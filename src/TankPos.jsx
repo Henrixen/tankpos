@@ -2085,8 +2085,8 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
                       <EC value={normaliseQty(f.qty)} color={C.amber} placeholder="" onSave={v2=>onUpdateC(f.id,"qty",normaliseQty(v2))} width={colWidthsC.Qty||55} data-cid={f.id+"-qty"} onTab={()=>document.querySelector(`[data-cid="${f.id}-load"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-cargo"]`)?.click()}/>
                       <EC value={toTCase(f.load||"")} placeholder="" onSave={v2=>onUpdateC(f.id,"load",v2)} width={colWidthsC.Load||100} data-cid={f.id+"-load"} onTab={()=>document.querySelector(`[data-cid="${f.id}-disch"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-qty"]`)?.click()}/>
                       <EC value={toTCase(f.disch||"")} placeholder="" onSave={v2=>onUpdateC(f.id,"disch",v2)} width={colWidthsC.Disch||100} data-cid={f.id+"-disch"} onTab={()=>document.querySelector(`[data-cid="${f.id}-lcstart"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-load"]`)?.click()}/>
-                      <EC value={f.from||""} placeholder="" onSave={v2=>onUpdateC(f.id,"from",v2)} width={colWidthsC.LaycanStart||90} data-cid={f.id+"-lcstart"} onTab={()=>document.querySelector(`[data-cid="${f.id}-lcend"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-disch"]`)?.click()}/>
-                      <EC value={f.to||""} placeholder="" onSave={v2=>onUpdateC(f.id,"to",v2)} width={colWidthsC.LaycanEnd||90} data-cid={f.id+"-lcend"} onTab={()=>document.querySelector(`[data-cid="${f.id}-fr"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-lcstart"]`)?.click()}/>
+                      <EC value={fmtDateShort(f.from)} placeholder="" onSave={v2=>onUpdateC(f.id,"from",v2)} width={colWidthsC.LaycanStart||90} data-cid={f.id+"-lcstart"} onTab={()=>document.querySelector(`[data-cid="${f.id}-lcend"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-disch"]`)?.click()}/>
+                      <EC value={fmtDateShort(f.to)}} placeholder="" onSave={v2=>onUpdateC(f.id,"to",v2)} width={colWidthsC.LaycanEnd||90} data-cid={f.id+"-lcend"} onTab={()=>document.querySelector(`[data-cid="${f.id}-fr"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-lcstart"]`)?.click()}/>
                       <EC value={fmtFreight(f.freight)||f.freight} color={"#a8e6a3"} placeholder="" onSave={v2=>onUpdateC(f.id,"freight",fmtFreight(v2)||v2)} width={colWidthsC.Freight||90} data-cid={f.id+"-fr"} onTab={()=>document.querySelector(`[data-cid="${f.id}-cmnt"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-lcend"]`)?.click()}/>
                       <EC value={f.comment||""} color={C.dim} placeholder="" onSave={v2=>onUpdateC(f.id,"comment",v2)} width={colWidthsC.Comment||130} data-cid={f.id+"-cmnt"}/>
                       <td style={{...td,width:colWidthsC.Updated||88,fontSize:12,color:C.faint,whiteSpace:"nowrap",overflow:"hidden"}}>{f.updated?new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
@@ -2900,7 +2900,15 @@ function OpChart({data,ops,colors}) {
     </div>
   );
 }
-
+// --- Date formatter (21 Jan)
+function fmtDateShort(d){
+  if(!d) return "";
+  const x = new Date(d);
+  return x.toLocaleDateString("en-GB",{
+    day:"numeric",
+    month:"short"
+  });
+}
 // ─── Cargo schema normaliser ──────────────────────────────────────────────────
 function normaliseCargo(c){
   return {
@@ -2934,7 +2942,7 @@ export default function TankPos(){
   useEffect(()=>{const fn=()=>setMobile(isMobile());window.addEventListener("resize",fn);return()=>window.removeEventListener("resize",fn);},[]);
 
   async function fetchCargoes(){
-    const {data,error}=await supabase.from("cargoes").select("*").range(0,5000);
+    const {data,error}=await supabase.from("cargoes").select("*").range(0,10000);
     if(error){console.error(error);return;}
     setCargoes(data.map(normaliseCargo));
   }
