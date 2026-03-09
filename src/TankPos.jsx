@@ -225,24 +225,26 @@ async function loadAll(){
 
   // LOAD CARGOES FROM SUPABASE
   try{
-    const { data, error } = await supabase
+   const { data } = await supabase
   .from("cargoes")
-  .select("*");
+  .select("*")
+  .limit(10000);
 
-cargoes = (data || []).map(c => ({
+const mapped = data.map(c => ({
+  id: c.id,
   vessel: c.vessel,
   charterer: c.charterer,
   cargo: c.product,
-  qty: c.qty ? `${Math.round(c.qty/1000)}kt` : "",
+  qty: c.qty,
   load: c.load_port,
   disch: c.disch_port,
-  laycan: c.laycan_start && c.laycan_end
-    ? `${new Date(c.laycan_start).toLocaleDateString()}-${new Date(c.laycan_end).toLocaleDateString()}`
-    : "",
+  laycan: c.laycan,
   freight: c.freight,
   comment: c.comment,
   updated: c.updated
 }));
+
+setCargoes(mapped);
 
     if(error){
       console.error("Supabase cargo error:", error);
