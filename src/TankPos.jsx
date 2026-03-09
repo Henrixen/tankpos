@@ -780,13 +780,43 @@ function AIAsk({vessels,cargoes,intelItems}){
   const [busy,setBusy]=useState(false);
   const [convHistory,setConvHistory]=useState([]);
 
-  function buildContext(){
-    const cargoSummary=cargoes.map(c=>[c.status||"",c.charterer,c.cargoType,c.qty,c.loadPort,c.dischPort,c.laycan,c.freight,c.vessel].filter(Boolean).join("|")).join("\n");
-    const vesselSummary=vessels.map(v=>[v.vessel,v.operator,v.openPort,v.date,v.dwt&&v.dwt+"dwt",v.built&&"built:"+v.built,v.spec?.iceClass,v.spec?.lastCargo&&"lastcargo:"+v.spec.lastCargo].filter(Boolean).join("|")).join("\n");
-    const vault=(intelItems||[]).map(i=>i.extracted).join("\n---\n");
-    return `Today: ${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}\nCARGO FIXTURES (${cargoes.length}):\n${cargoSummary||"none"}\nVESSEL POSITIONS (${vessels.length}):\n${vesselSummary||"none"}\nMARKET INTEL VAULT (${(intelItems||[]).length} items):\n${vault||"none"}`;
-  }
+function buildContext(){
+  const cargoSummary=cargoes.map(c=>[
+    c.status||"",
+    c.charterer,
+    c.cargo,
+    c.qty,
+    c.load,
+    c.disch,
+    c.from,
+    c.to,
+    c.freight,
+    c.vessel
+  ].filter(Boolean).join("|")).join("\n");
 
+  const vesselSummary=vessels.map(v=>[
+    v.vessel,
+    v.operator,
+    v.openPort,
+    v.date,
+    v.dwt && v.dwt+"dwt",
+    v.built && "built:"+v.built,
+    v.spec?.iceClass,
+    v.spec?.lastCargo && "lastcargo:"+v.spec.lastCargo
+  ].filter(Boolean).join("|")).join("\n");
+
+  const vault=(intelItems||[]).map(i=>i.extracted).join("\n---\n");
+
+  return `Today: ${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}
+CARGO FIXTURES (${cargoes.length}):
+${cargoSummary||"none"}
+
+VESSEL POSITIONS (${vessels.length}):
+${vesselSummary||"none"}
+
+MARKET INTEL VAULT (${(intelItems||[]).length} items):
+${vault||"none"}`;
+}
   async function ask(){
     const q=question.trim();if(!q||busy)return;
     setBusy(true);setAnswer("");
