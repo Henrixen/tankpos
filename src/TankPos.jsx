@@ -213,18 +213,37 @@ function calcVoyage(vessel, cargo) {
 // ─── Storage ──────────────────────────────────────────────────────────────────
 const SK="tankpos-v5",CK="tankpos-cargo-v2";
 async function loadAll(){
-  let vessels=[], cargoes=[];
+
+  let vessels = [], cargoes = [];
+
   try{
-    const rv=await window.storage.get(SK,true),rc=await window.storage.get(CK,true);
-    vessels=rv?JSON.parse(rv.value):[];
-    cargoes=rc?JSON.parse(rc.value):[];
+    const rv = await window.storage.get(SK,true);
+    vessels = rv ? JSON.parse(rv.value) : [];
   }catch(_){
-    vessels=JSON.parse(localStorage.getItem(SK)||"[]");
-    cargoes=JSON.parse(localStorage.getItem(CK)||"[]");
+    vessels = JSON.parse(localStorage.getItem(SK) || "[]");
   }
-  // Re-enrich all vessels from DB on load (fills missing operator/specs)
-  vessels = vessels.map(v => enrichV(v));
-  return {vessels, cargoes};
+
+  // LOAD CARGOES FROM SUPABASE
+  try{
+    const { data, error } = await supabase
+      .from("cargoes")
+      .select("*");
+
+    if(error){
+      console.error("Supabase cargo error:", error);
+      cargoes = [];
+    }else{
+      cargoes = data;
+    }
+
+  }catch(e){
+    console.error("Supabase fetch failed:", e);
+    cargoes = [];
+  }
+
+  vessels = vessels.map(v => enrich(v));
+
+  return { vessels, cargoes };
 }
 async function saveV(v){try{await window.storage.set(SK,JSON.stringify(v),true);}catch(_){}try{localStorage.setItem(SK,JSON.stringify(v));}catch(_){}}
 async function saveC(c){try{await window.storage.set(CK,JSON.stringify(c),true);}catch(_){}try{localStorage.setItem(CK,JSON.stringify(c));}catch(_){}}
