@@ -2,6 +2,8 @@
 // CACHE_BUSTER_030
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
+import { supabase } from "./supabaseclient"
+import { useEffect, useState } from "react"
 
 // ─── Utilities ──────────────────────────────────────────────────────────────────
 const stripHtml = s => {
@@ -2920,12 +2922,35 @@ function OpChart({data,ops,colors}) {
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function TankPos(){
-  const [vessels,setVessels]=useState([]);
-  const [cargoes,setCargoes]=useState([]);
-  const [mobile,setMobile]=useState(()=>isMobile());
 
-  useEffect(()=>{loadAll().then(({vessels:v,cargoes:c})=>{setVessels(v);setCargoes(c);});},[]);
-  useEffect(()=>{const fn=()=>setMobile(isMobile());window.addEventListener("resize",fn);return()=>window.removeEventListener("resize",fn);},[]);
+const [vessels,setVessels]=useState([])
+const [cargoes,setCargoes]=useState([])
+const [mobile,setMobile]=useState(()=>isMobile())
+
+useEffect(() => {
+  fetchData();
+}, []);
+
+async function fetchData(){
+
+  const { data: cargoData, error: cargoError } = await supabase
+    .from("cargoes")
+    .select("*")
+    .range(0,10000)
+
+  const { data: vesselData, error: vesselError } = await supabase
+    .from("vessels")
+    .select("*")
+    .range(0,10000)
+
+  if(cargoError) console.error(cargoError)
+  if(vesselError) console.error(vesselError)
+
+  if(cargoData) setCargoes(cargoData)
+  if(vesselData) setVessels(vesselData)
+
+}
+}, []);  useEffect(()=>{const fn=()=>setMobile(isMobile());window.addEventListener("resize",fn);return()=>window.removeEventListener("resize",fn);},[]);
 
   const renameV=useCallback((oldName,newName)=>{
     if(!newName||!newName.trim()||newName.trim().toUpperCase()===oldName)return;
