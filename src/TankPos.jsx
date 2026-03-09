@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "./supabaseclient"
-import { useEffect, useState } from "react"
 
 // ─── Utilities ──────────────────────────────────────────────────────────────────
 const stripHtml = s => {
