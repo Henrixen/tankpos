@@ -2927,9 +2927,10 @@ const [vessels,setVessels]=useState([])
 const [cargoes,setCargoes]=useState([])
 const [mobile,setMobile]=useState(()=>isMobile())
 
+// LOAD DATA FROM SUPABASE
 useEffect(() => {
-  fetchData();
-}, []);
+  fetchData()
+}, [])
 
 async function fetchData(){
 
@@ -2948,10 +2949,15 @@ async function fetchData(){
 
   if(cargoData) setCargoes(cargoData)
   if(vesselData) setVessels(vesselData)
-
 }
-}, []);  useEffect(()=>{const fn=()=>setMobile(isMobile());window.addEventListener("resize",fn);return()=>window.removeEventListener("resize",fn);},[]);
 
+// MOBILE RESIZE HANDLER
+useEffect(()=>{
+  const fn = () => setMobile(isMobile())
+  window.addEventListener("resize",fn)
+  return () => window.removeEventListener("resize",fn)
+},[])
+  
   const renameV=useCallback((oldName,newName)=>{
     if(!newName||!newName.trim()||newName.trim().toUpperCase()===oldName)return;
     const n=newName.trim().toUpperCase();
