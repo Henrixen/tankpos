@@ -2,6 +2,7 @@
 // CACHE_BUSTER_030
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
+import { supabase } from "./supabaseclient";
 
 // ─── Utilities ──────────────────────────────────────────────────────────────────
 const stripHtml = s => {
@@ -2828,6 +2829,20 @@ export default function TankPos(){
 
   useEffect(()=>{loadAll().then(({vessels:v,cargoes:c})=>{setVessels(v);setCargoes(c);});},[]);
   useEffect(()=>{const fn=()=>setMobile(isMobile());window.addEventListener("resize",fn);return()=>window.removeEventListener("resize",fn);},[]);
+
+  useEffect(() => {
+  async function testSupabase() {
+    const { data, error } = await supabase
+      .from("cargoes")
+      .select("*")
+      .limit(5);
+
+    console.log("Supabase test:", data);
+    if (error) console.error(error);
+  }
+
+  testSupabase();
+}, []);
 
   const renameV=useCallback((oldName,newName)=>{
     if(!newName||!newName.trim()||newName.trim().toUpperCase()===oldName)return;
