@@ -2149,10 +2149,8 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
                 {hasMore&&
                 <div style={{textAlign:"center",padding:"12px"}}>
                 <button onClick={onLoadMore} style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"4px 16px",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Load more</button>
-                </div>
-            </div>
-          </div>
-        )}
+                </div>}
+                )}
 
         {/* ── MATRIX ── */}
         {tab==="matrix"&&(
