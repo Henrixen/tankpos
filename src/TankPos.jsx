@@ -3039,23 +3039,26 @@ export default function TankPos(){
   const addVessels=useCallback(async(parsed)=>{
   let r={added:0,updated:0,total:0};
   setVessels(prev=>{const before=prev.length;const next=mergeVessels(prev,parsed);r={added:next.length-before,updated:parsed.length-Math.max(0,next.length-before),total:next.length};saveV(next);setTimeout(()=>saveSnapshot(next),100);return next;});
-  const rows=parsed.map(v=>({
-    id: v.id||v.vessel||("pos_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),
-    vessel: v.vessel,
-    operator: v.operator||null,
-    openPort: v.openPort||null,
-    date: v.date||null,
-    dwt: v.dwt||null,
-    built: v.built||null,
-    loa: v.loa||null,
-    beam: v.beam||null,
-    cbm: v.cbm||null,
-    comment: v.comment||null,
-    spec: v.spec||null,
-    updatedAt: v.updatedAt||null,
-    operatorManual: v.operatorManual||null,
-    updated_at: new Date().toISOString(),
-  }));
+  const rows=parsed.map(v=>{
+    const ev=enrichV(v);
+    return {
+      id: ev.id||ev.vessel||("pos_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),
+      vessel: ev.vessel,
+      operator: ev.operator||null,
+      openPort: ev.openPort||null,
+      date: ev.date||null,
+      dwt: ev.dwt||null,
+      built: ev.built||null,
+      loa: ev.loa||null,
+      beam: ev.beam||null,
+      cbm: ev.cbm||null,
+      comment: ev.comment||null,
+      spec: ev.spec||null,
+      updatedAt: ev.updatedAt||null,
+      operatorManual: ev.operatorManual||null,
+      updated_at: new Date().toISOString(),
+    };
+  });
   const{error}=await supabase.from("positions").upsert(rows,{onConflict:"vessel"});
   if(error)console.error(error);
   return r;
