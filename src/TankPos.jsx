@@ -2942,8 +2942,11 @@ function fmtDateShort(d){
 function normaliseCargo(c){
   function fmtDate(d){
     if(!d) return "";
+    // Already formatted "13 Mar"
+    if(/^\d{1,2}\s[A-Za-z]{3}$/.test(String(d).trim())) return d;
     const dt=new Date(d);
-    return isNaN(dt)?d:dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
+    if(isNaN(dt)) return "";
+    return dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
   }
   return {
     id:        c.id,
