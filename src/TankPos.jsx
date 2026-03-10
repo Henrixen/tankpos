@@ -442,21 +442,9 @@ const normaliseQty = q => {
 const fmtN = n => { if(!n && n!==0) return ""; const v=Number(String(n).replace(/,/g,"")); if(isNaN(v)) return String(n); if(v>=1000) return Math.round(v/1000)+"k"; return String(v); };
 const fmtFreight = s => {
   if(!s) return s;
-  let v = String(s).trim();
-  // Already has USD prefix and lsum suffix - just normalise numbers
-  const hasUSD = /usd/i.test(v);
-  const hasLsum = /l\.?s\.?u\.?m|lsum/i.test(v);
-  // Extract number(s)
-  const nums = v.match(/\d[\d,.]*/g);
-  if(!nums) return v;
-  const n = parseFloat(nums[0].replace(/,/g,''));
-  if(isNaN(n)) return v;
-  const kt = n >= 500 ? Math.round(n/1000)+'k' : n;
-  const prefix = hasUSD ? '' : 'USD ';
-  const suffix = hasLsum ? '' : ' lsum';
-  // Rebuild: USD Xk lsum
-  return 'USD ' + kt + ' lsum';
+  return String(s).trim().replace(/\s+/g," ");
 };
+
 const toTCase = s => {
   if(!s) return s;
   // Words that must always be fully uppercase
