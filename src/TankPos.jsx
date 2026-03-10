@@ -325,8 +325,24 @@ function xJSON(raw){if(!raw)throw new Error("Empty");const cl=raw.trim().replace
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 async function apiCall(sys,msgs){
-  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,system:sys,messages:msgs})});
-  const d=await res.json();if(!res.ok)throw new Error("API "+res.status+": "+(d?.error?.message||"?"));
+  const res = await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+      "anthropic-version":"2023-06-01",
+      "anthropic-dangerous-direct-browser-access":"true"
+    },
+    body:JSON.stringify({
+      model:"claude-sonnet-4-20250514",
+      max_tokens:4000,
+      system:sys,
+      messages:msgs
+    })
+  });
+
+  const d = await res.json();
+  if(!res.ok) throw new Error("API "+res.status+": "+(d?.error?.message||"?"));
   return d.content.map(b=>b.text||"").join("");
 }
 async function ocrImage(img){return apiCall("OCR engine. Transcribe all text faithfully row by row. Plain text only.",[{role:"user",content:[{type:"image",source:{type:"base64",media_type:img.mime,data:img.base64}},{type:"text",text:"Transcribe all text: vessel names, ports, dates, numbers, freight."}]}]);}
