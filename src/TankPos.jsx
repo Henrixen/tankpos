@@ -3042,7 +3042,7 @@ export default function TankPos(){
   const rows=parsed.map(v=>{
     const ev=enrichV(v);
     return {
-      id: ev.id||ev.vessel||("pos_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),
+      id: "pos_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),
       vessel: ev.vessel,
       operator: ev.operator||null,
       openPort: ev.openPort||null,
@@ -3059,7 +3059,7 @@ export default function TankPos(){
       updated_at: new Date().toISOString(),
     };
   });
-  const{error}=await supabase.from("positions").upsert(rows,{onConflict:"vessel"});
+  const{error}=await supabase.from("positions").insert(rows);
   if(error)console.error(error);
   return r;
 },[]);
