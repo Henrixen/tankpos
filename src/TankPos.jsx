@@ -2145,12 +2145,14 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
                       <td style={{...td,width:26,padding:"0 2px"}}><button onClick={(e)=>{e.stopPropagation();setPendingDel({type:"cargo",id:f.id,label:f.vessel||"cargo"});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.7}} title="Delete">✕</button></td>
                     </tr>;
                   })}</tbody>
-                </table>
-                {hasMore&&
-                <div style={{textAlign:"center",padding:"12px"}}>
+                </table>}
+              {hasMore&&
+              <div style={{textAlign:"center",padding:"12px"}}>
                 <button onClick={onLoadMore} style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"4px 16px",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Load more</button>
-                </div>}
-                )}
+              </div>}
+            </div>
+          </div>
+        )}
 
         {/* ── MATRIX ── */}
         {tab==="matrix"&&(
