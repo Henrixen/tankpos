@@ -3040,7 +3040,7 @@ export default function TankPos(){
   let r={added:0,updated:0,total:0};
   setVessels(prev=>{const before=prev.length;const next=mergeVessels(prev,parsed);r={added:next.length-before,updated:parsed.length-Math.max(0,next.length-before),total:next.length};saveV(next);setTimeout(()=>saveSnapshot(next),100);return next;});
   const rows=parsed.map(v=>({...v,updated_at:new Date().toISOString()}));
-  const{error}=await supabase.from("positions").upsert(rows,{onConflict:"vessel"});
+  const{error}=await supabase.from("positions").upsert(rows,{onConflict:"vessel",ignoreDuplicates:false});
   if(error)console.error(error);
   return r;
 },[]);
