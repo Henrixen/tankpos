@@ -2619,53 +2619,23 @@ function Dashboard({vessels, cargoes, history}) {
 
   // ── Bunker prices: fetch live from PBT via web_search, fallback to last known ──
   async function fetchBunkersPBT() {
-    setBLoading(true); setBError(null);
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-        body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",
-          max_tokens:800,
-          
-          system:"You are a maritime bunker price expert. Return ONLY a raw JSON object (no markdown, no explanation) with current approximate bunker fuel prices in USD/mt. Format: {date,Rotterdam_HSFO,Rotterdam_VLSFO,Rotterdam_MGO,Fujairah_HSFO,Fujairah_VLSFO,Fujairah_MGO,Singapore_HSFO,Singapore_VLSFO,Singapore_MGO}. Numbers only in USD/mt.",
-          messages:[{role:"user",content:"Return approximate bunker fuel prices USD/mt for Rotterdam/ARA, Fujairah, Singapore for Mar 2026. Typical ranges: HSFO 420-440, VLSFO 480-520, MGO 700-780. Return ONLY JSON: {date,Rotterdam_HSFO,Rotterdam_VLSFO,Rotterdam_MGO,Fujairah_HSFO,Fujairah_VLSFO,Fujairah_MGO,Singapore_HSFO,Singapore_VLSFO,Singapore_MGO}"}]
-        })
-      });
-      const d = await res.json();
-      if (!res.ok) throw new Error("API " + res.status + ": " + (d?.error?.message||""));
-      // Collect all text blocks (web_search returns multiple content blocks)
-      const allText = (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
-      const cl = allText.replace(/```[\w]*/g,"").replace(/```/g,"").trim();
-      const s = cl.indexOf("{"), e = cl.lastIndexOf("}");
-      if (s >= 0 && e > s) {
-        const p = JSON.parse(cl.slice(s, e+1));
-        setBunkers({
-          date:      p.date || new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}),
-          ARA_HSFO:  p.Rotterdam_HSFO  || null,
-          ARA_VLSFO: p.Rotterdam_VLSFO || null,
-          ARA_MGO:   p.Rotterdam_MGO   || null,
-          FUJ_HSFO:  p.Fujairah_HSFO   || null,
-          FUJ_VLSFO: p.Fujairah_VLSFO  || null,
-          FUJ_MGO:   p.Fujairah_MGO    || null,
-          SIN_HSFO:  p.Singapore_HSFO  || null,
-          SIN_VLSFO: p.Singapore_VLSFO || null,
-          SIN_MGO:   p.Singapore_MGO   || null,
-        });
-        setBFetched(true);
-      } else {
-        // Fallback to last known PBT prices (28 Feb 2026)
-        setBunkers({date:"Mar 2026 est.",ARA_HSFO:432,ARA_VLSFO:485,ARA_MGO:728,FUJ_HSFO:428,FUJ_VLSFO:512,FUJ_MGO:782,SIN_HSFO:442,SIN_VLSFO:528,SIN_MGO:718});
-        setBFetched(true);
-        
-      }
-    } catch(e) {
-      // Network error - show cached
-      setBunkers({date:"Mar 2026 est.",ARA_HSFO:432,ARA_VLSFO:485,ARA_MGO:728,FUJ_HSFO:428,FUJ_VLSFO:512,FUJ_MGO:782,SIN_HSFO:442,SIN_VLSFO:528,SIN_MGO:718});
-      setBFetched(true);
-      setBError("Using estimated prices - "+e.message.slice(0,60));
-    } finally { setBLoading(false); }
-  }
+  setBLoading(true); setBError(null);
+  try {
+    const res = await fetch("/api/bunkers");
+    const p = await res.json();
+    setBunkers({
+      date: p.date,
+      ARA_HSFO: p.ARA_HSFO, ARA_VLSFO: p.ARA_VLSFO, ARA_MGO: p.ARA_MGO,
+      FUJ_HSFO: p.FUJ_HSFO, FUJ_VLSFO: p.FUJ_VLSFO, FUJ_MGO: p.FUJ_MGO,
+      SIN_HSFO: p.SIN_HSFO, SIN_VLSFO: p.SIN_VLSFO, SIN_MGO: p.SIN_MGO,
+    });
+    setBFetched(true);
+  } catch(e) {
+    setBunkers({date:"10 Mar 2026",ARA_HSFO:600,ARA_VLSFO:650,ARA_MGO:1075,FUJ_HSFO:580,FUJ_VLSFO:620,FUJ_MGO:1050,SIN_HSFO:570,SIN_VLSFO:610,SIN_MGO:1040});
+    setBFetched(true);
+    setBError("Using cached prices - "+e.message);
+  } finally { setBLoading(false); }
+}
 
   // Fleet stats
   const openVessels = vessels.filter(v=>v.date&&v.openPort&&v.openPort!=="EMPLOYED");
