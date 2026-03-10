@@ -890,25 +890,61 @@ function AIAsk({vessels,cargoes,intelItems}){
 
 // ─── Right Panel ──────────────────────────────────────────────────────────────
 function RightPanel({vessels,cargoes}){
-  const [activeTab,setActiveTab]=useState("ai");
   const [intelItems,setIntelItems]=useState([]);
   useEffect(()=>{loadIntel().then(d=>{setIntelItems(d);});},[]);
 
   return(
-    <div style={{flex:"1 1 0",minWidth:220,maxWidth:"40%",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",alignSelf:"stretch",resize:"horizontal"}}>
-      <div style={{display:"flex",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0}}>
-        {[["ai","🤖 Ask AI"],["intel","📡 Intel"]].map(([id,label])=>(
-          <button key={id} onClick={()=>setActiveTab(id)} style={{flex:1,padding:"7px 4px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"sans-serif",fontWeight:700,fontSize:12,color:activeTab===id?C.blue:C.dim,borderBottom:"2px solid "+(activeTab===id?C.blue:"transparent")}}>
-            {label}
-          </button>
-        ))}
+  <div
+    style={{
+      flex:"1 1 0",
+      minWidth:220,
+      maxWidth:"40%",
+      display:"grid",
+      gridTemplateRows:"1fr 1fr",
+      gap:10,
+      alignSelf:"stretch",
+      resize:"horizontal"
+    }}
+  >
+
+    {/* Ask AI */}
+    <div style={{
+      background:C.bg2,
+      border:"1px solid "+C.bd,
+      borderRadius:7,
+      overflow:"hidden",
+      display:"flex",
+      flexDirection:"column"
+    }}>
+      <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
+        <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
       </div>
+
       <div style={{flex:1,padding:"10px",overflowY:"auto"}}>
-        {activeTab==="ai"&&<AIAsk vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>}
-        {activeTab==="intel"&&<IntelVault onVaultUpdate={setIntelItems}/>}
+        <AIAsk vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>
       </div>
     </div>
-  );
+
+    {/* Intel Vault */}
+    <div style={{
+      background:C.bg2,
+      border:"1px solid "+C.bd,
+      borderRadius:7,
+      overflow:"hidden",
+      display:"flex",
+      flexDirection:"column"
+    }}>
+      <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
+        <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📡 Intel Vault</span>
+      </div>
+
+      <div style={{flex:1,padding:"10px",overflowY:"auto"}}>
+        <IntelVault onVaultUpdate={setIntelItems}/>
+      </div>
+    </div>
+
+  </div>
+);
 }
 
 
@@ -2076,7 +2112,18 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo"/>
                 <ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/>
               </div>
-              <RightPanel vessels={vessels} cargoes={cargoes}/>
+              <div
+  style={{
+    flex:"1 1 0",
+    minWidth:200,
+    display:"flex",
+    flexDirection:"column",
+    gap:10,
+    maxWidth:"30%"
+  }}
+>
+  <RightPanel vessels={vessels} cargoes={cargoes}/>
+</div>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
               <input value={cSearch} onChange={e=>{setCSearch(e.target.value);onCargoSearch(e.target.value);}} placeholder="🔍 Search cargoes…"
