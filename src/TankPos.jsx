@@ -1745,7 +1745,7 @@ function TCECalculator(){
   );
 }
 
-function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC}){
+function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch}){
   const [tab,setTab]=useState("pos");
   const [search,setSearch]=useState("");
   const [filters,setFilters]=useState(new Set());
@@ -2077,7 +2077,7 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
               <RightPanel vessels={vessels} cargoes={cargoes}/>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <input value={cSearch} onChange={e=>setCSearch(e.target.value)} placeholder="🔍 Search cargoes…"
+              <input value={cSearch} onChange={e=>{setCSearch(e.target.value);onCargoSearch(e.target.value);}} placeholder="🔍 Search cargoes…"
                 style={{flex:1,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 10px",outline:"none"}}/>
               {[["ALL","All"],["FIXED","Fixed"],["SUBS","On Subs"]].map(([f,l])=>(
                 <button key={f} onClick={()=>setCFilter(f)} style={fb(cFilter===f)}>{l}</button>
@@ -2146,6 +2146,11 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
                     </tr>;
                   })}</tbody>
                 </table>
+                {hasMore&&
+                <div style={{textAlign:"center",padding:"12px"}}>
+                <button onClick={onLoadMore} style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"4px 16px",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Load more</button>
+                </div>
+                }
               }
             </div>
           </div>
@@ -2962,6 +2967,9 @@ function normaliseCargo(c){
 export default function TankPos(){
   const [vessels,setVessels]=useState([]);
   const [cargoes,setCargoes]=useState([]);
+  const [hasMore,setHasMore]=useState(false);
+  const searchTimer=useRef(null);
+  function onCargoSearch(term){clearTimeout(searchTimer.current);searchTimer.current=setTimeout(()=>fetchCargoes(term),300);}
   const [mobile,setMobile]=useState(()=>isMobile());
 
   // Load vessels from local storage, cargoes from Supabase
@@ -2971,10 +2979,29 @@ export default function TankPos(){
   },[]);
   useEffect(()=>{const fn=()=>setMobile(isMobile());window.addEventListener("resize",fn);return()=>window.removeEventListener("resize",fn);},[]);
 
-  async function fetchCargoes(){
-    const {data,error}=await supabase.from("cargoes").select("*").range(0,10000);
+  async function fetchCargoes(searchTerm=""){
+    if(searchTerm.trim()){
+      const t=searchTerm.trim();
+      const{data,error}=await supabase.from("cargoes").select("*")
+        .or(`charterer.ilike.%${t}%,vessel.ilike.%${t}%,load.ilike.%${t}%,disch.ilike.%${t}%,cargo.ilike.%${t}%,status.ilike.%${t}%`)
+        .range(0,499).order("updated",{ascending:false});
+      if(error){console.error(error);return;}
+      setCargoes(data.map(normaliseCargo));
+    } else {
+      const{data,error}=await supabase.from("cargoes").select("*")
+        .range(0,199).order("updated",{ascending:false});
+      if(error){console.error(error);return;}
+      setCargoes(data.map(normaliseCargo));
+      setHasMore(data.length===200);
+    }
+  }
+
+  async function loadMoreCargoes(){
+    const{data,error}=await supabase.from("cargoes").select("*")
+      .range(cargoes.length,cargoes.length+199).order("updated",{ascending:false});
     if(error){console.error(error);return;}
-    setCargoes(data.map(normaliseCargo));
+    if(data.length<200) setHasMore(false);
+    setCargoes(prev=>[...prev,...data.map(normaliseCargo)]);
   }
 
   const renameV=useCallback((oldName,newName)=>{
@@ -3061,6 +3088,6 @@ export default function TankPos(){
     else{const{error}=await supabase.from("cargoes").delete().eq("id",id);if(error)console.error(error);}
   },[]);
 
-  const props={vessels,cargoes,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC};
+  const props={vessels,cargoes,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch};
   return <DesktopApp {...props}/>;
 }
