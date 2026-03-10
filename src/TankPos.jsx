@@ -4,6 +4,15 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import * as XLSX from "xlsx";
 import { supabase } from "./supabaseclient";
 
+// Date helpers
+function toISODate(d){
+  if(!d) return null;
+  const months={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  const [day,mon]=d.split(" ");
+  const dt=new Date(new Date().getFullYear(),months[mon],parseInt(day));
+  return isNaN(dt)?null:dt.toISOString().slice(0,10);
+}
+
 // ─── Utilities ──────────────────────────────────────────────────────────────────
 const stripHtml = s => {
   if(!s) return "";
@@ -2897,20 +2906,25 @@ function fmtDateShort(d){
 }
 // ─── Cargo schema normaliser ──────────────────────────────────────────────────
 function normaliseCargo(c){
+  function fmtDate(d){
+    if(!d) return "";
+    const dt=new Date(d);
+    return isNaN(dt)?d:dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
+  }
   return {
-    id:       c.id,
-    status:   c.status   || "",
-    vessel:   c.vessel   || "",
-    charterer:c.charterer|| "",
-    cargo:    c.cargo    || "",
-    qty:      c.qty      || "",
-    load:     c.load     || "",
-    disch:    c.disch    || "",
-    from:     c.from     || "",
-    to:       c.to       || "",
-    freight:  c.freight  || "",
-    comment:  c.comment  || "",
-    updated:  c.updated  || "",
+    id:        c.id,
+    status:    c.status    || "",
+    vessel:    c.vessel    || "",
+    charterer: c.charterer || "",
+    cargo:     c.cargo     || "",
+    qty:       c.qty       || "",
+    load:      c.load      || "",
+    disch:     c.disch     || "",
+    from:      fmtDate(c.from),
+    to:        fmtDate(c.to),
+    freight:   c.freight   || "",
+    comment:   c.comment   || "",
+    updated:   c.updated   || "",
   };
 }
 
@@ -2948,7 +2962,8 @@ export default function TankPos(){
   // Universal cargo updater — optimistic local update + Supabase write
   const updateC=useCallback(async(id,field,value)=>{
     setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:value}:c));
-    const{error}=await supabase.from("cargoes").update({[field]:value}).eq("id",id);
+    const dbValue=(field==="from"||field==="to")?toISODate(value):value;
+    const{error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id);
     if(error)console.error(error);
   },[]);
 
@@ -2986,7 +3001,8 @@ export default function TankPos(){
     });
     // Write new rows to Supabase
     if(stamped.length>0){
-      const{error}=await supabase.from("cargoes").upsert(stamped,{onConflict:"id"});
+      const rows=stamped.map(c=>({...c,from:toISODate(c.from),to:toISODate(c.to)}));
+      const{error}=await supabase.from("cargoes").upsert(rows,{onConflict:"id"});
       if(error)console.error(error);
     }
     setVessels(prev=>{const next=prev.map(v=>{const fix=stamped.find(f=>f.vessel&&f.vessel.toLowerCase()===v.vessel.toLowerCase());if(fix&&fix.status==="FIXED"){return{...v,openPort:"EMPLOYED"};}return v;});saveV(next);return next;});
@@ -2997,7 +3013,8 @@ export default function TankPos(){
   const addC=useCallback(async(c)=>{
     const norm=normaliseCargo({...c,id:c.id||("c_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),updated:c.updated||new Date().toISOString()});
     setCargoes(prev=>[...prev,norm]);
-    const{error}=await supabase.from("cargoes").upsert([norm],{onConflict:"id"});
+    const row={...norm,from:toISODate(norm.from),to:toISODate(norm.to)};
+    const{error}=await supabase.from("cargoes").upsert([row],{onConflict:"id"});
     if(error)console.error(error);
     if(norm.status==="FIXED"&&norm.vessel&&norm.disch){setVessels(prev=>{const next=prev.map(v=>v.vessel?.toLowerCase()!==norm.vessel.toLowerCase()?v:{...v,openPort:norm.disch});saveV(next);return next;});}
   },[]);
