@@ -992,7 +992,9 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode}){
         setStatus({t:"success",m:"✓ "+(r.added?r.added+" added":"")+(r.updated?", "+r.updated+" updated":"")+" - "+r.total+" total"});
       }else{
         const p=await parseCargo(text||"(img)",img,known);if(!p?.length){setStatus({t:"error",m:"No fixture data found."});return;}
-        const lk=onAddCargoes(p);setText("");setImg(null);
+        const ts=posDate?new Date(posDate).toISOString():new Date().toISOString();
+        const stamped=p.map(v=>({...v,updated:ts}));
+        const lk=onAddCargoes(stamped);setText("");setImg(null);
         setStatus({t:"success",m:"✓ "+p.length+" fixture(s)"+(lk?", "+lk+" pos updated":"")});
       }
     }catch(e){setStatus({t:"error",m:e.message});}finally{setBusy(false);}
@@ -1015,7 +1017,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode}){
           {busy?"⟳ Processing…":"▶ Parse & Add"}
         </button>
         <button onClick={()=>fRef.current?.click()} title="Upload image / screenshot" style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 10px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>🖼</button>
-        {mode==="pos"&&<input type="date" value={posDate} onChange={e=>setPosDate(e.target.value)} title="Date of this position list - used as Updated date" style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:3,color:C.dim,fontFamily:"inherit",fontSize:12,padding:"2px 5px",outline:"none",width:118,flexShrink:0}}/>}
+        {(mode==="pos"||mode==="cargo")&&<input type="date" value={posDate} onChange={e=>setPosDate(e.target.value)} title={mode==="pos"?"Date of this position list":"Date of this cargo list"} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:3,color:C.dim,fontFamily:"inherit",fontSize:12,padding:"2px 5px",outline:"none",width:118,flexShrink:0}}/>}
         <button onClick={()=>xlsRef.current?.click()} title="Upload Excel / CSV" style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 8px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>📊</button>
         <input ref={fRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
         <input ref={xlsRef} type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}} onChange={e=>handleXls(e.target.files?.[0])}/>
