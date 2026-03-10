@@ -3097,6 +3097,7 @@ export default function TankPos(){
       const rows=stamped.map(c=>({...c,from:toISODate(c.from),to:toISODate(c.to)}));
       const{error}=await supabase.from("cargoes").upsert(rows,{onConflict:"id"});
       if(error)console.error(error);
+      else fetchCargoes();
     }
     setVessels(prev=>{const next=prev.map(v=>{const fix=stamped.find(f=>f.vessel&&f.vessel.toLowerCase()===v.vessel.toLowerCase());if(fix&&fix.status==="FIXED"){return{...v,openPort:"EMPLOYED"};}return v;});saveV(next);return next;});
     return added;
