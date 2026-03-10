@@ -2998,7 +2998,13 @@ export default function TankPos(){
 
   // Universal cargo updater — optimistic local update + Supabase write
   const updateC=useCallback(async(id,field,value)=>{
-    setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:value}:c));
+    const displayValue=(field==="from"||field==="to")?(() => {
+      const iso=toISODate(value);
+      if(!iso) return value;
+      const dt=new Date(iso);
+      return dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
+    })():value;
+    setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:displayValue}:c));
     const dbValue=(field==="from"||field==="to")?toISODate(value):value;
     const{error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id);
     if(error)console.error(error);
