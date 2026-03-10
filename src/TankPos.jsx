@@ -19,8 +19,11 @@ function toISODate(d){
 
   // "13/3" or "13/03" or "13-3" or "13-03"
   const m2=s.match(/^(\d{1,2})[\/\-](\d{1,2})/);
-  if(m2){
-    const dt=new Date(new Date().getFullYear(),parseInt(m2[2])-1,parseInt(m2[1]));
+   if(m2){
+    // Norwegian format: day/month
+    const day=parseInt(m2[1]);
+    const month=parseInt(m2[2])-1;
+    const dt=new Date(new Date().getFullYear(),month,day);
     return isNaN(dt)?null:dt.toISOString().slice(0,10);
   }
 
