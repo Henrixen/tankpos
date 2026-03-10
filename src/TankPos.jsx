@@ -3039,8 +3039,24 @@ export default function TankPos(){
   const addVessels=useCallback(async(parsed)=>{
   let r={added:0,updated:0,total:0};
   setVessels(prev=>{const before=prev.length;const next=mergeVessels(prev,parsed);r={added:next.length-before,updated:parsed.length-Math.max(0,next.length-before),total:next.length};saveV(next);setTimeout(()=>saveSnapshot(next),100);return next;});
-  const rows=parsed.map(v=>({...v,updated_at:new Date().toISOString()}));
-  const{error}=await supabase.from("positions").upsert(rows,{onConflict:"vessel",ignoreDuplicates:false});
+  const rows=parsed.map(v=>({
+    id: v.id||v.vessel||("pos_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),
+    vessel: v.vessel,
+    operator: v.operator||null,
+    openPort: v.openPort||null,
+    date: v.date||null,
+    dwt: v.dwt||null,
+    built: v.built||null,
+    loa: v.loa||null,
+    beam: v.beam||null,
+    cbm: v.cbm||null,
+    comment: v.comment||null,
+    spec: v.spec||null,
+    updatedAt: v.updatedAt||null,
+    operatorManual: v.operatorManual||null,
+    updated_at: new Date().toISOString(),
+  }));
+  const{error}=await supabase.from("positions").upsert(rows,{onConflict:"vessel"});
   if(error)console.error(error);
   return r;
 },[]);
