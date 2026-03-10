@@ -14,7 +14,8 @@ function toISODate(d){
   const m1=s.match(/^(\d{1,2})\s+([A-Za-z]{3})/);
   if(m1){
     const dt=new Date(new Date().getFullYear(),months[m1[2].charAt(0).toUpperCase()+m1[2].slice(1,3).toLowerCase()],parseInt(m1[1]));
-    return isNaN(dt)?null:dt.toISOString().slice(0,10);
+    if(isNaN(dt)) return null;
+    return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
   }
 
   // "13/3" or "13/03" or "13-3" or "13-03"
@@ -24,7 +25,8 @@ function toISODate(d){
     const day=parseInt(m2[1]);
     const month=parseInt(m2[2])-1;
     const dt=new Date(new Date().getFullYear(),month,day);
-    return isNaN(dt)?null:dt.toISOString().slice(0,10);
+    if(isNaN(dt)) return null;
+    return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
   }
 
   // Already ISO "2026-03-13"
