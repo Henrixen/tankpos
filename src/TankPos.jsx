@@ -1047,10 +1047,10 @@ function EC({value,color,placeholder,onSave,bold,onTab,onShiftTab,...rest}){
   );
   return(
     <td onClick={start} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} title={value||(placeholder||"Click to edit")}
-      style={{padding:"4px 7px",cursor:"text",outline:hov?"1px solid rgba(79,195,247,.3)":"none",outlineOffset:"-1px",verticalAlign:"middle",transition:"background .1s",whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} {...rest}>
+      style={{padding:"4px 7px",cursor:"text",outline:hov?"1px solid rgba(79,195,247,.3)":"1px solid transparent",outlineOffset:"-1px",verticalAlign:"middle",transition:"background .1s",whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} {...rest}>
       <div style={{display:"flex",alignItems:"center",gap:2,overflow:"hidden"}}>
         <span style={{color:value?(color||C.tx):C.faint,fontWeight:bold?700:400,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block",minWidth:0}}>{value||""}</span>
-        {hov&&<span style={{color:C.faint,fontSize:12}}>✎</span>}
+        <span style={{color:C.faint,fontSize:12,opacity:hov?1:0}}>✎</span>
       </div>
     </td>
   );
