@@ -8,9 +8,43 @@ import { supabase } from "./supabaseclient";
 function toISODate(d){
   if(!d) return null;
   const months={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-  const [day,mon]=d.split(" ");
-  const dt=new Date(new Date().getFullYear(),months[mon],parseInt(day));
-  return isNaN(dt)?null:dt.toISOString().slice(0,10);
+  const s=String(d).trim();
+
+  // "13 Mar" or "13 Mar 2026"
+  const m1=s.match(/^(\d{1,2})\s+([A-Za-z]{3})/);
+  if(m1){
+    const dt=new Date(new Date().getFullYear(),months[m1[2].charAt(0).toUpperCase()+m1[2].slice(1,3).toLowerCase()],parseInt(m1[1]));
+    return isNaN(dt)?null:dt.toISOString().slice(0,10);
+  }
+
+  // "13/3" or "13/03" or "13-3" or "13-03"
+  const m2=s.match(/^(\d{1,2})[\/\-](\d{1,2})/);
+  if(m2){
+    const dt=new Date(new Date().getFullYear(),parseInt(m2[2])-1,parseInt(m2[1]));
+    return isNaN(dt)?null:dt.toISOString().slice(0,10);
+  }
+
+  // Already ISO "2026-03-13"
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  return null;
+}
+
+function qtyToNum(q){
+  if(!q) return null;
+  const s=String(q).replace(/\s/g,"").toLowerCase();
+  // already a clean number
+  if(/^\d+$/.test(s)) return parseInt(s);
+  // 15kt, 15k, 15,000mt, 15000mt
+  const m=s.match(/([\d,]+\.?\d*)\s*(k|kt|kmt|mt)?/);
+  if(!m) return null;
+  const n=parseFloat(m[1].replace(/,/g,""));
+  return m[2]&&m[2].startsWith("k")?Math.round(n*1000):Math.round(n);
+}
+
+function numToQty(n){
+  if(!n&&n!==0) return "";
+  return n>=1000?Math.round(n/1000)+"kt":n+"t";
 }
 
 // ─── Utilities ──────────────────────────────────────────────────────────────────
