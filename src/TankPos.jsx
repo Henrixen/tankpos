@@ -1968,33 +1968,35 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
             </div>
             {vessels.length?(<>
               {/* Stats row with opening timeline bar chart */}
-              <div style={{marginLeft: "50%"}}>
-              <OpeningBreakdown vessels={vessels} filteredVessels={filtV} bucketFilters={bucketFilters} onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}/>
-              </div>
-              {/* Export */}
-              <ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/>
-              {/* Search + filters */}
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Multi-search: e.g. belfast ulsd 1A  (all tokens must match)"
-                  style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
-                {FILTER_GROUPS.map(({label,items})=>(
-                  <div key={label} style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-                    <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>{label}</span>
-                    {items.map(([f,l])=>(
-                      <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
-                    ))}
-                    {filters.size?(<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:4}}>✕ Clear</button>):null}
-                  </div>
-                ))}
-                <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-                  <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>Updated</span>
-                  {[["","All"],["today","Today"],["week","This week"]].map(([v,l])=>(
-                    <button key={v} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&v!=="")}>{l}</button>
-                  ))}
-                </div>
-                {opFilter&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:"rgba(79,195,247,0.08)",border:"1px solid rgba(79,195,247,0.25)",borderRadius:5}}><span style={{fontSize:12,color:C.blue,fontWeight:700}}>🔍 Filtered: {opFilter}</span><button onClick={()=>setOpFilter(null)} style={{background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:12,padding:"0 2px"}}>✕ Clear</button></div>}
-                {bucketFilters.size>0&&<div style={{fontSize:12,color:C.blue,cursor:"pointer"}} onClick={()=>setBucketFilters(new Set())}>✕ Clear segment filter ({[...bucketFilters].join(", ")})</div>}
-              </div>
+              <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+  {/* LEFT 50% */}
+  <div style={{flex:"0 0 50%",display:"flex",flexDirection:"column",gap:6}}>
+    <ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/>
+    <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Multi-search: e.g. belfast ulsd 1A  (all tokens must match)"
+      style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
+    {FILTER_GROUPS.map(({label,items})=>(
+      <div key={label} style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>{label}</span>
+        {items.map(([f,l])=>(
+          <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
+        ))}
+        {filters.size?(<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:4}}>✕ Clear</button>):null}
+      </div>
+    ))}
+    <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+      <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>Updated</span>
+      {[["","All"],["today","Today"],["week","This week"]].map(([v,l])=>(
+        <button key={v} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&v!=="")}>{l}</button>
+      ))}
+    </div>
+    {opFilter&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:"rgba(79,195,247,0.08)",border:"1px solid rgba(79,195,247,0.25)",borderRadius:5}}><span style={{fontSize:12,color:C.blue,fontWeight:700}}>🔍 Filtered: {opFilter}</span><button onClick={()=>setOpFilter(null)} style={{background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:12,padding:"0 2px"}}>✕ Clear</button></div>}
+    {bucketFilters.size>0&&<div style={{fontSize:12,color:C.blue,cursor:"pointer"}} onClick={()=>setBucketFilters(new Set())}>✕ Clear segment filter ({[...bucketFilters].join(", ")})</div>}
+  </div>
+
+  {/* RIGHT 50% */}
+  <div style={{flex:"0 0 50%"}}>
+    <OpeningBreakdown vessels={vessels} filteredVessels={filtV} bucketFilters={bucketFilters} onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}/>
+  </div>
               {/* Fleet count row — directly above table */}
               <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12}}>
                 <span style={{color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",fontSize:11}}>Total fleet</span>
