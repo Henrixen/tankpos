@@ -1968,7 +1968,9 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
             </div>
             {vessels.length?(<>
               {/* Stats row with opening timeline bar chart */}
+              <div style={{maxWidth: "50%"}}>
               <OpeningBreakdown vessels={vessels} filteredVessels={filtV} bucketFilters={bucketFilters} onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}/>
+              </div>
               {/* Export */}
               <ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/>
               {/* Search + filters */}
