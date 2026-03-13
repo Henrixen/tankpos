@@ -359,7 +359,7 @@ async function saveSnapshot(vessels) {
 // ─── Vessel merge ─────────────────────────────────────────────────────────────
 function mKey(inc,keys){if(!inc)return null;const s=inc.toLowerCase().trim();if(keys.has(s))return s;for(const k of keys){const[a,b]=s.length<=k.length?[s.split(" "),k.split(" ")]:[k.split(" "),s.split(" ")];if(a.every(w=>b.includes(w)))return k;}for(const k of keys){if(k.endsWith(s)||s.endsWith(k)||k.startsWith(s)||s.startsWith(k))return k;}return null;}
 function mergeVessels(existing,incoming){
-  const map=new Map(existing.map(v=>[v.vessel?.toLowerCase(),v]));
+  const map=new Map(existing.filter(v=>v.vessel).map(v=>[v.vessel.toLowerCase(),v]));
   const incomingKeys=new Set(incoming.map(v=>v.vessel?.toLowerCase().trim()).filter(Boolean));
   for(const v of incoming){
     const rk=v.vessel?.toLowerCase().trim();if(!rk)continue;
