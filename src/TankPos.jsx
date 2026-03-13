@@ -409,15 +409,6 @@ async function ocrImage(img){return apiCall("OCR engine. Transcribe all text fai
 async function parsePos(text,img,known){
   let t=text;if(img){const o=await ocrImage(img);t=o+(text&&text!=="(img)"?"\n\n"+text:"");}
   const kv=known.length?"Known vessels: "+known.join(", "):"";
-  const raw=await apiCall(
-    "Maritime vessel position parser. Output ONLY a raw JSON array. No markdown, no explanation, no code fences.",
-    [{role:"user",content:"Parse vessel positions into a JSON array.\n"+kv+"\n\nEach item must have these fields (null if unknown):\n{\n  vessel: string (ship name),\n  operator: string (commercial operator/manager - NOT the owner, NOT 'TBN'. Extract from phrases like 'opr: X', 'managed by X', company names),\n  built: string (year e.g. '2007'),\n  dwt: string (deadweight tons),\n  cbm: string,\n  date: string (open date ALWAYS in 'DD Mon' format e.g. '05 Mar'. If only a day number given like '25th' or '25' use current month Mar. Never leave as bare number.),\n  openPort: string (port where vessel opens, e.g. 'Rotterdam', 'ARA', 'Humber'. Use EMPLOYED if fixed/on subs),\n  comment: string,\n  spec: { fuel: string, iceClass: string }\n}\n\nOutput ONLY the JSON array.\n\nData:\n"+t}]
-  );
-  return xJSON(raw);
-}
-async function parsePos(text,img,known){
-  let t=text;if(img){const o=await ocrImage(img);t=o+(text&&text!=="(img)"?"\n\n"+text:"");}
-  const kv=known.length?"Known vessels: "+known.join(", "):"";
   const isEdit=/^(update|change|set)\b/i.test(t.trim());
   const sys=isEdit
     ?"Maritime vessel editor. Output ONLY a raw JSON array. No markdown, no explanation, no code fences."
