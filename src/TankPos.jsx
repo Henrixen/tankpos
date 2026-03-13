@@ -105,6 +105,15 @@ function dbLookup(name) {
       if (words.every(w => dk.includes(w))) return dv;
     }
   }
+  let bestKey=null, bestScore=0;
+  for(const dk of Object.keys(VDB)){
+    const shorter=Math.min(clean.length,dk.length);
+    let matches=0;
+    for(let i=0;i<shorter;i++) if(clean[i]===dk[i]) matches++;
+    const score=matches/Math.max(clean.length,dk.length);
+    if(score>0.75&&score>bestScore){bestScore=score;bestKey=dk;}
+  }
+  if(bestKey) return VDB[bestKey];
   return null;
 }
 
