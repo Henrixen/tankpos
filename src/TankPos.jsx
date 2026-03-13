@@ -248,7 +248,7 @@ function classifyRegion(portName) {
   const direct = Object.keys(REGION_MAP).find(r => r.toLowerCase() === n);
   if (direct) return direct;
   for (const [region, ports] of Object.entries(REGION_MAP)) {
-    if (ports.some(p => n.includes(p) || p.includes(n) || n.split(/[\s/+,]/)[0]===p)) return region;
+    if (ports.some(p => p && (n.includes(p) || p.includes(n) || n.split(/[\s/+,]/)[0]===p))) return region;
   }
   return null;
 }
