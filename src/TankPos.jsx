@@ -363,7 +363,7 @@ function mergeVessels(existing,incoming){
   const incomingKeys=new Set(incoming.map(v=>v.vessel?.toLowerCase().trim()).filter(Boolean));
   for(const v of incoming){
     const rk=v.vessel?.toLowerCase().trim();if(!rk)continue;
-    const mk=mKey(rk,new Set(map.keys()));const prev=map.get(mk||rk)||{};
+    const mk=mKey(rk,new Set([...map.keys()].filter(Boolean)));const prev=map.get(mk||rk)||{};
     let merged={...prev};
     if(!mk||v.vessel.length>(prev.vessel||"").length)merged.vessel=v.vessel;
     // Check if this is a genuine position update (openPort or date changed) or just a spec match
