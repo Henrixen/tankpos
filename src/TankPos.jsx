@@ -244,6 +244,9 @@ const REGION_MAP = {
 function classifyRegion(portName) {
   if (!portName || portName === "EMPLOYED") return null;
   const n = portName.toLowerCase().trim();
+  // Direct region name match (e.g. openPort is literally "ECUK")
+  const direct = Object.keys(REGION_MAP).find(r => r.toLowerCase() === n);
+  if (direct) return direct;
   for (const [region, ports] of Object.entries(REGION_MAP)) {
     if (ports.some(p => n.includes(p) || p.includes(n) || n.split(/[\s/+,]/)[0]===p)) return region;
   }
