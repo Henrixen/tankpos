@@ -3,7 +3,7 @@ name: Import Vessels to Supabase
 on:
   push:
     paths:
-      - 'data/vessels.csv'
+      - 'data/Barton.csv'
 
 jobs:
   import:
