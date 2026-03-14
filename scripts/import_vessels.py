@@ -47,5 +47,10 @@ for _, row in df.iterrows():
         "comments": str(row.get("Comments", "") or "").strip() or None,
     })
 
-supabase.table("vessels_db").upsert(records).execute()
-print(f"Upserted {len(records)} vessels")
+print(f"Total records: {len(records)}")
+if records:
+    print("Sample record:", records[0])
+    supabase.table("vessels_db").upsert(records).execute()
+    print(f"Upserted {len(records)} vessels")
+else:
+    print("No records to upsert")
