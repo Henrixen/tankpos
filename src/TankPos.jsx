@@ -1002,6 +1002,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode}){
       const knownVessels=vessels.map(v=>v.vessel).filter(Boolean);const knownCargo=[...new Set((cargoes||[]).map(c=>c.vessel).filter(Boolean))];const known=[...new Set([...knownVessels,...knownCargo])];
       if(mode==="pos"){
         const p=await parsePos(text||"(img)",img,known);if(!p?.length){setStatus({t:"error",m:"No vessel data found."});return;}
+        console.log("parsed:", JSON.stringify(p));
         const ts=posDate?new Date(posDate).toISOString():new Date().toISOString();
         const stamped=p.map(v=>({...v,updatedAt:ts}));
         const r=onAddVessels(stamped);setText("");setImg(null);
