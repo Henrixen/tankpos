@@ -6,7 +6,7 @@ url = os.environ["SUPABASE_URL"]
 key = os.environ["SUPABASE_KEY"]
 supabase = create_client(url, key)
 
-df = pd.read_csv("data/Barton.csv")
+df = pd.read_csv("data/Barton.csv", on_bad_lines='skip', encoding='utf-8-sig')
 
 def get_coating(row):
     if pd.notna(row.get("MarineLine")) and str(row.get("MarineLine")).strip() != "":
