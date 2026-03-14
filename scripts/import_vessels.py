@@ -50,7 +50,16 @@ for _, row in df.iterrows():
 print(f"Total records: {len(records)}")
 if records:
     print("Sample record:", records[0])
-    supabase.table("vessels_db").upsert(records).execute()
-    print(f"Upserted {len(records)} vessels")
+    # Deduplicate by vessel name, keep last occurrence
+    seen = {}
+    for r in records:
+        seen[r["vessel"]] = r
+    unique_records = list(seen.values())
+    print(f"Unique records: {len(unique_records)}")
+    # Upsert in batches of 500
+    for i in range(0, len(unique_records), 500):
+        batch = unique_records[i:i+500]
+        supabase.table("vessels_db").upsert(batch).execute()
+    print(f"Upserted {len(unique_records)} vessels")
 else:
     print("No records to upsert")
