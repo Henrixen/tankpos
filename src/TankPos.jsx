@@ -1003,6 +1003,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode}){
       if(mode==="pos"){
         const p=await parsePos(text||"(img)",img,known);if(!p?.length){setStatus({t:"error",m:"No vessel data found."});return;}
         console.log("parsed:", JSON.stringify(p));
+        console.log("vesselDB size:", Object.keys(vesselDB).length);
         const ts=posDate?new Date(posDate).toISOString():new Date().toISOString();
         const stamped=p.map(v=>({...v,updatedAt:ts}));
         const r=onAddVessels(stamped);setText("");setImg(null);
