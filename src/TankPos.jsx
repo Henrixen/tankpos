@@ -555,7 +555,7 @@ function RateMatrix(){
         if (dbRows) {
           dbRows.forEach(row => {
             // Note: row.Vessel (Capital V) to match your Supabase column name
-            if (row.Vessel) {
+            if (row.vessel) {
               vesselDB[row.vessel.toLowerCase().trim()] = row;
             }
           });
