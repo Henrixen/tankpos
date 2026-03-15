@@ -258,7 +258,7 @@ async function loadAll(){
     cargoes=JSON.parse(localStorage.getItem(CK)||"[]");
   }
   // Re-enrich all vessels from DB on load (fills missing operator/specs)
-  vessels = vessels.map(v => enrichV(v,{}));
+  vessels = vessels.map(v => enrichV(v,vesselDB));
   return {vessels, cargoes};
 }
 async function saveV(v){try{await window.storage.set(SK,JSON.stringify(v),true);}catch(_){}try{localStorage.setItem(SK,JSON.stringify(v));}catch(_){}}
@@ -3087,7 +3087,7 @@ useEffect(()=>{
   let r={added:0,updated:0,total:0};
   setVessels(prev=>{const before=prev.length;const next=mergeVessels(prev,parsed,vesselDB);r={added:next.length-before,updated:parsed.length-Math.max(0,next.length-before),total:next.length};saveV(next);setTimeout(()=>saveSnapshot(next),100);return next;});
   const rows=parsed.map(v=>{
-    const ev=enrichV(v);
+    const ev=enrichV(v,vesselDB);
     return {
       id: "pos_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),
       vessel: ev.vessel,
@@ -3149,7 +3149,7 @@ useEffect(()=>{
   },[]);
 
   const addV=useCallback(async(v)=>{
-  setVessels(prev=>{const idx=prev.findIndex(x=>x.vessel?.toLowerCase()===v.vessel.toLowerCase());const next=idx>=0?prev.map((x,i)=>i===idx?enrichV(v):x):[...prev,enrichV(v)];saveV(next);return next;});
+  setVessels(prev=>{const idx=prev.findIndex(x=>x.vessel?.toLowerCase()===v.vessel.toLowerCase());const next=idx>=0?prev.map((x,i)=>i===idx?enrichV(v,vesselDB):x):[...prev,enrichV(v,vesselDB)];saveV(next);return next;});
   const{error}=await supabase.from("positions").upsert([{...v,updated_at:new Date().toISOString()}],{onConflict:"vessel"});
   if(error)console.error(error);
 },[]);
