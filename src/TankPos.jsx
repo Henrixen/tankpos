@@ -1930,7 +1930,6 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 18px",background:C.bg2,borderBottom:"1px solid "+C.bd,position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",alignItems:"center",gap:8,fontFamily:"sans-serif",fontWeight:800,fontSize:17}}>⚓ Tank<span style={{color:C.green}}>Pos</span></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          {tab==="cargo"&&cargoes.length>0&&(<button onClick={()=>setPendingDel({type:"allcargo",id:"__ALLCARGO__",label:"ALL "+cargoes.length+" cargo fixtures"})} style={{background:"none",border:"1px solid "+C.red,borderRadius:4,padding:"2px 10px",color:C.red,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✕ Clear Cargoes</button>)}
           {tab==="pos"&&vessels.length>0&&(<button onClick={()=>setPendingDel({type:"all",id:"__ALL__",label:"ALL "+vessels.length+" vessels"})} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 10px",color:C.dim,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✕ Clear Positions</button>)}
         </div>
       </div>
