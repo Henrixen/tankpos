@@ -95,19 +95,24 @@ function dbLookup(name, vesselDB) {
 function enrichV(v, vesselDB) {
   const d = dbLookup(v.vessel, vesselDB);
   if (!d) return v;
-  const resolvedOp = v.operatorManual ? v.operator : (v.operator || d.operator || null);
+
+  // Use Capitalized keys (D.Operator, d.Built, etc.) to match Supabase
+  const resolvedOp = v.operatorManual ? v.operator : (v.operator || d.Operator || null);
+
   return {
     ...v,
-    built:    v.built    || d.built    || null,
-    dwt:      v.dwt      || d.dwt      || null,
-    loa:      v.loa      || d.loa      || null,
-    beam:     v.beam     || d.beam     || null,
-    cbm:      v.cbm      || d.cbm      || null,
+    built:    v.built    || d.Built    || null,
+    dwt:      v.dwt      || d.Dwt      || null,
+    loa:      v.loa      || d.Loa      || null,
+    beam:     v.beam     || d.Beam     || null,
+    cbm:      v.cbm      || d.Cbm      || null,
     operator: resolvedOp,
     spec: {
       ...v.spec,
-      iceClass: v.spec?.iceClass || d.ice_class || null,
-      fuel:     v.spec?.fuel     || d.fuel      || null,
+      // Check your screenshot: is it Ice_class or Ice_Class? 
+      // Based on your previous image it is "Ice_class"
+      iceClass: v.spec?.iceClass || d.Ice_class || null,
+      fuel:     v.spec?.fuel     || d.Fuel      || null,
     }
   };
 }
@@ -543,18 +548,50 @@ function RateMatrix(){
   const [matrixBunker,setMatrixBunker]=useState(TCE_DEFAULTS.bunker);
 
   const tceDefaultsRef=useRef(TCE_DEFAULTS);
-  useEffect(()=>{
-    loadRates().then(d=>{
-      if(d){
-        matrixRef.current={...matrixRef.current,...d};
-        if(d.__euRoutes)setEuRoutes(d.__euRoutes);
-        if(d.__rateRoutes)setRateRoutes(d.__rateRoutes);
-        if(d.__matrixBunker)setMatrixBunker(d.__matrixBunker);
+  useEffect(() => {
+    async function init() {
+      // 1. Fetch Vessel Specs from Supabase and fill the vesselDB object
+      try {
+        const { data: dbRows, error: dbErr } = await supabase.from("vessels_db").select("*");
+        if (dbErr) throw dbErr;
+        if (dbRows) {
+          dbRows.forEach(row => {
+            // Note: row.Vessel (Capital V) to match your Supabase column name
+            if (row.Vessel) {
+              vesselDB[row.Vessel.toLowerCase().trim()] = row;
+            }
+          });
+          console.log("Vessel DB Loaded:", Object.keys(vesselDB).length, "vessels");
+        }
+      } catch (e) {
+        console.error("Supabase Vessel DB Error:", e.message);
       }
-      loadedRef.current=true;forceUpdate(n=>n+1);
-    });
-    loadTCEDefaults().then(d=>{if(d)tceDefaultsRef.current={...TCE_DEFAULTS,...d};});
-  },[]);
+
+      // 2. Load Rates & TCE Defaults (Your existing logic)
+      loadRates().then(d => {
+        if (d) {
+          matrixRef.current = { ...matrixRef.current, ...d };
+          if (d.__euRoutes) setEuRoutes(d.__euRoutes);
+          if (d.__rateRoutes) setRateRoutes(d.__rateRoutes);
+          if (d.__matrixBunker) setMatrixBunker(d.__matrixBunker);
+        }
+        loadedRef.current = true;
+        forceUpdate(n => n + 1);
+      });
+      
+      loadTCEDefaults().then(d => {
+        if (d) tceDefaultsRef.current = { ...TCE_DEFAULTS, ...d };
+      });
+
+      // 3. Load user positions and apply the specs immediately
+      const { vessels, cargoes } = await loadAll();
+      setVessels(vessels);
+      setCargoes(cargoes);
+      setLoading(false);
+    }
+    
+    init();
+  }, []);
 
   function saveMatrixBunker(val){
     matrixRef.current.__matrixBunker=val;
