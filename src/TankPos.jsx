@@ -253,14 +253,20 @@ const SK="tankpos-v5",CK="tankpos-cargo-v2";
 async function loadAll() {
   let vessels = [], cargoes = [];
   // 1. Fetch your vessel database from Supabase
-  const { data: dbRows, error } = await supabase.from("vessels_db").select("*").limit(10000);
-  const vDB = {};
-  if (dbRows) {
-    dbRows.forEach(row => {
-      // Map the vessel name as the key for the lookup
-      if (row.vessel) vDB[row.vessel.toLowerCase().trim()] = row;
-    });
-  }
+  let allRows = [];
+let from = 0;
+const pageSize = 1000;
+while(true){
+  const {data, error} = await supabase.from("vessels_db").select("*").range(from, from+pageSize-1);
+  if(error || !data || data.length === 0) break;
+  allRows = [...allRows, ...data];
+  if(data.length < pageSize) break;
+  from += pageSize;
+}
+const vDB = {};
+allRows.forEach(row => {
+  if(row.vessel) vDB[row.vessel.toLowerCase().trim()] = row;
+});
 
   try {
     const rv = await window.storage.get(SK, true);
@@ -3010,22 +3016,23 @@ export default function TankPos(){
   const [mobile,setMobile]=useState(()=>isMobile());
 
     useEffect(()=>{
-  supabase.from("vessels_db")
-    .select("vessel,dwt,built,loa,beam,cbm,ice_class,fuel,operator").limit(10000)
-    .then(({data,error})=>{
-      console.log("vessels_db result:", data?.length, error);
-      if(error){console.error("vessels_db error:",error);return;}
-      if(!data) return;
-      const map = {};
-      for(const r of data){
-        if(r.vessel){
-          map[r.vessel.toLowerCase().trim()] = r;
-        }
-      }
-      setVesselDB(map);
-      window.vesselDB = map;
-      console.log("vesselDB loaded:", Object.keys(map).length);
-    });
+  (async()=>{
+    let allRows = [];
+    let from = 0;
+    const pageSize = 1000;
+    while(true){
+      const {data, error} = await supabase.from("vessels_db").select("vessel,dwt,built,loa,beam,cbm,ice_class,fuel,operator").range(from, from+pageSize-1);
+      if(error || !data || data.length === 0) break;
+      allRows = [...allRows, ...data];
+      if(data.length < pageSize) break;
+      from += pageSize;
+    }
+    const map = {};
+    allRows.forEach(r => { if(r.vessel) map[r.vessel.toLowerCase().trim()] = r; });
+    setVesselDB(map);
+    window.vesselDB = map;
+    console.log("vesselDB loaded:", allRows.length);
+  })();
 },[]);
 
   function onCargoSearch(term){
