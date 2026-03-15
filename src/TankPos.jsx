@@ -3054,23 +3054,23 @@ export default function TankPos(){
   const [mobile,setMobile]=useState(()=>isMobile());
 
     useEffect(()=>{
-    supabase.from("vessels_db")
-      .select("vessel,dwt,built,loa,beam,cbm,ice_class,fuel,operator")
-      .then(({data})=>{
-        if(!data) return;
-        const map = {};
-
-        for(const r of data){
-          if(r.vessel){
-            map[r.vessel.toLowerCase().trim()] = r;
-          }
+  supabase.from("vessels_db")
+    .select("vessel,dwt,built,loa,beam,cbm,ice_class,fuel,operator")
+    .then(({data,error})=>{
+      console.log("vessels_db result:", data?.length, error);
+      if(error){console.error("vessels_db error:",error);return;}
+      if(!data) return;
+      const map = {};
+      for(const r of data){
+        if(r.vessel){
+          map[r.vessel.toLowerCase().trim()] = r;
         }
-
-        setVesselDB(map);
-        window.vesselDB = map;
-
-      });
-  },[]);
+      }
+      setVesselDB(map);
+      window.vesselDB = map;
+      console.log("vesselDB loaded:", Object.keys(map).length);
+    });
+},[]);
 
   function onCargoSearch(term){
     clearTimeout(searchTimer.current);
