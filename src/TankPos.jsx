@@ -910,7 +910,7 @@ function RightPanel({vessels,cargoes}){
       gridTemplateRows:"1fr 1fr",
       gap:10,
       alignSelf:"stretch",
-      resize:"horizontal"
+      resize:"none"
     }}
   >
 
