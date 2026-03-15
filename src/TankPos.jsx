@@ -74,7 +74,7 @@ if (vesselDB[k]) return vesselDB[k];
 // Try exact case-insensitive match
 const exactKey = Object.keys(vesselDB).find(dk => dk === clean || dk === k);
 if (exactKey) return vesselDB[exactKey];
-  const words = clean.split(" ").filter(w => w.length > 3);
+  const words = clean.split(" ").filter(w => w.length > 1);
   if (words.length >= 2) {
     for (const [dk, dv] of Object.entries(vesselDB)) {
       if (words.every(w => dk.includes(w))) return dv;
