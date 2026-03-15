@@ -546,51 +546,7 @@ function RateMatrix(){
   const [matrixBunker,setMatrixBunker]=useState(TCE_DEFAULTS.bunker);
 
   const tceDefaultsRef=useRef(TCE_DEFAULTS);
-  useEffect(() => {
-    async function init() {
-      // 1. Fetch Vessel Specs from Supabase and fill the vesselDB object
-      try {
-        const { data: dbRows, error: dbErr } = await supabase.from("vessels_db").select("*");
-        if (dbErr) throw dbErr;
-        if (dbRows) {
-          dbRows.forEach(row => {
-            // Note: row.Vessel (Capital V) to match your Supabase column name
-            if (row.vessel) {
-              vesselDB[row.vessel.toLowerCase().trim()] = row;
-            }
-          });
-          console.log("Vessel DB Loaded:", Object.keys(vesselDB).length, "vessels");
-        }
-      } catch (e) {
-        console.error("Supabase Vessel DB Error:", e.message);
-      }
-
-      // 2. Load Rates & TCE Defaults (Your existing logic)
-      loadRates().then(d => {
-        if (d) {
-          matrixRef.current = { ...matrixRef.current, ...d };
-          if (d.__euRoutes) setEuRoutes(d.__euRoutes);
-          if (d.__rateRoutes) setRateRoutes(d.__rateRoutes);
-          if (d.__matrixBunker) setMatrixBunker(d.__matrixBunker);
-        }
-        loadedRef.current = true;
-        forceUpdate(n => n + 1);
-      });
-      
-      loadTCEDefaults().then(d => {
-        if (d) tceDefaultsRef.current = { ...TCE_DEFAULTS, ...d };
-      });
-
-      // 3. Load user positions and apply the specs immediately
-      const { vessels, cargoes } = await loadAll();
-      setVessels(vessels);
-      setCargoes(cargoes);
-      setLoading(false);
-    }
-    
-    init();
-  }, []);
-
+ 
   function saveMatrixBunker(val){
     matrixRef.current.__matrixBunker=val;
     if(loadedRef.current)saveRates(matrixRef.current);
