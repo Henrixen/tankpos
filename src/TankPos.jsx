@@ -2997,32 +2997,38 @@ function normaliseCargo(c){
 }
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
-useEffect(()=>{
-  supabase.from("vessels_db")
-    .select("vessel,dwt,built,loa,beam,cbm,ice_class,fuel,operator")
-    .then(({data})=>{
-      if(!data) return;
+export default function TankPos(){
 
-      const map={};
-
-      for(const r of data){
-        if(r.vessel){
-          map[r.vessel.toLowerCase().trim()] = r;
-        }
-      }
-
-      setVesselDB(map);
-      window.vesselDB = map;
-
-    });
-},[]);
+  const [vesselDB, setVesselDB] = useState({});
   const [vessels,setVessels]=useState([]);
   const [cargoes,setCargoes]=useState([]);
   const [hasMore,setHasMore]=useState(false);
   const searchTimer=useRef(null);
-  function onCargoSearch(term){clearTimeout(searchTimer.current);searchTimer.current=setTimeout(()=>fetchCargoes(term),300);}
   const [mobile,setMobile]=useState(()=>isMobile());
 
+  useEffect(()=>{
+    supabase.from("vessels_db")
+      .select("vessel,dwt,built,loa,beam,cbm,ice_class,fuel,operator")
+      .then(({data})=>{
+        if(!data) return;
+
+        const map={};
+
+        for(const r of data){
+          if(r.vessel){
+            map[r.vessel.toLowerCase().trim()] = r;
+          }
+        }
+
+        setVesselDB(map);
+        window.vesselDB = map; // debug
+      });
+  },[]);
+
+  function onCargoSearch(term){
+    clearTimeout(searchTimer.current);
+    searchTimer.current=setTimeout(()=>fetchCargoes(term),300);
+  }
   // Load vessels from local storage, cargoes from Supabase
   useEffect(()=>{
   fetchPositions();
