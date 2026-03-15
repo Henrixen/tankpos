@@ -258,7 +258,7 @@ async function loadAll(){
     cargoes=JSON.parse(localStorage.getItem(CK)||"[]");
   }
   // Re-enrich all vessels from DB on load (fills missing operator/specs)
-  vessels = vessels.map(v => enrichV(v,vesselDB));
+  vessels = vessels.map(v => enrichV(v,{}));
   return {vessels, cargoes};
 }
 async function saveV(v){try{await window.storage.set(SK,JSON.stringify(v),true);}catch(_){}try{localStorage.setItem(SK,JSON.stringify(v));}catch(_){}}
