@@ -929,7 +929,7 @@ function RightPanel({vessels,cargoes}){
 
 
 // ─── ParsePanel ───────────────────────────────────────────────────────────────
-function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode}){
+function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vesselDB}){
   const [mode,setMode]=useState(lockedMode||"pos");
   const [text,setText]=useState("");const [img,setImg]=useState(null);
   const [busy,setBusy]=useState(false);const [status,setStatus]=useState(null);
