@@ -3055,7 +3055,7 @@ export default function TankPos(){
 
     useEffect(()=>{
   supabase.from("vessels_db")
-    .select("vessel,dwt,built,loa,beam,cbm,ice_class,fuel,operator")
+    .select("vessel,dwt,built,loa,beam,cbm,ice_class,fuel,operator").limit(10000)
     .then(({data,error})=>{
       console.log("vessels_db result:", data?.length, error);
       if(error){console.error("vessels_db error:",error);return;}
