@@ -253,7 +253,7 @@ const SK="tankpos-v5",CK="tankpos-cargo-v2";
 async function loadAll() {
   let vessels = [], cargoes = [];
   // 1. Fetch your vessel database from Supabase
-  const { data: dbRows, error } = await supabase.from("vessels_db").select("*");
+  const { data: dbRows, error } = await supabase.from("vessels_db").select("*").limit(10000);
   const vDB = {};
   if (dbRows) {
     dbRows.forEach(row => {
