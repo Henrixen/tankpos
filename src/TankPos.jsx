@@ -65,15 +65,19 @@ const stripHtml = s => {
   }
   return out.replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&nbsp;/g," ").replace(/&#\d+;/g,"").trim();
 };
-function dbLookup(name, vesselDB) {
-  if (!name || !vesselDB) return null;
-  const k = name.toLowerCase().trim();
-  const clean = k.replace(/[.-]/g," ").replace(/\s+/g," ").trim();
-  if (vesselDB[clean]) return vesselDB[clean];
-  if (vesselDB[k]) return vesselDB[k];
-  for (const [dk, dv] of Object.entries(vesselDB)) {
-    if (clean.length > 4 && (dk.includes(clean) || clean.includes(dk))) return dv;
-  }
+function dbLookup(name, db) {
+  if (!name || !db) return null;
+  const raw = name.toLowerCase().trim();
+  
+  // 1. Try exact match (e.g., if DB has "xt peace")
+  if (db[raw]) return db[raw];
+  
+  // 2. Try stripping prefixes (mt, mv, xt) and then check (e.g., if DB has "peace")
+  const clean = raw.replace(/^(mt|mv|m\/t|m\.t\.|xt)\s+/g, "").trim();
+  if (db[clean]) return db[clean];
+
+  return null;
+}
   const words = clean.split(" ").filter(w => w.length > 3);
   if (words.length >= 2) {
     for (const [dk, dv] of Object.entries(vesselDB)) {
