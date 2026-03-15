@@ -65,7 +65,7 @@ const stripHtml = s => {
   }
   return out.replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&nbsp;/g," ").replace(/&#\d+;/g,"").trim();
 };
-function dbLookup(name, db) {
+function dbLookup(name, vesselDB) {
   if (!name || !db) return null;
   const raw = name.toLowerCase().trim();
   
