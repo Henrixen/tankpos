@@ -1956,9 +1956,9 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
         {tab==="pos"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {/* ── Three-column top row: Parse+Fixing | Rates | AI+Intel ── */}
-            <div style={{display:"flex",gap:10,alignItems:"stretch"}}>
+            <div style={{display:"flex",gap:10,alignItems:"stretch",height:240}}>
               {/* Left: Parse + FixingWindow */}
-              <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,resize:"horizontal",overflow:"auto",maxWidth:"50%"}}>
+              <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,resize:"none",overflow:"auto",maxWidth:"50%"}}>
                 <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={vesselDB}/>
                 <FixingWindow vessels={vessels} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)}/>
               </div>
