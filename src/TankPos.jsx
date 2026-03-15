@@ -1054,8 +1054,8 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
       {img&&!img.dataUrl&&<div style={{padding:"3px 10px",background:"rgba(188,140,255,.07)",fontSize:12,color:C.purple,display:"flex",justifyContent:"space-between"}}><span>📷 attached</span><button onClick={()=>setImg(null)} style={{background:"none",border:"none",color:C.purple,cursor:"pointer",fontSize:12}}>✕</button></div>}
       <textarea value={text} onChange={e=>setText(e.target.value)} onPaste={onPaste}
         placeholder={mode==="pos"?"Paste positions or Ctrl+V screenshot…":"Paste cargo fixtures or Ctrl+V screenshot…"}
-        style={{width:"100%",minHeight:52,background:C.bg2,border:"none",color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}
-      <div style={{padding:"5px 8px",borderTop:"1px solid "+C.bd2,display:"flex",gap:5,alignItems:"center"}}>
+        style={{width:"100%",minHeight:52,background:C.bg2,border:"none",color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}>
+        <div style={{padding:"5px 8px",borderTop:"1px solid "+C.bd2,display:"flex",gap:5,alignItems:"center"}}>
         <button onClick={go} disabled={busy} style={{flex:1,background:busy?"#1a4a8f":"#1f6feb",border:"none",borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px 0",cursor:busy?"default":"pointer"}}>
           {busy?"⟳ Processing…":"▶ Parse & Add"}
         </button>
@@ -1930,10 +1930,6 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 18px",background:C.bg2,borderBottom:"1px solid "+C.bd,position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",alignItems:"center",gap:8,fontFamily:"sans-serif",fontWeight:800,fontSize:17}}>⚓ Tank<span style={{color:C.green}}>Pos</span></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <button onClick={()=>backupData(vessels,cargoes)} style={{background:"none",border:"1px solid "+C.green,borderRadius:4,padding:"2px 10px",color:C.green,fontSize:12,cursor:"pointer",fontFamily:"inherit"}} title="Download all data as JSON">💾 Backup</button>
-          <input ref={restoreRef} type="file" accept=".json" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(!f)return;restoreData(f,(v)=>{setVessels(v);saveV(v);},(c)=>{setCargoes(c);saveC(c);setRestoreMsg(c.length+" cargoes restored");setTimeout(()=>setRestoreMsg(""),4000);});e.target.value="";}}/>
-          <button onClick={()=>restoreRef.current&&restoreRef.current.click()} style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"2px 10px",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit"}} title="Restore from JSON backup">📂 Restore</button>
-          {restoreMsg&&<span style={{color:C.green,fontSize:12,fontFamily:"inherit"}}>✓ {restoreMsg}</span>}
           {tab==="cargo"&&cargoes.length>0&&(<button onClick={()=>setPendingDel({type:"allcargo",id:"__ALLCARGO__",label:"ALL "+cargoes.length+" cargo fixtures"})} style={{background:"none",border:"1px solid "+C.red,borderRadius:4,padding:"2px 10px",color:C.red,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✕ Clear Cargoes</button>)}
           {tab==="pos"&&vessels.length>0&&(<button onClick={()=>setPendingDel({type:"all",id:"__ALL__",label:"ALL "+vessels.length+" vessels"})} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 10px",color:C.dim,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✕ Clear Positions</button>)}
         </div>
