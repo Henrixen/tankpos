@@ -1966,6 +1966,7 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
                 <div style={{padding:"6px 12px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📊 Rate Matrix</span>
                   <span style={{fontSize:12,color:C.faint,marginLeft:8}}>right-click cell for comment</span>
+                  <span style={{flex:1}}/>
                 </div>
                 <div style={{padding:"8px 10px",overflowY:"auto",flex:1}}>
                   <RateMatrix/>
