@@ -70,10 +70,10 @@ function dbLookup(name, vesselDB) {
   const k = name.toLowerCase().trim();
   const clean = k.replace(/[.-]/g," ").replace(/\s+/g," ").trim();
   if (vesselDB[clean]) return vesselDB[clean];
-  if (vesselDB[k]) return vesselDB[k];
-  for (const [dk, dv] of Object.entries(vesselDB)) {
-    if (clean.length > 4 && (dk.includes(clean) || clean.includes(dk))) return dv;
-  }
+if (vesselDB[k]) return vesselDB[k];
+// Try exact case-insensitive match
+const exactKey = Object.keys(vesselDB).find(dk => dk === clean || dk === k);
+if (exactKey) return vesselDB[exactKey];
   const words = clean.split(" ").filter(w => w.length > 3);
   if (words.length >= 2) {
     for (const [dk, dv] of Object.entries(vesselDB)) {
