@@ -1873,7 +1873,8 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
       }
       if(cFilter==="FIXED"&&c.status!=="FIXED")return false;
       if(cFilter==="SUBS"&&c.status!=="SUBS")return false;
-
+      if(cFilter==="FAILED"&&c.status!=="FAILED")return false;
+      
       if(cDateFilter){const hay=(c.from||" ")+" "+(c.to||"");if(!hay.toLowerCase().includes(cDateFilter.toLowerCase()))return false;}
       if(!cTokens.length)return true;
       return cTokens.every(t=>JSON.stringify(c).toLowerCase().includes(t));
@@ -2028,7 +2029,7 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
                     </thead>
                     <tbody>
                       {filtV.map((v,i)=>{
-                        const fix=cargoes.find(c=>c.vessel&&c.vessel.toLowerCase()===v.vessel.toLowerCase()&&(c.status==="FIXED"||c.status==="SUBS"));
+                        const fix=cargoes.find(c=>c.vessel&&c.vessel.toLowerCase()===v.vessel.toLowerCase()&&(c.status==="FIXED"||c.status==="SUBS"||c.status==="FAILED"));
                         const isSel=sel===v.vessel;
                         const reg=classifyRegion(v.openPort);
                         const ppt=isOpenPPT(v.date);
@@ -2083,7 +2084,7 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
                       <EC value={selV.notes} color={C.dim} placeholder="Add vessel notes…" onSave={v2=>onUpdateV(selV.vessel,"notes",v2)}/>
                       {selFixes.length?(<>
                         <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em",padding:"6px 0 3px",borderBottom:"1px solid "+C.bd2}}>Fixtures ({selFixes.length})</div>
-                        {selFixes.map(f=>{const col=f.status==="FIXED"?C.green:f.status==="SUBS"?C.purple:C.blue;return(
+                        const col=f.status==="FIXED"?C.green:f.status==="SUBS"?C.purple:f.status==="FAILED"?C.red:C.blue;return(
                           <div key={f.id} style={{background:C.bg,border:"1px solid "+col+"33",borderRadius:4,padding:"5px 8px",marginBottom:4,marginTop:3}}>
                             <div style={{fontFamily:"sans-serif",fontWeight:700,fontSize:12,color:col}}>{f.status}{f.from?" · "+f.from+(f.to?" - "+f.to:""):""}</div>
                             <div style={{fontSize:12,fontWeight:600}}>{f.load||"?"}→{f.disch||"?"}</div>
@@ -2136,8 +2137,8 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
               <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoes.length}</span></span>
               <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtC.length}</span></span>
               <span style={{color:C.faint}}>Fixed <span style={{color:C.green,fontWeight:700}}>{cargoes.filter(c=>c.status==="FIXED").length}</span></span>
-              
               <span style={{color:C.faint}}>Subs <span style={{color:C.purple,fontWeight:700}}>{cargoes.filter(c=>c.status==="SUBS").length}</span></span>
+              <span style={{color:C.faint}}>Failed <span style={{color:C.red,fontWeight:700}}>{cargoes.filter(c=>c.status==="FAILED").length}</span></span>
               <span style={{flex:1}}/>
             </div>
             <div style={{border:"1px solid "+C.bd2,borderRadius:7,overflow:"hidden",overflowX:"auto"}}>
@@ -2161,7 +2162,7 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
                     <th style={{...th,width:26,minWidth:26,padding:"4px 2px"}}></th>
                   </tr></thead>
                   <tbody>{filtC.map((f,ri)=>{
-                    const sc=f.status==="FIXED"?C.green:f.status==="SUBS"?C.purple:C.faint;
+                    const sc=f.status==="FIXED"?C.green:f.status==="SUBS"?C.purple:f.status==="FAILED"?C.red:C.faint;
                     const fmtLC=s=>{
                       if(!s)return"";
                       // Strip year first
@@ -2172,7 +2173,7 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
                     };
                     return <tr key={f.id} style={{background:ri%2===0?C.bg:C.bg2}}>
                       <td style={{...td,width:28,padding:"0 2px",textAlign:"center",cursor:"pointer"}} onClick={e=>{e.stopPropagation();setSelCargoes(p=>{const n=new Set(p);n.has(f.id)?n.delete(f.id):n.add(f.id);return n;})}}><span style={{fontSize:12,color:selCargoes.has(f.id)?"#4fc3f7":C.faint}}>{selCargoes.has(f.id)?"[✓]":"[ ]"}</span></td>
-                      <td style={{...td,width:colWidthsC.Status||60,cursor:"pointer",overflow:"hidden"}} onClick={e=>{e.stopPropagation();const opts=["SUBS","FIXED",""];const cur=opts.indexOf(f.status||"");onUpdateC(f.id,"status",opts[(cur+1)%opts.length]);}} title="Click to cycle status">
+                      <td style={{...td,width:colWidthsC.Status||60,cursor:"pointer",overflow:"hidden"}} onClick={e=>{e.stopPropagation();const opts=["SUBS","FIXED","FAILED",""];const cur=opts.indexOf(f.status||"");onUpdateC(f.id,"status",opts[(cur+1)%opts.length]);}} title="Click to cycle status">
                         <span style={{color:sc,fontWeight:700}}>{f.status||""}</span>
                       </td>
                       <EC value={f.vessel} color={C.blue} bold placeholder="TBN" onSave={v2=>onUpdateC(f.id,"vessel",v2)} width={colWidthsC.Vessel||130} onTab={()=>document.querySelector(`[data-cid="${f.id}-chtr"]`)?.click()}/>
@@ -2213,7 +2214,7 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
                 const fixes=cargoes.filter(c=>c.vessel&&c.vessel.toLowerCase()===v.vessel.toLowerCase()).sort((a,b)=>(b.updated||"").localeCompare(a.updated||""));
                 const cargo=fixes[0];const calc=cargo?calcVoyage(v,cargo):null;
                 const bg=i%2===0?C.bg:C.bg2;
-                const sc=cargo?(cargo.status==="FIXED"?C.green:cargo.status==="SUBS"?C.purple:C.amber):C.faint;
+                const sc=cargo?(cargo.status==="FIXED"?C.green:cargo.status==="SUBS"?C.purple:cargo.status==="FAILED"?C.red:C.amber):C.faint;
                 return(
                   <div key={v.vessel} style={{background:bg,borderBottom:"1px solid "+C.bd2,padding:"9px 14px"}}>
                     <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
