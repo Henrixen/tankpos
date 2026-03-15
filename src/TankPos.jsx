@@ -258,7 +258,7 @@ async function loadAll(){
     cargoes=JSON.parse(localStorage.getItem(CK)||"[]");
   }
   // Re-enrich all vessels from DB on load (fills missing operator/specs)
-  vessels = vessels.map(v => enrichV(v,{}));
+  vessels = vessels.map(v => enrichV(v, vesselDB));
   return {vessels, cargoes};
 }
 async function saveV(v){try{await window.storage.set(SK,JSON.stringify(v),true);}catch(_){}try{localStorage.setItem(SK,JSON.stringify(v));}catch(_){}}
@@ -1931,7 +1931,7 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
             <div style={{display:"flex",gap:10,alignItems:"stretch"}}>
               {/* Left: Parse + FixingWindow */}
               <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,resize:"horizontal",overflow:"auto",maxWidth:"50%"}}>
-                <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos"/>
+                <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={vesselDB}/>
                 <FixingWindow vessels={vessels} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)}/>
               </div>
               {/* Middle: Rate Matrix */}
@@ -2095,7 +2095,7 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:6}}>
-                <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo"/>
+                <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={vesselDB}/>
                 <ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/>
               </div>
               <div
