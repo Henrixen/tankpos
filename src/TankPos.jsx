@@ -3011,6 +3011,19 @@ export default function TankPos(){
       .select("vessel,dwt,built,loa,beam,cbm,ice_class,fuel,operator")
       .then(({data})=>{
         if(!data) return;
+        const map = {};
+
+        for(const r of data){
+          if(r.vessel){
+            map[r.vessel.toLowerCase().trim()] = r;
+          }
+        }
+
+        setVesselDB(map);
+        window.vesselDB = map;
+
+      });
+  },[]);
 
   function onCargoSearch(term){
     clearTimeout(searchTimer.current);
