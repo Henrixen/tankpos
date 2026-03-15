@@ -929,7 +929,7 @@ function RightPanel({vessels,cargoes}){
 
 
 // ─── ParsePanel ───────────────────────────────────────────────────────────────
-function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vesselDB}){
+function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode}){
   const [mode,setMode]=useState(lockedMode||"pos");
   const [text,setText]=useState("");const [img,setImg]=useState(null);
   const [busy,setBusy]=useState(false);const [status,setStatus]=useState(null);
@@ -1931,7 +1931,7 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
             <div style={{display:"flex",gap:10,alignItems:"stretch"}}>
               {/* Left: Parse + FixingWindow */}
               <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,resize:"horizontal",overflow:"auto",maxWidth:"50%"}}>
-                <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={vesselDB}/>
+                <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos"/>
                 <FixingWindow vessels={vessels} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)}/>
               </div>
               {/* Middle: Rate Matrix */}
@@ -2095,7 +2095,7 @@ function DesktopApp({vessels,cargoes,onUpdateV,onRenameV,onUpdateC,onAddVessels,
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
               <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:6}}>
-                <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={vesselDB}/>
+                <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo"/>
                 <ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/>
               </div>
               <div
