@@ -1,9 +1,9 @@
 // CACHE_BUSTER_006
 // CACHE_BUSTER_030
+const vesselDB = {};
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "./supabaseclient";
- 
 
 // Date helpers
 function toISODate(d){
