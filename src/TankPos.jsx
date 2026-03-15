@@ -990,7 +990,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
           const laycan=ls&&le&&ls!==le?ls+" - "+le:ls||le||"";
           const vessel=String(r[cVessel]||"").trim();
           const rawSt=cStatus&&r[cStatus]?String(r[cStatus]).toUpperCase():"";
-          const status=rawSt==="FIXED"?"FIXED":rawSt==="SUBS"?"SUBS":"";
+          const status=rawSt==="FIXED"?"FIXED":rawSt==="SUBS"?"SUBS":rawSt==="FAILED"?"FAILED":"";
           const cUpdated=fnd(["updated date","updated","date updated","last updated"]);
           const rawUpd=r[cUpdated];
           const addedAt=rawUpd instanceof Date?rawUpd.toISOString():rawUpd?new Date(rawUpd).toISOString()||new Date().toISOString():new Date().toISOString();
