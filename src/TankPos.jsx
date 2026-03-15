@@ -86,7 +86,7 @@ if (exactKey) return vesselDB[exactKey];
     let matches=0;
     for(let i=0;i<shorter;i++) if(clean[i]===dk[i]) matches++;
     const score=matches/Math.max(clean.length,dk.length);
-    if(score>0.90&&score>bestScore){bestScore=score;bestKey=dk;}
+    if(score>0.850&&score>bestScore){bestScore=score;bestKey=dk;}
   }
   if(bestKey) return vesselDB[bestKey];
   return null;
