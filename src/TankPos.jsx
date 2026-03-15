@@ -86,7 +86,7 @@ function dbLookup(name, vesselDB) {
     let matches=0;
     for(let i=0;i<shorter;i++) if(clean[i]===dk[i]) matches++;
     const score=matches/Math.max(clean.length,dk.length);
-    if(score>0.75&&score>bestScore){bestScore=score;bestKey=dk;}
+    if(score>0.85&&score>bestScore){bestScore=score;bestKey=dk;}
   }
   if(bestKey) return vesselDB[bestKey];
   return null;
