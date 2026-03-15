@@ -1226,10 +1226,6 @@ function FixingWindow({vessels, opFilter, onOpFilter}){
           <div style={{minWidth:22,textAlign:"right",fontSize:12,color:C.faint}}>{withDays.length}v</div>
         </div>
       </div>
-      {/* Legend */}
-      <div style={{display:"flex",flexWrap:"wrap",gap:"4px 10px"}}>
-        {rows.map(r=>(<span key={r.op} style={{fontSize:12,color:r.col}}>● {r.op}</span>))}
-      </div>
 
     </div>
   );
