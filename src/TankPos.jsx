@@ -74,10 +74,11 @@ if (vesselDB[k]) return vesselDB[k];
 // Try exact case-insensitive match
 const exactKey = Object.keys(vesselDB).find(dk => dk === clean || dk === k);
 if (exactKey) return vesselDB[exactKey];
+  console.log("dbLookup searching for:", clean);
   const words = clean.split(" ").filter(w => w.length > 1);
   if (words.length >= 2) {
     for (const [dk, dv] of Object.entries(vesselDB)) {
-      if (words.every(w => dk.includes(w))) return dv;
+      if (words.every(w => dk.includes(w))){console.log("word matched:",clean,"->",dk);return dv;}
     }
   }
   let bestKey=null, bestScore=0;
