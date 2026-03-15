@@ -2997,17 +2997,23 @@ function normaliseCargo(c){
 }
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
-export default function TankPos(){
-  const [vesselDB, setVesselDB] = useState({});
- 
 useEffect(()=>{
   supabase.from("vessels_db")
     .select("vessel,dwt,built,loa,beam,cbm,ice_class,fuel,operator")
     .then(({data})=>{
       if(!data) return;
+
       const map={};
-      for(const r of data) if(r.vessel) map[r.vessel.toLowerCase().trim()]=r;
+
+      for(const r of data){
+        if(r.vessel){
+          map[r.vessel.toLowerCase().trim()] = r;
+        }
+      }
+
       setVesselDB(map);
+      window.vesselDB = map;
+
     });
 },[]);
   const [vessels,setVessels]=useState([]);
