@@ -247,19 +247,31 @@ function calcVoyage(vessel, cargo) {
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 const SK="tankpos-v5",CK="tankpos-cargo-v2";
-async function loadAll(){
-  let vessels=[], cargoes=[];
-  try{
-    const rv=await window.storage.get(SK,true),rc=await window.storage.get(CK,true);
-    vessels=rv?JSON.parse(rv.value):[];
-    cargoes=rc?JSON.parse(rc.value):[];
-  }catch(_){
-    vessels=JSON.parse(localStorage.getItem(SK)||"[]");
-    cargoes=JSON.parse(localStorage.getItem(CK)||"[]");
+async function loadAll() {
+  let vessels = [], cargoes = [];
+  // 1. Fetch your vessel database from Supabase
+  const { data: dbRows, error } = await supabase.from("vessels_db").select("*");
+  const vDB = {};
+  if (dbRows) {
+    dbRows.forEach(row => {
+      // Map the vessel name as the key for the lookup
+      if (row.vessel) vDB[row.vessel.toLowerCase().trim()] = row;
+    });
   }
-  // Re-enrich all vessels from DB on load (fills missing operator/specs)
-  vessels = vessels.map(v => enrichV(v, {}));
-  return {vessels, cargoes};
+
+  try {
+    const rv = await window.storage.get(SK, true);
+    const rc = await window.storage.get(CK, true);
+    vessels = rv ? JSON.parse(rv.value) : [];
+    cargoes = rc ? JSON.parse(rc.value) : [];
+  } catch (_) {
+    vessels = JSON.parse(localStorage.getItem(SK) || "[]");
+    cargoes = JSON.parse(localStorage.getItem(CK) || "[]");
+  }
+
+  // 2. Pass the fetched database (vDB) instead of an empty object
+  vessels = vessels.map(v => enrichV(v, vDB)); 
+  return { vessels, cargoes };
 }
 async function saveV(v){try{await window.storage.set(SK,JSON.stringify(v),true);}catch(_){}try{localStorage.setItem(SK,JSON.stringify(v));}catch(_){}}
 async function saveC(c){try{await window.storage.set(CK,JSON.stringify(c),true);}catch(_){}try{localStorage.setItem(CK,JSON.stringify(c));}catch(_){}}
