@@ -761,10 +761,10 @@ function RateMatrix({onBunkerChange}){
         </div>
         <table style={{borderCollapse:"collapse",width:"100%"}}>
           <thead><tr>
-            <th style={{...thS,textAlign:"left",width:"33%"}}>Route</th>
-            <th style={{...thS,width:"33%"}}>Rate ($ lsum)</th>
-            <th style={{...thS,width:"17%",color:C.green}}>TCE $/day</th>
-            <th style={{...thS,width:"17%"}}>Comment</th>
+            <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
+            <th style={{...thS,width:"25%"}}>Rate ($ lsum)</th>
+            <th style={{...thS,width:"25%",color:C.green}}>TCE $/day</th>
+            <th style={{...thS,width:"25%"}}>Comment</th>
           </tr></thead>
           <tbody>
             {euRoutes.map((rt,i)=>(
@@ -774,7 +774,7 @@ function RateMatrix({onBunkerChange}){
                 </td>
                 <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-rate"} col={REGION_COLORS.Europe} rev={rev}/></td>
                 <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-tce"} col={C.green} rev={rev}/></td>
-                <td style={{...tdR,padding:"0 4px",fontSize:11,color:C.faint,fontStyle:"italic"}}>{matrixRef.current[rt.id+"-rate"]?.comment||""}</td>
+                <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-comment"} col={C.faint} rev={rev}/></td>
               </tr>
             ))}
           </tbody>
@@ -789,8 +789,9 @@ function RateMatrix({onBunkerChange}){
           </div>
           <table style={{borderCollapse:"collapse",width:"100%"}}>
             <thead><tr>
-              <th style={{...thS,textAlign:"left",minWidth:100}}>Route</th>
-              {RATE_SIZES.map(sz=>(<th key={sz} style={{...thS,minWidth:46}}>{sz}</th>))}
+              <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
+              {RATE_SIZES.map(sz=>(<th key={sz} style={{...thS,width:"15%"}}>{sz}</th>))}
+              <th style={{...thS,width:"20%"}}>Comment</th>
             </tr></thead>
             <tbody>
               {rg.routes.map((rt,rtIdx)=>(
@@ -803,6 +804,7 @@ function RateMatrix({onBunkerChange}){
                       <RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-"+sz} col={REGION_COLORS[rg.region]} rev={rev}/>
                     </td>
                   ))}
+                  <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-comment"} col={C.faint} rev={rev}/></td>
                 </tr>
               ))}
             </tbody>
