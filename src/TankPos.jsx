@@ -838,10 +838,14 @@ function IntelVault({onVaultUpdate}){
       })});
       const d=await res.json();
       const extracted=(d.content||[]).map(b=>b.text||"").join("");
-      const item={id:"iv_"+Date.now(),raw:text,extracted,addedAt:new Date().toISOString(),hasImg:!!img};
-      const saved=await saveIntelItem(item);
-      const finalItem=saved?{...item,id:saved.id}:item;
-      const next=[finalItem,...items];
+      const lines=extracted.split("\n").map(l=>l.trim()).filter(l=>l.length>2);
+      const newItems=[];
+      for(const line of lines){
+        const lineItem={id:"iv_"+Date.now()+"_"+Math.random().toString(36).slice(2,5),raw:text,extracted:line,addedAt:new Date().toISOString(),hasImg:!!img};
+        const saved=await saveIntelItem(lineItem);
+        newItems.push(saved?{...lineItem,id:saved.id}:lineItem);
+      }
+      const next=[...newItems,...items];
       setItems(next);onVaultUpdate&&onVaultUpdate(next);
       setText("");setImg(null);
       setStatus({t:"success",m:"✓ Stored in vault"});setTimeout(()=>setStatus(null),3000);
@@ -2055,17 +2059,17 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     </div>
     {opFilter&&<div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:"rgba(79,195,247,0.08)",border:"1px solid rgba(79,195,247,0.25)",borderRadius:5}}><span style={{fontSize:12,color:C.blue,fontWeight:700}}>🔍 Filtered: {opFilter}</span><button onClick={()=>setOpFilter(null)} style={{background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:12,padding:"0 2px"}}>✕ Clear</button></div>}
     {bucketFilters.size>0&&<div style={{fontSize:12,color:C.blue,cursor:"pointer"}} onClick={()=>setBucketFilters(new Set())}>✕ Clear segment filter ({[...bucketFilters].join(", ")})</div>}
-    <div style={{position:"relative",width:"100%"}}>
-      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Multi-search: e.g. belfast ulsd 1A  (all tokens must match)"
-        style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
-      {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
-    </div>
   </div>
 
   {/* RIGHT 50% */}
   <div style={{flex:"0 0 50%"}}>
     <OpeningBreakdown vessels={vessels} filteredVessels={filtV} bucketFilters={bucketFilters} onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}/>
   </div>
+</div>
+<div style={{position:"relative",width:"100%"}}>
+  <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Multi-search: e.g. belfast ulsd 1A  (all tokens must match)"
+    style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
+  {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
 </div>
               {/* Fleet count row — directly above table */}
               <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12}}>
