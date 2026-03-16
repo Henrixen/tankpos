@@ -1187,7 +1187,7 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
   const maxCount=Math.max(1,...buckets.map(b=>b.vessels.length));
 
   return(
-    <div style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:7,padding:"10px 14px 14px 14px",height:"100%",boxSizing:"border-box",display:"flex",flexDirection:"column"}}>
+    <div style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:7,padding:"10px 14px 14px 14px",flex:1,boxSizing:"border-box",display:"flex",flexDirection:"column"}}>
       {nodateOpen.length>0&&<div style={{fontSize:11,color:C.faint,marginBottom:8,textAlign:"right"}}>{nodateOpen.length} no date</div>}
       {/* Bar chart */}
       <div style={{display:"flex",gap:8,flex:1}}>
@@ -1199,7 +1199,7 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
               style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",cursor:b.vessels.length>0?"pointer":"default",borderRadius:6,padding:"2px 2px 0 2px",outline:bucketFilters.has(b.sublabel)?"2px solid "+b.col:"2px solid transparent",transition:"outline 0.15s"}}
               title={b.vessels.length>0?b.vessels.map(v=>v.vessel).join(", "):b.sublabel}>
               <div style={{fontSize:13,fontWeight:800,color:b.vessels.length>0?b.col:"transparent",marginBottom:3,minHeight:18}}>{b.vessels.length>0?b.vessels.length:""}</div>
-              <div style={{width:"100%",background:C.bg3,borderRadius:4,flex:1,display:"flex",alignItems:"flex-end",overflow:"hidden"}}>
+              <div style={{width:"100%",background:C.bg3,borderRadius:4,flex:1,display:"flex",alignItems:"flex-end",overflow:"hidden",minHeight:80}}>
                 <div style={{width:"100%",height:barH+"%",background:b.col+(b.vessels.length>0?"cc":"44"),borderRadius:4,transition:"height 0.3s"}}/>
               </div>
               <div style={{fontSize:12,color:b.vessels.length>0?b.col:C.faint,fontWeight:700,textAlign:"center",marginTop:7,lineHeight:1.2}}>{b.sublabel}</div>
@@ -2048,7 +2048,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   </div>
 
   {/* RIGHT 50% */}
-  <div style={{flex:"0 0 50%",display:"flex",flexDirection:"column",minHeight:0}}>
+  <div style={{flex:"0 0 50%",display:"flex",flexDirection:"column",minHeight:0,alignSelf:"stretch"}}>
     <OpeningBreakdown vessels={vessels} filteredVessels={filtV} bucketFilters={bucketFilters} onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})} fillHeight/>
   </div>
 </div>
@@ -3252,7 +3252,7 @@ export default function TankPos(){
       updated_at: new Date().toISOString(),
     };
   });
-  const{error}=await supabase.from("positions").insert(rows);
+  const{error}=await supabase.from("positions").upsert(rows,{onConflict:"vessel"});
   if(error)console.error(error);
   return r;
 },[]);
