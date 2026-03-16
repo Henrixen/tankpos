@@ -1130,7 +1130,6 @@ function EC({value,color,placeholder,onSave,bold,onTab,onShiftTab,onEnter,...res
   function start(e){e.stopPropagation();setDraft(value||"");setEd(true);setTimeout(()=>{if(ref.current){ref.current.focus();ref.current.select?.();}},15);}
   function commit(){setEd(false);const t=draft.trim();if(t!==(value||""))onSave(t);}
   function onKey(e){
-    function onKey(e){
     e.stopPropagation();
     if(e.key==="Enter"){e.preventDefault();commit();if(onEnter)setTimeout(onEnter,30);}
     if(e.key==="Escape"){e.preventDefault();setEd(false);}
