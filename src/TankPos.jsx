@@ -839,6 +839,7 @@ function IntelVault({onVaultUpdate}){
   const [busy,setBusy]=useState(false);
   const [status,setStatus]=useState(null);
   const [activeTag,setActiveTag]=useState(null);
+  const [intelDate,setIntelDate]=useState(()=>new Date().toISOString().slice(0,10));
   const fRef=useRef(null);
 
   const TAGS=["RATES","FIXTURE","QUOTE","MARKET","FM","RUMOUR","COUNTERPARTY","EVENT","TC","SALE"];
@@ -905,7 +906,7 @@ Rules:
           extracted:item.content,
           title:item.title||item.content.slice(0,40),
           tag:item.tag||"MARKET",
-          addedAt:new Date().toISOString(),
+          addedAt:intelDate?new Date(intelDate).toISOString():new Date().toISOString(),
           hasImg:!!img
         };
         const saved=await saveIntelItem({...lineItem,comment:JSON.stringify({tag:lineItem.tag,title:lineItem.title,content:lineItem.extracted})});
