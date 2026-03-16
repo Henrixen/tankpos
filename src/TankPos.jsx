@@ -2299,7 +2299,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                         onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-vessel"]`)?.click();}}/>
                       <td style={{...td,width:colWidthsC.Updated||88,fontSize:12,color:C.faint,whiteSpace:"nowrap",overflow:"hidden"}}>{f.updated?new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
                       <td style={{...td,width:26,padding:"0 2px"}}><button onClick={(e)=>{e.stopPropagation();setPendingDel({type:"cargo",id:f.id,label:f.vessel||"cargo"});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.7}} title="Delete">✕</button></td>
-                    </tr>;
+                    </tr>
                   })}</tbody>
                 </table>}
               {hasMore&&
