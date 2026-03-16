@@ -600,6 +600,19 @@ function RateMatrix({onBunkerChange}){
   const [rev,forceUpdate]=useState(0);
   const matrixRef=useRef(defaultRateMatrix());
   const loadedRef=useRef(false);
+
+  useEffect(()=>{
+    loadRates().then(d=>{
+      if(d){
+        matrixRef.current={...defaultRateMatrix(),...d};
+        if(d.__euRoutes)setEuRoutes(d.__euRoutes);
+        if(d.__rateRoutes)setRateRoutes(d.__rateRoutes);
+        if(d.__matrixBunker){setMatrixBunker(d.__matrixBunker);const bs=getBunkerState();bs.val=d.__matrixBunker;bs.listeners.forEach(cb=>cb(d.__matrixBunker));}
+      }
+      loadedRef.current=true;
+      forceUpdate(n=>n+1);
+    });
+  },[]);
   const [editComment,setEditComment]=useState(null);
   // Editable route labels
   const [euRoutes,setEuRoutes]=useState(()=>EU_ROUTES.map(r=>({...r})));
