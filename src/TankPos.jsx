@@ -952,6 +952,7 @@ Rules:
             style={{flex:1,background:busy?"#1a4a8f":"#1f6feb",border:"none",borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"4px 0",cursor:busy?"default":"pointer"}}>
             {busy?"⟳ Extracting…":"⬆ Extract & Store"}
           </button>
+          <input type="date" value={intelDate} onChange={e=>setIntelDate(e.target.value)} title="Date of this intel" style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:3,color:C.dim,fontFamily:"inherit",fontSize:12,padding:"2px 5px",outline:"none",width:118,flexShrink:0}}/>
           <button onClick={()=>fRef.current?.click()} title="Attach image/screenshot"
             style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"2px 8px",fontFamily:"inherit",fontSize:12,cursor:"pointer"}}>🖼</button>
           <input ref={fRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
