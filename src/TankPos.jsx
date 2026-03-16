@@ -532,13 +532,13 @@ function RateMatrixBunkerInput(){
 const EU_ROUTES=[
   // ballastNm = nm from typical position (ARA base) to load port
   // loadPDA / dischPDA in USD
-  {id:"mng-ara",from:"Mongstad",to:"ARA",ballastNm:600,ladenNm:532,loadPDA:25000,dischPDA:28000},
-  {id:"ara-tha",from:"ARA",to:"Thames",ballastNm:0,ladenNm:256,loadPDA:28000,dischPDA:25400},
-  {id:"ara-dub",from:"ARA",to:"Dublin",ballastNm:0,ladenNm:500,loadPDA:28000,dischPDA:16200},
-  {id:"tee-ara",from:"Tees",to:"ARA",ballastNm:256,ladenNm:256,loadPDA:35560,dischPDA:28000},
-  {id:"bis-ara",from:"Biscay",to:"ARA",ballastNm:600,ladenNm:500,loadPDA:21600,dischPDA:28000},
-  {id:"ara-wme",from:"ARA",to:"WMed",ballastNm:0,ladenNm:2049,loadPDA:28000,dischPDA:27000},
-  {id:"med-ara",from:"Med",to:"ARA",ballastNm:2049,ladenNm:2049,loadPDA:27000,dischPDA:28000},
+  {id:"mng-ara",from:"Mongstad",to:"ARA",ballastNm:532,ladenNm:532,loadPDA:25000,dischPDA:28000},
+  {id:"ara-tha",from:"ARA",to:"Thames",ballastNm:450,ladenNm:256,loadPDA:28000,dischPDA:25400},
+  {id:"ara-dub",from:"ARA",to:"Dublin",ballastNm:450,ladenNm:500,loadPDA:28000,dischPDA:16200},
+  {id:"tee-ara",from:"Tees",to:"ARA",ballastNm:450,ladenNm:256,loadPDA:35560,dischPDA:28000},
+  {id:"bis-ara",from:"Biscay",to:"ARA",ballastNm:650,ladenNm:650,loadPDA:21600,dischPDA:28000},
+  {id:"ara-wme",from:"ARA",to:"WMed",ballastNm:450,ladenNm:2049,loadPDA:28000,dischPDA:27000},
+  {id:"med-ara",from:"Med",to:"ARA",ballastNm:600,ladenNm:2049,loadPDA:27000,dischPDA:28000},
 ];
 // Asia + TA: rate per size
 const RATE_ROUTES=[
@@ -551,7 +551,7 @@ const RATE_ROUTES=[
     {id:"usg-ara",from:"USG",to:"ARA"},
   ]},
 ];
-const RATE_SIZES=["5kt","10kt","15kt","20kt"];
+const RATE_SIZES=["5kt","10kt","18kt"];
 const REGION_COLORS={Europe:"#58a6ff",Asia:"#bc8cff",TA:"#e3b341"};
 
 function defaultRateMatrix(){
@@ -762,9 +762,9 @@ function RateMatrix({onBunkerChange}){
         <table style={{borderCollapse:"collapse",width:"100%"}}>
           <thead><tr>
             <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
-            <th style={{...thS,width:"25%"}}>Rate ($ lsum)</th>
-            <th style={{...thS,width:"25%",color:C.green}}>TCE $/day</th>
-            <th style={{...thS,width:"25%"}}>Comment</th>
+            <th style={{...thS,width:"15%"}}>Rate ($ lsum)</th>
+            <th style={{...thS,width:"15%",color:C.green}}>TCE $/day</th>
+            <th style={{...thS,width:"40%"}}>Comment</th>
           </tr></thead>
           <tbody>
             {euRoutes.map((rt,i)=>(
@@ -789,9 +789,9 @@ function RateMatrix({onBunkerChange}){
           </div>
           <table style={{borderCollapse:"collapse",width:"100%"}}>
             <thead><tr>
-              <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
-              {RATE_SIZES.map(sz=>(<th key={sz} style={{...thS,width:"15%"}}>{sz}</th>))}
-              <th style={{...thS,width:"20%"}}>Comment</th>
+              <th style={{...thS,textAlign:"left",width:"30%"}}>Route</th>
+              {RATE_SIZES.map(sz=>(<th key={sz} style={{...thS,width:"13.3%"}}>{sz}</th>))}
+              <th style={{...thS,width:"30%"}}>Comment</th>
             </tr></thead>
             <tbody>
               {rg.routes.map((rt,rtIdx)=>(
