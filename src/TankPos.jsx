@@ -1130,9 +1130,10 @@ function EC({value,color,placeholder,onSave,bold,onTab,onShiftTab,onEnter,...res
   function start(e){e.stopPropagation();setDraft(value||"");setEd(true);setTimeout(()=>{if(ref.current){ref.current.focus();ref.current.select?.();}},15);}
   function commit(){setEd(false);const t=draft.trim();if(t!==(value||""))onSave(t);}
   function onKey(e){
+    function onKey(e){
     e.stopPropagation();
     if(e.key==="Enter"){e.preventDefault();commit();if(onEnter)setTimeout(onEnter,30);}
-    if(e.key==="Escape"){setEd(false);}
+    if(e.key==="Escape"){e.preventDefault();setEd(false);}
     if(e.key==="Tab"){e.preventDefault();commit();
       if(e.shiftKey){if(onShiftTab)setTimeout(onShiftTab,30);}
       else{if(onTab)setTimeout(onTab,30);}
@@ -2105,16 +2106,16 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                         return(
                           <tr key={v.vessel} style={{background:bg,outline:isSel?"1px solid rgba(88,166,255,.2)":"1px solid transparent",cursor:"pointer"}} onClick={()=>setSel(sel===v.vessel?null:v.vessel)}>
                             <td style={{...td,width:28,padding:"0 2px",textAlign:"center",cursor:"pointer"}} onClick={e=>{e.stopPropagation();setSelVessels(p=>{const n=new Set(p);n.has(v.vessel)?n.delete(v.vessel):n.add(v.vessel);return n;})}}><span style={{fontSize:12,color:selVessels.has(v.vessel)?"#4fc3f7":C.faint}}>{selVessels.has(v.vessel)?"[✓]":"[ ]"}</span></td>
-                            <EC value={v.operator} color={C.purple} placeholder="Operator" onSave={val=>onUpdateV(v.vessel,"operator",val)} data-vid={v.vessel+"-op"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()}/>
-                            <EC value={toTCase(v.vessel)} color={C.blue} bold={true} placeholder="Vessel" onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-op"]`)?.click()}/>
+                            <EC value={v.operator} color={C.purple} placeholder="Operator" onSave={val=>onUpdateV(v.vessel,"operator",val)} data-vid={v.vessel+"-op"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-vessel"]`)?.click()} onShiftTab={()=>{const prev=filtV[i-1];if(prev)document.querySelector(`[data-vid="${prev.vessel}-comment"]`)?.click();}} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-op"]`)?.click();}}/>
+                            <EC value={toTCase(v.vessel)} color={C.blue} bold={true} placeholder="Vessel" onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)} data-vid={v.vessel+"-vessel"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-op"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-vessel"]`)?.click();}}/>
                             <td style={{...td,color:C.dim,whiteSpace:"nowrap",cursor:"default",overflow:"hidden",maxWidth:0}} title={v.built||""}>{v.built||""}</td>
                             <td style={{...td,color:C.amber,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={fmtN(v.dwt)}>{fmtN(v.dwt)}</td>
                             <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.loa||""}>{v.loa||""}</td>
                             <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.beam||""}>{v.beam||""}</td>
                             <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={fmtN(v.cbm)}>{fmtN(v.cbm)}</td>
-                            <EC value={v.date} color={ppt?C.green:"#58a6ff"} placeholder="Date" onSave={val=>onUpdateV(v.vessel,"date",val)} data-vid={v.vessel+"-date"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-op"]`)?.click()}/>
-                            <EC value={v.openPort} color={v.openPort==="EMPLOYED"?C.purple:C.amber} placeholder="Port" onSave={val=>onUpdateV(v.vessel,"openPort",val)} data-vid={v.vessel+"-port"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-comment"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()}/>
-                            <EC value={v.comment} color={C.dim} placeholder="Comment" onSave={val=>onUpdateV(v.vessel,"comment",val)} data-vid={v.vessel+"-comment"} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()}/>
+                            <EC value={v.date} color={ppt?C.green:"#58a6ff"} placeholder="Date" onSave={val=>onUpdateV(v.vessel,"date",val)} data-vid={v.vessel+"-date"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-vessel"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-date"]`)?.click();}}/>
+                            <EC value={v.openPort} color={v.openPort==="EMPLOYED"?C.purple:C.amber} placeholder="Port" onSave={val=>onUpdateV(v.vessel,"openPort",val)} data-vid={v.vessel+"-port"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-comment"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-port"]`)?.click();}}/>
+                            <EC value={v.comment} color={C.dim} placeholder="Comment" onSave={val=>onUpdateV(v.vessel,"comment",val)} data-vid={v.vessel+"-comment"} onTab={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-op"]`)?.click();}} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-comment"]`)?.click();}}/>
                             <td style={{...td,fontSize:12,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",width:colWidthsV.Updated||76}} title={v.updatedAt?new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):v.addedAt?new Date(v.addedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""} >{v.updatedAt?new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):v.addedAt?new Date(v.addedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
 
                             <td style={{...td,width:22}} onClick={e=>e.stopPropagation()}>
@@ -2256,9 +2257,9 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                       <td style={{...td,width:colWidthsC.Status||60,cursor:"pointer",overflow:"hidden"}} onClick={e=>{e.stopPropagation();const opts=["SUBS","FIXED","FAILED",""];const cur=opts.indexOf(f.status||"");onUpdateC(f.id,"status",opts[(cur+1)%opts.length]);}} title="Click to cycle status">
                         <span style={{color:sc,fontWeight:700}}>{f.status||""}</span>
                       </td>
-                      <EC value={f.vessel} color={C.blue} bold placeholder="TBN" onSave={v2=>onUpdateC(f.id,"vessel",v2)} width={colWidthsC.Vessel||130}
+                      <EC value={f.vessel} color={C.blue} bold placeholder="TBN" onSave={v2=>onUpdateC(f.id,"vessel",v2)} width={colWidthsC.Vessel||130} data-cid={f.id+"-vessel"}
                         onTab={()=>document.querySelector(`[data-cid="${f.id}-chtr"]`)?.click()}
-                        onShiftTab={()=>{const prev=filtC[ri-1];if(prev)document.querySelector(`[data-cid="${prev.id}-cmnt"]`)?.click();}}
+                        onShiftTab={()=>{const prev=filtC[ri-1];if(prev)document.querySelector(`[data-cid="${prev.id}-cmnt"]`)?.click();else document.querySelector(`[data-cid="${f.id}-vessel"]`)?.blur();}}
                         onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-vessel"]`)?.click();}}/>
                       <EC value={toTCase(f.charterer)} color={"#79c0ff"} placeholder="" onSave={v2=>onUpdateC(f.id,"charterer",toTCase(v2))} width={colWidthsC.Charterer||110} data-cid={f.id+"-chtr"}
                         onTab={()=>document.querySelector(`[data-cid="${f.id}-cargo"]`)?.click()}
@@ -2295,7 +2296,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                       <EC value={f.comment||""} color={C.dim} placeholder="" onSave={v2=>onUpdateC(f.id,"comment",v2)} width={colWidthsC.Comment||130} data-cid={f.id+"-cmnt"}
                         onTab={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-vessel"]`)?.click();}}
                         onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-fr"]`)?.click()}
-                        onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-cmnt"]`)?.click();}}/>
+                        onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-vessel"]`)?.click();}}/>
                       <td style={{...td,width:colWidthsC.Updated||88,fontSize:12,color:C.faint,whiteSpace:"nowrap",overflow:"hidden"}}>{f.updated?new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
                       <td style={{...td,width:26,padding:"0 2px"}}><button onClick={(e)=>{e.stopPropagation();setPendingDel({type:"cargo",id:f.id,label:f.vessel||"cargo"});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.7}} title="Delete">✕</button></td>
                     </tr>;
