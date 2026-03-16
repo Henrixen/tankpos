@@ -3319,7 +3319,10 @@ export default function TankPos(){
       if(error)console.error("delC all error:",error);
     } else {
       const{error}=await supabase.from("cargoes").delete().eq("id",id);
-      if(error){console.error("delC error:",error,id);}
+      if(error){
+        console.error("delC error:",error,id);
+        alert("Delete failed: "+error.message+" (id: "+id+")");
+      }
     }
   },[]);
 
