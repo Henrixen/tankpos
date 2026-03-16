@@ -2062,7 +2062,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   </div>
 
   {/* RIGHT 50% */}
-  <div style={{flex:"0 0 50%"}}>
+  <div style={{flex:"0 0 50%",display:"flex",flexDirection:"column"}}>
     <OpeningBreakdown vessels={vessels} filteredVessels={filtV} bucketFilters={bucketFilters} onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}/>
   </div>
 </div>
