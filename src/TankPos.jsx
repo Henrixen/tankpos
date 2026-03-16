@@ -791,7 +791,7 @@ function RateMatrix({onBunkerChange}){
             <thead><tr>
               <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
               {RATE_SIZES.map(sz=>(<th key={sz} style={{...thS,width:"11.67%"}}>{sz}</th>))}
-              <th style={{...thS,width:40"%"}}>Comment</th>
+              <th style={{...thS,width:"40%"}}>Comment</th>
             </tr></thead>
             <tbody>
               {rg.routes.map((rt,rtIdx)=>(
