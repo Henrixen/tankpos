@@ -761,9 +761,10 @@ function RateMatrix({onBunkerChange}){
         </div>
         <table style={{borderCollapse:"collapse",width:"100%"}}>
           <thead><tr>
-            <th style={{...thS,textAlign:"left",minWidth:100}}>Route</th>
-            <th style={{...thS,minWidth:80}}>Rate ($ lsum)</th>
-            <th style={{...thS,minWidth:70,color:C.green}} title="TCE auto-calculated from rate, includes 100% EU ETS (intra-EU scope), port costs & bunkers from Standard Variables">TCE $/day</th>
+            <th style={{...thS,textAlign:"left",width:"33%"}}>Route</th>
+            <th style={{...thS,width:"33%"}}>Rate ($ lsum)</th>
+            <th style={{...thS,width:"17%",color:C.green}}>TCE $/day</th>
+            <th style={{...thS,width:"17%"}}>Comment</th>
           </tr></thead>
           <tbody>
             {euRoutes.map((rt,i)=>(
@@ -773,6 +774,7 @@ function RateMatrix({onBunkerChange}){
                 </td>
                 <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-rate"} col={REGION_COLORS.Europe} rev={rev}/></td>
                 <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-tce"} col={C.green} rev={rev}/></td>
+                <td style={{...tdR,padding:"0 4px",fontSize:11,color:C.faint,fontStyle:"italic"}}>{matrixRef.current[rt.id+"-rate"]?.comment||""}</td>
               </tr>
             ))}
           </tbody>
