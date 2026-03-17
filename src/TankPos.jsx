@@ -2806,9 +2806,8 @@ function FixingTab({vessels}){
         })}
       </div>
     </div>
-  );
+  });
 }
-
 
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch}){
   const [tab,setTab]=useState("pos");
