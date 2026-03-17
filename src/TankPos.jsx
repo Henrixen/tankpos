@@ -1963,8 +1963,466 @@ function TCECalculator(){
 
 const JOB_STATUS=["OPEN","WORKING","SUBS","FIXED","FAILED"];
 const JOB_STATUS_COL={OPEN:C.blue,WORKING:C.amber,SUBS:C.purple,FIXED:C.green,FAILED:C.red};
+const SEGMENTS=["Sub 10kt","Cityclass","Intermediate","Flexi","Handy","MR","Far East","Ex US"];
 
 function FixingTab({vessels}){
+  const [jobs,setJobs]=useState([]);
+  const [clients,setClients]=useState([]);
+  const [owners,setOwners]=useState([]); // owner directory
+  const [expandedJob,setExpandedJob]=useState(null);
+  const [editingClient,setEditingClient]=useState(null);
+  const [showNewJob,setShowNewJob]=useState(false);
+  const [showNewClient,setShowNewClient]=useState(false);
+  const [showOwnerDir,setShowOwnerDir]=useState(false);
+  const [statusFilter,setStatusFilter]=useState("ALL");
+  const [clientFilter,setClientFilter]=useState("ALL");
+  const [newJob,setNewJob]=useState({id:"",charterer:"",product:"",qty:"",load:"",disch:"",laycan_from:"",laycan_to:"",status:"OPEN",guidance:"",outcome:"",owners:[]});
+  const [newClient,setNewClient]=useState({id:"",name:"",coverage:"",notes:""});
+  const [newOwnerEntry,setNewOwnerEntry]=useState({id:"",company:"",segment:"",pic:"",trade:"",comment:""});
+
+  useEffect(()=>{
+    loadFixingJobs().then(setJobs);
+    loadClients().then(setClients);
+    // Load owner directory from dashboard table
+    supabase.from("dashboard").select("value").eq("key","owner-directory").single()
+      .then(({data})=>{if(data)try{setOwners(JSON.parse(data.value));}catch(_){}});
+  },[]);
+
+  async function saveOwnerDir(dir){
+    setOwners(dir);
+    await supabase.from("dashboard").upsert({key:"owner-directory",value:JSON.stringify(dir)},{onConflict:"key"});
+  }
+
+  function addOwnerEntry(){
+    const id="od_"+Date.now()+"_"+Math.random().toString(36).slice(2,5);
+    const entry={...newOwnerEntry,id};
+    saveOwnerDir([...owners,entry]);
+    setNewOwnerEntry({id:"",company:"",segment:"",pic:"",trade:"",comment:""});
+  }
+
+  function updateOwnerEntry(id,field,val){
+    saveOwnerDir(owners.map(o=>o.id===id?{...o,[field]:val}:o));
+  }
+
+  function removeOwnerEntry(id){
+    saveOwnerDir(owners.filter(o=>o.id!==id));
+  }
+
+  function suggestVessels(job){
+    if(!vessels||!vessels.length)return[];
+    const loadRegion=classifyRegion(job.load);
+    const layfrom=job.laycan_from?new Date(job.laycan_from):null;
+    return vessels.filter(v=>{
+      if(v.openPort==="EMPLOYED")return false;
+      const vRegion=classifyRegion(v.openPort);
+      const regionMatch=loadRegion&&vRegion&&(loadRegion===vRegion||
+        (loadRegion==="ECUK"&&vRegion==="CANAL")||(loadRegion==="CANAL"&&vRegion==="ECUK")||
+        (loadRegion==="BISCAY"&&vRegion==="CANAL"));
+      const portMatch=v.openPort&&job.load&&(v.openPort.toLowerCase().includes(job.load.toLowerCase().slice(0,4))||job.load.toLowerCase().includes(v.openPort.toLowerCase().slice(0,4)));
+      const d=v.date?daysBetween(v.date):null;
+      const dateMatch=d===null||(layfrom?d<=(Math.round((layfrom-new Date())/86400000)+5):true);
+      return(regionMatch||portMatch)&&dateMatch;
+    }).slice(0,8);
+  }
+
+  async function createJob(){
+    const id="job_"+Date.now()+"_"+Math.random().toString(36).slice(2,5);
+    const job={...newJob,id,owners:[],created_at:new Date().toISOString()};
+    await saveFixingJob(job);
+    setJobs(prev=>[job,...prev]);
+    setNewJob({id:"",charterer:"",product:"",qty:"",load:"",disch:"",laycan_from:"",laycan_to:"",status:"OPEN",guidance:"",outcome:"",owners:[]});
+    setShowNewJob(false);
+    setExpandedJob(id);
+  }
+
+  async function updateJob(id,changes){
+    setJobs(prev=>prev.map(j=>j.id===id?{...j,...changes}:j));
+    const job=jobs.find(j=>j.id===id);
+    if(job)await saveFixingJob({...job,...changes});
+  }
+
+  async function removeJob(id){
+    setJobs(prev=>prev.filter(j=>j.id!==id));
+    await deleteFixingJob(id);
+  }
+
+  async function addOwnerRow(jobId){
+    const row={id:"or_"+Date.now(),owner:"",vessel:"",indication:"",response:"",comment:""};
+    const job=jobs.find(j=>j.id===jobId);
+    if(!job)return;
+    await updateJob(jobId,{owners:[...(job.owners||[]),row]});
+  }
+
+  async function updateOwnerRow(jobId,rowId,field,val){
+    const job=jobs.find(j=>j.id===jobId);
+    if(!job)return;
+    await updateJob(jobId,{owners:(job.owners||[]).map(r=>r.id===rowId?{...r,[field]:val}:r)});
+  }
+
+  async function removeOwnerRow(jobId,rowId){
+    const job=jobs.find(j=>j.id===jobId);
+    if(!job)return;
+    await updateJob(jobId,{owners:(job.owners||[]).filter(r=>r.id!==rowId)});
+  }
+
+  async function createClient(){
+    const id="cl_"+Date.now()+"_"+Math.random().toString(36).slice(2,5);
+    const client={...newClient,id,last_updated:new Date().toISOString()};
+    await saveClient(client);
+    setClients(prev=>[...prev,client]);
+    setNewClient({id:"",name:"",coverage:"",notes:""});
+    setShowNewClient(false);
+  }
+
+  async function updateClient(id,changes){
+    setClients(prev=>prev.map(c=>c.id===id?{...c,...changes}:c));
+    const client=clients.find(c=>c.id===id);
+    if(client)await saveClient({...client,...changes});
+  }
+
+  function clientFreshness(last_updated){
+    if(!last_updated)return C.red;
+    const days=(new Date()-new Date(last_updated))/86400000;
+    if(days<2)return C.green;
+    if(days<5)return C.amber;
+    return C.red;
+  }
+
+  function daysSince(ts){
+    if(!ts)return null;
+    return Math.floor((new Date()-new Date(ts))/86400000);
+  }
+
+  const filteredJobs=jobs.filter(j=>{
+    if(statusFilter!=="ALL"&&j.status!==statusFilter)return false;
+    if(clientFilter!=="ALL"&&j.charterer!==clientFilter)return false;
+    return true;
+  });
+
+  const inpS={background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"4px 7px",outline:"none",boxSizing:"border-box"};
+  const fb2=(on,col)=>({fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:4,border:"1px solid "+(on?col||C.blue:C.bd),background:on?(col||C.blue)+"22":"transparent",color:on?col||C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
+
+  // Grouped owner directory by segment
+  const ownersBySegment=SEGMENTS.reduce((acc,seg)=>{acc[seg]=owners.filter(o=>o.segment===seg);return acc;},{});
+
+  return(
+    <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+
+      {/* ── LEFT: Clients + Owner Directory ── */}
+      <div style={{flex:"0 0 240px",display:"flex",flexDirection:"column",gap:8}}>
+
+        {/* Client header */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Clients</span>
+          <button onClick={()=>setShowNewClient(s=>!s)} style={{fontSize:11,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.blue,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>+ Add</button>
+        </div>
+
+        {showNewClient&&(
+          <div style={{background:C.bg2,border:"1px solid "+C.blue+"44",borderRadius:6,padding:"10px"}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.blue,marginBottom:6,textTransform:"uppercase"}}>New Client</div>
+            {[["name","Name"],["coverage","Market coverage"],["notes","Notes"]].map(([f,l])=>(
+              <div key={f} style={{marginBottom:5}}>
+                <div style={{fontSize:11,color:C.faint,marginBottom:2}}>{l}</div>
+                <input value={newClient[f]} onChange={e=>setNewClient(p=>({...p,[f]:e.target.value}))} style={{...inpS,width:"100%"}}/>
+              </div>
+            ))}
+            <div style={{display:"flex",gap:5,marginTop:6}}>
+              <button onClick={createClient} style={{flex:1,background:"#1f6feb",border:"none",borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px",cursor:"pointer"}}>Save</button>
+              <button onClick={()=>setShowNewClient(false)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,fontFamily:"inherit",fontSize:12,padding:"5px 10px",cursor:"pointer"}}>✕</button>
+            </div>
+          </div>
+        )}
+
+        {clients.map(client=>{
+          const col=clientFreshness(client.last_updated);
+          const isActive=clientFilter===client.name;
+          const activeJobs=jobs.filter(j=>j.charterer===client.name&&(j.status==="OPEN"||j.status==="WORKING"||j.status==="SUBS"));
+          const isEditing=editingClient===client.id;
+          const ds=daysSince(client.last_updated);
+          return(
+            <div key={client.id}
+              onClick={()=>setClientFilter(f=>f===client.name?"ALL":client.name)}
+              style={{background:isActive?"rgba(88,166,255,.10)":C.bg2,border:"1px solid "+(isActive?C.blue:col+"44"),borderRadius:7,padding:"10px 12px",cursor:"pointer",transition:"all 0.15s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                <span style={{width:8,height:8,borderRadius:"50%",background:col,flexShrink:0,display:"inline-block"}}/>
+                <span style={{fontWeight:700,fontSize:12,color:isActive?C.blue:C.tx,flex:1}}>{client.name}</span>
+                <span style={{fontSize:11,color:C.faint}}>{ds===0?"today":ds===1?"1d":ds+"d"}</span>
+                <button onClick={e=>{e.stopPropagation();setEditingClient(isEditing?null:client.id);}} style={{background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:12,padding:"0 2px"}}>✎</button>
+                <button onClick={e=>{e.stopPropagation();if(window.confirm("Delete "+client.name+"?"))deleteClient(client.id).then(()=>setClients(p=>p.filter(c=>c.id!==client.id)));}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:11,padding:"0 2px",opacity:0.5}}>✕</button>
+              </div>
+              {client.coverage&&<div style={{fontSize:11,color:C.dim,marginBottom:4,lineHeight:1.4}}>{client.coverage}</div>}
+              {activeJobs.length>0&&(
+                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                  {activeJobs.map(j=>(
+                    <span key={j.id} style={{fontSize:10,fontWeight:700,padding:"1px 5px",borderRadius:3,background:JOB_STATUS_COL[j.status]+"22",color:JOB_STATUS_COL[j.status],border:"1px solid "+JOB_STATUS_COL[j.status]+"33"}}>
+                      {j.product||"cargo"} {j.load}{j.disch?"→"+j.disch:""}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {activeJobs.length===0&&<div style={{fontSize:11,color:C.faint,fontStyle:"italic"}}>No active requirements</div>}
+              {isEditing&&(
+                <div onClick={e=>e.stopPropagation()} style={{marginTop:8,borderTop:"1px solid "+C.bd2,paddingTop:8}}>
+                  {[["name","Name"],["coverage","Coverage"],["notes","Notes"]].map(([f,l])=>(
+                    <div key={f} style={{marginBottom:5}}>
+                      <div style={{fontSize:11,color:C.faint,marginBottom:2}}>{l}</div>
+                      <input value={client[f]||""} onChange={e=>updateClient(client.id,{[f]:e.target.value})} style={{...inpS,width:"100%"}}/>
+                    </div>
+                  ))}
+                  <button onClick={()=>{updateClient(client.id,{last_updated:new Date().toISOString()});setEditingClient(null);}}
+                    style={{fontSize:11,background:"rgba(67,233,123,.15)",border:"1px solid "+C.green+"44",borderRadius:4,color:C.green,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit",marginRight:4}}>✓ Updated</button>
+                  <button onClick={()=>setEditingClient(null)} style={{fontSize:11,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit"}}>Done</button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Owner Directory */}
+        <div style={{marginTop:8,borderTop:"1px solid "+C.bd2,paddingTop:8}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+            <span style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Owner Directory</span>
+            <button onClick={()=>setShowOwnerDir(s=>!s)} style={{fontSize:11,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.blue,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>{showOwnerDir?"▲":"▼"}</button>
+          </div>
+          {showOwnerDir&&(
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {/* Add new entry */}
+              <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:6,padding:"8px"}}>
+                <div style={{fontSize:11,color:C.blue,fontWeight:700,marginBottom:6,textTransform:"uppercase"}}>Add Entry</div>
+                <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                  <input value={newOwnerEntry.company} onChange={e=>setNewOwnerEntry(p=>({...p,company:e.target.value}))} placeholder="Owner company" style={{...inpS,width:"100%"}}/>
+                  <select value={newOwnerEntry.segment} onChange={e=>setNewOwnerEntry(p=>({...p,segment:e.target.value}))} style={{...inpS,width:"100%"}}>
+                    <option value="">Segment…</option>
+                    {SEGMENTS.map(s=><option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <input value={newOwnerEntry.trade} onChange={e=>setNewOwnerEntry(p=>({...p,trade:e.target.value}))} placeholder="Trade e.g. TA west" style={{...inpS,width:"100%"}}/>
+                  <input value={newOwnerEntry.pic} onChange={e=>setNewOwnerEntry(p=>({...p,pic:e.target.value}))} placeholder="PIC name" style={{...inpS,width:"100%"}}/>
+                  <input value={newOwnerEntry.comment} onChange={e=>setNewOwnerEntry(p=>({...p,comment:e.target.value}))} placeholder="Comment" style={{...inpS,width:"100%"}}/>
+                  <button onClick={addOwnerEntry} style={{background:"#1f6feb",border:"none",borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"4px",cursor:"pointer"}}>+ Add</button>
+                </div>
+              </div>
+              {/* Directory grouped by segment */}
+              {SEGMENTS.filter(seg=>ownersBySegment[seg]?.length>0).map(seg=>(
+                <div key={seg}>
+                  <div style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:3,marginTop:4}}>{seg}</div>
+                  {ownersBySegment[seg].map(o=>(
+                    <div key={o.id} style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:4,padding:"5px 8px",marginBottom:3}}>
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <span style={{fontWeight:700,fontSize:12,color:C.tx,flex:1}}>{o.company}</span>
+                        <button onClick={()=>removeOwnerEntry(o.id)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:11,opacity:0.5,padding:"0 2px"}}>✕</button>
+                      </div>
+                      {o.trade&&<div style={{fontSize:11,color:C.blue}}>{o.trade}{o.pic?<span style={{color:C.dim}}> · {o.pic}</span>:null}</div>}
+                      {o.comment&&<div style={{fontSize:11,color:C.faint,fontStyle:"italic"}}>{o.comment}</div>}
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {owners.length===0&&<div style={{fontSize:11,color:C.faint,fontStyle:"italic"}}>No entries yet.</div>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── RIGHT: Fixing Jobs ── */}
+      <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:8}}>
+
+        {/* Toolbar */}
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+          <button onClick={()=>setShowNewJob(s=>!s)}
+            style={{fontSize:12,fontWeight:700,background:"#1f6feb",border:"none",borderRadius:5,color:"#fff",padding:"5px 14px",cursor:"pointer",fontFamily:"inherit"}}>
+            + New Job
+          </button>
+          <div style={{display:"flex",gap:4}}>
+            {["ALL",...JOB_STATUS].map(s=>(
+              <button key={s} onClick={()=>setStatusFilter(s)} style={fb2(statusFilter===s,JOB_STATUS_COL[s])}>{s}</button>
+            ))}
+          </div>
+          {clientFilter!=="ALL"&&(
+            <button onClick={()=>setClientFilter("ALL")} style={{fontSize:11,background:"rgba(88,166,255,.1)",border:"1px solid rgba(88,166,255,.3)",borderRadius:4,color:C.blue,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit"}}>
+              🔍 {clientFilter} ✕
+            </button>
+          )}
+          <span style={{marginLeft:"auto",fontSize:11,color:C.faint}}>{filteredJobs.length} job{filteredJobs.length!==1?"s":""}</span>
+        </div>
+
+        {/* New Job Form */}
+        {showNewJob&&(
+          <div style={{background:C.bg2,border:"1px solid "+C.blue+"44",borderRadius:7,padding:"12px"}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.blue,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.07em"}}>New Fixing Job</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <div style={{flex:"1 1 140px"}}>
+                <div style={{fontSize:11,color:C.faint,marginBottom:2}}>Charterer</div>
+                <select value={newJob.charterer} onChange={e=>setNewJob(p=>({...p,charterer:e.target.value}))} style={{...inpS,width:"100%"}}>
+                  <option value="">Select client…</option>
+                  {clients.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
+                </select>
+              </div>
+              {[["product","Product","e.g. ULSD"],["qty","Qty","e.g. 15kt"],["load","Load","e.g. Tees"],["disch","Disch","e.g. ARA"]].map(([f,l,ph])=>(
+                <div key={f} style={{flex:"1 1 90px"}}>
+                  <div style={{fontSize:11,color:C.faint,marginBottom:2}}>{l}</div>
+                  <input value={newJob[f]} onChange={e=>setNewJob(p=>({...p,[f]:e.target.value}))} placeholder={ph} style={{...inpS,width:"100%"}}/>
+                </div>
+              ))}
+              <div style={{flex:"1 1 110px"}}>
+                <div style={{fontSize:11,color:C.faint,marginBottom:2}}>Laycan from</div>
+                <input type="date" value={newJob.laycan_from} onChange={e=>setNewJob(p=>({...p,laycan_from:e.target.value}))} style={{...inpS,width:"100%"}}/>
+              </div>
+              <div style={{flex:"1 1 110px"}}>
+                <div style={{fontSize:11,color:C.faint,marginBottom:2}}>Laycan to</div>
+                <input type="date" value={newJob.laycan_to} onChange={e=>setNewJob(p=>({...p,laycan_to:e.target.value}))} style={{...inpS,width:"100%"}}/>
+              </div>
+              <div style={{flex:"1 1 140px"}}>
+                <div style={{fontSize:11,color:C.faint,marginBottom:2}}>Guidance</div>
+                <input value={newJob.guidance} onChange={e=>setNewJob(p=>({...p,guidance:e.target.value}))} placeholder="e.g. ~$350k lsum" style={{...inpS,width:"100%"}}/>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:5,marginTop:8}}>
+              <button onClick={createJob} style={{background:"#1f6feb",border:"none",borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"6px 18px",cursor:"pointer"}}>Create Job</button>
+              <button onClick={()=>setShowNewJob(false)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,fontFamily:"inherit",fontSize:12,padding:"6px 12px",cursor:"pointer"}}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* Job list */}
+        {filteredJobs.length===0&&<div style={{color:C.faint,fontSize:12,padding:"40px",textAlign:"center"}}>No fixing jobs yet. Click + New Job to start.</div>}
+        {filteredJobs.map(job=>{
+          const isOpen=expandedJob===job.id;
+          const scol=JOB_STATUS_COL[job.status]||C.dim;
+          const suggested=suggestVessels(job);
+          const fmtLaycan=()=>{
+            const f=job.laycan_from?new Date(job.laycan_from).toLocaleDateString("en-GB",{day:"2-digit",month:"short"}):"";
+            const t=job.laycan_to?new Date(job.laycan_to).toLocaleDateString("en-GB",{day:"2-digit",month:"short"}):"";
+            return f&&t?f+" – "+t:f||t||"";
+          };
+          // Summary line e.g. "12.5kt Nap Rotterdam → Thames 23-25 Mar"
+          const summary=[job.qty,job.product,job.load&&job.disch?job.load+" → "+job.disch:job.load||job.disch,fmtLaycan()].filter(Boolean).join("  ");
+
+          return(
+            <div key={job.id} style={{background:C.bg2,border:"1px solid "+scol+"44",borderRadius:7,overflow:"hidden"}}>
+
+              {/* ── Collapsed header ── */}
+              <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",cursor:"pointer"}} onClick={()=>setExpandedJob(isOpen?null:job.id)}>
+                {/* Status pills — click to cycle without opening */}
+                <div style={{display:"flex",gap:3,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                  {JOB_STATUS.map(s=>(
+                    <button key={s} onClick={()=>updateJob(job.id,{status:s})}
+                      style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,border:"1px solid "+(job.status===s?JOB_STATUS_COL[s]:C.bd),background:job.status===s?JOB_STATUS_COL[s]+"33":"transparent",color:job.status===s?JOB_STATUS_COL[s]:C.faint,cursor:"pointer",fontFamily:"inherit"}}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                <span style={{fontWeight:700,fontSize:12,color:C.blue,flexShrink:0,minWidth:60}}>{job.charterer||"—"}</span>
+                <span style={{fontSize:12,color:C.tx,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{summary}</span>
+                {job.guidance&&<span style={{fontSize:11,color:C.purple,flexShrink:0}}>💬 {job.guidance}</span>}
+                <span style={{fontSize:11,color:C.faint,flexShrink:0}}>{(job.owners||[]).length>0?(job.owners||[]).length+"o":""}</span>
+                <span style={{fontSize:11,color:C.faint}}>{isOpen?"▲":"▼"}</span>
+                <button onClick={e=>{e.stopPropagation();if(window.confirm("Delete this job?"))removeJob(job.id);}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.4,padding:"0 2px"}}>✕</button>
+              </div>
+
+              {/* ── Expanded body ── */}
+              {isOpen&&(
+                <div style={{borderTop:"1px solid "+C.bd2,display:"flex",gap:0}}>
+
+                  {/* LEFT 20%: free text notes */}
+                  <div style={{flex:"0 0 20%",minWidth:160,borderRight:"1px solid "+C.bd2,padding:"10px",display:"flex",flexDirection:"column",gap:8}}>
+                    {/* Edit fields */}
+                    <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                      {[["product","Product"],["qty","Qty"],["load","Load"],["disch","Disch"],["guidance","Guidance"]].map(([f,l])=>(
+                        <div key={f}>
+                          <div style={{fontSize:10,color:C.faint,marginBottom:1,textTransform:"uppercase",letterSpacing:"0.06em"}}>{l}</div>
+                          <input value={job[f]||""} onChange={e=>updateJob(job.id,{[f]:e.target.value})} style={{...inpS,width:"100%",padding:"3px 6px",fontSize:11}}/>
+                        </div>
+                      ))}
+                      <div>
+                        <div style={{fontSize:10,color:C.faint,marginBottom:1,textTransform:"uppercase",letterSpacing:"0.06em"}}>Laycan from</div>
+                        <input type="date" value={job.laycan_from||""} onChange={e=>updateJob(job.id,{laycan_from:e.target.value})} style={{...inpS,width:"100%",padding:"3px 6px",fontSize:11}}/>
+                      </div>
+                      <div>
+                        <div style={{fontSize:10,color:C.faint,marginBottom:1,textTransform:"uppercase",letterSpacing:"0.06em"}}>Laycan to</div>
+                        <input type="date" value={job.laycan_to||""} onChange={e=>updateJob(job.id,{laycan_to:e.target.value})} style={{...inpS,width:"100%",padding:"3px 6px",fontSize:11}}/>
+                      </div>
+                    </div>
+                    {/* Free text notes */}
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:10,color:C.faint,marginBottom:2,textTransform:"uppercase",letterSpacing:"0.06em"}}>Notes / Outcome</div>
+                      <textarea value={job.outcome||""} onChange={e=>updateJob(job.id,{outcome:e.target.value})}
+                        placeholder="e.g. Fixed Stolt Kite at $340k · Failed — owner withdrew"
+                        style={{...inpS,width:"100%",minHeight:100,resize:"vertical",fontSize:11}}/>
+                    </div>
+                    {/* Charterer selector */}
+                    <div>
+                      <div style={{fontSize:10,color:C.faint,marginBottom:1,textTransform:"uppercase",letterSpacing:"0.06em"}}>Charterer</div>
+                      <select value={job.charterer||""} onChange={e=>updateJob(job.id,{charterer:e.target.value})} style={{...inpS,width:"100%",fontSize:11}}>
+                        <option value="">—</option>
+                        {clients.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* RIGHT 80%: owner table */}
+                  <div style={{flex:1,padding:"10px",minWidth:0}}>
+                    {/* Suggested vessels */}
+                    {suggested.length>0&&(
+                      <div style={{marginBottom:8,display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+                        <span style={{fontSize:11,color:C.faint}}>💡 Nearby:</span>
+                        {suggested.map(v=>(
+                          <button key={v.vessel} onClick={()=>{
+                            const already=(job.owners||[]).some(r=>r.vessel&&r.vessel.toLowerCase()===v.vessel.toLowerCase());
+                            if(!already)addOwnerRow(job.id).then(()=>{
+                              const j2=jobs.find(j=>j.id===job.id);
+                              if(j2){const last=(j2.owners||[]).slice(-1)[0];if(last)updateOwnerRow(job.id,last.id,"vessel",v.vessel);}
+                            });
+                          }} style={{fontSize:11,padding:"1px 7px",borderRadius:4,background:C.bg3,border:"1px solid "+C.bd,color:C.blue,cursor:"pointer",fontFamily:"inherit"}}>
+                            +{v.vessel} <span style={{color:C.faint,fontSize:10}}>{v.openPort} {v.date}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Owner table header + add button */}
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+                      <span style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Owner Contacts</span>
+                      <button onClick={()=>addOwnerRow(job.id)} style={{fontSize:11,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.blue,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>+ Owner</button>
+                    </div>
+
+                    {(job.owners||[]).length===0&&<div style={{fontSize:12,color:C.faint,fontStyle:"italic"}}>No owners contacted yet.</div>}
+                    {(job.owners||[]).length>0&&(
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                        <thead>
+                          <tr style={{background:C.bg3}}>
+                            {["Owner","Vessel","Indication","Response","Comment",""].map(h=>(
+                              <th key={h} style={{padding:"4px 8px",textAlign:"left",fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid "+C.bd2,whiteSpace:"nowrap"}}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(job.owners||[]).map((row,ri)=>(
+                            <tr key={row.id} style={{background:ri%2===0?C.bg:C.bg2}}>
+                              {[["owner",110],["vessel",120],["indication",95],["response",85],["comment",0]].map(([f,w])=>(
+                                <td key={f} style={{padding:"2px 3px",borderBottom:"1px solid "+C.bg3}}>
+                                  <input value={row[f]||""} onChange={e=>updateOwnerRow(job.id,row.id,f,e.target.value)}
+                                    placeholder={f==="indication"?"e.g. $340k":f==="response"?"Firm/Subj/Pass":""}
+                                    style={{...inpS,width:w||"100%",padding:"3px 5px",background:"transparent",border:"none",borderBottom:"1px solid "+C.bd2+"66",fontSize:12}}/>
+                                </td>
+                              ))}
+                              <td style={{padding:"2px 3px",whiteSpace:"nowrap"}}>
+                                <button onClick={()=>removeOwnerRow(job.id,row.id)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.5}}>✕</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
   const [jobs,setJobs]=useState([]);
   const [clients,setClients]=useState([]);
   const [expandedJob,setExpandedJob]=useState(null);
