@@ -2236,7 +2236,7 @@ function FixingTab({vessels}){
           const fmtLaycan=()=>{
             const f=job.laycan_from?new Date(job.laycan_from).toLocaleDateString("en-GB",{day:"2-digit",month:"short"}):"";
             const t=job.laycan_to?new Date(job.laycan_to).toLocaleDateString("en-GB",{day:"2-digit",month:"short"}):"";
-            return f&&t?f+" – "+t":f||t||"";
+            return f&&t?f+" – "+t:f||t||"";
           };
           return(
             <div key={job.id} style={{background:C.bg2,border:"1px solid "+scol+"44",borderRadius:7,overflow:"hidden"}}>
