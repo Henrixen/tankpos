@@ -1963,7 +1963,8 @@ function TCECalculator(){
 
 const JOB_STATUS=["OPEN","WORKING","SUBS","FIXED","FAILED"];
 const JOB_STATUS_COL={OPEN:C.blue,WORKING:C.amber,SUBS:C.purple,FIXED:C.green,FAILED:C.red};
-const SEGMENTS=["Sub 10kt","Cityclass","Intermediate","Flexi","Handy","MR","Far East","Ex US"];
+const SEGMENTS=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];
+const TRADES=["UKC","Med","EU Feast", "AG","TA West","Ex US","Asia"];
 
 function FixingTab({vessels}){
   const [jobs,setJobs]=useState([]);
@@ -1984,6 +1985,12 @@ function FixingTab({vessels}){
   const [ownerTradeFilter,setOwnerTradeFilter]=useState(null);
   const [newClient,setNewClient]=useState({id:"",name:"",coverage:"",notes:""});
   const [newOwnerEntry,setNewOwnerEntry]=useState({id:"",company:"",segment:"",pic:"",trade:"",comment:""});
+  const [jobSearch,setJobSearch]=useState("");
+  const [pendingDelJob,setPendingDelJob]=useState(null);
+  const [pendingDelOwner,setPendingDelOwner]=useState(null);
+  const [ownerDirSearch,setOwnerDirSearch]=useState("");
+  const [ownerSegFilter,setOwnerSegFilter]=useState(null);
+  const [ownerTradeFilter,setOwnerTradeFilter]=useState(null);
 
   useEffect(()=>{
     loadFixingJobs().then(setJobs);
@@ -2010,7 +2017,13 @@ function FixingTab({vessels}){
   }
 
   function removeOwnerEntry(id){
-    saveOwnerDir(owners.filter(o=>o.id!==id));
+    setPendingDelOwner(id);
+  }
+  function confirmRemoveOwnerEntry(){
+    if(!pendingDelOwner)return;
+    saveOwnerDir(owners.filter(o=>o.id!==pendingDelOwner));
+    setPendingDelOwner(null);
+  }
   }
 
   function suggestVessels(job){
@@ -2032,11 +2045,9 @@ function FixingTab({vessels}){
 
   async function createJob(){
     const id="job_"+Date.now()+"_"+Math.random().toString(36).slice(2,5);
-    const job={...newJob,id,owners:[],created_at:new Date().toISOString()};
+    const job={id,charterer:"",product:"",qty:"",load:"",disch:"",laycan:"",laytime:"",status:"OPEN",guidance:"",outcome:"",owners:[],fixed_owner:"",fixed_vessel:"",fixed_rate:"",added_date:new Date().toISOString().slice(0,10),created_at:new Date().toISOString()};
     await saveFixingJob(job);
     setJobs(prev=>[job,...prev]);
-    setNewJob({id:"",charterer:"",product:"",qty:"",load:"",disch:"",laycan_from:"",laycan_to:"",status:"OPEN",guidance:"",outcome:"",owners:[]});
-    setShowNewJob(false);
     setExpandedJob(id);
   }
 
@@ -2209,7 +2220,15 @@ function FixingTab({vessels}){
         })}
 
         {/* Owner Directory */}
+        {/* Owner Directory */}
         <div style={{marginTop:8,borderTop:"1px solid "+C.bd2,paddingTop:8}}>
+          {pendingDelOwner&&(
+            <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:C.bg2,border:"1px solid "+C.red,borderRadius:8,padding:"12px 20px",zIndex:9999,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.5)",fontFamily:"sans-serif",fontSize:12,minWidth:280}}>
+              <span style={{color:C.tx,flex:1}}>Remove <strong>{owners.find(o=>o.id===pendingDelOwner)?.company||"entry"}</strong>?</span>
+              <button onClick={confirmRemoveOwnerEntry} style={{background:C.red,border:"none",borderRadius:5,color:"#fff",padding:"5px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>Remove</button>
+              <button onClick={()=>setPendingDelOwner(null)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,padding:"5px 14px",cursor:"pointer",fontSize:12}}>Cancel</button>
+            </div>
+          )}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
             <span style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Owner Directory</span>
             <button onClick={()=>setShowOwnerDir(s=>!s)} style={{fontSize:11,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.blue,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>{showOwnerDir?"▲":"▼"}</button>
@@ -2219,9 +2238,15 @@ function FixingTab({vessels}){
               {/* Search + filters */}
               <input value={ownerDirSearch||""} onChange={e=>setOwnerDirSearch(e.target.value)} placeholder="🔍 Search owners…" style={{...inpS,width:"100%",padding:"3px 7px",fontSize:11}}/>
               <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-                {["Sub 10k","City","Inter","Flexi","Handy","MR"].map(s=>(
+                {SEGMENTS.map(s=>(
                   <button key={s} onClick={()=>setOwnerSegFilter(f=>f===s?null:s)}
                     style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,border:"1px solid "+(ownerSegFilter===s?C.blue:C.bd),background:ownerSegFilter===s?"rgba(88,166,255,.2)":"transparent",color:ownerSegFilter===s?C.blue:C.faint,cursor:"pointer",fontFamily:"inherit"}}>{s}</button>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+                {TRADES.map(t=>(
+                  <button key={t} onClick={()=>setOwnerTradeFilter(f=>f===t?null:t)}
+                    style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,border:"1px solid "+(ownerTradeFilter===t?C.amber:C.bd),background:ownerTradeFilter===t?"rgba(255,209,102,.2)":"transparent",color:ownerTradeFilter===t?C.amber:C.faint,cursor:"pointer",fontFamily:"inherit"}}>{t}</button>
                 ))}
               </div>
               <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
@@ -2231,25 +2256,27 @@ function FixingTab({vessels}){
                 ))}
               </div>
               {/* Add new row inline */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr auto",gap:3,alignItems:"center"}}>
-                <input value={newOwnerEntry.company} onChange={e=>setNewOwnerEntry(p=>({...p,company:e.target.value}))} placeholder="Company" style={{...inpS,padding:"2px 5px",fontSize:11}}/>
-                <input value={newOwnerEntry.pic} onChange={e=>setNewOwnerEntry(p=>({...p,pic:e.target.value}))} placeholder="PIC" style={{...inpS,padding:"2px 5px",fontSize:11}}/>
-                <select value={newOwnerEntry.segment} onChange={e=>setNewOwnerEntry(p=>({...p,segment:e.target.value}))} style={{...inpS,padding:"2px 5px",fontSize:11}}>
+              <div style={{display:"grid",gridTemplateColumns:"80px 60px 60px 50px 70px auto",gap:3,alignItems:"center",marginBottom:4}}>
+                <input value={newOwnerEntry.company} onChange={e=>setNewOwnerEntry(p=>({...p,company:e.target.value}))} placeholder="Company" style={{...inpS,padding:"2px 4px",fontSize:11}}/>
+                <input value={newOwnerEntry.pic} onChange={e=>setNewOwnerEntry(p=>({...p,pic:e.target.value}))} placeholder="PIC" style={{...inpS,padding:"2px 4px",fontSize:11}}/>
+                <input value={newOwnerEntry.comment} onChange={e=>setNewOwnerEntry(p=>({...p,comment:e.target.value}))} placeholder="Comment" style={{...inpS,padding:"2px 4px",fontSize:11}}/>
+                <select value={newOwnerEntry.segment} onChange={e=>setNewOwnerEntry(p=>({...p,segment:e.target.value}))} style={{...inpS,padding:"2px 3px",fontSize:11,background:C.bg3,appearance:"none"}}>
                   <option value="">Seg…</option>
-                  {["Sub 10k","City","Inter","Flexi","Handy","MR"].map(s=><option key={s} value={s}>{s}</option>)}
+                  {SEGMENTS.map(s=><option key={s} value={s}>{s}</option>)}
                 </select>
-                <select value={newOwnerEntry.trade} onChange={e=>setNewOwnerEntry(p=>({...p,trade:e.target.value}))} style={{...inpS,padding:"2px 5px",fontSize:11}}>
+                <select value={newOwnerEntry.trade} onChange={e=>setNewOwnerEntry(p=>({...p,trade:e.target.value}))} style={{...inpS,padding:"2px 3px",fontSize:11,background:C.bg3,appearance:"none"}}>
                   <option value="">Trade…</option>
-                  {["UKC","Med","AG","TA West","Ex US","Asia"].map(t=><option key={t} value={t}>{t}</option>)}
+                  {TRADES.map(t=><option key={t} value={t}>{t}</option>)}
                 </select>
-                <button onClick={addOwnerEntry} style={{background:"#1f6feb",border:"none",borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:11,padding:"3px 8px",cursor:"pointer",whiteSpace:"nowrap"}}>+ Add</button>
+                <button onClick={addOwnerEntry} style={{background:"#1f6feb",border:"none",borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:11,padding:"3px 7px",cursor:"pointer",whiteSpace:"nowrap"}}>+ Add</button>
               </div>
               {/* Table */}
               {(()=>{
+                const dSel={...inpS,padding:"1px 3px",background:C.bg3,border:"none",borderBottom:"1px solid "+C.bd2+"55",fontSize:11,appearance:"none"};
                 const filtered=owners.filter(o=>{
                   if(ownerSegFilter&&o.segment!==ownerSegFilter)return false;
                   if(ownerTradeFilter&&o.trade!==ownerTradeFilter)return false;
-                  if(ownerDirSearch){const t=ownerDirSearch.toLowerCase();if(![o.company,o.pic,o.segment,o.trade].filter(Boolean).join(" ").toLowerCase().includes(t))return false;}
+                  if(ownerDirSearch){const t=ownerDirSearch.toLowerCase();if(![o.company,o.pic,o.segment,o.trade,o.comment].filter(Boolean).join(" ").toLowerCase().includes(t))return false;}
                   return true;
                 });
                 if(!filtered.length)return <div style={{fontSize:11,color:C.faint,fontStyle:"italic"}}>No entries.</div>;
@@ -2257,40 +2284,44 @@ function FixingTab({vessels}){
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                     <thead>
                       <tr style={{background:C.bg3}}>
-                        {["Company","PIC","Segment","Trade",""].map(h=>(
-                          <th key={h} style={{padding:"3px 5px",textAlign:"left",fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid "+C.bd2}}>{h}</th>
+                        {["Company","PIC","Comment","Seg","Trade",""].map(h=>(
+                          <th key={h} style={{padding:"3px 4px",textAlign:"left",fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"1px solid "+C.bd2,whiteSpace:"nowrap"}}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {filtered.map((o,ri)=>(
                         <tr key={o.id} style={{background:ri%2===0?C.bg:C.bg2}}>
-                          <td style={{padding:"2px 5px",borderBottom:"1px solid "+C.bg3}}>
+                          <td style={{padding:"1px 4px",borderBottom:"1px solid "+C.bg3,width:75}}>
                             <input value={o.company||""} onChange={e=>updateOwnerEntry(o.id,"company",e.target.value)} style={{...inpS,width:"100%",padding:"1px 3px",background:"transparent",border:"none",borderBottom:"1px solid "+C.bd2+"55",fontSize:11}}/>
                           </td>
-                          <td style={{padding:"2px 5px",borderBottom:"1px solid "+C.bg3}}>
+                          <td style={{padding:"1px 4px",borderBottom:"1px solid "+C.bg3,width:55}}>
                             <input value={o.pic||""} onChange={e=>updateOwnerEntry(o.id,"pic",e.target.value)} style={{...inpS,width:"100%",padding:"1px 3px",background:"transparent",border:"none",borderBottom:"1px solid "+C.bd2+"55",fontSize:11}}/>
                           </td>
-                          <td style={{padding:"2px 5px",borderBottom:"1px solid "+C.bg3}}>
-                            <select value={o.segment||""} onChange={e=>updateOwnerEntry(o.id,"segment",e.target.value)} style={{...inpS,padding:"1px 3px",background:"transparent",border:"none",fontSize:11,color:C.blue}}>
+                          <td style={{padding:"1px 4px",borderBottom:"1px solid "+C.bg3}}>
+                            <input value={o.comment||""} onChange={e=>updateOwnerEntry(o.id,"comment",e.target.value)} style={{...inpS,width:"100%",padding:"1px 3px",background:"transparent",border:"none",borderBottom:"1px solid "+C.bd2+"55",fontSize:11}}/>
+                          </td>
+                          <td style={{padding:"1px 4px",borderBottom:"1px solid "+C.bg3,width:52}}>
+                            <select value={o.segment||""} onChange={e=>updateOwnerEntry(o.id,"segment",e.target.value)} style={{...dSel,color:C.blue,width:"100%"}}>
                               <option value="">—</option>
-                              {["Sub 10k","City","Inter","Flexi","Handy","MR"].map(s=><option key={s} value={s}>{s}</option>)}
+                              {SEGMENTS.map(s=><option key={s} value={s}>{s}</option>)}
                             </select>
                           </td>
-                          <td style={{padding:"2px 5px",borderBottom:"1px solid "+C.bg3}}>
-                            <select value={o.trade||""} onChange={e=>updateOwnerEntry(o.id,"trade",e.target.value)} style={{...inpS,padding:"1px 3px",background:"transparent",border:"none",fontSize:11,color:C.amber}}>
+                          <td style={{padding:"1px 4px",borderBottom:"1px solid "+C.bg3,width:58}}>
+                            <select value={o.trade||""} onChange={e=>updateOwnerEntry(o.id,"trade",e.target.value)} style={{...dSel,color:C.amber,width:"100%"}}>
                               <option value="">—</option>
-                              {["UKC","Med","AG","TA West","Ex US","Asia"].map(t=><option key={t} value={t}>{t}</option>)}
+                              {TRADES.map(t=><option key={t} value={t}>{t}</option>)}
                             </select>
                           </td>
-                          <td style={{padding:"2px 3px"}}>
-                            <button onClick={()=>removeOwnerEntry(o.id)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:11,opacity:0.5}}>✕</button>
+                          <td style={{padding:"1px 3px",width:16}}>
+                            <button onClick={()=>removeOwnerEntry(o.id)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:11,opacity:0.5,padding:0}}>✕</button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 );
+              })()}
               })()}
             </div>
           )}
@@ -2302,7 +2333,7 @@ function FixingTab({vessels}){
 
         {/* Toolbar */}
         <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-          <button onClick={()=>setShowNewJob(s=>!s)}
+          <button onClick={createJob}
             style={{fontSize:12,fontWeight:700,background:"#1f6feb",border:"none",borderRadius:5,color:"#fff",padding:"5px 14px",cursor:"pointer",fontFamily:"inherit"}}>
             + New
           </button>
@@ -2323,44 +2354,6 @@ function FixingTab({vessels}){
             style={{...inpS,width:"100%",padding:"5px 28px 5px 10px"}}/>
           {jobSearch&&<button onClick={()=>setJobSearch("")} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:11}}>✕</button>}
         </div>
-
-        {/* New Job Form */}
-        {showNewJob&&(
-          <div style={{background:C.bg2,border:"1px solid "+C.blue+"44",borderRadius:7,padding:"12px"}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.blue,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.07em"}}>New Fixing Job</div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              <div style={{flex:"1 1 140px"}}>
-                <div style={{fontSize:11,color:C.faint,marginBottom:2}}>Charterer</div>
-                <select value={newJob.charterer} onChange={e=>setNewJob(p=>({...p,charterer:e.target.value}))} style={{...inpS,width:"100%"}}>
-                  <option value="">Select client…</option>
-                  {clients.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
-                </select>
-              </div>
-              {[["product","Product","e.g. ULSD"],["qty","Qty","e.g. 15kt"],["load","Load","e.g. Tees"],["disch","Disch","e.g. ARA"]].map(([f,l,ph])=>(
-                <div key={f} style={{flex:"1 1 90px"}}>
-                  <div style={{fontSize:11,color:C.faint,marginBottom:2}}>{l}</div>
-                  <input value={newJob[f]} onChange={e=>setNewJob(p=>({...p,[f]:e.target.value}))} placeholder={ph} style={{...inpS,width:"100%"}}/>
-                </div>
-              ))}
-              <div style={{flex:"1 1 130px"}}>
-                <div style={{fontSize:11,color:C.faint,marginBottom:2}}>Laycan</div>
-                <input value={newJob.laycan} onChange={e=>setNewJob(p=>({...p,laycan:fmtLaycanText(e.target.value)}))} onBlur={e=>setNewJob(p=>({...p,laycan:fmtLaycanText(e.target.value)}))} placeholder="e.g. 13/3 or 13-15 Mar" style={{...inpS,width:"100%"}}/>
-              </div>
-              <div style={{flex:"1 1 110px"}}>
-                <div style={{fontSize:11,color:C.faint,marginBottom:2}}>Added</div>
-                <input type="date" value={newJob.added_date||""} onChange={e=>setNewJob(p=>({...p,added_date:e.target.value}))} style={{...inpS,width:"100%"}}/>
-              </div>
-              <div style={{flex:"1 1 140px"}}>
-                <div style={{fontSize:11,color:C.faint,marginBottom:2}}>Guidance</div>
-                <input value={newJob.guidance} onChange={e=>setNewJob(p=>({...p,guidance:e.target.value}))} placeholder="e.g. ~$350k lsum" style={{...inpS,width:"100%"}}/>
-              </div>
-            </div>
-            <div style={{display:"flex",gap:5,marginTop:8}}>
-              <button onClick={createJob} style={{background:"#1f6feb",border:"none",borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"6px 18px",cursor:"pointer"}}>Create Job</button>
-              <button onClick={()=>setShowNewJob(false)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,fontFamily:"inherit",fontSize:12,padding:"6px 12px",cursor:"pointer"}}>Cancel</button>
-            </div>
-          </div>
-        )}
 
         {/* Job list */}
         {filteredJobs.length===0&&<div style={{color:C.faint,fontSize:12,padding:"40px",textAlign:"center"}}>No fixing jobs yet. Click + New Job to start.</div>}
@@ -2411,8 +2404,8 @@ function FixingTab({vessels}){
                         {clients.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
                       </select>
                     </div>
-                    {/* Cargo fields */}
-                    {[["product","Product"],["qty","Qty"],["load","Load"],["disch","Disch"]].map(([f,l])=>(
+                    {/* Cargo fields — QTY first */}
+                    {[["qty","Qty"],["product","Product"],["load","Load"],["disch","Disch"]].map(([f,l])=>(
                       <div key={f} style={{display:"flex",alignItems:"center",gap:4}}>
                         <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.05em",width:52,flexShrink:0}}>{l}</span>
                         <input value={job[f]||""} onChange={e=>updateJob(job.id,{[f]:e.target.value})} style={{...inpS,flex:1,padding:"2px 5px",fontSize:11}}/>
@@ -2421,6 +2414,10 @@ function FixingTab({vessels}){
                     <div style={{display:"flex",alignItems:"center",gap:4}}>
                       <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.05em",width:52,flexShrink:0}}>Laycan</span>
                       <input value={job.laycan||""} onChange={e=>updateJob(job.id,{laycan:e.target.value})} onBlur={e=>updateJob(job.id,{laycan:fmtLaycanText(e.target.value)})} placeholder="13-15 Mar" style={{...inpS,flex:1,padding:"2px 5px",fontSize:11}}/>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.05em",width:52,flexShrink:0}}>Laytime</span>
+                      <input value={job.laytime||""} onChange={e=>updateJob(job.id,{laytime:e.target.value})} placeholder="e.g. 200mt/hr" style={{...inpS,flex:1,padding:"2px 5px",fontSize:11}}/>
                     </div>
                     {/* Notes */}
                     <div style={{flex:1,marginTop:4}}>
