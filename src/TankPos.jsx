@@ -2975,24 +2975,28 @@ function WSTracker() {
         "You are a freight market data parser. Parse worldscale and FFA data. Respond ONLY with raw JSON, no markdown.",
         [{role:"user",content:`Parse this WS/FFA market data into JSON.
 Routes we track: TC2 (ARA-USAC 37kt), TC6 (Cross-Med 30kt), TC14 (USGC-UKC 38kt), TC23 (UKC-USAC 30kt), TC178 (Rdam barge $/mt).
+
 Output format:
 {
   "date": "DD Mon YY",
   "spot": {
-    "TC2":  {"ws": number_or_null, "change": number_or_null},
-    "TC6":  {"ws": number_or_null, "change": number_or_null},
-    "TC14": {"ws": number_or_null, "change": number_or_null},
-    "TC23": {"ws": number_or_null, "change": number_or_null},
-    "TC178":{"ws": number_or_null, "change": number_or_null}
+    "TC2":  {"ws": 218.75, "change": -1.25},
+    "TC6":  {"ws": 310.56, "change": -14.44}
   },
   "ffa": {
-    "TC2":  {"Feb26":null,"Mar26":null,"Apr26":null,"Q126":null,"Q226":null},
-    "TC14": {"Feb26":null,"Mar26":null,"Apr26":null,"Q126":null,"Q226":null},
-    "TC6":  {"Feb26":null,"Mar26":null,"Apr26":null,"Q126":null,"Q226":null},
-    "TC23": {"Feb26":null,"Mar26":null,"Apr26":null,"Q126":null,"Q226":null}
+    "TC2":  {"Mar26": 247.50, "Apr26": 227.50, "May26": 165.50, "Q126": 167.50, "Q226": 179.50, "AVE25": 134.50},
+    "TC14": {"Mar26": 394.50, "Apr26": 329.50, "May26": 243.50, "Q126": 277.50, "Q226": 255.50, "AVE25": 147.50}
   }
 }
-Fill only values you can find. Leave others null.
+
+Rules:
+- Only include routes and fields where you actually found a value — omit nulls entirely
+- spot: include ws and change (as signed number e.g. -1.25) if present
+- ffa period key format MUST be exactly: Mar26 Apr26 May26 Jun26 Q126 Q226 Q326 Q426 AVE25 AVE26 (no slash, no space)
+- If input has "MAR/26" use "Mar26", "1Q/26" use "Q126", "AVE/25" use "AVE25"
+- Spot change: extract from parentheses e.g. "218.75(-1.25)" → ws:218.75 change:-1.25
+- TC178 uses $/mt not WS — still put the number in "ws" field
+
 Data:
 ${text}`}]
       );
@@ -3016,8 +3020,7 @@ ${text}`}]
       const prevHistory = (existing.history||[]).filter(h=>h.date!==today);
       const newHistory = [...prevHistory, snap].slice(-90);
 
-      const next = {
-        const next = {
+       const next = {
         spot: (()=>{
           const es=existing.spot||{};
           const ns={...es};
