@@ -2395,6 +2395,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     if(filters.size>0){
       list=list.filter(v=>{
         if(filters.has("PPT")&&!isOpenPPT(v.date))return false;
+        if(filters.has("HIDE_EMP")&&v.openPort==="EMPLOYED")return false;
         if(filters.has("NAP")&&!(v.comment?.toLowerCase().includes("naph")||v.spec?.lastCargo?.toLowerCase().includes("naph")))return false;
         if(filters.has("SUBS")&&v.openPort!=="EMPLOYED")return false;
         const reg=classifyRegion(v.openPort);
@@ -2471,7 +2472,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter]);
 
   const FILTER_GROUPS=[
-    {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"]]},
+    {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"],["HIDE_EMP","Hide Employed"]]},
     {label:"Region",items:[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]]},
   ];
 
