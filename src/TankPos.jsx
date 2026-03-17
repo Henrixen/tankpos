@@ -1976,7 +1976,8 @@ function FixingTab({vessels}){
   const [showOwnerDir,setShowOwnerDir]=useState(false);
   const [statusFilter,setStatusFilter]=useState("ALL");
   const [clientFilter,setClientFilter]=useState("ALL");
-  const [newJob,setNewJob]=useState({id:"",charterer:"",product:"",qty:"",load:"",disch:"",laycan_from:"",laycan_to:"",status:"OPEN",guidance:"",outcome:"",owners:[]});
+  const [newJob,setNewJob]=useState({id:"",charterer:"",product:"",qty:"",load:"",disch:"",laycan:"",status:"OPEN",guidance:"",outcome:"",owners:[],fixed_owner:"",fixed_vessel:"",fixed_rate:"",added_date:new Date().toISOString().slice(0,10)});
+  const [jobSearch,setJobSearch]=useState("");
   const [newClient,setNewClient]=useState({id:"",name:"",coverage:"",notes:""});
   const [newOwnerEntry,setNewOwnerEntry]=useState({id:"",company:"",segment:"",pic:"",trade:"",comment:""});
 
@@ -2096,6 +2097,11 @@ function FixingTab({vessels}){
   const filteredJobs=jobs.filter(j=>{
     if(statusFilter!=="ALL"&&j.status!==statusFilter)return false;
     if(clientFilter!=="ALL"&&j.charterer!==clientFilter)return false;
+    if(jobSearch.trim()){
+      const t=jobSearch.trim().toLowerCase();
+      const hay=[j.charterer,j.product,j.qty,j.load,j.disch,j.laycan,j.guidance,j.outcome,j.fixed_owner,j.fixed_vessel].filter(Boolean).join(" ").toLowerCase();
+      if(!hay.includes(t))return false;
+    }
     return true;
   });
 
@@ -2104,6 +2110,26 @@ function FixingTab({vessels}){
 
   // Grouped owner directory by segment
   const ownersBySegment=SEGMENTS.reduce((acc,seg)=>{acc[seg]=owners.filter(o=>o.segment===seg);return acc;},{});
+
+  function fmtLaycanText(s){
+    if(!s)return s;
+    const MONTHS=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+    const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    // "13/3" or "13-15/3" or "13/3-15/3"
+    const m1=s.match(/^(\d{1,2})[\/\-](\d{1,2})(?:\s*[-–]\s*(\d{1,2})[\/\-](\d{1,2}))?$/);
+    if(m1){
+      const d1=m1[1],mo1=parseInt(m1[2])-1;
+      if(m1[3]&&m1[4]){const d2=m1[3],mo2=parseInt(m1[4])-1;return d1+" "+MON[mo1]+" - "+d2+" "+MON[mo2];}
+      return d1+" "+MON[mo1];
+    }
+    // "13-15 Mar" or "13 Mar"
+    const m2=s.match(/^(\d{1,2})(?:\s*[-–]\s*(\d{1,2}))?\s+([A-Za-z]{3})/);
+    if(m2){
+      const mo=MON.find(m=>m.toLowerCase()===m2[3].toLowerCase().slice(0,3));
+      if(mo)return m2[2]?m2[1]+" "+mo+" - "+m2[2]+" "+mo:m2[1]+" "+mo;
+    }
+    return s;
+  }
 
   return(
     <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
@@ -2244,6 +2270,11 @@ function FixingTab({vessels}){
           )}
           <span style={{marginLeft:"auto",fontSize:11,color:C.faint}}>{filteredJobs.length} job{filteredJobs.length!==1?"s":""}</span>
         </div>
+        <div style={{position:"relative",maxWidth:300}}>
+          <input value={jobSearch} onChange={e=>setJobSearch(e.target.value)} placeholder="🔍 Search jobs…"
+            style={{...inpS,width:"100%",padding:"5px 28px 5px 10px"}}/>
+          {jobSearch&&<button onClick={()=>setJobSearch("")} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:11}}>✕</button>}
+        </div>
 
         {/* New Job Form */}
         {showNewJob&&(
@@ -2263,13 +2294,13 @@ function FixingTab({vessels}){
                   <input value={newJob[f]} onChange={e=>setNewJob(p=>({...p,[f]:e.target.value}))} placeholder={ph} style={{...inpS,width:"100%"}}/>
                 </div>
               ))}
-              <div style={{flex:"1 1 110px"}}>
-                <div style={{fontSize:11,color:C.faint,marginBottom:2}}>Laycan from</div>
-                <input type="date" value={newJob.laycan_from} onChange={e=>setNewJob(p=>({...p,laycan_from:e.target.value}))} style={{...inpS,width:"100%"}}/>
+              <div style={{flex:"1 1 130px"}}>
+                <div style={{fontSize:11,color:C.faint,marginBottom:2}}>Laycan</div>
+                <input value={newJob.laycan} onChange={e=>setNewJob(p=>({...p,laycan:fmtLaycanText(e.target.value)}))} onBlur={e=>setNewJob(p=>({...p,laycan:fmtLaycanText(e.target.value)}))} placeholder="e.g. 13/3 or 13-15 Mar" style={{...inpS,width:"100%"}}/>
               </div>
               <div style={{flex:"1 1 110px"}}>
-                <div style={{fontSize:11,color:C.faint,marginBottom:2}}>Laycan to</div>
-                <input type="date" value={newJob.laycan_to} onChange={e=>setNewJob(p=>({...p,laycan_to:e.target.value}))} style={{...inpS,width:"100%"}}/>
+                <div style={{fontSize:11,color:C.faint,marginBottom:2}}>Added</div>
+                <input type="date" value={newJob.added_date||""} onChange={e=>setNewJob(p=>({...p,added_date:e.target.value}))} style={{...inpS,width:"100%"}}/>
               </div>
               <div style={{flex:"1 1 140px"}}>
                 <div style={{fontSize:11,color:C.faint,marginBottom:2}}>Guidance</div>
@@ -2323,47 +2354,45 @@ function FixingTab({vessels}){
               {isOpen&&(
                 <div style={{borderTop:"1px solid "+C.bd2,display:"flex",gap:0}}>
 
-                  {/* LEFT 20%: free text notes */}
-                  <div style={{flex:"0 0 20%",minWidth:160,borderRight:"1px solid "+C.bd2,padding:"10px",display:"flex",flexDirection:"column",gap:8}}>
-                    {/* Edit fields */}
-                    <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                      {[["product","Product"],["qty","Qty"],["load","Load"],["disch","Disch"],["guidance","Guidance"]].map(([f,l])=>(
-                        <div key={f}>
-                          <div style={{fontSize:10,color:C.faint,marginBottom:1,textTransform:"uppercase",letterSpacing:"0.06em"}}>{l}</div>
-                          <input value={job[f]||""} onChange={e=>updateJob(job.id,{[f]:e.target.value})} style={{...inpS,width:"100%",padding:"3px 6px",fontSize:11}}/>
-                        </div>
-                      ))}
-                      <div>
-                        <div style={{fontSize:10,color:C.faint,marginBottom:1,textTransform:"uppercase",letterSpacing:"0.06em"}}>Laycan from</div>
-                        <input type="date" value={job.laycan_from||""} onChange={e=>updateJob(job.id,{laycan_from:e.target.value})} style={{...inpS,width:"100%",padding:"3px 6px",fontSize:11}}/>
+                  {/* LEFT 20%: cargo fields + notes */}
+                  <div style={{flex:"0 0 20%",minWidth:160,borderRight:"1px solid "+C.bd2,padding:"10px",display:"flex",flexDirection:"column",gap:4}}>
+                    {/* Compact label+input rows */}
+                    {[["product","Product"],["qty","Qty"],["load","Load"],["disch","Disch"],["guidance","Guidance"]].map(([f,l])=>(
+                      <div key={f} style={{display:"flex",alignItems:"center",gap:4}}>
+                        <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.05em",width:52,flexShrink:0}}>{l}</span>
+                        <input value={job[f]||""} onChange={e=>updateJob(job.id,{[f]:e.target.value})} style={{...inpS,flex:1,padding:"2px 5px",fontSize:11}}/>
                       </div>
-                      <div>
-                        <div style={{fontSize:10,color:C.faint,marginBottom:1,textTransform:"uppercase",letterSpacing:"0.06em"}}>Laycan to</div>
-                        <input type="date" value={job.laycan_to||""} onChange={e=>updateJob(job.id,{laycan_to:e.target.value})} style={{...inpS,width:"100%",padding:"3px 6px",fontSize:11}}/>
-                      </div>
+                    ))}
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.05em",width:52,flexShrink:0}}>Laycan</span>
+                      <input value={job.laycan||""} onChange={e=>updateJob(job.id,{laycan:e.target.value})} onBlur={e=>updateJob(job.id,{laycan:fmtLaycanText(e.target.value)})} placeholder="13-15 Mar" style={{...inpS,flex:1,padding:"2px 5px",fontSize:11}}/>
                     </div>
-                    {/* Free text notes */}
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:10,color:C.faint,marginBottom:2,textTransform:"uppercase",letterSpacing:"0.06em"}}>Notes / Outcome</div>
-                      <textarea value={job.outcome||""} onChange={e=>updateJob(job.id,{outcome:e.target.value})}
-                        placeholder="e.g. Fixed Stolt Kite at $340k · Failed — owner withdrew"
-                        style={{...inpS,width:"100%",minHeight:100,resize:"vertical",fontSize:11}}/>
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.05em",width:52,flexShrink:0}}>Added</span>
+                      <input type="date" value={job.added_date||""} onChange={e=>updateJob(job.id,{added_date:e.target.value})} style={{...inpS,flex:1,padding:"2px 5px",fontSize:11}}/>
                     </div>
-                    {/* Charterer selector */}
-                    <div>
-                      <div style={{fontSize:10,color:C.faint,marginBottom:1,textTransform:"uppercase",letterSpacing:"0.06em"}}>Charterer</div>
-                      <select value={job.charterer||""} onChange={e=>updateJob(job.id,{charterer:e.target.value})} style={{...inpS,width:"100%",fontSize:11}}>
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.05em",width:52,flexShrink:0}}>Client</span>
+                      <select value={job.charterer||""} onChange={e=>updateJob(job.id,{charterer:e.target.value})} style={{...inpS,flex:1,padding:"2px 5px",fontSize:11}}>
                         <option value="">—</option>
                         {clients.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
                       </select>
                     </div>
+                    {/* Notes */}
+                    <div style={{flex:1,marginTop:4}}>
+                      <div style={{fontSize:10,color:C.faint,marginBottom:2,textTransform:"uppercase",letterSpacing:"0.06em"}}>Notes</div>
+                      <textarea value={job.outcome||""} onChange={e=>updateJob(job.id,{outcome:e.target.value})}
+                        placeholder="Market context, charterer feedback, outcome…"
+                        style={{...inpS,width:"100%",minHeight:140,resize:"vertical",fontSize:11}}/>
+                    </div>
                   </div>
 
-                  {/* RIGHT 80%: owner table */}
-                  <div style={{flex:1,padding:"10px",minWidth:0}}>
+                  {/* RIGHT 80%: owner table + fixed section */}
+                  <div style={{flex:1,padding:"10px",minWidth:0,display:"flex",flexDirection:"column",gap:10}}>
+
                     {/* Suggested vessels */}
                     {suggested.length>0&&(
-                      <div style={{marginBottom:8,display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+                      <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
                         <span style={{fontSize:11,color:C.faint}}>💡 Nearby:</span>
                         {suggested.map(v=>(
                           <button key={v.vessel} onClick={()=>{
@@ -2379,40 +2408,57 @@ function FixingTab({vessels}){
                       </div>
                     )}
 
-                    {/* Owner table header + add button */}
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
-                      <span style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Owner Contacts</span>
-                      <button onClick={()=>addOwnerRow(job.id)} style={{fontSize:11,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.blue,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>+ Owner</button>
+                    {/* Owner contacts table */}
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+                        <span style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Owner Contacts</span>
+                        <button onClick={()=>addOwnerRow(job.id)} style={{fontSize:11,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.blue,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>+ Owner</button>
+                      </div>
+                      {(job.owners||[]).length===0&&<div style={{fontSize:12,color:C.faint,fontStyle:"italic"}}>No owners contacted yet.</div>}
+                      {(job.owners||[]).length>0&&(
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                          <thead>
+                            <tr style={{background:C.bg3}}>
+                              {["Owner","PIC","Vessel","Indication","Comment",""].map(h=>(
+                                <th key={h} style={{padding:"4px 8px",textAlign:"left",fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid "+C.bd2,whiteSpace:"nowrap"}}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(job.owners||[]).map((row,ri)=>(
+                              <tr key={row.id} style={{background:ri%2===0?C.bg:C.bg2}}>
+                                {[["owner",110],["pic",80],["vessel",120],["indication",95],["comment",0]].map(([f,w])=>(
+                                  <td key={f} style={{padding:"2px 3px",borderBottom:"1px solid "+C.bg3}}>
+                                    <input value={row[f]||""} onChange={e=>updateOwnerRow(job.id,row.id,f,e.target.value)}
+                                      placeholder={f==="indication"?"e.g. $340k":f==="pic"?"Name":""}
+                                      style={{...inpS,width:w||"100%",padding:"3px 5px",background:"transparent",border:"none",borderBottom:"1px solid "+C.bd2+"66",fontSize:12}}/>
+                                  </td>
+                                ))}
+                                <td style={{padding:"2px 3px",whiteSpace:"nowrap"}}>
+                                  <button onClick={()=>removeOwnerRow(job.id,row.id)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.5}}>✕</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
                     </div>
 
-                    {(job.owners||[]).length===0&&<div style={{fontSize:12,color:C.faint,fontStyle:"italic"}}>No owners contacted yet.</div>}
-                    {(job.owners||[]).length>0&&(
-                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                        <thead>
-                          <tr style={{background:C.bg3}}>
-                            {["Owner","Vessel","Indication","Response","Comment",""].map(h=>(
-                              <th key={h} style={{padding:"4px 8px",textAlign:"left",fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid "+C.bd2,whiteSpace:"nowrap"}}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(job.owners||[]).map((row,ri)=>(
-                            <tr key={row.id} style={{background:ri%2===0?C.bg:C.bg2}}>
-                              {[["owner",110],["vessel",120],["indication",95],["response",85],["comment",0]].map(([f,w])=>(
-                                <td key={f} style={{padding:"2px 3px",borderBottom:"1px solid "+C.bg3}}>
-                                  <input value={row[f]||""} onChange={e=>updateOwnerRow(job.id,row.id,f,e.target.value)}
-                                    placeholder={f==="indication"?"e.g. $340k":f==="response"?"Firm/Subj/Pass":""}
-                                    style={{...inpS,width:w||"100%",padding:"3px 5px",background:"transparent",border:"none",borderBottom:"1px solid "+C.bd2+"66",fontSize:12}}/>
-                                </td>
-                              ))}
-                              <td style={{padding:"2px 3px",whiteSpace:"nowrap"}}>
-                                <button onClick={()=>removeOwnerRow(job.id,row.id)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.5}}>✕</button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
+                    {/* Fixed section */}
+                    <div style={{borderTop:"1px solid "+C.bd2,paddingTop:8}}>
+                      <div style={{fontSize:11,fontWeight:700,color:C.green,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>✓ Fixed</div>
+                      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                        {[["fixed_owner","Owner",100],["fixed_vessel","Vessel",120],["fixed_rate","Rate",120]].map(([f,l,w])=>(
+                          <div key={f} style={{display:"flex",alignItems:"center",gap:4}}>
+                            <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.05em",flexShrink:0}}>{l}</span>
+                            <input value={job[f]||""} onChange={e=>updateJob(job.id,{[f]:e.target.value})}
+                              placeholder={f==="fixed_rate"?"e.g. $340k lsum":""}
+                              style={{...inpS,width:w,padding:"3px 6px",fontSize:11}}/>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
                   </div>
                 </div>
               )}
