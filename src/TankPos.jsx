@@ -485,13 +485,6 @@ async function saveIntelItem(item){
   if(error){console.error("saveIntelItem error:",error);return null;}
   return data;
 }
-// FIND:
-async function deleteIntelItem(id){
-  const {error}=await supabase.from("intelvault").delete().eq("id",id);
-  if(error)console.error("deleteIntelItem error:",error);
-}
-
-// REPLACE WITH:
 async function deleteIntelItem(id){
   const {error}=await supabase.from("intelvault").delete().eq("id",id);
   if(error)console.error("deleteIntelItem error:",error);
