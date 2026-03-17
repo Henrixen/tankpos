@@ -2926,7 +2926,6 @@ const ROUTES = [
   {id:"TC6",  name:"TC6",  desc:"Cross-Med 30kt",        unit:"WS"},
   {id:"TC14", name:"TC14", desc:"US Gulf→UKC 38kt",     unit:"WS"},
   {id:"TC23", name:"TC23", desc:"UKC→USAC 30kt",        unit:"WS"},
-  {id:"TC178",name:"TC178",desc:"Rdam→ARA barge 1kt",  unit:"$/mt"},
 ];
 
 const FFA_PERIODS = ["Feb/26","Mar/26","Apr/26","Q1/26","Q2/26","AVE/25"];
@@ -2957,9 +2956,27 @@ function WSTracker() {
     })();
   },[]);
 
+  function normalisePeriodKeys(ffa){
+    if(!ffa) return ffa;
+    const keyMap={'Feb26':'Feb26','Mar26':'Mar26','Apr26':'Apr26','May26':'May26','Jun26':'Jun26',
+      'FEB26':'Feb26','MAR26':'Mar26','APR26':'Apr26','MAY26':'May26','JUN26':'Jun26',
+      'Q126':'Q126','Q226':'Q226','Q326':'Q326','Q426':'Q426',
+      '1Q26':'Q126','2Q26':'Q226','3Q26':'Q326','4Q26':'Q426',
+      'AVE25':'AVE25','AVE26':'AVE26','ave25':'AVE25','ave26':'AVE26'};
+    const result={};
+    for(const[rid,periods] of Object.entries(ffa)){
+      result[rid]={};
+      for(const[k,v] of Object.entries(periods)){
+        const norm=keyMap[k]||k;
+        result[rid][norm]=v;
+      }
+    }
+    return result;
+  }
   async function saveWS(d) {
-    try{await supabase.from("dashboard").upsert({key:WS_STORE,value:JSON.stringify(d)},{onConflict:"key"});}catch(_){}
-    setData(d);
+    const clean={...d,ffa:normalisePeriodKeys(d.ffa)};
+    try{await supabase.from("dashboard").upsert({key:WS_STORE,value:JSON.stringify(clean)},{onConflict:"key"});}catch(_){}
+    setData(clean);
   }
 
   async function parseWS() {
@@ -3168,7 +3185,9 @@ ${text}`}]
                       {(()=>{
                         const allKeys=new Set();
                         Object.values(data.ffa||{}).forEach(f=>Object.keys(f).filter(k=>k!=="updatedAt").forEach(k=>allKeys.add(k)));
-                        return [...allKeys].map(p=>(<th key={p} style={th2}>{p}</th>));
+                        const periodOrder=['Jan26','Feb26','Mar26','Apr26','May26','Jun26','Jul26','Aug26','Sep26','Oct26','Nov26','Dec26','Q126','Q226','Q326','Q426','AVE25','AVE26'];
+                        const sorted=[...allKeys].sort((a,b)=>{const ai=periodOrder.indexOf(a),bi=periodOrder.indexOf(b);return(ai===-1?99:ai)-(bi===-1?99:bi);});
+                        return sorted.map(p=>(<th key={p} style={th2}>{p}</th>));
                       })()}
                     </tr>
                   </thead>
@@ -3178,10 +3197,12 @@ ${text}`}]
                       const spot=data.spot?.[r.id]?.ws;
                       const allKeys=new Set();
                       Object.values(data.ffa||{}).forEach(fx=>Object.keys(fx).filter(k=>k!=="updatedAt").forEach(k=>allKeys.add(k)));
+                      const periodOrder=['Jan26','Feb26','Mar26','Apr26','May26','Jun26','Jul26','Aug26','Sep26','Oct26','Nov26','Dec26','Q126','Q226','Q326','Q426','AVE25','AVE26'];
+                      const sorted=[...allKeys].sort((a,b)=>{const ai=periodOrder.indexOf(a),bi=periodOrder.indexOf(b);return(ai===-1?99:ai)-(bi===-1?99:bi);});
                       return(
                         <tr key={r.id}>
                           <td style={{...td2,textAlign:"left",fontWeight:700,color:routeColors[r.id]||C.blue}}>{r.name}</td>
-                          {[...allKeys].map(p=>{
+                          {sorted.map(p=>{
                             const v=f[p];
                             const diff=v!=null&&spot!=null?v-spot:null;
                             const col=diff==null?C.dim:diff>0?C.red:C.green;
