@@ -3055,18 +3055,17 @@ ${text}`}]
         ffa: (()=>{
           const ef=existing.ffa||{};
           const pf=parsed.ffa||{};
-          const nf={...ef};
-          for(const[rid,val] of Object.entries(pf)){
-            if(!val) continue;
-            const prev=ef[rid]||{};
-            nf[rid]={...prev};
-            // Only overwrite period values that are non-null in the new parse
-            for(const[period,v] of Object.entries(val)){
-              if(v!=null) nf[rid][period]=v;
+          // If new paste has FFA data, replace entirely so columns always match latest paste
+          if(Object.keys(pf).length>0){
+            const nf={};
+            for(const[rid,val] of Object.entries(pf)){
+              if(!val) continue;
+              nf[rid]={...val,updatedAt:today};
             }
-            nf[rid].updatedAt=today;
+            return nf;
           }
-          return nf;
+          // No FFA in this paste — keep existing
+          return ef;
         })(),
         history: newHistory,
         lastUpdate: today,
