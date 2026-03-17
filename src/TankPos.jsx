@@ -3017,13 +3017,35 @@ ${text}`}]
       const newHistory = [...prevHistory, snap].slice(-90);
 
       const next = {
-        spot: {...(existing.spot||{}), ...stampedSpot},
+        const next = {
+        spot: (()=>{
+          const es=existing.spot||{};
+          const ns={...es};
+          for(const[rid,val] of Object.entries(stampedSpot)){
+            if(!val) continue;
+            const prev=es[rid]||{};
+            // Only overwrite fields that are non-null in the new parse
+            ns[rid]={...prev};
+            if(val.ws!=null) ns[rid].ws=val.ws;
+            if(val.change!=null) ns[rid].change=val.change;
+            ns[rid].updatedAt=today;
+          }
+          return ns;
+        })(),
         ffa: (()=>{
           const ef=existing.ffa||{};
           const pf=parsed.ffa||{};
-          // Only update routes that appear in parsed data
           const nf={...ef};
-          for(const[rid,val] of Object.entries(pf)){if(val)nf[rid]={...(ef[rid]||{}),...val,updatedAt:today};}
+          for(const[rid,val] of Object.entries(pf)){
+            if(!val) continue;
+            const prev=ef[rid]||{};
+            nf[rid]={...prev};
+            // Only overwrite period values that are non-null in the new parse
+            for(const[period,v] of Object.entries(val)){
+              if(v!=null) nf[rid][period]=v;
+            }
+            nf[rid].updatedAt=today;
+          }
           return nf;
         })(),
         history: newHistory,
