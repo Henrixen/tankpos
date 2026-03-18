@@ -1415,23 +1415,51 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels}) {
   function fmtDate(){ return new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}); }
 
   // WhatsApp / text format for positions
-  function posToText(rows){
-    const tt = s => !s?"":s.toLowerCase().split(" ").map(w=>w?w[0].toUpperCase()+w.slice(1):"").join(" ");
-    // Group by operator
-    const byOp = {};
-    for(const v of rows){ const op=v.operator||"Unknown"; if(!byOp[op])byOp[op]=[]; byOp[op].push(v); }
-    const parts = [];
-    parts.push(`🚢 *Open Positions* - ${fmtDate()}`);
-    parts.push("");
-    for(const [op, vList] of Object.entries(byOp)){
-      parts.push(`*${tt(op)}*`);
-      for(const v of vList){
-        const port = v.openPort==="EMPLOYED" ? "On Subs" : tt(v.openPort||"—");
-        const date = v.date||"";
-        const ppt  = isOpenPPT(v.date) ? " ✓" : "";
-        parts.push(`${tt(v.vessel||"TBN")} || ${port} || ${date}${ppt}`);
+  function cargoToText(rows){
+    // Title case but keep known abbreviations uppercase
+    const UPPER_ABBR=new Set(["ARA","USG","USGC","UKC","UKG","MED","ARA","GIB","SPORE","WAF","MEG","AG","CPP","DPP","LNG","LPG","IMO","FOB","CIF","ETA","STS","FSU","ULSD","HVO","GTL","LCO","UCO","FAME","LSFO","HSFO","MGO","VME"]);
+    const tc = s => !s?"":s.toLowerCase().split(" ").map(w=>{
+      if(!w)return w;
+      const up=w.toUpperCase();
+      if(UPPER_ABBR.has(up))return up;
+      return w[0].toUpperCase()+w.slice(1);
+    }).join(" ");
+    // Title case cargo type (not all caps)
+    const tcCargo = s => !s?"":s.toLowerCase().split(" ").map(w=>w?w[0].toUpperCase()+w.slice(1):"").join(" ");
+    // Format qty: replace . with , for decimals
+    const fmtQty = q => {const n=normaliseQty(q)||"";return n.replace(/(\d)\.(\d)/g,"$1,$2");};
+    // Format laycan: "19 Mar - 21 Mar" → "19-21 Mar", or single date
+    const fmtLaycan = (from,to) => {
+      if(!from&&!to)return "";
+      if(from&&to){
+        // Try to compact same-month range: "19 Mar - 21 Mar" → "19-21 Mar"
+        const m1=from.match(/^(\d{1,2})\s+([A-Za-z]{3})/);
+        const m2=to.match(/^(\d{1,2})\s+([A-Za-z]{3})/);
+        if(m1&&m2&&m1[2].toLowerCase()===m2[2].toLowerCase())
+          return m1[1]+"-"+m2[1]+" "+m1[2];
+        return from+" - "+to;
       }
-      parts.push("");
+      return from||to;
+    };
+    const parts = [];
+    for(const c of rows){
+      const st = c.status||"";
+      const charterer = tc(c.charterer||"");
+      const qty = fmtQty(c.qty);
+      const cargoType = tcCargo(c.cargo||"");
+      const load = tc(c.load||"");
+      const disch = tc(c.disch||"");
+      const laycanStr = fmtLaycan(c.from,c.to);
+      const freight = c.freight||"";
+      const vessel = tc(c.vessel||"");
+      let line = "";
+      if((st==="FIXED"||st==="SUBS") && vessel){
+        const fixWord = st==="SUBS"?"on subs":"fixed";
+        line = [charterer,fixWord,vessel,qty,cargoType,load,"to",disch,laycanStr,freight?"USD "+freight+" ls":""].filter(Boolean).join(" ");
+      } else {
+        line = [vessel||charterer,qty,cargoType,load,"to",disch,laycanStr].filter(Boolean).join(" ");
+      }
+      parts.push(line);
     }
     return parts.join("\n").trim();
   }
@@ -2593,8 +2621,12 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
           <span style={{color:C.tx,flex:1}}>Delete <strong>{pendingDel.label}</strong>?</span>
           <button onClick={()=>{
             if(pendingDel.type==="vessel"||pendingDel.type==="all") onDelV(pendingDel.id);
+            else if(pendingDel.id==="__SELECTED__"){[...selVessels].forEach(v=>onDelV(v));setSelVessels(new Set());}
             else if(pendingDel.type==="cargo") onDelC(pendingDel.id);
-            else if(pendingDel.type==="allcargo") onDelC("__ALLCARGO__");
+            elseelse if(pendingDel.type==="allcargo"){
+              if(pendingDel.id==="__SELCARGO__"){[...selCargoes].forEach(id=>onDelC(id));setSelCargoes(new Set());}
+              else onDelC("__ALLCARGO__");
+            }GO__");
             setPendingDel(null);
           }} style={{background:C.red,border:"none",borderRadius:5,color:"#fff",padding:"5px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>Delete</button>
           <button onClick={()=>setPendingDel(null)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,padding:"5px 14px",cursor:"pointer",fontSize:12}}>Cancel</button>
@@ -2671,7 +2703,15 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
               <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
   {/* LEFT 50% */}
   <div style={{flex:mobile?"1 1 100%":"0 0 50%",display:"flex",flexDirection:"column",gap:6}}>
-    <ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/>
+    <div style={{display:"flex",gap:6,alignItems:"center"}}>
+      <ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/>
+      {selVessels.size>0&&(
+        <button onClick={()=>setPendingDel({type:"all",id:"__SELECTED__",label:selVessels.size+" vessel"+(selVessels.size!==1?"s":"")})}
+          style={{fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:5,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+          🗑 Delete ({selVessels.size})
+        </button>
+      )}
+    </div>
     {FILTER_GROUPS.map(({label,items})=>(
       <div key={label} style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
         <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>{label}</span>
@@ -2848,6 +2888,12 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                 {cSearch&&<button onClick={()=>{setCSearch("");onCargoSearch("");}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
               </div>
               <ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/>
+              {selCargoes.size>0&&(
+                <button onClick={()=>setPendingDel({type:"allcargo",id:"__SELCARGO__",label:selCargoes.size+" cargo"+(selCargoes.size!==1?"es":"")})}
+                  style={{fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:5,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                  🗑 Delete ({selCargoes.size})
+                </button>
+              )}
               {[["ALL","All"],["FIXED","Fixed"],["SUBS","On Subs"],["FAILED","Failed"]].map(([f,l])=>(
                 <button key={f} onClick={()=>setCFilter(f)} style={fb(cFilter===f)}>{l}</button>
               ))}
