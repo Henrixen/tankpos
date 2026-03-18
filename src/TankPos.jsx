@@ -2380,7 +2380,7 @@ function FixingTab({vessels}){
                   </div>
 
                   {/* RIGHT 80%: owner table + fixed */}
-                  <div style={{flex:1,padding:"10px",minWidth:0,display:"flex",flexDirection:"column",gap:10}}>
+                  <div style={{flex:1,padding:"10px",minWidth:0,display:"flex",flexDirection:"column",gap:10,overflow:"visible"}}>
                     {suggested.length>0&&(
                       <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
                         <span style={{fontSize:11,color:C.faint}}>💡 Nearby:</span>
@@ -2404,7 +2404,7 @@ function FixingTab({vessels}){
                       </div>
                       {(job.owners||[]).length===0&&<div style={{fontSize:12,color:C.faint,fontStyle:"italic"}}>No owners contacted yet.</div>}
                       {(job.owners||[]).length>0&&(
-                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,tableLayout:"fixed"}}>
                           <thead>
                             <tr style={{background:C.bg3}}>
                               {["Owner","PIC","Vessel","Indication","Comment",""].map(h=>(
@@ -2617,18 +2617,18 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         {tab==="pos"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {/* ── Three-column top row: Parse+Fixing | Rates | AI+Intel ── */}
-            <div style={{display:"flex",gap:10,alignItems:"stretch",height:450}}>
+            <div style={{display:"flex",gap:10,alignItems:"stretch",flexDirection:mobile?"column":"row",height:mobile?"auto":450}}>
               {/* Left: Parse + FixingWindow */}
-              <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,overflow:"hidden",maxWidth:"50%",height:"100%"}}>
+              <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,overflow:"hidden",maxWidth:mobile?"100%":"50%",height:mobile?"auto":"100%"}}>
   <div style={{flex:"0 0 auto"}}>
     <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={vesselDB}/>
   </div>
-  <div style={{flex:1,overflow:"auto"}}>
+  <div style={{flex:mobile?undefined:1,overflow:mobile?"visible":"auto",touchAction:"pan-y"}}>
     <FixingWindow vessels={vessels} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)}/>
   </div>
 </div>
               {/* Middle: Rate Matrix */}
-              <div style={{flex:"1 1 0",minWidth:180,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",maxWidth:"40%"}}>
+              {!mobile&&<div style={{flex:"1 1 0",minWidth:180,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",maxWidth:"40%"}}>
                 <div style={{padding:"6px 12px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",alignItems:"center",gap:6}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📊 Rate Matrix</span>
                   <span style={{flex:1}}/>
@@ -2639,15 +2639,15 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                 <div style={{padding:"8px 10px",overflowY:"auto",overflowX:"hidden",flex:1}}>
                   <RateMatrix/>
                 </div>
-              </div>
+              </div>}
               {/* Right: AI Ask + Intel Vault */}
-              <RightPanel vessels={vessels} cargoes={cargoes}/>
+              {!mobile&&<RightPanel vessels={vessels} cargoes={cargoes}/>}
             </div>
             {vessels.length?(<>
               {/* Stats row with opening timeline bar chart */}
-              <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
   {/* LEFT 50% */}
-  <div style={{flex:"0 0 50%",display:"flex",flexDirection:"column",gap:6}}>
+  <div style={{flex:mobile?"1 1 100%":"0 0 50%",display:"flex",flexDirection:"column",gap:6}}>
     <ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/>
     {FILTER_GROUPS.map(({label,items})=>(
       <div key={label} style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
@@ -2674,9 +2674,9 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   </div>
 
   {/* RIGHT 50% */}
-  <div style={{flex:"0 0 50%",display:"flex",flexDirection:"column",minHeight:0,alignSelf:"stretch"}}>
+  {!mobile&&<div style={{flex:"0 0 50%",display:"flex",flexDirection:"column",minHeight:0,alignSelf:"stretch"}}>
     <OpeningBreakdown vessels={vessels} filteredVessels={filtV} bucketFilters={bucketFilters} onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})} fillHeight/>
-  </div>
+  </div>}
 </div>
               {/* Fleet count row — directly above table */}
               <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12}}>
@@ -2691,8 +2691,8 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
               </div>
               {/* Table + side panel */}
               <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-                <div style={{border:"1px solid "+C.bd2,borderRadius:7,overflow:"hidden",flex:1,minWidth:0}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,tableLayout:"fixed",fontFamily:"sans-serif"}}>
+                <div style={{border:"1px solid "+C.bd2,borderRadius:7,overflow:"auto",flex:1,minWidth:0}}>
+                  <table style={{width:mobile?"max-content":"100%",borderCollapse:"collapse",fontSize:12,tableLayout:"fixed",fontFamily:"sans-serif"}}>
                     <colgroup>
                         <col style={{width:28}}/><col style={{width:130}}/><col style={{width:130}}/><col style={{width:50}}/>
                         <col style={{width:58}}/><col style={{width:50}}/><col style={{width:50}}/><col style={{width:58}}/>
