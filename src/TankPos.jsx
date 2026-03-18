@@ -2122,7 +2122,7 @@ function FixingTab({vessels}){
   }
 
   return(
-    <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+    <div style={{display:"flex",gap:12,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
       {/* Delete confirmations */}
       {pendingDelJob&&(
         <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:C.bg2,border:"1px solid "+C.red,borderRadius:8,padding:"12px 20px",zIndex:9999,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.5)",fontFamily:"sans-serif",fontSize:12,minWidth:300}}>
@@ -2133,7 +2133,7 @@ function FixingTab({vessels}){
       )}
 
       {/* LEFT: Clients + Owner Directory */}
-      <div style={{flex:"0 0 290px",display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{flex:mobile?"1 1 auto":"0 0 290px",width:mobile?"100%":290,display:"flex",flexDirection:"column",gap:8}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <span style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Clients</span>
           <button onClick={()=>setShowNewClient(s=>!s)} style={{fontSize:11,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.blue,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>+ Add</button>
@@ -2606,10 +2606,10 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         </div>
       </div>
       <div style={{padding:"12px 16px",maxWidth:1900,margin:"0 auto"}}>
-        <div style={{display:"flex",borderBottom:"1px solid "+C.bd2,marginBottom:12}}>
-          {[["pos","⚓ Positions",vessels.length],["cargo","📦 Cargoes",cargoTotal||cargoes.length],["fix","🎯 Fixing",0],["matrix","🔗 Matrix",0],["tce","⚡ TCE Calc",0],["dash","📊 Dashboard",0]].map(([id,label,cnt])=>(
-            <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}} style={{fontFamily:"sans-serif",fontWeight:700,fontSize:12,padding:"7px 16px",border:"none",background:"transparent",color:tab===id?C.blue:C.dim,borderBottom:"2px solid "+(tab===id?C.blue:"transparent"),cursor:"pointer"}}>
-              {label}{cnt>0?(<span style={{fontSize:12,marginLeft:3,background:C.bg3,padding:"1px 5px",borderRadius:8}}>{cnt}</span>):null}
+        <div style={{display:"flex",flexWrap:"wrap",borderBottom:"1px solid "+C.bd2,marginBottom:12,gap:mobile?"2px 0":0}}>
+          {[["pos","⚓ Pos",vessels.length],["cargo","📦 Cargo",cargoTotal||cargoes.length],["fix","🎯 Fix",0],["matrix","🔗 Matrix",0],["tce","⚡ TCE",0],["dash","📊 Dash",0]].map(([id,label,cnt])=>(
+            <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}} style={{fontFamily:"sans-serif",fontWeight:700,fontSize:mobile?11:12,padding:mobile?"6px 10px":"7px 16px",border:"none",background:"transparent",color:tab===id?C.blue:C.dim,borderBottom:"2px solid "+(tab===id?C.blue:"transparent"),cursor:"pointer",whiteSpace:"nowrap"}}>
+              {label}{cnt>0?(<span style={{fontSize:11,marginLeft:3,background:C.bg3,padding:"1px 5px",borderRadius:8}}>{cnt}</span>):null}
             </button>
           ))}
         </div>
@@ -2619,16 +2619,16 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {/* ── Three-column top row: Parse+Fixing | Rates | AI+Intel ── */}
             <div style={{display:"flex",gap:10,alignItems:"stretch",flexDirection:mobile?"column":"row",height:mobile?"auto":450}}>
-              {/* Left: Parse + FixingWindow */}
+              {/* Parse panel — always shown */}
               <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,overflow:"hidden",maxWidth:mobile?"100%":"50%",height:mobile?"auto":"100%"}}>
-  <div style={{flex:"0 0 auto"}}>
-    <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={vesselDB}/>
-  </div>
-  <div style={{flex:mobile?undefined:1,overflow:mobile?"visible":"auto",touchAction:"pan-y"}}>
-    <FixingWindow vessels={vessels} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)}/>
-  </div>
-</div>
-              {/* Middle: Rate Matrix */}
+                <div style={{flex:"0 0 auto"}}>
+                  <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={vesselDB}/>
+                </div>
+                <div style={{flex:mobile?undefined:1,overflow:mobile?"visible":"auto",touchAction:"pan-y"}}>
+                  <FixingWindow vessels={vessels} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)}/>
+                </div>
+              </div>
+              {/* Rate Matrix — desktop only */}
               {!mobile&&<div style={{flex:"1 1 0",minWidth:180,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",maxWidth:"40%"}}>
                 <div style={{padding:"6px 12px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",alignItems:"center",gap:6}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📊 Rate Matrix</span>
@@ -2641,9 +2641,30 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                   <RateMatrix/>
                 </div>
               </div>}
-              {/* Right: AI Ask + Intel Vault */}
+              {/* AI + Intel — desktop only */}
               {!mobile&&<RightPanel vessels={vessels} cargoes={cargoes}/>}
             </div>
+            {/* Mobile: AI Ask + Intel Vault stacked below */}
+            {mobile&&(
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden"}}>
+                  <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
+                    <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
+                  </div>
+                  <div style={{padding:"10px"}}>
+                    <AIAsk vessels={vessels} cargoes={cargoes} intelItems={[]}/>
+                  </div>
+                </div>
+                <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden"}}>
+                  <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
+                    <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📡 Intel Vault</span>
+                  </div>
+                  <div style={{padding:"10px"}}>
+                    <IntelVault onVaultUpdate={()=>{}}/>
+                  </div>
+                </div>
+              </div>
+            )}
             {vessels.length?(<>
               {/* Stats row with opening timeline bar chart */}
               <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
@@ -2794,13 +2815,13 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         {tab==="cargo"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {/* Top row: Parse 50% | Ask AI 25% | Intel Vault 25% — same height */}
-            <div style={{display:"flex",gap:10,alignItems:"stretch",minHeight:280}}>
-              {/* 50% Parse */}
-              <div style={{flex:"0 0 50%",display:"flex",flexDirection:"column"}}>
+            <div style={{display:"flex",gap:10,alignItems:"stretch",minHeight:mobile?"auto":280,flexDirection:mobile?"column":"row"}}>
+              {/* Parse */}
+              <div style={{flex:mobile?"1 1 auto":"0 0 50%",display:"flex",flexDirection:"column"}}>
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={vesselDB}/>
               </div>
-              {/* 25% Ask AI */}
-              <div style={{flex:"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+              {/* Ask AI */}
+              <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
                 <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
                 </div>
@@ -2808,8 +2829,8 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                   <AIAsk vessels={vessels} cargoes={cargoes} intelItems={[]}/>
                 </div>
               </div>
-              {/* 25% Intel Vault */}
-              <div style={{flex:"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+              {/* Intel Vault */}
+              <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
                 <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📡 Intel Vault</span>
                 </div>
@@ -2818,8 +2839,8 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                 </div>
               </div>
             </div>
-            {/* Search + Export + Filters on same row */}
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
+            {/* Search + Export + Filters — wrap on mobile */}
+            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
               <div style={{position:"relative",flex:1}}>
                 <input value={cSearch} onChange={e=>{setCSearch(e.target.value);onCargoSearch(e.target.value);}} placeholder="🔍 Search cargoes…"
                   style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
@@ -2931,10 +2952,11 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
           </div>
         )}
 
-        {/* ── MATRIX ── */}
         {/* ── FIXING ── */}
         {tab==="fix"&&(
-          <FixingTab vessels={vessels}/>
+          <div style={{overflowX:mobile?"hidden":"visible"}}>
+            <FixingTab vessels={vessels}/>
+          </div>
         )}
 
         {/* ── MATRIX ── */}
