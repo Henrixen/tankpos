@@ -2620,13 +2620,13 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
           fontFamily:"sans-serif",fontSize:12,minWidth:300}}>
           <span style={{color:C.tx,flex:1}}>Delete <strong>{pendingDel.label}</strong>?</span>
           <button onClick={()=>{
-            if(pendingDel.type==="vessel"||pendingDel.type==="all") onDelV(pendingDel.id);
-            else if(pendingDel.id==="__SELECTED__"){[...selVessels].forEach(v=>onDelV(v));setSelVessels(new Set());}
+            if(pendingDel.id==="__SELECTED__"){[...selVessels].forEach(v=>onDelV(v));setSelVessels(new Set());}
+            else if(pendingDel.type==="vessel"||pendingDel.type==="all") onDelV(pendingDel.id);
             else if(pendingDel.type==="cargo") onDelC(pendingDel.id);
-            elseelse if(pendingDel.type==="allcargo"){
+            else if(pendingDel.type==="allcargo"){
               if(pendingDel.id==="__SELCARGO__"){[...selCargoes].forEach(id=>onDelC(id));setSelCargoes(new Set());}
               else onDelC("__ALLCARGO__");
-            }GO__");
+            }
             setPendingDel(null);
           }} style={{background:C.red,border:"none",borderRadius:5,color:"#fff",padding:"5px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>Delete</button>
           <button onClick={()=>setPendingDel(null)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,padding:"5px 14px",cursor:"pointer",fontSize:12}}>Cancel</button>
@@ -2704,7 +2704,15 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   {/* LEFT 50% */}
   <div style={{flex:mobile?"1 1 100%":"0 0 50%",display:"flex",flexDirection:"column",gap:6}}>
     <div style={{display:"flex",gap:6,alignItems:"center"}}>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>
       <ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/>
+      {selVessels.size>0&&(
+        <button onClick={()=>setPendingDel({type:"all",id:"__SELECTED__",label:selVessels.size+" vessel"+(selVessels.size!==1?"s":"")})}
+          style={{fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:5,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+          🗑 Delete ({selVessels.size})
+        </button>
+      )}
+    </div>
       {selVessels.size>0&&(
         <button onClick={()=>setPendingDel({type:"all",id:"__SELECTED__",label:selVessels.size+" vessel"+(selVessels.size!==1?"s":"")})}
           style={{fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:5,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
@@ -2888,6 +2896,12 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                 {cSearch&&<button onClick={()=>{setCSearch("");onCargoSearch("");}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
               </div>
               <ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/>
+              {selCargoes.size>0&&(
+                <button onClick={()=>setPendingDel({type:"allcargo",id:"__SELCARGO__",label:selCargoes.size+" cargo"+(selCargoes.size!==1?"es":"")})}
+                  style={{fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:5,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                  🗑 Delete ({selCargoes.size})
+                </button>
+              )}
               {selCargoes.size>0&&(
                 <button onClick={()=>setPendingDel({type:"allcargo",id:"__SELCARGO__",label:selCargoes.size+" cargo"+(selCargoes.size!==1?"es":"")})}
                   style={{fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:5,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
