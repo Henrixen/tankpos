@@ -1967,6 +1967,7 @@ const SEGMENTS=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];
 const TRADES=["UKC","Med","EU Feast", "AG","TA West","Ex US","Asia"];
 
 function FixingTab({vessels}){
+  const mobile=isMobile();
   const [jobs,setJobs]=useState([]);
   const [clients,setClients]=useState([]);
   const [owners,setOwners]=useState([]); // owner directory
