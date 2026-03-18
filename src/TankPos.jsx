@@ -2396,13 +2396,16 @@ function FixingTab({vessels}){
                   {/* LEFT panel */}
                   <div style={{flex:"0 0 20%",minWidth:160,borderRight:"1px solid "+C.bd2,padding:"10px",display:"flex",flexDirection:"column",gap:4}}>
                     {/* Client + added date on same row */}
-                    <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:6}}>
+                    <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:2}}>
                       <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.05em",width:52,flexShrink:0}}>Client</span>
                       <select value={job.charterer||""} onChange={e=>updateJob(job.id,{charterer:e.target.value})} style={{...inpS,flex:1,padding:"2px 5px",fontSize:11,background:C.bg3,appearance:"none"}}>
                         <option value="">—</option>
                         {clients.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
                       </select>
-                      <input type="date" value={job.added_date||""} onChange={e=>updateJob(job.id,{added_date:e.target.value})} title="Date added" style={{...inpS,width:32,padding:"2px 3px",fontSize:9,background:C.bg3,border:"none",color:C.faint,flexShrink:0,cursor:"pointer"}}/>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"flex-end",marginBottom:6}}>
+                      <input type="date" value={job.added_date||""} onChange={e=>updateJob(job.id,{added_date:e.target.value})} title="Date added"
+                        style={{fontSize:10,color:C.faint,background:"transparent",border:"none",outline:"none",cursor:"pointer",fontFamily:"inherit",textAlign:"right"}}/>
                     </div>
                     {[["qty","Qty"],["product","Product"],["load","Load"],["disch","Disch"]].map(([f,l])=>(
                       <div key={f} style={{display:"flex",alignItems:"center",gap:4}}>
@@ -2410,16 +2413,13 @@ function FixingTab({vessels}){
                         <input value={job[f]||""} onChange={e=>updateJob(job.id,{[f]:e.target.value})} style={{...inpS,flex:1,padding:"2px 5px",fontSize:11}}/>
                       </div>
                     ))}
-                    {/* Laycan + Laytime on same row */}
-                    <div style={{display:"flex",gap:4}}>
-                      <div style={{flex:1,display:"flex",alignItems:"center",gap:4}}>
-                        <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.05em",width:52,flexShrink:0}}>Laycan</span>
-                        <input value={job.laycan||""} onChange={e=>updateJob(job.id,{laycan:e.target.value})} onBlur={e=>updateJob(job.id,{laycan:fmtLaycanText(e.target.value)})} placeholder="13-15 Mar" style={{...inpS,flex:1,padding:"2px 5px",fontSize:11}}/>
-                      </div>
-                      <div style={{flex:1,display:"flex",alignItems:"center",gap:4}}>
-                        <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.05em",width:52,flexShrink:0}}>Laytime</span>
-                        <input value={job.laytime||""} onChange={e=>updateJob(job.id,{laytime:e.target.value})} placeholder="200mt/hr" style={{...inpS,flex:1,padding:"2px 5px",fontSize:11}}/>
-                      </div>
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.05em",width:52,flexShrink:0}}>Laycan</span>
+                      <input value={job.laycan||""} onChange={e=>updateJob(job.id,{laycan:e.target.value})} onBlur={e=>updateJob(job.id,{laycan:fmtLaycanText(e.target.value)})} placeholder="13-15 Mar" style={{...inpS,flex:1,padding:"2px 5px",fontSize:11}}/>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.05em",width:52,flexShrink:0}}>Laytime</span>
+                      <input value={job.laytime||""} onChange={e=>updateJob(job.id,{laytime:e.target.value})} placeholder="200mt/hr" style={{...inpS,flex:1,padding:"2px 5px",fontSize:11}}/>
                     </div>
                     {/* Guidance - 6 lines */}
                     <div>
