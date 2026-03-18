@@ -2902,12 +2902,6 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                   🗑 Delete ({selCargoes.size})
                 </button>
               )}
-              {selCargoes.size>0&&(
-                <button onClick={()=>setPendingDel({type:"allcargo",id:"__SELCARGO__",label:selCargoes.size+" cargo"+(selCargoes.size!==1?"es":"")})}
-                  style={{fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:5,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                  🗑 Delete ({selCargoes.size})
-                </button>
-              )}
               {[["ALL","All"],["FIXED","Fixed"],["SUBS","On Subs"],["FAILED","Failed"]].map(([f,l])=>(
                 <button key={f} onClick={()=>setCFilter(f)} style={fb(cFilter===f)}>{l}</button>
               ))}
