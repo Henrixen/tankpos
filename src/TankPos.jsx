@@ -2479,6 +2479,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [colWidthsV,setColWidthsV]=useState({Operator:120,Vessel:120,Built:48,DWT:55,LOA:48,Beam:46,CBM:55,Date:68,OpenPort:100,Comment:120,Updated:76,Spec:72});
   const [colWidthsC,setColWidthsC]=useState({Status:60,Vessel:130,Charterer:110,Cargo:80,Qty:60,Load:100,Disch:100,LaycanStart:90,LaycanEnd:90,Freight:90,Comment:120,Updated:88});
 
+  const mobile=isMobile();
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
   const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
   const fb=on=>({fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid "+(on?C.blue:C.bd),background:on?"rgba(88,166,255,.12)":"transparent",color:on?C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
