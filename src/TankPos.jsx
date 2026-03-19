@@ -2655,7 +2655,15 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         return true;
       });
     }
-    if(sortK)list=[...list].sort((a,b)=>{const av=String(a[sortK]||"").toLowerCase(),bv=String(b[sortK]||"").toLowerCase();return av<bv?-sortD:av>bv?sortD:0;});
+    if(sortK)list=[...list].sort((a,b)=>{
+      if(sortK==="date"){
+        const MON=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+        const toNum=s=>{if(!s)return 9999;const m=String(s).toLowerCase().match(/^(\d{1,2})\s+([a-z]{3})/);if(!m)return 9999;return MON.indexOf(m[2])*100+parseInt(m[1]);};
+        return(toNum(a.date)-toNum(b.date))*sortD;
+      }
+      const av=String(a[sortK]||"").toLowerCase(),bv=String(b[sortK]||"").toLowerCase();
+      return av<bv?-sortD:av>bv?sortD:0;
+    });
     return list;
   },[vessels,filters,search,sortK,sortD,opFilter,bucketFilters,updFilter]);
 
@@ -2855,9 +2863,18 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                 <div style={{border:"1px solid "+C.bd2,borderRadius:7,overflow:"auto",flex:1,minWidth:0}}>
                   <table style={{width:mobile?"max-content":"100%",borderCollapse:"collapse",fontSize:12,tableLayout:"fixed",fontFamily:"sans-serif"}}>
                     <colgroup>
-                        <col style={{width:28}}/><col style={{width:130}}/><col style={{width:130}}/><col style={{width:50}}/>
-                        <col style={{width:58}}/><col style={{width:50}}/><col style={{width:50}}/><col style={{width:58}}/>
-                        <col style={{width:72}}/><col style={{width:110}}/><col style={{width:130}}/><col style={{width:30}}/>
+                        <col style={{width:28}}/>
+                        <col style={{width:colWidthsV.Operator||130}}/>
+                        <col style={{width:colWidthsV.Vessel||130}}/>
+                        <col style={{width:colWidthsV.Built||50}}/>
+                        <col style={{width:colWidthsV.DWT||58}}/>
+                        <col style={{width:colWidthsV.LOA||50}}/>
+                        <col style={{width:colWidthsV.Beam||50}}/>
+                        <col style={{width:colWidthsV.CBM||58}}/>
+                        <col style={{width:colWidthsV.Date||72}}/>
+                        <col style={{width:colWidthsV.OpenPort||110}}/>
+                        <col style={{width:colWidthsV.Comment||130}}/>
+                        <col style={{width:30}}/>
                       </colgroup>
                       <thead>
                       <tr>
@@ -2894,7 +2911,13 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                             <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.loa||""}>{v.loa||""}</td>
                             <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.beam||""}>{v.beam||""}</td>
                             <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={fmtN(v.cbm)}>{fmtN(v.cbm)}</td>
-                            <EC value={v.date} color={ppt?C.green:"#58a6ff"} placeholder="Date" onSave={val=>{const MONTHS=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];let fmt=val;const m1=val.match(/^(\d{1,2})[\/\-](\d{1,2})$/);if(m1){fmt=m1[1]+" "+MON[parseInt(m1[2])-1];}else{const m2=val.match(/^(\d{1,2})\s+([A-Za-z]{3})/i);if(m2){const mi=MONTHS.indexOf(m2[2].toLowerCase().slice(0,3));if(mi>=0)fmt=m2[1]+" "+MON[mi];}}onUpdateV(v.vessel,"date",fmt);}} data-vid={v.vessel+"-date"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-vessel"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-date"]`)?.click();}}/>
+                            <EC value={v.date} color={ppt?C.green:"#58a6ff"} placeholder="Date" onSave={val=>{
+                              const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+                              let fmt=val.trim();
+                              const m1=fmt.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+                              if(m1){const mo=parseInt(m1[2])-1;if(mo>=0&&mo<12)fmt=parseInt(m1[1])+" "+MON[mo];}
+                              else{const m2=fmt.match(/^(\d{1,2})\s+([A-Za-z]{3})/i);if(m2){const mi=MON.findIndex(m=>m.toLowerCase()===m2[2].toLowerCase().slice(0,3));if(mi>=0)fmt=parseInt(m2[1])+" "+MON[mi];}}
+                              onUpdateV(v.vessel,"date",fmt);}}
                             <EC value={v.openPort} color={v.openPort==="EMPLOYED"?C.purple:C.amber} placeholder="Port" onSave={val=>onUpdateV(v.vessel,"openPort",val)} data-vid={v.vessel+"-port"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-comment"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-port"]`)?.click();}}/>
                             <EC value={v.comment} color={C.dim} placeholder="Comment" onSave={val=>onUpdateV(v.vessel,"comment",val)} data-vid={v.vessel+"-comment"} onTab={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-op"]`)?.click();}} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-comment"]`)?.click();}}/>
                             <td style={{...td,fontSize:12,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",width:colWidthsV.Updated||76}} title={v.updatedAt?new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):v.addedAt?new Date(v.addedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""} >{v.updatedAt?new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):v.addedAt?new Date(v.addedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
