@@ -2869,7 +2869,8 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                         <col style={{width:colWidthsV.Date||72}}/>
                         <col style={{width:colWidthsV.OpenPort||110}}/>
                         <col style={{width:colWidthsV.Comment||130}}/>
-                        <col style={{width:30}}/>
+                        <col style={{width:colWidthsV.Updated||76}}/>
+                        <col style={{width:20}}/>
                       </colgroup>
                       <thead>
                       <tr>
