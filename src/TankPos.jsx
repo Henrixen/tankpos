@@ -2760,9 +2760,9 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                 <div style={{flex:"0 0 auto"}}>
                   <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={vesselDB}/>
                 </div>
-                <div style={{flex:mobile?undefined:1,overflow:mobile?"visible":"auto",touchAction:"pan-y"}}>
-                  <FixingWindow vessels={vessels} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)}/>
-                </div>
+                <div style={{flex:1,overflow:"visible"}}>
+                <FixingWindow vessels={vessels} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)}/>
+              </div>
               </div>
               {/* Rate Matrix — desktop only */}
               {!mobile&&<div style={{flex:"1 1 0",minWidth:180,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",maxWidth:"40%"}}>
