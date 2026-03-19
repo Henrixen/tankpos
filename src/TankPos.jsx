@@ -2426,16 +2426,16 @@ function FixingTab({vessels}){
                       <div style={{fontSize:10,color:C.faint,marginBottom:2,textTransform:"uppercase",letterSpacing:"0.06em"}}>Guidance</div>
                       <textarea value={job.guidance||""} onChange={e=>updateJob(job.id,{guidance:e.target.value})}
                         placeholder="Rate guidance, market context…"
-                        onMouseUp={e=>{textareaHeights.current[job.id+"_guidance"]=e.target.style.height;}}
-                        style={{...inpS,width:"100%",height:textareaHeights.current[job.id+"_guidance"]||"90px",minHeight:90,resize:"vertical",fontSize:11}}/>
+                        onMouseUp={e=>{window._taHeights[job.id+"_guidance"]=e.target.style.height;}}
+                        style={{...inpS,width:"100%",height:window._taHeights[job.id+"_guidance"]||"90px",minHeight:90,resize:"vertical",fontSize:11}}/>
                     </div>
                     {/* Notes - bigger */}
                     <div style={{flex:1}}>
                       <div style={{fontSize:10,color:C.faint,marginBottom:2,textTransform:"uppercase",letterSpacing:"0.06em"}}>Notes</div>
                       <textarea value={job.outcome||""} onChange={e=>updateJob(job.id,{outcome:e.target.value})}
                         placeholder="Market context, charterer feedback, outcome…"
-                        onMouseUp={e=>{textareaHeights.current[job.id+"_notes"]=e.target.style.height;}}
-                        style={{...inpS,width:"100%",height:textareaHeights.current[job.id+"_notes"]||"140px",minHeight:140,resize:"vertical",fontSize:11}}/>
+                        onMouseUp={e=>{window._taHeights[job.id+"_notes"]=e.target.style.height;}}
+                        style={{...inpS,width:"100%",height:window._taHeights[job.id+"_notes"]||"140px",minHeight:140,resize:"vertical",fontSize:11}}/>
                     </div>
                     {/* Notes - bigger */}
                     <div style={{flex:1}}>
