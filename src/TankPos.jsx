@@ -4034,7 +4034,7 @@ export default function TankPos(){
     vessel:      r.vessel_name||"",
     operator:    r.operator||"",
     openPort:    r.port_name||"",
-    date:        r.open_date?String(r.open_date).slice(0,10):"",
+    date:        r.open_date?(()=>{const s=String(r.open_date);if(/^\d{1,2}\s[A-Za-z]/.test(s))return s;const d=new Date(s);if(isNaN(d))return s;return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});})():"",
     dwt:         r.dwt||null,
     built:       r.build_year||null,
     loa:         r.overall_length||null,
@@ -4114,7 +4114,8 @@ export default function TankPos(){
     };
   });
   const{error}=await supabase.from("positions").upsert(rows,{onConflict:"vessel"});
-  if(error)console.error(error);
+  if(error)console.error("positions upsert error:",error);
+  else console.log("positions saved ok:",rows.length,"rows",rows.map(r=>r.vessel));
   return r;
 },[]);
 
