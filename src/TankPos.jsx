@@ -2373,6 +2373,7 @@ function FixingTab({vessels}){
             <div key={job.id} style={{background:C.bg2,border:"1px solid "+scol+"44",borderRadius:7,overflow:"hidden"}}>
               {/* Collapsed header */}
               <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",cursor:"pointer"}} onClick={()=>setExpandedJob(isOpen?null:job.id)}>
+                <span style={{fontWeight:700,fontSize:12,color:C.blue,flexShrink:0,minWidth:60}}>{job.charterer||"—"}</span>
                 <div style={{display:"flex",gap:3,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                   {JOB_STATUS.map(s=>(
                     <button key={s} onClick={()=>updateJob(job.id,{status:s})}
@@ -2381,7 +2382,6 @@ function FixingTab({vessels}){
                     </button>
                   ))}
                 </div>
-                <span style={{fontWeight:700,fontSize:12,color:C.blue,flexShrink:0,minWidth:60}}>{job.charterer||"—"}</span>
                 <span style={{fontSize:12,color:C.tx,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{summary}</span>
                 <span style={{fontSize:11,color:C.faint,flexShrink:0}}>{(job.owners||[]).length>0?(job.owners||[]).length+"o":""}</span>
                 {job.added_date&&<span style={{fontSize:10,color:C.faint,flexShrink:0}}>{new Date(job.added_date).toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}</span>}
