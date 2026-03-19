@@ -2437,13 +2437,6 @@ function FixingTab({vessels}){
                         onMouseUp={e=>{if(!window._taHeights)window._taHeights={};window._taHeights[job.id+"_notes"]=e.target.style.height;}}
                         style={{...inpS,width:"100%",height:(window._taHeights||{})[job.id+"_notes"]||"140px",minHeight:140,resize:"vertical",fontSize:11}}/>
                     </div>
-                    {/* Notes - bigger */}
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:10,color:C.faint,marginBottom:2,textTransform:"uppercase",letterSpacing:"0.06em"}}>Notes</div>
-                      <textarea value={job.outcome||""} onChange={e=>updateJob(job.id,{outcome:e.target.value})}
-                        placeholder="Market context, charterer feedback, outcome…"
-                        style={{...inpS,width:"100%",minHeight:140,resize:"vertical",fontSize:11}}/>
-                    </div>
                   </div>
 
                   {/* RIGHT panel */}
