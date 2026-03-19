@@ -2754,7 +2754,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         {tab==="pos"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {/* ── Three-column top row: Parse+Fixing | Rates | AI+Intel ── */}
-            <div style={{display:"flex",gap:10,alignItems:"stretch",flexDirection:mobile?"column":"row",height:mobile?"auto":450}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
               {/* Parse panel — always shown */}
               <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,overflow:"hidden",maxWidth:mobile?"100%":"50%",height:mobile?"auto":"100%"}}>
                 <div style={{flex:"0 0 auto"}}>
