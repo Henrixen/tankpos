@@ -3427,7 +3427,7 @@ ${text}`}]
           {/* Spot table */}
           <div style={{marginBottom:12}}>
             <div style={{fontSize:12,color:C.faint,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>Current Spot</div>
-            <div style={{overflowX:"auto"}} data-jobid={job.id}>
+            <div style={{overflowX:"auto"}}>
               <table style={{borderCollapse:"collapse",fontSize:12,minWidth:400}}>
                 <thead>
                   <tr>
