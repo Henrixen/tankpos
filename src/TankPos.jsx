@@ -4018,10 +4018,31 @@ export default function TankPos(){
   }
 
   async function fetchPositions(){
-    const{data,error}=await supabase.from("positions").select("*").range(0,5000);
-    if(error){console.error(error);return;}
-    setVessels(data);
-  }
+  const{data,error}=await supabase.from("positions_combined").select("*").range(0,5000);
+  if(error){console.error(error);return;}
+  setVessels((data||[]).map(r=>({
+    id:          r.id||"",
+    vessel:      r.vessel_name||"",
+    operator:    r.operator||"",
+    openPort:    r.port_name||"",
+    date:        r.open_date?String(r.open_date).slice(0,10):"",
+    dwt:         r.dwt||null,
+    built:       r.build_year||null,
+    loa:         r.overall_length||null,
+    beam:        r.beam||null,
+    comment:     r.details||"",
+    last3:       r.last_3_cargoes||"",
+    dirtyClean:  r.dirty_clean||"",
+    iceClass:    r.ice_class||"",
+    segment:     r.segment||"",
+    superRegion: r.super_region||"",
+    destination: r.destination_ais||"",
+    etaAis:      r.eta_ais||"",
+    lastPort:    r.last_port||"",
+    updatedAt:   r.last_updated||"",
+    source:      r.source||"manual",
+  })));
+}
 
   async function loadMoreCargoes(){
     const{data,error}=await supabase.from("cargoes").select("*")
