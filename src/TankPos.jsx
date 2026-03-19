@@ -2495,14 +2495,14 @@ function FixingTab({vessels}){
                                     }} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:4,cursor:"col-resize",background:"rgba(100,150,200,0.3)",borderRadius:2}}/>
                                   </th>
                                 ))}
-                                <th style={{padding:"4px 2px",borderBottom:"1px solid "+C.bd2,width:24}}/>
+                                <th style={{padding:"4px 2px",borderBottom:"1px solid "+C.bd2,width:20,textAlign:"right"}}/>
                               </tr>
                             </thead>
                             <tbody>
                               {(job.owners||[]).map((row,ri)=>(
                                 <tr key={row.id} style={{background:ri%2===0?C.bg:C.bg2}}>
                                   {cols.map((f,ci)=>(
-                                    <td key={f} style={{padding:"1px 2px",borderBottom:"1px solid "+C.bg3,overflow:"hidden"}}>
+                                  <td key={f} style={{padding:"1px 2px",borderBottom:"1px solid "+C.bg3,overflow:"hidden",textAlign:"left"}}>
                                       <input value={row[f]||""} onChange={e=>updateOwnerRow(job.id,row.id,f,e.target.value)}
                                         placeholder={f==="indication"?"e.g. $340k":f==="pic"?"Name":""}
                                         onKeyDown={e=>{
@@ -2529,7 +2529,7 @@ function FixingTab({vessels}){
                                         style={{...inpS,width:"100%",padding:"3px 5px",background:"transparent",border:"none",borderBottom:"1px solid "+C.bd2+"44",fontSize:12,boxSizing:"border-box"}}/>
                                     </td>
                                   ))}
-                                  <td style={{padding:"1px 2px",textAlign:"center"}}>
+                                  <td style={{padding:"1px 4px",textAlign:"right",width:20}}>
                                     <button onClick={()=>removeOwnerRow(job.id,row.id)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:11,opacity:0.5,padding:0}}>✕</button>
                                   </td>
                                 </tr>
