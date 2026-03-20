@@ -208,7 +208,7 @@ function isOpenPPT(dateStr) {
 
 // ─── Region classification ────────────────────────────────────────────────────
 const REGION_MAP = {
-  WCUK:   ["belfast","cork","dublin","milford haven","liverpool","clyde","mersey","glasgow","avonmouth","bristol","swansea","barrow","stanlow","clydebank","fawley","plymouth"","wcuk"],
+  WCUK:   ["belfast","cork","dublin","milford haven","liverpool","clyde","mersey","glasgow","avonmouth","bristol","swansea","barrow","stanlow","clydebank","fawley","plymouth","wcuk"],
   ECUK:   ["thames","humber","immingham","teesport","tees","teesside","tyne","sunderland","middlesbrough","grangemouth","forth","leith","dundee","medway","wilton","braefoot bay","bb","bbay","ecuk"],
   CANAL:  ["rotterdam","ara","amsterdam","antwerp","ghent","flushing","le havre","dunkirk","rouen","hamburg","brunsbuttel","wilhelmshaven","bremerhaven","bremen","zeebrugge","brest","calais","dieppe"],
   BISCAY: ["bordeaux","bdx","nantes","la pallice","bayonne","bilbao","santander","le verdon","donges","montoir","gijon","ferrol","brest"],
