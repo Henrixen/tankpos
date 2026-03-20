@@ -4174,35 +4174,54 @@ export default function TankPos(){
     if(error)console.error(error);
   },[]);
 
-  const addVessels=useCallback(async(parsed)=>{
-  const vdb=window.vesselDB||vesselDB;
-  let r={added:0,updated:0,total:0};
-  setVessels(prev=>{const before=prev.length;const next=mergeVessels(prev,parsed,vdb);;r={added:next.length-before,updated:parsed.length-Math.max(0,next.length-before),total:next.length};saveV(next);setTimeout(()=>saveSnapshot(next),100);return next;});
-  const rows=parsed.map(v=>{
-    const ev=enrichV(v,vdb);
-    return {
-      id: "pos_"+Date.now()+"_"+Math.random().toString(36).slice(2,6),
-      vessel: ev.vessel,
-      operator: ev.operator||null,
-      openPort: ev.openPort||null,
-      date: ev.date||null,
-      dwt: ev.dwt||null,
-      built: ev.built||null,
-      loa: ev.loa||null,
-      beam: ev.beam||null,
-      cbm: ev.cbm||null,
-      comment: ev.comment||null,
-      spec: ev.spec||null,
-      file_date: ev.file_date||null,
-      operatorManual: ev.operatorManual||null,
-      updated_at: new Date().toISOString(),
-    };
-  });
-  const{error}=await supabase.from("positions").upsert(rows,{onConflict:"vessel"});
-  if(error)console.error("positions upsert error:",error);
-  else console.log("positions saved ok:",rows.length,"rows",rows.map(r=>r.vessel));
-  return r;
-},[]);
+  const addVessels = useCallback(async (parsed) => {
+    const vdb = window.vesselDB || vesselDB;
+    const nowIso = new Date().toISOString(); // The "Current Time" for the file upload
+    let r = { added: 0, updated: 0, total: 0 };
+
+    setVessels(prev => {
+      const before = prev.length;
+      // We pass nowIso into the local state so the UI updates immediately
+      const next = mergeVessels(prev, parsed.map(p => ({ ...p, fileDate: nowIso })), vdb);
+      r = { 
+        added: next.length - before, 
+        updated: parsed.length - Math.max(0, next.length - before), 
+        total: next.length 
+      };
+      saveV(next);
+      setTimeout(() => saveSnapshot(next), 100);
+      return next;
+    });
+
+    const rows = parsed.map(v => {
+      const ev = enrichV(v, vdb);
+      return {
+        id: "pos_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+        vessel: ev.vessel,
+        operator: ev.operator || null,
+        openPort: ev.openPort || null,
+        date: ev.date || null,
+        dwt: ev.dwt || null,
+        built: ev.built || null,
+        loa: ev.loa || null,
+        beam: ev.beam || null,
+        cbm: ev.cbm || null,
+        comment: ev.comment || null,
+        spec: ev.spec || null,
+        // ─── FIX: Use the 'nowIso' timestamp we created above ───
+        file_date: nowIso, 
+        last_update_spotship: nowIso,
+        operatorManual: ev.operatorManual || null,
+        updated_at: nowIso,
+      };
+    });
+
+    const { error } = await supabase.from("positions").upsert(rows, { onConflict: "vessel" });
+    if (error) console.error("positions upsert error:", error);
+    else console.log("positions saved ok:", rows.length, "rows");
+    
+    return r;
+  }, [vesselDB, saveV, saveSnapshot]);
 
   const addCargoes=useCallback(async(parsed)=>{
     const stamped=parsed.map((f,i)=>normaliseCargo({
