@@ -208,11 +208,11 @@ function isOpenPPT(dateStr) {
 
 // ─── Region classification ────────────────────────────────────────────────────
 const REGION_MAP = {
-  WCUK:   ["belfast","cork","dublin","milford haven","liverpool","clyde","mersey","glasgow","avonmouth","bristol","swansea","barrow"],
-  ECUK:   ["thames","humber","immingham","teesport","tees","tyne","sunderland","middlesbrough","grangemouth","forth","leith","dundee","medway","gns","wilton"],
+  WCUK:   ["belfast","cork","dublin","milford haven","liverpool","clyde","mersey","glasgow","avonmouth","bristol","swansea","barrow","stanlow","clydebank","fawley","plymouth"","wcuk"],
+  ECUK:   ["thames","humber","immingham","teesport","tees","teesside","tyne","sunderland","middlesbrough","grangemouth","forth","leith","dundee","medway","wilton","braefoot bay","bb","bbay","ecuk"],
   CANAL:  ["rotterdam","ara","amsterdam","antwerp","ghent","flushing","le havre","dunkirk","rouen","hamburg","brunsbuttel","wilhelmshaven","bremerhaven","bremen","zeebrugge","brest","calais","dieppe"],
-  BISCAY: ["bordeaux","bdx","nantes","la pallice","bayonne","bilbao","santander","le verdon","donges","montoir","gijon","ferrol"],
-  BALTIC: ["gdansk","gdynia","klaipeda","ventspils","riga","tallinn","helsinki","naantali","porvoo","kotka","stockholm","nynashamn","karlshamn","lulea","oulu","baltic","baltiysk"],
+  BISCAY: ["bordeaux","bdx","nantes","la pallice","bayonne","bilbao","santander","le verdon","donges","montoir","gijon","ferrol","brest"],
+  BALTIC: ["gdansk","gdynia","klaipeda","ventspils","riga","tallinn","helsinki","naantali","porvoo","kotka","stockholm","nynashamn","karlshamn","lulea","oulu","baltic","baltiysk","stettin",""szczecin"],
   SKAW:   ["gothenburg","goteborg","oslo","stavanger","mongstad","sture","kalundborg","fredericia","copenhagen","malmo","helsingborg","flensburg","kiel","aarhus","esbjerg","aalborg","sarroch"],
   MED:    ["gibraltar","algeciras","ceuta","barcelona","tarragona","valencia","cartagena","alicante","almeria","malaga","huelva","cadiz","sines","leixoes","setubal","lisbon","marseille","fos","lavera","port jerome","genoa","savona","livorno","la spezia","trieste","venice","ravenna","porto marghera","naples","napoli","augusta","milazzo","messina","sicily","palermo","catania","cagliari","porto torres","civitavecchia","brindisi","taranto","bari","ancona","split","rijeka","piraeus","athens","thessaloniki","kavala","alexandroupolis","constanta","odessa","novorossiysk","tuapse","batumi","trabzon","samsun","izmit","aliaga","izmir","canakkale","istanbul","marmara","bandirma","mudanya","derince","gebze","izmit","derince","aliaga","c-med","cmed","med","n spain","spain med","adriatic","wmed","w med","span med","e med","e.med","levant","malta","tunis","tunisia","la goulette","bizerte","sfax","porto empedocle"],
 };
@@ -4133,6 +4133,8 @@ export default function TankPos(){
     lastPort:    r.last_port||"",
     updatedAt:   r.last_updated||"",
     source:      r.source||"manual",
+    fileDate:     r.file_date || null,
+    lastUpdateSpot: r.last_update_spotship || null,
   })));
 }
 
@@ -4194,6 +4196,7 @@ export default function TankPos(){
       updatedAt: ev.updatedAt||null,
       operatorManual: ev.operatorManual||null,
       updated_at: new Date().toISOString(),
+      file_date: nowIso,
     };
   });
   const{error}=await supabase.from("positions").upsert(rows,{onConflict:"vessel"});
