@@ -3669,6 +3669,39 @@ function Dashboard({vessels, cargoes, history}) {
   const [bLoading, setBLoading] = useState(false);
   const [bError, setBError] = useState(null);
   const [bFetched, setBFetched] = useState(false);
+  const [bunkerHistory, setBunkerHistory] = useState([]); // New state for graph
+
+  // Part 5: Fetch all history entries from Supabase
+  useEffect(() => {
+    async function getHistory() {
+      const { data } = await supabase
+        .from("dashboard")
+        .select("value")
+        .ilike("key", "bunker-hist-%");
+      if (data) {
+        // Sort by date so the graph flows left to right
+        const parsed = data.map(d => JSON.parse(d.value));
+        setBunkerHistory(parsed.sort((a,b) => new Date(a.date) - new Date(b.date)));
+      }
+    }
+    getHistory();
+  }, []);
+
+  // Part 4: Load the "Last Known" prices so the screen isn't blank on refresh
+  useEffect(() => {
+    async function loadSaved() {
+      const { data } = await supabase
+        .from("dashboard")
+        .select("value")
+        .eq("key", "last-bunker-prices")
+        .maybeSingle();
+      if (data) {
+        setBunkers(JSON.parse(data.value));
+        setBFetched(true);
+      }
+    }
+    loadSaved();
+  }, []);
 
   // ── Bunker prices: fetch live from PBT via web_search, fallback to last known ──
   async function fetchBunkersPBT() {
@@ -3676,20 +3709,57 @@ function Dashboard({vessels, cargoes, history}) {
   try {
     const res = await fetch("/api/bunkers");
     const p = await res.json();
-    setBunkers({
-      date: p.date,
+    const newBunkers = {
+      date: p.date || new Date().toLocaleDateString("en-GB"),
       ARA_HSFO: p.ARA_HSFO, ARA_VLSFO: p.ARA_VLSFO, ARA_MGO: p.ARA_MGO,
       FUJ_HSFO: p.FUJ_HSFO, FUJ_VLSFO: p.FUJ_VLSFO, FUJ_MGO: p.FUJ_MGO,
       SIN_HSFO: p.SIN_HSFO, SIN_VLSFO: p.SIN_VLSFO, SIN_MGO: p.SIN_MGO,
-    });
+    };
+
+    setBunkers(newBunkers);
     setBFetched(true);
+
+    // PERSIST: Save latest so refresh doesn't wipe it
+    await supabase.from("dashboard").upsert({ key: "last-bunker-prices", value: JSON.stringify(newBunkers) }, { onConflict: "key" });
+
+    // HISTORY: Save a snapshot for the graph
+    const histKey = `bunker-hist-${newBunkers.date.replaceAll("/", "-").replaceAll(" ", "-")}`;
+    await supabase.from("dashboard").upsert({ key: histKey, value: JSON.stringify(newBunkers) }, { onConflict: "key" });
+
   } catch(e) {
-    setBunkers({date:"10 Mar 2026",ARA_HSFO:600,ARA_VLSFO:650,ARA_MGO:1075,FUJ_HSFO:580,FUJ_VLSFO:620,FUJ_MGO:1050,SIN_HSFO:570,SIN_VLSFO:610,SIN_MGO:1040});
-    setBFetched(true);
-    setBError("Using cached prices - "+e.message);
+    setBError("Fetch failed. Using fallback.");
   } finally { setBLoading(false); }
 }
 
+  function BunkerChart({ history }) {
+  if (!history || history.length < 2) return null;
+  
+  const W = 400, H = 120, P = 20;
+  // We will track ARA VLSFO as the primary trend line
+  const vals = history.map(h => h.ARA_VLSFO || 0);
+  const min = Math.min(...vals) * 0.98;
+  const max = Math.max(...vals) * 1.02;
+  const range = max - min || 1;
+
+  const points = history.map((h, i) => {
+    const x = P + (i / (history.length - 1)) * (W - P * 2);
+    const y = H - P - ((h.ARA_VLSFO - min) / range) * (H - P * 2);
+    return `${x},${y}`;
+  }).join(" ");
+
+  return (
+    <div style={{ marginTop: 10, background: 'rgba(0,0,0,0.2)', borderRadius: 6, padding: 8 }}>
+      <div style={{ fontSize: 10, color: '#8b949e', marginBottom: 4 }}>ARA VLSFO Trend (Last {history.length} updates)</div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }}>
+        <polyline fill="none" stroke="#58a6ff" strokeWidth="2" strokeLinejoin="round" points={points} />
+        {/* Min/Max Labels */}
+        <text x={W - 5} y={P} fill="#8b949e" fontSize="10" textAnchor="end">${Math.round(max)}</text>
+        <text x={W - 5} y={H - 5} fill="#8b949e" fontSize="10" textAnchor="end">${Math.round(min)}</text>
+      </svg>
+    </div>
+  );
+}
+  
   // Fleet stats
   const openVessels = vessels.filter(v=>v.date&&v.openPort&&v.openPort!=="EMPLOYED");
   const withDays = openVessels.map(v=>({...v,days:daysBetween(v.date)})).filter(v=>v.days!==null);
