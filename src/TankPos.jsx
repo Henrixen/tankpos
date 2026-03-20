@@ -4196,7 +4196,7 @@ export default function TankPos(){
       updatedAt: ev.updatedAt||null,
       operatorManual: ev.operatorManual||null,
       updated_at: new Date().toISOString(),
-      file_date: nowIso,
+      file_date: ev.filedate||null,
     };
   });
   const{error}=await supabase.from("positions").upsert(rows,{onConflict:"vessel"});
