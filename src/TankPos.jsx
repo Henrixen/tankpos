@@ -2581,6 +2581,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [opFilter,setOpFilter]=useState(null);
   const [updFilter,setUpdFilter]=useState(""); // "" | "today" | "week"
   const [bucketFilters,setBucketFilters]=useState(new Set()); // set of active bucket keys
+  const [posFileDateFilter,setPosFileDateFilter]=useState("");
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
   const [mxSearch,setMxSearch]=useState("");
@@ -2637,8 +2638,18 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
       });
     }
     const normOp=s=>(s||"Unknown").trim().toLowerCase();if(opFilter)list=list.filter(v=>normOp(v.operator)===normOp(opFilter));
+    
+    if(posFileDateFilter){
+  list=list.filter(v=>{
+    if(!v.fileDate) return false;
+    const d=new Date(v.fileDate);
+    if(isNaN(d)) return false;
+    return d.toISOString().slice(0,10)===posFileDateFilter;
+  });
+}
     list=list.filter(matchesSearch);
     if(updFilter){
+      
       const now=new Date();
       const todayStart=new Date(now);todayStart.setHours(0,0,0,0);
       const weekStart=new Date(now);weekStart.setHours(0,0,0,0);weekStart.setDate(weekStart.getDate()-((weekStart.getDay()+6)%7)); // Monday
@@ -2660,7 +2671,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
       return av<bv?-sortD:av>bv?sortD:0;
     });
     return list;
-  },[vessels,filters,search,sortK,sortD,opFilter,bucketFilters,updFilter]);
+  },[vessels,filters,search,sortK,sortD,opFilter,bucketFilters,updFilter,posFileDateFilter]);
 
   const stats={total:vessels.length,ppt:vessels.filter(v=>isOpenPPT(v.date)).length,subs:vessels.filter(v=>v.openPort==="EMPLOYED").length};
   const selV=sel?vessels.find(v=>v.vessel===sel):null;
@@ -2753,6 +2764,60 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         {/* ── POSITIONS ── */}
         {tab==="pos"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {/* ── Positions Filters (File Date) ── */}
+<div style={{
+  display:"flex",
+  gap:8,
+  alignItems:"center",
+  flexWrap:"wrap",
+  background:C.bg2,
+  border:"1px solid "+C.bd,
+  borderRadius:6,
+  padding:"6px 10px"
+}}>
+  <span style={{
+    fontSize:11,
+    color:C.faint,
+    textTransform:"uppercase",
+    letterSpacing:"0.07em"
+  }}>
+    File Date
+  </span>
+
+  <input
+    type="date"
+    value={posFileDateFilter}
+    onChange={e=>setPosFileDateFilter(e.target.value)}
+    style={{
+      background:C.bg3,
+      border:"1px solid "+C.bd,
+      borderRadius:4,
+      color:C.tx,
+      fontFamily:"inherit",
+      fontSize:12,
+      padding:"3px 8px",
+      outline:"none"
+    }}
+  />
+
+  {posFileDateFilter && (
+    <button
+      onClick={()=>setPosFileDateFilter("")}
+      style={{
+        background:"none",
+        border:"1px solid "+C.bd,
+        borderRadius:4,
+        color:C.dim,
+        fontSize:12,
+        padding:"3px 8px",
+        cursor:"pointer",
+        fontFamily:"inherit"
+      }}
+    >
+      ✕ Clear
+    </button>
+  )}
+</div>
             {/* ── Three-column top row: Parse+Fixing | Rates | AI+Intel ── */}
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
               {/* Parse panel — always shown */}
