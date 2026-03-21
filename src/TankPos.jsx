@@ -4158,7 +4158,7 @@ export default function TankPos(){
     query = query.range(0, 199);
   }
 
-  const { data, error, count } = await query.order("last_updated", { ascending: false });
+const { data, error, count } = await query.order("last_updated", { ascending: false, nullsFirst: false });
 
   if (error) { console.error("fetchPositions error:", error); return; }
 
