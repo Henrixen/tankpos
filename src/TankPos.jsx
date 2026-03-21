@@ -2581,6 +2581,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [opFilter,setOpFilter]=useState(null);
   const [updFilter,setUpdFilter]=useState(""); // "" | "today" | "week"
   const [bucketFilters,setBucketFilters]=useState(new Set()); // set of active bucket keys
+  const [posFileRange,setPosFileRange]=useState([28,0]); // [fromDaysAgo, toDaysAgo]
   const [posFileDateFilter,setPosFileDateFilter]=useState("");
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
@@ -2611,6 +2612,18 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     const hay=JSON.stringify(v).toLowerCase();
     return tokens.every(t=>hay.includes(t));
   }
+
+  function daysAgoDate(days){
+  const d=new Date();
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate()-days);
+  return d;
+}
+
+function fmtShortDate(d){
+  if(!d) return "";
+  return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
+}
 
   const filtV=useMemo(()=>{
     let list=vessels;
@@ -2900,6 +2913,60 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
       {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
     </div>
+    <div style={{
+  display:"flex",
+  flexDirection:"column",
+  gap:6,
+  padding:"8px 10px",
+  background:C.bg3,
+  border:"1px solid "+C.bd2,
+  borderRadius:6
+}}>
+  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+    <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>
+      File Date Range
+    </span>
+    <span style={{fontSize:12,color:C.tx,fontWeight:700}}>
+      {fmtShortDate(daysAgoDate(Math.max(posFileRange[0],posFileRange[1])))} → {fmtShortDate(daysAgoDate(Math.min(posFileRange[0],posFileRange[1])))}
+    </span>
+  </div>
+
+  <div style={{display:"flex",alignItems:"center",gap:8}}>
+    <span style={{fontSize:11,color:C.dim,width:52}}>From</span>
+    <input
+      type="range"
+      min="0"
+      max="28"
+      step="1"
+      value={posFileRange[0]}
+      onChange={e=>setPosFileRange(([_,to])=>[Number(e.target.value),to])}
+      style={{flex:1}}
+    />
+    <span style={{fontSize:11,color:C.dim,width:64,textAlign:"right"}}>
+      {posFileRange[0]}d ago
+    </span>
+  </div>
+
+  <div style={{display:"flex",alignItems:"center",gap:8}}>
+    <span style={{fontSize:11,color:C.dim,width:52}}>To</span>
+    <input
+      type="range"
+      min="0"
+      max="28"
+      step="1"
+      value={posFileRange[1]}
+      onChange={e=>setPosFileRange(([from,_])=>[from,Number(e.target.value)])}
+      style={{flex:1}}
+    />
+    <span style={{fontSize:11,color:C.dim,width:64,textAlign:"right"}}>
+      {posFileRange[1]}d ago
+    </span>
+  </div>
+
+  <div style={{fontSize:11,color:C.faint}}>
+    Limited to file dates from the last 4 weeks
+  </div>
+</div>
   </div>
 
   {/* RIGHT 50% */}
