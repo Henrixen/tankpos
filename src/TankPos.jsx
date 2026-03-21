@@ -4119,102 +4119,127 @@ export default function TankPos(){
     clearTimeout(searchTimer.current);
     searchTimer.current=setTimeout(()=>fetchCargoes(term),300);
   }
-  // Load vessels from local storage, cargoes from Supabase
-  useEffect(()=>{
-  fetchPositions();
-  fetchCargoes();
-},[]);
+  
   useEffect(()=>{const fn=()=>setMobile(isMobile());window.addEventListener("resize",fn);return()=>window.removeEventListener("resize",fn);},[]);
 
   // --- 1. THE MAIN FETCH FUNCTION ---
-  async function fetchPositions(searchTerm = "") {
-    const t = searchTerm.trim();
-    let query = supabase.from("positions_combined").select("*", { count: "exact" });
+async function fetchPositions(searchTerm = "") {
+  const t = searchTerm.trim();
+  let query = supabase.from("positions_combined").select("*", { count: "exact" });
 
-    if (t) {
-      query = query.or(`vessel_name.ilike.%${t}%,operator.ilike.%${t}%,port_name.ilike.%${t}%,details.ilike.%${t}%`)
-                   .range(0, 499);
-    } else {
-      query = query.range(0, 199);
-    }
-
-    // We change this to vessel_name to stop the 500 error. 
-    // Once the page loads, we can troubleshoot the date sort.
-    const { data, error, count } = await query.order("vessel_name", { ascending: true });
-
-    if (error) { console.error("fetchPositions error:", error); return; }
-
-    const mapped = (data || []).map(r => ({
-      id:          r.id || "",
-      vessel:      r.vessel_name || "",
-      operator:    r.operator || "",
-      openPort:    r.port_name || "",
-      date:        r.open_date ? (()=>{const s=String(r.open_date);if(/^\d{1,2}\s[A-Za-z]/.test(s))return s;const d=new Date(s);if(isNaN(d))return s;return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});})() : "",
-      dwt:         r.dwt || null,
-      built:       r.build_year || null,
-      loa:         r.overall_length || null,
-      beam:        r.beam || null,
-      comment:     r.details || "",
-      last3:       r.last_3_cargoes || "",
-      dirtyClean:  r.dirty_clean || "",
-      iceClass:    r.ice_class || "",
-      segment:     r.segment || "",
-      superRegion: r.super_region || "",
-      destination: r.destination_ais || "",
-      etaAis:      r.eta_ais || "",
-      lastPort:    r.last_port || "",
-      updatedAt:   r.last_updated || "",
-      source:      r.source || "manual",
-      fileDate:    r.file_date || null,
-      lastUpdateSpot: r.last_update_spotship || null,
-    }));
-
-    setVessels(mapped);
-    setHasMoreVessels(data.length === 200);
-    if (count !== null) setVesselTotal(count);
+  if (t) {
+    query = query.or(`vessel_name.ilike.%${t}%,operator.ilike.%${t}%,port_name.ilike.%${t}%,details.ilike.%${t}%`)
+                 .range(0, 499);
+  } else {
+    query = query.range(0, 199);
   }
 
-  // --- 2. THE LOAD MORE FUNCTION (Placed immediately after) ---
-  async function loadMorePositions() {
-    const from = vessels.length;
-    const to = from + 199;
+  const { data, error, count } = await query.order("vessel_name", { ascending: true });
 
-    const { data, error } = await supabase.from("positions_combined")
-      .select("*")
-      .range(from, to)
-      .order("vessel_name", { ascending: true });
-
-    if (error) { console.error("loadMorePositions error:", error); return; }
-
-    const newRows = (data || []).map(r => ({
-      id:          r.id || "",
-      vessel:      r.vessel_name || "",
-      operator:    r.operator || "",
-      openPort:    r.port_name || "",
-      date:        r.open_date ? (()=>{const s=String(r.open_date);if(/^\d{1,2}\s[A-Za-z]/.test(s))return s;const d=new Date(s);if(isNaN(d))return s;return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});})() : "",
-      dwt:         r.dwt || null,
-      built:       r.build_year || null,
-      loa:         r.overall_length || null,
-      beam:        r.beam || null,
-      comment:     r.details || "",
-      last3:       r.last_3_cargoes || "",
-      dirtyClean:  r.dirty_clean || "",
-      iceClass:    r.ice_class || "",
-      segment:     r.segment || "",
-      superRegion: r.super_region || "",
-      destination: r.destination_ais || "",
-      etaAis:      r.eta_ais || "",
-      lastPort:    r.last_port || "",
-      updatedAt:   r.last_updated || "",
-      source:      r.source || "manual",
-      fileDate:    r.file_date || null,
-      lastUpdateSpot: r.last_update_spotship || null,
-    }));
-
-    if (data.length < 200) setHasMoreVessels(false);
-    setVessels(prev => [...prev, ...newRows]);
+  if (error) {
+    console.error("fetchPositions error:", error);
+    return;
   }
 
+  const mapped = (data || []).map(r => ({
+    id:          r.id || "",
+    vessel:      r.vessel_name || "",
+    operator:    r.operator || "",
+    openPort:    r.port_name || "",
+    date:        r.open_date ? (()=>{const s=String(r.open_date);if(/^\d{1,2}\s[A-Za-z]/.test(s))return s;const d=new Date(s);if(isNaN(d))return s;return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});})() : "",
+    dwt:         r.dwt || null,
+    built:       r.build_year || null,
+    loa:         r.overall_length || null,
+    beam:        r.beam || null,
+    comment:     r.details || "",
+    last3:       r.last_3_cargoes || "",
+    dirtyClean:  r.dirty_clean || "",
+    iceClass:    r.ice_class || "",
+    segment:     r.segment || "",
+    superRegion: r.super_region || "",
+    destination: r.destination_ais || "",
+    etaAis:      r.eta_ais || "",
+    lastPort:    r.last_port || "",
+    updatedAt:   r.last_updated || "",
+    source:      r.source || "manual",
+    fileDate:    r.file_date || null,
+    lastUpdateSpot: r.last_update_spotship || null,
+  }));
+
+  setVessels(mapped);
+  setHasMoreVessels(data.length === 200);
+  if (count !== null) setVesselTotal(count);
+}
+
+async function fetchCargoes(searchTerm = "") {
+  const t = searchTerm.trim();
+  let query = supabase.from("cargoes").select("*", { count: "exact" });
+
+  if (t) {
+    query = query.or(
+      `cargo.ilike.%${t}%,charterer.ilike.%${t}%,load.ilike.%${t}%,disch.ilike.%${t}%,vessel.ilike.%${t}%,comment.ilike.%${t}%`
+    ).range(0, 199);
+  } else {
+    query = query.range(0, 199);
+  }
+
+  const { data, error, count } = await query.order("updated", { ascending: false });
+
+  if (error) {
+    console.error("fetchCargoes error:", error);
+    return;
+  }
+
+  const mapped = (data || []).map(normaliseCargo);
+
+  setCargoes(mapped);
+  setHasMore(data.length === 200);
+  if (count !== null) setCargoTotal(count);
+}
+
+// --- 2. THE LOAD MORE FUNCTION (Placed immediately after) ---
+async function loadMorePositions() {
+  const from = vessels.length;
+  const to = from + 199;
+
+  const { data, error } = await supabase.from("positions_combined")
+    .select("*")
+    .range(from, to)
+    .order("vessel_name", { ascending: true });
+
+  if (error) {
+    console.error("loadMorePositions error:", error);
+    return;
+  }
+
+  const newRows = (data || []).map(r => ({
+    id:          r.id || "",
+    vessel:      r.vessel_name || "",
+    operator:    r.operator || "",
+    openPort:    r.port_name || "",
+    date:        r.open_date ? (()=>{const s=String(r.open_date);if(/^\d{1,2}\s[A-Za-z]/.test(s))return s;const d=new Date(s);if(isNaN(d))return s;return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});})() : "",
+    dwt:         r.dwt || null,
+    built:       r.build_year || null,
+    loa:         r.overall_length || null,
+    beam:        r.beam || null,
+    comment:     r.details || "",
+    last3:       r.last_3_cargoes || "",
+    dirtyClean:  r.dirty_clean || "",
+    iceClass:    r.ice_class || "",
+    segment:     r.segment || "",
+    superRegion: r.super_region || "",
+    destination: r.destination_ais || "",
+    etaAis:      r.eta_ais || "",
+    lastPort:    r.last_port || "",
+    updatedAt:   r.last_updated || "",
+    source:      r.source || "manual",
+    fileDate:    r.file_date || null,
+    lastUpdateSpot: r.last_update_spotship || null,
+  }));
+
+  if (data.length < 200) setHasMoreVessels(false);
+  setVessels(prev => [...prev, ...newRows]);
+}
   // --- 3. THE INITIAL STARTUP (Corrected useEffect) ---
   useEffect(() => {
     (async () => {
