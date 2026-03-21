@@ -4134,7 +4134,7 @@ export default function TankPos(){
       query = query.range(0, 199);
     }
 
-    // Using vessel_name sort to prevent the 500 error timeout
+    // Sort by vessel_name to prevent the 500 database timeout
     const { data, error, count } = await query.order("vessel_name", { ascending: true });
 
     if (error) { console.error("fetchPositions error:", error); return; }
@@ -4177,7 +4177,7 @@ export default function TankPos(){
       .range(from, from + 199)
       .order("vessel_name", { ascending: true });
 
-    if (error) { console.error("loadMorePositions error:", error); return; }
+    if (error) { console.error("loadMore error:", error); return; }
 
     const newRows = (data || []).map(r => ({
       id:          r.id || "",
@@ -4208,10 +4208,10 @@ export default function TankPos(){
     setVessels(prev => [...prev, ...newRows]);
   }
 
-  // --- 3. THE INITIAL STARTUP (Corrected useEffect) ---
+  // --- 3. THE INITIAL STARTUP ---
   useEffect(() => {
     (async () => {
-      // We only call fetchPositions here to avoid the "fetchCargoes is not defined" error
+      // Running only this one to avoid the Cargo error
       await fetchPositions("");
     })();
   }, []);
