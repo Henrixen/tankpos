@@ -4404,5 +4404,11 @@ async function loadMorePositions() {
   },[]);
 
   const props={vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch};
-  return <DesktopApp {...props}/>;
+  return (
+  <DesktopApp
+    {...props}
+    hasMoreVessels={hasMoreVessels}
+    onLoadMoreVessels={loadMorePositions}
+  />
+);
 }
