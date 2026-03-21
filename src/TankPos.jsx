@@ -2976,7 +2976,7 @@ if(updFilter){
           
           {/* --- NEW FIL-DATO HEADER --- */}
           <th style={{...th,width:colWidthsV["FileDate"]||90,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("fileDate")}>
-            <span style={{userSelect:"none",paddingRight:6}}>Fil-dato{sortK==="fileDate"?(sortD>0?" ↑":" ↓"):""}</span>
+            <span style={{userSelect:"none",paddingRight:6}}>UPDATED{sortK==="fileDate"?(sortD>0?" ↑":" ↓"):""}</span>
             <span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["FileDate"]||90;const mv=m=>setColWidthsV(p=>({...p,"FileDate":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/>
           </th>
 
