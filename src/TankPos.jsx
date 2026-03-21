@@ -4215,9 +4215,10 @@ export default function TankPos(){
     setVessels(prev => [...prev, ...newRows]);
   }
 
-  // --- 3. THE EFFECT (Placed below the functions) ---
+  // --- 3. THE INITIAL STARTUP (Corrected useEffect) ---
   useEffect(() => {
     (async () => {
+      // We only call fetchPositions here to avoid the "fetchCargoes is not defined" error
       await fetchPositions("");
     })();
   }, []);
