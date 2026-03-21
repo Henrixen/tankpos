@@ -4098,7 +4098,7 @@ export default function TankPos(){
       // 2. Fetch the Cargoes (first 200)
       await fetchCargoes("");
 
-      // 3. Keep your existing vessel_db logic if you use it for the dropdowns
+      // 3. Keep your existing vessel_db logic if you use it for the dropdowns 
       let allRows = [];
       let from = 0;
       const pageSize = 1000;
@@ -4126,110 +4126,102 @@ export default function TankPos(){
 },[]);
   useEffect(()=>{const fn=()=>setMobile(isMobile());window.addEventListener("resize",fn);return()=>window.removeEventListener("resize",fn);},[]);
 
-  async function fetchCargoes(searchTerm=""){
-    if(searchTerm.trim()){
-      const t=searchTerm.trim();
-      const{data,error}=await supabase.from("cargoes").select("*")
-        .or(`charterer.ilike.%${t}%,vessel.ilike.%${t}%,load.ilike.%${t}%,disch.ilike.%${t}%,cargo.ilike.%${t}%,status.ilike.%${t}%`)
-        .range(0,499).order("updated",{ascending:false});
-      if(error){console.error(error);return;}
-      setCargoes(data.map(normaliseCargo));
-    } else {
-      const[{data,error},{count}]=await Promise.all([
-        supabase.from("cargoes").select("*").range(0,199).order("updated",{ascending:false}),
-        supabase.from("cargoes").select("*",{count:"exact",head:true})
-      ]);
-      if(error){console.error(error);return;}
-      setCargoes(data.map(normaliseCargo));
-      setHasMore(data.length===200);
-      if(count!=null)setCargoTotal(count);
-    }
-  }
-
+  // --- 1. THE MAIN FETCH FUNCTION ---
   async function fetchPositions(searchTerm = "") {
-  const t = searchTerm.trim();
-  let query = supabase.from("positions_combined").select("*", { count: "exact" });
+    const t = searchTerm.trim();
+    let query = supabase.from("positions_combined").select("*", { count: "exact" });
 
-  // If there's a search term, filter results (similar to your cargo logic)
-  if (t) {
-    query = query.or(`vessel_name.ilike.%${t}%,operator.ilike.%${t}%,port_name.ilike.%${t}%,details.ilike.%${t}%`)
-                 .range(0, 499);
-  } else {
-    query = query.range(0, 199);
+    if (t) {
+      query = query.or(`vessel_name.ilike.%${t}%,operator.ilike.%${t}%,port_name.ilike.%${t}%,details.ilike.%${t}%`)
+                   .range(0, 499);
+    } else {
+      query = query.range(0, 199);
+    }
+
+    // We change this to vessel_name to stop the 500 error. 
+    // Once the page loads, we can troubleshoot the date sort.
+    const { data, error, count } = await query.order("vessel_name", { ascending: true });
+
+    if (error) { console.error("fetchPositions error:", error); return; }
+
+    const mapped = (data || []).map(r => ({
+      id:          r.id || "",
+      vessel:      r.vessel_name || "",
+      operator:    r.operator || "",
+      openPort:    r.port_name || "",
+      date:        r.open_date ? (()=>{const s=String(r.open_date);if(/^\d{1,2}\s[A-Za-z]/.test(s))return s;const d=new Date(s);if(isNaN(d))return s;return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});})() : "",
+      dwt:         r.dwt || null,
+      built:       r.build_year || null,
+      loa:         r.overall_length || null,
+      beam:        r.beam || null,
+      comment:     r.details || "",
+      last3:       r.last_3_cargoes || "",
+      dirtyClean:  r.dirty_clean || "",
+      iceClass:    r.ice_class || "",
+      segment:     r.segment || "",
+      superRegion: r.super_region || "",
+      destination: r.destination_ais || "",
+      etaAis:      r.eta_ais || "",
+      lastPort:    r.last_port || "",
+      updatedAt:   r.last_updated || "",
+      source:      r.source || "manual",
+      fileDate:    r.file_date || null,
+      lastUpdateSpot: r.last_update_spotship || null,
+    }));
+
+    setVessels(mapped);
+    setHasMoreVessels(data.length === 200);
+    if (count !== null) setVesselTotal(count);
   }
 
-const { data, error, count } = await query.order("last_updated", { ascending: false, nullsFirst: false });
+  // --- 2. THE LOAD MORE FUNCTION (Placed immediately after) ---
+  async function loadMorePositions() {
+    const from = vessels.length;
+    const to = from + 199;
 
-  if (error) { console.error("fetchPositions error:", error); return; }
+    const { data, error } = await supabase.from("positions_combined")
+      .select("*")
+      .range(from, to)
+      .order("vessel_name", { ascending: true });
 
-  const mapped = (data || []).map(r => ({
-    id:          r.id || "",
-    vessel:      r.vessel_name || "",
-    operator:    r.operator || "",
-    openPort:    r.port_name || "",
-    date:        r.open_date ? (()=>{const s=String(r.open_date);if(/^\d{1,2}\s[A-Za-z]/.test(s))return s;const d=new Date(s);if(isNaN(d))return s;return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});})() : "",
-    dwt:         r.dwt || null,
-    built:       r.build_year || null,
-    loa:         r.overall_length || null,
-    beam:        r.beam || null,
-    comment:     r.details || "",
-    last3:       r.last_3_cargoes || "",
-    dirtyClean:  r.dirty_clean || "",
-    iceClass:    r.ice_class || "",
-    segment:     r.segment || "",
-    superRegion: r.super_region || "",
-    destination: r.destination_ais || "",
-    etaAis:      r.eta_ais || "",
-    lastPort:    r.last_port || "",
-    updatedAt:   r.last_updated || "",
-    source:      r.source || "manual",
-    fileDate:    r.file_date || null,
-    lastUpdateSpot: r.last_update_spotship || null,
-  }));
+    if (error) { console.error("loadMorePositions error:", error); return; }
 
-  setVessels(mapped);
-  setHasMoreVessels(data.length === 200);
-  if (count !== null) setVesselTotal(count);
-}
-async function loadMorePositions() {
-  const from = vessels.length;
-  const to = from + 199;
+    const newRows = (data || []).map(r => ({
+      id:          r.id || "",
+      vessel:      r.vessel_name || "",
+      operator:    r.operator || "",
+      openPort:    r.port_name || "",
+      date:        r.open_date ? (()=>{const s=String(r.open_date);if(/^\d{1,2}\s[A-Za-z]/.test(s))return s;const d=new Date(s);if(isNaN(d))return s;return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});})() : "",
+      dwt:         r.dwt || null,
+      built:       r.build_year || null,
+      loa:         r.overall_length || null,
+      beam:        r.beam || null,
+      comment:     r.details || "",
+      last3:       r.last_3_cargoes || "",
+      dirtyClean:  r.dirty_clean || "",
+      iceClass:    r.ice_class || "",
+      segment:     r.segment || "",
+      superRegion: r.super_region || "",
+      destination: r.destination_ais || "",
+      etaAis:      r.eta_ais || "",
+      lastPort:    r.last_port || "",
+      updatedAt:   r.last_updated || "",
+      source:      r.source || "manual",
+      fileDate:    r.file_date || null,
+      lastUpdateSpot: r.last_update_spotship || null,
+    }));
 
-  const { data, error } = await supabase.from("positions_combined")
-    .select("*")
-    .range(from, to)
-    .order("last_updated", { ascending: false });
+    if (data.length < 200) setHasMoreVessels(false);
+    setVessels(prev => [...prev, ...newRows]);
+  }
 
-  if (error) { console.error("loadMorePositions error:", error); return; }
-
-  const newRows = (data || []).map(r => ({
-    id:          r.id || "",
-    vessel:      r.vessel_name || "",
-    operator:    r.operator || "",
-    openPort:    r.port_name || "",
-    date:        r.open_date ? (()=>{const s=String(r.open_date);if(/^\d{1,2}\s[A-Za-z]/.test(s))return s;const d=new Date(s);if(isNaN(d))return s;return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});})() : "",
-    dwt:         r.dwt || null,
-    built:       r.build_year || null,
-    loa:         r.overall_length || null,
-    beam:        r.beam || null,
-    comment:     r.details || "",
-    last3:       r.last_3_cargoes || "",
-    dirtyClean:  r.dirty_clean || "",
-    iceClass:    r.ice_class || "",
-    segment:     r.segment || "",
-    superRegion: r.super_region || "",
-    destination: r.destination_ais || "",
-    etaAis:      r.eta_ais || "",
-    lastPort:    r.last_port || "",
-    updatedAt:   r.last_updated || "",
-    source:      r.source || "manual",
-    fileDate:    r.file_date || null,
-    lastUpdateSpot: r.last_update_spotship || null,
-  }));
-
-  if (data.length < 200) setHasMoreVessels(false);
-  setVessels(prev => [...prev, ...newRows]);
-}
+  // --- 3. THE EFFECT (Placed below the functions) ---
+  useEffect(() => {
+    (async () => {
+      await fetchPositions("");
+    })();
+  }, []);
+  
   async function loadMoreCargoes(){
     const{data,error}=await supabase.from("cargoes").select("*")
       .range(cargoes.length,cargoes.length+199).order("updated",{ascending:false});
