@@ -4090,26 +4090,31 @@ export default function TankPos(){
   const searchTimer=useRef(null);
   const [mobile,setMobile]=useState(()=>isMobile());
 
-    useEffect(()=>{
-  (async()=>{
-    let allRows = [];
-    let from = 0;
-    const pageSize = 1000;
-    while(true){
-      const {data, error} = await supabase.from("vessels_db").select("vessel,dwt,built,loa,beam,cbm,ice_class,fuel,operator").range(from, from+pageSize-1);
-      if(error || !data || data.length === 0) break;
-      allRows = [...allRows, ...data];
-      if(data.length < pageSize) break;
-      from += pageSize;
-    }
-    const map = {};
-    allRows.forEach(r => { if(r.vessel) map[r.vessel.toLowerCase().trim()] = r; });
-    setVesselDB(map);
-    window.vesselDB = map;
-    console.log("vesselDB loaded:", allRows.length);
-  })();
-},[]);
+    useEffect(() => {
+    (async () => {
+      // 1. Fetch the Vessels (first 200)
+      await fetchPositions(""); 
+      
+      // 2. Fetch the Cargoes (first 200)
+      await fetchCargoes("");
 
+      // 3. Keep your existing vessel_db logic if you use it for the dropdowns
+      let allRows = [];
+      let from = 0;
+      const pageSize = 1000;
+      while(true){
+        const {data, error} = await supabase.from("vessels_db").select("vessel,dwt,built,loa,beam,cbm,ice_class,fuel,operator").range(from, from+pageSize-1);
+        if(error || !data || data.length === 0) break;
+        allRows = [...allRows, ...data];
+        if(data.length < pageSize) break;
+        from += pageSize;
+      }
+      const db = {};
+      allRows.forEach(r => { if(r.vessel) db[r.vessel.toUpperCase()] = r; });
+      setVesselDB(db);
+    })();
+  }, []);
+  
   function onCargoSearch(term){
     clearTimeout(searchTimer.current);
     searchTimer.current=setTimeout(()=>fetchCargoes(term),300);
