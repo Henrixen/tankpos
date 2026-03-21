@@ -2582,7 +2582,6 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [updFilter,setUpdFilter]=useState(""); // "" | "today" | "week"
   const [bucketFilters,setBucketFilters]=useState(new Set()); // set of active bucket keys
   const [posFileRange,setPosFileRange]=useState([28,0]); // [fromDaysAgo, toDaysAgo]
-  const [posFileDateFilter,setPosFileDateFilter]=useState("");
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
   const [mxSearch,setMxSearch]=useState("");
@@ -2650,18 +2649,27 @@ function fmtShortDate(d){
         return(bucketFilters.has("PPT")&&inPPT)||(bucketFilters.has("2-4d")&&in24)||(bucketFilters.has("4-8d")&&in48)||(bucketFilters.has(">8d")&&in8p);
       });
     }
-    const normOp=s=>(s||"Unknown").trim().toLowerCase();if(opFilter)list=list.filter(v=>normOp(v.operator)===normOp(opFilter));
-    
-    if(posFileDateFilter){
+    const normOp=s=>(s||"Unknown").trim().toLowerCase();
+if(opFilter)list=list.filter(v=>normOp(v.operator)===normOp(opFilter));
+
+list=list.filter(matchesSearch);
+
+{
+  const fromDays=Math.max(posFileRange[0],posFileRange[1]); // older
+  const toDays=Math.min(posFileRange[0],posFileRange[1]);   // newer
+  const fromDate=daysAgoDate(fromDays);
+  const toDate=daysAgoDate(toDays);
+  toDate.setHours(23,59,59,999);
+
   list=list.filter(v=>{
     if(!v.fileDate) return false;
     const d=new Date(v.fileDate);
     if(isNaN(d)) return false;
-    return d.toISOString().slice(0,10)===posFileDateFilter;
+    return d>=fromDate && d<=toDate;
   });
 }
-    list=list.filter(matchesSearch);
-    if(updFilter){
+
+if(updFilter){
       
       const now=new Date();
       const todayStart=new Date(now);todayStart.setHours(0,0,0,0);
@@ -2684,7 +2692,7 @@ function fmtShortDate(d){
       return av<bv?-sortD:av>bv?sortD:0;
     });
     return list;
-  },[vessels,filters,search,sortK,sortD,opFilter,bucketFilters,updFilter,posFileDateFilter]);
+  },[vessels,filters,search,sortK,sortD,opFilter,bucketFilters,updFilter,posFileRange]);
 
   const stats={total:vessels.length,ppt:vessels.filter(v=>isOpenPPT(v.date)).length,subs:vessels.filter(v=>v.openPort==="EMPLOYED").length};
   const selV=sel?vessels.find(v=>v.vessel===sel):null;
