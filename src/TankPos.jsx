@@ -4309,7 +4309,7 @@ export default function TankPos(){
   }
 
   async function fetchPositions(){
-  const{data,error}=await supabase.from("positions_combined").select("*").range(0,10000);
+  const{data,error}=await supabase.from("positions_combined").select("*").limit(10000);
   if(error){console.error(error);return;}
   setVessels((data||[]).map(r=>({
     id:          r.id||"",
