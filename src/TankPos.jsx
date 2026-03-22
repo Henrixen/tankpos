@@ -2581,7 +2581,8 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [opFilter,setOpFilter]=useState(null);
   const [updFilter,setUpdFilter]=useState(""); // "" | "today" | "week"
   const [bucketFilters,setBucketFilters]=useState(new Set()); // set of active bucket keys
-  const [posFileRange,setPosFileRange]=useState([28,0]); // [fromDaysAgo, toDaysAgo]
+  const [posFileDaysBack,setPosFileDaysBack]=useState(28); // 0=today, 28=4 weeks ago
+  const [superRegionFilter,setSuperRegionFilter]=useState("ALL");
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
   const [mxSearch,setMxSearch]=useState("");
@@ -2607,10 +2608,24 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   // Multi-token search across all text fields
   const tokens=search.trim().toLowerCase().split(/\s+/).filter(Boolean);
   function matchesSearch(v){
-    if(!tokens.length)return true;
-    const hay=JSON.stringify(v).toLowerCase();
-    return tokens.every(t=>hay.includes(t));
-  }
+  if(!tokens.length)return true;
+  const hay=JSON.stringify(v).toLowerCase();
+  return tokens.every(t=>hay.includes(t));
+}
+
+const superRegionOptions=["ALL", ...Array.from(new Set(
+  vessels.map(v=>String(v.superRegion||"").trim()).filter(Boolean)
+)).sort((a,b)=>a.localeCompare(b))];
+
+const latestFileDate=(()=>{
+  const dates=vessels
+    .map(v=>v.fileDate?new Date(v.fileDate):null)
+    .filter(d=>d && !isNaN(d));
+  if(!dates.length) return null;
+  return new Date(Math.max(...dates.map(d=>d.getTime())));
+})();
+
+const filtV=useMemo(()=>{
 
   function daysAgoDate(days){
   const d=new Date();
@@ -2652,13 +2667,18 @@ function fmtShortDate(d){
     const normOp=s=>(s||"Unknown").trim().toLowerCase();
 if(opFilter)list=list.filter(v=>normOp(v.operator)===normOp(opFilter));
 
+if(superRegionFilter!=="ALL"){
+  list=list.filter(v=>String(v.superRegion||"").trim()===superRegionFilter);
+}
+
 list=list.filter(matchesSearch);
 
-{
-  const fromDays=Math.max(posFileRange[0],posFileRange[1]); // older
-  const toDays=Math.min(posFileRange[0],posFileRange[1]);   // newer
-  const fromDate=daysAgoDate(fromDays);
-  const toDate=daysAgoDate(toDays);
+if(latestFileDate){
+  const fromDate=new Date(latestFileDate);
+  fromDate.setHours(0,0,0,0);
+  fromDate.setDate(fromDate.getDate()-Number(posFileDaysBack||0));
+
+  const toDate=new Date(latestFileDate);
   toDate.setHours(23,59,59,999);
 
   list=list.filter(v=>{
@@ -2668,6 +2688,8 @@ list=list.filter(matchesSearch);
     return d>=fromDate && d<=toDate;
   });
 }
+
+if(updFilter){
 
 if(updFilter){
       
@@ -2692,7 +2714,7 @@ if(updFilter){
       return av<bv?-sortD:av>bv?sortD:0;
     });
     return list;
-  },[vessels,filters,search,sortK,sortD,opFilter,bucketFilters,updFilter,posFileRange]);
+  },[vessels,filters,search,sortK,sortD,opFilter,bucketFilters,updFilter,posFileDaysBack,superRegionFilter,latestFileDate]);
 
   const stats={total:vessels.length,ppt:vessels.filter(v=>isOpenPPT(v.date)).length,subs:vessels.filter(v=>v.openPort==="EMPLOYED").length};
   const selV=sel?vessels.find(v=>v.vessel===sel):null;
@@ -2871,7 +2893,7 @@ if(updFilter){
     <div style={{
   display:"flex",
   flexDirection:"column",
-  gap:6,
+  gap:8,
   padding:"8px 10px",
   background:C.bg3,
   border:"1px solid "+C.bd2,
@@ -2879,47 +2901,76 @@ if(updFilter){
 }}>
   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
     <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>
-      File Date Range
+      File Date Window
     </span>
     <span style={{fontSize:12,color:C.tx,fontWeight:700}}>
-      {fmtShortDate(daysAgoDate(Math.max(posFileRange[0],posFileRange[1])))} → {fmtShortDate(daysAgoDate(Math.min(posFileRange[0],posFileRange[1])))}
+      {latestFileDate
+        ? `${fmtShortDate(new Date(new Date(latestFileDate).setDate(latestFileDate.getDate()-posFileDaysBack)))} → ${fmtShortDate(latestFileDate)}`
+        : "No file dates"}
     </span>
   </div>
 
   <div style={{display:"flex",alignItems:"center",gap:8}}>
-    <span style={{fontSize:11,color:C.dim,width:52}}>From</span>
+    <span style={{fontSize:11,color:C.dim,width:70}}>From</span>
     <input
       type="range"
       min="0"
       max="28"
       step="1"
-      value={posFileRange[0]}
-      onChange={e=>setPosFileRange(([_,to])=>[Number(e.target.value),to])}
+      value={posFileDaysBack}
+      onChange={e=>setPosFileDaysBack(Number(e.target.value))}
       style={{flex:1}}
     />
-    <span style={{fontSize:11,color:C.dim,width:64,textAlign:"right"}}>
-      {posFileRange[0]}d ago
-    </span>
-  </div>
-
-  <div style={{display:"flex",alignItems:"center",gap:8}}>
-    <span style={{fontSize:11,color:C.dim,width:52}}>To</span>
-    <input
-      type="range"
-      min="0"
-      max="28"
-      step="1"
-      value={posFileRange[1]}
-      onChange={e=>setPosFileRange(([from,_])=>[from,Number(e.target.value)])}
-      style={{flex:1}}
-    />
-    <span style={{fontSize:11,color:C.dim,width:64,textAlign:"right"}}>
-      {posFileRange[1]}d ago
+    <span style={{fontSize:11,color:C.dim,width:80,textAlign:"right"}}>
+      {posFileDaysBack}d back
     </span>
   </div>
 
   <div style={{fontSize:11,color:C.faint}}>
-    Limited to file dates from the last 4 weeks
+    Right edge is always the latest file date in the data
+  </div>
+
+  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:2}}>
+    <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>
+      Super Region
+    </span>
+
+    <select
+      value={superRegionFilter}
+      onChange={e=>setSuperRegionFilter(e.target.value)}
+      style={{
+        background:C.bg2,
+        border:"1px solid "+C.bd,
+        borderRadius:4,
+        color:C.tx,
+        fontFamily:"inherit",
+        fontSize:12,
+        padding:"4px 8px",
+        outline:"none"
+      }}
+    >
+      {superRegionOptions.map(r=>(
+        <option key={r} value={r}>{r}</option>
+      ))}
+    </select>
+
+    {superRegionFilter!=="ALL" && (
+      <button
+        onClick={()=>setSuperRegionFilter("ALL")}
+        style={{
+          background:"none",
+          border:"1px solid "+C.bd,
+          borderRadius:4,
+          color:C.dim,
+          fontSize:12,
+          padding:"3px 8px",
+          cursor:"pointer",
+          fontFamily:"inherit"
+        }}
+      >
+        ✕ Clear
+      </button>
+    )}
   </div>
 </div>
   </div>
