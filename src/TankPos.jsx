@@ -2677,19 +2677,19 @@ const filtV=useMemo(()=>{
 
   list=list.filter(matchesSearch);
 
-  {
-  const today=new Date();
-  today.setHours(23,59,59,999);
-  const fromDate=new Date();
-  fromDate.setHours(0,0,0,0);
-  fromDate.setDate(fromDate.getDate()-Number(posFileDaysBack||0));
-  list=list.filter(v=>{
-    if(!v.fileDate) return true;
-    const d=new Date(v.fileDate);
-    if(isNaN(d)) return true;
-    return d>=fromDate && d<=today;
-  });
-}
+  if(posFileDaysBack<28){
+    const today=new Date();
+    today.setHours(23,59,59,999);
+    const fromDate=new Date();
+    fromDate.setHours(0,0,0,0);
+    fromDate.setDate(fromDate.getDate()-Number(posFileDaysBack||0));
+    list=list.filter(v=>{
+      if(!v.fileDate) return true;
+      const d=new Date(v.fileDate);
+      if(isNaN(d)) return true;
+      return d>=fromDate && d<=today;
+    });
+  }
 
   if(updFilter){
     const now=new Date();
