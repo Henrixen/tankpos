@@ -2625,9 +2625,7 @@ const latestFileDate=(()=>{
   return new Date(Math.max(...dates.map(d=>d.getTime())));
 })();
 
-const filtV=useMemo(()=>{
-
-  function daysAgoDate(days){
+function daysAgoDate(days){
   const d=new Date();
   d.setHours(0,0,0,0);
   d.setDate(d.getDate()-days);
@@ -2639,7 +2637,7 @@ function fmtShortDate(d){
   return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
 }
 
-  const filtV=useMemo(()=>{
+const filtV=useMemo(()=>{
   let list=vessels;
 
   if(filters.size>0){
