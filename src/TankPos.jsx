@@ -3140,17 +3140,17 @@ const filtV=useMemo(()=>{
                   </div>
                 )}
               </div>
+            {/* Positions show more */}
+            {filtV.length>posPage*POS_PAGE_SIZE&&(
+              <div style={{textAlign:"center",padding:"12px 0"}}>
+                <button onClick={()=>setPosPage(p=>p+1)}
+                  style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"5px 18px",color:C.blue,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>
+                  Show more ({filtV.length - posPage*POS_PAGE_SIZE} remaining)
+                </button>
+              </div>
+            )}
             </>):null}
           </div>
-          {/* Positions show more */}
-          {filtV.length>posPage*POS_PAGE_SIZE&&(
-            <div style={{textAlign:"center",padding:"12px 0"}}>
-              <button onClick={()=>setPosPage(p=>p+1)}
-                style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"5px 18px",color:C.blue,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>
-                Show more ({filtV.length - posPage*POS_PAGE_SIZE} remaining)
-              </button>
-            </div>
-          )}
         )}
 
         {/* ── CARGOES ── */}
