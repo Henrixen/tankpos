@@ -2683,14 +2683,16 @@ const filtV=useMemo(()=>{
 
   const fromDate=new Date();
   fromDate.setHours(0,0,0,0);
-  fromDate.setDate(fromDate.getDate()-Number(posFileDaysBack||0));
-
-  list=list.filter(v=>{
-    if(!v.fileDate) return true;
-    const d=new Date(v.fileDate);
-    if(isNaN(d)) return false;
-    return d>=fromDate && d<=today;
-  });
+  const hasExternalVessels=list.some(v=>v.fileDate);
+  if(hasExternalVessels){
+    fromDate.setDate(fromDate.getDate()-Number(posFileDaysBack||0));
+    list=list.filter(v=>{
+      if(!v.fileDate) return true;
+      const d=new Date(v.fileDate);
+      if(isNaN(d)) return false;
+      return d>=fromDate && d<=today;
+    });
+  }
 }
 
   if(updFilter){
