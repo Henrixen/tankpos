@@ -4302,45 +4302,73 @@ export default function TankPos(){
   }
 
   async function fetchPositions(){
-  // Load manual positions first (always show these)
-  const{data:manualData,error:manualError}=await supabase.from("positions").select("*");
-  if(manualError)console.error("manual positions error:",manualError);
-  // Load external positions (limited to 3000 most recent)
-  const{data:extData,error:extError}=await supabase.from("positions_external").select("*")
-    .order("file_date",{ascending:false}).limit(3000)
-    .gte("file_date",new Date(Date.now()-90*24*60*60*1000).toISOString());
-  if(extError)console.error("external positions error:",extError);
-  // Combine: manual first, then external - dedupe by vessel name
-  const manualNames=new Set((manualData||[]).map(r=>String(r.vessel||"").toLowerCase().trim()));
-  const combined=[
-    ...(manualData||[]).map(r=>({...r,vessel_name:r.vessel,port_name:r.openPort,open_date:r.date,build_year:r.built,overall_length:r.loa,details:r.comment,last_updated:r.updated_at,source:"manual",file_date:null})),
-    ...(extData||[]).filter(r=>!manualNames.has(String(r.vessel_name||"").toLowerCase().trim()))
-  ];
-  console.log("fetchPositions: manual=",manualData?.length,"external=",extData?.length,"combined=",combined.length);
-  setVessels(combined.map(r=>({
-    id:          r.id||"",
-    vessel:      r.vessel_name||"",
+  // Fetch manual positions
+  const{data:manualData}=await supabase.from("positions").select("*");
+  // Fetch most recent external positions (last 90 days, max 3000)
+  const cutoff=new Date(Date.now()-90*24*60*60*1000).toISOString();
+  const{data:extData}=await supabase.from("positions_external").select("*")
+    .gte("file_date",cutoff).order("file_date",{ascending:false}).limit(3000);
+  // Manual vessel names take priority - remove external duplicates
+  const manualNames=new Set((manualData||[]).map(r=>String(r.vessel||"").toLowerCase().trim()).filter(Boolean));
+  // Normalise manual rows to common shape
+  const manualRows=(manualData||[]).map(r=>({
+    _src:"manual",
+    vessel:      String(r.vessel||"").toUpperCase(),
     operator:    r.operator||"",
-    openPort:    r.port_name||"",
-    date:        r.open_date?(()=>{const s=String(r.open_date);if(/^\d{1,2}\s[A-Za-z]/.test(s))return s;const d=new Date(s);if(isNaN(d))return s;return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});})():"",
+    openPort:    r.openPort||r.port_name||"",
+    date:        r.date||"",
     dwt:         r.dwt||null,
-    built:       r.build_year||null,
-    loa:         r.overall_length||null,
+    built:       r.built||r.build_year||null,
+    loa:         r.loa||r.overall_length||null,
     beam:        r.beam||null,
-    comment:     r.details||"",
-    last3:       r.last_3_cargoes||"",
-    dirtyClean:  r.dirty_clean||"",
-    iceClass:    r.ice_class||"",
+    cbm:         r.cbm||null,
+    comment:     r.comment||r.details||"",
+    spec:        r.spec||null,
+    updatedAt:   r.updated_at||r.updatedAt||null,
+    fileDate:    null,
     segment:     r.segment||"",
     superRegion: r.super_region||"",
-    destination: r.destination_ais||"",
-    etaAis:      r.eta_ais||"",
-    lastPort:    r.last_port||"",
-    updatedAt:   r.last_updated||"",
-    source:      r.source||"manual",
-    fileDate:     r.file_date || null,
-    lastUpdateSpot: r.last_update_spotship || null,
-  })));
+    last3:       r.last_3_cargoes||"",
+    dirtyClean:  r.dirty_clean||"",
+    source:      "manual",
+    id:          r.id||"",
+  }));
+  // Normalise external rows, skip if vessel already in manual
+  const extRows=(extData||[])
+    .filter(r=>!manualNames.has(String(r.vessel_name||r.vessel||"").toLowerCase().trim()))
+    .map(r=>{
+      const rawDate=r.open_date||r.date||"";
+      let fmtDate=rawDate;
+      if(rawDate&&!/^\d{1,2}\s[A-Za-z]/.test(rawDate)){
+        const d=new Date(rawDate);
+        if(!isNaN(d)){const day=d.getDate();const mon=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];fmtDate=day+" "+mon;}
+      }
+      return{
+        _src:"external",
+        vessel:      String(r.vessel_name||r.vessel||"").toUpperCase(),
+        operator:    r.operator||"",
+        openPort:    r.port_name||r.openPort||"",
+        date:        fmtDate,
+        dwt:         r.dwt||null,
+        built:       r.build_year||r.built||null,
+        loa:         r.overall_length||r.loa||null,
+        beam:        r.beam||null,
+        cbm:         null,
+        comment:     r.details||r.comment||"",
+        spec:        null,
+        updatedAt:   r.updated_at||r.last_updated||null,
+        fileDate:    r.file_date||null,
+        segment:     r.segment||"",
+        superRegion: r.super_region||"",
+        last3:       r.last_3_cargoes||"",
+        dirtyClean:  r.dirty_clean||"",
+        source:      "external",
+        id:          String(r.id||""),
+      };
+    });
+  const combined=[...manualRows,...extRows];
+  console.log("Positions loaded: manual=",manualRows.length,"external=",extRows.length,"total=",combined.length);
+  setVessels(combined);
 }
 
   async function loadMoreCargoes(){
