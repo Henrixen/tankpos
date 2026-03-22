@@ -2958,7 +2958,7 @@ const filtV=useMemo(()=>{
 
   <span style={{fontSize:11,color:C.faint}}>
   Right edge is always today
-</div>
+</span>
   <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:4}}>
     <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Segment</span>
     <select value={segmentFilter} onChange={e=>{setSegmentFilter(e.target.value);setPosPage(1);}}
