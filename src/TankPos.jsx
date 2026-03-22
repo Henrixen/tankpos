@@ -2584,7 +2584,8 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [posFileDaysBack,setPosFileDaysBack]=useState(28); // 0=today, 28=4 weeks ago
   const [posPage,setPosPage]=useState(1);
   const POS_PAGE_SIZE=100;
-  const [superRegionFilter,setSuperRegionFilter]=useState("ALL");
+  const [superRegionFilter,setSuperRegionFilter]=useState("");
+  const [segmentFilter,setSegmentFilter]=useState("");
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
   const [mxSearch,setMxSearch]=useState("");
@@ -2670,6 +2671,9 @@ const filtV=useMemo(()=>{
   if(superRegionFilter!=="ALL"){
     list=list.filter(v=>String(v.superRegion||"").trim()===superRegionFilter);
   }
+  if(segmentFilter){
+    list=list.filter(v=>String(v.segment||"").trim()===segmentFilter);
+  }
 
   list=list.filter(matchesSearch);
 
@@ -2682,7 +2686,7 @@ const filtV=useMemo(()=>{
   fromDate.setDate(fromDate.getDate()-Number(posFileDaysBack||0));
 
   list=list.filter(v=>{
-    if(!v.fileDate) return false;
+    if(!v.fileDate) return true;
     const d=new Date(v.fileDate);
     if(isNaN(d)) return false;
     return d>=fromDate && d<=today;
@@ -2738,7 +2742,8 @@ const filtV=useMemo(()=>{
   bucketFilters,
   updFilter,
   posFileDaysBack,
-  superRegionFilter
+  superRegionFilter,
+  segmentFilter
 ]);
   // Reset page when filters change
   useEffect(()=>{setPosPage(1);},[vessels,filters,search,sortK,opFilter,bucketFilters,updFilter,posFileDaysBack,superRegionFilter]);
@@ -2951,9 +2956,17 @@ const filtV=useMemo(()=>{
     </span>
   </div>
 
-  <div style={{fontSize:11,color:C.faint}}>
+  <span style={{fontSize:11,color:C.faint}}>
   Right edge is always today
 </div>
+  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:4}}>
+    <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Segment</span>
+    <select value={segmentFilter} onChange={e=>{setSegmentFilter(e.target.value);setPosPage(1);}}
+      style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 8px",outline:"none"}}>
+      <option value="">All</option>
+      {[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort().map(s=><option key={s} value={s}>{s}</option>)}
+    </select>
+  </div>
 
   <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:2}}>
     <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>
@@ -4294,7 +4307,7 @@ export default function TankPos(){
   }
 
   async function fetchPositions(){
-  const{data,error}=await supabase.from("positions_combined").select("*").range(0,5000);
+  const{data,error}=await supabase.from("positions_combined").select("*").range(0,10000);
   if(error){console.error(error);return;}
   setVessels((data||[]).map(r=>({
     id:          r.id||"",
