@@ -2583,7 +2583,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [bucketFilters,setBucketFilters]=useState(new Set()); // set of active bucket keys
   const [posFileDaysBack,setPosFileDaysBack]=useState(90); // 0=today only, 90=show all
   const [posPage,setPosPage]=useState(1);
-  const POS_PAGE_SIZE=50;
+  const POS_PAGE_SIZE=100;
   const [superRegionFilter,setSuperRegionFilter]=useState("");
   const [segmentFilter,setSegmentFilter]=useState("");
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
@@ -4301,27 +4301,22 @@ export default function TankPos(){
   }
 
   async function fetchPositions(){
-  const{data,error}=await supabase.from("positions_combined").select("*")
-  .order("last_updated",{ascending:false}).limit(3000);
-  if(error){console.error("fetchPositions error:",error);return;}
-  console.log("fetchPositions got:",data?.length,"rows, sources:",[...new Set((data||[]).map(r=>r.source))]);
-  // Sort: manual first, then external
-  const sorted=(data||[]).sort((a,b)=>{
-    if(a.source==="manual"&&b.source!=="manual")return -1;
-    if(a.source!=="manual"&&b.source==="manual")return 1;
-    return 0;
-  });
-  // Deduplicate by vessel name - manual entries win over external
-  const seen=new Set();
-  const deduped=sorted.filter(r=>{
-    const key=String(r.vessel_name||"").toLowerCase().trim();
-    if(!key)return true;
-    if(seen.has(key))return false;
-    seen.add(key);
-    return true;
-  });
-  console.log("After dedup:",deduped.length,"unique vessels");
-  setVessels(deduped.map(r=>({
+  // Load manual positions first (always show these)
+  const{data:manualData,error:manualError}=await supabase.from("positions").select("*");
+  if(manualError)console.error("manual positions error:",manualError);
+  // Load external positions (limited to 3000 most recent)
+  const{data:extData,error:extError}=await supabase.from("positions_external").select("*")
+    .order("file_date",{ascending:false}).limit(3000)
+    .gte("file_date",new Date(Date.now()-90*24*60*60*1000).toISOString());
+  if(extError)console.error("external positions error:",extError);
+  // Combine: manual first, then external - dedupe by vessel name
+  const manualNames=new Set((manualData||[]).map(r=>String(r.vessel||"").toLowerCase().trim()));
+  const combined=[
+    ...(manualData||[]).map(r=>({...r,vessel_name:r.vessel,port_name:r.openPort,open_date:r.date,build_year:r.built,overall_length:r.loa,details:r.comment,last_updated:r.updated_at,source:"manual",file_date:null})),
+    ...(extData||[]).filter(r=>!manualNames.has(String(r.vessel_name||"").toLowerCase().trim()))
+  ];
+  console.log("fetchPositions: manual=",manualData?.length,"external=",extData?.length,"combined=",combined.length);
+  setVessels(combined.map(r=>({
     id:          r.id||"",
     vessel:      r.vessel_name||"",
     operator:    r.operator||"",
