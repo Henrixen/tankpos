@@ -2617,14 +2617,6 @@ const superRegionOptions=["ALL", ...Array.from(new Set(
   vessels.map(v=>String(v.superRegion||"").trim()).filter(Boolean)
 )).sort((a,b)=>a.localeCompare(b))];
 
-const latestFileDate=(()=>{
-  const dates=vessels
-    .map(v=>v.fileDate?new Date(v.fileDate):null)
-    .filter(d=>d && !isNaN(d));
-  if(!dates.length) return null;
-  return new Date(Math.max(...dates.map(d=>d.getTime())));
-})();
-
 function daysAgoDate(days){
   const d=new Date();
   d.setHours(0,0,0,0);
@@ -2679,21 +2671,21 @@ const filtV=useMemo(()=>{
 
   list=list.filter(matchesSearch);
 
-  if(latestFileDate){
-    const fromDate=new Date(latestFileDate);
-    fromDate.setHours(0,0,0,0);
-    fromDate.setDate(fromDate.getDate()-Number(posFileDaysBack||0));
+  {
+  const today=new Date();
+  today.setHours(23,59,59,999);
 
-    const toDate=new Date(latestFileDate);
-    toDate.setHours(23,59,59,999);
+  const fromDate=new Date();
+  fromDate.setHours(0,0,0,0);
+  fromDate.setDate(fromDate.getDate()-Number(posFileDaysBack||0));
 
-    list=list.filter(v=>{
-      if(!v.fileDate) return false;
-      const d=new Date(v.fileDate);
-      if(isNaN(d)) return false;
-      return d>=fromDate && d<=toDate;
-    });
-  }
+  list=list.filter(v=>{
+    if(!v.fileDate) return false;
+    const d=new Date(v.fileDate);
+    if(isNaN(d)) return false;
+    return d>=fromDate && d<=today;
+  });
+}
 
   if(updFilter){
     const now=new Date();
@@ -2744,8 +2736,7 @@ const filtV=useMemo(()=>{
   bucketFilters,
   updFilter,
   posFileDaysBack,
-  superRegionFilter,
-  latestFileDate
+  superRegionFilter
 ]);
 
   const stats={total:vessels.length,ppt:vessels.filter(v=>isOpenPPT(v.date)).length,subs:vessels.filter(v=>v.openPort==="EMPLOYED").length};
@@ -2936,10 +2927,8 @@ const filtV=useMemo(()=>{
       File Date Window
     </span>
     <span style={{fontSize:12,color:C.tx,fontWeight:700}}>
-      {latestFileDate
-        ? `${fmtShortDate(new Date(new Date(latestFileDate).setDate(latestFileDate.getDate()-posFileDaysBack)))} → ${fmtShortDate(latestFileDate)}`
-        : "No file dates"}
-    </span>
+  {`${fmtShortDate(new Date(new Date().setDate(new Date().getDate()-posFileDaysBack)))} → ${fmtShortDate(new Date())}`}
+</span>
   </div>
 
   <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -2959,8 +2948,8 @@ const filtV=useMemo(()=>{
   </div>
 
   <div style={{fontSize:11,color:C.faint}}>
-    Right edge is always the latest file date in the data
-  </div>
+  Right edge is always today
+</div>
 
   <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:2}}>
     <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>
