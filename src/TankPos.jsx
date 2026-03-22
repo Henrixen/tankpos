@@ -2640,81 +2640,115 @@ function fmtShortDate(d){
 }
 
   const filtV=useMemo(()=>{
-    let list=vessels;
-    if(filters.size>0){
-      list=list.filter(v=>{
-        if(filters.has("PPT")&&!isOpenPPT(v.date))return false;
-        if(filters.has("HIDE_EMP")&&v.openPort==="EMPLOYED")return false;
-        if(filters.has("NAP")&&!(v.comment?.toLowerCase().includes("naph")||v.spec?.lastCargo?.toLowerCase().includes("naph")))return false;
-        if(filters.has("SUBS")&&v.openPort!=="EMPLOYED")return false;
-        const reg=classifyRegion(v.openPort);
-        for(const r of["WCUK","ECUK","CANAL","BISCAY","BALTIC","SKAW","MED"]){if(filters.has(r)&&reg!==r)return false;}
-        return true;
-      });
-    }
-    // Bucket filter from opening breakdown (multi-select)
-    if(bucketFilters.size>0){
-      list=list.filter(v=>{
-        if(v.openPort==="EMPLOYED")return false;
-        const d=daysBetween(v.date);
-        const inPPT=d!==null&&d<=1;
-        const in24=d!==null&&d>=2&&d<=4;
-        const in48=d!==null&&d>=5&&d<=8;
-        const in8p=d!==null&&d>8;
-        return(bucketFilters.has("PPT")&&inPPT)||(bucketFilters.has("2-4d")&&in24)||(bucketFilters.has("4-8d")&&in48)||(bucketFilters.has(">8d")&&in8p);
-      });
-    }
-    const normOp=s=>(s||"Unknown").trim().toLowerCase();
-if(opFilter)list=list.filter(v=>normOp(v.operator)===normOp(opFilter));
+  let list=vessels;
 
-if(superRegionFilter!=="ALL"){
-  list=list.filter(v=>String(v.superRegion||"").trim()===superRegionFilter);
-}
+  if(filters.size>0){
+    list=list.filter(v=>{
+      if(filters.has("PPT") && !isOpenPPT(v.date)) return false;
+      if(filters.has("HIDE_EMP") && v.openPort==="EMPLOYED") return false;
+      if(filters.has("NAP") && !(v.comment?.toLowerCase().includes("naph") || v.spec?.lastCargo?.toLowerCase().includes("naph"))) return false;
+      if(filters.has("SUBS") && v.openPort!=="EMPLOYED") return false;
 
-list=list.filter(matchesSearch);
+      const reg=classifyRegion(v.openPort);
+      for(const r of ["WCUK","ECUK","CANAL","BISCAY","BALTIC","SKAW","MED"]){
+        if(filters.has(r) && reg!==r) return false;
+      }
+      return true;
+    });
+  }
 
-if(latestFileDate){
-  const fromDate=new Date(latestFileDate);
-  fromDate.setHours(0,0,0,0);
-  fromDate.setDate(fromDate.getDate()-Number(posFileDaysBack||0));
+  if(bucketFilters.size>0){
+    list=list.filter(v=>{
+      if(v.openPort==="EMPLOYED") return false;
+      const d=daysBetween(v.date);
+      const inPPT=d!==null && d<=1;
+      const in24=d!==null && d>=2 && d<=4;
+      const in48=d!==null && d>=5 && d<=8;
+      const in8p=d!==null && d>8;
+      return (bucketFilters.has("PPT") && inPPT)
+        || (bucketFilters.has("2-4d") && in24)
+        || (bucketFilters.has("4-8d") && in48)
+        || (bucketFilters.has(">8d") && in8p);
+    });
+  }
 
-  const toDate=new Date(latestFileDate);
-  toDate.setHours(23,59,59,999);
+  const normOp=s=>(s||"Unknown").trim().toLowerCase();
+  if(opFilter) list=list.filter(v=>normOp(v.operator)===normOp(opFilter));
 
-  list=list.filter(v=>{
-    if(!v.fileDate) return false;
-    const d=new Date(v.fileDate);
-    if(isNaN(d)) return false;
-    return d>=fromDate && d<=toDate;
-  });
-}
+  if(superRegionFilter!=="ALL"){
+    list=list.filter(v=>String(v.superRegion||"").trim()===superRegionFilter);
+  }
 
-if(updFilter){
+  list=list.filter(matchesSearch);
 
-if(updFilter){
-      
-      const now=new Date();
-      const todayStart=new Date(now);todayStart.setHours(0,0,0,0);
-      const weekStart=new Date(now);weekStart.setHours(0,0,0,0);weekStart.setDate(weekStart.getDate()-((weekStart.getDay()+6)%7)); // Monday
-      list=list.filter(v=>{
-        const ts=v.updatedAt||v.addedAt;if(!ts)return false;
-        const d=new Date(ts);
-        if(updFilter==="today")return d>=todayStart;
-        if(updFilter==="week")return d>=weekStart;
-        return true;
-      });
-    }
-    if(sortK)list=[...list].sort((a,b)=>{
+  if(latestFileDate){
+    const fromDate=new Date(latestFileDate);
+    fromDate.setHours(0,0,0,0);
+    fromDate.setDate(fromDate.getDate()-Number(posFileDaysBack||0));
+
+    const toDate=new Date(latestFileDate);
+    toDate.setHours(23,59,59,999);
+
+    list=list.filter(v=>{
+      if(!v.fileDate) return false;
+      const d=new Date(v.fileDate);
+      if(isNaN(d)) return false;
+      return d>=fromDate && d<=toDate;
+    });
+  }
+
+  if(updFilter){
+    const now=new Date();
+    const todayStart=new Date(now);
+    todayStart.setHours(0,0,0,0);
+
+    const weekStart=new Date(now);
+    weekStart.setHours(0,0,0,0);
+    weekStart.setDate(weekStart.getDate()-((weekStart.getDay()+6)%7));
+
+    list=list.filter(v=>{
+      const ts=v.updatedAt||v.addedAt;
+      if(!ts) return false;
+      const d=new Date(ts);
+      if(updFilter==="today") return d>=todayStart;
+      if(updFilter==="week") return d>=weekStart;
+      return true;
+    });
+  }
+
+  if(sortK){
+    list=[...list].sort((a,b)=>{
       if(sortK==="date"){
         const MON=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
-        const toNum=s=>{if(!s)return 9999;const m=String(s).toLowerCase().match(/^(\d{1,2})\s+([a-z]{3})/);if(!m)return 9999;return MON.indexOf(m[2])*100+parseInt(m[1]);};
-        return(toNum(a.date)-toNum(b.date))*sortD;
+        const toNum=s=>{
+          if(!s) return 9999;
+          const m=String(s).toLowerCase().match(/^(\d{1,2})\s+([a-z]{3})/);
+          if(!m) return 9999;
+          return MON.indexOf(m[2])*100 + parseInt(m[1]);
+        };
+        return (toNum(a.date)-toNum(b.date))*sortD;
       }
-      const av=String(a[sortK]||"").toLowerCase(),bv=String(b[sortK]||"").toLowerCase();
-      return av<bv?-sortD:av>bv?sortD:0;
+
+      const av=String(a[sortK]||"").toLowerCase();
+      const bv=String(b[sortK]||"").toLowerCase();
+      return av<bv ? -sortD : av>bv ? sortD : 0;
     });
-    return list;
-  },[vessels,filters,search,sortK,sortD,opFilter,bucketFilters,updFilter,posFileDaysBack,superRegionFilter,latestFileDate]);
+  }
+
+  return list;
+},[
+  vessels,
+  filters,
+  search,
+  sortK,
+  sortD,
+  opFilter,
+  bucketFilters,
+  updFilter,
+  posFileDaysBack,
+  superRegionFilter,
+  latestFileDate
+]);
 
   const stats={total:vessels.length,ppt:vessels.filter(v=>isOpenPPT(v.date)).length,subs:vessels.filter(v=>v.openPort==="EMPLOYED").length};
   const selV=sel?vessels.find(v=>v.vessel===sel):null;
