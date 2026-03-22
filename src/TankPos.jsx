@@ -2583,7 +2583,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [bucketFilters,setBucketFilters]=useState(new Set()); // set of active bucket keys
   const [posFileDaysBack,setPosFileDaysBack]=useState(90); // 0=today only, 90=show all
   const [posPage,setPosPage]=useState(1);
-  const POS_PAGE_SIZE=100;
+  const POS_PAGE_SIZE=200;
   const [superRegionFilter,setSuperRegionFilter]=useState("");
   const [segmentFilter,setSegmentFilter]=useState("");
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
@@ -2677,12 +2677,13 @@ const filtV=useMemo(()=>{
 
   list=list.filter(matchesSearch);
 
-  if(posFileDaysBack<90){
+  // fileDate slider filter - only apply when user moves slider below 89
+  if(posFileDaysBack<89){
     const today=new Date();
     today.setHours(23,59,59,999);
     const fromDate=new Date();
     fromDate.setHours(0,0,0,0);
-    fromDate.setDate(fromDate.getDate()-Number(posFileDaysBack||0));
+    fromDate.setDate(fromDate.getDate()-Number(posFileDaysBack));
     list=list.filter(v=>{
       if(!v.fileDate) return true;
       const d=new Date(v.fileDate);
