@@ -2581,7 +2581,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [opFilter,setOpFilter]=useState(null);
   const [updFilter,setUpdFilter]=useState(""); // "" | "today" | "week"
   const [bucketFilters,setBucketFilters]=useState(new Set()); // set of active bucket keys
-  const [posFileDaysBack,setPosFileDaysBack]=useState(28); // 0=today, 28=4 weeks ago
+  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
   const [posPage,setPosPage]=useState(1);
   const POS_PAGE_SIZE=100;
   const [superRegionFilter,setSuperRegionFilter]=useState("");
@@ -2677,7 +2677,7 @@ const filtV=useMemo(()=>{
 
   list=list.filter(matchesSearch);
 
-  if(posFileDaysBack<28){
+  if(posFileDaysBack<90){
     const today=new Date();
     today.setHours(23,59,59,999);
     const fromDate=new Date();
@@ -2934,7 +2934,9 @@ const filtV=useMemo(()=>{
       File Date Window
     </span>
     <span style={{fontSize:12,color:C.tx,fontWeight:700}}>
-  {`${fmtShortDate(new Date(new Date().setDate(new Date().getDate()-posFileDaysBack)))} → ${fmtShortDate(new Date())}`}
+  {posFileDaysBack===0
+      ? `Today only`
+      : `${fmtShortDate(new Date(new Date().setDate(new Date().getDate()-posFileDaysBack)))} → ${fmtShortDate(new Date())}`}
 </span>
   </div>
 
@@ -2943,14 +2945,14 @@ const filtV=useMemo(()=>{
     <input
       type="range"
       min="0"
-      max="28"
+      max="90"
       step="1"
-      value={posFileDaysBack}
-      onChange={e=>setPosFileDaysBack(Number(e.target.value))}
+      value={90-posFileDaysBack}
+      onChange={e=>setPosFileDaysBack(90-Number(e.target.value))}
       style={{flex:1}}
     />
     <span style={{fontSize:11,color:C.dim,width:80,textAlign:"right"}}>
-      {posFileDaysBack}d back
+      {posFileDaysBack===0?"Today only":posFileDaysBack+"d window"}
     </span>
   </div>
 
@@ -4308,7 +4310,7 @@ export default function TankPos(){
     vessel:      r.vessel_name||"",
     operator:    r.operator||"",
     openPort:    r.port_name||"",
-    date:        r.open_date?(()=>{const s=String(r.open_date);if(/^\d{1,2}\s[A-Za-z]/.test(s))return s;const d=new Date(s);if(isNaN(d))return s;return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});})():"",
+    date:        r.open_date?(()=>{const s=String(r.open_date);if(/^\d{1,2}\s[A-Za-z]/.test(s))return s;const d=new Date(s);if(isNaN(d))return s;const day=d.getDate();const mon=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];return day+" "+mon;})():"",
     dwt:         r.dwt||null,
     built:       r.build_year||null,
     loa:         r.overall_length||null,
