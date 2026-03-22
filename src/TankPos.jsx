@@ -4304,7 +4304,16 @@ export default function TankPos(){
   .order("last_updated",{ascending:false}).limit(3000);
   if(error){console.error("fetchPositions error:",error);return;}
   console.log("fetchPositions got:",data?.length,"rows, sources:",[...new Set((data||[]).map(r=>r.source))]);
-  setVessels((data||[]).map(r=>({
+  // Deduplicate: manual entries override external for same vessel name
+  const seen=new Set();
+  const deduped=(data||[]).filter(r=>{
+    const key=String(r.vessel_name||"").toLowerCase().trim();
+    if(!key)return true;
+    if(seen.has(key))return false;
+    seen.add(key);
+    return true;
+  });
+  setVessels(deduped.map(r=>({
     id:          r.id||"",
     vessel:      r.vessel_name||"",
     operator:    r.operator||"",
