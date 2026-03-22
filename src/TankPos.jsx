@@ -2680,19 +2680,15 @@ const filtV=useMemo(()=>{
   {
   const today=new Date();
   today.setHours(23,59,59,999);
-
   const fromDate=new Date();
   fromDate.setHours(0,0,0,0);
-  const hasExternalVessels=list.some(v=>v.fileDate);
-  if(hasExternalVessels){
-    fromDate.setDate(fromDate.getDate()-Number(posFileDaysBack||0));
-    list=list.filter(v=>{
-      if(!v.fileDate) return true;
-      const d=new Date(v.fileDate);
-      if(isNaN(d)) return false;
-      return d>=fromDate && d<=today;
-    });
-  }
+  fromDate.setDate(fromDate.getDate()-Number(posFileDaysBack||0));
+  list=list.filter(v=>{
+    if(!v.fileDate) return true;
+    const d=new Date(v.fileDate);
+    if(isNaN(d)) return true;
+    return d>=fromDate && d<=today;
+  });
 }
 
   if(updFilter){
@@ -3106,18 +3102,13 @@ const filtV=useMemo(()=>{
                     </tbody>
                   </table>
                 </div>
-                {/* Positions pagination */}
-                {Math.ceil(filtV.length/POS_PAGE_SIZE)>1&&(
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"10px",flexWrap:"wrap"}}>
-                    <button onClick={()=>setPosPage(p=>Math.max(1,p-1))} disabled={posPage===1}
-                      style={{fontSize:12,padding:"3px 10px",borderRadius:4,border:"1px solid "+C.bd,background:C.bg3,color:posPage===1?C.faint:C.blue,cursor:posPage===1?"default":"pointer",fontFamily:"inherit"}}>← Prev</button>
-                    {Array.from({length:Math.ceil(filtV.length/POS_PAGE_SIZE)},(_,i)=>i+1).map(p=>(
-                      <button key={p} onClick={()=>setPosPage(p)}
-                        style={{fontSize:12,padding:"3px 8px",borderRadius:4,border:"1px solid "+(p===posPage?C.blue:C.bd),background:p===posPage?"rgba(88,166,255,.15)":C.bg3,color:p===posPage?C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",fontWeight:p===posPage?700:400}}>{p}</button>
-                    ))}
-                    <button onClick={()=>setPosPage(p=>Math.min(Math.ceil(filtV.length/POS_PAGE_SIZE),p+1))} disabled={posPage===Math.ceil(filtV.length/POS_PAGE_SIZE)}
-                      style={{fontSize:12,padding:"3px 10px",borderRadius:4,border:"1px solid "+C.bd,background:C.bg3,color:posPage===Math.ceil(filtV.length/POS_PAGE_SIZE)?C.faint:C.blue,cursor:posPage===Math.ceil(filtV.length/POS_PAGE_SIZE)?"default":"pointer",fontFamily:"inherit"}}>Next →</button>
-                    <span style={{fontSize:11,color:C.faint}}>{filtV.length} vessels · page {posPage} of {Math.ceil(filtV.length/POS_PAGE_SIZE)}</span>
+                {/* Positions show more */}
+                {filtV.length>posPage*POS_PAGE_SIZE&&(
+                  <div style={{textAlign:"center",padding:"12px"}}>
+                    <button onClick={()=>setPosPage(p=>p+1)}
+                      style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"5px 18px",color:C.blue,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>
+                      Show more ({filtV.length - posPage*POS_PAGE_SIZE} remaining)
+                    </button>
                   </div>
                 )}
                 {/* Side panel */}
@@ -4309,7 +4300,8 @@ export default function TankPos(){
   }
 
   async function fetchPositions(){
-  const{data,error}=await supabase.from("positions_combined").select("*").limit(10000);
+  const{data,error}=await supabase.from("positions_combined").select("*")
+  .order("last_updated",{ascending:false}).limit(3000);
   if(error){console.error(error);return;}
   setVessels((data||[]).map(r=>({
     id:          r.id||"",
