@@ -3054,7 +3054,7 @@ const filtV=useMemo(()=>{
             <span style={{userSelect:"none",paddingRight:6}}>FILE DATE{sortK==="fileDate"?(sortD>0?" ↑":" ↓"):""}</span>
             <span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["FileDate"]||90;const mv=m=>setColWidthsV(p=>({...p,"FileDate":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/>
           </th>
-          <th style={{...th,width:26,minWidth:26}}></th>
+          <th style={{...th,width:28,minWidth:28,maxWidth:28,textAlign:"right",paddingRight:6}}></th>
         </tr>
       </thead>
                     <tbody>
@@ -3079,7 +3079,7 @@ const filtV=useMemo(()=>{
                             <EC value={v.comment} color={C.dim} placeholder="Comment" onSave={val=>onUpdateV(v.vessel,"comment",val)} data-vid={v.vessel+"-comment"} onTab={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-op"]`)?.click();}} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-comment"]`)?.click();}}/>
                              <td style={{...td,fontSize:12,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",width:colWidthsV.FileDate||90}}>{v.fileDate?new Date(v.fileDate).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
 
-                            <td style={{...td,width:22}} onClick={e=>e.stopPropagation()}>
+                            <td style={{...td,width:28,minWidth:28,maxWidth:28,textAlign:"right",paddingRight:6}} onClick={e=>e.stopPropagation()}>
                               <button onClick={(e)=>{e.stopPropagation();setPendingDel({type:"vessel",id:v.vessel,label:v.vessel});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,padding:"1px 4px",opacity:0.7}} title="Delete">✕</button>
                             </td>
                           </tr>
