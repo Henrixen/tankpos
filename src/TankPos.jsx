@@ -2672,8 +2672,24 @@ const filtV=useMemo(()=>{
   if(superRegionFilter!=="ALL"){
     list=list.filter(v=>String(v.superRegion||"").trim()===superRegionFilter);
   }
-  if(segmentFilter){
+    if(segmentFilter){
     list=list.filter(v=>String(v.segment||"").trim()===segmentFilter);
+  }
+
+  if(posFileDaysBack < 90){
+    const today = new Date();
+    today.setHours(23,59,59,999);
+
+    const cutoff = new Date();
+    cutoff.setHours(0,0,0,0);
+    cutoff.setDate(cutoff.getDate() - posFileDaysBack);
+
+    list = list.filter(v => {
+      if(!v.fileDate) return false;
+      const d = new Date(v.fileDate);
+      if(isNaN(d)) return false;
+      return d >= cutoff && d <= today;
+    });
   }
 
   list=list.filter(matchesSearch);
@@ -4286,7 +4302,12 @@ export default function TankPos(){
   }
 
   async function fetchPositions(){
-  const{data,error}=await supabase.from("positions_latest").select("*").limit(10000);
+  async function fetchPositions(){
+  const{data,error}=await supabase
+    .from("positions_external")
+    .select("*")
+    .order("file_date", { ascending: false })
+    .limit(20000);
   if(error){console.error("fetchPositions error:",error);return;}
   console.log("fetchPositions:",data?.length,"rows");
   const mn=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
