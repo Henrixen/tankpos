@@ -2582,7 +2582,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [opFilter,setOpFilter]=useState(null);
   const [updFilter,setUpdFilter]=useState(""); // "" | "today" | "week"
   const [bucketFilters,setBucketFilters]=useState(new Set()); // set of active bucket keys
-  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
+  const [posFileDaysBack,setPosFileDaysBack]=useState(0);
   const [posPage,setPosPage]=useState(1);
   const POS_PAGE_SIZE=100;
   const [superRegionFilter,setSuperRegionFilter]=useState("ALL");
@@ -2669,50 +2669,48 @@ const filtV=useMemo(()=>{
   const normOp=s=>(s||"Unknown").trim().toLowerCase();
   if(opFilter) list=list.filter(v=>normOp(v.operator)===normOp(opFilter));
 
-  if(superRegionFilter!=="ALL"){
-    list=list.filter(v=>String(v.superRegion||"").trim()===superRegionFilter);
-  }
-    if(segmentFilter){
-    list=list.filter(v=>String(v.segment||"").trim()===segmentFilter);
-  }
+if(superRegionFilter!=="ALL"){
+  list=list.filter(v=>String(v.superRegion||"").trim()===superRegionFilter);
+}
+if(segmentFilter){
+  list=list.filter(v=>String(v.segment||"").trim()===segmentFilter);
+}
 
-  if(posFileDaysBack < 90){
-    const today = new Date();
-    today.setHours(23,59,59,999);
+const todayEnd = new Date();
+todayEnd.setHours(23,59,59,999);
 
-    const cutoff = new Date();
-    cutoff.setHours(0,0,0,0);
-    cutoff.setDate(cutoff.getDate() - posFileDaysBack);
+const cutoff = new Date();
+cutoff.setHours(0,0,0,0);
+cutoff.setDate(cutoff.getDate() - posFileDaysBack);
 
-    list = list.filter(v => {
-      if(!v.fileDate) return false;
-      const d = new Date(v.fileDate);
-      if(isNaN(d)) return false;
-      return d >= cutoff && d <= today;
-    });
-  }
+list = list.filter(v => {
+  if(!v.fileDate) return false;
+  const d = new Date(v.fileDate);
+  if(isNaN(d)) return false;
+  return d >= cutoff && d <= todayEnd;
+});
 
-  list=list.filter(matchesSearch);
+list=list.filter(matchesSearch);
 
-   if(updFilter){
-    const now=new Date();
-    const todayStart=new Date(now);
-    todayStart.setHours(0,0,0,0);
+if(updFilter){
+  const now=new Date();
+  const todayStart=new Date(now);
+  todayStart.setHours(0,0,0,0);
 
-    const weekStart=new Date(now);
-    weekStart.setHours(0,0,0,0);
-    weekStart.setDate(weekStart.getDate()-((weekStart.getDay()+6)%7));
+  const weekStart=new Date(now);
+  weekStart.setHours(0,0,0,0);
+  weekStart.setDate(weekStart.getDate()-((weekStart.getDay()+6)%7));
 
-    list=list.filter(v=>{
-      const ts=v.updatedAt||v.addedAt;
-      if(!ts) return true; // keep vessels without timestamp
-      const d=new Date(ts);
-      if(isNaN(d)) return true;
-      if(updFilter==="today") return d>=todayStart;
-      if(updFilter==="week") return d>=weekStart;
-      return true;
-    });
-  }
+  list=list.filter(v=>{
+    const ts=v.updatedAt||v.addedAt;
+    if(!ts) return true;
+    const d=new Date(ts);
+    if(isNaN(d)) return true;
+    if(updFilter==="today") return d>=todayStart;
+    if(updFilter==="week") return d>=weekStart;
+    return true;
+  });
+}
 
   if(sortK){
     list=[...list].sort((a,b)=>{
@@ -2938,24 +2936,27 @@ const filtV=useMemo(()=>{
       File Date Window
     </span>
     <span style={{fontSize:12,color:C.tx,fontWeight:700}}>
-  {posFileDaysBack>=90?"Showing all positions":`${fmtShortDate(new Date(new Date().setDate(new Date().getDate()-posFileDaysBack)))} → ${fmtShortDate(new Date())}`}
+  {`${fmtShortDate(new Date(new Date().setDate(new Date().getDate()-posFileDaysBack)))} → ${fmtShortDate(new Date())}`}
 </span>
   </div>
 
   <div style={{display:"flex",alignItems:"center",gap:8}}>
     <span style={{fontSize:11,color:C.dim,width:70}}>From</span>
     <input
-      type="range"
-      min="0"
-      max="90"
-      step="1"
-      value={posFileDaysBack}
-      onChange={e=>{setPosFileDaysBack(Number(e.target.value));setPosPage(1);}}
-      style={{flex:1}}
-    />
-    <span style={{fontSize:11,color:C.dim,width:80,textAlign:"right"}}>
-      {posFileDaysBack===90?"All":posFileDaysBack===0?"Today only":posFileDaysBack+"d"}
-    </span>
+  type="range"
+  min="0"
+  max="30"
+  step="1"
+  value={30 - posFileDaysBack}
+  onChange={e=>{
+    setPosFileDaysBack(30 - Number(e.target.value));
+    setPosPage(1);
+  }}
+  style={{flex:1}}
+/>
+<span style={{fontSize:11,color:C.dim,width:80,textAlign:"right"}}>
+  {posFileDaysBack===0 ? "Today only" : posFileDaysBack+"d"}
+</span>
   </div>
 
   <span style={{fontSize:11,color:C.faint}}>
