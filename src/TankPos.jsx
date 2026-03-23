@@ -1285,7 +1285,7 @@ function EC({value,color,placeholder,onSave,bold,onTab,onShiftTab,onEnter,...res
   if(ed)return(
     <td onClick={e=>e.stopPropagation()} style={{padding:"3px 5px",background:"rgba(88,166,255,.06)",outline:"1px solid rgba(88,166,255,.4)",verticalAlign:"middle"}}>
       <input ref={ref} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={commit} onKeyDown={onKey} placeholder={placeholder||""}
-        style={{background:C.bg,border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"1px 4px",width:"100%",outline:"none",boxSizing:"border-box",textTransform:"uppercase"}}
+        style={{background:C.bg,border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"1px 4px",width:"100%",outline:"none",boxSizing:"border-box",textTransform:"uppercase"}}/>
     </td>
   );
   return(
