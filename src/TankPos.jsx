@@ -4302,75 +4302,39 @@ export default function TankPos(){
   }
 
   async function fetchPositions(){
-  // Fetch manual positions
-  const{data:manualData}=await supabase.from("positions").select("*");
-  // Fetch most recent external positions (last 90 days, max 3000)
-  const cutoff=new Date(Date.now()-90*24*60*60*1000).toISOString();
-  const{data:extData}=await supabase.from("positions_external").select("*")
-    .eq("most_recent","Yes").order("file_date",{ascending:false}).limit(5000);
-  // Manual vessel names take priority - remove external duplicates
-  const manualNames=new Set((manualData||[]).map(r=>String(r.vessel||"").toLowerCase().trim()).filter(Boolean));
-  // Normalise manual rows to common shape
-  const manualRows=(manualData||[]).map(r=>({
-    _src:"manual",
-    vessel:      String(r.vessel||"").toUpperCase(),
-    operator:    r.operator||"",
-    openPort:    r.openPort||r.port_name||"",
-    date:        r.date||"",
-    dwt:         r.dwt||null,
-    built:       r.built||r.build_year||null,
-    loa:         r.loa||r.overall_length||null,
-    beam:        r.beam||null,
-    cbm:         r.cbm||null,
-    comment:     r.comment||r.details||"",
-    spec:        r.spec||null,
-    updatedAt:   r.updated_at||r.updatedAt||null,
-    fileDate:    null,
-    segment:     r.segment||"",
-    superRegion: r.super_region||"",
-    last3:       r.last_3_cargoes||"",
-    dirtyClean:  r.dirty_clean||"",
-    source:      "manual",
-    id:          r.id||"",
+  const{data,error}=await supabase.from("positions_combined").select("*").limit(10000);
+  if(error){console.error("fetchPositions error:",error);return;}
+  console.log("fetchPositions:",data?.length,"rows");
+  const mn=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  setVessels((data||[]).map(r=>{
+    const rawDate=String(r.open_date||"");
+    let fmtDate=rawDate;
+    if(rawDate&&!/^\d{1,2}\s[A-Za-z]/.test(rawDate)){
+      const d=new Date(rawDate);
+      if(!isNaN(d))fmtDate=d.getDate()+" "+mn[d.getMonth()];
+    }
+    return{
+      id:          String(r.id||""),
+      vessel:      String(r.vessel_name||"").toUpperCase(),
+      operator:    r.operator||"",
+      openPort:    r.port_name||"",
+      date:        fmtDate,
+      dwt:         r.dwt||null,
+      built:       r.build_year||null,
+      loa:         r.overall_length||null,
+      beam:        r.beam||null,
+      comment:     r.details||"",
+      last3:       r.last_3_cargoes||"",
+      dirtyClean:  r.dirty_clean||"",
+      iceClass:    r.ice_class||"",
+      segment:     r.segment||"",
+      superRegion: r.super_region||"",
+      updatedAt:   r.last_updated||"",
+      fileDate:    r.file_date||null,
+      source:      r.source||"manual",
+    };
   }));
-  // Normalise external rows, skip if vessel already in manual
-  const extRows=(extData||[])
-    .filter(r=>!manualNames.has(String(r.vessel_name||r.vessel||"").toLowerCase().trim()))
-    .map(r=>{
-      const rawDate=r.open_date||r.date||"";
-      let fmtDate=rawDate;
-      if(rawDate&&!/^\d{1,2}\s[A-Za-z]/.test(rawDate)){
-        const d=new Date(rawDate);
-        if(!isNaN(d)){const day=d.getDate();const mon=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];fmtDate=day+" "+mon;}
-      }
-      return{
-        _src:"external",
-        vessel:      String(r.vessel_name||r.vessel||"").toUpperCase(),
-        operator:    r.operator||"",
-        openPort:    r.port_name||r.openPort||"",
-        date:        fmtDate,
-        dwt:         r.dwt||null,
-        built:       r.build_year||r.built||null,
-        loa:         r.overall_length||r.loa||null,
-        beam:        r.beam||null,
-        cbm:         null,
-        comment:     r.details||r.comment||"",
-        spec:        null,
-        updatedAt:   r.updated_at||r.last_updated||null,
-        fileDate:    r.file_date||null,
-        segment:     r.segment||"",
-        superRegion: r.super_region||"",
-        last3:       r.last_3_cargoes||"",
-        dirtyClean:  r.dirty_clean||"",
-        source:      "external",
-        id:          String(r.id||""),
-      };
-    });
-  const combined=[...manualRows,...extRows];
-  console.log("Positions loaded: manual=",manualRows.length,"external=",extRows.length,"total=",combined.length);
-  setVessels(combined);
 }
-
   async function loadMoreCargoes(){
     const{data,error}=await supabase.from("cargoes").select("*")
       .range(cargoes.length,cargoes.length+199).order("updated",{ascending:false});
