@@ -4307,7 +4307,7 @@ export default function TankPos(){
   // Fetch most recent external positions (last 90 days, max 3000)
   const cutoff=new Date(Date.now()-90*24*60*60*1000).toISOString();
   const{data:extData}=await supabase.from("positions_external").select("*")
-    .gte("file_date",cutoff).order("file_date",{ascending:false}).limit(3000);
+    .eq("most_recent","Yes").order("file_date",{ascending:false}).limit(5000);
   // Manual vessel names take priority - remove external duplicates
   const manualNames=new Set((manualData||[]).map(r=>String(r.vessel||"").toLowerCase().trim()).filter(Boolean));
   // Normalise manual rows to common shape
