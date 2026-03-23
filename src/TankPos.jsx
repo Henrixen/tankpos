@@ -2677,22 +2677,7 @@ const filtV=useMemo(()=>{
 
   list=list.filter(matchesSearch);
 
-  // fileDate slider filter - only apply when user moves slider below 89
-  if(posFileDaysBack<89){
-    const today=new Date();
-    today.setHours(23,59,59,999);
-    const fromDate=new Date();
-    fromDate.setHours(0,0,0,0);
-    fromDate.setDate(fromDate.getDate()-Number(posFileDaysBack));
-    list=list.filter(v=>{
-      if(!v.fileDate) return true;
-      const d=new Date(v.fileDate);
-      if(isNaN(d)) return true;
-      return d>=fromDate && d<=today;
-    });
-  }
-
-  if(updFilter){
+   if(updFilter){
     const now=new Date();
     const todayStart=new Date(now);
     todayStart.setHours(0,0,0,0);
