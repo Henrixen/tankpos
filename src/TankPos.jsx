@@ -2585,7 +2585,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [posFileDaysBack,setPosFileDaysBack]=useState(90);
   const [posPage,setPosPage]=useState(1);
   const POS_PAGE_SIZE=99999;
-  const [superRegionFilter,setSuperRegionFilter]=useState("");
+  const [superRegionFilter,setSuperRegionFilter]=useState("ALL");
   const [segmentFilter,setSegmentFilter]=useState("");
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
