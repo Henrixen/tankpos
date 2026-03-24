@@ -1033,7 +1033,7 @@ Rules:
       )}
 
       {/* Item list */}
-      <div style={{display:"flex",flexDirection:"column",gap:3,maxHeight:200,overflowY:"auto"}}>
+      <div style={{display:"flex",flexDirection:"column",gap:3,maxHeight:200,overflowY:"auto",scrollbarWidth:"thin",scrollbarColor:C.bd2+" transparent"}}>
         {filtered.length===0&&<div style={{fontSize:12,color:C.faint,fontStyle:"italic"}}>Nothing stored yet.</div>}
         {filtered.map(item=>{
           const col=TAG_COLORS[item.tag]||C.dim;
