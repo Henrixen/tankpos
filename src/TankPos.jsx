@@ -4376,23 +4376,22 @@ export default function TankPos(){
     });
 
     const rows = parsed.map(v => {
-      const ev = enrichV(v, vdb);
-      return {
-        vessel_name: ev.vessel,
-        operator:    ev.operator || null,
-        port_name:   ev.openPort || null,
-        open_date:   ev.date || null,
-        dwt:         ev.dwt || null,
-        build_year:  ev.built || null,
-        overall_length: ev.loa || null,
-        beam:        ev.beam || null,
-        details:     ev.comment || null,
-        spec:        ev.spec || null,
-        file_date:   nowIso,
-        updated_at:  nowIso,
-        source:      "manual",
-      };
-    });
+  const ev = enrichV(v, vdb);
+  return {
+    vessel_name: ev.vessel,
+    operator:    ev.operator || null,
+    port_name:   ev.openPort || null,
+    open_date:   ev.date || null,
+    dwt:         ev.dwt || null,
+    build_year:  ev.built || null,
+    overall_length: ev.loa || null,
+    beam:        ev.beam || null,
+    details:     ev.comment || null,
+    file_date:   nowIso,
+    updated_at:  nowIso,
+    source:      "manual",
+  };
+});
 
     const { error } = await supabase.from("positions_external").upsert(rows, { onConflict: "vessel_name" });
     if (error) console.error("positions_external upsert error:", error);
