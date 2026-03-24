@@ -3032,7 +3032,6 @@ const filtV=useMemo(()=>{
         <col style={{width:colWidthsV.Date||72}}/>
         <col style={{width:colWidthsV.OpenPort||110}}/>
         <col style={{width:colWidthsV.Comment||130}}/>
-        <col style={{width:colWidthsV.FileDate||90}}/> {/* New Column Width */}
         <col style={{width:colWidthsV.FileDate||90}}/>
         <col style={{width:18}}/>
       </colgroup>
