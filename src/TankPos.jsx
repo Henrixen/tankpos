@@ -4381,7 +4381,7 @@ export default function TankPos(){
     vessel_name: ev.vessel,
     operator:    ev.operator || null,
     port_name:   ev.openPort || null,
-    open_date:   ev.date || null,
+    open_date: ev.date ? toISODate(ev.date) : null,
     dwt: ev.dwt ? parseFloat(String(ev.dwt).replace(/\s/g,"").replace(/[^0-9.]/g,"")) || null : null,
     build_year:  ev.built || null,
     overall_length: ev.loa || null,
