@@ -4376,8 +4376,9 @@ export default function TankPos(){
     });
 
     const rows = parsed.map(v => {
-  const ev = enrichV(v, vdb);
-  return {
+    const ev = enrichV(v, vdb);
+    return {
+    id: ev.vessel.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,""),
     vessel_name: ev.vessel,
     operator:    ev.operator || null,
     port_name:   ev.openPort || null,
