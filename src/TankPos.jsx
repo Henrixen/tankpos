@@ -2577,7 +2577,8 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [tab,setTab]=useState("pos");
   const [search,setSearch]=useState("");
   const [filters,setFilters]=useState(new Set());
-  const [sortK,setSortK]=useState(null);const [sortD,setSortD]=useState(1);
+  const [sortK,setSortK]=useState("fileDate");
+  const [sortD,setSortD]=useState(-1);
   const [sel,setSel]=useState(null);
   const [opFilter,setOpFilter]=useState(null);
   const [updFilter,setUpdFilter]=useState(""); // "" | "today" | "week"
