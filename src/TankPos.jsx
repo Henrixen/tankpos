@@ -4339,7 +4339,7 @@ export default function TankPos(){
   const fieldMap={openPort:"port_name",date:"open_date",built:"build_year",loa:"overall_length",comment:"details",operator:"operator",dwt:"dwt",beam:"beam"};
 const dbField=fieldMap[field]||field;
 const dbValue=field==="date"?toISODate(value):value;
-const{error}=await supabase.from("positions_external").update({[dbField]:dbValue,updated_at:new Date().toISOString()}).eq("vessel_name",name);
+const{error}=await supabase.from("positions_external").update({[dbField]:dbValue,updated_at:new Date().toISOString()}).ilike("vessel_name",name);
   if(error)console.error(error);
 },[]);
 
