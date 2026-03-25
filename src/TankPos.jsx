@@ -4378,7 +4378,6 @@ export default function TankPos(){
     const rows = parsed.map(v => {
     const ev = enrichV(v, vdb);
     return {
-    id: ev.vessel.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,""),
     vessel_name: ev.vessel,
     operator:    ev.operator || null,
     port_name:   ev.openPort || null,
@@ -4394,7 +4393,7 @@ export default function TankPos(){
   };
 });
 
-    const { error } = await supabase.from("positions_external").upsert(rows, { onConflict: "vessel_name" });
+    const { error } = await supabase.from("positions_external").insert(rows);
     if (error) console.error("positions_external upsert error:", error);
     else console.log("positions saved ok:", rows.length, "rows");
     
