@@ -4337,8 +4337,9 @@ export default function TankPos(){
   const updateV=useCallback(async(name,field,value)=>{
   setVessels(prev=>{const now2=new Date().toISOString();const next=prev.map(v=>{if(v.vessel!==name)return v;if(field.includes(".")){const[a,b]=field.split(".");return{...v,updatedAt:now2,[a]:{...(v[a]||{}),[b]:value||null}};}const extra=field==="operator"?{operatorManual:true}:{};return{...v,updatedAt:now2,[field]:value||null,...extra};});saveV(next);return next;});
   const fieldMap={openPort:"port_name",date:"open_date",built:"build_year",loa:"overall_length",comment:"details",operator:"operator",dwt:"dwt",beam:"beam"};
-  const dbField=fieldMap[field]||field;
-  const{error}=await supabase.from("positions_external").update({[dbField]:value,updated_at:new Date().toISOString()}).eq("vessel_name",name);
+const dbField=fieldMap[field]||field;
+const dbValue=field==="date"?toISODate(value):value;
+const{error}=await supabase.from("positions_external").update({[dbField]:dbValue,updated_at:new Date().toISOString()}).eq("vessel_name",name);
   if(error)console.error(error);
 },[]);
 
