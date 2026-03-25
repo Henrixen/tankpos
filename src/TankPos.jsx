@@ -4413,15 +4413,18 @@ export default function TankPos(){
       const existingIds=new Set(prev.map(c=>c.id));
       const toAdd=stamped.filter(f=>{
         if(existingIds.has(f.id))return false;
-        if(f.charterer&&f.load&&f.disch&&f.from){
-          const isDup=prev.some(e=>
-            (e.charterer||"").toLowerCase()===(f.charterer||"").toLowerCase()&&
-            (e.load||"").toLowerCase()===(f.load||"").toLowerCase()&&
-            (e.disch||"").toLowerCase()===(f.disch||"").toLowerCase()&&
-            (e.from||"")===(f.from||"")
-          );
-          if(isDup)return false;
-        }
+        if(f.charterer&&f.load&&f.from){
+  const dupIdx=prev.findIndex(e=>
+    (e.charterer||"").toLowerCase()===(f.charterer||"").toLowerCase()&&
+    (e.load||"").toLowerCase()===(f.load||"").toLowerCase()&&
+    (e.from||"")===(f.from||"")
+  );
+  if(dupIdx>=0){
+    // Update existing record instead of adding new
+    prev[dupIdx]={...prev[dupIdx],...f};
+    return false;
+  }
+}
         return true;
       });
       added=toAdd.length;
