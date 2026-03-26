@@ -2835,7 +2835,7 @@ const filtV=useMemo(()=>{
                   <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={vesselDB}/>
                 </div>
                 <div style={{flex:1,overflow:"visible"}}>
-                xingWindow vessels={vessels} opFilter={opFilter} onOpFilter={op=>setOpFilt
+                <FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)}/>
               </div>
               </div>
               {/* Rate Matrix — desktop only */}
