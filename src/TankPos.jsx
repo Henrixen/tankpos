@@ -190,11 +190,14 @@ function addDays(dateStr, days) {
   return String(d.getDate()).padStart(2,"0") + " " + MON_DISPLAY[d.getMonth()];
 }
 
-function daysBetween(dateStr) {
+function daysBetween(dateStr, baseDate = null) {
   const d = parseDate(dateStr);
   if (!d) return null;
-  const today = new Date(); today.setHours(0,0,0,0);
-  return Math.round((d - today)/(86400000));
+
+  const ref = baseDate ? new Date(baseDate) : new Date();
+  ref.setHours(0,0,0,0);
+
+  return Math.round((d - ref) / 86400000);
 }
 
 function isOpenPPT(dateStr) {
@@ -1357,12 +1360,15 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
 }
 
 
-function FixingWindow({vessels, opFilter, onOpFilter}){
-  const openVessels = vessels.filter(v=>v.date&&v.openPort&&v.openPort!=="EMPLOYED");
-  if(!openVessels.length)return null;
+function FixingWindow({vessels, fileDate, opFilter, onOpFilter}){
+  const openVessels = vessels.filter(v => v.date && v.openPort && v.openPort !== "EMPLOYED");
+  if(!openVessels.length) return null;
 
-  const withDays = openVessels.map(v=>({...v,days:daysBetween(v.date)})).filter(v=>v.days!==null);
-  if(!withDays.length)return null;
+  const withDays = openVessels
+    .map(v => ({ ...v, days: daysBetween(v.date, fileDate) }))
+    .filter(v => v.days !== null);
+
+  if(!withDays.length) return null;
 
   const mean=arr=>arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0;
   const avgR=arr=>arr.length?Math.round(mean(arr)):null;
@@ -2835,7 +2841,7 @@ const filtV=useMemo(()=>{
                   <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={vesselDB}/>
                 </div>
                 <div style={{flex:1,overflow:"visible"}}>
-                <FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)}/>
+                <FixingWindow vessels={filtV}fileDate={fileDate} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)}/>
               </div>
               </div>
               {/* Rate Matrix — desktop only */}
