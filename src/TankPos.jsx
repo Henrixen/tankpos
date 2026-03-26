@@ -1156,7 +1156,7 @@ function RightPanel({vessels,cargoes}){
 
 
 // ─── ParsePanel ───────────────────────────────────────────────────────────────
-function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vesselDB = {}}){
+function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vesselDB = {}, posDate, setPosDate})
   const [mode,setMode]=useState(lockedMode||"pos");
   const [text,setText]=useState("");const [img,setImg]=useState(null);
   const [busy,setBusy]=useState(false);const [status,setStatus]=useState(null);
@@ -2841,7 +2841,7 @@ const filtV=useMemo(()=>{
                   <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={vesselDB}/>
                 </div>
                 <div style={{flex:1,overflow:"visible"}}>
-                <FixingWindow vessels={filtV} fileDate={fileDate} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} />
+                <FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} />
               </div>
               </div>
               {/* Rate Matrix — desktop only */}
