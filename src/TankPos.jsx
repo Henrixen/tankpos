@@ -1161,8 +1161,6 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
   const [text,setText]=useState("");const [img,setImg]=useState(null);
   const [busy,setBusy]=useState(false);const [status,setStatus]=useState(null);
   const fRef=useRef(null);const xlsRef=useRef(null);
-  const todayISO=()=>new Date().toISOString().slice(0,10);
-  const [posDate,setPosDate]=useState(todayISO);
 
   async function handleXls(file){
     if(!file)return;
