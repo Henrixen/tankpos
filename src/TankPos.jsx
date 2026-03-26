@@ -2841,7 +2841,7 @@ const filtV=useMemo(()=>{
                   <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={vesselDB}/>
                 </div>
                 <div style={{flex:1,overflow:"visible"}}>
-                <FixingWindow vessels={filtV}fileDate={fileDate} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)}/>
+                <FixingWindow vessels={filtV} fileDate={fileDate} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} />
               </div>
               </div>
               {/* Rate Matrix — desktop only */}
@@ -3943,7 +3943,7 @@ function Dashboard({vessels, cargoes, history}) {
   
   // Fleet stats
   const openVessels = vessels.filter(v=>v.date&&v.openPort&&v.openPort!=="EMPLOYED");
-  const withDays = openVessels.map(v=>({...v,days:daysBetween(v.date)})).filter(v=>v.days!==null);
+  const withDays = openVessels.map(v => ({ ...v, days: daysBetween(v.date, fileDate) })).filter(v => v.days !== null);
   const fleetAvg = withDays.length ? Math.round(withDays.reduce((a,b)=>a+b.days,0)/withDays.length) : null;
 
   // Region breakdown
@@ -4238,6 +4238,7 @@ export default function TankPos(){
   const [hasMore,setHasMore]=useState(false);
   const searchTimer=useRef(null);
   const [mobile,setMobile]=useState(()=>isMobile());
+  const [fileDate, setFileDate] = useState(() => new Date().toISOString().slice(0,10));
 
     useEffect(()=>{
   (async()=>{
