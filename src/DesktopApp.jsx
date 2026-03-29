@@ -576,19 +576,67 @@ const filtV=useMemo(()=>{
     })}
   </>
 )}
-            {/* Positions show more */}
-            {filtV.length>posPage*POS_PAGE_SIZE&&(
-              <div style={{textAlign:"center",padding:"12px 0"}}>
-                <button onClick={()=>setPosPage(p=>p+1)}
-                  style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"5px 18px",color:C.blue,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>
-                  Show more ({filtV.length - posPage*POS_PAGE_SIZE} remaining)
-                </button>
+                                    {/* Show More Button */}
+                        {filtV.length > posPage * POS_PAGE_SIZE && (
+                          <div style={{ textAlign: "center", padding: "12px 0" }}>
+                            <button 
+                              onClick={() => setPosPage(p => p + 1)}
+                              style={{
+                                background: "none",
+                                border: "1px solid " + C.blue,
+                                borderRadius: 4,
+                                padding: "5px 18px",
+                                color: C.blue,
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                                fontSize: 12,
+                                fontWeight: 700
+                              }}
+                            >
+                              Show more ({filtV.length - posPage * POS_PAGE_SIZE} remaining)
+                            </button>
+                          </div>
+                        )}
+                      </div> {/* End of Table Container */}
+
+                    </div> {/* End of Table + Side Panel Flex */}
+
+                    {/* Side Panel - Selected Vessel */}
+                    {selV && (
+                      <div style={{
+                        width: 240,
+                        flexShrink: 0,
+                        background: C.bg2,
+                        border: "1px solid " + C.bd,
+                        borderRadius: 7,
+                        overflow: "hidden",
+                        position: "sticky",
+                        top: 56,
+                        alignSelf: "flex-start",
+                        maxHeight: "calc(100vh - 70px)",
+                        display: "flex",
+                        flexDirection: "column"
+                      }}>
+                        <div style={{ padding: "8px 12px", background: C.bg, borderBottom: "1px solid " + C.bd2, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0 }}>
+                          <div>
+                            <div style={{ fontFamily: "sans-serif", fontWeight: 800, fontSize: 12, color: C.blue }}>
+                              {toTCase(selV.vessel)}
+                            </div>
+                            <div style={{ fontSize: 12, color: C.purple }}>{selV.operator || ""}</div>
+                          </div>
+                          <button onClick={() => setSel(null)} style={{ background: "none", border: "none", color: C.dim, fontSize: 14, cursor: "pointer" }}>✕</button>
+                        </div>
+
+                        <div style={{ padding: "8px 12px", overflowY: "auto", flex: 1 }}>
+                          {/* Your existing side panel fields go here */}
+                          {/* Copy-paste your original side panel content (Open Port, Date, Comment, Spec, Notes, Fixtures) from the previous version */}
+                        </div>
+                      </div>
+                    )}
+                  </div> {/* End of Positions Tab Main Container */}
+                ) : null}
               </div>
             )}
-            </div> {/* Closes the scrollable padding div */}
-                  </div> /* Closes the side panel container */
-                )} 
-              </div> {/* Closes the Table + side panel flex wrapper */}
 
         {/* ── CARGOES ── */}
         {tab==="cargo"&&(
