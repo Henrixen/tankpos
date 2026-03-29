@@ -557,15 +557,25 @@ const filtV=useMemo(()=>{
                       <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em",padding:"6px 0 3px",borderBottom:"1px solid "+C.bd2,marginTop:4}}>Notes</div>
                       <EC value={selV.notes} color={C.dim} placeholder="Add vessel notes…" onSave={v2=>onUpdateV(selV.vessel,"notes",v2)}/>
                       {selFixes.length?(<>
-                        <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em",padding:"6px 0 3px",borderBottom:"1px solid "+C.bd2}}>Fixtures ({selFixes.length})</div>
-                        const col=f.status==="FIXED"?C.green:f.status==="SUBS"?C.purple:f.status==="FAILED"?C.red:C.blue;return(
-                          <div key={f.id} style={{background:C.bg,border:"1px solid "+col+"33",borderRadius:4,padding:"5px 8px",marginBottom:4,marginTop:3}}>
-                            <div style={{fontFamily:"sans-serif",fontWeight:700,fontSize:12,color:col}}>{f.status}{f.from?" · "+f.from+(f.to?" - "+f.to:""):""}</div>
-                            <div style={{fontSize:12,fontWeight:600}}>{f.load||"?"}→{f.disch||"?"}</div>
-                            {f.freight&&<div style={{fontSize:12,color:C.purple}}>{f.freight}</div>}
-                          </div>
-                        );})}
-                      </>):null}
+                        {selFixes && selFixes.length > 0 ? (
+  <>
+    <div style={{fontSize:12, fontWeight:700, color:C.faint, textTransform:"uppercase", letterSpacing:"0.09em", padding:"6px 0 3px", borderBottom:"1px solid "+C.bd2}}>
+      Fixtures ({selFixes.length})
+    </div>
+    {selFixes.map((f) => {
+      const col = f.status === "FIXED" ? C.green : f.status === "SUBS" ? C.purple : f.status === "FAILED" ? C.red : C.blue;
+      return (
+        <div key={f.id} style={{background:C.bg, border:"1px solid "+col+"33", borderRadius:4, padding:"5px 8px", marginBottom:4, marginTop:3}}>
+          <div style={{fontFamily:"sans-serif", fontWeight:700, fontSize:12, color:col}}>
+            {f.status}{f.from ? ` · ${f.from}` : ""}{f.to ? ` - ${f.to}` : ""}
+          </div>
+          <div style={{fontSize:12, fontWeight:600}}>{f.load || "?"} → {f.disch || "?"}</div>
+          {f.freight && <div style={{fontSize:12, color:C.purple}}>{f.freight}</div>}
+        </div>
+      );
+    })}
+  </>
+) : null}
                     </div>
                   </div>
                 )}
