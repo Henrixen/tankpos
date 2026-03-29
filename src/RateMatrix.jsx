@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { C, TCE_DEFAULTS, EU_ROUTES, RATE_ROUTES, RATE_SIZES, REGION_COLORS } from "./constants";
+import { C, TCE_DEFAULTS } from "./constants";
 import { loadRates, saveRates } from "./supabaseHelpers";
 import { calcTCE, calcEuEts } from "./TCECalculator";
 
