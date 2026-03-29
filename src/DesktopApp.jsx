@@ -556,102 +556,41 @@ const filtV=useMemo(()=>{
                       })}
                       <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em",padding:"6px 0 3px",borderBottom:"1px solid "+C.bd2,marginTop:4}}>Notes</div>
                       <EC value={selV.notes} color={C.dim} placeholder="Add vessel notes…" onSave={v2=>onUpdateV(selV.vessel,"notes",v2)}/>
-                      {selFixes.length?(<>
-                        {selFixes && selFixes.length > 0 && (
+                      {selFixes.length > 0 && (
   <>
-    <div style={{fontSize:12, fontWeight:700, color:C.faint, textTransform:"uppercase", letterSpacing:"0.09em", padding:"6px 0 3px", borderBottom:"1px solid "+C.bd2}}>
+    <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em",padding:"6px 0 3px",borderBottom:"1px solid "+C.bd2}}>
       Fixtures ({selFixes.length})
     </div>
     {selFixes.map((f) => {
-      const col = f.status === "FIXED" ? C.green : f.status === "SUBS" ? C.purple : f.status === "FAILED" ? C.red : C.blue;
+      const col =
+        f.status === "FIXED" ? C.green :
+        f.status === "SUBS" ? C.purple :
+        f.status === "FAILED" ? C.red : C.blue;
+
       return (
-        <div key={f.id} style={{background:C.bg, border:"1px solid "+col+"33", borderRadius:4, padding:"5px 8px", marginBottom:4, marginTop:3}}>
-          <div style={{fontFamily:"sans-serif", fontWeight:700, fontSize:12, color:col}}>
+        <div
+          key={f.id}
+          style={{
+            background:C.bg,
+            border:"1px solid "+col+"33",
+            borderRadius:4,
+            padding:"5px 8px",
+            marginBottom:4,
+            marginTop:3
+          }}
+        >
+          <div style={{fontFamily:"sans-serif",fontWeight:700,fontSize:12,color:col}}>
             {f.status}{f.from ? ` · ${f.from}` : ""}{f.to ? ` - ${f.to}` : ""}
           </div>
-          <div style={{fontSize:12, fontWeight:600}}>{f.load || "?"} → {f.disch || "?"}</div>
-          {f.freight && <div style={{fontSize:12, color:C.purple}}>{f.freight}</div>}
+          <div style={{fontSize:12,fontWeight:600}}>
+            {f.load || "?"} → {f.disch || "?"}
+          </div>
+          {f.freight && <div style={{fontSize:12,color:C.purple}}>{f.freight}</div>}
         </div>
       );
     })}
   </>
 )}
-                                                            {/* Show More Button */}
-                        {filtV.length > posPage * POS_PAGE_SIZE && (
-                          <div style={{ textAlign: "center", padding: "12px 0" }}>
-                            <button
-                              onClick={() => setPosPage(p => p + 1)}
-                              style={{
-                                background: "none",
-                                border: "1px solid " + C.blue,
-                                borderRadius: 4,
-                                padding: "5px 18px",
-                                color: C.blue,
-                                cursor: "pointer",
-                                fontFamily: "inherit",
-                                fontSize: 12,
-                                fontWeight: 700
-                              }}
-                            >
-                              Show more ({filtV.length - posPage * POS_PAGE_SIZE} remaining)
-                            </button>
-                          </div>
-                        )}
-                      </div> {/* End Table scroll area */}
-
-                      {/* Side Panel - Selected Vessel */}
-                      {selV && (
-                        <div style={{
-                          width: 240,
-                          flexShrink: 0,
-                          background: C.bg2,
-                          border: "1px solid " + C.bd,
-                          borderRadius: 7,
-                          overflow: "hidden",
-                          position: "sticky",
-                          top: 56,
-                          alignSelf: "flex-start",
-                          maxHeight: "calc(100vh - 70px)",
-                          display: "flex",
-                          flexDirection: "column"
-                        }}>
-                          <div style={{ padding: "8px 12px", background: C.bg, borderBottom: "1px solid " + C.bd2, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0 }}>
-                            <div>
-                              <div style={{ fontFamily: "sans-serif", fontWeight: 800, fontSize: 12, color: C.blue }}>
-                                {toTCase(selV.vessel)}
-                              </div>
-                              <div style={{ fontSize: 12, color: C.purple }}>{selV.operator || ""}</div>
-                            </div>
-                            <button onClick={() => setSel(null)} style={{ background: "none", border: "none", color: C.dim, fontSize: 14, cursor: "pointer" }}>✕</button>
-                          </div>
-
-                          <div style={{ padding: "8px 12px", overflowY: "auto", flex: 1 }}>
-                            {/* Standard Fields */}
-                            {[["Open Port","openPort",C.amber],["Date","date",C.blue],["Comment","comment",C.dim]].map(([l,f,col])=>(
-                                <div key={f} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",gap:4}}>
-                                  <span style={{fontSize:11,color:C.faint}}>{l}</span>
-                                  <EC value={selV[f]} color={col} onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
-                                </div>
-                            ))}
-                            
-                            {/* Fixtures Section */}
-                            {selFixes.length > 0 && (
-                                <div style={{marginTop:10}}>
-                                  <div style={{fontSize:11, fontWeight:700, color:C.faint, textTransform:"uppercase", borderBottom:"1px solid "+C.bd2}}>Fixtures</div>
-                                  {selFixes.map(f => (
-                                    <div key={f.id} style={{fontSize:11, padding:"4px 0"}}>{f.status}: {f.load} → {f.disch}</div>
-                                  ))}
-                                </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div> {/* End Flex Wrapper (Table + Side Panel) */}
-                  </>
-                ) : null}
-              </div> {/* End Positions Tab Content */}
-            )}
-
         {/* ── CARGOES ── */}
         {tab==="cargo"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
