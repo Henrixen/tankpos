@@ -6,7 +6,6 @@ const HK       = "tankpos-history-v1";
 const RATE_KEY = "rates";
 export const WS_STORE = "ws-data";
 
-// ─── loadAll ───
 async function loadAll() {
   let vessels = [], cargoes = [];
   // 1. Fetch your vessel database from Supabase
@@ -40,57 +39,14 @@ allRows.forEach(row => {
   return { vessels, cargoes };
 }
 
-// ─── saveV ───
 async function saveV(v){try{await window.storage.set(SK,JSON.stringify(v),true);}catch(_){}try{localStorage.setItem(SK,JSON.stringify(v));}catch(_){}}
 async function saveC(c){try{await window.storage.set(CK,JSON.stringify(c),true);}catch(_){}try{localStorage.setItem(CK,JSON.stringify(c));}catch(_){}}
 
-// ─── Backup / Restore ─────────────────────────────────────────────────────────
-function backupData(vessels, cargoes){
-  const blob=new Blob([JSON.stringify({vessels,cargoes,exportedAt:new Date().toISOString(),v:2},null,2)],{type:"application/json"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
-  a.download="tankpos-backup-"+new Date().toLocaleDateString("en-GB").replace(/\//g,"-")+".json";
-  a.click();URL.revokeObjectURL(a.href);
-}
-
-// ─── saveC ───
-async function saveC(c){try{await window.storage.set(CK,JSON.stringify(c),true);}catch(_){}try{localStorage.setItem(CK,JSON.stringify(c));}catch(_){}}
-
-// ─── Backup / Restore ─────────────────────────────────────────────────────────
-function backupData(vessels, cargoes){
-  const blob=new Blob([JSON.stringify({vessels,cargoes,exportedAt:new Date().toISOString(),v:2},null,2)],{type:"application/json"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
-  a.download="tankpos-backup-"+new Date().toLocaleDateString("en-GB").replace(/\//g,"-")+".json";
-  a.click();URL.revokeObjectURL(a.href);
-}
-
-// ─── backupData ───
-function backupData(vessels, cargoes){
-  const blob=new Blob([JSON.stringify({vessels,cargoes,exportedAt:new Date().toISOString(),v:2},null,2)],{type:"application/json"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
-  a.download="tankpos-backup-"+new Date().toLocaleDateString("en-GB").replace(/\//g,"-")+".json";
-  a.click();URL.revokeObjectURL(a.href);
-}
-
-// ─── restoreData ───
-function restoreData(file,onVessels,onCargoes){
-  const r=new FileReader();
-  r.onload=e=>{
-    try{
-      const d=JSON.parse(e.target.result);
-      if(d.vessels)onVessels(d.vessels);
-      if(d.cargoes)onCargoes(d.cargoes);
-    }catch(err){alert("Invalid backup file: "+err.message);}
-  };
-  r.readAsText(file);
-}
-
-// ─── loadHistory ───
 async function loadHistory() {
   try { const r = await window.storage.get(HK,true); return r ? JSON.parse(r.value) : []; }
   catch(_) { return JSON.parse(localStorage.getItem(HK)||"[]"); }
 }
 
-// ─── saveSnapshot ───
 async function saveSnapshot(vessels) {
   // Calculate fixing window avg for this snapshot
   const today = new Date(); today.setHours(0,0,0,0);
@@ -129,35 +85,57 @@ async function saveSnapshot(vessels) {
   } catch(_) {}
 }
 
-// ─── loadIntel ───
+
+// ─── Vessel merge ─────────────────────────────────────────────────────────────
+function mKey(inc,keys){if(!inc)return null;const s=inc.toLowerCase().trim();if(keys.has(s))return s;for(const k of keys){const[a,b]=s.length<=k.length?[s.split(" "),k.split(" ")]:[k.split(" "),s.split(" ")];if(a.every(w=>b.includes(w)))return k;}for(const k of keys){if(k.endsWith(s)||s.endsWith(k)||k.startsWith(s)||s.startsWith(k))return k;}return null;}
+function mergeVessels(existing,incoming,vesselDB){
+  const map=new Map(existing.filter(v=>v.vessel).map(v=>[v.vessel.toLowerCase(),v]));
+  const incomingKeys=new Set(incoming.map(v=>v.vessel?.toLowerCase().trim()).filter(Boolean));
+  for(const v of incoming){
+    const rk=v.vessel?.toLowerCase().trim();if(!rk)continue;
+    const mk=mKey(rk,new Set([...map.keys()].filter(Boolean)));const prev=map.get(mk||rk)||{};
+    let merged={...prev};
+    if(!mk||v.vessel.length>(prev.vessel||"").length)merged.vessel=v.vessel;
+    // Check if this is a genuine position update (openPort or date changed) or just a spec match
+    const positionChanged=(v.openPort&&v.openPort!==prev.openPort)||(v.date&&v.date!==prev.date);
+    for(const[k,val]of Object.entries(v)){
+      if(k==="vessel"||val==null||val==="")continue;
+      if(k==="operator"&&prev.operatorManual)continue;
+      // Only update updatedAt if the position data actually changed
+      if(k==="updatedAt"){if(positionChanged||!prev.updatedAt)merged[k]=val;continue;}
+      if(k==="spec"&&typeof val==="object"){merged.spec={...(prev.spec||{})};for(const[sk,sv]of Object.entries(val)){if(sv!=null&&sv!=="")merged.spec[sk]=sv;}}
+      else merged[k]=val;
+    }
+    const canon=(merged.vessel||"").toLowerCase();if(mk&&mk!==canon)map.delete(mk);
+    map.set(canon,enrichV(merged,vesselDB));
+  }
+  return Array.from(map.values());
+}
+function xJSON(raw){if(!raw)throw new Error("Empty");const cl=raw.trim().replace(/^```[\w]*/,"").replace(/```/g,"").trim();try{return JSON.parse(cl);}catch(_){}const s=cl.indexOf("["),e=cl.lastIndexOf("]");if(s>=0&&e>s){try{return JSON.parse(cl.slice(s,e+1));}catch(_){}}throw new Error("Parse failed: "+raw.slice(0,60));}
+
+// ─── API ──────────────────────────────────────────────────────────────────────
+
 async function loadIntel(){
   const {data,error}=await supabase.from("intelvault").select("*").order("created_at",{ascending:false});
   if(error){console.error("loadIntel error:",error);return [];}
   if(!data) return [];
   return data.map(r=>({id:r.id,extracted:r.comment,addedAt:r.created_at,raw:"",hasImg:false}));
 }
-
-// ─── saveIntelItem ───
 async function saveIntelItem(item){
   const {data,error}=await supabase.from("intelvault").insert({comment:item.extracted}).select().single();
   if(error){console.error("saveIntelItem error:",error);return null;}
   return data;
 }
-
-// ─── deleteIntelItem ───
 async function deleteIntelItem(id){
   const {error}=await supabase.from("intelvault").delete().eq("id",id);
   if(error)console.error("deleteIntelItem error:",error);
 }
-
-// ─── loadFixingJobs ───
+// ─── Fixing tab storage ───────────────────────────────────────────────────────
 async function loadFixingJobs(){
   const{data,error}=await supabase.from("fixing_jobs").select("*").order("created_at",{ascending:false});
   if(error){console.error(error);return[];}
   return(data||[]).map(r=>({...r,owners:r.owners||[],tags:r.tags||[]}));
 }
-
-// ─── saveFixingJob ───
 async function saveFixingJob(job){
   const row={
     id:job.id,
@@ -182,34 +160,25 @@ async function saveFixingJob(job){
   const{error}=await supabase.from("fixing_jobs").upsert([row],{onConflict:"id"});
   if(error)console.error(error);
 }
-
-// ─── deleteFixingJob ───
 async function deleteFixingJob(id){
   const{error}=await supabase.from("fixing_jobs").delete().eq("id",id);
   if(error)console.error(error);
 }
-
-// ─── loadClients ───
 async function loadClients(){
   const{data,error}=await supabase.from("fixing_clients").select("*").order("name");
   if(error){console.error(error);return[];}
   return data||[];
 }
-
-// ─── saveClient ───
 async function saveClient(client){
   const row={id:client.id,name:client.name||"",coverage:client.coverage||"",notes:client.notes||"",last_updated:client.last_updated||new Date().toISOString()};
   const{error}=await supabase.from("fixing_clients").upsert([row],{onConflict:"id"});
   if(error)console.error(error);
 }
-
-// ─── deleteClient ───
 async function deleteClient(id){
   const{error}=await supabase.from("fixing_clients").delete().eq("id",id);
   if(error)console.error(error);
 }
 
-// ─── loadRates ───
 async function loadRates(){
   try{
     const {data,error}=await supabase.from("ratematrix").select("value").eq("key",RATE_KEY).single();
@@ -217,8 +186,6 @@ async function loadRates(){
     return JSON.parse(data.value);
   }catch(_){return null;}
 }
-
-// ─── saveRates ───
 async function saveRates(data){
   try{
     await supabase.from("ratematrix").upsert({key:RATE_KEY,value:JSON.stringify(data)},{onConflict:"key"});
