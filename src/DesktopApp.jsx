@@ -557,7 +557,7 @@ const filtV=useMemo(()=>{
                       <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em",padding:"6px 0 3px",borderBottom:"1px solid "+C.bd2,marginTop:4}}>Notes</div>
                       <EC value={selV.notes} color={C.dim} placeholder="Add vessel notes…" onSave={v2=>onUpdateV(selV.vessel,"notes",v2)}/>
                       {selFixes.length?(<>
-                        {selFixes && selFixes.length > 0 ? (
+                        {selFixes && selFixes.length > 0 && (
   <>
     <div style={{fontSize:12, fontWeight:700, color:C.faint, textTransform:"uppercase", letterSpacing:"0.09em", padding:"6px 0 3px", borderBottom:"1px solid "+C.bd2}}>
       Fixtures ({selFixes.length})
@@ -571,14 +571,11 @@ const filtV=useMemo(()=>{
           </div>
           <div style={{fontSize:12, fontWeight:600}}>{f.load || "?"} → {f.disch || "?"}</div>
           {f.freight && <div style={{fontSize:12, color:C.purple}}>{f.freight}</div>}
-                     </div>
-            );
-          })}
-        </>
-      )}
-    </div>
-  )}
-</div>
+        </div>
+      );
+    })}
+  </>
+)}
             {/* Positions show more */}
             {filtV.length>posPage*POS_PAGE_SIZE&&(
               <div style={{textAlign:"center",padding:"12px 0"}}>
