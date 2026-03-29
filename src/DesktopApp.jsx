@@ -571,15 +571,14 @@ const filtV=useMemo(()=>{
           </div>
           <div style={{fontSize:12, fontWeight:600}}>{f.load || "?"} → {f.disch || "?"}</div>
           {f.freight && <div style={{fontSize:12, color:C.purple}}>{f.freight}</div>}
-        </div>
-      );
-    })}
-  </>
-) : null}
-                    </div>
-                  </div>
-                )}
-              </div>
+                     </div>
+            );
+          })}
+        </>
+      )}
+    </div>
+  )}
+</div>
             {/* Positions show more */}
             {filtV.length>posPage*POS_PAGE_SIZE&&(
               <div style={{textAlign:"center",padding:"12px 0"}}>
