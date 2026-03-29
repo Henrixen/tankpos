@@ -585,9 +585,10 @@ const filtV=useMemo(()=>{
                 </button>
               </div>
             )}
-            </>):null}
-          </div>
-        )}
+            </div> {/* Closes the scrollable padding div */}
+                  </div> /* Closes the side panel container */
+                )} 
+              </div> {/* Closes the Table + side panel flex wrapper */}
 
         {/* ── CARGOES ── */}
         {tab==="cargo"&&(
