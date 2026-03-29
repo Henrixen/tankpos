@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabaseclient";
-import { C, WS_ROUTES, WS_STORE } from "./constants";
+import { C, OP_COLORS } from "./constants";
 import { stripHtml, classifyRegion, daysBetween } from "./utils";
 import { apiCall, ocrImage } from "./api";
 
 const WS_STORE = "ws-data";
 const ROUTES = [
-  {id:"TC2",  name:"TC2",  desc:"ARA→USAC 37kt",       unit:"WS"},
-  {id:"TC6",  name:"TC6",  desc:"Cross-Med 30kt",        unit:"WS"},
-  {id:"TC14", name:"TC14", desc:"US Gulf→UKC 38kt",     unit:"WS"},
-  {id:"TC23", name:"TC23", desc:"UKC→USAC 30kt",        unit:"WS"},
+  {id:"TC2",  name:"TC2",  desc:"ARA→USAC 37kt",    unit:"WS"},
+  {id:"TC6",  name:"TC6",  desc:"Cross-Med 30kt",   unit:"WS"},
+  {id:"TC14", name:"TC14", desc:"US Gulf→UKC 38kt", unit:"WS"},
+  {id:"TC23", name:"TC23", desc:"UKC→USAC 30kt",    unit:"WS"},
 ];
 
 const FFA_PERIODS = ["Feb/26","Mar/26","Apr/26","Q1/26","Q2/26","AVE/25"];
@@ -560,7 +560,7 @@ function Dashboard({vessels, cargoes, history}) {
   
   // Fleet stats
   const openVessels = vessels.filter(v=>v.date&&v.openPort&&v.openPort!=="EMPLOYED");
-  const withDays = openVessels.map(v => ({ ...v, days: daysBetween(v.date, fileDate) })).filter(v => v.days !== null);
+  const withDays = openVessels.map(v => ({ ...v, days: daysBetween(v.date) })).filter(v => v.days !== null);
   const fleetAvg = withDays.length ? Math.round(withDays.reduce((a,b)=>a+b.days,0)/withDays.length) : null;
 
   // Region breakdown
@@ -792,7 +792,7 @@ function OpChart({data,ops,colors}) {
           // Build path skipping nulls
           let path="";
           pts.forEach((p,i)=>{if(p){path+=(path?"L":"M")+p.join(",");}});
-          return<path key={op} d={path} fill="none" stroke={colors[oi]} strokeWidth="1.5" strokeLinejoin="round" opacity="0.85"/>;
+          return <path key={op} d={path} fill="none" stroke={colors?.[op] || colors?.[oi] || C.blue} strokeWidth="1.5" strokeLinejoin="round" opacity="0.85"/>;
         })}
         {[mn,mx].map(v=>(
           <g key={v}>
@@ -803,7 +803,7 @@ function OpChart({data,ops,colors}) {
       </svg>
       {/* Legend */}
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:4}}>
-        {ops.map((op,i)=>(<span key={op} style={{fontSize:12,color:colors[i]}}><span style={{fontWeight:700}}>●</span> {op}</span>))}
+        {ops.map((op,i)=>(<span key={op} style={{fontSize:12,color:colors?.[op] || colors?.[i] || C.blue}}><span style={{fontWeight:700}}>●</span> {op}</span>))}
       </div>
     </div>
   );
