@@ -576,10 +576,10 @@ const filtV=useMemo(()=>{
     })}
   </>
 )}
-                                    {/* Show More Button */}
+                                                            {/* Show More Button */}
                         {filtV.length > posPage * POS_PAGE_SIZE && (
                           <div style={{ textAlign: "center", padding: "12px 0" }}>
-                            <button 
+                            <button
                               onClick={() => setPosPage(p => p + 1)}
                               style={{
                                 background: "none",
@@ -597,9 +597,35 @@ const filtV=useMemo(()=>{
                             </button>
                           </div>
                         )}
-                      </div> {/* End of Table Container */}
+                      </div>   {/* ← Closes the TABLE scrollable container */}
 
-                    </div> {/* End of Table + Side Panel Flex */}
+                    </div>   {/* ← Closes the FLEX wrapper (Table + Side Panel) */}
+
+                    {/* Side Panel */}
+                    {selV && (
+                      <div style={{
+                        width: 240,
+                        flexShrink: 0,
+                        background: C.bg2,
+                        border: "1px solid " + C.bd,
+                        borderRadius: 7,
+                        overflow: "hidden",
+                        position: "sticky",
+                        top: 56,
+                        alignSelf: "flex-start",
+                        maxHeight: "calc(100vh - 70px)",
+                        display: "flex",
+                        flexDirection: "column"
+                      }}>
+                        {/* === PUT YOUR FULL SIDE PANEL CONTENT HERE === */}
+                        {/* Include the header with vessel name, the list of EC components, Spec, Notes, and Fixtures */}
+                        {/* Copy this part from your original code before you started editing */}
+                      </div>
+                    )}
+                  </div>   {/* ← Closes the main Positions tab container */}
+                ) : null}
+              </div>
+            )}
 
                     {/* Side Panel - Selected Vessel */}
                     {selV && (
