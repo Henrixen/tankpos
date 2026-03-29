@@ -10,6 +10,7 @@ import { TCECalculator } from "./TCECalculator";
 import Dashboard from "./Dashboard";
 import { loadHistory } from "./supabaseHelpers";
 import { OpeningBreakdown, FixingWindow, ExportPanel } from "./PositionsHelpers";
+import IntelVault from "./IntelVault";
 
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB}){
   const [tab,setTab]=useState("pos");
@@ -277,7 +278,7 @@ const filtV=useMemo(()=>{
               {/* Parse panel — always shown */}
               <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,overflow:"hidden",maxWidth:mobile?"100%":"50%",height:mobile?"auto":"100%"}}>
                 <div style={{flex:"0 0 auto"}}>
-                  <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={vesselDB}/>
+                  <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/>
                 </div>
                 <div style={{flex:1,overflow:"visible"}}>
                   <FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} />
@@ -646,7 +647,7 @@ const filtV=useMemo(()=>{
             <div style={{display:"flex",gap:10,alignItems:"stretch",minHeight:mobile?"auto":280,flexDirection:mobile?"column":"row"}}>
               {/* Parse */}
               <div style={{flex:mobile?"1 1 auto":"0 0 50%",display:"flex",flexDirection:"column"}}>
-                <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={vesselDB}/>
+                <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
               </div>
               {/* Ask AI */}
               <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
@@ -654,7 +655,7 @@ const filtV=useMemo(()=>{
                   <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
                 </div>
                 <div style={{flex:1,padding:"10px",overflowY:"auto"}}>
-                  <AIAsk vessels={vessels} cargoes={cargoes} intelItems={[]}/>
+                  <RightPanel vessels={vessels} cargoes={cargoes}/>
                 </div>
               </div>
               {/* Intel Vault */}
