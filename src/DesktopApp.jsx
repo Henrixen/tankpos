@@ -597,71 +597,59 @@ const filtV=useMemo(()=>{
                             </button>
                           </div>
                         )}
-                      </div>   {/* ← Closes the TABLE scrollable container */}
+                      </div> {/* End Table scroll area */}
 
-                    </div>   {/* ← Closes the FLEX wrapper (Table + Side Panel) */}
-
-                    {/* Side Panel */}
-                    {selV && (
-                      <div style={{
-                        width: 240,
-                        flexShrink: 0,
-                        background: C.bg2,
-                        border: "1px solid " + C.bd,
-                        borderRadius: 7,
-                        overflow: "hidden",
-                        position: "sticky",
-                        top: 56,
-                        alignSelf: "flex-start",
-                        maxHeight: "calc(100vh - 70px)",
-                        display: "flex",
-                        flexDirection: "column"
-                      }}>
-                        {/* === PUT YOUR FULL SIDE PANEL CONTENT HERE === */}
-                        {/* Include the header with vessel name, the list of EC components, Spec, Notes, and Fixtures */}
-                        {/* Copy this part from your original code before you started editing */}
-                      </div>
-                    )}
-                  </div>   {/* ← Closes the main Positions tab container */}
-                ) : null}
-              </div>
-            )}
-
-                    {/* Side Panel - Selected Vessel */}
-                    {selV && (
-                      <div style={{
-                        width: 240,
-                        flexShrink: 0,
-                        background: C.bg2,
-                        border: "1px solid " + C.bd,
-                        borderRadius: 7,
-                        overflow: "hidden",
-                        position: "sticky",
-                        top: 56,
-                        alignSelf: "flex-start",
-                        maxHeight: "calc(100vh - 70px)",
-                        display: "flex",
-                        flexDirection: "column"
-                      }}>
-                        <div style={{ padding: "8px 12px", background: C.bg, borderBottom: "1px solid " + C.bd2, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0 }}>
-                          <div>
-                            <div style={{ fontFamily: "sans-serif", fontWeight: 800, fontSize: 12, color: C.blue }}>
-                              {toTCase(selV.vessel)}
+                      {/* Side Panel - Selected Vessel */}
+                      {selV && (
+                        <div style={{
+                          width: 240,
+                          flexShrink: 0,
+                          background: C.bg2,
+                          border: "1px solid " + C.bd,
+                          borderRadius: 7,
+                          overflow: "hidden",
+                          position: "sticky",
+                          top: 56,
+                          alignSelf: "flex-start",
+                          maxHeight: "calc(100vh - 70px)",
+                          display: "flex",
+                          flexDirection: "column"
+                        }}>
+                          <div style={{ padding: "8px 12px", background: C.bg, borderBottom: "1px solid " + C.bd2, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0 }}>
+                            <div>
+                              <div style={{ fontFamily: "sans-serif", fontWeight: 800, fontSize: 12, color: C.blue }}>
+                                {toTCase(selV.vessel)}
+                              </div>
+                              <div style={{ fontSize: 12, color: C.purple }}>{selV.operator || ""}</div>
                             </div>
-                            <div style={{ fontSize: 12, color: C.purple }}>{selV.operator || ""}</div>
+                            <button onClick={() => setSel(null)} style={{ background: "none", border: "none", color: C.dim, fontSize: 14, cursor: "pointer" }}>✕</button>
                           </div>
-                          <button onClick={() => setSel(null)} style={{ background: "none", border: "none", color: C.dim, fontSize: 14, cursor: "pointer" }}>✕</button>
-                        </div>
 
-                        <div style={{ padding: "8px 12px", overflowY: "auto", flex: 1 }}>
-                          {/* Your existing side panel fields go here */}
-                          {/* Copy-paste your original side panel content (Open Port, Date, Comment, Spec, Notes, Fixtures) from the previous version */}
+                          <div style={{ padding: "8px 12px", overflowY: "auto", flex: 1 }}>
+                            {/* Standard Fields */}
+                            {[["Open Port","openPort",C.amber],["Date","date",C.blue],["Comment","comment",C.dim]].map(([l,f,col])=>(
+                                <div key={f} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",gap:4}}>
+                                  <span style={{fontSize:11,color:C.faint}}>{l}</span>
+                                  <EC value={selV[f]} color={col} onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
+                                </div>
+                            ))}
+                            
+                            {/* Fixtures Section */}
+                            {selFixes.length > 0 && (
+                                <div style={{marginTop:10}}>
+                                  <div style={{fontSize:11, fontWeight:700, color:C.faint, textTransform:"uppercase", borderBottom:"1px solid "+C.bd2}}>Fixtures</div>
+                                  {selFixes.map(f => (
+                                    <div key={f.id} style={{fontSize:11, padding:"4px 0"}}>{f.status}: {f.load} → {f.disch}</div>
+                                  ))}
+                                </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div> {/* End of Positions Tab Main Container */}
+                      )}
+                    </div> {/* End Flex Wrapper (Table + Side Panel) */}
+                  </>
                 ) : null}
-              </div>
+              </div> {/* End Positions Tab Content */}
             )}
 
         {/* ── CARGOES ── */}
