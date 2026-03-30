@@ -309,7 +309,7 @@ function FixingTab({vessels}){
               const trd=document.getElementById("trd_"+job.id)?.value;
               const matches=owners.filter(o=>(seg?o.segment===seg:true)&&(trd?o.trade===trd:true));
               if(!matches.length)return;
-              const lines=matches.map(o=>o.company+" /").join("\n");
+              const lines=matches.map(o=>`${o.company} /`).join("\n");
               updateJob(job.id,{indications:(job.indications?job.indications+"\n":"")+lines});
             }} style={{fontSize:10,fontWeight:700,background:"rgba(88,166,255,.15)",border:"1px solid "+C.blue+"44",borderRadius:4,color:C.blue,padding:"2px 7px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
               Import owners
