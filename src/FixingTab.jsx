@@ -12,7 +12,7 @@ const TRADES = ["UKC","Med","EU Feast","AG","TA West","Ex US","Asia"];
 function FixingTab({vessels}){
   const mobile=isMobile();
   const [jobs,setJobs]=useState([]);
-  const [clients,setClients]=useState([]);
+  const [clients,setClients]=useState([{id:"c1",name:"Aramco"},{id:"c2",name:"Trafigura"},{id:"c3",name:"Circle K"},{id:"c4",name:"Equinor"},{id:"c5",name:"CSS SA"},{id:"c6",name:"BASF"},{id:"c7",name:"Essar"},{id:"c8",name:"Exxon"},{id:"c9",name:"ENI"}]);
   const [owners,setOwners]=useState([]); // owner directory
   const [expandedJob,setExpandedJob]=useState(null);
   const [editingClient,setEditingClient]=useState(null);
@@ -385,7 +385,7 @@ function FixingTab({vessels}){
                     </button>
                   ))}
                 </div>
-                <span style={{fontSize:12,color:C.tx,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{summary}</span>
+                <input type="text" value={job.added_date||""} onClick={e=>e.stopPropagation()} onChange={e=>{e.stopPropagation();updateJob(job.id,{added_date:e.target.value});}} placeholder="DD/MM/YYYY" style={{background:"transparent",border:"none",borderBottom:"1px solid "+C.bd,color:C.faint,fontFamily:"inherit",fontSize:11,width:80,outline:"none",flexShrink:0}}/>
                 {job.added_date&&<span style={{fontSize:10,color:C.faint,flexShrink:0}}>{new Date(job.added_date).toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}</span>}
                 <span style={{fontSize:11,color:C.faint}}>{isOpen?"▲":"▼"}</span>
                 <button onClick={e=>{e.stopPropagation();setPendingDelJob({id:job.id,label:summary||job.charterer||"job"});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.4,padding:"0 2px"}}>✕</button>
