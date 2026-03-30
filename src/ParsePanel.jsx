@@ -5,7 +5,7 @@ import { loadImg, normaliseQty } from "./utils";
 import { apiCall, ocrImage, parsePos, parseCargo } from "./api";
 
 function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vesselDB = {}}) {
-  const [posDate, setPosDate] = useState(() => new Date().toISOString().slice(0,10));
+  const [posDate, setPosDate] = useState(() => {const d=new Date();return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();});
   const [mode,setMode]=useState(lockedMode||"pos");
   const [text,setText]=useState("");const [img,setImg]=useState(null);
   const [busy,setBusy]=useState(false);const [status,setStatus]=useState(null);
@@ -108,7 +108,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
           {busy?"⟳ Processing…":"▶ Parse & Add"}
         </button>
         <button onClick={()=>fRef.current?.click()} title="Upload image / screenshot" style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 10px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>🖼</button>
-        {(mode==="pos"||mode==="cargo")&&<input type="date" value={posDate} onChange={e=>setPosDate(e.target.value)} lang="en-GB" title={mode==="pos"?"Date of this position list":"Date of this cargo list"} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:3,color:C.dim,fontFamily:"inherit",fontSize:12,padding:"2px 5px",outline:"none",width:118,flexShrink:0}}/>}
+        {(mode==="pos"||mode==="cargo")&&<input type="text" value={posDate} onChange={e=>{const v=e.target.value;const m=v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);if(m)setPosDate(m[3]+"-"+m[2]+"-"+m[1]);else setPosDate(v);}} placeholder="DD/MM/YYYY" title={mode==="pos"?"Date of this position list":"Date of this cargo list"} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:3,color:C.dim,fontFamily:"inherit",fontSize:12,padding:"2px 5px",outline:"none",width:118,flexShrink:0}}/>
         <button onClick={()=>xlsRef.current?.click()} title="Upload Excel / CSV" style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 8px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>📊</button>
         <input ref={fRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
         <input ref={xlsRef} type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}} onChange={e=>handleXls(e.target.files?.[0])}/>
