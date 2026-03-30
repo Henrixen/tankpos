@@ -293,3 +293,32 @@ export function loadImg(file,cb){
 
 // ─── Small UI components ──────────────────────────────────────────────────────
 export function Tag({col,children}){return <span style={{fontSize:12,fontWeight:700,padding:"2px 6px",borderRadius:4,border:"1px solid "+col+"44",background:col+"11",color:col,whiteSpace:"nowrap"}}>{children}</span>;}
+
+export function calcEuEts(
+  ballastNm,
+  ladenNm,
+  ballastCons,
+  ladenCons,
+  portDaysLoad,
+  portDaysDisch,
+  co2Factor,
+  etsPrice,
+  scopeEU,
+  scopeUK,
+  scopeExtra,
+  idleDays,
+  speed,
+  ice
+){
+  const ballastDays = ballastNm / (speed * 24);
+  const ladenDays = ladenNm / (speed * 24);
+
+  const ballastFuel = ballastDays * ballastCons;
+  const ladenFuel = ladenDays * ladenCons;
+
+  const totalFuel = ballastFuel + ladenFuel;
+  const emissions = totalFuel * co2Factor;
+  const cost = emissions * etsPrice * scopeEU;
+
+  return Math.round(cost || 0);
+}
