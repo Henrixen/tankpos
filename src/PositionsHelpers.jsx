@@ -30,6 +30,7 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
     {label:">8 days",sublabel:">8d",vessels:d48plus,col:"#2ecc71"},
   ];
   const maxCount=Math.max(1,...buckets.map(b=>b.vessels.length));
+  const totalCount = buckets.reduce((sum, b) => sum + b.vessels.length, 0) || 1;
 
   return(
     <div style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:7,padding:"10px 14px 14px 14px",flex:1,boxSizing:"border-box",display:"flex",flexDirection:"column",minHeight:220,height:"100%"}}>
@@ -37,15 +38,15 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
       {/* Bar chart */}
       <div style={{display:"flex",gap:8,flex:1}}>
         {buckets.map(b=>{
-          const pct=b.vessels.length/maxCount;
-          const barH=Math.max(pct*100,b.vessels.length>0?4:0);
+          const pct = b.vessels.length / totalCount;
+const barH = Math.max(pct * 100, b.vessels.length > 0 ? 4 : 0);
           return(
             <div key={b.label} onClick={()=>onBucketFilter&&onBucketFilter(b.sublabel)}
               style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",cursor:b.vessels.length>0?"pointer":"default",borderRadius:6,padding:"2px 2px 0 2px",outline:bucketFilters.has(b.sublabel)?"2px solid "+b.col:"2px solid transparent",transition:"outline 0.15s"}}
               title={b.vessels.length>0?b.vessels.map(v=>v.vessel).join(", "):b.sublabel}>
               <div style={{fontSize:13,fontWeight:800,color:b.vessels.length>0?b.col:"transparent",marginBottom:3,minHeight:18}}>{b.vessels.length>0?b.vessels.length:""}</div>
               <div style={{width:"100%",background:C.bg3,borderRadius:4,flex:1,display:"flex",alignItems:"flex-end",overflow:"hidden",minHeight:120,height:"100%"}}>
-                <div style={{width:"100%",height:b.vessels.length>0?Math.max(barH*100,8)+"%":"4%",background:b.col+(b.vessels.length>0?"cc":"22"),borderRadius:4,transition:"height 0.3s"}}/>
+                <div style={{width:"100%",height:b.vessels.length>0?Math.max(barH,8)+"%":"4%",background:b.col+(b.vessels.length>0?"cc":"22"),borderRadius:4,transition:"height 0.3s"}}/>
               </div>
               <div style={{fontSize:12,color:b.vessels.length>0?b.col:C.faint,fontWeight:700,textAlign:"center",marginTop:7,lineHeight:1.2}}>{b.sublabel}</div>
               <div style={{fontSize:10,color:C.faint,textAlign:"center",marginTop:3,lineHeight:1.3,maxWidth:"100%",wordBreak:"break-word"}}>{b.label}</div>
