@@ -4,7 +4,8 @@ import { C } from "./constants";
 import { loadImg, normaliseQty } from "./utils";
 import { apiCall, ocrImage, parsePos, parseCargo } from "./api";
 
-function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vesselDB = {}, posDate, setPosDate}) {
+function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vesselDB = {}}) {
+  const [posDate, setPosDate] = useState(() => new Date().toISOString().slice(0,10));
   const [mode,setMode]=useState(lockedMode||"pos");
   const [text,setText]=useState("");const [img,setImg]=useState(null);
   const [busy,setBusy]=useState(false);const [status,setStatus]=useState(null);
