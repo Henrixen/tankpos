@@ -21,7 +21,7 @@ function FixingTab({vessels}){
   const [showOwnerDir,setShowOwnerDir]=useState(false);
   const [statusFilter,setStatusFilter]=useState("ALL");
   const [clientFilter,setClientFilter]=useState("ALL");
-  const [newJob,setNewJob]=useState({id:"",charterer:"",product:"",qty:"",load:"",disch:"",laycan:"",status:"OPEN",guidance:"",outcome:"",owners:[],fixed_owner:"",fixed_vessel:"",fixed_rate:"",added_date:new Date().toISOString().slice(0,10)});
+  const [newJob,setNewJob]=useState({id:"",charterer:"",product:"",qty:"",load:"",disch:"",laycan:"",status:"OPEN",guidance:"",outcome:"",owners:[],fixed_owner:"",fixed_vessel:"",fixed_rate:"",added_date:new Date().toLocaleDateString('nb-NO',{day:'2-digit',month:'short',year:'numeric'}).replace(/\./g,'')});
   const [newClient,setNewClient]=useState({id:"",name:"",coverage:"",notes:""});
   const [newOwnerEntry,setNewOwnerEntry]=useState({id:"",company:"",segment:"",pic:"",trade:"",comment:""});
   const [jobSearch,setJobSearch]=useState("");
@@ -66,6 +66,20 @@ function FixingTab({vessels}){
   // Grouped owner directory by segment
   const ownersBySegment=SEGMENTS.reduce((acc,seg)=>{acc[seg]=owners.filter(o=>o.segment===seg);return acc;},{});
 
+  function fmtDateInput(input){
+    if(!input)return input;
+    const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const currentYear=new Date().getFullYear();
+    // Match DD/MM or DD/M format
+    const m=input.match(/^(\d{1,2})\/(\d{1,2})$/);
+    if(m){
+      const day=m[1].padStart(2,'0');
+      const month=parseInt(m[2])-1;
+      if(month>=0&&month<12)return `${parseInt(m[1])} ${MON[month]} ${currentYear}`;
+    }
+    return input;
+  }
+
   function fmtLaycanText(s){
     if(!s)return s;
     const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -101,7 +115,9 @@ function FixingTab({vessels}){
 
   async function createJob(charterer=""){
   const id="job_"+Date.now()+"_"+Math.random().toString(36).slice(2,5);
-  const job={id,charterer,product:"",qty:"",load:"",disch:"",laycan:"",laytime:"",status:"OPEN",guidance:"",outcome:"",notes:"",indications:"",subs_fixed:"",cargo_details:"",owners:[],fixed_owner:"",fixed_vessel:"",fixed_rate:"",added_date:new Date().toISOString().slice(0,10),created_at:new Date().toISOString()};
+  const today=new Date();
+  const formattedDate=`${today.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][today.getMonth()]} ${today.getFullYear()}`;
+  const job={id,charterer,product:"",qty:"",load:"",disch:"",laycan:"",laytime:"",status:"OPEN",guidance:"",outcome:"",notes:"",indications:"",subs_fixed:"",cargo_details:"",owners:[],fixed_owner:"",fixed_vessel:"",fixed_rate:"",added_date:formattedDate,created_at:new Date().toISOString()};
   await saveFixingJob(job);
   setJobs(prev=>[job,...prev]);
   setExpandedJob(id);
@@ -116,7 +132,7 @@ function FixingTab({vessels}){
   saveTimer.current[id]=setTimeout(()=>{
     const job=jobsRef.current.find(j=>j.id===id);
     if(job)saveFixingJob({...job,...changes});
-  },1200);
+  },500);
 }
 
   async function removeJob(id){
@@ -245,25 +261,34 @@ function FixingTab({vessels}){
         </div>
 
         {filteredJobs.length===0&&<div style={{color:C.faint,fontSize:12,padding:"40px",textAlign:"center"}}>No fixing jobs. Click + New to start.</div>}
-        {(clientFilter==="ALL"?[...new Set(jobs.map(j=>j.charterer||""))]:[ clientFilter]).map(charterer=>(
-  <div key={charterer} style={{display:"flex",flexDirection:"column",gap:0}}>
-    {clientFilter==="ALL"&&<div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 2px 3px"}}>{charterer}</div>}
-    {filteredJobs.filter(j=>{
-      if(clientFilter==="ALL") return (j.charterer||"")===charterer;
-      return (j.charterer||"")===clientFilter;
-    }).map(job=>{
-          const isOpen=expandedJob===job.id;
+        {(clientFilter==="ALL"?[...new Set(jobs.map(j=>j.charterer||""))]:[ clientFilter]).map(charterer=>{
+          const chartererJobs=filteredJobs.filter(j=>{
+            if(clientFilter==="ALL") return (j.charterer||"")===charterer;
+            return (j.charterer||"")===clientFilter;
+          });
+          if(chartererJobs.length===0)return null;
+          const isChartererOpen=expandedJob===charterer;
+          return(
+  <div key={charterer} style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",marginBottom:6}}>
+    {/* Charterer header - click to expand/collapse */}
+    <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",cursor:"pointer",background:C.bg1}} onClick={()=>setExpandedJob(isChartererOpen?null:charterer)}>
+      <span style={{fontWeight:700,fontSize:13,color:C.blue,flex:1}}>{charterer||"—"}</span>
+      <span style={{fontSize:11,color:C.faint}}>{chartererJobs.length} cargo{chartererJobs.length!==1?"es":""}</span>
+      <span style={{fontSize:11,color:C.faint}}>{isChartererOpen?"▲":"▼"}</span>
+    </div>
+    
+    {/* All jobs for this charterer */}
+    {isChartererOpen&&chartererJobs.map(job=>{
           const scol=JOB_STATUS_COL[job.status]||C.dim;
           const suggested=suggestVessels(job);
           const summary=[job.qty,job.product,job.load&&job.disch?`${job.load} → ${job.disch}`:job.load||job.disch,job.laycan].filter(Boolean).join("  ");
 
           return(
-            <div key={job.id} style={{background:C.bg2,border:"1px solid "+scol+"44",borderRadius:7,overflow:"hidden"}}>
-              {/* Collapsed header */}
-              <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",cursor:"pointer"}} onClick={()=>setExpandedJob(isOpen?null:job.id)}>
-                <span style={{fontWeight:700,fontSize:12,color:C.blue,flexShrink:0,minWidth:60}}>{job.charterer||"—"}</span>
-<input type="text" value={job.added_date||""} onClick={e=>e.stopPropagation()} onChange={e=>{e.stopPropagation();updateJob(job.id,{added_date:e.target.value});}} placeholder="DD/MM/YYYY" style={{background:"transparent",border:"none",borderBottom:"1px solid "+C.bd,color:C.faint,fontFamily:"inherit",fontSize:11,width:80,outline:"none",flexShrink:0}}/>
-<div style={{display:"flex",gap:3,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+            <div key={job.id} style={{borderTop:"1px solid "+C.bd2,padding:"10px 12px"}}>
+              {/* Job summary line */}
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <span style={{fontSize:11,color:C.faint,minWidth:90}}>{job.added_date||"—"}</span>
+<div style={{display:"flex",gap:3,flexShrink:0}}>
                   {JOB_STATUS.map(s=>(
                     <button key={s} onClick={()=>updateJob(job.id,{status:s})}
                       style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,border:"1px solid "+(job.status===s?JOB_STATUS_COL[s]:C.bd),background:job.status===s?JOB_STATUS_COL[s]+"33":"transparent",color:job.status===s?JOB_STATUS_COL[s]:C.faint,cursor:"pointer",fontFamily:"inherit"}}>
@@ -271,13 +296,12 @@ function FixingTab({vessels}){
                     </button>
                   ))}
                 </div>
-                <span style={{fontSize:11,color:C.faint}}>{isOpen?"▲":"▼"}</span>
+                <span style={{fontSize:11,color:C.tx,flex:1}}>{summary||"New cargo"}</span>
                 <button onClick={e=>{e.stopPropagation();setPendingDelJob({id:job.id,label:summary||job.charterer||"job"});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.4,padding:"0 2px"}}>✕</button>
               </div>
 
-              {/* Expanded body */}
-              {isOpen&&(
-  <div style={{borderTop:"1px solid "+C.bd2,padding:10,display:"flex",flexDirection:"column",gap:8}}>
+              {/* Job details */}
+  <div style={{display:"flex",flexDirection:"column",gap:8}}>
     {/* Row 1: 3 columns */}
     <div style={{display:"flex",gap:8,alignItems:"stretch"}}>
       {/* Cargo details 10% */}
@@ -332,15 +356,15 @@ function FixingTab({vessels}){
       <textarea value={job.subs_fixed||""} onChange={e=>updateJob(job.id,{subs_fixed:e.target.value})}
         placeholder={`Owner / Vessel / Rate / Terms...`}
         style={{...inpS,width:"100%",minHeight:36,resize:"vertical",fontSize:11,boxSizing:"border-box"}}/>
-              </div>
-              </div>
-              )}
+    </div>
+  </div>
             </div>
           );
         })}
-     </div>
-   ))}
-</div>
+  </div>
+);})}
+      </div>
+
       {/* Owner Directory */}
       <div style={{flex:"0 0 260px",width:260,display:"flex",flexDirection:"column",gap:6}}>
         {pendingDelOwner&&(
@@ -430,7 +454,7 @@ function FixingTab({vessels}){
                 </table>
               );
             })()}
-        </div>  
+          </div>
         )}
       </div>
       </div>
