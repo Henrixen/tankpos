@@ -11,6 +11,7 @@ import Dashboard from "./Dashboard";
 import { loadHistory } from "./supabaseHelpers";
 import { OpeningBreakdown, FixingWindow, ExportPanel } from "./PositionsHelpers";
 import IntelVault from "./IntelVault";
+import { isMobile } from "./constants";
 
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB}){
   const [tab,setTab]=useState("pos");
