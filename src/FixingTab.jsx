@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "./supabaseclient";
 import { C, SEGMENTS } from "./constants";
 import { classifyRegion, daysBetween } from "./utils";
@@ -90,15 +90,19 @@ function FixingTab({vessels}){
     return s;
   }
 
-  const filteredJobs=jobs.filter(j=>{
+  const filteredJobs=useMemo(()=>jobs.filter(j=>{
     if(statusFilter!=="ALL"&&j.status!==statusFilter)return false;
     if(clientFilter!=="ALL"&&j.charterer!==clientFilter)return false;
     if(jobSearch.trim()){const t=jobSearch.trim().toLowerCase();const hay=[j.charterer,j.product,j.qty,j.load,j.disch,j.laycan,j.outcome,j.fixed_owner,j.fixed_vessel].filter(Boolean).join(" ").toLowerCase();if(!hay.includes(t))return false;}
     return true;
-  });
+  }),[jobs,statusFilter,clientFilter,jobSearch]);
 
-  const inpS={background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"4px 7px",outline:"none",boxSizing:"border-box"};
-  const fb2=(on,col)=>({fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:4,border:"1px solid "+(on?col||C.blue:C.bd),background:on?(col||C.blue)+"22":"transparent",color:on?col||C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
+  const charterersList=useMemo(()=>
+    clientFilter==="ALL"?[...new Set(jobs.map(j=>j.charterer||""))]:[ clientFilter]
+  ,[jobs,clientFilter]);
+
+  const inpS=useMemo(()=>({background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"4px 7px",outline:"none",boxSizing:"border-box"}),[]);
+  const fb2=useCallback((on,col)=>({fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:4,border:"1px solid "+(on?col||C.blue:C.bd),background:on?(col||C.blue)+"22":"transparent",color:on?col||C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}),[]);
 
   function suggestVessels(job){
     if(!vessels||!vessels.length)return[];
@@ -126,14 +130,14 @@ function FixingTab({vessels}){
   const jobsRef=React.useRef(jobs);
  React.useEffect(()=>{jobsRef.current=jobs;},[jobs]);
   const saveTimer=React.useRef({});
-  async function updateJob(id,changes){
+  const updateJob=useCallback((id,changes)=>{
   setJobs(prev=>prev.map(j=>j.id===id?{...j,...changes}:j));
   clearTimeout(saveTimer.current[id]);
   saveTimer.current[id]=setTimeout(()=>{
     const job=jobsRef.current.find(j=>j.id===id);
     if(job)saveFixingJob({...job,...changes});
-  },500);
-}
+  },800);
+},[]);
 
   async function removeJob(id){
     setJobs(prev=>prev.filter(j=>j.id!==id));
@@ -261,7 +265,7 @@ function FixingTab({vessels}){
         </div>
 
         {filteredJobs.length===0&&<div style={{color:C.faint,fontSize:12,padding:"40px",textAlign:"center"}}>No fixing jobs. Click + New to start.</div>}
-        {(clientFilter==="ALL"?[...new Set(jobs.map(j=>j.charterer||""))]:[ clientFilter]).map(charterer=>{
+        {charterersList.map(charterer=>{
           const chartererJobs=filteredJobs.filter(j=>{
             if(clientFilter==="ALL") return (j.charterer||"")===charterer;
             return (j.charterer||"")===clientFilter;
@@ -280,7 +284,6 @@ function FixingTab({vessels}){
     {/* All jobs for this charterer */}
     {isChartererOpen&&chartererJobs.map(job=>{
           const scol=JOB_STATUS_COL[job.status]||C.dim;
-          const suggested=suggestVessels(job);
           const summary=[job.qty,job.product,job.load&&job.disch?`${job.load} → ${job.disch}`:job.load||job.disch,job.laycan].filter(Boolean).join("  ");
 
           return(
