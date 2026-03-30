@@ -408,7 +408,7 @@ function FixingTab({vessels}){
         <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>Notes & Guidance</div>
         <textarea value={job.notes||""} onChange={e=>updateJob(job.id,{notes:e.target.value})}
           placeholder="Rate guidance, charterer feedback, market context…"
-          style={{...inpS,width:"100%",flex:1,resize:"none",fontSize:11,boxSizing:"border-box"}}
+          style={{...inpS,width:"100%",flex:1,resize:"none",fontSize:11,boxSizing:"border-box"}}/>
       </div>
       {/* Indications 60% */}
       <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
