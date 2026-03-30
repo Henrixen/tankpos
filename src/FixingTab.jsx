@@ -338,10 +338,8 @@ function FixingTab({vessels}){
             </div>
           );
         })}
-    </div>
   </div>
 ))}
-
       {/* Owner Directory */}
       <div style={{flex:"0 0 260px",width:260,display:"flex",flexDirection:"column",gap:6}}>
         {pendingDelOwner&&(
