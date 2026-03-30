@@ -248,7 +248,10 @@ function FixingTab({vessels}){
         {(clientFilter==="ALL"?[...new Set(jobs.map(j=>j.charterer||""))]:[ clientFilter]).map(charterer=>(
   <div key={charterer} style={{display:"flex",flexDirection:"column",gap:0}}>
     {clientFilter==="ALL"&&<div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 2px 3px"}}>{charterer}</div>}
-    {filteredJobs.filter(j=>(j.charterer||"")===(clientFilter==="ALL"?charterer:clientFilter)||clientFilter!=="ALL").map(job=>{
+    {filteredJobs.filter(j=>{
+      if(clientFilter==="ALL") return (j.charterer||"")===charterer;
+      return (j.charterer||"")===clientFilter;
+    }).map(job=>{
           const isOpen=expandedJob===job.id;
           const scol=JOB_STATUS_COL[job.status]||C.dim;
           const suggested=suggestVessels(job);
