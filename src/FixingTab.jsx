@@ -192,8 +192,8 @@ function FixingTab({vessels}){
           const statusCounts=["OPEN","SUBS","FIXED","FAILED"].reduce((a,s)=>{const n=clientJobs.filter(j=>j.status===s).length;if(n)a.push({s,n});return a;},[]);
           const isExpanded=editingClient===client.id;
           return(
-            <div key={client.id} style={{display:"flex",flexDirection:"column",background:isActive?"rgba(88,166,255,.12)":C.bg2,border:"1px solid "+(isActive?C.blue:C.bd),borderRadius:12,overflow:"hidden",minWidth:80}}>
-              <div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",cursor:"pointer"}} onClick={()=>setClientFilter(f=>f===client.name?"ALL":client.name)}>
+            <div key={client.id} style={{display:"flex",flexDirection:"column",background:isActive?"rgba(88,166,255,.12)":C.bg2,border:"1px solid "+(isActive?C.blue:C.bd),borderRadius:12,overflow:"hidden",minWidth:120}}>
+  <div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",cursor:"pointer"}} onClick={()=>setClientFilter(f=>f===client.name?"ALL":client.name)}>
                 <span style={{fontSize:12,fontWeight:700,color:isActive?C.blue:C.tx,whiteSpace:"nowrap"}}>{client.name}</span>
                 {statusCounts.map(({s,n})=>(
                   <span key={s} style={{fontSize:9,fontWeight:700,padding:"1px 4px",borderRadius:8,background:JOB_STATUS_COL[s]+"22",color:JOB_STATUS_COL[s]}}>{n}{s}</span>
@@ -206,7 +206,7 @@ function FixingTab({vessels}){
                 <div style={{padding:"6px 10px",borderTop:"1px solid "+C.bd2}} onClick={e=>e.stopPropagation()}>
                   <textarea value={client.notes||""} onChange={e=>updateClient(client.id,{notes:e.target.value})}
                     placeholder="Client notes…"
-                    style={{...inpS,width:"100%",minHeight:60,resize:"vertical",fontSize:11,boxSizing:"border-box"}}/>
+                    style={{...inpS,width:"100%",minHeight:120,resize:"vertical",fontSize:11,boxSizing:"border-box"}}/>
                 </div>
               )}
             </div>
@@ -245,7 +245,10 @@ function FixingTab({vessels}){
         </div>
 
         {filteredJobs.length===0&&<div style={{color:C.faint,fontSize:12,padding:"40px",textAlign:"center"}}>No fixing jobs. Click + New to start.</div>}
-        {filteredJobs.map(job=>{
+        {(clientFilter==="ALL"?[...new Set(jobs.map(j=>j.charterer||""))]:[ clientFilter]).map(charterer=>(
+  <div key={charterer} style={{display:"flex",flexDirection:"column",gap:0}}>
+    {clientFilter==="ALL"&&<div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 2px 3px"}}>{charterer}</div>}
+    {filteredJobs.filter(j=>(j.charterer||"")===(clientFilter==="ALL"?charterer:clientFilter)||clientFilter!=="ALL").map(job=>{
           const isOpen=expandedJob===job.id;
           const scol=JOB_STATUS_COL[job.status]||C.dim;
           const suggested=suggestVessels(job);
@@ -256,7 +259,8 @@ function FixingTab({vessels}){
               {/* Collapsed header */}
               <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",cursor:"pointer"}} onClick={()=>setExpandedJob(isOpen?null:job.id)}>
                 <span style={{fontWeight:700,fontSize:12,color:C.blue,flexShrink:0,minWidth:60}}>{job.charterer||"—"}</span>
-                <div style={{display:"flex",gap:3,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+<input type="text" value={job.added_date||""} onClick={e=>e.stopPropagation()} onChange={e=>{e.stopPropagation();updateJob(job.id,{added_date:e.target.value});}} placeholder="DD/MM/YYYY" style={{background:"transparent",border:"none",borderBottom:"1px solid "+C.bd,color:C.faint,fontFamily:"inherit",fontSize:11,width:80,outline:"none",flexShrink:0}}/>
+<div style={{display:"flex",gap:3,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                   {JOB_STATUS.map(s=>(
                     <button key={s} onClick={()=>updateJob(job.id,{status:s})}
                       style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,border:"1px solid "+(job.status===s?JOB_STATUS_COL[s]:C.bd),background:job.status===s?JOB_STATUS_COL[s]+"33":"transparent",color:job.status===s?JOB_STATUS_COL[s]:C.faint,cursor:"pointer",fontFamily:"inherit"}}>
@@ -264,8 +268,6 @@ function FixingTab({vessels}){
                     </button>
                   ))}
                 </div>
-                <input type="text" value={job.added_date||""} onClick={e=>e.stopPropagation()} onChange={e=>{e.stopPropagation();updateJob(job.id,{added_date:e.target.value});}} placeholder="DD/MM/YYYY" style={{background:"transparent",border:"none",borderBottom:"1px solid "+C.bd,color:C.faint,fontFamily:"inherit",fontSize:11,width:80,outline:"none",flexShrink:0}}/>
-                {job.added_date&&<span style={{fontSize:10,color:C.faint,flexShrink:0}}>{new Date(job.added_date).toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}</span>}
                 <span style={{fontSize:11,color:C.faint}}>{isOpen?"▲":"▼"}</span>
                 <button onClick={e=>{e.stopPropagation();setPendingDelJob({id:job.id,label:summary||job.charterer||"job"});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.4,padding:"0 2px"}}>✕</button>
               </div>
@@ -333,6 +335,9 @@ function FixingTab({vessels}){
             </div>
           );
         })}
+    </div>
+  </div>
+))}
       </div>
 
       {/* Owner Directory */}
