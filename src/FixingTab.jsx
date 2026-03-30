@@ -438,7 +438,7 @@ function FixingTab({vessels}){
           style={{...inpS,width:"100%",minHeight:120,resize:"vertical",fontSize:11,boxSizing:"border-box",fontFamily:"monospace"}}/>
       </div>
     </div>
-    {/* Row 2: Subs / Fixed */}
+   {/* Row 2: Subs / Fixed */}
     <div style={{borderTop:"1px solid "+C.bd2,paddingTop:8}}>
       <div style={{fontSize:10,color:job.status==="FIXED"?C.green:job.status==="SUBS"?C.purple:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4,fontWeight:700}}>
         {job.status==="FIXED"?"✓ Fixed":job.status==="SUBS"?"On Subs":"Subs / Fixed"}
@@ -449,5 +449,12 @@ function FixingTab({vessels}){
     </div>
   </div>
 )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default FixingTab;
