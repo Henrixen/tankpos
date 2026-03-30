@@ -311,14 +311,12 @@ function FixingTab({vessels}){
       <div style={{flex:"0 0 10%",minWidth:120,display:"flex",flexDirection:"column",gap:4,alignSelf:"stretch"}}>
         <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>Cargo</div>
         <textarea value={job.cargo_details||""} onChange={e=>updateJob(job.id,{cargo_details:e.target.value})}
-          placeholder={`Client\nQty\nProduct\nLoad → Disch\nLaycan`}
           style={{...inpS,width:"100%",flex:1,resize:"none",fontSize:11,boxSizing:"border-box"}}/>
       </div>
       {/* Notes 30% */}
       <div style={{flex:"0 0 30%",minWidth:0,display:"flex",flexDirection:"column",gap:4,alignSelf:"stretch"}}>
         <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>Notes & Guidance</div>
         <textarea value={job.notes||""} onChange={e=>updateJob(job.id,{notes:e.target.value})}
-          placeholder="Rate guidance, charterer feedback, market context…"
           style={{...inpS,width:"100%",flex:1,resize:"none",fontSize:11,boxSizing:"border-box"}}/>
       </div>
       {/* Indications 60% */}
@@ -347,7 +345,6 @@ function FixingTab({vessels}){
           </div>
         </div>
         <textarea value={job.indications||""} onChange={e=>updateJob(job.id,{indications:e.target.value})}
-          placeholder={`Odfjell /\nFuretank /\n…`}
           style={{...inpS,width:"100%",minHeight:120,resize:"vertical",fontSize:11,boxSizing:"border-box",fontFamily:"monospace"}}/>
       </div>
     </div>
@@ -357,7 +354,6 @@ function FixingTab({vessels}){
         {job.status==="FIXED"?`✓ Fixed`:job.status==="SUBS"?`On Subs`:`Subs / Fixed`}
       </div>
       <textarea value={job.subs_fixed||""} onChange={e=>updateJob(job.id,{subs_fixed:e.target.value})}
-        placeholder={`Owner / Vessel / Rate / Terms...`}
         style={{...inpS,width:"100%",minHeight:36,resize:"vertical",fontSize:11,boxSizing:"border-box"}}/>
     </div>
   </div>
