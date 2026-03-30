@@ -327,7 +327,7 @@ function FixingTab({vessels}){
         {job.status==="FIXED"?"✓ Fixed":job.status==="SUBS"?"On Subs":"Subs / Fixed"}
       </div>
       <textarea value={job.subs_fixed||""} onChange={e=>updateJob(job.id,{subs_fixed:e.target.value})}
-        placeholder="Owner / Vessel / Rate / Terms…"
+        placeholder="Owner / Vessel / Rate / Terms..."
         style={{...inpS,width:"100%",minHeight:36,resize:"vertical",fontSize:11,boxSizing:"border-box"}}/>
     </div>
   </div>
