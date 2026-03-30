@@ -3,6 +3,7 @@ import { supabase } from "./supabaseclient";
 import { C, SEGMENTS } from "./constants";
 import { classifyRegion, daysBetween } from "./utils";
 import { loadFixingJobs, saveFixingJob, deleteFixingJob, loadClients, saveClient, deleteClient } from "./supabaseHelpers";
+import { isMobile } from "./constants";
 
 const JOB_STATUS = ["OPEN","WORKING","SUBS","FIXED","FAILED"];
 const JOB_STATUS_COL = {OPEN:C.blue,WORKING:C.amber,SUBS:C.purple,FIXED:C.green,FAILED:C.red};
