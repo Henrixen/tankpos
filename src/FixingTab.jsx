@@ -99,26 +99,25 @@ function FixingTab({vessels}){
     }).slice(0,8);
   }
 
-  async function createJob(){
-    const id="job_"+Date.now()+"_"+Math.random().toString(36).slice(2,5);
-    const job={id,charterer:"",product:"",qty:"",load:"",disch:"",laycan:"",laytime:"",status:"OPEN",guidance:"",outcome:"",notes:"",indications:"",subs_fixed:"",owners:[],fixed_owner:"",fixed_vessel:"",fixed_rate:"",added_date:new Date().toISOString().slice(0,10),created_at:new Date().toISOString()};
-    await saveFixingJob(job);
-    setJobs(prev=>[job,...prev]);
-    setExpandedJob(id);
-  }
+  async function createJob(charterer=""){
+  const id="job_"+Date.now()+"_"+Math.random().toString(36).slice(2,5);
+  const job={id,charterer,product:"",qty:"",load:"",disch:"",laycan:"",laytime:"",status:"OPEN",guidance:"",outcome:"",notes:"",indications:"",subs_fixed:"",cargo_details:"",owners:[],fixed_owner:"",fixed_vessel:"",fixed_rate:"",added_date:new Date().toISOString().slice(0,10),created_at:new Date().toISOString()};
+  await saveFixingJob(job);
+  setJobs(prev=>[job,...prev]);
+  setExpandedJob(id);
+}
 
+  const jobsRef=React.useRef(jobs);
+ React.useEffect(()=>{jobsRef.current=jobs;},[jobs]);
   const saveTimer=React.useRef({});
   async function updateJob(id,changes){
-    setJobs(prev=>prev.map(j=>j.id===id?{...j,...changes}:j));
-    clearTimeout(saveTimer.current[id]);
-    saveTimer.current[id]=setTimeout(()=>{
-      setJobs(prev=>{
-        const job=prev.find(j=>j.id===id);
-        if(job)saveFixingJob(job);
-        return prev;
-      });
-    },800);
-  }
+  setJobs(prev=>prev.map(j=>j.id===id?{...j,...changes}:j));
+  clearTimeout(saveTimer.current[id]);
+  saveTimer.current[id]=setTimeout(()=>{
+    const job=jobsRef.current.find(j=>j.id===id);
+    if(job)saveFixingJob({...job,...changes});
+  },1200);
+}
 
   async function removeJob(id){
     setJobs(prev=>prev.filter(j=>j.id!==id));
@@ -201,6 +200,7 @@ function FixingTab({vessels}){
                 ))}
                 {total>0&&<span style={{fontSize:10,color:C.faint}}>{total}</span>}
                 <span onClick={e=>{e.stopPropagation();setEditingClient(isExpanded?null:client.id);}} style={{fontSize:10,color:C.faint,cursor:"pointer",marginLeft:2}}>{isExpanded?"▲":"▼"}</span>
+<span onClick={e=>{e.stopPropagation();createJob(client.name);setClientFilter(client.name);}} style={{fontSize:10,color:C.blue,cursor:"pointer",marginLeft:4,fontWeight:700}}>+</span>
               </div>
               {isExpanded&&(
                 <div style={{padding:"6px 10px",borderTop:"1px solid "+C.bd2}} onClick={e=>e.stopPropagation()}>
@@ -229,7 +229,6 @@ function FixingTab({vessels}){
       <div style={{display:"flex",gap:12,alignItems:"flex-start",width:"100%"}}>
       <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:8}}>
         <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-          <button onClick={createJob} style={{fontSize:12,fontWeight:700,background:"#1f6feb",border:"none",borderRadius:5,color:"#fff",padding:"5px 14px",cursor:"pointer",fontFamily:"inherit"}}>+ New</button>
           <div style={{display:"flex",gap:4}}>
             {["ALL",...JOB_STATUS].map(s=>(
               <button key={s} onClick={()=>setStatusFilter(s)} style={fb2(statusFilter===s,JOB_STATUS_COL[s])}>{s}</button>
