@@ -107,10 +107,17 @@ function FixingTab({vessels}){
     setExpandedJob(id);
   }
 
+  const saveTimer=React.useRef({});
   async function updateJob(id,changes){
     setJobs(prev=>prev.map(j=>j.id===id?{...j,...changes}:j));
-    const job=jobs.find(j=>j.id===id);
-    if(job)await saveFixingJob({...job,...changes});
+    clearTimeout(saveTimer.current[id]);
+    saveTimer.current[id]=setTimeout(()=>{
+      setJobs(prev=>{
+        const job=prev.find(j=>j.id===id);
+        if(job)saveFixingJob(job);
+        return prev;
+      });
+    },800);
   }
 
   async function removeJob(id){
@@ -379,7 +386,6 @@ function FixingTab({vessels}){
                   ))}
                 </div>
                 <span style={{fontSize:12,color:C.tx,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{summary}</span>
-                <span style={{fontSize:11,color:C.faint,flexShrink:0}}>{(job.owners||[]).length>0?(job.owners||[]).length+"o":""}</span>
                 {job.added_date&&<span style={{fontSize:10,color:C.faint,flexShrink:0}}>{new Date(job.added_date).toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}</span>}
                 <span style={{fontSize:11,color:C.faint}}>{isOpen?"▲":"▼"}</span>
                 <button onClick={e=>{e.stopPropagation();setPendingDelJob({id:job.id,label:summary||job.charterer||"job"});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.4,padding:"0 2px"}}>✕</button>
@@ -389,24 +395,20 @@ function FixingTab({vessels}){
               {isOpen&&(
   <div style={{borderTop:"1px solid "+C.bd2,padding:10,display:"flex",flexDirection:"column",gap:8}}>
     {/* Row 1: 3 columns */}
-    <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+    <div style={{display:"flex",gap:8,alignItems:"stretch"}}>
       {/* Cargo details 10% */}
-      <div style={{flex:"0 0 10%",minWidth:120,display:"flex",flexDirection:"column",gap:4}}>
+      <div style={{flex:"0 0 10%",minWidth:120,display:"flex",flexDirection:"column",gap:4,alignSelf:"stretch"}}>
         <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>Cargo</div>
-        {[["charterer","Client"],["qty","Qty"],["product","Product"],["load","Load"],["disch","Disch"],["laycan","Laycan"]].map(([f,l])=>(
-          <div key={f}>
-            <div style={{fontSize:10,color:C.faint,marginBottom:1}}>{l}</div>
-            <input value={job[f]||""} onChange={e=>updateJob(job.id,{[f]:e.target.value})}
-              style={{...inpS,width:"100%",padding:"2px 5px",fontSize:11}}/>
-          </div>
-        ))}
+        <textarea value={job.cargo_details||""} onChange={e=>updateJob(job.id,{cargo_details:e.target.value})}
+          placeholder={"Client\nQty\nProduct\nLoad → Disch\nLaycan"}
+          style={{...inpS,width:"100%",flex:1,resize:"none",fontSize:11,boxSizing:"border-box"}}/>
       </div>
       {/* Notes 30% */}
-      <div style={{flex:"0 0 30%",minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
+      <div style={{flex:"0 0 30%",minWidth:0,display:"flex",flexDirection:"column",gap:4,alignSelf:"stretch"}}>
         <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>Notes & Guidance</div>
         <textarea value={job.notes||""} onChange={e=>updateJob(job.id,{notes:e.target.value})}
           placeholder="Rate guidance, charterer feedback, market context…"
-          style={{...inpS,width:"100%",minHeight:120,resize:"vertical",fontSize:11,boxSizing:"border-box"}}/>
+          style={{...inpS,width:"100%",flex:1,resize:"none",fontSize:11,boxSizing:"border-box"}}
       </div>
       {/* Indications 60% */}
       <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
