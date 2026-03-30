@@ -1,5 +1,7 @@
 import { supabase } from "./supabaseclient";
 
+function xJSON(raw){if(!raw)throw new Error("Empty");const cl=raw.trim().replace(/^```[\w]*/,"").replace(/```/g,"").trim();try{return JSON.parse(cl);}catch(_){}const s=cl.indexOf("["),e=cl.lastIndexOf("]");if(s>=0&&e>s){try{return JSON.parse(cl.slice(s,e+1));}catch(_){}}throw new Error("Parse failed: "+raw.slice(0,60));}
+
 // ─── Anthropic API ────────────────────────────────────────────────────────────
 async function apiCall(sys,msgs){
   const res = await fetch("https://api.anthropic.com/v1/messages",{
