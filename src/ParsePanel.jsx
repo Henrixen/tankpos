@@ -77,13 +77,13 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
       if(mode==="pos"){
         const p=await parsePos(text||"(img)",img,known);if(!p?.length){setStatus({t:"error",m:"No vessel data found."});return;}
         console.log("parsed:", JSON.stringify(p));
-        const ts=posDate?new Date(posDate).toISOString():new Date().toISOString();
+        const [dd,mm,yyyy]=posDate.split("/");const ts=(dd&&mm&&yyyy)?new Date(`${yyyy}-${mm}-${dd}`).toISOString():new Date().toISOString();
         const stamped=p.map(v=>({...v,updatedAt:ts}));
         const r=onAddVessels(stamped);setText("");setImg(null);
         setStatus({t:"success",m:"✓ "+(r.added?r.added+" added":"")+(r.updated?", "+r.updated+" updated":"")+" - "+r.total+" total"});
       }else{
         const p=await parseCargo(text||"(img)",img,known);if(!p?.length){setStatus({t:"error",m:"No fixture data found."});return;}
-        const ts=posDate?new Date(posDate).toISOString():new Date().toISOString();
+        const [dd,mm,yyyy]=posDate.split("/");const ts=(dd&&mm&&yyyy)?new Date(`${yyyy}-${mm}-${dd}`).toISOString():new Date().toISOString();
         const stamped=p.map(v=>({...v,updated:ts}));
         const lk=onAddCargoes(stamped);setText("");setImg(null);
         setStatus({t:"success",m:"✓ "+p.length+" fixture(s)"+(lk?", "+lk+" pos updated":"")});
