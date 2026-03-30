@@ -450,37 +450,4 @@ function FixingTab({vessels}){
   </div>
 )}
 
-                    {/* Fixed section */}
-                    <div style={{borderRadius:5,padding:8,background:job.status==="FIXED"?"rgba(67,233,123,0.06)":"rgba(255,255,255,0.02)",border:job.status==="FIXED"?"1px solid "+C.green+"44":"1px solid "+C.bd2,transition:"all 0.2s"}}>
-                      <div style={{fontSize:11,fontWeight:700,color:job.status==="FIXED"?C.green:"#555",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>✓ Fixed</div>
-                      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                        {[["fixed_owner","Owner",100],["fixed_vessel","Vessel",130],["fixed_rate","Rate",130]].map(([f,l,w])=>(
-                          <div key={f} style={{display:"flex",alignItems:"center",gap:4}}>
-                            <span style={{fontSize:10,color:job.status==="FIXED"?C.faint:"#555",textTransform:"uppercase",letterSpacing:"0.05em",flexShrink:0}}>{l}</span>
-                            <input value={job[f]||""} onChange={e=>updateJob(job.id,{[f]:e.target.value})}
-                              placeholder={f==="fixed_rate"?"e.g. $340k lsum":""}
-                              style={{...inpS,width:w,padding:"3px 6px",fontSize:11,opacity:job.status==="FIXED"?1:0.6}}/>
-                          </div>
-                        ))}
-                        <div style={{display:"flex",alignItems:"center",gap:4,flex:1,minWidth:150}}>
-                          <span style={{fontSize:10,color:job.status==="FIXED"?C.faint:"#555",textTransform:"uppercase",letterSpacing:"0.05em",flexShrink:0}}>Comment</span>
-                          <input value={job.fixed_comment||""} onChange={e=>updateJob(job.id,{fixed_comment:e.target.value})}
-                            placeholder="e.g. direct, via broker X"
-                            style={{...inpS,flex:1,padding:"3px 6px",fontSize:11,opacity:job.status==="FIXED"?1:0.6}}/>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-
-
 export default FixingTab;
