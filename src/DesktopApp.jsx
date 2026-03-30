@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { C, OP_COLORS, isMobile } from "./constants";
-import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty } from "./utils";
+import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight } from "./utils";
 import EC from "./EC";
 import ParsePanel from "./ParsePanel";
 import RightPanel from "./AIAsk";
