@@ -332,14 +332,15 @@ function FixingTab({vessels}){
       <textarea value={job.subs_fixed||""} onChange={e=>updateJob(job.id,{subs_fixed:e.target.value})}
         placeholder={`Owner / Vessel / Rate / Terms...`}
         style={{...inpS,width:"100%",minHeight:36,resize:"vertical",fontSize:11,boxSizing:"border-box"}}/>
-    </div>
-  </div>
-)}
+              </div>
+              </div>
+              )}
             </div>
           );
         })}
-  </div>
-))}
+     </div>
+   ))}
+</div>
       {/* Owner Directory */}
       <div style={{flex:"0 0 260px",width:260,display:"flex",flexDirection:"column",gap:6}}>
         {pendingDelOwner&&(
@@ -429,7 +430,7 @@ function FixingTab({vessels}){
                 </table>
               );
             })()}
-          </div>
+        </div>  
         )}
       </div>
       </div>
