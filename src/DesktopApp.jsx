@@ -329,7 +329,7 @@ const filtV=useMemo(()=>{
                 {/* Stats row with opening timeline bar chart */}
                 <div style={{display:"flex",gap:10,alignItems:"stretch",flexDirection:mobile?"column":"row"}}>
                   {/* LEFT 50% */}
-                  <div style={{flex:mobile?"1 1 100%":"0 0 33%",display:"flex",flexDirection:"column",gap:6}}>
+                  <div style={{flex:mobile?"1 1 100%":"0 0 32%",display:"flex",flexDirection:"column",gap:6}}>
 
                     {selVessels.size>0&&(
                       <button
@@ -456,7 +456,7 @@ const filtV=useMemo(()=>{
 
                   {/* RIGHT 50% - OpeningBreakdown with reduced height */}
                   {!mobile&&(
-                    <div style={{flex:"0 0 50%",display:"flex",flexDirection:"column",minHeight:0,alignSelf:"stretch",maxHeight:380}}>
+                    <div style={{flex:"0 0 32%",display:"flex",flexDirection:"column",minHeight:0,alignSelf:"stretch",maxHeight:380}}>
                       <OpeningBreakdown
                         vessels={vessels}
                         filteredVessels={filtV}
