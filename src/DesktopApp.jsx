@@ -275,20 +275,20 @@ const filtV=useMemo(()=>{
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
           
             {/* ── Three-column top row: Parse+Fixing | Rates | AI+Intel ── */}
-            <div style={{display:"flex",gap:10,alignItems:"stretch",flexDirection:mobile?"column":"row"}}>
-              {/* Parse panel — always shown */}
-              <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,overflow:"hidden",maxWidth:mobile?"100%":"32%",alignSelf:"stretch"}}>
-  <div style={{flex:"1 1 0",minHeight:0,display:"flex",flexDirection:"column"}}>
+            <div style={{display:"flex",gap:10,alignItems:"stretch",flexDirection:mobile?"column":"row",maxHeight:320}}>
+              {/* Parse panel + Fixing Window */}
+              <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,overflow:"hidden",maxWidth:mobile?"100%":"32%",alignSelf:"stretch",maxHeight:320}}>
+  <div style={{flex:"1 1 0",minHeight:0,display:"flex",flexDirection:"column",maxHeight:155}}>
     <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/>
   </div>
-  <div style={{flex:"1 1 0",minHeight:0,display:"flex",flexDirection:"column"}}>
+  <div style={{flex:"1 1 0",minHeight:0,display:"flex",flexDirection:"column",maxHeight:155}}>
     <FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} />
   </div>
 </div>
 
               {/* Rate Matrix — desktop only */}
               {!mobile&&(
-                <div style={{flex:"1 1 0",minWidth:180,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",maxWidth:"34%",alignSelf:"stretch"}}>
+                <div style={{flex:"1 1 0",minWidth:180,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",maxWidth:"34%",alignSelf:"stretch",maxHeight:320}}>
                   <div style={{padding:"6px 12px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",alignItems:"center",gap:6}}>
                     <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📊 Rate Matrix</span>
                     <span style={{flex:1}}/>
@@ -302,8 +302,12 @@ const filtV=useMemo(()=>{
                 </div>
               )}
 
-              {/* AI + Intel — desktop only */}
-              {!mobile&&<RightPanel vessels={vessels} cargoes={cargoes}/>}
+              {/* AI + Intel — desktop only with fixed height */}
+              {!mobile&&(
+                <div style={{flex:"1 1 0",minWidth:220,maxWidth:"34%",alignSelf:"stretch",maxHeight:320}}>
+                  <RightPanel vessels={vessels} cargoes={cargoes}/>
+                </div>
+              )}
             </div>
 
             {/* Mobile: AI Ask + Intel Vault stacked below */}
@@ -335,23 +339,6 @@ const filtV=useMemo(()=>{
                         🗑 Delete ({selVessels.size})
                       </button>
                     )}
-
-                    {FILTER_GROUPS.map(({label,items})=>(
-                      <div key={label} style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>{label}</span>
-                        {items.map(([f,l])=>(
-                          <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
-                        ))}
-                        {filters.size?(<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:4}}>✕ Clear</button>):null}
-                      </div>
-                    ))}
-
-                    <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-                      <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>Updated</span>
-                      {[["","All"],["today","Today"],["week","This week"]].map(([v,l])=>(
-                        <button key={v} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&v!=="")}>{l}</button>
-                      ))}
-                    </div>
 
                     {opFilter&&(
                       <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:"rgba(79,195,247,0.08)",border:"1px solid rgba(79,195,247,0.25)",borderRadius:5}}>
@@ -409,28 +396,46 @@ const filtV=useMemo(()=>{
                       </div>
 
                       <span style={{fontSize:11,color:C.faint}}>Right edge is always today</span>
+                    </div>
 
-                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:4}}>
+                    {/* STATUS, REGION, UPDATED filters moved here */}
+                    <div style={{display:"flex",flexDirection:"column",gap:6,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
+                      {FILTER_GROUPS.map(({label,items})=>(
+                        <div key={label} style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                          <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>{label}</span>
+                          {items.map(([f,l])=>(
+                            <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
+                          ))}
+                          {filters.size?(<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:4}}>✕ Clear</button>):null}
+                        </div>
+                      ))}
+
+                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>Updated</span>
+                        {[["","All"],["today","Today"],["week","This week"]].map(([v,l])=>(
+                          <button key={v} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&v!=="")}>{l}</button>
+                        ))}
+                      </div>
+
+                      {/* SEGMENT and SUPER REGION moved to same section */}
+                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                         <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Segment</span>
                         <select
                           value={segmentFilter}
                           onChange={e=>{setSegmentFilter(e.target.value);setPosPage(1);}}
-                          style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 8px",outline:"none"}}
+                          style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 8px",outline:"none"}}
                         >
                           <option value="">All</option>
                           {[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort().map(s=><option key={s} value={s}>{s}</option>)}
                         </select>
-                      </div>
 
-                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:2}}>
-                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>
+                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginLeft:8}}>
                           Super Region
                         </span>
-
                         <select
                           value={superRegionFilter}
                           onChange={e=>setSuperRegionFilter(e.target.value)}
-                          style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"4px 8px",outline:"none"}}
+                          style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 8px",outline:"none"}}
                         >
                           {superRegionOptions.map(r=>(
                             <option key={r} value={r}>{r}</option>
@@ -440,30 +445,30 @@ const filtV=useMemo(()=>{
                         {superRegionFilter!=="ALL" && (
                           <button
                             onClick={()=>setSuperRegionFilter("ALL")}
-                            style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,color:C.dim,fontSize:12,padding:"3px 8px",cursor:"pointer",fontFamily:"inherit"}}
+                            style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,color:C.dim,fontSize:12,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit"}}
                           >
-                            ✕ Clear
+                            ✕
                           </button>
                         )}
                       </div>
                     </div>
                   </div>
 
-                  {/* RIGHT 50% */}
+                  {/* RIGHT 50% - OpeningBreakdown with reduced height */}
                   {!mobile&&(
-                    <div style={{flex:"0 0 50%",display:"flex",flexDirection:"column",minHeight:0,alignSelf:"stretch"}}>
+                    <div style={{flex:"0 0 50%",display:"flex",flexDirection:"column",minHeight:0,alignSelf:"stretch",maxHeight:380}}>
                       <OpeningBreakdown
                         vessels={vessels}
                         filteredVessels={filtV}
                         bucketFilters={bucketFilters}
                         onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
-                        fillHeight
+                        fillHeight={false}
                       />
                     </div>
                   )}
                 </div>
 
-                {/* Fleet count row — directly above table */}
+                {/* Fleet count row with EXPORT moved here */}
                 <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,flexWrap:"wrap"}}>
   <ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/>
 
