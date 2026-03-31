@@ -95,7 +95,7 @@ function FixingWindow({vessels, fileDate, opFilter, onOpFilter}){
     <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,padding:"8px 12px 10px",marginBottom:10}}>
       <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>⏱ Fixing Window - Open Fleet by Operator</div>
       {/* Chart area with themed scrollbar */}
-      <div style={{position:"relative",marginBottom:6,maxHeight:280,overflowY:"auto",overflowX:"hidden",scrollbarWidth:"thin",scrollbarColor:C.bd2+" transparent"}}>
+      <div style={{position:"relative",marginBottom:6,maxHeight:220,overflowY:"auto",overflowX:"hidden",scrollbarWidth:"thin",scrollbarColor:C.bd2+" transparent"}}>
         {rows.map((r,i)=>{
           const pct=toPct(r.days);
           return(
