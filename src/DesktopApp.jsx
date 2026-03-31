@@ -456,7 +456,7 @@ const filtV=useMemo(()=>{
 
                   {/* RIGHT 50% - OpeningBreakdown with reduced height */}
                   {!mobile&&(
-                    <div style={{flex:"0 0 34%",display:"flex",flexDirection:"column",minHeight:0,alignSelf:"stretch",maxHeight:380}}>
+                    <div style={{flex:"0 0 33.5%",display:"flex",flexDirection:"column",minHeight:0,alignSelf:"stretch",maxHeight:380}}>
                       <OpeningBreakdown
                         vessels={vessels}
                         filteredVessels={filtV}
