@@ -275,20 +275,20 @@ const filtV=useMemo(()=>{
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
           
             {/* ── Three-column top row: Parse+Fixing | Rates | AI+Intel ── */}
-            <div style={{display:"flex",gap:10,alignItems:"stretch",flexDirection:mobile?"column":"row",maxHeight:320}}>
+            <div style={{display:"flex",gap:10,alignItems:"stretch",flexDirection:mobile?"column":"row",maxHeight:480}}>
               {/* Parse panel + Fixing Window */}
-              <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,overflow:"hidden",maxWidth:mobile?"100%":"32%",alignSelf:"stretch",maxHeight:320}}>
-  <div style={{flex:"1 1 0",minHeight:0,display:"flex",flexDirection:"column",maxHeight:155}}>
+              <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,overflow:"hidden",maxWidth:mobile?"100%":"32%",alignSelf:"stretch",maxHeight:480}}>
+  <div style={{flex:"1 1 0",minHeight:0,display:"flex",flexDirection:"column",maxHeight:235}}>
     <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/>
   </div>
-  <div style={{flex:"1 1 0",minHeight:0,display:"flex",flexDirection:"column",maxHeight:155}}>
+  <div style={{flex:"1 1 0",minHeight:0,display:"flex",flexDirection:"column",maxHeight:235}}>
     <FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} />
   </div>
 </div>
 
               {/* Rate Matrix — desktop only */}
               {!mobile&&(
-                <div style={{flex:"1 1 0",minWidth:180,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",maxWidth:"34%",alignSelf:"stretch",maxHeight:320}}>
+                <div style={{flex:"1 1 0",minWidth:180,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",maxWidth:"34%",alignSelf:"stretch",maxHeight:480}}>
                   <div style={{padding:"6px 12px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",alignItems:"center",gap:6}}>
                     <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📊 Rate Matrix</span>
                     <span style={{flex:1}}/>
@@ -304,7 +304,7 @@ const filtV=useMemo(()=>{
 
               {/* AI + Intel — desktop only with fixed height */}
               {!mobile&&(
-                <div style={{flex:"1 1 0",minWidth:220,maxWidth:"34%",alignSelf:"stretch",maxHeight:320}}>
+                <div style={{flex:"1 1 0",minWidth:220,maxWidth:"34%",alignSelf:"stretch",maxHeight:480}}>
                   <RightPanel vessels={vessels} cargoes={cargoes}/>
                 </div>
               )}
