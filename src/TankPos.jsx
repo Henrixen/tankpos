@@ -202,7 +202,7 @@ const{error}=await supabase.from("positions_external").update({[dbField]:dbValue
       };
     });
 
-    const { error } = await supabase.from("positions_external").insert(rows);
+    const { error } = await supabase.from("positions_external").upsert(rows, { onConflict: 'vessel_name' });
     if (error) console.error("positions_external upsert error:", error);
     else console.log("positions saved ok:", rows.length, "rows");
     
