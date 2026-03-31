@@ -121,6 +121,31 @@ export function haversine(a,b) {
 const _MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
 const _MON_D  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+export function rollOpenDateForward(dateStr, baseDate = null) {
+  if (!dateStr) return dateStr;
+
+  const ref = baseDate ? new Date(baseDate) : new Date();
+  ref.setHours(0, 0, 0, 0);
+
+  const s = String(dateStr).trim();
+  const m = s.match(/^(\d{1,2})\s+([A-Za-z]{3})$/);
+  if (!m) return dateStr;
+
+  const day = parseInt(m[1], 10);
+  const mon = _MONTHS.findIndex(x => x === m[2].slice(0, 3).toLowerCase());
+  if (mon < 0) return dateStr;
+
+  const d = new Date(ref.getFullYear(), mon, day);
+  d.setHours(0, 0, 0, 0);
+
+  // reject impossible dates like 31 Feb
+  if (d.getMonth() !== mon || d.getDate() !== day) return dateStr;
+
+  if (d < ref) d.setMonth(d.getMonth() + 1);
+
+  return String(d.getDate()).padStart(2, "0") + " " + _MON_D[d.getMonth()];
+}
+
 export function parseDate(s) {
   if (!s) return null;
   const lo = s.toLowerCase();
