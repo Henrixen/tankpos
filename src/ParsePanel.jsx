@@ -87,11 +87,25 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
 
   const ts=baseDate.toISOString();
 
-  const stamped=p.map(v=>({
-    ...v,
-    date: v.openPort==="EMPLOYED" ? v.date : rollOpenDateForward(v.date, baseDate),
-    updatedAt: ts
-  }));
+  // Enrich with vesselDB spec data before saving
+  const stamped=p.map(v=>{
+    const vesselKey = v.vessel?.toUpperCase();
+    const dbVessel = vesselDB[vesselKey];
+    
+    return {
+      ...v,
+      date: v.openPort==="EMPLOYED" ? v.date : rollOpenDateForward(v.date, baseDate),
+      updatedAt: ts,
+      // Add spec data from vesselDB if available
+      spec: dbVessel ? {
+        iceClass: dbVessel.iceClass || null,
+        lastCargo: dbVessel.lastCargo || null,
+        coated: dbVessel.coated || null,
+        segment: dbVessel.segment || null,
+        // Add any other spec fields you want to preserve
+      } : v.spec || null
+    };
+  });
 
   const r=onAddVessels(stamped);
   setText("");
