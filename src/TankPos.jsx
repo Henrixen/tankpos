@@ -167,22 +167,32 @@ const{error}=await supabase.from("positions_external").update({[dbField]:dbValue
     });
 
     const rows = parsed.map(v => {
-    const ev = enrichV(v, vdb);
-    return {
-    vessel_name: ev.vessel,
-    operator:    ev.operator || null,
-    port_name:   ev.openPort || null,
-    open_date: ev.date ? toISODate(ev.date) : null,
-    dwt: ev.dwt ? parseFloat(String(ev.dwt).replace(/\s/g,"").replace(/[^0-9.]/g,"")) || null : null,
-    build_year: ev.built ? parseInt(String(ev.built).replace(/[^0-9]/g,"")) || null : null,
-    overall_length: ev.loa ? Math.round(parseFloat(String(ev.loa).replace(/,/g,".").replace(/[^0-9.]/g,""))) || null : null,
-    beam: ev.beam ? Math.round(parseFloat(String(ev.beam).replace(/,/g,".").replace(/[^0-9.]/g,""))) || null : null,
-    details:     ev.comment || null,
-    file_date:   nowIso,
-    updated_at:  nowIso,
-    source:      "manual",
-  };
-});
+      const ev = enrichV(v, vdb);
+      
+      // Get spec data from vesselDB lookup
+      const vesselKey = ev.vessel?.toUpperCase();
+      const dbVessel = vdb[vesselKey?.toLowerCase()];
+      
+      return {
+        vessel_name: ev.vessel,
+        operator:    ev.operator || null,
+        port_name:   ev.openPort || null,
+        open_date: ev.date ? toISODate(ev.date) : null,
+        dwt: ev.dwt ? parseFloat(String(ev.dwt).replace(/\s/g,"").replace(/[^0-9.]/g,"")) || null : null,
+        build_year: ev.built ? parseInt(String(ev.built).replace(/[^0-9]/g,"")) || null : null,
+        overall_length: ev.loa ? Math.round(parseFloat(String(ev.loa).replace(/,/g,".").replace(/[^0-9.]/g,""))) || null : null,
+        beam: ev.beam ? Math.round(parseFloat(String(ev.beam).replace(/,/g,".").replace(/[^0-9.]/g,""))) || null : null,
+        details:     ev.comment || null,
+        file_date:   nowIso,
+        updated_at:  nowIso,
+        source:      "manual",
+        // ✅ ADD SPEC FIELDS FROM VESSELDB
+        ice_class: dbVessel?.ice_class || ev.spec?.iceClass || null,
+        last_3_cargoes: dbVessel?.last_cargo || ev.spec?.lastCargo || null,
+        segment: dbVessel?.segment || ev.spec?.segment || ev.segment || null,
+        // Add other spec fields as needed
+      };
+    });
 
     const { error } = await supabase.from("positions_external").insert(rows);
     if (error) console.error("positions_external upsert error:", error);
@@ -267,4 +277,3 @@ const{error}=await supabase.from("positions_external").update({[dbField]:dbValue
   const props={vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
   return <DesktopApp {...props}/>;
 }
-
