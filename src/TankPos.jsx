@@ -177,9 +177,18 @@ const{error}=await supabase.from("positions_external").update({[dbField]:dbValue
     const rows = parsed.map(v => {
       const ev = enrichV(v, vdb);
       
-      // Get spec data from vesselDB lookup
+      // Spec data is already in v.spec from ParsePanel OR look it up in vesselDB
       const vesselKey = ev.vessel?.toUpperCase();
       const dbVessel = vdb[vesselKey?.toLowerCase()];
+      
+      // Priority: use spec from parsed object first, then fallback to vesselDB
+      const spec = v.spec || (dbVessel ? {
+        iceClass: dbVessel.ice_class,
+        lastCargo: dbVessel.last_cargo,
+        segment: dbVessel.segment,
+      } : {});
+      
+      console.log("Saving to DB - vessel:", ev.vessel, "spec:", spec);
       
       return {
         vessel_name: ev.vessel,
@@ -194,11 +203,10 @@ const{error}=await supabase.from("positions_external").update({[dbField]:dbValue
         file_date:   nowIso,
         updated_at:  nowIso,
         source:      "manual",
-        // ✅ ADD SPEC FIELDS FROM VESSELDB
-        ice_class: dbVessel?.ice_class || ev.spec?.iceClass || null,
-        last_3_cargoes: dbVessel?.last_cargo || ev.spec?.lastCargo || null,
-        segment: dbVessel?.segment || ev.spec?.segment || ev.segment || null,
-        // Add other spec fields as needed
+        // ✅ SAVE SPEC FIELDS - use the spec that was already added in ParsePanel
+        ice_class: spec.iceClass || null,
+        last_3_cargoes: spec.lastCargo || null,
+        segment: spec.segment || ev.segment || null,
       };
     });
 
