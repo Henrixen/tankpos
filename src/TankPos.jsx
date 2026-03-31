@@ -105,6 +105,14 @@ export default function TankPos(){
       updatedAt:   r.updated_at||"",
       fileDate:    r.file_date||null,
       source:      r.source||"external",
+      // ✅ ADD SPEC OBJECT WITH DATA FROM DATABASE
+      spec: {
+        iceClass: r.ice_class||null,
+        lastCargo: r.last_3_cargoes||null,
+        segment: r.segment||null,
+        coated: r.fully_coated||r.part_coated||null,
+        // Add other spec fields as needed
+      }
     };
   }));
 }
