@@ -75,30 +75,28 @@ function RightPanel({vessels,cargoes}){
   useEffect(()=>{loadIntel().then(d=>{setIntelItems(d);});},[]);
 
   return(
-  <div style={{flex:"1 1 0",minWidth:220,maxWidth:"34%",display:"flex",flexDirection:"row",gap:10,alignSelf:"stretch",minHeight:0}}>
-
-    {/* Ask AI */}
-    <div style={{flex:1,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-      <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
-        <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
+    <div style={{display:"flex",flexDirection:"column",gap:10,height:"100%",maxHeight:320}}>
+      {/* Ask AI */}
+      <div style={{flex:"1 1 0",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0,maxHeight:155}}>
+        <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0}}>
+          <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
+        </div>
+        <div style={{flex:1,padding:"10px",overflowY:"auto",minHeight:0}}>
+          <AIAsk vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>
+        </div>
       </div>
-      <div style={{flex:1,padding:"10px",overflowY:"auto",minHeight:0}}>
-        <AIAsk vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>
+
+      {/* Intel Vault */}
+      <div style={{flex:"1 1 0",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0,maxHeight:155}}>
+        <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0}}>
+          <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📡 Intel Vault</span>
+        </div>
+        <div style={{flex:1,padding:"10px",overflowY:"auto",minHeight:0}}>
+          <IntelVault onVaultUpdate={setIntelItems}/>
+        </div>
       </div>
     </div>
-
-    {/* Intel Vault */}
-    <div style={{flex:1,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-      <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
-        <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📡 Intel Vault</span>
-      </div>
-      <div style={{flex:1,padding:"10px",overflowY:"auto",minHeight:0}}>
-        <IntelVault onVaultUpdate={setIntelItems}/>
-      </div>
-    </div>
-
-  </div>
-);
+  );
 }
 
 
