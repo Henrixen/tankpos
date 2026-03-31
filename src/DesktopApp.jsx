@@ -326,7 +326,6 @@ const filtV=useMemo(()=>{
                 <div style={{display:"flex",gap:10,alignItems:"stretch",flexDirection:mobile?"column":"row"}}>
                   {/* LEFT 50% */}
                   <div style={{flex:mobile?"1 1 100%":"0 0 50%",display:"flex",flexDirection:"column",gap:6}}>
-                    <ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/>
 
                     {selVessels.size>0&&(
                       <button
@@ -465,16 +464,28 @@ const filtV=useMemo(()=>{
                 </div>
 
                 {/* Fleet count row — directly above table */}
-                <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12}}>
-                  <span style={{color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",fontSize:11}}>Total fleet</span>
-                  <span style={{fontSize:22,fontWeight:800,color:C.tx,lineHeight:1}}>{vessels.length}</span>
-                  <span style={{color:C.faint,fontSize:11}}>ships</span>
-                  {filtV.length<vessels.length&&<span style={{color:C.blue,fontWeight:700,background:"rgba(88,166,255,.1)",border:"1px solid rgba(88,166,255,.25)",borderRadius:4,padding:"1px 7px"}}>showing {filtV.length}</span>}
-                  <span style={{color:C.purple,fontSize:12}}>{vessels.filter(v=>v.openPort==="EMPLOYED").length} employed</span>
-                  <span style={{color:"#f78166",fontSize:12}}>{vessels.filter(v=>isOpenPPT(v.date)&&v.openPort!=="EMPLOYED").length} PPT</span>
-                  <span style={{flex:1}}/>
-                  <span style={{color:C.faint,fontSize:11}}>💡 Click any cell to edit</span>
-                </div>
+                <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,flexWrap:"wrap"}}>
+  <ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/>
+
+  {selVessels.size>0&&(
+    <button
+      onClick={()=>setPendingDel({type:"all",id:"__SELECTED__",label:selVessels.size+" vessel"+(selVessels.size!==1?"s":"")})}
+      style={{fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:5,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}
+    >
+      🗑 Delete ({selVessels.size})
+    </button>
+  )}
+
+  <span style={{flex:1}}/>
+
+  <span style={{color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",fontSize:11}}>Total fleet</span>
+  <span style={{fontSize:22,fontWeight:800,color:C.tx,lineHeight:1}}>{vessels.length}</span>
+  <span style={{color:C.faint,fontSize:11}}>ships</span>
+  {filtV.length<vessels.length&&<span style={{color:C.blue,fontWeight:700,background:"rgba(88,166,255,.1)",border:"1px solid rgba(88,166,255,.25)",borderRadius:4,padding:"1px 7px"}}>showing {filtV.length}</span>}
+  <span style={{color:C.purple,fontSize:12}}>{vessels.filter(v=>v.openPort==="EMPLOYED").length} employed</span>
+  <span style={{color:"#f78166",fontSize:12}}>{vessels.filter(v=>isOpenPPT(v.date)&&v.openPort!=="EMPLOYED").length} PPT</span>
+  <span style={{color:C.faint,fontSize:11}}>💡 Click any cell to edit</span>
+</div>
 
                 {/* Table + side panel */}
                 <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
