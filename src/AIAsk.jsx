@@ -75,14 +75,14 @@ function RightPanel({vessels,cargoes}){
   useEffect(()=>{loadIntel().then(d=>{setIntelItems(d);});},[]);
 
   return(
-  <div style={{flex:"1 1 0",minWidth:220,maxWidth:"40%",display:"flex",flexDirection:"row",gap:10,alignSelf:"stretch"}}>
+  <div style={{flex:"1 1 0",minWidth:220,maxWidth:"34%",display:"flex",flexDirection:"row",gap:10,alignSelf:"stretch",minHeight:0}}>
 
     {/* Ask AI */}
     <div style={{flex:1,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
       <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
         <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
       </div>
-      <div style={{flex:1,padding:"10px",overflowY:"auto"}}>
+      <div style={{flex:1,padding:"10px",overflowY:"auto",minHeight:0}}>
         <AIAsk vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>
       </div>
     </div>
@@ -92,7 +92,7 @@ function RightPanel({vessels,cargoes}){
       <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
         <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📡 Intel Vault</span>
       </div>
-      <div style={{flex:1,padding:"10px",overflowY:"auto"}}>
+      <div style={{flex:1,padding:"10px",overflowY:"auto",minHeight:0}}>
         <IntelVault onVaultUpdate={setIntelItems}/>
       </div>
     </div>
