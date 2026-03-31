@@ -278,10 +278,10 @@ const filtV=useMemo(()=>{
             <div style={{display:"flex",gap:10,alignItems:"stretch",flexDirection:mobile?"column":"row",maxHeight:480}}>
               {/* Parse panel + Fixing Window */}
               <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,overflow:"hidden",maxWidth:mobile?"100%":"32%",alignSelf:"stretch",maxHeight:480}}>
-  <div style={{flex:"1 1 0",minHeight:0,display:"flex",flexDirection:"column",maxHeight:235}}>
+  <div style={{flexShrink:0,display:"flex",flexDirection:"column"}}>
     <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/>
   </div>
-  <div style={{flex:"1 1 0",minHeight:0,display:"flex",flexDirection:"column",maxHeight:235}}>
+  <div style={{flex:"1 1 0",minHeight:0,display:"flex",flexDirection:"column"}}>
     <FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} />
   </div>
 </div>
