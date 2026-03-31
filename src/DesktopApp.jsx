@@ -6,6 +6,7 @@ import ParsePanel from "./ParsePanel";
 import RightPanel from "./AIAsk";
 import { RateMatrix, RateMatrixBunkerInput } from "./RateMatrix";
 import FixingTab from "./FixingTab";
+import ProjectsTab from "./ProjectsTab";
 import { TCECalculator } from "./TCECalculator";
 import Dashboard from "./Dashboard";
 import { loadHistory } from "./supabaseHelpers";
@@ -262,7 +263,7 @@ const filtV=useMemo(()=>{
       </div>
       <div style={{padding:"12px 16px",maxWidth:1900,margin:"0 auto"}}>
         <div style={{display:"flex",flexWrap:"wrap",borderBottom:"1px solid "+C.bd2,marginBottom:12,gap:mobile?"2px 0":0}}>
-          {[["pos","⚓ Pos",vessels.length],["cargo","📦 Cargo",cargoTotal||cargoes.length],["fix","🎯 Fix",0],["matrix","🔗 Matrix",0],["tce","⚡ TCE",0],["dash","📊 Dash",0]].map(([id,label,cnt])=>(
+          {[["pos","⚓ Pos",vessels.length],["cargo","📦 Cargo",cargoTotal||cargoes.length],["fix","🎯 Fix",0],["projects","🧮 Projects",0],["matrix","🔗 Matrix",0],["tce","⚡ TCE",0],["dash","📊 Dash",0]].map(([id,label,cnt])=>(
             <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}} style={{fontFamily:"sans-serif",fontWeight:700,fontSize:mobile?11:12,padding:mobile?"6px 10px":"7px 16px",border:"none",background:"transparent",color:tab===id?C.blue:C.dim,borderBottom:"2px solid "+(tab===id?C.blue:"transparent"),cursor:"pointer",whiteSpace:"nowrap"}}>
               {label}{cnt>0?(<span style={{fontSize:11,marginLeft:3,background:C.bg3,padding:"1px 5px",borderRadius:8}}>{cnt}</span>):null}
             </button>
@@ -791,6 +792,13 @@ const filtV=useMemo(()=>{
         {tab==="fix"&&(
           <div style={{overflowX:mobile?"hidden":"visible"}}>
             <FixingTab vessels={vessels}/>
+          </div>
+        )}
+
+        {/* ── PROJECTS ── */}
+        {tab==="projects"&&(
+          <div style={{overflowX:mobile?"hidden":"visible"}}>
+            <ProjectsTab/>
           </div>
         )}
 
