@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { C } from "./constants";
 import { loadImg, normaliseQty, rollOpenDateForward } from "./utils";
