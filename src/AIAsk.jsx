@@ -75,9 +75,9 @@ function RightPanel({vessels,cargoes}){
   useEffect(()=>{loadIntel().then(d=>{setIntelItems(d);});},[]);
 
   return(
-    <div style={{display:"flex",flexDirection:"column",gap:10,height:"100%",maxHeight:480}}>
+    <div style={{display:"flex",flexDirection:"row",gap:10,height:"100%",maxHeight:480}}>
       {/* Ask AI */}
-      <div style={{flex:"1 1 0",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0,maxHeight:235}}>
+      <div style={{flex:"1 1 0",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0,maxHeight:480}}>
         <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0}}>
           <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
         </div>
@@ -87,7 +87,7 @@ function RightPanel({vessels,cargoes}){
       </div>
 
       {/* Intel Vault */}
-      <div style={{flex:"1 1 0",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0,maxHeight:235}}>
+      <div style={{flex:"1 1 0",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0,maxHeight:480}}>
         <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0}}>
           <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📡 Intel Vault</span>
         </div>
