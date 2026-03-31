@@ -49,32 +49,16 @@ function ProjectsTab() {
 }
 
 // ===== SPOT VS TC CALCULATOR =====
+// ===== SPOT VS TC CALCULATOR =====
 function SpotVsTCCalculator() {
-  const [mode, setMode] = useState("single"); // "single" or "simulation"
+  const [mode, setMode] = useState("single");
   const [inputs, setInputs] = useState({
-    // Voyage details
-    cargoQty: "38000",
-    cargoGrade: "CPP",
-    loadPort: "Tees",
-    dischPort: "ARA",
-    ballastDays: "1.5",
-    ladenDays: "1.5",
-    repositionDays: "0.5",
-    portDays: "3.5",
-    // Spot TCE
-    spotTCE: "23000",
-    // TC Hire
-    tcHire: "17000",
-    // Variable costs
-    bunkersPrice: "550",
-    seaConsumption: "28",
-    portConsumption: "4",
-    portCost: "45000",
-    commissionPct: "0",
-    // Simulation
-    simPeriod: "1", // 1, 3, or 6 months
-    idleDaysPerMonth: "8",
-    voyagesPerMonth: "3"
+    cargoQty: "38000", cargoGrade: "CPP", loadPort: "Tees", dischPort: "ARA",
+    ballastDays: "1.5", ladenDays: "1.5", repositionDays: "0.5", portDays: "3.5",
+    bunkersPrice: "550", seaConsumption: "28", portConsumption: "4", idleConsumption: "2",
+    portCost: "45000", demurrageRate: "35000", demurrageDays: "0", commissionPct: "1.25",
+    spotTCE: "23000", tcHire: "17000",
+    simPeriod: "1", idleDaysPerMonth: "8", voyagesPerMonth: "3"
   });
 
   const update = (key, val) => setInputs(prev => ({ ...prev, [key]: val }));
@@ -92,42 +76,26 @@ function SpotVsTCCalculator() {
     const seaCons = parseFloat(inputs.seaConsumption) || 0;
     const portCons = parseFloat(inputs.portConsumption) || 0;
     const portCost = parseFloat(inputs.portCost) || 0;
+    const demRate = parseFloat(inputs.demurrageRate) || 0;
+    const demDays = parseFloat(inputs.demurrageDays) || 0;
     const commPct = parseFloat(inputs.commissionPct) || 0;
 
-    // Spot: TCE revenue - variable costs - commission
+    const bunkersCost = (seaCons * (ballast + laden + reposition) + portCons * port) * bunkersPrice;
+    const demurrageCost = demRate * demDays;
+    const commission = (spotTCE * totalDays) * (commPct / 100);
+    const variableCosts = bunkersCost + portCost + demurrageCost;
+
     const spotRevenue = spotTCE * totalDays;
-    const spotBunkers = (seaCons * (ballast + laden + reposition) + portCons * port) * bunkersPrice;
-    const spotPort = portCost;
-    const spotGross = spotRevenue - spotBunkers - spotPort;
-    const spotCommission = spotGross * (commPct / 100);
-    const spotNet = spotGross - spotCommission;
-
-    // TC: Hire cost - variable costs
     const tcHireCost = tcHire * totalDays;
-    const tcBunkers = spotBunkers; // Same bunkers
-    const tcPort = spotPort; // Same port costs
-    const tcTotal = tcHireCost + tcBunkers + tcPort;
-    const tcNet = -tcTotal; // Negative because it's a cost
-
-    const advantage = spotNet - Math.abs(tcNet);
-    const advantagePct = Math.abs(tcNet) > 0 ? (advantage / Math.abs(tcNet)) * 100 : 0;
+    const tcTotalCost = tcHireCost + variableCosts + commission;
+    const netDifference = spotRevenue - tcTotalCost;
+    const breakevenTCE = totalDays > 0 ? tcTotalCost / totalDays : 0;
 
     return {
-      totalDays,
-      spotRevenue,
-      spotBunkers,
-      spotPort,
-      spotCommission,
-      spotNet,
-      tcHireCost,
-      tcBunkers,
-      tcPort,
-      tcTotal,
-      tcNet,
-      advantage,
-      advantagePct,
-      spotDailyNet: totalDays > 0 ? spotNet / totalDays : 0,
-      tcDailyNet: totalDays > 0 ? tcNet / totalDays : 0
+      totalDays, bunkersCost, demurrageCost, portCost, commission, variableCosts,
+      spotRevenue, spotDailyNet: totalDays > 0 ? spotRevenue / totalDays : 0,
+      tcHireCost, tcTotalCost, tcDailyNet: totalDays > 0 ? tcTotalCost / totalDays : 0,
+      netDifference, breakevenTCE
     };
   }, [inputs]);
 
@@ -135,410 +103,287 @@ function SpotVsTCCalculator() {
     const months = parseFloat(inputs.simPeriod) || 1;
     const idleDaysPerMonth = parseFloat(inputs.idleDaysPerMonth) || 0;
     const voyagesPerMonth = parseFloat(inputs.voyagesPerMonth) || 0;
-    
     const tcHire = parseFloat(inputs.tcHire) || 0;
-    const totalDaysPerMonth = 30;
-    const totalDays = months * totalDaysPerMonth;
+    const spotTCE = parseFloat(inputs.spotTCE) || 0;
+    const idleCons = parseFloat(inputs.idleConsumption) || 0;
+    const bunkersPrice = parseFloat(inputs.bunkersPrice) || 0;
+    
+    const totalDays = months * 30;
     const totalVoyages = months * voyagesPerMonth;
     const totalIdleDays = months * idleDaysPerMonth;
     const totalWorkingDays = totalDays - totalIdleDays;
 
-    // Spot: multiple voyages
-    const spotNetPerVoyage = singleVoyageResults.spotNet;
-    const spotTotalNet = spotNetPerVoyage * totalVoyages;
-    const spotDailyAvg = totalDays > 0 ? spotTotalNet / totalDays : 0;
-
-    // TC: continuous hire for entire period including idle days
+    const spotTotalRevenue = spotTCE * totalWorkingDays;
     const tcTotalHire = tcHire * totalDays;
-    const tcVoyageCosts = (singleVoyageResults.tcBunkers + singleVoyageResults.tcPort) * totalVoyages;
-    const tcTotalCost = tcTotalHire + tcVoyageCosts;
-    const tcDailyAvg = totalDays > 0 ? -tcTotalCost / totalDays : 0;
-
-    const advantage = spotTotalNet - tcTotalCost;
-    const advantagePct = tcTotalCost > 0 ? (advantage / tcTotalCost) * 100 : 0;
+    const tcVoyageCosts = singleVoyageResults.variableCosts * totalVoyages;
+    const tcIdleBunkers = idleCons * totalIdleDays * bunkersPrice;
+    const tcTotalCost = tcTotalHire + tcVoyageCosts + tcIdleBunkers;
 
     return {
-      months,
-      totalDays,
-      totalVoyages,
-      totalIdleDays,
-      totalWorkingDays,
-      spotTotalNet,
-      spotDailyAvg,
-      tcTotalHire,
-      tcVoyageCosts,
-      tcTotalCost,
-      tcDailyAvg,
-      advantage,
-      advantagePct
+      months, totalDays, totalVoyages, totalIdleDays, totalWorkingDays,
+      spotTotalRevenue, spotDailyAvg: totalDays > 0 ? spotTotalRevenue / totalDays : 0,
+      tcTotalHire, tcVoyageCosts, tcIdleBunkers, tcTotalCost,
+      tcDailyAvg: totalDays > 0 ? tcTotalCost / totalDays : 0,
+      netDifference: spotTotalRevenue - tcTotalCost
     };
-  }, [inputs, singleVoyageResults, mode]);
+  }, [inputs, singleVoyageResults]);
 
   const inpS = { background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontFamily: "inherit", fontSize: 13, padding: "6px 10px", outline: "none", width: "100%" };
   const lblS = { fontSize: 11, color: C.faint, marginBottom: 4, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" };
 
   return (
-    <div style={{ maxWidth: 1400, margin: "0 auto" }}>
+    <div style={{ maxWidth: 1600, margin: "0 auto" }}>
       <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 16 }}>
         <div style={{ flex: 1 }}>
-          <h3 style={{ fontSize: 18, fontWeight: 700, color: C.tx, margin: "0 0 8px 0" }}>Spot TCE vs Time Charter Analysis</h3>
-          <p style={{ fontSize: 13, color: C.faint, margin: 0 }}>Compare earning spot TCE vs. taking a vessel on time charter</p>
+          <h3 style={{ fontSize: 18, fontWeight: 700, color: C.tx, margin: "0 0 8px 0" }}>Spot TCE vs Time Charter Comparison</h3>
+          <p style={{ fontSize: 13, color: C.faint, margin: 0 }}>Compare earning spot market TCE vs. hiring a vessel on time charter</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={() => setMode("single")}
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              padding: "8px 16px",
-              borderRadius: 6,
-              border: "1px solid " + (mode === "single" ? C.blue : C.bd),
-              background: mode === "single" ? C.blue + "22" : C.bg3,
-              color: mode === "single" ? C.blue : C.dim,
-              cursor: "pointer",
-              fontFamily: "inherit"
-            }}
-          >
-            Single Voyage
-          </button>
-          <button
-            onClick={() => setMode("simulation")}
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              padding: "8px 16px",
-              borderRadius: 6,
-              border: "1px solid " + (mode === "simulation" ? C.blue : C.bd),
-              background: mode === "simulation" ? C.blue + "22" : C.bg3,
-              color: mode === "simulation" ? C.blue : C.dim,
-              cursor: "pointer",
-              fontFamily: "inherit"
-            }}
-          >
-            Simulation
-          </button>
+          {["single", "simulation"].map(m => (
+            <button key={m} onClick={() => setMode(m)} style={{
+              fontSize: 12, fontWeight: 600, padding: "8px 16px", borderRadius: 6,
+              border: "1px solid " + (mode === m ? C.blue : C.bd),
+              background: mode === m ? C.blue + "22" : C.bg3,
+              color: mode === m ? C.blue : C.dim, cursor: "pointer", fontFamily: "inherit"
+            }}>
+              {m === "single" ? "Single Voyage" : "Simulation"}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        {/* Top Row: Voyage Details and Variable Costs */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-          {/* Voyage Details */}
+      {mode === "single" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Row 1: Voyage Details */}
           <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Voyage Details</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div>
-                <div style={lblS}>Cargo Qty (MT)</div>
-                <input style={inpS} value={inputs.cargoQty} onChange={e => update("cargoQty", e.target.value)} />
-              </div>
-              <div>
-                <div style={lblS}>Cargo Grade</div>
-                <input style={inpS} value={inputs.cargoGrade} onChange={e => update("cargoGrade", e.target.value)} placeholder="CPP / UNL / Gasoil" />
-              </div>
-              <div>
-                <div style={lblS}>Load Port</div>
-                <input style={inpS} value={inputs.loadPort} onChange={e => update("loadPort", e.target.value)} />
-              </div>
-              <div>
-                <div style={lblS}>Discharge Port</div>
-                <input style={inpS} value={inputs.dischPort} onChange={e => update("dischPort", e.target.value)} />
-              </div>
-              <div>
-                <div style={lblS}>Ballast Days</div>
-                <input style={inpS} value={inputs.ballastDays} onChange={e => update("ballastDays", e.target.value)} />
-              </div>
-              <div>
-                <div style={lblS}>Laden Days</div>
-                <input style={inpS} value={inputs.ladenDays} onChange={e => update("ladenDays", e.target.value)} />
-              </div>
-              <div>
-                <div style={lblS}>Reposition Days</div>
-                <input style={inpS} value={inputs.repositionDays} onChange={e => update("repositionDays", e.target.value)} />
-              </div>
-              <div>
-                <div style={lblS}>Port Days</div>
-                <input style={inpS} value={inputs.portDays} onChange={e => update("portDays", e.target.value)} />
-              </div>
-              <div style={{ marginTop: 4, padding: 8, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-                <div style={{ fontSize: 11, color: C.faint, marginBottom: 4 }}>TOTAL VOYAGE</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>{singleVoyageResults.totalDays.toFixed(1)} days</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Variable Costs */}
-          <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Variable Costs</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div>
-                <div style={lblS}>Bunkers (USD/MT)</div>
-                <input style={inpS} value={inputs.bunkersPrice} onChange={e => update("bunkersPrice", e.target.value)} placeholder="550" />
-              </div>
-              <div>
-                <div style={lblS}>Sea Cons. (MT/day)</div>
-                <input style={inpS} value={inputs.seaConsumption} onChange={e => update("seaConsumption", e.target.value)} placeholder="28" />
-              </div>
-              <div>
-                <div style={lblS}>Port Cons. (MT/day)</div>
-                <input style={inpS} value={inputs.portConsumption} onChange={e => update("portConsumption", e.target.value)} placeholder="4" />
-              </div>
-              <div>
-                <div style={lblS}>Port Costs (USD)</div>
-                <input style={inpS} value={inputs.portCost} onChange={e => update("portCost", e.target.value)} placeholder="45000" />
-              </div>
-              <div>
-                <div style={lblS}>Commission (%)</div>
-                <input style={inpS} value={inputs.commissionPct} onChange={e => update("commissionPct", e.target.value)} placeholder="0" />
-              </div>
-
-              <div style={{ marginTop: 4, padding: 8, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-                <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>COST PER VOYAGE</div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
-                  <span>Bunkers</span>
-                  <span style={{ fontFamily: "monospace" }}>USD {Math.round(singleVoyageResults.spotBunkers).toLocaleString()}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx }}>
-                  <span>Port</span>
-                  <span style={{ fontFamily: "monospace" }}>USD {Math.round(singleVoyageResults.spotPort).toLocaleString()}</span>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12 }}>
+              <div><div style={lblS}>Cargo Qty (MT)</div><input style={inpS} value={inputs.cargoQty} onChange={e => update("cargoQty", e.target.value)} /></div>
+              <div><div style={lblS}>Cargo Grade</div><input style={inpS} value={inputs.cargoGrade} onChange={e => update("cargoGrade", e.target.value)} /></div>
+              <div><div style={lblS}>Load Port</div><input style={inpS} value={inputs.loadPort} onChange={e => update("loadPort", e.target.value)} /></div>
+              <div><div style={lblS}>Discharge Port</div><input style={inpS} value={inputs.dischPort} onChange={e => update("dischPort", e.target.value)} /></div>
+              <div><div style={lblS}>Ballast Days</div><input style={inpS} value={inputs.ballastDays} onChange={e => update("ballastDays", e.target.value)} /></div>
+              <div><div style={lblS}>Laden Days</div><input style={inpS} value={inputs.ladenDays} onChange={e => update("ladenDays", e.target.value)} /></div>
+              <div><div style={lblS}>Reposition Days</div><input style={inpS} value={inputs.repositionDays} onChange={e => update("repositionDays", e.target.value)} /></div>
+              <div><div style={lblS}>Port Days</div><input style={inpS} value={inputs.portDays} onChange={e => update("portDays", e.target.value)} /></div>
+              <div style={{ display: "flex", alignItems: "flex-end" }}>
+                <div style={{ padding: "8px 12px", background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2, width: "100%" }}>
+                  <div style={{ fontSize: 10, color: C.faint, marginBottom: 2 }}>TOTAL</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.tx }}>{singleVoyageResults.totalDays.toFixed(1)}d</div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Bottom Row: Spot TCE and TC Hire */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-          {/* Spot TCE */}
+          {/* Row 2: Variable Costs */}
           <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>💰 Spot Market</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Variable Costs (Applied to Both Options)</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr) 2fr", gap: 12, alignItems: "start" }}>
+              <div><div style={lblS}>Bunkers (USD/MT)</div><input style={inpS} value={inputs.bunkersPrice} onChange={e => update("bunkersPrice", e.target.value)} /></div>
+              <div><div style={lblS}>Sea Cons (MT/d)</div><input style={inpS} value={inputs.seaConsumption} onChange={e => update("seaConsumption", e.target.value)} /></div>
+              <div><div style={lblS}>Port Cons (MT/d)</div><input style={inpS} value={inputs.portConsumption} onChange={e => update("portConsumption", e.target.value)} /></div>
+              <div><div style={lblS}>Port Cost (USD)</div><input style={inpS} value={inputs.portCost} onChange={e => update("portCost", e.target.value)} /></div>
               <div>
-                <div style={lblS}>Spot TCE (USD/day)</div>
-                <input style={inpS} value={inputs.spotTCE} onChange={e => update("spotTCE", e.target.value)} placeholder="23000" />
-              </div>
-
-              <div style={{ marginTop: 8, padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-                <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>PER VOYAGE P&L</div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                  <span>Revenue ({singleVoyageResults.totalDays.toFixed(1)}d)</span>
-                  <span style={{ fontFamily: "monospace", color: C.green }}>+{Math.round(singleVoyageResults.spotRevenue).toLocaleString()}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                  <span>Bunkers</span>
-                  <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.spotBunkers).toLocaleString()}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                  <span>Port Costs</span>
-                  <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.spotPort).toLocaleString()}</span>
-                </div>
-                {singleVoyageResults.spotCommission > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                    <span>Commission</span>
-                    <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.spotCommission).toLocaleString()}</span>
+                <div style={lblS}>Demurrage</div>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8 }}>
+                  <input style={inpS} value={inputs.demurrageRate} onChange={e => update("demurrageRate", e.target.value)} placeholder="Rate (USD/day)" />
+                  <input style={inpS} value={inputs.demurrageDays} onChange={e => update("demurrageDays", e.target.value)} placeholder="Days" />
+                  <div style={{ padding: "6px 10px", background: C.bg1, borderRadius: 4, border: "1px solid " + C.bd2, fontSize: 12, fontWeight: 700, color: C.tx, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {Math.round(singleVoyageResults.demurrageCost).toLocaleString()}
                   </div>
-                )}
-                <div style={{ borderTop: "1px solid " + C.bd2, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.tx }}>
-                  <span>Net</span>
-                  <span style={{ fontFamily: "monospace", color: singleVoyageResults.spotNet > 0 ? C.green : C.red }}>
-                    {singleVoyageResults.spotNet > 0 ? "+" : ""}{Math.round(singleVoyageResults.spotNet).toLocaleString()}
-                  </span>
                 </div>
-                <div style={{ marginTop: 4, fontSize: 11, color: C.faint, textAlign: "right" }}>
-                  USD {Math.round(singleVoyageResults.spotDailyNet).toLocaleString()}/day
+              </div>
+              <div><div style={lblS}>Commission (%)</div><input style={inpS} value={inputs.commissionPct} onChange={e => update("commissionPct", e.target.value)} /></div>
+              <div style={{ gridColumn: "span 4" }}>
+                <div style={{ padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>COST BREAKDOWN PER VOYAGE</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: C.faint, marginBottom: 2 }}>Bunkers</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>USD {Math.round(singleVoyageResults.bunkersCost).toLocaleString()}</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: C.faint, marginBottom: 2 }}>Port Costs</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>USD {Math.round(singleVoyageResults.portCost).toLocaleString()}</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: C.faint, marginBottom: 2 }}>Demurrage</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>USD {Math.round(singleVoyageResults.demurrageCost).toLocaleString()}</div>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: C.faint, marginBottom: 2 }}>Commission</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.tx }}>USD {Math.round(singleVoyageResults.commission).toLocaleString()}</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* TC Hire */}
-          <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>⏱️ Time Charter</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div>
-                <div style={lblS}>TC Hire (USD/day)</div>
-                <input style={inpS} value={inputs.tcHire} onChange={e => update("tcHire", e.target.value)} placeholder="17000" />
+          {/* Row 3: Spot Market vs Time Charter */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+            <div style={{ background: C.green + "11", border: "2px solid " + C.green, borderRadius: 8, padding: 20 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.green, marginBottom: 16 }}>💰 Spot Market</div>
+              <div style={{ marginBottom: 16 }}>
+                <div style={lblS}>Spot TCE (USD/day)</div>
+                <input style={{ ...inpS, fontSize: 16, fontWeight: 700, padding: "10px 12px" }} value={inputs.spotTCE} onChange={e => update("spotTCE", e.target.value)} />
               </div>
+              <div style={{ padding: 16, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
+                <div style={{ fontSize: 12, color: C.faint, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>Revenue Calculation</div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: C.tx, marginBottom: 8 }}>
+                  <span>TCE × {singleVoyageResults.totalDays.toFixed(1)} days</span>
+                  <span style={{ fontWeight: 700, color: C.green, fontFamily: "monospace" }}>+{Math.round(singleVoyageResults.spotRevenue).toLocaleString()}</span>
+                </div>
+                <div style={{ borderTop: "1px solid " + C.bd2, marginTop: 12, paddingTop: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, marginBottom: 4 }}>
+                    <span style={{ fontWeight: 600 }}>Total Earnings</span>
+                    <span style={{ fontWeight: 700, color: C.green, fontFamily: "monospace" }}>USD {Math.round(singleVoyageResults.spotRevenue).toLocaleString()}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: C.faint, textAlign: "right" }}>USD {Math.round(singleVoyageResults.spotDailyNet).toLocaleString()}/day</div>
+                </div>
+              </div>
+            </div>
 
-              <div style={{ marginTop: 8, padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-                <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>PER VOYAGE COST</div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
+            <div style={{ background: C.red + "11", border: "2px solid " + C.red, borderRadius: 8, padding: 20 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.red, marginBottom: 16 }}>⏱️ Time Charter</div>
+              <div style={{ marginBottom: 16 }}>
+                <div style={lblS}>TC Hire (USD/day)</div>
+                <input style={{ ...inpS, fontSize: 16, fontWeight: 700, padding: "10px 12px" }} value={inputs.tcHire} onChange={e => update("tcHire", e.target.value)} />
+              </div>
+              <div style={{ padding: 16, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
+                <div style={{ fontSize: 12, color: C.faint, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>Cost Breakdown</div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx, marginBottom: 6 }}>
                   <span>Hire ({singleVoyageResults.totalDays.toFixed(1)}d)</span>
                   <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.tcHireCost).toLocaleString()}</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                  <span>Bunkers</span>
-                  <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.tcBunkers).toLocaleString()}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx, marginBottom: 6 }}>
+                  <span>Variable Costs</span>
+                  <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.variableCosts).toLocaleString()}</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                  <span>Port Costs</span>
-                  <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.tcPort).toLocaleString()}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx, marginBottom: 6 }}>
+                  <span>Commission</span>
+                  <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.commission).toLocaleString()}</span>
                 </div>
-                <div style={{ borderTop: "1px solid " + C.bd2, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.red }}>
-                  <span>Total Cost</span>
-                  <span style={{ fontFamily: "monospace" }}>-{Math.round(singleVoyageResults.tcTotal).toLocaleString()}</span>
-                </div>
-                <div style={{ marginTop: 4, fontSize: 11, color: C.faint, textAlign: "right" }}>
-                  USD {Math.round(Math.abs(singleVoyageResults.tcDailyNet)).toLocaleString()}/day
+                <div style={{ borderTop: "1px solid " + C.bd2, marginTop: 12, paddingTop: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, marginBottom: 4 }}>
+                    <span style={{ fontWeight: 600 }}>Total Cost</span>
+                    <span style={{ fontWeight: 700, color: C.red, fontFamily: "monospace" }}>USD {Math.round(singleVoyageResults.tcTotalCost).toLocaleString()}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: C.faint, textAlign: "right" }}>USD {Math.round(singleVoyageResults.tcDailyNet).toLocaleString()}/day</div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Simulation Parameters - only show in simulation mode */}
-        {mode === "simulation" && (
+          {/* Comparison */}
+          <div style={{ background: singleVoyageResults.netDifference > 0 ? C.green + "11" : C.red + "11", border: "2px solid " + (singleVoyageResults.netDifference > 0 ? C.green : C.red), borderRadius: 8, padding: 24, textAlign: "center" }}>
+            <div style={{ fontSize: 14, color: C.faint, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
+              {singleVoyageResults.netDifference > 0 ? "✓ Spot Market is Better" : "✗ Time Charter is Cheaper"}
+            </div>
+            <div style={{ fontSize: 36, fontWeight: 700, color: singleVoyageResults.netDifference > 0 ? C.green : C.red, marginBottom: 8 }}>
+              {singleVoyageResults.netDifference > 0 ? "+" : ""}USD {Math.round(singleVoyageResults.netDifference).toLocaleString()}
+            </div>
+            <div style={{ fontSize: 14, color: C.faint }}>Breakeven TCE: USD {Math.round(singleVoyageResults.breakevenTCE).toLocaleString()}/day</div>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Simulation Parameters */}
           <div style={{ background: C.bg2, border: "2px solid " + C.blue, borderRadius: 8, padding: 16 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>📊 Simulation Parameters</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
               <div>
                 <div style={lblS}>Period (months)</div>
                 <div style={{ display: "flex", gap: 8 }}>
                   {["1", "3", "6"].map(m => (
-                    <button
-                      key={m}
-                      onClick={() => update("simPeriod", m)}
-                      style={{
-                        flex: 1,
-                        fontSize: 13,
-                        fontWeight: 600,
-                        padding: "8px",
-                        borderRadius: 6,
-                        border: "1px solid " + (inputs.simPeriod === m ? C.blue : C.bd),
-                        background: inputs.simPeriod === m ? C.blue + "22" : C.bg3,
-                        color: inputs.simPeriod === m ? C.blue : C.dim,
-                        cursor: "pointer",
-                        fontFamily: "inherit"
-                      }}
-                    >
-                      {m}M
-                    </button>
+                    <button key={m} onClick={() => update("simPeriod", m)} style={{
+                      flex: 1, fontSize: 13, fontWeight: 600, padding: "8px", borderRadius: 6,
+                      border: "1px solid " + (inputs.simPeriod === m ? C.blue : C.bd),
+                      background: inputs.simPeriod === m ? C.blue + "22" : C.bg3,
+                      color: inputs.simPeriod === m ? C.blue : C.dim, cursor: "pointer", fontFamily: "inherit"
+                    }}>{m}M</button>
                   ))}
                 </div>
               </div>
-              <div>
-                <div style={lblS}>Voyages per Month</div>
-                <input style={inpS} value={inputs.voyagesPerMonth} onChange={e => update("voyagesPerMonth", e.target.value)} />
-              </div>
-              <div>
-                <div style={lblS}>Idle Days per Month</div>
-                <input style={inpS} value={inputs.idleDaysPerMonth} onChange={e => update("idleDaysPerMonth", e.target.value)} />
-              </div>
+              <div><div style={lblS}>Voyages per Month</div><input style={inpS} value={inputs.voyagesPerMonth} onChange={e => update("voyagesPerMonth", e.target.value)} /></div>
+              <div><div style={lblS}>Idle Days per Month</div><input style={inpS} value={inputs.idleDaysPerMonth} onChange={e => update("idleDaysPerMonth", e.target.value)} /></div>
+              <div><div style={lblS}>Idle Cons (MT/day)</div><input style={inpS} value={inputs.idleConsumption} onChange={e => update("idleConsumption", e.target.value)} /></div>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* Comparison Result */}
-      {mode === "single" && (
-        <div style={{ marginTop: 20, background: singleVoyageResults.advantage > 0 ? C.green + "11" : C.red + "11", border: "2px solid " + (singleVoyageResults.advantage > 0 ? C.green : C.red), borderRadius: 8, padding: 20, textAlign: "center" }}>
-          <div style={{ fontSize: 13, color: C.faint, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
-            {singleVoyageResults.advantage > 0 ? "✓ Spot Market is More Profitable" : "✗ Time Charter is Cheaper"}
-          </div>
-          <div style={{ fontSize: 32, fontWeight: 700, color: singleVoyageResults.advantage > 0 ? C.green : C.red, marginBottom: 4 }}>
-            {singleVoyageResults.advantage > 0 ? "Earn " : "Lose "} USD {Math.abs(Math.round(singleVoyageResults.advantage)).toLocaleString()}
-          </div>
-          <div style={{ fontSize: 14, color: C.faint }}>
-            {Math.abs(singleVoyageResults.advantagePct).toFixed(1)}% {singleVoyageResults.advantage > 0 ? "more profitable" : "more expensive"} per voyage
-          </div>
-        </div>
-      )}
-
-      {/* Simulation Results */}
-      {mode === "simulation" && (
-        <div style={{ marginTop: 20 }}>
+          {/* Results */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-            {/* Spot Simulation */}
             <div style={{ background: C.green + "11", border: "2px solid " + C.green, borderRadius: 8, padding: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.green, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                💰 Spot Market - {simulationResults.months} Month{simulationResults.months > 1 ? "s" : ""}
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.green, marginBottom: 16 }}>💰 Spot Market - {simulationResults.months}M</div>
+              <div style={{ marginBottom: 12 }}>
+                <div style={lblS}>Spot TCE (USD/day)</div>
+                <input style={{ ...inpS, fontSize: 16, fontWeight: 700, padding: "10px 12px" }} value={inputs.spotTCE} onChange={e => update("spotTCE", e.target.value)} />
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx }}>
-                  <span>Total Days</span>
-                  <span style={{ fontWeight: 700 }}>{simulationResults.totalDays} days</span>
+              <div style={{ padding: 16, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
+                <div style={{ fontSize: 12, color: C.faint, marginBottom: 12, textTransform: "uppercase" }}>Period Breakdown</div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx, marginBottom: 6 }}>
+                  <span>Total Days</span><span style={{ fontWeight: 700 }}>{simulationResults.totalDays}</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx }}>
-                  <span>Working Days</span>
-                  <span style={{ fontWeight: 700 }}>{simulationResults.totalWorkingDays} days</span>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx, marginBottom: 6 }}>
+                  <span>Working Days</span><span style={{ fontWeight: 700 }}>{simulationResults.totalWorkingDays}</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx }}>
-                  <span>Idle Days</span>
-                  <span style={{ fontWeight: 700, color: C.amber }}>{simulationResults.totalIdleDays} days</span>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx, marginBottom: 6 }}>
+                  <span>Idle Days</span><span style={{ fontWeight: 700, color: C.amber }}>{simulationResults.totalIdleDays}</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx }}>
-                  <span>Total Voyages</span>
-                  <span style={{ fontWeight: 700 }}>{simulationResults.totalVoyages}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx, marginBottom: 12 }}>
+                  <span>Voyages</span><span style={{ fontWeight: 700 }}>{simulationResults.totalVoyages}</span>
                 </div>
-                <div style={{ borderTop: "1px solid " + C.green + "44", marginTop: 8, paddingTop: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, color: C.tx, marginBottom: 4 }}>
+                <div style={{ borderTop: "1px solid " + C.bd2, paddingTop: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, marginBottom: 4 }}>
                     <span style={{ fontWeight: 600 }}>Total Earnings</span>
-                    <span style={{ fontWeight: 700, color: C.green, fontFamily: "monospace" }}>
-                      +USD {Math.round(simulationResults.spotTotalNet).toLocaleString()}
-                    </span>
+                    <span style={{ fontWeight: 700, color: C.green, fontFamily: "monospace" }}>+{Math.round(simulationResults.spotTotalRevenue).toLocaleString()}</span>
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: C.faint }}>
-                    <span>Daily Average</span>
-                    <span style={{ fontWeight: 700, fontFamily: "monospace" }}>USD {Math.round(simulationResults.spotDailyAvg).toLocaleString()}/day</span>
-                  </div>
+                  <div style={{ fontSize: 13, color: C.faint, textAlign: "right" }}>USD {Math.round(simulationResults.spotDailyAvg).toLocaleString()}/day avg</div>
                 </div>
               </div>
             </div>
 
-            {/* TC Simulation */}
             <div style={{ background: C.red + "11", border: "2px solid " + C.red, borderRadius: 8, padding: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.red, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                ⏱️ Time Charter - {simulationResults.months} Month{simulationResults.months > 1 ? "s" : ""}
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.red, marginBottom: 16 }}>⏱️ Time Charter - {simulationResults.months}M</div>
+              <div style={{ marginBottom: 12 }}>
+                <div style={lblS}>TC Hire (USD/day)</div>
+                <input style={{ ...inpS, fontSize: 16, fontWeight: 700, padding: "10px 12px" }} value={inputs.tcHire} onChange={e => update("tcHire", e.target.value)} />
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx }}>
-                  <span>Total Days</span>
-                  <span style={{ fontWeight: 700 }}>{simulationResults.totalDays} days</span>
+              <div style={{ padding: 16, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
+                <div style={{ fontSize: 12, color: C.faint, marginBottom: 12, textTransform: "uppercase" }}>Cost Breakdown</div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx, marginBottom: 6 }}>
+                  <span>Hire ({simulationResults.totalDays}d)</span>
+                  <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(simulationResults.tcTotalHire).toLocaleString()}</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx }}>
-                  <span>Hire Days (all days)</span>
-                  <span style={{ fontWeight: 700 }}>{simulationResults.totalDays} days</span>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx, marginBottom: 6 }}>
+                  <span>Voyage Costs (×{simulationResults.totalVoyages})</span>
+                  <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(simulationResults.tcVoyageCosts).toLocaleString()}</span>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx }}>
-                  <span>Total Voyages</span>
-                  <span style={{ fontWeight: 700 }}>{simulationResults.totalVoyages}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx, marginBottom: 12 }}>
+                  <span>Idle Bunkers ({simulationResults.totalIdleDays}d)</span>
+                  <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(simulationResults.tcIdleBunkers).toLocaleString()}</span>
                 </div>
-                <div style={{ borderTop: "1px solid " + C.red + "44", marginTop: 20, paddingTop: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx, marginBottom: 4 }}>
-                    <span>Hire Cost</span>
-                    <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(simulationResults.tcTotalHire).toLocaleString()}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.tx, marginBottom: 8 }}>
-                    <span>Voyage Costs</span>
-                    <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(simulationResults.tcVoyageCosts).toLocaleString()}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, color: C.tx, marginBottom: 4 }}>
+                <div style={{ borderTop: "1px solid " + C.bd2, paddingTop: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, marginBottom: 4 }}>
                     <span style={{ fontWeight: 600 }}>Total Cost</span>
-                    <span style={{ fontWeight: 700, color: C.red, fontFamily: "monospace" }}>
-                      -USD {Math.round(simulationResults.tcTotalCost).toLocaleString()}
-                    </span>
+                    <span style={{ fontWeight: 700, color: C.red, fontFamily: "monospace" }}>-{Math.round(simulationResults.tcTotalCost).toLocaleString()}</span>
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: C.faint }}>
-                    <span>Daily Average</span>
-                    <span style={{ fontWeight: 700, fontFamily: "monospace" }}>USD {Math.round(Math.abs(simulationResults.tcDailyAvg)).toLocaleString()}/day</span>
-                  </div>
+                  <div style={{ fontSize: 13, color: C.faint, textAlign: "right" }}>USD {Math.round(simulationResults.tcDailyAvg).toLocaleString()}/day avg</div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Final Comparison */}
-          <div style={{ marginTop: 20, background: simulationResults.advantage > 0 ? C.green + "11" : C.red + "11", border: "2px solid " + (simulationResults.advantage > 0 ? C.green : C.red), borderRadius: 8, padding: 24, textAlign: "center" }}>
+          <div style={{ background: simulationResults.netDifference > 0 ? C.green + "11" : C.red + "11", border: "2px solid " + (simulationResults.netDifference > 0 ? C.green : C.red), borderRadius: 8, padding: 24, textAlign: "center" }}>
             <div style={{ fontSize: 14, color: C.faint, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
-              {simulationResults.advantage > 0 ? "✓ Spot Market is More Profitable" : "✗ Time Charter is Cheaper"}
+              {simulationResults.netDifference > 0 ? "✓ Spot Market is More Profitable" : "✗ Time Charter is Cheaper"}
             </div>
-            <div style={{ fontSize: 36, fontWeight: 700, color: simulationResults.advantage > 0 ? C.green : C.red, marginBottom: 8 }}>
-              {simulationResults.advantage > 0 ? "+" : "-"}USD {Math.abs(Math.round(simulationResults.advantage)).toLocaleString()}
-            </div>
-            <div style={{ fontSize: 16, color: C.faint, marginBottom: 12 }}>
-              over {simulationResults.months} month{simulationResults.months > 1 ? "s" : ""} ({simulationResults.totalVoyages} voyages, {simulationResults.totalIdleDays} idle days)
+            <div style={{ fontSize: 36, fontWeight: 700, color: simulationResults.netDifference > 0 ? C.green : C.red, marginBottom: 8 }}>
+              {simulationResults.netDifference > 0 ? "+" : ""}USD {Math.abs(Math.round(simulationResults.netDifference)).toLocaleString()}
             </div>
             <div style={{ fontSize: 14, color: C.faint }}>
-              Spot: USD {Math.round(simulationResults.spotDailyAvg).toLocaleString()}/day avg vs TC: USD {Math.round(Math.abs(simulationResults.tcDailyAvg)).toLocaleString()}/day cost
+              over {simulationResults.months} month{simulationResults.months > 1 ? "s" : ""} ({simulationResults.totalVoyages} voyages, {simulationResults.totalIdleDays} idle days)
             </div>
           </div>
         </div>
@@ -546,7 +391,6 @@ function SpotVsTCCalculator() {
     </div>
   );
 }
-
 // ===== VESSEL PURCHASE CALCULATOR =====
 function VesselPurchaseCalculator() {
   const [inputs, setInputs] = useState({
