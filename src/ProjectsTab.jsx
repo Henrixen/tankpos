@@ -220,160 +220,166 @@ function SpotVsTCCalculator() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: mode === "simulation" ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr", gap: 20 }}>
-        {/* Voyage Details */}
-        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Voyage Details</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div>
-              <div style={lblS}>Cargo Qty (MT)</div>
-              <input style={inpS} value={inputs.cargoQty} onChange={e => update("cargoQty", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Cargo Grade</div>
-              <input style={inpS} value={inputs.cargoGrade} onChange={e => update("cargoGrade", e.target.value)} placeholder="CPP / UNL / Gasoil" />
-            </div>
-            <div>
-              <div style={lblS}>Load Port</div>
-              <input style={inpS} value={inputs.loadPort} onChange={e => update("loadPort", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Discharge Port</div>
-              <input style={inpS} value={inputs.dischPort} onChange={e => update("dischPort", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Ballast Days</div>
-              <input style={inpS} value={inputs.ballastDays} onChange={e => update("ballastDays", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Laden Days</div>
-              <input style={inpS} value={inputs.ladenDays} onChange={e => update("ladenDays", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Reposition Days</div>
-              <input style={inpS} value={inputs.repositionDays} onChange={e => update("repositionDays", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Port Days</div>
-              <input style={inpS} value={inputs.portDays} onChange={e => update("portDays", e.target.value)} />
-            </div>
-            <div style={{ marginTop: 4, padding: 8, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-              <div style={{ fontSize: 11, color: C.faint, marginBottom: 4 }}>TOTAL VOYAGE</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>{singleVoyageResults.totalDays.toFixed(1)} days</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Variable Costs */}
-        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Variable Costs</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div>
-              <div style={lblS}>Bunkers (USD/MT)</div>
-              <input style={inpS} value={inputs.bunkersPrice} onChange={e => update("bunkersPrice", e.target.value)} placeholder="550" />
-            </div>
-            <div>
-              <div style={lblS}>Sea Cons. (MT/day)</div>
-              <input style={inpS} value={inputs.seaConsumption} onChange={e => update("seaConsumption", e.target.value)} placeholder="28" />
-            </div>
-            <div>
-              <div style={lblS}>Port Cons. (MT/day)</div>
-              <input style={inpS} value={inputs.portConsumption} onChange={e => update("portConsumption", e.target.value)} placeholder="4" />
-            </div>
-            <div>
-              <div style={lblS}>Port Costs (USD)</div>
-              <input style={inpS} value={inputs.portCost} onChange={e => update("portCost", e.target.value)} placeholder="45000" />
-            </div>
-            <div>
-              <div style={lblS}>Commission (%)</div>
-              <input style={inpS} value={inputs.commissionPct} onChange={e => update("commissionPct", e.target.value)} placeholder="0" />
-            </div>
-
-            <div style={{ marginTop: 4, padding: 8, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-              <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>COST PER VOYAGE</div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
-                <span>Bunkers</span>
-                <span style={{ fontFamily: "monospace" }}>USD {Math.round(singleVoyageResults.spotBunkers).toLocaleString()}</span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* Top Row: Voyage Details and Variable Costs */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          {/* Voyage Details */}
+          <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Voyage Details</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                <div style={lblS}>Cargo Qty (MT)</div>
+                <input style={inpS} value={inputs.cargoQty} onChange={e => update("cargoQty", e.target.value)} />
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx }}>
-                <span>Port</span>
-                <span style={{ fontFamily: "monospace" }}>USD {Math.round(singleVoyageResults.spotPort).toLocaleString()}</span>
+              <div>
+                <div style={lblS}>Cargo Grade</div>
+                <input style={inpS} value={inputs.cargoGrade} onChange={e => update("cargoGrade", e.target.value)} placeholder="CPP / UNL / Gasoil" />
+              </div>
+              <div>
+                <div style={lblS}>Load Port</div>
+                <input style={inpS} value={inputs.loadPort} onChange={e => update("loadPort", e.target.value)} />
+              </div>
+              <div>
+                <div style={lblS}>Discharge Port</div>
+                <input style={inpS} value={inputs.dischPort} onChange={e => update("dischPort", e.target.value)} />
+              </div>
+              <div>
+                <div style={lblS}>Ballast Days</div>
+                <input style={inpS} value={inputs.ballastDays} onChange={e => update("ballastDays", e.target.value)} />
+              </div>
+              <div>
+                <div style={lblS}>Laden Days</div>
+                <input style={inpS} value={inputs.ladenDays} onChange={e => update("ladenDays", e.target.value)} />
+              </div>
+              <div>
+                <div style={lblS}>Reposition Days</div>
+                <input style={inpS} value={inputs.repositionDays} onChange={e => update("repositionDays", e.target.value)} />
+              </div>
+              <div>
+                <div style={lblS}>Port Days</div>
+                <input style={inpS} value={inputs.portDays} onChange={e => update("portDays", e.target.value)} />
+              </div>
+              <div style={{ marginTop: 4, padding: 8, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
+                <div style={{ fontSize: 11, color: C.faint, marginBottom: 4 }}>TOTAL VOYAGE</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>{singleVoyageResults.totalDays.toFixed(1)} days</div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Spot TCE */}
-        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>💰 Spot Market</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div>
-              <div style={lblS}>Spot TCE (USD/day)</div>
-              <input style={inpS} value={inputs.spotTCE} onChange={e => update("spotTCE", e.target.value)} placeholder="23000" />
-            </div>
+          {/* Variable Costs */}
+          <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Variable Costs</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                <div style={lblS}>Bunkers (USD/MT)</div>
+                <input style={inpS} value={inputs.bunkersPrice} onChange={e => update("bunkersPrice", e.target.value)} placeholder="550" />
+              </div>
+              <div>
+                <div style={lblS}>Sea Cons. (MT/day)</div>
+                <input style={inpS} value={inputs.seaConsumption} onChange={e => update("seaConsumption", e.target.value)} placeholder="28" />
+              </div>
+              <div>
+                <div style={lblS}>Port Cons. (MT/day)</div>
+                <input style={inpS} value={inputs.portConsumption} onChange={e => update("portConsumption", e.target.value)} placeholder="4" />
+              </div>
+              <div>
+                <div style={lblS}>Port Costs (USD)</div>
+                <input style={inpS} value={inputs.portCost} onChange={e => update("portCost", e.target.value)} placeholder="45000" />
+              </div>
+              <div>
+                <div style={lblS}>Commission (%)</div>
+                <input style={inpS} value={inputs.commissionPct} onChange={e => update("commissionPct", e.target.value)} placeholder="0" />
+              </div>
 
-            <div style={{ marginTop: 8, padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-              <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>PER VOYAGE P&L</div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Revenue ({singleVoyageResults.totalDays.toFixed(1)}d)</span>
-                <span style={{ fontFamily: "monospace", color: C.green }}>+{Math.round(singleVoyageResults.spotRevenue).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Bunkers</span>
-                <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.spotBunkers).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Port Costs</span>
-                <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.spotPort).toLocaleString()}</span>
-              </div>
-              {singleVoyageResults.spotCommission > 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                  <span>Commission</span>
-                  <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.spotCommission).toLocaleString()}</span>
+              <div style={{ marginTop: 4, padding: 8, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
+                <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>COST PER VOYAGE</div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
+                  <span>Bunkers</span>
+                  <span style={{ fontFamily: "monospace" }}>USD {Math.round(singleVoyageResults.spotBunkers).toLocaleString()}</span>
                 </div>
-              )}
-              <div style={{ borderTop: "1px solid " + C.bd2, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.tx }}>
-                <span>Net</span>
-                <span style={{ fontFamily: "monospace", color: singleVoyageResults.spotNet > 0 ? C.green : C.red }}>
-                  {singleVoyageResults.spotNet > 0 ? "+" : ""}{Math.round(singleVoyageResults.spotNet).toLocaleString()}
-                </span>
-              </div>
-              <div style={{ marginTop: 4, fontSize: 11, color: C.faint, textAlign: "right" }}>
-                USD {Math.round(singleVoyageResults.spotDailyNet).toLocaleString()}/day
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx }}>
+                  <span>Port</span>
+                  <span style={{ fontFamily: "monospace" }}>USD {Math.round(singleVoyageResults.spotPort).toLocaleString()}</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* TC Hire */}
-        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>⏱️ Time Charter</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div>
-              <div style={lblS}>TC Hire (USD/day)</div>
-              <input style={inpS} value={inputs.tcHire} onChange={e => update("tcHire", e.target.value)} placeholder="17000" />
-            </div>
+        {/* Bottom Row: Spot TCE and TC Hire */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          {/* Spot TCE */}
+          <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>💰 Spot Market</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                <div style={lblS}>Spot TCE (USD/day)</div>
+                <input style={inpS} value={inputs.spotTCE} onChange={e => update("spotTCE", e.target.value)} placeholder="23000" />
+              </div>
 
-            <div style={{ marginTop: 8, padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-              <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>PER VOYAGE COST</div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Hire ({singleVoyageResults.totalDays.toFixed(1)}d)</span>
-                <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.tcHireCost).toLocaleString()}</span>
+              <div style={{ marginTop: 8, padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
+                <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>PER VOYAGE P&L</div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
+                  <span>Revenue ({singleVoyageResults.totalDays.toFixed(1)}d)</span>
+                  <span style={{ fontFamily: "monospace", color: C.green }}>+{Math.round(singleVoyageResults.spotRevenue).toLocaleString()}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
+                  <span>Bunkers</span>
+                  <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.spotBunkers).toLocaleString()}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
+                  <span>Port Costs</span>
+                  <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.spotPort).toLocaleString()}</span>
+                </div>
+                {singleVoyageResults.spotCommission > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
+                    <span>Commission</span>
+                    <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.spotCommission).toLocaleString()}</span>
+                  </div>
+                )}
+                <div style={{ borderTop: "1px solid " + C.bd2, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.tx }}>
+                  <span>Net</span>
+                  <span style={{ fontFamily: "monospace", color: singleVoyageResults.spotNet > 0 ? C.green : C.red }}>
+                    {singleVoyageResults.spotNet > 0 ? "+" : ""}{Math.round(singleVoyageResults.spotNet).toLocaleString()}
+                  </span>
+                </div>
+                <div style={{ marginTop: 4, fontSize: 11, color: C.faint, textAlign: "right" }}>
+                  USD {Math.round(singleVoyageResults.spotDailyNet).toLocaleString()}/day
+                </div>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Bunkers</span>
-                <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.tcBunkers).toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* TC Hire */}
+          <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>⏱️ Time Charter</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                <div style={lblS}>TC Hire (USD/day)</div>
+                <input style={inpS} value={inputs.tcHire} onChange={e => update("tcHire", e.target.value)} placeholder="17000" />
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Port Costs</span>
-                <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.tcPort).toLocaleString()}</span>
-              </div>
-              <div style={{ borderTop: "1px solid " + C.bd2, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.red }}>
-                <span>Total Cost</span>
-                <span style={{ fontFamily: "monospace" }}>-{Math.round(singleVoyageResults.tcTotal).toLocaleString()}</span>
-              </div>
-              <div style={{ marginTop: 4, fontSize: 11, color: C.faint, textAlign: "right" }}>
-                USD {Math.round(Math.abs(singleVoyageResults.tcDailyNet)).toLocaleString()}/day
+
+              <div style={{ marginTop: 8, padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
+                <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>PER VOYAGE COST</div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
+                  <span>Hire ({singleVoyageResults.totalDays.toFixed(1)}d)</span>
+                  <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.tcHireCost).toLocaleString()}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
+                  <span>Bunkers</span>
+                  <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.tcBunkers).toLocaleString()}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
+                  <span>Port Costs</span>
+                  <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(singleVoyageResults.tcPort).toLocaleString()}</span>
+                </div>
+                <div style={{ borderTop: "1px solid " + C.bd2, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.red }}>
+                  <span>Total Cost</span>
+                  <span style={{ fontFamily: "monospace" }}>-{Math.round(singleVoyageResults.tcTotal).toLocaleString()}</span>
+                </div>
+                <div style={{ marginTop: 4, fontSize: 11, color: C.faint, textAlign: "right" }}>
+                  USD {Math.round(Math.abs(singleVoyageResults.tcDailyNet)).toLocaleString()}/day
+                </div>
               </div>
             </div>
           </div>
@@ -381,7 +387,7 @@ function SpotVsTCCalculator() {
 
         {/* Simulation Parameters - only show in simulation mode */}
         {mode === "simulation" && (
-          <div style={{ gridColumn: "1 / -1", background: C.bg2, border: "2px solid " + C.blue, borderRadius: 8, padding: 16 }}>
+          <div style={{ background: C.bg2, border: "2px solid " + C.blue, borderRadius: 8, padding: 16 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>📊 Simulation Parameters</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
               <div>
