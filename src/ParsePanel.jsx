@@ -11,6 +11,13 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
   const [busy,setBusy]=useState(false);const [status,setStatus]=useState(null);
   const fRef=useRef(null);const xlsRef=useRef(null);
 
+  // Auto-load vesselDB if empty (for spec enrichment)
+  useEffect(() => {
+    if (mode === "pos" && Object.keys(vesselDB).length === 0 && window.vesselDB && Object.keys(window.vesselDB).length > 0) {
+      console.log("Using window.vesselDB in ParsePanel");
+    }
+  }, [mode, vesselDB]);
+
   async function handleXls(file){
     if(!file)return;
     setBusy(true);setStatus({t:"info",m:"Reading spreadsheet…"});
@@ -87,10 +94,19 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
 
   const ts=baseDate.toISOString();
 
+  // Use vesselDB from props or fallback to window.vesselDB
+  const vdb = Object.keys(vesselDB).length > 0 ? vesselDB : (window.vesselDB || {});
+  
+  console.log("vesselDB available:", Object.keys(vdb).length, "vessels");
+
   // Enrich with vesselDB spec data before saving
   const stamped=p.map(v=>{
     const vesselKey = v.vessel?.toUpperCase();
-    const dbVessel = vesselDB[vesselKey];
+    const dbVessel = vdb[vesselKey?.toLowerCase()];
+    
+    if (dbVessel) {
+      console.log("Found spec for", vesselKey, ":", dbVessel.ice_class, dbVessel.segment);
+    }
     
     return {
       ...v,
@@ -98,11 +114,10 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
       updatedAt: ts,
       // Add spec data from vesselDB if available
       spec: dbVessel ? {
-        iceClass: dbVessel.iceClass || null,
-        lastCargo: dbVessel.lastCargo || null,
+        iceClass: dbVessel.ice_class || null,
+        lastCargo: dbVessel.last_cargo || null,
         coated: dbVessel.coated || null,
         segment: dbVessel.segment || null,
-        // Add any other spec fields you want to preserve
       } : v.spec || null
     };
   });
