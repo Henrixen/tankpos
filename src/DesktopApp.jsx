@@ -329,7 +329,7 @@ const filtV=useMemo(()=>{
                 {/* Stats row with opening timeline bar chart */}
                 <div style={{display:"flex",gap:10,alignItems:"stretch",flexDirection:mobile?"column":"row"}}>
                   {/* LEFT 50% */}
-                  <div style={{flex:mobile?"1 1 100%":"0 0 33.5%",display:"flex",flexDirection:"column",gap:6}}>
+                  <div style={{flex:mobile?"1 1 100%":"0 0 30%",display:"flex",flexDirection:"column",gap:6}}>
 
                     {selVessels.size>0&&(
                       <button
