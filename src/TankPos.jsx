@@ -196,22 +196,20 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
       console.log("Saving to DB - vessel:", ev.vessel, "spec:", spec);
       
       return {
-        vessel_name: ev.vessel,
-        operator:    ev.operator || null,
-        port_name:   ev.openPort || null,
-        open_date: ev.date ? toISODate(ev.date) : null,
-        dwt: ev.dwt ? parseFloat(String(ev.dwt).replace(/\s/g,"").replace(/[^0-9.]/g,"")) || null : null,
-        build_year: ev.built ? parseInt(String(ev.built).replace(/[^0-9]/g,"")) || null : null,
-        overall_length: ev.loa ? Math.round(parseFloat(String(ev.loa).replace(/,/g,".").replace(/[^0-9.]/g,""))) || null : null,
-        beam: ev.beam ? Math.round(parseFloat(String(ev.beam).replace(/,/g,".").replace(/[^0-9.]/g,""))) || null : null,
-        details:     ev.comment || null,
-        file_date:   nowIso,
-        updated_at:  nowIso,
-        source:      "manual",
-        // ✅ SAVE SPEC FIELDS - use the spec that was already added in ParsePanel
-        ice_class: spec.iceClass || null,
-        last_3_cargoes: spec.lastCargo || null,
-        segment: spec.segment || ev.segment || null,
+        vessel: ev.vessel,
+        operator: ev.operator || null,
+        openPort: ev.openPort || null,
+        date: ev.date || null,
+        dwt: ev.dwt || null,
+        built: ev.built || null,
+        loa: ev.loa || null,
+        beam: ev.beam || null,
+        comment: ev.comment || null,
+        file_date: nowIso,
+        updatedAt: nowIso,
+        updated_at: nowIso,
+        // ✅ SAVE SPEC as JSONB object
+        spec: spec,
       };
     });
 
