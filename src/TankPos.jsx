@@ -102,7 +102,7 @@ export default function TankPos(){
       built:       r.build_year||null,
       loa:         r.overall_length||null,
       beam:        r.beam||null,
-      comment:     r.details||r.comment||"",
+      comment:     r.details||"",
       last3:       r.last_3_cargoes||"",
       dirtyClean:  r.dirty_clean||"",
       iceClass:    r.ice_class||"",
@@ -111,13 +111,12 @@ export default function TankPos(){
       updatedAt:   r.updated_at||"",
       fileDate:    r.file_date||null,
       source:      r.source||"external",
-      // ✅ ADD SPEC OBJECT WITH DATA FROM DATABASE
+      // ✅ CREATE SPEC OBJECT FROM VIEW COLUMNS
       spec: {
         iceClass: r.ice_class||null,
         lastCargo: r.last_3_cargoes||null,
         segment: r.segment||null,
-        coated: r.fully_coated||r.part_coated||null,
-        // Add other spec fields as needed
+        coated: null,  // Not in view, could add if needed
       }
     };
   }));
