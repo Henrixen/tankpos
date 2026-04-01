@@ -52,6 +52,12 @@ export default function TankPos(){
   fetchPositions();
   fetchCargoes();
 },[]);
+
+  // Auto-load vesselDB on startup
+  useEffect(() => {
+    loadVesselDB();
+  }, []);
+
   useEffect(()=>{const fn=()=>setMobile(isMobile());window.addEventListener("resize",fn);return()=>window.removeEventListener("resize",fn);},[]);
 
   async function fetchCargoes(searchTerm=""){
@@ -137,7 +143,7 @@ export default function TankPos(){
   const fieldMap={openPort:"port_name",date:"open_date",built:"build_year",loa:"overall_length",comment:"details",operator:"operator",dwt:"dwt",beam:"beam"};
 const dbField=fieldMap[field]||field;
 const dbValue=field==="date"?toISODate(value):value;
-const{error}=await supabase.from("positions_external").update({[dbField]:dbValue,updated_at:new Date().toISOString()}).ilike("vessel_name",name);
+const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_at:new Date().toISOString()}).ilike("vessel_name",name).eq("source","manual");
   if(error)console.error(error);
 },[]);
 
@@ -211,7 +217,7 @@ const{error}=await supabase.from("positions_external").update({[dbField]:dbValue
     });
 
     const { error } = await supabase.from("positions").insert(rows);
-    if (error) console.error("positions_external upsert error:", error);
+    if (error) console.error("positions insert error:", error);
     else console.log("positions saved ok:", rows.length, "rows");
     
     return r;
@@ -272,8 +278,8 @@ const{error}=await supabase.from("positions_external").update({[dbField]:dbValue
   },[]);
   const delV=useCallback(async(name)=>{
   setVessels(prev=>{const next=name==="__ALL__"?[]:prev.filter(v=>v.vessel!==name);saveV(next);return next;});
-  if(name==="__ALL__"){const{error}=await supabase.from("positions_external").delete().eq("source","manual");if(error)console.error(error);}
-  else{const{error}=await supabase.from("positions_external").delete().eq("vessel_name",name);if(error)console.error(error);}
+  if(name==="__ALL__"){const{error}=await supabase.from("positions").delete().eq("source","manual");if(error)console.error(error);}
+  else{const{error}=await supabase.from("positions").delete().eq("vessel_name",name).eq("source","manual");if(error)console.error(error);}
 },[]);
   const delC=useCallback(async(id)=>{
     setCargoes(prev=>id==="__ALLCARGO__"?[]:prev.filter(c=>c.id!==id));
