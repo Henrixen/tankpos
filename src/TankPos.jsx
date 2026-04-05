@@ -5,7 +5,9 @@ import { supabase } from "./supabaseclient";
 import { isMobile } from "./constants";
 import { enrichV, normaliseCargo, mergeVessels, toISODate } from "./utils";
 import { saveV, saveSnapshot, loadHistory } from "./supabaseHelpers";
+import { v4 as uuidv4 } from 'uuid';
 import DesktopApp from "./DesktopApp";
+
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function TankPos(){
@@ -196,6 +198,7 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
       console.log("Saving to DB - vessel:", ev.vessel, "spec:", spec);
       
       return {
+        id: uuidv4(),
         vessel: ev.vessel,
         operator: ev.operator || null,
         openPort: ev.openPort || null,
