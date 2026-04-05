@@ -198,22 +198,22 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
       console.log("Saving to DB - vessel:", ev.vessel, "spec:", spec);
       
       return {
-        id: uuidv4(),
-        vessel: ev.vessel,
-        operator: ev.operator || null,
-        openPort: ev.openPort || null,
-        date: ev.date || null,
-        dwt: ev.dwt || null,
-        built: ev.built || null,
-        loa: ev.loa || null,
-        beam: ev.beam || null,
-        comment: ev.comment || null,
-        file_date: nowIso,
-        updatedAt: nowIso,
-        updated_at: nowIso,
-        // ✅ SAVE SPEC as JSONB object
-        spec: spec,
-      };
+  id: uuidv4(),
+  vessel_name: ev.vessel,        // ← was: vessel
+  operator: ev.operator || null,
+  port_name: ev.openPort || null, // ← was: openPort
+  open_date: ev.date || null,     // ← was: date
+  dwt: ev.dwt || null,
+  build_year: ev.built || null,   // ← was: built
+  overall_length: ev.loa || null, // ← was: loa
+  beam: ev.beam || null,
+  cbm: ev.cbm || null,           // ← add this if you have it
+  details: ev.comment || null,    // ← was: comment
+  file_date: nowIso,
+  updatedAt: nowIso,
+  updated_at: nowIso,
+  spec: spec,
+};
     });
 
     const { error } = await supabase
