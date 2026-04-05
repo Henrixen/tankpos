@@ -199,21 +199,21 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
       
       return {
   id: uuidv4(),
-  vessel_name: ev.vessel,        // ← was: vessel
+  vessel: ev.vessel,              // ← back to vessel
   operator: ev.operator || null,
-  port_name: ev.openPort || null, // ← was: openPort
-  open_date: ev.date || null,     // ← was: date
+  openPort: ev.openPort || null,  // ← back to openPort
+  date: ev.date || null,          // ← back to date
   dwt: ev.dwt || null,
-  build_year: ev.built || null,   // ← was: built
-  overall_length: ev.loa || null, // ← was: loa
+  built: ev.built || null,        // ← back to built
+  loa: ev.loa || null,            // ← back to loa
   beam: ev.beam || null,
-  cbm: ev.cbm || null,           // ← add this if you have it
-  details: ev.comment || null,    // ← was: comment
+  cbm: ev.cbm || null,
+  comment: ev.comment || null,    // ← back to comment
   file_date: nowIso,
   updatedAt: nowIso,
   updated_at: nowIso,
   spec: spec,
-  source: 'manual',  // ← ADD THIS
+  source: 'manual',
 };
     });
 
