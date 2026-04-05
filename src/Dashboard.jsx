@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabaseclient";
 import { C, OP_COLORS } from "./constants";
-import { stripHtml, classifyRegion, daysBetween } from "./utils.js";
+import { stripHtml, classifyRegion, daysBetween } from "./utils.jsx";
 import { apiCall, ocrImage } from "./api";
 
 const WS_STORE = "ws-data";
