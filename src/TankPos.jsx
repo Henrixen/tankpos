@@ -216,7 +216,9 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
       };
     });
 
-    const { error } = await supabase.from("positions").insert(rows);
+    const { error } = await supabase
+  .from("positions")
+  .upsert(rows, { onConflict: 'vessel' });
     if (error) console.error("positions insert error:", error);
     else console.log("positions saved ok:", rows.length, "rows");
     
