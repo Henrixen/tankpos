@@ -213,6 +213,7 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
   updatedAt: nowIso,
   updated_at: nowIso,
   spec: spec,
+  source: 'manual',  // ← ADD THIS
 };
     });
 
@@ -266,8 +267,8 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
   },[]);
 
   const addV=useCallback(async(v)=>{
-  setVessels(prev=>{const idx=prev.findIndex(x=>x.vessel?.toLowerCase()===v.vessel.toLowerCase());const next=idx>=0?prev.map((x,i)=>i===idx?enrichV(v,vesselDB):x):[...prev,enrichV(v,vesselDB)];saveV(next);return next;});
-  const{error}=await supabase.from("positions").upsert([{...v,updated_at:new Date().toISOString()}],{onConflict:"vessel"});
+  setVessels(prev=>{...});
+  const{error}=await supabase.from("positions").upsert([{...v,source:'manual',updated_at:new Date().toISOString()}],{onConflict:"vessel_name"});
   if(error)console.error(error);
 },[vesselDB]);
   const addC=useCallback(async(c)=>{
