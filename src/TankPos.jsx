@@ -138,14 +138,63 @@ export default function TankPos(){
     setSel(n);
   },[]);
 
-  const updateV=useCallback(async(name,field,value)=>{
-  setVessels(prev=>{const now2=new Date().toISOString();const next=prev.map(v=>{if(v.vessel!==name)return v;if(field.includes(".")){const[a,b]=field.split(".");return{...v,updatedAt:now2,[a]:{...(v[a]||{}),[b]:value||null}};}const extra=field==="operator"?{operatorManual:true}:{};return{...v,updatedAt:now2,[field]:value||null,...extra};});saveV(next);return next;});
-  const fieldMap={openPort:"port_name",date:"open_date",built:"build_year",loa:"overall_length",comment:"details",operator:"operator",dwt:"dwt",beam:"beam"};
-const dbField=fieldMap[field]||field;
-const dbValue=field==="date"?toISODate(value):value;
-const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_at:new Date().toISOString()}).ilike("vessel_name",name);
-  if(error)console.error(error);
-},[]);
+  const updateV = useCallback(async(name, field, value) => {
+  setVessels(prev => {
+    const now2 = new Date().toISOString();
+
+    const next = prev.map(v => {
+      if (v.vessel !== name) return v;
+
+      if (field.includes(".")) {
+        const [a, b] = field.split(".");
+        return {
+          ...v,
+          updatedAt: now2,
+          [a]: {
+            ...(v[a] || {}),
+            [b]: value || null
+          }
+        };
+      }
+
+      const extra = field === "operator" ? { operatorManual: true } : {};
+
+      return {
+        ...v,
+        updatedAt: now2,
+        [field]: value || null,
+        ...extra
+      };
+    });
+
+    saveV(next);
+    return next;
+  });
+
+  const fieldMap = {
+    openPort: "port_name",
+    date: "open_date",
+    built: "build_year",
+    loa: "overall_length",
+    comment: "details",
+    operator: "operator",
+    dwt: "dwt",
+    beam: "beam",
+    cbm: "cbm"
+  };
+
+  const dbField = fieldMap[field] || field;
+
+  const { error } = await supabase
+    .from("positions")
+    .update({
+      [dbField]: value || null,
+      updated_at: new Date().toISOString()
+    })
+    .ilike("vessel_name", name);
+
+  if (error) console.error("updateV error:", error);
+}, []);
 
   // Universal cargo updater — optimistic local update + Supabase write
   const updateC=useCallback(async(id,field,value)=>{
@@ -198,18 +247,18 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
       
       return {
   id: uuidv4(),
-  vessel: ev.vessel,              // ← back to vessel
+  vessel_name: ev.vessel,
   operator: ev.operator || null,
-  openPort: ev.openPort || null,  // ← back to openPort
-  date: ev.date || null,          // ← back to date
+  port_name: ev.openPort || null,
+  open_date: ev.date || null,
   dwt: ev.dwt || null,
-  built: ev.built || null,        // ← back to built
-  loa: ev.loa || null,            // ← back to loa
+  build_year: ev.built || null,
+  overall_length: ev.loa || null,
   beam: ev.beam || null,
   cbm: ev.cbm || null,
-  comment: ev.comment || null,    // ← back to comment
+  details: ev.comment || null,
   file_date: nowIso,
-  updatedAt: nowIso,
+  updated_at_manual: nowIso,
   updated_at: nowIso,
   spec: spec,
 };
@@ -266,7 +315,7 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
 
   const addV=useCallback(async(v)=>{
   setVessels(prev=>{const idx=prev.findIndex(x=>x.vessel?.toLowerCase()===v.vessel.toLowerCase());const next=idx>=0?prev.map((x,i)=>i===idx?enrichV(v,vesselDB):x):[...prev,enrichV(v,vesselDB)];saveV(next);return next;});
-  const{error}=await supabase.from("positions").upsert([{...v,updated_at:new Date().toISOString()}],{onConflict:"vessel"});
+  const{error}=await supabase.from("positions").upsert([{...v,updated_at:new Date().toISOString()}],{onConflict:"vessel_name"});
   if(error)console.error(error);
 },[vesselDB]);
   const addC=useCallback(async(c)=>{
@@ -288,15 +337,13 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
     const { error } = await supabase
       .from("positions")
       .delete()
-      .neq("vessel", "__none__");
-
+      .neq("vessel_name", "__none__");
     if(error) console.error("delV all error:", error);
   } else {
     const { error } = await supabase
       .from("positions")
       .delete()
-      .ilike("vessel", name);
-
+      .ilike("vessel_name", name);
     if(error) console.error("delV error:", error, name);
   }
 },[]);
