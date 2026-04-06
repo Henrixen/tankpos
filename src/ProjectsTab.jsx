@@ -5,9 +5,10 @@ function ProjectsTab() {
   const [activeCalc, setActiveCalc] = useState("spot-vs-tc");
 
   const calculators = [
-    { id: "spot-vs-tc", label: "Spot vs TC Analysis", icon: "⚖️" },
+    { id: "spot-vs-tc", label: "Spot TCE vs TC Hire", icon: "⚖️" },
     { id: "vessel-purchase", label: "Vessel Purchase ROI", icon: "🚢" },
-    { id: "bareboat", label: "Bareboat Charter (BBC)", icon: "📊" }
+    { id: "bareboat", label: "Bareboat Charter (BBC)", icon: "📊" },
+    { id: "spot-vs-tc-charterer", label: "Spot vs TC (Charterer)", icon: "📋" }
   ];
 
   return (
@@ -43,6 +44,7 @@ function ProjectsTab() {
         {activeCalc === "spot-vs-tc" && <SpotVsTCCalculator />}
         {activeCalc === "vessel-purchase" && <VesselPurchaseCalculator />}
         {activeCalc === "bareboat" && <BareboatCalculator />}
+        {activeCalc === "spot-vs-tc-charterer" && <SpotVsTCChartererCalculator />}
       </div>
     </div>
   );
@@ -791,6 +793,295 @@ function BareboatCalculator() {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===== SPOT VS TC CHARTERER CALCULATOR (ORIGINAL) =====
+function SpotVsTCChartererCalculator() {
+  const [inputs, setInputs] = useState({
+    // Voyage details
+    cargoQty: "38000",
+    cargoGrade: "CPP",
+    loadPort: "Tees",
+    dischPort: "ARA",
+    distance: "650",
+    vesselSize: "MR",
+    // Spot freight option
+    spotFreight: "360000",
+    demurrageRate: "35000",
+    demurrageDays: "0.5",
+    commission: "1.25",
+    // TC option
+    tcHire: "20000",
+    ballastDays: "2",
+    ladenDays: "3",
+    repositionDays: "1",
+    portDays: "4",
+    // Variable costs (apply to both)
+    bunkersPrice: "550",
+    seaConsumption: "28",
+    portConsumption: "4",
+    portCost: "45000"
+  });
+
+  const update = (key, val) => setInputs(prev => ({ ...prev, [key]: val }));
+
+  const results = useMemo(() => {
+    // Parse inputs
+    const freight = parseFloat(inputs.spotFreight) || 0;
+    const demRate = parseFloat(inputs.demurrageRate) || 0;
+    const demDays = parseFloat(inputs.demurrageDays) || 0;
+    const comm = parseFloat(inputs.commission) || 0;
+    
+    const hire = parseFloat(inputs.tcHire) || 0;
+    const ballastDays = parseFloat(inputs.ballastDays) || 0;
+    const ladenDays = parseFloat(inputs.ladenDays) || 0;
+    const repositionDays = parseFloat(inputs.repositionDays) || 0;
+    const portDays = parseFloat(inputs.portDays) || 0;
+    const totalDays = ballastDays + ladenDays + repositionDays + portDays;
+    
+    const bunkersPrice = parseFloat(inputs.bunkersPrice) || 0;
+    const seaCons = parseFloat(inputs.seaConsumption) || 0;
+    const portCons = parseFloat(inputs.portConsumption) || 0;
+    const portCost = parseFloat(inputs.portCost) || 0;
+    
+    // Variable costs (apply to both options)
+    const seaDays = ballastDays + ladenDays + repositionDays;
+    const bunkersCost = (seaCons * seaDays + portCons * portDays) * bunkersPrice;
+    const demurrageCost = demRate * demDays;
+    
+    // SPOT OPTION: Freight + Demurrage + Commission + Variable Costs
+    const spotFreightCost = freight;
+    const spotCommission = (freight + demurrageCost) * (comm / 100);
+    const spotTotal = freight + demurrageCost + spotCommission + bunkersCost + portCost;
+    
+    // TC OPTION: Hire + Variable Costs + Commission
+    const tcHireCost = hire * totalDays;
+    const tcCommission = tcHireCost * (comm / 100);
+    const tcTotal = tcHireCost + tcCommission + bunkersCost + portCost;
+    
+    const difference = spotTotal - tcTotal;
+    const savingPct = spotTotal > 0 ? (difference / spotTotal) * 100 : 0;
+    
+    return {
+      // Spot breakdown
+      spotFreightCost,
+      demurrageCost,
+      spotCommission,
+      spotVariableCosts: bunkersCost + portCost,
+      spotTotal,
+      // TC breakdown
+      tcHireCost,
+      tcCommission,
+      tcVariableCosts: bunkersCost + portCost,
+      tcTotal,
+      // Comparison
+      difference,
+      savingPct,
+      totalDays,
+      bunkersCost,
+      portCost
+    };
+  }, [inputs]);
+
+  const inpS = { background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontFamily: "inherit", fontSize: 13, padding: "6px 10px", outline: "none", width: "100%" };
+  const lblS = { fontSize: 11, color: C.faint, marginBottom: 4, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" };
+
+  return (
+    <div style={{ maxWidth: 1400, margin: "0 auto" }}>
+      <div style={{ marginBottom: 16 }}>
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: C.tx, margin: "0 0 8px 0" }}>Spot Freight vs Time Charter (Charterer Perspective)</h3>
+        <p style={{ fontSize: 13, color: C.faint, margin: 0 }}>
+          Compare chartering a vessel on spot market (paying freight) vs. time charter (paying daily hire) for a cargo voyage
+        </p>
+      </div>
+
+      {/* Row 1: Voyage Details */}
+      <div style={{ marginBottom: 20, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Voyage Details</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12 }}>
+          <div>
+            <div style={lblS}>Vessel Size</div>
+            <input style={inpS} value={inputs.vesselSize} onChange={e => update("vesselSize", e.target.value)} placeholder="MR / LR1" />
+          </div>
+          <div>
+            <div style={lblS}>Cargo Qty (MT)</div>
+            <input style={inpS} value={inputs.cargoQty} onChange={e => update("cargoQty", e.target.value)} />
+          </div>
+          <div>
+            <div style={lblS}>Cargo Grade</div>
+            <input style={inpS} value={inputs.cargoGrade} onChange={e => update("cargoGrade", e.target.value)} placeholder="CPP / UNL" />
+          </div>
+          <div>
+            <div style={lblS}>Load Port</div>
+            <input style={inpS} value={inputs.loadPort} onChange={e => update("loadPort", e.target.value)} />
+          </div>
+          <div>
+            <div style={lblS}>Discharge Port</div>
+            <input style={inpS} value={inputs.dischPort} onChange={e => update("dischPort", e.target.value)} />
+          </div>
+          <div>
+            <div style={lblS}>Distance (nm)</div>
+            <input style={inpS} value={inputs.distance} onChange={e => update("distance", e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      {/* Row 2: Days Breakdown */}
+      <div style={{ marginBottom: 20, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Voyage Duration</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
+          <div>
+            <div style={lblS}>Ballast Days</div>
+            <input style={inpS} value={inputs.ballastDays} onChange={e => update("ballastDays", e.target.value)} />
+          </div>
+          <div>
+            <div style={lblS}>Laden Days</div>
+            <input style={inpS} value={inputs.ladenDays} onChange={e => update("ladenDays", e.target.value)} />
+          </div>
+          <div>
+            <div style={lblS}>Reposition Days</div>
+            <input style={inpS} value={inputs.repositionDays} onChange={e => update("repositionDays", e.target.value)} />
+          </div>
+          <div>
+            <div style={lblS}>Port Days</div>
+            <input style={inpS} value={inputs.portDays} onChange={e => update("portDays", e.target.value)} />
+          </div>
+          <div style={{ display: "flex", alignItems: "flex-end" }}>
+            <div style={{ padding: "6px 10px", background: C.blue + "22", border: "1px solid " + C.blue, borderRadius: 4, width: "100%", textAlign: "center" }}>
+              <div style={{ fontSize: 10, color: C.faint, marginBottom: 2 }}>TOTAL DAYS</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.blue }}>{results.totalDays}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: Variable Costs */}
+      <div style={{ marginBottom: 20, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Variable Costs (Apply to Both Options)</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
+          <div>
+            <div style={lblS}>Bunkers Price (USD/MT)</div>
+            <input style={inpS} value={inputs.bunkersPrice} onChange={e => update("bunkersPrice", e.target.value)} />
+          </div>
+          <div>
+            <div style={lblS}>Sea Consumption (MT/day)</div>
+            <input style={inpS} value={inputs.seaConsumption} onChange={e => update("seaConsumption", e.target.value)} />
+          </div>
+          <div>
+            <div style={lblS}>Port Consumption (MT/day)</div>
+            <input style={inpS} value={inputs.portConsumption} onChange={e => update("portConsumption", e.target.value)} />
+          </div>
+          <div>
+            <div style={lblS}>Port Costs (USD)</div>
+            <input style={inpS} value={inputs.portCost} onChange={e => update("portCost", e.target.value)} />
+          </div>
+          <div>
+            <div style={lblS}>Commission (%)</div>
+            <input style={inpS} value={inputs.commission} onChange={e => update("commission", e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      {/* Row 4: Spot Market vs Time Charter Comparison */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        {/* SPOT MARKET OPTION */}
+        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>💰 Spot Market</div>
+          
+          <div style={{ marginBottom: 16 }}>
+            <div style={lblS}>Spot Freight (USD)</div>
+            <input style={inpS} value={inputs.spotFreight} onChange={e => update("spotFreight", e.target.value)} />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+            <div>
+              <div style={lblS}>Demurrage Rate (USD/day)</div>
+              <input style={inpS} value={inputs.demurrageRate} onChange={e => update("demurrageRate", e.target.value)} />
+            </div>
+            <div>
+              <div style={lblS}>Demurrage Days</div>
+              <input style={inpS} value={inputs.demurrageDays} onChange={e => update("demurrageDays", e.target.value)} />
+            </div>
+          </div>
+
+          <div style={{ padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>COST BREAKDOWN</div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
+              <span>Freight</span>
+              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.spotFreightCost).toLocaleString()}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
+              <span>Demurrage</span>
+              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.demurrageCost).toLocaleString()}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
+              <span>Commission ({inputs.commission}%)</span>
+              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.spotCommission).toLocaleString()}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
+              <span>Bunkers</span>
+              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.bunkersCost).toLocaleString()}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 8, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>
+              <span>Port Costs</span>
+              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.portCost).toLocaleString()}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.tx }}>
+              <span>TOTAL COST</span>
+              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.spotTotal).toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* TIME CHARTER OPTION */}
+        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>⏱️ Time Charter</div>
+          
+          <div style={{ marginBottom: 16 }}>
+            <div style={lblS}>TC Hire (USD/day)</div>
+            <input style={inpS} value={inputs.tcHire} onChange={e => update("tcHire", e.target.value)} />
+          </div>
+
+          <div style={{ padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>COST BREAKDOWN</div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
+              <span>Hire ({results.totalDays} days × USD {inputs.tcHire})</span>
+              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.tcHireCost).toLocaleString()}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
+              <span>Commission ({inputs.commission}%)</span>
+              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.tcCommission).toLocaleString()}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
+              <span>Bunkers</span>
+              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.bunkersCost).toLocaleString()}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 8, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>
+              <span>Port Costs</span>
+              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.portCost).toLocaleString()}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.tx }}>
+              <span>TOTAL COST</span>
+              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.tcTotal).toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Summary */}
+      <div style={{ marginTop: 20, padding: 20, background: results.difference > 0 ? C.green + "11" : C.red + "11", border: "2px solid " + (results.difference > 0 ? C.green : C.red), borderRadius: 8 }}>
+        <div style={{ fontSize: 14, color: C.faint, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          {results.difference > 0 ? "✓ TC Option is Cheaper" : "✗ Spot Option is Cheaper"}
+        </div>
+        <div style={{ fontSize: 32, fontWeight: 700, color: results.difference > 0 ? C.green : C.red, marginBottom: 4 }}>
+          {results.difference > 0 ? "Save" : "Extra Cost"} USD {Math.abs(Math.round(results.difference)).toLocaleString()}
+        </div>
+        <div style={{ fontSize: 13, color: C.faint }}>
+          {Math.abs(results.savingPct).toFixed(1)}% {results.difference > 0 ? "saving" : "additional cost"} vs. {results.difference > 0 ? "spot" : "TC"} option
         </div>
       </div>
     </div>
