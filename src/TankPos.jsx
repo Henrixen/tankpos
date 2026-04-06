@@ -281,8 +281,8 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
   },[]);
   const delV=useCallback(async(name)=>{
   setVessels(prev=>{const next=name==="__ALL__"?[]:prev.filter(v=>v.vessel!==name);saveV(next);return next;});
-  if(name==="__ALL__"){const{error}=await supabase.from("positions").delete().eq("source","manual");if(error)console.error(error);}
-  else{const{error}=await supabase.from("positions").delete().eq("vessel_name",name).eq("source","manual");if(error)console.error(error);}
+  if(name==="__ALL__"){const{error}=await supabase.from("positions").delete().neq("vessel_name","__none__");if(error)console.error(error);}
+  else{const{error}=await supabase.from("positions").delete().eq("vessel_name",name);if(error)console.error(error);}
 },[]);
   const delC=useCallback(async(id)=>{
     setCargoes(prev=>id==="__ALLCARGO__"?[]:prev.filter(c=>c.id!==id));
