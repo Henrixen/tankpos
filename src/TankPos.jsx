@@ -103,6 +103,7 @@ export default function TankPos(){
       built:       r.build_year||null,
       loa:         r.overall_length||null,
       beam:        r.beam||null,
+      cbm:         r.cbm||null,
       comment:     r.details||"",
       last3:       r.last_3_cargoes||"",
       dirtyClean:  r.dirty_clean||"",
