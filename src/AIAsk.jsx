@@ -74,59 +74,7 @@ function RightPanel({vessels,cargoes}){
   const [intelItems,setIntelItems]=useState([]);
   useEffect(()=>{loadIntel().then(d=>{setIntelItems(d);});},[]);
 
-  return(
-    <div style={{display:"flex",flexDirection:"row",gap:10,height:"100%",maxHeight:480}}>
-      {/* Ask AI */}
-      <div style={{flex:"1 1 0",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0,maxHeight:480}}>
-        <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0}}>
-          <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
-        </div>
-        <div style={{flex:1,padding:"10px",overflowY:"auto",minHeight:0}}>
-          <AIAsk vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>
-        </div>
-      </div>
-
-      {/* Intel Vault */}
-      <div style={{flex:"1 1 0",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0,maxHeight:480}}>
-        <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0}}>
-          <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📡 Intel Vault</span>
-        </div>
-        <div 
-          style={{
-            flex:1,
-            padding:"10px",
-            overflowY:"auto",
-            minHeight:0
-          }}
-          className="intel-vault-scroll"
-        >
-          <IntelVault onVaultUpdate={setIntelItems}/>
-        </div>
-      </div>
-      
-      {/* Custom scrollbar styling for Intel Vault */}
-      <style>{`
-        .intel-vault-scroll::-webkit-scrollbar {
-          width: 8px;
-        }
-        .intel-vault-scroll::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .intel-vault-scroll::-webkit-scrollbar-thumb {
-          background: ${C.bd};
-          border-radius: 4px;
-        }
-        .intel-vault-scroll::-webkit-scrollbar-thumb:hover {
-          background: ${C.dim};
-        }
-        /* Firefox */
-        .intel-vault-scroll {
-          scrollbar-width: thin;
-          scrollbar-color: ${C.bd} transparent;
-        }
-      `}</style>
-    </div>
-  );
+  return <AIAsk vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>;
 }
 
 
