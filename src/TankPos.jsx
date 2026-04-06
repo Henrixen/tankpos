@@ -1,4 +1,3 @@
-// CACHE_BUSTER_006
 // CACHE_BUSTER_030
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabaseclient";
@@ -144,7 +143,7 @@ export default function TankPos(){
   const fieldMap={openPort:"port_name",date:"open_date",built:"build_year",loa:"overall_length",comment:"details",operator:"operator",dwt:"dwt",beam:"beam"};
 const dbField=fieldMap[field]||field;
 const dbValue=field==="date"?toISODate(value):value;
-const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_at:new Date().toISOString()}).ilike("vessel_name",name).eq("source","manual");
+const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_at:new Date().toISOString()}).ilike("vessel_name",name);
   if(error)console.error(error);
 },[]);
 
@@ -213,7 +212,6 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
   updatedAt: nowIso,
   updated_at: nowIso,
   spec: spec,
-  source: 'manual',
 };
     });
 
@@ -268,7 +266,7 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
 
   const addV=useCallback(async(v)=>{
   setVessels(prev=>{const idx=prev.findIndex(x=>x.vessel?.toLowerCase()===v.vessel.toLowerCase());const next=idx>=0?prev.map((x,i)=>i===idx?enrichV(v,vesselDB):x):[...prev,enrichV(v,vesselDB)];saveV(next);return next;});
-  const{error}=await supabase.from("positions").upsert([{...v,source:'manual',updated_at:new Date().toISOString()}],{onConflict:"vessel_name"});
+  const{error}=await supabase.from("positions").upsert([{...v,updated_at:new Date().toISOString()}],{onConflict:"vessel_name"});
   if(error)console.error(error);
 },[vesselDB]);
   const addC=useCallback(async(c)=>{
