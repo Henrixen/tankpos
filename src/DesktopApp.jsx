@@ -663,7 +663,7 @@ const filtV=useMemo(()=>{
         {tab==="cargo"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {/* Top row: Parse 50% | Ask AI 25% | Intel Vault 25% — same height */}
-            <div style={{display:"flex",gap:10,alignItems:"stretch",minHeight:mobile?"auto":280,flexDirection:mobile?"column":"row"}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
               {/* Parse */}
               <div style={{flex:mobile?"1 1 auto":"0 0 50%",display:"flex",flexDirection:"column"}}>
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
@@ -673,10 +673,10 @@ const filtV=useMemo(()=>{
                 <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
                   <button onClick={()=>setAskAiExpanded(!askAiExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 8px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit"}} title={askAiExpanded?"Collapse":"Expand"}>
-                    {askAiExpanded?"▼":"▲"}
+                    {askAiExpanded?"▲":"▼"}
                   </button>
                 </div>
-                <div style={{flex:1,padding:"10px",overflowY:"auto"}}>
+                <div style={{flex:1,padding:"10px",overflowY:"auto"}} className="custom-scrollbar">
                   <RightPanel vessels={vessels} cargoes={cargoes}/>
                 </div>
               </div>
@@ -685,14 +685,33 @@ const filtV=useMemo(()=>{
                 <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📡 Intel Vault</span>
                   <button onClick={()=>setIntelVaultExpanded(!intelVaultExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 8px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit"}} title={intelVaultExpanded?"Collapse":"Expand"}>
-                    {intelVaultExpanded?"▼":"▲"}
+                    {intelVaultExpanded?"▲":"▼"}
                   </button>
                 </div>
-                <div style={{flex:1,padding:"10px",overflowY:"auto"}}>
+                <div style={{flex:1,padding:"10px",overflowY:"auto"}} className="custom-scrollbar">
                   <IntelVault onVaultUpdate={()=>{}}/>
                 </div>
               </div>
             </div>
+            <style>{`
+              .custom-scrollbar::-webkit-scrollbar {
+                width: 8px;
+              }
+              .custom-scrollbar::-webkit-scrollbar-track {
+                background: transparent;
+              }
+              .custom-scrollbar::-webkit-scrollbar-thumb {
+                background: ${C.bd};
+                border-radius: 4px;
+              }
+              .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                background: ${C.dim};
+              }
+              .custom-scrollbar {
+                scrollbar-width: thin;
+                scrollbar-color: ${C.bd} transparent;
+              }
+            `}</style>
             {/* Search + Export + Filters — wrap on mobile */}
             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
               <div style={{position:"relative",flex:1}}>
@@ -733,8 +752,8 @@ const filtV=useMemo(()=>{
                     <th style={{...th,width:colWidthsC["Status"]||60,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Status"){setCsortD(d=>d*-1);}else{setCsortK("Status");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Status{cSortK==="Status"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Status"]||60;const mv=m=>setColWidthsC(p=>({...p,"Status":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                     <th style={{...th,width:colWidthsC["Vessel"]||130,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Vessel"){setCsortD(d=>d*-1);}else{setCsortK("Vessel");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Vessel{cSortK==="Vessel"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Vessel"]||130;const mv=m=>setColWidthsC(p=>({...p,"Vessel":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                     <th style={{...th,width:colWidthsC["Charterer"]||110,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Charterer"){setCsortD(d=>d*-1);}else{setCsortK("Charterer");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Charterer{cSortK==="Charterer"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Charterer"]||110;const mv=m=>setColWidthsC(p=>({...p,"Charterer":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                    <th style={{...th,width:colWidthsC["Cargo"]||80,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Cargo"){setCsortD(d=>d*-1);}else{setCsortK("Cargo");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Cargo{cSortK==="Cargo"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Cargo"]||80;const mv=m=>setColWidthsC(p=>({...p,"Cargo":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                     <th style={{...th,width:colWidthsC["Qty"]||55,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Qty"){setCsortD(d=>d*-1);}else{setCsortK("Qty");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Qty{cSortK==="Qty"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Qty"]||55;const mv=m=>setColWidthsC(p=>({...p,"Qty":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
+                    <th style={{...th,width:colWidthsC["Cargo"]||80,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Cargo"){setCsortD(d=>d*-1);}else{setCsortK("Cargo");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Cargo{cSortK==="Cargo"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Cargo"]||80;const mv=m=>setColWidthsC(p=>({...p,"Cargo":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                     <th style={{...th,width:colWidthsC["Load"]||100,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Load"){setCsortD(d=>d*-1);}else{setCsortK("Load");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Load{cSortK==="Load"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Load"]||100;const mv=m=>setColWidthsC(p=>({...p,"Load":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                     <th style={{...th,width:colWidthsC["Disch"]||100,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Disch"){setCsortD(d=>d*-1);}else{setCsortK("Disch");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Disch{cSortK==="Disch"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Disch"]||100;const mv=m=>setColWidthsC(p=>({...p,"Disch":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                     <th style={{...th,width:colWidthsC["LaycanStart"]||90,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="LaycanStart"){setCsortD(d=>d*-1);}else{setCsortK("LaycanStart");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>From{cSortK==="LaycanStart"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["LaycanStart"]||90;const mv=m=>setColWidthsC(p=>({...p,"LaycanStart":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
@@ -764,20 +783,20 @@ const filtV=useMemo(()=>{
                         onShiftTab={()=>{const prev=filtC[ri-1];if(prev)document.querySelector(`[data-cid="${prev.id}-cmnt"]`)?.click();else document.querySelector(`[data-cid="${f.id}-vessel"]`)?.blur();}}
                         onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-vessel"]`)?.click();}}/>
                       <EC value={toTCase(f.charterer)} color={"#79c0ff"} placeholder="" onSave={v2=>onUpdateC(f.id,"charterer",toTCase(v2))} width={colWidthsC.Charterer||110} data-cid={f.id+"-chtr"}
-                        onTab={()=>document.querySelector(`[data-cid="${f.id}-cargo"]`)?.click()}
+                        onTab={()=>document.querySelector(`[data-cid="${f.id}-qty"]`)?.click()}
                         onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-vessel"]`)?.click()}
                         onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-chtr"]`)?.click();}}/>
-                      <EC value={f.cargo||""} placeholder="" onSave={v2=>onUpdateC(f.id,"cargo",v2)} width={colWidthsC.Cargo||80} data-cid={f.id+"-cargo"}
-                        onTab={()=>document.querySelector(`[data-cid="${f.id}-qty"]`)?.click()}
-                        onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-chtr"]`)?.click()}
-                        onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-cargo"]`)?.click();}}/>
                       <EC value={normaliseQty(f.qty)} color={C.amber} placeholder="" onSave={v2=>onUpdateC(f.id,"qty",normaliseQty(v2))} width={colWidthsC.Qty||55} data-cid={f.id+"-qty"}
-                        onTab={()=>document.querySelector(`[data-cid="${f.id}-load"]`)?.click()}
-                        onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-cargo"]`)?.click()}
+                        onTab={()=>document.querySelector(`[data-cid="${f.id}-cargo"]`)?.click()}
+                        onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-chtr"]`)?.click()}
                         onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-qty"]`)?.click();}}/>
+                      <EC value={f.cargo||""} placeholder="" onSave={v2=>onUpdateC(f.id,"cargo",v2)} width={colWidthsC.Cargo||80} data-cid={f.id+"-cargo"}
+                        onTab={()=>document.querySelector(`[data-cid="${f.id}-load"]`)?.click()}
+                        onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-qty"]`)?.click()}
+                        onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-cargo"]`)?.click();}}/>
                       <EC value={toTCase(f.load||"")} placeholder="" onSave={v2=>onUpdateC(f.id,"load",v2)} width={colWidthsC.Load||100} data-cid={f.id+"-load"}
                         onTab={()=>document.querySelector(`[data-cid="${f.id}-disch"]`)?.click()}
-                        onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-qty"]`)?.click()}
+                        onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-cargo"]`)?.click()}
                         onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-load"]`)?.click();}}/>
                       <EC value={toTCase(f.disch||"")} placeholder="" onSave={v2=>onUpdateC(f.id,"disch",v2)} width={colWidthsC.Disch||100} data-cid={f.id+"-disch"}
                         onTab={()=>document.querySelector(`[data-cid="${f.id}-lcstart"]`)?.click()}
