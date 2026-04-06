@@ -277,10 +277,26 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
     if(error)console.error(error);
     if(norm.status==="FIXED"&&norm.vessel&&norm.disch){setVessels(prev=>{const next=prev.map(v=>v.vessel?.toLowerCase()!==norm.vessel.toLowerCase()?v:{...v,openPort:norm.disch});saveV(next);return next;});}
   },[]);
-  const delV=useCallback(async(name)=>{
-  setVessels(prev=>{const next=name==="__ALL__"?[]:prev.filter(v=>v.vessel!==name);saveV(next);return next;});
-  if(name==="__ALL__"){const{error}=await supabase.from("positions").delete().neq("vessel_name","__none__");if(error)console.error(error);}
-  else{const{error}=await supabase.from("positions").delete().eq("vessel_name",name);if(error)console.error(error);}
+  const delV = useCallback(async(name)=>{
+  setVessels(prev=>{
+    const next = name==="__ALL__" ? [] : prev.filter(v => v.vessel !== name);
+    saveV(next);
+    return next;
+  });
+
+  if(name==="__ALL__"){
+    const { error } = await supabase
+      .from("positions")
+      .delete()
+      .neq("vessel", "__none__");
+    if(error) console.error("delV all error:", error);
+  } else {
+    const { error } = await supabase
+      .from("positions")
+      .delete()
+      .eq("vessel", name);
+    if(error) console.error("delV error:", error, name);
+  }
 },[]);
   const delC=useCallback(async(id)=>{
     setCargoes(prev=>id==="__ALLCARGO__"?[]:prev.filter(c=>c.id!==id));
