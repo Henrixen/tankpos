@@ -266,7 +266,7 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
 
   const addV=useCallback(async(v)=>{
   setVessels(prev=>{const idx=prev.findIndex(x=>x.vessel?.toLowerCase()===v.vessel.toLowerCase());const next=idx>=0?prev.map((x,i)=>i===idx?enrichV(v,vesselDB):x):[...prev,enrichV(v,vesselDB)];saveV(next);return next;});
-  const{error}=await supabase.from("positions").upsert([{...v,updated_at:new Date().toISOString()}],{onConflict:"vessel_name"});
+  const{error}=await supabase.from("positions").upsert([{...v,updated_at:new Date().toISOString()}],{onConflict:"vessel"});
   if(error)console.error(error);
 },[vesselDB]);
   const addC=useCallback(async(c)=>{
@@ -289,12 +289,14 @@ const{error}=await supabase.from("positions").update({[dbField]:dbValue,updated_
       .from("positions")
       .delete()
       .neq("vessel", "__none__");
+
     if(error) console.error("delV all error:", error);
   } else {
     const { error } = await supabase
       .from("positions")
       .delete()
-      .eq("vessel", name);
+      .ilike("vessel", name);
+
     if(error) console.error("delV error:", error, name);
   }
 },[]);
