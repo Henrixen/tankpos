@@ -41,6 +41,8 @@ const [segmentFilter,setSegmentFilter]=useState("");
   const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
   const [colWidthsV,setColWidthsV]=useState({Operator:120,Vessel:120,Built:48,DWT:55,LOA:48,Beam:46,CBM:55,Date:68,OpenPort:100,Comment:200,FileDate:60,Spec:72});
   const [colWidthsC,setColWidthsC]=useState({Status:60,Vessel:130,Charterer:110,Cargo:80,Qty:60,Load:100,Disch:100,LaycanStart:90,LaycanEnd:90,Freight:90,Comment:120,Updated:88});
+  const [askAiExpanded,setAskAiExpanded]=useState(false);
+  const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
 
   const mobile=isMobile();
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
@@ -667,18 +669,24 @@ const filtV=useMemo(()=>{
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
               </div>
               {/* Ask AI */}
-              <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-                <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0}}>
+              <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:askAiExpanded?840:280,transition:"height 0.3s ease"}}>
+                <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
+                  <button onClick={()=>setAskAiExpanded(!askAiExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 8px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit"}} title={askAiExpanded?"Collapse":"Expand"}>
+                    {askAiExpanded?"▼":"▲"}
+                  </button>
                 </div>
                 <div style={{flex:1,padding:"10px",overflowY:"auto"}}>
                   <RightPanel vessels={vessels} cargoes={cargoes}/>
                 </div>
               </div>
               {/* Intel Vault */}
-              <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-                <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0}}>
+              <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:intelVaultExpanded?840:280,transition:"height 0.3s ease"}}>
+                <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📡 Intel Vault</span>
+                  <button onClick={()=>setIntelVaultExpanded(!intelVaultExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 8px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit"}} title={intelVaultExpanded?"Collapse":"Expand"}>
+                    {intelVaultExpanded?"▼":"▲"}
+                  </button>
                 </div>
                 <div style={{flex:1,padding:"10px",overflowY:"auto"}}>
                   <IntelVault onVaultUpdate={()=>{}}/>
