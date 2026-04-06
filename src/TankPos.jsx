@@ -266,7 +266,7 @@ export default function TankPos(){
 
     const { error } = await supabase
   .from("positions")
-  .upsert(rows, { onConflict: 'vessel' });
+  .upsert(rows, { onConflict: 'vessel_name' });
     if (error) console.error("positions insert error:", error);
     else console.log("positions saved ok:", rows.length, "rows");
     
