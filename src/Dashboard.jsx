@@ -560,7 +560,29 @@ function Dashboard({vessels, cargoes, history}) {
   
   // Fleet stats
   const openVessels = vessels.filter(v=>v.date&&v.openPort&&v.openPort!=="EMPLOYED");
-  const withDays = openVessels.map(v => ({ ...v, days: daysBetween(v.date) })).filter(v => v.days !== null);
+  
+  // Calculate fixing window: days from fileDate to open date
+  const withDays = openVessels.map(v => {
+    if (!v.fileDate || !v.date) return { ...v, days: null };
+    
+    const parseDate = (d) => {
+      if (!d) return null;
+      // Handle various date formats
+      const dt = new Date(d);
+      return isNaN(dt) ? null : dt;
+    };
+    
+    const fileDt = parseDate(v.fileDate);
+    const openDt = parseDate(v.date);
+    
+    if (!fileDt || !openDt) return { ...v, days: null };
+    
+    const diffMs = openDt - fileDt;
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    
+    return { ...v, days: diffDays };
+  }).filter(v => v.days !== null);
+  
   const fleetAvg = withDays.length ? Math.round(withDays.reduce((a,b)=>a+b.days,0)/withDays.length) : null;
 
   // Region breakdown
@@ -577,7 +599,28 @@ function Dashboard({vessels, cargoes, history}) {
   if (fleetAvg !== null) {
     const todayIdx = chartSnaps.findIndex(h=>h.date===today);
     const todayByOp = {};
-    for(const v of openVessels){const d=daysBetween(v.date);if(d===null)continue;const op=(v.operator||"Unknown").trim();todayByOp[op]=(todayByOp[op]||[]).concat(d);}
+    
+    for(const v of openVessels){
+      if (!v.fileDate || !v.date) continue;
+      
+      const parseDate = (d) => {
+        if (!d) return null;
+        const dt = new Date(d);
+        return isNaN(dt) ? null : dt;
+      };
+      
+      const fileDt = parseDate(v.fileDate);
+      const openDt = parseDate(v.date);
+      
+      if (!fileDt || !openDt) continue;
+      
+      const diffMs = openDt - fileDt;
+      const d = Math.round(diffMs / (1000 * 60 * 60 * 24));
+      
+      const op=(v.operator||"Unknown").trim();
+      todayByOp[op]=(todayByOp[op]||[]).concat(d);
+    }
+    
     const todayOpAvgs = Object.fromEntries(Object.entries(todayByOp).map(([op,ds])=>[op,Math.round(ds.reduce((a,b)=>a+b,0)/ds.length)]));
     const todaySnap = {date:today,fixingAvg:fleetAvg,total:vessels.length,openCount:openVessels.length,byOp:todayOpAvgs};
     if (todayIdx>=0) chartSnaps[todayIdx]=todaySnap;
