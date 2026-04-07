@@ -567,9 +567,22 @@ function Dashboard({vessels, cargoes, history}) {
     
     const parseDate = (d) => {
       if (!d) return null;
-      // Handle various date formats
-      const dt = new Date(d);
-      return isNaN(dt) ? null : dt;
+      // Try parsing as ISO date first
+      let dt = new Date(d);
+      if (!isNaN(dt)) return dt;
+      
+      // Try parsing "DD Mon" format (e.g. "31 Mar")
+      const match = String(d).match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
+      if (match) {
+        const day = parseInt(match[1]);
+        const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+        const month = months[match[2].toLowerCase()];
+        const year = new Date().getFullYear();
+        dt = new Date(year, month, day);
+        return isNaN(dt) ? null : dt;
+      }
+      
+      return null;
     };
     
     const fileDt = parseDate(v.fileDate);
@@ -605,8 +618,22 @@ function Dashboard({vessels, cargoes, history}) {
       
       const parseDate = (d) => {
         if (!d) return null;
-        const dt = new Date(d);
-        return isNaN(dt) ? null : dt;
+        // Try parsing as ISO date first
+        let dt = new Date(d);
+        if (!isNaN(dt)) return dt;
+        
+        // Try parsing "DD Mon" format (e.g. "31 Mar")
+        const match = String(d).match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
+        if (match) {
+          const day = parseInt(match[1]);
+          const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+          const month = months[match[2].toLowerCase()];
+          const year = new Date().getFullYear();
+          dt = new Date(year, month, day);
+          return isNaN(dt) ? null : dt;
+        }
+        
+        return null;
       };
       
       const fileDt = parseDate(v.fileDate);
