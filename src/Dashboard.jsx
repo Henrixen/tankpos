@@ -565,14 +565,38 @@ function Dashboard({vessels, cargoes, history}) {
   const calcFixingWindow = (v) => {
     if (!v.fileDate || !v.date) return null;
     
-    // Parse dates - both should work with current formats
+    // Parse fileDate (should be ISO format like "2026-03-30")
     const fileDt = new Date(v.fileDate);
-    const openDt = new Date(v.date);
+    if (isNaN(fileDt)) {
+      console.warn('Invalid fileDate:', v.fileDate, 'for vessel:', v.vessel);
+      return null;
+    }
     
-    if (isNaN(fileDt) || isNaN(openDt)) return null;
+    // Parse openDate - try ISO first, then "DD Mon" format
+    let openDt = new Date(v.date);
+    if (isNaN(openDt)) {
+      // Try "DD Mon" format like "1 Apr"
+      const match = String(v.date).match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
+      if (match) {
+        const day = parseInt(match[1]);
+        const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+        const month = months[match[2].toLowerCase()];
+        const year = fileDt.getFullYear(); // Use same year as fileDate
+        openDt = new Date(year, month, day);
+      }
+    }
+    
+    if (isNaN(openDt)) {
+      console.warn('Invalid openDate:', v.date, 'for vessel:', v.vessel);
+      return null;
+    }
     
     const diffMs = openDt - fileDt;
-    return Math.round(diffMs / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    
+    console.log('Vessel:', v.vessel, 'FileDate:', fileDt.toISOString().slice(0,10), 'OpenDate:', openDt.toISOString().slice(0,10), 'Diff:', diffDays);
+    
+    return diffDays;
   };
   
   const withDays = openVessels.map(v => ({ ...v, days: calcFixingWindow(v) })).filter(v => v.days !== null);
