@@ -64,8 +64,11 @@ function FixingWindow({vessels, fileDate, opFilter, onOpFilter}){
   if(!openVessels.length) return null;
 
   const withDays = openVessels
-    .map(v => ({ ...v, days: daysBetween(v.date, fileDate) }))
-    .filter(v => v.days !== null);
+  .map(v => ({
+    ...v,
+    days: daysBetween(v.date, v.fileDate)
+  }))
+  .filter(v => v.days !== null);
 
   if(!withDays.length) return null;
 
