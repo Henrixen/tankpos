@@ -282,17 +282,17 @@ const filtV=useMemo(()=>{
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
           
             {/* ── Three-column top row ── */}
-            <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
+            <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row",alignItems:"flex-start"}}>
               
-              {/* LEFT: Parse + Fixing (32% width, no empty space) */}
+              {/* LEFT: Parse + Fixing (32% width, no flex, no empty space) */}
               <div style={{width:mobile?"100%":"32%",display:"flex",flexDirection:"column",gap:10}}>
-                <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/>
-                <FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} />
+                <div><ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/></div>
+                <div><FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} /></div>
               </div>
-
-              {/* CENTER: Rate Matrix (34% width, maxHeight to prevent empty space) */}
+ 
+              {/* CENTER: Rate Matrix (34% width, no scroll, fits content) */}
               {!mobile&&(
-                <div style={{width:"34%",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                <div style={{width:"34%",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",alignSelf:"flex-start"}}>
                   <div style={{padding:"6px 12px",borderBottom:"1px solid "+C.bd2,background:C.bg,display:"flex",alignItems:"center",gap:6}}>
                     <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📊 Rate Matrix</span>
                     <span style={{flex:1}}/>
@@ -300,16 +300,16 @@ const filtV=useMemo(()=>{
                     <RateMatrixBunkerInput/>
                     <span style={{fontSize:11,color:C.faint}}>$/mt</span>
                   </div>
-                  <div style={{padding:"8px 10px",overflowY:"auto",maxHeight:360}}>
+                  <div style={{padding:"8px 10px"}}>
                     <RateMatrix/>
                   </div>
                 </div>
               )}
-
+ 
               {/* RIGHT: Ask AI + AIS Map (34% width) */}
               {!mobile&&(
                 <div style={{width:"34%",display:"flex",flexDirection:"column",gap:10}}>
-                  {/* Ask AI (fixed 200px height) */}
+                  {/* Ask AI (fixed 180px height) */}
                   <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
                     <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
                       <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
@@ -319,8 +319,8 @@ const filtV=useMemo(()=>{
                     </div>
                   </div>
                   
-                  {/* AIS Map (fixed 400px height) */}
-                  <div style={{height:400}}>
+                  {/* AIS Map (grows to match left column height) */}
+                  <div style={{flex:1,minHeight:380}}>
                     <AISMap selectedVessels={selectedAISVessels} vessels={vessels}/>
                   </div>
                 </div>
