@@ -281,13 +281,6 @@ const filtV=useMemo(()=>{
         {tab==="pos"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
           
-            REPLACE THE TOP ROW SECTION (lines ~285-318 in your current DesktopApp.jsx)
-
-FIND THIS SECTION:
-            {/* ── Three-column top row: Parse+Fixing | Rates | AI+Intel ── */}
-            <div style={{display:"flex",gap:10,alignItems:"stretch",flexDirection:mobile?"column":"row",maxHeight:480}}>
-
-REPLACE WITH THIS:
             {/* ── Three-column top row ── */}
             <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
               
