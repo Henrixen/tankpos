@@ -282,21 +282,21 @@ const filtV=useMemo(()=>{
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
           
             {/* ── NEW Top row: Parse+Fixing (32%) | Rates (34%) | AI+AIS (34%) ── */}
-            <div style={{display:"flex",gap:10,alignItems:"stretch",flexDirection:mobile?"column":"row"}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
               
-              {/* LEFT: Parse panel + Fixing Window (expanded height) */}
-              <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,maxWidth:mobile?"100%":"32%",height:520}}>
+              {/* LEFT: Parse panel + Fixing Window (no empty space) */}
+              <div style={{flex:"1 1 0",minWidth:220,display:"flex",flexDirection:"column",gap:10,maxWidth:mobile?"100%":"32%"}}>
                 <div style={{flexShrink:0}}>
                   <ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/>
                 </div>
-                <div style={{flex:1,minHeight:0}}>
+                <div style={{flexShrink:0}}>
                   <FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} />
                 </div>
               </div>
 
-              {/* CENTER: Rate Matrix (same height) */}
+              {/* CENTER: Rate Matrix (reduced height to match content) */}
               {!mobile&&(
-                <div style={{flex:"1 1 0",minWidth:180,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",maxWidth:"34%",height:520}}>
+                <div style={{flex:"1 1 0",minWidth:180,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",maxWidth:"34%",maxHeight:380}}>
                   <div style={{padding:"6px 12px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",alignItems:"center",gap:6}}>
                     <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📊 Rate Matrix</span>
                     <span style={{flex:1}}/>
@@ -310,11 +310,11 @@ const filtV=useMemo(()=>{
                 </div>
               )}
 
-              {/* RIGHT: Ask AI + AIS Map stacked */}
+              {/* RIGHT: Ask AI + AIS Map stacked (AIS gets more height) */}
               {!mobile&&(
-                <div style={{flex:"1 1 0",minWidth:220,maxWidth:"34%",display:"flex",flexDirection:"column",gap:10,height:520}}>
+                <div style={{flex:"1 1 0",minWidth:220,maxWidth:"34%",display:"flex",flexDirection:"column",gap:10}}>
                   {/* Ask AI */}
-                  <div style={{flex:"0 0 240px",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                  <div style={{flex:"0 0 200px",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
                     <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
                       <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
                     </div>
@@ -323,8 +323,8 @@ const filtV=useMemo(()=>{
                     </div>
                   </div>
                   
-                  {/* AIS Map */}
-                  <div style={{flex:1,minHeight:0}}>
+                  {/* AIS Map (taller now) */}
+                  <div style={{flex:"0 0 440px"}}>
                     <AISMap selectedVessels={selectedAISVessels} vessels={vessels}/>
                   </div>
                 </div>
@@ -334,11 +334,11 @@ const filtV=useMemo(()=>{
             {vessels.length > 0 && (
               <>
                 {/* Stats row - SWAPPED ORDER: PPT buckets LEFT, Filters CENTER */}
-                <div style={{display:"flex",gap:10,alignItems:"stretch",flexDirection:mobile?"column":"row"}}>
+                <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
                   
-                  {/* LEFT: PPT/2-4d/4-8d Timeline (was right, now left) */}
+                  {/* LEFT: PPT/2-4d/4-8d Timeline */}
                   {!mobile&&(
-                    <div style={{flex:"0 0 33.5%"}}>
+                    <div style={{flex:"0 0 32%"}}>
                       <OpeningBreakdown
                         vessels={vessels}
                         filteredVessels={filtV}
@@ -349,8 +349,8 @@ const filtV=useMemo(()=>{
                     </div>
                   )}
 
-                  {/* CENTER: File Date + Filters (was left, now center) */}
-                  <div style={{flex:mobile?"1 1 100%":"0 0 32%",display:"flex",flexDirection:"column",gap:6}}>
+                  {/* CENTER: File Date + Filters (matches Rate Matrix width) */}
+                  <div style={{flex:mobile?"1 1 100%":"0 0 34%",display:"flex",flexDirection:"column",gap:6}}>
 
                     {selVessels.size>0&&(
                       <button
