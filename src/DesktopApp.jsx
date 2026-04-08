@@ -300,7 +300,7 @@ const filtV=useMemo(()=>{
                     <RateMatrixBunkerInput/>
                     <span style={{fontSize:11,color:C.faint}}>$/mt</span>
                   </div>
-                  <div style={{padding:"8px 10px"}}>
+                  <div style={{padding:"8px 10px",height:350,overflowY:"auto"}}>
                     <RateMatrix/>
                   </div>
                 </div>
