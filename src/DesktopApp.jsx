@@ -281,48 +281,43 @@ const filtV=useMemo(()=>{
         {tab==="pos"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
           
-            {/* ── Top row: Perfect grid ── */}
-            <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
-              
-              {/* LEFT: Parse + Fixing (32%) */}
-              <div style={{width:mobile?"100%":"32%",display:"flex",flexDirection:"column",gap:10}}>
-                <div style={{height:180}}><ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/></div>
-                <div style={{height:200}}><FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} /></div>
-              </div>
- 
-              {/* CENTER: Rate Matrix (34%) */}
-              {!mobile&&(
-                <div style={{width:"34%",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",alignSelf:"flex-start"}}>
-                  <div style={{padding:"6px 12px",borderBottom:"1px solid "+C.bd2,background:C.bg,display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📊 Rate Matrix</span>
-                    <span style={{flex:1}}/>
-                    <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Bunker</span>
-                    <RateMatrixBunkerInput/>
-                    <span style={{fontSize:11,color:C.faint}}>$/mt</span>
-                  </div>
-                  <div style={{padding:"8px 10px",height:400,overflowY:"auto"}}>
-                    <RateMatrix/>
-                  </div>
-                </div>
-              )}
- 
-              {/* RIGHT: Ask AI + AIS Map (34%) */}
-              {!mobile&&(
-                <div style={{width:"34%",display:"flex",flexDirection:"column",gap:10}}>
-                  <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-                    <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
-                      <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
-                    </div>
-                    <div style={{padding:"10px",height:200,overflowY:"auto"}}>
-                      <RightPanel vessels={vessels} cargoes={cargoes}/>
-                    </div>
-                  </div>
-                  <div style={{height:440}}>
-                    <AISMap selectedVessels={selectedAISVessels} vessels={vessels}/>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* ── Top row: Simplified layout ── */}
+<div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
+  
+  {/* LEFT: Parse + Fixing Window */}
+  <div style={{flex:"1",maxWidth:mobile?"100%":"50%",display:"flex",flexDirection:"column",gap:10}}>
+    <div style={{height:180}}>
+      <ParsePanel 
+        vessels={vessels} 
+        onAddVessels={onAddVessels} 
+        onAddCargoes={onAddCargoes} 
+        lockedMode="pos" 
+        vesselDB={{}}
+      />
+    </div>
+    <div style={{height:200}}>
+      <FixingWindow 
+        vessels={filtV} 
+        opFilter={opFilter} 
+        onOpFilter={op=>setOpFilter(o=>o===op?null:op)} 
+      />
+    </div>
+  </div>
+
+  {/* RIGHT: Ask AI */}
+  {!mobile&&(
+    <div style={{flex:"1",maxWidth:"50%"}}>
+      <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:"390px"}}>
+        <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
+          <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
+        </div>
+        <div style={{flex:1,padding:"10px",overflowY:"auto"}} className="custom-scrollbar">
+          <RightPanel vessels={vessels} cargoes={cargoes}/>
+        </div>
+      </div>
+    </div>
+  )}
+</div>
 
             {vessels.length > 0 && (
               <>
