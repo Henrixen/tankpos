@@ -313,7 +313,7 @@ const filtV=useMemo(()=>{
                     <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
                       <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
                     </div>
-                    <div style={{padding:"10px",height:160,overflowY:"auto"}}>
+                    <div style={{padding:"10px",height:200,overflowY:"auto"}}>
                       <RightPanel vessels={vessels} cargoes={cargoes}/>
                     </div>
                   </div>
