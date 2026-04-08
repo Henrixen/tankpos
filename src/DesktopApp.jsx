@@ -13,7 +13,6 @@ import { loadHistory } from "./supabaseHelpers";
 import { OpeningBreakdown, FixingWindow, ExportPanel } from "./PositionsHelpers";
 import IntelVault from "./IntelVault";
 import AISMap from "./AISMap";
-import AISMap from "./AISMap";
 
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB}){
   const [tab,setTab]=useState("pos");
@@ -45,7 +44,6 @@ const [segmentFilter,setSegmentFilter]=useState("");
   const [colWidthsC,setColWidthsC]=useState({Status:60,Vessel:130,Charterer:110,Cargo:80,Qty:60,Load:100,Disch:100,LaycanStart:90,LaycanEnd:90,Freight:90,Comment:120,Updated:88});
   const [askAiExpanded,setAskAiExpanded]=useState(false);
   const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
-  const [selectedAISVessels,setSelectedAISVessels]=useState([]);
   const [selectedAISVessels,setSelectedAISVessels]=useState([]);
 
   const mobile=isMobile();
