@@ -281,18 +281,18 @@ const filtV=useMemo(()=>{
         {tab==="pos"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
           
-            {/* ── Three-column top row ── */}
-            <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row",alignItems:"flex-start"}}>
+            {/* ── Top row: Perfect grid ── */}
+            <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
               
-              {/* LEFT: Parse + Fixing (32% width, no flex, no empty space) */}
+              {/* LEFT: Parse + Fixing (32%) */}
               <div style={{width:mobile?"100%":"32%",display:"flex",flexDirection:"column",gap:10}}>
-                <div><ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/></div>
-                <div><FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} /></div>
+                <div style={{height:180}}><ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/></div>
+                <div style={{height:200}}><FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} /></div>
               </div>
  
-              {/* CENTER: Rate Matrix (34% width, no scroll, fits content) */}
+              {/* CENTER: Rate Matrix (34%) */}
               {!mobile&&(
-                <div style={{width:"34%",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",alignSelf:"flex-start"}}>
+                <div style={{width:"34%",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
                   <div style={{padding:"6px 12px",borderBottom:"1px solid "+C.bd2,background:C.bg,display:"flex",alignItems:"center",gap:6}}>
                     <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📊 Rate Matrix</span>
                     <span style={{flex:1}}/>
@@ -306,21 +306,18 @@ const filtV=useMemo(()=>{
                 </div>
               )}
  
-              {/* RIGHT: Ask AI + AIS Map (34% width) */}
+              {/* RIGHT: Ask AI + AIS Map (34%) */}
               {!mobile&&(
                 <div style={{width:"34%",display:"flex",flexDirection:"column",gap:10}}>
-                  {/* Ask AI (fixed 180px height) */}
                   <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
                     <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
                       <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
                     </div>
-                    <div style={{padding:"10px",height:180,overflowY:"auto"}}>
+                    <div style={{padding:"10px",height:160,overflowY:"auto"}}>
                       <RightPanel vessels={vessels} cargoes={cargoes}/>
                     </div>
                   </div>
-                  
-                  {/* AIS Map (grows to match left column height) */}
-                  <div style={{flex:1,minHeight:380}}>
+                  <div style={{height:440}}>
                     <AISMap selectedVessels={selectedAISVessels} vessels={vessels}/>
                   </div>
                 </div>
@@ -329,12 +326,12 @@ const filtV=useMemo(()=>{
 
             {vessels.length > 0 && (
               <>
-                {/* Stats row - SWAPPED ORDER: PPT buckets LEFT, Filters CENTER */}
-                <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
+                {/* Second row: PPT + Filters (grid aligned) */}
+                <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
                   
-                  {/* LEFT: PPT/2-4d/4-8d Timeline */}
+                  {/* LEFT: PPT Timeline (32%) */}
                   {!mobile&&(
-                    <div style={{flex:"0 0 32%"}}>
+                    <div style={{width:"32%"}}>
                       <OpeningBreakdown
                         vessels={vessels}
                         filteredVessels={filtV}
@@ -345,8 +342,8 @@ const filtV=useMemo(()=>{
                     </div>
                   )}
 
-                  {/* CENTER: File Date + Filters (matches Rate Matrix width) */}
-                  <div style={{flex:mobile?"1 1 100%":"0 0 34%",display:"flex",flexDirection:"column",gap:6}}>
+                  {/* CENTER: File Date + Filters (34%) */}
+                  <div style={{width:mobile?"100%":"34%",display:"flex",flexDirection:"column",gap:6}}>
 
                     {selVessels.size>0&&(
                       <button
