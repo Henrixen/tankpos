@@ -152,7 +152,7 @@ async function saveFixingJob(job){
     outcome:job.outcome||null,
     notes:job.notes||null,
     indications:job.indications||null,
-    cargo_details: job.cargo_details || null,
+    cargo_details:job.cargo_details||null,
     subs_fixed:job.subs_fixed||null,
     owners:job.owners||[],
     fixed_owner:job.fixed_owner||null,
