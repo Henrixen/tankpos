@@ -137,33 +137,25 @@ async function loadFixingJobs(){
   if(error){console.error(error);return[];}
   return(data||[]).map(r=>({...r,owners:r.owners||[],tags:r.tags||[]}));
 }
-async function saveFixingJob(job){
-  const row={
-    id:job.id,
-    charterer:job.charterer||null,
-    product:job.product||null,
-    qty:job.qty||null,
-    load:job.load||null,
-    disch:job.disch||null,
-    laycan:job.laycan||null,
-    laytime:job.laytime||null,
-    status:job.status||"OPEN",
-    guidance:job.guidance||null,
-    outcome:job.outcome||null,
-    notes:job.notes||null,
-    indications:job.indications||null,
-    cargo_details:job.cargo_details||null,
-    subs_fixed:job.subs_fixed||null,
-    owners:job.owners||[],
-    fixed_owner:job.fixed_owner||null,
-    fixed_vessel:job.fixed_vessel||null,
-    fixed_rate:job.fixed_rate||null,
-    fixed_comment:job.fixed_comment||null,
-    added_date:job.added_date||null,
-    updated_at:new Date().toISOString(),
+async function saveFixingJob(job) {
+  const row = {
+    id: job.id,
+    charterer: job.charterer || null,
+    status: job.status || "OPEN",
+    laycan: job.laycan || null,
+    laytime: job.laytime || null,
+    notes: job.notes || null,
+    indications: job.indications || null,
+    cargo_details: job.cargo_details || null,
+    subs_fixed: job.subs_fixed || null,
+    owners: job.owners || [],
+    added_date: job.added_date || null,
+    segment: job.segment || null,
+    trade: job.trade || null,
+    updated_at: new Date().toISOString(),
   };
-  const{error}=await supabase.from("fixing_jobs").upsert([row],{onConflict:"id"});
-  if(error)console.error(error);
+  const { error } = await supabase.from("fixing_jobs").upsert([row], { onConflict: "id" });
+  if (error) console.error(error);
 }
 async function deleteFixingJob(id){
   const{error}=await supabase.from("fixing_jobs").delete().eq("id",id);
