@@ -117,13 +117,28 @@ function FixingTab({vessels}){
     }).slice(0,8);
   }
 
-  async function createJob(charterer=""){
-  const id="job_"+Date.now()+"_"+Math.random().toString(36).slice(2,5);
-  const today=new Date();
-  const formattedDate=`${today.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][today.getMonth()]} ${today.getFullYear()}`;
-  const job={id,charterer,product:"",qty:"",load:"",disch:"",laycan:"",laytime:"",status:"OPEN",guidance:"",outcome:"",notes:"",indications:"",subs_fixed:"",cargo_details:"",owners:[],fixed_owner:"",fixed_vessel:"",fixed_rate:"",added_date:formattedDate,created_at:new Date().toISOString()};
+  async function createJob(charterer = "") {
+  const id = "job_" + Date.now() + "_" + Math.random().toString(36).slice(2, 5);
+  const today = new Date();
+  const formattedDate = `${today.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][today.getMonth()]} ${today.getFullYear()}`;
+  const job = {
+    id,
+    charterer,
+    status: "OPEN",
+    laycan: "",
+    laytime: "",
+    notes: "",
+    indications: "",
+    cargo_details: "",
+    subs_fixed: "",
+    owners: [],
+    added_date: formattedDate,
+    segment: "",
+    trade: "",
+    created_at: new Date().toISOString(),
+  };
   await saveFixingJob(job);
-  setJobs(prev=>[job,...prev]);
+  setJobs(prev => [job, ...prev]);
   setExpandedJob(id);
 }
 
