@@ -328,7 +328,7 @@ const filtV=useMemo(()=>{
                   
                   {/* LEFT: PPT Timeline (32%) */}
                   {!mobile&&(
-                    <div style={{width:"32%"}}>
+                    <div style={{width:"32%",height:200}}>
                       <OpeningBreakdown
                         vessels={vessels}
                         filteredVessels={filtV}
