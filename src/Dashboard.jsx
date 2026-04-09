@@ -688,7 +688,7 @@ function Dashboard({vessels, cargoes, history}) {
   );
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:14,background:D.bg,borderRadius:10,padding:"16px",fontFamily:"IBM Plex Mono,monospace"}}>
+    <div style={{display:"flex",flexDirection:"column",gap:14,background:D.bg,borderRadius:10,padding:"16px",fontFamily:"Inter,sans-serif"}}>
 
       {/* ── Hero banner ── */}
       <div style={{position:"relative",borderRadius:10,overflow:"hidden",background:"#070f1c",border:"1px solid "+D.border2}}>
