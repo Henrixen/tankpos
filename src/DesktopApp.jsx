@@ -286,7 +286,7 @@ const filtV=useMemo(()=>{
               
               {/* LEFT: Parse + Fixing (32%) */}
               <div style={{width:mobile?"100%":"32%",display:"flex",flexDirection:"column",gap:10}}>
-  <div><ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/></div>
+  <div style={{height:220}}><ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/></div>
   <div><FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} /></div>
 </div>
  
