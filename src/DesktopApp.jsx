@@ -317,9 +317,6 @@ const filtV=useMemo(()=>{
                       <RightPanel vessels={vessels} cargoes={cargoes}/>
                     </div>
                   </div>
-                  <div style={{height:440}}>
-                    <AISMap selectedVessels={selectedAISVessels} vessels={vessels}/>
-                  </div>
                 </div>
               )}
             </div>
