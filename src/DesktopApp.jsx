@@ -287,7 +287,7 @@ const filtV=useMemo(()=>{
               {/* LEFT: Parse + Fixing (32%) */}
               <div style={{width:mobile?"100%":"32%",display:"flex",flexDirection:"column",gap:10}}>
                 <div style={{height:180}}><ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/></div>
-                <div style={{height:200}}><FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} /></div>
+                <div style={{height:250}}><FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} /></div>
               </div>
  
               {/* CENTER: Rate Matrix (34%) */}
@@ -339,8 +339,8 @@ const filtV=useMemo(()=>{
                     </div>
                   )}
 
-                  {/* CENTER: File Date + Filters (33%) */}
-                  <div style={{width:mobile?"100%":"33%",display:"flex",flexDirection:"column",gap:6}}>
+                  {/* CENTER: File Date + Filters (34%) */}
+                  <div style={{width:mobile?"100%":"34%",display:"flex",flexDirection:"column",gap:6}}>
 
                     {selVessels.size>0&&(
                       <button
@@ -452,9 +452,9 @@ const filtV=useMemo(()=>{
                     </div>
                   </div>
 
-                  {/* RIGHT: Spacer to match first row layout (35%) */}
+                  {/* RIGHT: Spacer to match first row layout (34%) */}
                   {!mobile&&(
-                    <div style={{width:"35%"}}></div>
+                    <div style={{width:"34%"}}></div>
                   )}
                 </div>
 
