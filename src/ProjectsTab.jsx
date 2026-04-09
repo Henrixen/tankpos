@@ -174,19 +174,19 @@ function SpotVsTCCalculator() {
               <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>SPOT COST BREAKDOWN</div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
                 <span>Freight</span>
-                <span style={{ fontFamily: "monospace" }}>USD {parseInt(inputs.spotFreight || 0).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {parseInt(inputs.spotFreight || 0).toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
                 <span>Demurrage</span>
-                <span style={{ fontFamily: "monospace" }}>USD {((parseFloat(inputs.demurrageRate) || 0) * (parseFloat(inputs.demurrageDays) || 0)).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {((parseFloat(inputs.demurrageRate) || 0) * (parseFloat(inputs.demurrageDays) || 0)).toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
                 <span>Commission</span>
-                <span style={{ fontFamily: "monospace" }}>USD {((parseFloat(inputs.spotFreight || 0) + (parseFloat(inputs.demurrageRate) || 0) * (parseFloat(inputs.demurrageDays) || 0)) * (parseFloat(inputs.commission) || 0) / 100).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {((parseFloat(inputs.spotFreight || 0) + (parseFloat(inputs.demurrageRate) || 0) * (parseFloat(inputs.demurrageDays) || 0)) * (parseFloat(inputs.commission) || 0) / 100).toLocaleString()}</span>
               </div>
               <div style={{ borderTop: "1px solid " + C.bd2, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.tx }}>
                 <span>Total</span>
-                <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.spotTotal).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.spotTotal).toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -229,19 +229,19 @@ function SpotVsTCCalculator() {
               <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>TC COST BREAKDOWN</div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
                 <span>Hire ({results.totalDays}d)</span>
-                <span style={{ fontFamily: "monospace" }}>USD {((parseFloat(inputs.tcHire) || 0) * results.totalDays).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {((parseFloat(inputs.tcHire) || 0) * results.totalDays).toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
                 <span>Bunkers</span>
-                <span style={{ fontFamily: "monospace" }}>USD {(((parseFloat(inputs.seaConsumption) || 0) * (parseFloat(inputs.seaDays) || 0) + (parseFloat(inputs.portConsumption) || 0) * (parseFloat(inputs.portDays) || 0)) * (parseFloat(inputs.bunkersPrice) || 0)).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {(((parseFloat(inputs.seaConsumption) || 0) * (parseFloat(inputs.seaDays) || 0) + (parseFloat(inputs.portConsumption) || 0) * (parseFloat(inputs.portDays) || 0)) * (parseFloat(inputs.bunkersPrice) || 0)).toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
                 <span>Port Costs</span>
-                <span style={{ fontFamily: "monospace" }}>USD {parseInt(inputs.portCost || 0).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {parseInt(inputs.portCost || 0).toLocaleString()}</span>
               </div>
               <div style={{ borderTop: "1px solid " + C.bd2, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.tx }}>
                 <span>Total</span>
-                <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.tcTotal).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.tcTotal).toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -458,11 +458,11 @@ function VesselPurchaseCalculator() {
               <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>CAPITAL STRUCTURE</div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
                 <span>Debt ({inputs.debtRatio}%)</span>
-                <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.debt).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.debt).toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx }}>
                 <span>Equity ({100 - parseFloat(inputs.debtRatio)}%)</span>
-                <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.equity).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.equity).toLocaleString()}</span>
               </div>
             </div>
 
@@ -470,19 +470,19 @@ function VesselPurchaseCalculator() {
               <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>ANNUAL CASH FLOW</div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
                 <span>Revenue</span>
-                <span style={{ fontFamily: "monospace", color: C.green }}>+{Math.round(results.annualRevenue).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif", color: C.green }}>+{Math.round(results.annualRevenue).toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
                 <span>OPEX</span>
-                <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(results.annualOpex).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif", color: C.red }}>-{Math.round(results.annualOpex).toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid " + C.bd2 }}>
                 <span>Debt Service</span>
-                <span style={{ fontFamily: "monospace", color: C.red }}>-{Math.round(results.annualDebtService).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif", color: C.red }}>-{Math.round(results.annualDebtService).toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: C.tx }}>
                 <span>Free Cash Flow</span>
-                <span style={{ fontFamily: "monospace", color: results.freeCF > 0 ? C.green : C.red }}>{results.freeCF > 0 ? "+" : ""}{Math.round(results.freeCF).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif", color: results.freeCF > 0 ? C.green : C.red }}>{results.freeCF > 0 ? "+" : ""}{Math.round(results.freeCF).toLocaleString()}</span>
               </div>
             </div>
 
@@ -499,11 +499,11 @@ function VesselPurchaseCalculator() {
             <div style={{ padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 6 }}>
                 <span>Breakeven TCE</span>
-                <span style={{ fontFamily: "monospace", fontWeight: 700 }}>USD {Math.round(results.breakevenTCE).toLocaleString()}/day</span>
+                <span style={{ fontFamily: "Inter,sans-serif", fontWeight: 700 }}>USD {Math.round(results.breakevenTCE).toLocaleString()}/day</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx }}>
                 <span>Payback Period</span>
-                <span style={{ fontFamily: "monospace", fontWeight: 700 }}>{results.paybackYears < 99 ? results.paybackYears.toFixed(1) + " years" : "N/A"}</span>
+                <span style={{ fontFamily: "Inter,sans-serif", fontWeight: 700 }}>{results.paybackYears < 99 ? results.paybackYears.toFixed(1) + " years" : "N/A"}</span>
               </div>
             </div>
           </div>
@@ -706,11 +706,11 @@ function BareboatCalculator() {
               <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>CAPITAL STRUCTURE</div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
                 <span>Debt ({inputs.debtRatio}%)</span>
-                <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.debt).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.debt).toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx }}>
                 <span>Equity ({100 - parseFloat(inputs.debtRatio)}%)</span>
-                <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.equity).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.equity).toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -724,15 +724,15 @@ function BareboatCalculator() {
               <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>AFTER {inputs.bbcPeriod} YEARS</div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
                 <span>Debt Paid Off</span>
-                <span style={{ fontFamily: "monospace", color: C.green }}>USD {Math.round(results.debtPaidOff).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif", color: C.green }}>USD {Math.round(results.debtPaidOff).toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
                 <span>Remaining Debt</span>
-                <span style={{ fontFamily: "monospace", color: results.remainingDebt > 0 ? C.amber : C.green }}>USD {Math.round(results.remainingDebt).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif", color: results.remainingDebt > 0 ? C.amber : C.green }}>USD {Math.round(results.remainingDebt).toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx }}>
                 <span>Vessel Book Value</span>
-                <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.vesselBookValue).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.vesselBookValue).toLocaleString()}</span>
               </div>
             </div>
 
@@ -740,15 +740,15 @@ function BareboatCalculator() {
               <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>EQUITY POSITION</div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
                 <span>Book Value</span>
-                <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.vesselBookValue).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.vesselBookValue).toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid " + C.bd2 }}>
                 <span>Less: Debt</span>
-                <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.remainingDebt).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.remainingDebt).toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: C.green }}>
                 <span>Net Equity</span>
-                <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.vesselBookValue - results.remainingDebt).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.vesselBookValue - results.remainingDebt).toLocaleString()}</span>
               </div>
             </div>
 
@@ -756,11 +756,11 @@ function BareboatCalculator() {
               <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>DEBT SERVICE</div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
                 <span>Monthly Payment</span>
-                <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.monthlyPayment).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.monthlyPayment).toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx }}>
                 <span>Annual Payment</span>
-                <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.annualDebtService).toLocaleString()}</span>
+                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.annualDebtService).toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -785,10 +785,10 @@ function BareboatCalculator() {
               {results.yearlyBreakdown.map(row => (
                 <tr key={row.year} style={{ borderBottom: "1px solid " + C.bd2 }}>
                   <td style={{ padding: "8px", color: C.tx }}>{row.year}</td>
-                  <td style={{ padding: "8px", textAlign: "right", fontFamily: "monospace", color: C.tx }}>USD {Math.round(row.debtStart).toLocaleString()}</td>
-                  <td style={{ padding: "8px", textAlign: "right", fontFamily: "monospace", color: C.red }}>USD {Math.round(row.interest).toLocaleString()}</td>
-                  <td style={{ padding: "8px", textAlign: "right", fontFamily: "monospace", color: C.green }}>USD {Math.round(row.principal).toLocaleString()}</td>
-                  <td style={{ padding: "8px", textAlign: "right", fontFamily: "monospace", color: C.tx, fontWeight: 600 }}>USD {Math.round(row.debtEnd).toLocaleString()}</td>
+                  <td style={{ padding: "8px", textAlign: "right", fontFamily: "Inter,sans-serif", color: C.tx }}>USD {Math.round(row.debtStart).toLocaleString()}</td>
+                  <td style={{ padding: "8px", textAlign: "right", fontFamily: "Inter,sans-serif", color: C.red }}>USD {Math.round(row.interest).toLocaleString()}</td>
+                  <td style={{ padding: "8px", textAlign: "right", fontFamily: "Inter,sans-serif", color: C.green }}>USD {Math.round(row.principal).toLocaleString()}</td>
+                  <td style={{ padding: "8px", textAlign: "right", fontFamily: "Inter,sans-serif", color: C.tx, fontWeight: 600 }}>USD {Math.round(row.debtEnd).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
@@ -1012,27 +1012,27 @@ function SpotVsTCChartererCalculator() {
             <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>COST BREAKDOWN</div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
               <span>Freight</span>
-              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.spotFreightCost).toLocaleString()}</span>
+              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.spotFreightCost).toLocaleString()}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
               <span>Demurrage</span>
-              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.demurrageCost).toLocaleString()}</span>
+              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.demurrageCost).toLocaleString()}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
               <span>Commission ({inputs.commission}%)</span>
-              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.spotCommission).toLocaleString()}</span>
+              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.spotCommission).toLocaleString()}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
               <span>Bunkers</span>
-              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.bunkersCost).toLocaleString()}</span>
+              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.bunkersCost).toLocaleString()}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 8, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>
               <span>Port Costs</span>
-              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.portCost).toLocaleString()}</span>
+              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.portCost).toLocaleString()}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.tx }}>
               <span>TOTAL COST</span>
-              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.spotTotal).toLocaleString()}</span>
+              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.spotTotal).toLocaleString()}</span>
             </div>
           </div>
         </div>
@@ -1050,23 +1050,23 @@ function SpotVsTCChartererCalculator() {
             <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>COST BREAKDOWN</div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
               <span>Hire ({results.totalDays} days × USD {inputs.tcHire})</span>
-              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.tcHireCost).toLocaleString()}</span>
+              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.tcHireCost).toLocaleString()}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
               <span>Commission ({inputs.commission}%)</span>
-              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.tcCommission).toLocaleString()}</span>
+              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.tcCommission).toLocaleString()}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
               <span>Bunkers</span>
-              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.bunkersCost).toLocaleString()}</span>
+              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.bunkersCost).toLocaleString()}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 8, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>
               <span>Port Costs</span>
-              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.portCost).toLocaleString()}</span>
+              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.portCost).toLocaleString()}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.tx }}>
               <span>TOTAL COST</span>
-              <span style={{ fontFamily: "monospace" }}>USD {Math.round(results.tcTotal).toLocaleString()}</span>
+              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.tcTotal).toLocaleString()}</span>
             </div>
           </div>
         </div>
