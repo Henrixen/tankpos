@@ -226,7 +226,7 @@ const filtV=useMemo(()=>{
   ];
 
   return(
-    <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"IBM Plex Mono,monospace"}}>
+    <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"Inter,sans-serif"}}>
       {/* ── Delete confirmation ── */}
       {pendingDel&&(
         <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",
