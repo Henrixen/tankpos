@@ -306,20 +306,12 @@ const filtV=useMemo(()=>{
                 </div>
               )}
  
-              {/* RIGHT: Ask AI + AIS Map (34%) */}
+              {/* RIGHT: AIS Map (34%) - matches Rate Matrix height */}
 {!mobile&&(
-  <div style={{width:"34%",display:"flex",flexDirection:"column",gap:10}}>
-    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-      <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
-        <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
-      </div>
-      <div style={{padding:"10px"}}>
-        <RightPanel vessels={vessels} cargoes={cargoes}/>
-      </div>
-    </div>
+  <div style={{width:"34%"}}>
+    <AISMap selectedVessels={selectedAISVessels} vessels={vessels}/>
   </div>
 )}
-</div>
 
             {vessels.length > 0 && (
               <>
@@ -452,10 +444,19 @@ const filtV=useMemo(()=>{
                     </div>
                   </div>
 
-                  {/* RIGHT: Spacer to match first row layout (34%) */}
-                  {!mobile&&(
-                    <div style={{width:"34%"}}></div>
-                  )}
+                  {/* RIGHT: Ask AI (34%) - matches PPT height */}
+{!mobile&&(
+  <div style={{width:"34%"}}>
+    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
+        <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
+      </div>
+      <div style={{padding:"10px"}}>
+        <RightPanel vessels={vessels} cargoes={cargoes}/>
+      </div>
+    </div>
+  </div>
+)}
                 </div>
 
                 {/* MOVED: Fleet count + Export + Search to same row */}
