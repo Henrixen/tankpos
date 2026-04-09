@@ -645,125 +645,194 @@ function Dashboard({vessels, cargoes, history}) {
 
 
 
-  const card = (label,val,sub,col)=>(
-    <div style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:7,padding:"10px 16px",flex:"1 1 120px"}}>
-      <div style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{label}</div>
-      <div style={{fontSize:24,fontWeight:800,color:col||C.tx,lineHeight:1}}>{val??"—"}</div>
-      {sub&&<div style={{fontSize:12,color:C.dim,marginTop:3}}>{sub}</div>}
+  // ── Ocean theme tokens ──────────────────────────────────────────────────────
+  const D = {
+    bg:       "#070f1c",
+    bg2:      "#0d1a2e",
+    bg3:      "#111f35",
+    bg4:      "#162540",
+    border:   "rgba(58,130,246,0.14)",
+    border2:  "rgba(58,130,246,0.22)",
+    tx:       "#e8f2ff",
+    dim:      "rgba(160,200,255,0.6)",
+    faint:    "rgba(120,160,220,0.45)",
+    blue:     "#58a6ff",
+    green:    "#3fb950",
+    amber:    "#f5a623",
+    purple:   "#a78bfa",
+    red:      "#ff6b6b",
+    pink:     "#fd79a8",
+  };
+
+  const card = (label, val, sub, col) => (
+    <div style={{background:D.bg3,border:"1px solid "+D.border2,borderRadius:8,padding:"12px 18px",flex:"1 1 120px",position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:col||D.blue,opacity:0.7,borderRadius:"8px 8px 0 0"}}/>
+      <div style={{fontSize:10,fontWeight:700,color:D.faint,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}}>{label}</div>
+      <div style={{fontSize:26,fontWeight:800,color:col||D.tx,lineHeight:1}}>{val??"—"}</div>
+      {sub&&<div style={{fontSize:11,color:D.faint,marginTop:4}}>{sub}</div>}
     </div>
   );
 
-  const secHead = t=>(<div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8,marginTop:4}}>{t}</div>);
+  const secHead = t => (
+    <div style={{fontSize:11,fontWeight:700,color:D.faint,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+      <span style={{display:"inline-block",width:2,height:12,background:D.blue,borderRadius:2,opacity:0.8}}/>
+      {t}
+    </div>
+  );
 
-  return(
-    <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      {/* KPI row */}
+  const panel = (children, extraStyle={}) => (
+    <div style={{background:D.bg2,border:"1px solid "+D.border,borderRadius:10,padding:"16px 18px",position:"relative",overflow:"hidden",...extraStyle}}>
+      <div style={{position:"absolute",inset:0,backgroundImage:"linear-gradient(rgba(30,100,200,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(30,100,200,0.03) 1px,transparent 1px)",backgroundSize:"40px 40px",pointerEvents:"none"}}/>
+      <div style={{position:"relative",zIndex:1}}>{children}</div>
+    </div>
+  );
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:14,background:D.bg,borderRadius:10,padding:"16px",fontFamily:"IBM Plex Mono,monospace"}}>
+
+      {/* ── Hero banner ── */}
+      <div style={{position:"relative",borderRadius:10,overflow:"hidden",background:"#070f1c",border:"1px solid "+D.border2}}>
+        <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse 80% 100% at 75% 100%,#0d2a4a 0%,#070f1c 65%)"}}/>
+        <div style={{position:"absolute",inset:0,backgroundImage:"linear-gradient(rgba(30,100,200,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(30,100,200,0.06) 1px,transparent 1px)",backgroundSize:"48px 48px"}}/>
+        <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse 50% 60% at 80% 70%,rgba(30,90,180,0.25) 0%,transparent 70%)"}}/>
+        {/* ship arcs */}
+        <svg style={{position:"absolute",bottom:0,right:0,width:"55%",height:"100%",opacity:0.12}} viewBox="0 0 500 200" preserveAspectRatio="xMaxYMax slice">
+          <ellipse cx="420" cy="220" rx="300" ry="160" fill="none" stroke="rgba(88,166,255,1)" strokeWidth="1"/>
+          <ellipse cx="420" cy="220" rx="200" ry="105" fill="none" stroke="rgba(88,166,255,1)" strokeWidth="1"/>
+          <ellipse cx="420" cy="220" rx="110" ry="58" fill="none" stroke="rgba(88,166,255,1)" strokeWidth="0.8"/>
+          <circle cx="120" cy="160" r="2" fill="rgba(88,200,255,1)"/>
+          <circle cx="260" cy="175" r="2" fill="rgba(20,200,120,1)"/>
+          <circle cx="390" cy="168" r="2" fill="rgba(88,166,255,1)"/>
+          <path d="M120,160 Q190,140 260,175" fill="none" stroke="rgba(88,200,255,0.8)" strokeWidth="0.8" strokeDasharray="4,3"/>
+          <path d="M260,175 Q325,155 390,168" fill="none" stroke="rgba(20,200,120,0.8)" strokeWidth="0.8" strokeDasharray="4,3"/>
+        </svg>
+        <div style={{position:"relative",zIndex:2,padding:"22px 26px 18px"}}>
+          <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",color:"rgba(120,180,255,0.55)",marginBottom:6}}>Signal — Tanker Intelligence</div>
+          <div style={{fontSize:22,fontWeight:800,color:"#e8f2ff",lineHeight:1.2,marginBottom:4}}>Market Dashboard</div>
+          <div style={{fontSize:12,color:"rgba(140,190,255,0.5)"}}>
+            Clean products · UKC / Med / TA ·&nbsp;
+            {new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+          </div>
+        </div>
+      </div>
+
+      {/* ── KPI row ── */}
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        {card("Fleet vessels",vessels.length,null,C.tx)}
-        {card("Open / fixing",openVessels.length,null,C.amber)}
-        {card("Fleet fixing window",fleetAvg!=null?(fleetAvg>=0?"+"+fleetAvg+"d":fleetAvg+"d"):null,"avg days until open",(fleetAvg<0)?C.green:(fleetAvg<=7)?C.amber:C.blue)}
-        {card("Fixed/Subs",vessels.filter(v=>v.openPort==="EMPLOYED").length,null,C.purple)}
-        {card("History snapshots",history.length,"data points collected",C.dim)}
+        {card("Fleet vessels",     vessels.length,                                          null,       D.blue)}
+        {card("Open / fixing",     openVessels.length,                                     null,       D.amber)}
+        {card("Fixing window",     fleetAvg!=null?(fleetAvg>=0?"+"+fleetAvg+"d":fleetAvg+"d"):null, "avg days until open", fleetAvg<0?D.green:fleetAvg<=7?D.amber:D.blue)}
+        {card("Fixed / subs",      vessels.filter(v=>v.openPort==="EMPLOYED").length,       null,       D.purple)}
+        {card("History snapshots", history.length,                                          "data points",D.faint)}
       </div>
 
-      {/* Fixing window trends side by side */}
+      {/* ── Charts row ── */}
       <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-        <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"14px 16px",flex:"1 1 340px",minWidth:280}}>
-          {secHead("📈 Fixing Window Trend - fleet avg")}
-          {chartData.length <= 1
-            ? (<div style={{color:C.faint,fontSize:12,padding:"24px 0",textAlign:"center"}}>
-                Parse positions to build trend data.
-              </div>)
-            : (<FWChart data={chartData}/>)
-          }
-        </div>
-        <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"14px 16px",flex:"1 1 340px",minWidth:280}}>
-          {secHead("👥 Fixing Window by Operator")}
-          {allOps.length===0
-            ? <div style={{color:C.faint,fontSize:12,padding:"24px 0",textAlign:"center"}}>Parse positions to build operator data.</div>
-            : <OpChart data={opChartData} ops={allOps} colors={OP_COLORS}/>
-          }
-        </div>
+        {panel(
+          <>
+            {secHead("Fixing window trend — fleet avg")}
+            {chartData.length<=1
+              ? <div style={{color:D.faint,fontSize:12,padding:"24px 0",textAlign:"center"}}>Parse positions to build trend data.</div>
+              : <FWChart data={chartData}/>}
+          </>,
+          {flex:"1 1 340px",minWidth:280}
+        )}
+        {panel(
+          <>
+            {secHead("Fixing window by operator")}
+            {allOps.length===0
+              ? <div style={{color:D.faint,fontSize:12,padding:"24px 0",textAlign:"center"}}>Parse positions to build operator data.</div>
+              : <OpChart data={opChartData} ops={allOps} colors={OP_COLORS}/>}
+          </>,
+          {flex:"1 1 340px",minWidth:280}
+        )}
       </div>
 
-      {/* Two column: region + bunkers */}
+      {/* ── Region + Bunkers row ── */}
       <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+
         {/* Region breakdown */}
-        <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"14px 16px",flex:"1 1 260px"}}>
-          {secHead("🗺 Open Fleet by Region")}
-          {Object.keys(regionCounts).length===0
-            ? <div style={{color:C.faint,fontSize:12}}>No open vessels</div>
-            : Object.entries(regionCounts).sort((a,b)=>b[1]-a[1]).map(([r,n])=>{
-                const pct = Math.round(n/openVessels.length*100);
-                const col = {WCUK:C.blue,ECUK:C.green,CANAL:C.amber,BISCAY:C.purple,SKAW:"#ff9f43",BALTIC:C.red,Other:C.faint,MED:"#fd79a8"}[r]||C.dim;
-                return(
-                  <div key={r} style={{marginBottom:6}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                      <span style={{fontSize:12,fontWeight:700,color:col}}>{r}</span>
-                      <span style={{fontSize:12,color:C.dim}}>{n} vessel{n!==1?"s":""}</span>
+        {panel(
+          <>
+            {secHead("Open fleet by region")}
+            {Object.keys(regionCounts).length===0
+              ? <div style={{color:D.faint,fontSize:12}}>No open vessels</div>
+              : Object.entries(regionCounts).sort((a,b)=>b[1]-a[1]).map(([r,n])=>{
+                  const pct=Math.round(n/openVessels.length*100);
+                  const col={WCUK:D.blue,ECUK:D.green,CANAL:D.amber,BISCAY:D.purple,SKAW:"#ff9f43",BALTIC:D.red,Other:D.faint,MED:D.pink}[r]||D.dim;
+                  return(
+                    <div key={r} style={{marginBottom:8}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                        <span style={{fontSize:12,fontWeight:700,color:col}}>{r}</span>
+                        <span style={{fontSize:11,color:D.faint}}>{n} vessel{n!==1?"s":""}</span>
+                      </div>
+                      <div style={{height:5,background:D.bg4,borderRadius:3,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:pct+"%",background:col,borderRadius:3,transition:"width .4s",boxShadow:"0 0 6px "+col+"66"}}/>
+                      </div>
                     </div>
-                    <div style={{height:6,background:C.bg3,borderRadius:3,overflow:"hidden"}}>
-                      <div style={{height:"100%",width:pct+"%",background:col,borderRadius:3,transition:"width .3s"}}/>
-                    </div>
-                  </div>
-                );
-              })
-          }
-        </div>
+                  );
+                })
+            }
+          </>,
+          {flex:"1 1 260px"}
+        )}
 
-        {/* Bunker prices - PBT International */}
-        <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"14px 16px",flex:"1 1 380px"}}>
-          {secHead("⛽ Bunker Prices USD/mt - PBT International")}
-          {!bFetched&&!bLoading&&(
-            <div style={{textAlign:"center",padding:"12px 0"}}>
-              <div style={{fontSize:12,color:C.dim,marginBottom:8}}>Source: pbt-international.com (updated 3×/week)</div>
-              <button onClick={fetchBunkersPBT} style={{background:"#1f6feb",border:"none",borderRadius:6,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"7px 18px",cursor:"pointer"}}>
-                🌐 Fetch Live from PBT
-              </button>
-            </div>
-          )}
-          {bLoading&&<div style={{color:C.blue,fontSize:12,padding:"12px 0",textAlign:"center"}}>⟳ Fetching pbt-international.com…</div>}
-          {bError&&<div style={{color:C.red,fontSize:12,padding:"6px 0"}}>{bError}<br/><button onClick={fetchBunkersPBT} style={{marginTop:4,background:"none",border:"1px solid "+C.bd,borderRadius:4,color:C.dim,fontSize:12,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit"}}>Retry</button></div>}
-          {bunkers&&(
-            <div>
-              <div style={{fontSize:12,color:C.faint,marginBottom:8}}>
-                Updated: {bunkers.date} · <a href="https://pbt-international.com/price-quotes" target="_blank" style={{color:C.blue,textDecoration:"none"}}>pbt-international.com</a>
+        {/* Bunker prices */}
+        {panel(
+          <>
+            {secHead("Bunker prices USD/mt — PBT International")}
+            {!bFetched&&!bLoading&&(
+              <div style={{textAlign:"center",padding:"14px 0"}}>
+                <div style={{fontSize:12,color:D.faint,marginBottom:10}}>Source: pbt-international.com · updated 3×/week</div>
+                <button onClick={fetchBunkersPBT} style={{background:"rgba(88,166,255,0.15)",border:"1px solid rgba(88,166,255,0.35)",borderRadius:6,color:D.blue,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"7px 20px",cursor:"pointer"}}>
+                  Fetch live from PBT
+                </button>
               </div>
-              {/* Table */}
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                <thead>
-                  <tr>
-                    <th style={{padding:"4px 8px",background:C.bg3,color:C.faint,fontWeight:700,fontSize:12,textTransform:"uppercase",textAlign:"left",borderRadius:"4px 0 0 0"}}>Port</th>
-                    <th style={{padding:"4px 8px",background:C.bg3,color:C.amber,fontWeight:700,fontSize:12,textTransform:"uppercase",textAlign:"right"}}>HSFO 380</th>
-                    <th style={{padding:"4px 8px",background:C.bg3,color:C.green,fontWeight:700,fontSize:12,textTransform:"uppercase",textAlign:"right"}}>VLSFO 0.5%</th>
-                    <th style={{padding:"4px 8px",background:C.bg3,color:C.blue,fontWeight:700,fontSize:12,textTransform:"uppercase",textAlign:"right",borderRadius:"0 4px 0 0"}}>MGO</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    ["ARA (Rotterdam)", bunkers.ARA_HSFO, bunkers.ARA_VLSFO, bunkers.ARA_MGO],
-                    ["Fujairah",        bunkers.FUJ_HSFO, bunkers.FUJ_VLSFO, bunkers.FUJ_MGO],
-                    ["Singapore",       bunkers.SIN_HSFO, bunkers.SIN_VLSFO, bunkers.SIN_MGO],
-                  ].map(([port,hsfo,vlsfo,mgo],i)=>(
-                    <tr key={port} style={{background:i%2===0?C.bg:C.bg2}}>
-                      <td style={{padding:"5px 8px",color:C.dim,fontWeight:600}}>{port}</td>
-                      <td style={{padding:"5px 8px",color:C.amber,fontWeight:700,textAlign:"right"}}>{hsfo?"$"+hsfo:"—"}</td>
-                      <td style={{padding:"5px 8px",color:C.green,fontWeight:700,textAlign:"right"}}>{vlsfo?"$"+vlsfo:"—"}</td>
-                      <td style={{padding:"5px 8px",color:C.blue,fontWeight:700,textAlign:"right"}}>{mgo?"$"+mgo:"—"}</td>
+            )}
+            {bLoading&&<div style={{color:D.blue,fontSize:12,padding:"14px 0",textAlign:"center"}}>⟳ Fetching pbt-international.com…</div>}
+            {bError&&<div style={{color:D.red,fontSize:12,padding:"6px 0"}}>{bError}<br/><button onClick={fetchBunkersPBT} style={{marginTop:4,background:"none",border:"1px solid "+D.border,borderRadius:4,color:D.dim,fontSize:12,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit"}}>Retry</button></div>}
+            {bunkers&&(
+              <div>
+                <div style={{fontSize:11,color:D.faint,marginBottom:10}}>
+                  Updated: {bunkers.date} · <a href="https://pbt-international.com/price-quotes" target="_blank" style={{color:D.blue,textDecoration:"none"}}>pbt-international.com</a>
+                </div>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                  <thead>
+                    <tr style={{background:D.bg4}}>
+                      <th style={{padding:"6px 10px",color:D.faint,fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.07em",textAlign:"left"}}>Port</th>
+                      <th style={{padding:"6px 10px",color:D.amber,fontWeight:700,fontSize:11,textTransform:"uppercase",textAlign:"right"}}>HSFO 380</th>
+                      <th style={{padding:"6px 10px",color:D.green,fontWeight:700,fontSize:11,textTransform:"uppercase",textAlign:"right"}}>VLSFO 0.5%</th>
+                      <th style={{padding:"6px 10px",color:D.blue,fontWeight:700,fontSize:11,textTransform:"uppercase",textAlign:"right"}}>MGO</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              <button onClick={fetchBunkersPBT} style={{marginTop:7,background:"none",border:"1px solid "+C.bd,borderRadius:4,color:C.dim,fontSize:12,padding:"2px 10px",cursor:"pointer",fontFamily:"inherit"}}>↻ Refresh from PBT</button>
-            </div>
-          )}
-        </div>
+                  </thead>
+                  <tbody>
+                    {[
+                      ["ARA (Rotterdam)", bunkers.ARA_HSFO, bunkers.ARA_VLSFO, bunkers.ARA_MGO],
+                      ["Fujairah",        bunkers.FUJ_HSFO, bunkers.FUJ_VLSFO, bunkers.FUJ_MGO],
+                      ["Singapore",       bunkers.SIN_HSFO, bunkers.SIN_VLSFO, bunkers.SIN_MGO],
+                    ].map(([port,hsfo,vlsfo,mgo],i)=>(
+                      <tr key={port} style={{background:i%2===0?"transparent":D.bg4,borderBottom:"1px solid "+D.border}}>
+                        <td style={{padding:"7px 10px",color:D.dim,fontWeight:600}}>{port}</td>
+                        <td style={{padding:"7px 10px",color:D.amber,fontWeight:700,textAlign:"right"}}>{hsfo?"$"+hsfo:"—"}</td>
+                        <td style={{padding:"7px 10px",color:D.green,fontWeight:700,textAlign:"right"}}>{vlsfo?"$"+vlsfo:"—"}</td>
+                        <td style={{padding:"7px 10px",color:D.blue,fontWeight:700,textAlign:"right"}}>{mgo?"$"+mgo:"—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <button onClick={fetchBunkersPBT} style={{marginTop:8,background:"none",border:"1px solid "+D.border,borderRadius:4,color:D.faint,fontSize:11,padding:"3px 10px",cursor:"pointer",fontFamily:"inherit"}}>↻ Refresh from PBT</button>
+              </div>
+            )}
+          </>,
+          {flex:"1 1 380px"}
+        )}
       </div>
-      {/* News Feed */}
+
+      {/* ── News Feed ── */}
       <NewsFeed/>
 
-      {/* WS / FFA tracker */}
+      {/* ── WS / FFA tracker ── */}
       <WSTracker/>
+
     </div>
   );
 }
