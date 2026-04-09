@@ -458,7 +458,6 @@ const filtV=useMemo(()=>{
 
                 </div>
                     </div>
-                  </div>
 
                   {/* RIGHT: Spacer to match first row layout (35%) */}
                   {!mobile&&(
