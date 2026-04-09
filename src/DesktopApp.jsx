@@ -342,8 +342,8 @@ const filtV=useMemo(()=>{
                     </div>
                   )}
 
-                  {/* CENTER: File Date + Filters (34%) */}
-                  <div style={{width:mobile?"100%":"34%",display:"flex",flexDirection:"column",gap:6}}>
+                  {/* CENTER: File Date + Filters (33%) */}
+                  <div style={{width:mobile?"100%":"33%",display:"flex",flexDirection:"column",gap:6}}>
 
                     {selVessels.size>0&&(
                       <button
@@ -454,6 +454,16 @@ const filtV=useMemo(()=>{
                       </div>
                     </div>
                   </div>
+                </div>
+
+                </div>
+                    </div>
+                  </div>
+
+                  {/* RIGHT: Spacer to match first row layout (35%) */}
+                  {!mobile&&(
+                    <div style={{width:"35%"}}></div>
+                  )}
                 </div>
 
                 {/* MOVED: Fleet count + Export + Search to same row */}
