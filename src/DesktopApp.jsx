@@ -308,7 +308,7 @@ const filtV=useMemo(()=>{
  
               {/* RIGHT: AIS Map (34%) - matches Rate Matrix height */}
 {!mobile&&(
-  <div style={{width:"34%",height:445}}>
+  <div style={{width:"34%",height:460}}>
     <AISMap selectedVessels={selectedAISVessels} vessels={vessels}/>
   </div>
 )}
