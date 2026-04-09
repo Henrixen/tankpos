@@ -1,10 +1,20 @@
 // ─── Colours ──────────────────────────────────────────────────────────────────
 export const C = {
-  bg:"#0a0f1e",bg2:"#0e1628",bg3:"#162035",
-  bd:"#1e3a5f",bd2:"#162035",
-  tx:"#cce4ff",dim:"#7eafd4",faint:"#3d6080",
-  blue:"#4fc3f7",green:"#43e97b",amber:"#ffd166",
-  purple:"#c084fc",red:"#ff6b6b",orange:"#fb923c",
+  bg:    "#070f1c",
+  bg2:   "#0c1729",
+  bg3:   "#111f35",
+  bg4:   "#162540",
+  bd:    "rgba(58,130,246,0.18)",
+  bd2:   "rgba(58,130,246,0.10)",
+  tx:    "#e8f2ff",
+  dim:   "rgba(160,200,255,0.65)",
+  faint: "rgba(110,155,215,0.45)",
+  blue:   "#58a6ff",
+  green:  "#3fb950",
+  amber:  "#f5a623",
+  purple: "#a78bfa",
+  red:    "#ff6b6b",
+  orange: "#fb923c",
 };
 
 export const OP_COLORS = ["#4fc3f7","#43e97b","#ffd166","#c084fc","#ff6b6b","#38bdf8","#34d399","#fb923c","#e879f9","#a3e635"];
