@@ -307,19 +307,15 @@ const filtV=useMemo(()=>{
               )}
  
               {/* RIGHT: Ask AI + AIS Map (34%) */}
-              {!mobile&&(
-                <div style={{width:"34%",display:"flex",flexDirection:"column",gap:10}}>
-                  <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-                    <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
-                      <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
-                    </div>
-                    <div style={{padding:"10px",height:200,overflowY:"auto"}}>
-                      <RightPanel vessels={vessels} cargoes={cargoes}/>
-                    </div>
-                  </div>
-                {/* AIS Map - fills remaining space */}
-    <div style={{flex:1,minHeight:400}}>
-      <AISMap selectedVessels={selectedAISVessels} vessels={vessels}/>
+{!mobile&&(
+  <div style={{width:"34%",display:"flex",flexDirection:"column",gap:10}}>
+    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
+        <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
+      </div>
+      <div style={{padding:"10px"}}>
+        <RightPanel vessels={vessels} cargoes={cargoes}/>
+      </div>
     </div>
   </div>
 )}
