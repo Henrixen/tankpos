@@ -324,7 +324,7 @@ const filtV=useMemo(()=>{
             {vessels.length > 0 && (
               <>
                 {/* Second row: PPT + Filters (grid aligned) */}
-                <div style={{display:"flex",gap:5,flexDirection:mobile?"column":"row"}}>
+<div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row",marginTop:5}}>
                   
                   {/* LEFT: PPT Timeline (32%) */}
                   {!mobile&&(
