@@ -355,24 +355,26 @@ function FixingTab({vessels}){
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
           <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>Indications</span>
           <div style={{display:"flex",gap:4,alignItems:"center"}}>
-            <select id={"seg_"+job.id} defaultValue="" style={{...inpS,padding:"1px 4px",fontSize:10,background:C.bg3,appearance:"none"}}>
-              <option value="">Seg…</option>
-              {SEGMENTS.map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
-            <select id={"trd_"+job.id} defaultValue="" style={{...inpS,padding:"1px 4px",fontSize:10,background:C.bg3,appearance:"none"}}>
-              <option value="">Trade…</option>
-              {TRADES.map(t=><option key={t} value={t}>{t}</option>)}
-            </select>
+            <select value={job.segment||""} 
+  onChange={e=>updateJob(job.id,{segment:e.target.value})}
+  style={{...inpS,padding:"1px 4px",fontSize:10,background:C.bg3,appearance:"none"}}>
+  <option value="">Seg…</option>
+  {SEGMENTS.map(s=><option key={s} value={s}>{s}</option>)}
+</select>
+<select value={job.trade||""}
+  onChange={e=>updateJob(job.id,{trade:e.target.value})}
+  style={{...inpS,padding:"1px 4px",fontSize:10,background:C.bg3,appearance:"none"}}>
+  <option value="">Trade…</option>
+  {TRADES.map(t=><option key={t} value={t}>{t}</option>)}
+</select>
             <button onClick={()=>{
-              const seg=document.getElementById("seg_"+job.id)?.value;
-              const trd=document.getElementById("trd_"+job.id)?.value;
-              const matches=owners.filter(o=>(seg?o.segment===seg:true)&&(trd?o.trade===trd:true));
-              if(!matches.length)return;
-              const lines=matches.map(o=>`${o.company} /`).join("\n");
-              updateJob(job.id,{indications:(job.indications?job.indications+"\n":"")+lines});
-            }} style={{fontSize:10,fontWeight:700,background:"rgba(88,166,255,.15)",border:"1px solid "+C.blue+"44",borderRadius:4,color:C.blue,padding:"2px 7px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-              Import owners
-            </button>
+  const matches=owners.filter(o=>(job.segment?o.segment===job.segment:true)&&(job.trade?o.trade===job.trade:true));
+  if(!matches.length)return;
+  const lines=matches.map(o=>`${o.company} /`).join("\n");
+  updateJob(job.id,{indications:(job.indications?job.indications+"\n":"")+lines});
+}} style={{fontSize:10,fontWeight:700,background:"rgba(88,166,255,.15)",border:"1px solid "+C.blue+"44",borderRadius:4,color:C.blue,padding:"2px 7px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+  Import owners
+</button>
           </div>
         </div>
         <textarea id={"indications_"+job.id} value={job.indications||""} onChange={e=>updateJob(job.id,{indications:e.target.value})}
