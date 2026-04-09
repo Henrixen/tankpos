@@ -312,7 +312,7 @@ const filtV=useMemo(()=>{
     <AISMap selectedVessels={selectedAISVessels} vessels={vessels}/>
   </div>
 )}
-
+ </div>
             {vessels.length > 0 && (
               <>
                 {/* Second row: PPT + Filters (grid aligned) */}
@@ -457,7 +457,7 @@ const filtV=useMemo(()=>{
     </div>
   </div>
 )}
-                </div>
+</div>
 
                 {/* MOVED: Fleet count + Export + Search to same row */}
                 <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,flexWrap:"wrap"}}>
