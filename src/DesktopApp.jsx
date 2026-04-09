@@ -279,7 +279,7 @@ const filtV=useMemo(()=>{
 
         {/* ── POSITIONS ── */}
         {tab==="pos"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
           
             {/* ── Top row: Perfect grid ── */}
             <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
@@ -324,7 +324,7 @@ const filtV=useMemo(()=>{
             {vessels.length > 0 && (
               <>
                 {/* Second row: PPT + Filters (grid aligned) */}
-                <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
+                <div style={{display:"flex",gap:5,flexDirection:mobile?"column":"row"}}>
                   
                   {/* LEFT: PPT Timeline (32%) */}
                   {!mobile&&(
