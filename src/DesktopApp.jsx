@@ -47,8 +47,8 @@ const [segmentFilter,setSegmentFilter]=useState("");
   const [selectedAISVessels,setSelectedAISVessels]=useState([]);
 
   const mobile=isMobile();
-  const th={background:C.bg2,color:C.faint,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",padding:"10px 12px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
-  const td={padding:"10px 12px",borderBottom:"1px solid "+C.bd2,verticalAlign:"middle",fontSize:13};
+  const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
+  const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
   const fb=on=>({fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid "+(on?C.blue:C.bd),background:on?"rgba(88,166,255,.12)":"transparent",color:on?C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
 
   // Tag component for vessel specs
@@ -226,7 +226,7 @@ const filtV=useMemo(()=>{
   ];
 
   return(
-    <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"IBM Plex Mono,monospace"}}>
+    <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"Inter,sans-serif"}}>
       {/* ── Delete confirmation ── */}
       {pendingDel&&(
         <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",
@@ -269,10 +269,10 @@ const filtV=useMemo(()=>{
         </div>
       </div>
       <div style={{padding:"12px 16px",maxWidth:1900,margin:"0 auto"}}>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16,background:C.bg2,padding:"8px",borderRadius:10,border:"1px solid "+C.bd2}}>
+        <div style={{display:"flex",flexWrap:"wrap",borderBottom:"1px solid "+C.bd2,marginBottom:12,gap:mobile?"2px 0":0}}>
           {[["pos","⚓ Pos",vessels.length],["cargo","📦 Cargo",cargoTotal||cargoes.length],["fix","🎯 Fix",0],["projects","🧮 Projects",0],["matrix","🔗 Matrix",0],["tce","⚡ TCE",0],["dash","📊 Dash",0]].map(([id,label,cnt])=>(
-            <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}} style={{fontFamily:"sans-serif",fontWeight:700,fontSize:mobile?12:14,padding:mobile?"8px 14px":"10px 20px",border:"1px solid "+(tab===id?C.blue:C.bd2),background:tab===id?C.blue+"22":C.bg3,color:tab===id?C.blue:C.dim,borderRadius:8,cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.2s",letterSpacing:"-0.01em"}}>
-              {label}{cnt>0?(<span style={{fontSize:mobile?10:11,marginLeft:6,background:tab===id?C.blue+"33":C.bg,padding:"2px 7px",borderRadius:10,fontWeight:800}}>{cnt}</span>):null}
+            <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}} style={{fontFamily:"sans-serif",fontWeight:700,fontSize:mobile?11:12,padding:mobile?"6px 10px":"7px 16px",border:"none",background:"transparent",color:tab===id?C.blue:C.dim,borderBottom:"2px solid "+(tab===id?C.blue:"transparent"),cursor:"pointer",whiteSpace:"nowrap"}}>
+              {label}{cnt>0?(<span style={{fontSize:11,marginLeft:3,background:C.bg3,padding:"1px 5px",borderRadius:8}}>{cnt}</span>):null}
             </button>
           ))}
         </div>
@@ -284,10 +284,11 @@ const filtV=useMemo(()=>{
             {/* ── Top row: Perfect grid ── */}
             <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
               
-              {/* LEFT: Parse (32%) */}
+              {/* LEFT: Parse + Fixing (32%) */}
               <div style={{width:mobile?"100%":"32%",display:"flex",flexDirection:"column",gap:10}}>
-                <div style={{height:180}}><ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/></div>
-              </div>
+  <div><ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/></div>
+  <div><FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} /></div>
+</div>
  
               {/* CENTER: Rate Matrix (34%) */}
               {!mobile&&(
@@ -297,89 +298,37 @@ const filtV=useMemo(()=>{
                     <span style={{flex:1}}/>
                     <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Bunker</span>
                     <RateMatrixBunkerInput/>
-                    <span style={{fontSize:11,color:C.faint}}>$/mt</span>
+                    <span style={{fontSize:10,color:C.faint}}>$/mt</span>
                   </div>
-                  <div style={{padding:"8px 10px",height:530,overflowY:"auto"}}>
+                  <div style={{padding:"8px 10px",height:424,overflowY:"hidden"}}>
                     <RateMatrix/>
                   </div>
                 </div>
               )}
  
-              {/* RIGHT: AIS Map (34%) */}
+              {/* RIGHT: Ask AI + AIS Map (34%) */}
               {!mobile&&(
                 <div style={{width:"34%",display:"flex",flexDirection:"column",gap:10}}>
-                    <div style={{height:620}}><AISMap selectedVessels={selectedAISVessels} vessels={vessels}/></div>
+                  <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                    <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
+                      <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
+                    </div>
+                    <div style={{padding:"10px",height:200,overflowY:"auto"}}>
+                      <RightPanel vessels={vessels} cargoes={cargoes}/>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Second row: Fixing Window (32%) + Ask AI (34%) + Intel Vault (34%) */}
-            {vessels.length > 0 && (
-              <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
-                {/* LEFT: Fixing Window (32%) */}
-                <div style={{width:mobile?"100%":"32%"}}>
-                  <FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} />
-                </div>
-
-                {/* CENTER: Ask AI (34%) */}
-                {!mobile&&(
-                  <div style={{width:"34%",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:askAiExpanded?400:200,transition:"height 0.3s ease"}}>
-                    <div style={{padding:"8px 14px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <span style={{fontSize:13,fontWeight:700,color:C.tx,letterSpacing:"-0.01em"}}>🤖 Ask AI</span>
-                      <button onClick={()=>setAskAiExpanded(!askAiExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:5,padding:"3px 10px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit",fontWeight:600}} title={askAiExpanded?"Collapse":"Expand"}>
-                        {askAiExpanded?"▲":"▼"}
-                      </button>
-                    </div>
-                    <div style={{flex:1,padding:"12px",overflowY:"auto"}} className="custom-scrollbar">
-                      <RightPanel vessels={vessels} cargoes={cargoes}/>
-                    </div>
-                  </div>
-                )}
-
-                {/* RIGHT: Intel Vault (34%) */}
-                {!mobile&&(
-                  <div style={{width:"34%",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:intelVaultExpanded?400:200,transition:"height 0.3s ease"}}>
-                    <div style={{padding:"8px 14px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <span style={{fontSize:13,fontWeight:700,color:C.tx,letterSpacing:"-0.01em"}}>📡 Intel Vault</span>
-                      <button onClick={()=>setIntelVaultExpanded(!intelVaultExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:5,padding:"3px 10px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit",fontWeight:600}} title={intelVaultExpanded?"Collapse":"Expand"}>
-                        {intelVaultExpanded?"▲":"▼"}
-                      </button>
-                    </div>
-                    <div style={{flex:1,padding:"12px",overflowY:"auto"}} className="custom-scrollbar">
-                      <IntelVault onVaultUpdate={()=>{}}/>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-            <style>{`
-              .custom-scrollbar::-webkit-scrollbar {
-                width: 8px;
-              }
-              .custom-scrollbar::-webkit-scrollbar-track {
-                background: transparent;
-              }
-              .custom-scrollbar::-webkit-scrollbar-thumb {
-                background: ${C.bd};
-                border-radius: 4px;
-              }
-              .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                background: ${C.dim};
-              }
-              .custom-scrollbar {
-                scrollbar-width: thin;
-                scrollbar-color: ${C.bd} transparent;
-              }
-            `}</style>
-
             {vessels.length > 0 && (
               <>
-                {/* Third row: PPT + Filters (grid aligned) */}
-                <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
+                {/* Second row: PPT + Filters (grid aligned) */}
+<div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row",marginTop:-5}}>
                   
                   {/* LEFT: PPT Timeline (32%) */}
                   {!mobile&&(
-                    <div style={{width:"32%"}}>
+                    <div style={{width:"32%",height:200}}>
                       <OpeningBreakdown
                         vessels={vessels}
                         filteredVessels={filtV}
@@ -448,43 +397,43 @@ const filtV=useMemo(()=>{
                     </div>
 
                     {/* STATUS, REGION, UPDATED filters */}
-                    <div style={{display:"flex",flexDirection:"column",gap:8,padding:"12px",background:C.bg2,border:"1px solid "+C.bd2,borderRadius:8}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:6,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
                       {FILTER_GROUPS.map(({label,items})=>(
-                        <div key={label} style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                          <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:55,fontWeight:700}}>{label}</span>
+                        <div key={label} style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                          <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>{label}</span>
                           {items.map(([f,l])=>(
-                            <button key={f} onClick={()=>toggleFilter(f)} style={{fontSize:11,fontWeight:700,padding:"6px 12px",borderRadius:6,border:"1px solid "+(filters.has(f)?C.blue:C.bd2),background:filters.has(f)?C.blue+"22":C.bg3,color:filters.has(f)?C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s"}}>{l}</button>
+                            <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
                           ))}
-                          {filters.size>0&&label==="Region"&&(<button onClick={()=>setFilters(new Set())} style={{fontSize:11,fontWeight:700,padding:"6px 12px",borderRadius:6,border:"1px solid "+C.red+"44",background:C.red+"22",color:C.red,cursor:"pointer",fontFamily:"inherit",marginLeft:4,transition:"all 0.2s"}}>✕ Clear</button>)}
+                          {filters.size?(<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:4}}>✕ Clear</button>):null}
                         </div>
                       ))}
 
-                      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:55,fontWeight:700}}>Updated</span>
+                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>Updated</span>
                         {[["","All"],["today","Today"],["week","This week"]].map(([v,l])=>(
-                          <button key={v} onClick={()=>setUpdFilter(v)} style={{fontSize:11,fontWeight:700,padding:"6px 12px",borderRadius:6,border:"1px solid "+(updFilter===v&&v!==""?C.blue:C.bd2),background:updFilter===v&&v!==""?C.blue+"22":C.bg3,color:updFilter===v&&v!==""?C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s"}}>{l}</button>
+                          <button key={v} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&v!=="")}>{l}</button>
                         ))}
                       </div>
 
                       {/* SEGMENT and SUPER REGION */}
-                      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:700}}>Segment</span>
+                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Segment</span>
                         <select
                           value={segmentFilter}
                           onChange={e=>{setSegmentFilter(e.target.value);setPosPage(1);}}
-                          style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 12px",outline:"none",fontWeight:600}}
+                          style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 8px",outline:"none"}}
                         >
-                          <option value="">All Segments</option>
+                          <option value="">All</option>
                           {[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort().map(s=><option key={s} value={s}>{s}</option>)}
                         </select>
 
-                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginLeft:8,fontWeight:700}}>
+                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginLeft:8}}>
                           Super Region
                         </span>
                         <select
                           value={superRegionFilter}
                           onChange={e=>setSuperRegionFilter(e.target.value)}
-                          style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 12px",outline:"none",fontWeight:600}}
+                          style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 8px",outline:"none"}}
                         >
                           {superRegionOptions.map(r=>(
                             <option key={r} value={r}>{r}</option>
@@ -494,7 +443,7 @@ const filtV=useMemo(()=>{
                         {superRegionFilter!=="ALL" && (
                           <button
                             onClick={()=>setSuperRegionFilter("ALL")}
-                            style={{background:C.red+"22",border:"1px solid "+C.red+"44",borderRadius:6,color:C.red,fontSize:11,fontWeight:700,padding:"4px 10px",cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s"}}
+                            style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,color:C.dim,fontSize:12,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit"}}
                           >
                             ✕
                           </button>
@@ -502,25 +451,30 @@ const filtV=useMemo(()=>{
                       </div>
                     </div>
                   </div>
+
+                  {/* RIGHT: Spacer to match first row layout (34%) */}
+                  {!mobile&&(
+                    <div style={{width:"34%"}}></div>
+                  )}
                 </div>
 
                 {/* MOVED: Fleet count + Export + Search to same row */}
-                <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:C.bg2,border:"1px solid "+C.bd2,borderRadius:8,fontSize:12,flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,flexWrap:"wrap"}}>
                   <ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/>
-                  <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:800,fontSize:14}}>{vessels.length}</span></span>
-                  <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:800,fontSize:14}}>{filtV.length}</span></span>
-                  <span style={{color:C.faint}}>Selected <span style={{color:C.cyan,fontWeight:800,fontSize:14}}>{selVessels.size}</span></span>
+                  <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{vessels.length}</span></span>
+                  <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtV.length}</span></span>
+                  <span style={{color:C.faint}}>Selected <span style={{color:"#4fc3f7",fontWeight:700}}>{selVessels.size}</span></span>
                   
                   {/* MOVED SEARCH FIELD HERE */}
-                  <div style={{position:"relative",marginLeft:"auto",minWidth:320,flex:"0 1 400px"}}>
+                  <div style={{position:"relative",marginLeft:"auto",minWidth:300}}>
                     <input
                       value={search}
                       onChange={e=>setSearch(e.target.value)}
-                      placeholder="🔍 Multi-search: vessel, operator, port..."
-                      style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,color:C.tx,fontFamily:"inherit",fontSize:13,padding:"8px 32px 8px 12px",outline:"none",width:"100%",boxSizing:"border-box"}}
+                      placeholder="🔍 Multi-search: e.g. belfast ulsd 1A"
+                      style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}
                     />
                     {search&&(
-                      <button onClick={()=>setSearch("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:18,height:18,cursor:"pointer",color:C.faint,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>
+                      <button onClick={()=>setSearch("")} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>
                         ✕
                       </button>
                     )}
@@ -702,7 +656,7 @@ const filtV=useMemo(()=>{
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
               </div>
               {/* Ask AI */}
-              <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:askAiExpanded?600:200,transition:"height 0.3s ease"}}>
+              <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:askAiExpanded?600:142,transition:"height 0.3s ease"}}>
                 <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
                   <button onClick={()=>setAskAiExpanded(!askAiExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 8px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit"}} title={askAiExpanded?"Collapse":"Expand"}>
@@ -714,7 +668,7 @@ const filtV=useMemo(()=>{
                 </div>
               </div>
               {/* Intel Vault */}
-              <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:intelVaultExpanded?600:200,transition:"height 0.3s ease"}}>
+              <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:intelVaultExpanded?600:142,transition:"height 0.3s ease"}}>
                 <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📡 Intel Vault</span>
                   <button onClick={()=>setIntelVaultExpanded(!intelVaultExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 8px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit"}} title={intelVaultExpanded?"Collapse":"Expand"}>
@@ -746,41 +700,34 @@ const filtV=useMemo(()=>{
               }
             `}</style>
             {/* Search + Export + Filters — wrap on mobile */}
-            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",padding:"12px",background:C.bg2,border:"1px solid "+C.bd2,borderRadius:8}}>
-              <div style={{position:"relative",flex:"1 1 300px",minWidth:200}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+              <div style={{position:"relative",flex:1}}>
                 <input value={cSearch} onChange={e=>{const v=e.target.value;setCSearch(v);clearTimeout(window._csTimer);window._csTimer=setTimeout(()=>onCargoSearch(v),350);}} placeholder="🔍 Search cargoes…"
-                  style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,color:C.tx,fontFamily:"inherit",fontSize:13,padding:"8px 32px 8px 12px",outline:"none",boxSizing:"border-box"}}/>
-                {cSearch&&<button onClick={()=>{setCSearch("");clearTimeout(window._csTimer);onCargoSearch("");}} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:18,height:18,cursor:"pointer",color:C.faint,fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
+                  style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
+                {cSearch&&<button onClick={()=>{setCSearch("");clearTimeout(window._csTimer);onCargoSearch("");}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
               </div>
               <ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/>
               {selCargoes.size>0&&(
                 <button onClick={()=>setPendingDel({type:"allcargo",id:"__SELCARGO__",label:selCargoes.size+" cargo"+(selCargoes.size!==1?"es":"")})}
-                  style={{fontSize:11,fontWeight:700,padding:"6px 14px",borderRadius:6,border:"1px solid "+C.red+"55",background:C.red+"22",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",transition:"all 0.2s"}}>
+                  style={{fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:5,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                   🗑 Delete ({selCargoes.size})
                 </button>
               )}
-              <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-                <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:700}}>Status</span>
-                {[["ALL","All"],["FIXED","Fixed"],["SUBS","Subs"],["FAILED","Failed"]].map(([f,l])=>(
-                  <button key={f} onClick={()=>setCFilter(f)} style={{fontSize:11,fontWeight:700,padding:"6px 12px",borderRadius:6,border:"1px solid "+(cFilter===f?C.blue:C.bd2),background:cFilter===f?C.blue+"22":C.bg3,color:cFilter===f?C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s"}}>{l}</button>
-                ))}
-              </div>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-                <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:700}}>Period</span>
-                {[["","All"],["tw","This Wk"],["lw","Last Wk"],["ytd","YTD"]].map(([v,label])=>(
-                  <button key={v} onClick={()=>setCTimeFilter(v)} style={{fontSize:11,fontWeight:700,padding:"6px 12px",borderRadius:6,border:"1px solid "+(cTimeFilter===v?C.blue:C.bd2),background:cTimeFilter===v?C.blue+"22":C.bg3,color:cTimeFilter===v?C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s",whiteSpace:"nowrap"}}>{label}</button>
-                ))}
-              </div>
-              <input value={cDateFilter} onChange={e=>setCDateFilter(e.target.value)} placeholder="🔍 Date filter…"
-                style={{width:100,background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",outline:"none"}}/>
+              {[["ALL","All"],["FIXED","Fixed"],["SUBS","On Subs"],["FAILED","Failed"]].map(([f,l])=>(
+                <button key={f} onClick={()=>setCFilter(f)} style={fb(cFilter===f)}>{l}</button>
+              ))}
+              {[["","All time"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([v,label])=>(
+                <button key={v} onClick={()=>setCTimeFilter(v)} style={{...fb(cTimeFilter===v),whiteSpace:"nowrap"}}>{label}</button>
+              ))}
+              <input value={cDateFilter} onChange={e=>setCDateFilter(e.target.value)} placeholder="🔍 Filter…"
+                style={{width:80,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 7px",outline:"none"}}/>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:16,padding:"10px 14px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:8,fontSize:12}}>
-              <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:800,fontSize:14}}>{cargoTotal||cargoes.length}</span></span>
-              <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:800,fontSize:14}}>{filtC.length}</span></span>
-              <span style={{color:C.faint}}>Fixed <span style={{color:C.green,fontWeight:800,fontSize:14}}>{cargoes.filter(c=>c.status==="FIXED").length}</span></span>
-              <span style={{color:C.faint}}>Subs <span style={{color:C.purple,fontWeight:800,fontSize:14}}>{cargoes.filter(c=>c.status==="SUBS").length}</span></span>
-              <span style={{color:C.faint}}>Failed <span style={{color:C.red,fontWeight:800,fontSize:14}}>{cargoes.filter(c=>c.status==="FAILED").length}</span></span>
-              {selCargoes.size>0&&<span style={{color:C.faint,marginLeft:"auto"}}>Selected <span style={{color:C.cyan,fontWeight:800,fontSize:14}}>{selCargoes.size}</span></span>}
+            <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12}}>
+              <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoTotal||cargoes.length}</span></span>
+              <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtC.length}</span></span>
+              <span style={{color:C.faint}}>Fixed <span style={{color:C.green,fontWeight:700}}>{cargoes.filter(c=>c.status==="FIXED").length}</span></span>
+              <span style={{color:C.faint}}>Subs <span style={{color:C.purple,fontWeight:700}}>{cargoes.filter(c=>c.status==="SUBS").length}</span></span>
+              <span style={{color:C.faint}}>Failed <span style={{color:C.red,fontWeight:700}}>{cargoes.filter(c=>c.status==="FAILED").length}</span></span>
               <span style={{flex:1}}/>
             </div>
             <div style={{border:"1px solid "+C.bd2,borderRadius:7,overflow:"hidden",overflowX:"auto"}}>
