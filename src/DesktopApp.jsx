@@ -368,14 +368,10 @@ const filtV=useMemo(()=>{
                 scrollbar-color: ${C.bd} transparent;
               }
             `}</style>
-            `}</style>
-                </div>
-              )}
-            </div>
 
             {vessels.length > 0 && (
               <>
-                {/* Second row: PPT + Filters (grid aligned) */}
+                {/* Third row: PPT + Filters (grid aligned) */}
                 <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
                   
                   {/* LEFT: PPT Timeline (32%) */}
