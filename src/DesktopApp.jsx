@@ -47,8 +47,8 @@ const [segmentFilter,setSegmentFilter]=useState("");
   const [selectedAISVessels,setSelectedAISVessels]=useState([]);
 
   const mobile=isMobile();
-  const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
-  const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
+  const th={background:C.bg2,color:C.faint,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",padding:"10px 12px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
+  const td={padding:"10px 12px",borderBottom:"1px solid "+C.bd2,verticalAlign:"middle",fontSize:13};
   const fb=on=>({fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid "+(on?C.blue:C.bd),background:on?"rgba(88,166,255,.12)":"transparent",color:on?C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
 
   // Tag component for vessel specs
@@ -284,10 +284,9 @@ const filtV=useMemo(()=>{
             {/* ── Top row: Perfect grid ── */}
             <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
               
-              {/* LEFT: Parse + Fixing (32%) */}
+              {/* LEFT: Parse (32%) */}
               <div style={{width:mobile?"100%":"32%",display:"flex",flexDirection:"column",gap:10}}>
                 <div style={{height:180}}><ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/></div>
-                <div style={{height:200}}><FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} /></div>
               </div>
  
               {/* CENTER: Rate Matrix (34%) */}
@@ -309,17 +308,67 @@ const filtV=useMemo(()=>{
               {/* RIGHT: Ask AI + AIS Map (34%) */}
               {!mobile&&(
                 <div style={{width:"34%",display:"flex",flexDirection:"column",gap:10}}>
-                  <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-                    <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
-                      <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
+                    <AISMap selectedVessels={selectedAISVessels} vessels={vessels}/>
+
+            {/* Second row: Fixing Window (32%) + Ask AI (34%) + Intel Vault (34%) */}
+            {vessels.length > 0 && (
+              <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
+                {/* LEFT: Fixing Window (32%) */}
+                <div style={{width:mobile?"100%":"32%"}}>
+                  <FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} />
+                </div>
+
+                {/* CENTER: Ask AI (34%) */}
+                {!mobile&&(
+                  <div style={{width:"34%",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:askAiExpanded?400:200,transition:"height 0.3s ease"}}>
+                    <div style={{padding:"8px 14px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:13,fontWeight:700,color:C.tx,letterSpacing:"-0.01em"}}>🤖 Ask AI</span>
+                      <button onClick={()=>setAskAiExpanded(!askAiExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:5,padding:"3px 10px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit",fontWeight:600}} title={askAiExpanded?"Collapse":"Expand"}>
+                        {askAiExpanded?"▲":"▼"}
+                      </button>
                     </div>
-                    <div style={{padding:"10px",height:200,overflowY:"auto"}}>
+                    <div style={{flex:1,padding:"12px",overflowY:"auto"}} className="custom-scrollbar">
                       <RightPanel vessels={vessels} cargoes={cargoes}/>
                     </div>
                   </div>
-                  <div style={{height:440}}>
-                    <AISMap selectedVessels={selectedAISVessels} vessels={vessels}/>
+                )}
+
+                {/* RIGHT: Intel Vault (34%) */}
+                {!mobile&&(
+                  <div style={{width:"34%",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:intelVaultExpanded?400:200,transition:"height 0.3s ease"}}>
+                    <div style={{padding:"8px 14px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:13,fontWeight:700,color:C.tx,letterSpacing:"-0.01em"}}>📡 Intel Vault</span>
+                      <button onClick={()=>setIntelVaultExpanded(!intelVaultExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:5,padding:"3px 10px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit",fontWeight:600}} title={intelVaultExpanded?"Collapse":"Expand"}>
+                        {intelVaultExpanded?"▲":"▼"}
+                      </button>
+                    </div>
+                    <div style={{flex:1,padding:"12px",overflowY:"auto"}} className="custom-scrollbar">
+                      <IntelVault onVaultUpdate={()=>{}}/>
+                    </div>
                   </div>
+                )}
+              </div>
+            )}
+            <style>{`
+              .custom-scrollbar::-webkit-scrollbar {
+                width: 8px;
+              }
+              .custom-scrollbar::-webkit-scrollbar-track {
+                background: transparent;
+              }
+              .custom-scrollbar::-webkit-scrollbar-thumb {
+                background: ${C.bd};
+                border-radius: 4px;
+              }
+              .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                background: ${C.dim};
+              }
+              .custom-scrollbar {
+                scrollbar-width: thin;
+                scrollbar-color: ${C.bd} transparent;
+              }
+            `}</style>
+            `}</style>
                 </div>
               )}
             </div>
