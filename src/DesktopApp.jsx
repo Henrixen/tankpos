@@ -299,16 +299,19 @@ const filtV=useMemo(()=>{
                     <RateMatrixBunkerInput/>
                     <span style={{fontSize:11,color:C.faint}}>$/mt</span>
                   </div>
-                  <div style={{padding:"8px 10px",height:400,overflowY:"auto"}}>
+                  <div style={{padding:"8px 10px",height:530,overflowY:"auto"}}>
                     <RateMatrix/>
                   </div>
                 </div>
               )}
  
-              {/* RIGHT: Ask AI + AIS Map (34%) */}
+              {/* RIGHT: AIS Map (34%) */}
               {!mobile&&(
                 <div style={{width:"34%",display:"flex",flexDirection:"column",gap:10}}>
-                    <AISMap selectedVessels={selectedAISVessels} vessels={vessels}/>
+                    <div style={{height:620}}><AISMap selectedVessels={selectedAISVessels} vessels={vessels}/></div>
+                </div>
+              )}
+            </div>
 
             {/* Second row: Fixing Window (32%) + Ask AI (34%) + Intel Vault (34%) */}
             {vessels.length > 0 && (
