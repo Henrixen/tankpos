@@ -1,5 +1,23 @@
 import React, { useState, useMemo } from "react";
-import { C } from "./constants";
+
+// Signal Ocean-inspired theme
+const THEME = {
+  bg: "#0a1628",
+  bg2: "#0f1d2e", 
+  bg3: "#1a2942",
+  bd: "#2a3f5f",
+  bd2: "#1e3048",
+  tx: "#e3e8ef",
+  dim: "#8b9cb5",
+  faint: "#6b7f9a",
+  blue: "#00d4ff",
+  cyan: "#0ea5e9",
+  orange: "#ff6b35",
+  green: "#43e97b",
+  amber: "#ffb020",
+  purple: "#a78bfa",
+  red: "#f87171"
+};
 
 function ProjectsTab() {
   const [activeCalc, setActiveCalc] = useState("spot-vs-tc");
@@ -12,10 +30,10 @@ function ProjectsTab() {
   ];
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: C.bg1 }}>
+    <div style={{ minHeight: "calc(100vh - 100px)", display: "flex", flexDirection: "column", background: THEME.bg }}>
       {/* Header */}
-      <div style={{ padding: "16px 20px", borderBottom: "1px solid " + C.bd, display: "flex", alignItems: "center", gap: 12 }}>
-        <span style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>Project Calculators</span>
+      <div style={{ padding: "16px 20px", borderBottom: "1px solid " + THEME.bd2, display: "flex", alignItems: "center", gap: 12, background: THEME.bg2 }}>
+        <span style={{ fontSize: 16, fontWeight: 700, color: THEME.tx, letterSpacing: "-0.02em" }}>🧮 Project Calculators</span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           {calculators.map(calc => (
             <button
@@ -24,13 +42,14 @@ function ProjectsTab() {
               style={{
                 fontSize: 12,
                 fontWeight: 600,
-                padding: "6px 12px",
+                padding: "7px 14px",
                 borderRadius: 6,
-                border: "1px solid " + (activeCalc === calc.id ? C.blue : C.bd),
-                background: activeCalc === calc.id ? C.blue + "22" : "transparent",
-                color: activeCalc === calc.id ? C.blue : C.dim,
+                border: "1px solid " + (activeCalc === calc.id ? THEME.blue : THEME.bd2),
+                background: activeCalc === calc.id ? THEME.blue + "22" : THEME.bg3,
+                color: activeCalc === calc.id ? THEME.blue : THEME.dim,
                 cursor: "pointer",
-                fontFamily: "inherit"
+                fontFamily: "inherit",
+                transition: "all 0.2s"
               }}
             >
               {calc.icon} {calc.label}
@@ -53,17 +72,14 @@ function ProjectsTab() {
 // ===== SPOT VS TC CALCULATOR =====
 function SpotVsTCCalculator() {
   const [inputs, setInputs] = useState({
-    // Voyage details
     cargoQty: "38000",
     cargoGrade: "CPP",
     loadPort: "Tees",
     dischPort: "ARA",
     distance: "650",
-    // Spot option
     spotFreight: "360000",
     demurrageRate: "35000",
     demurrageDays: "0.5",
-    // TC option
     tcHire: "20000",
     seaDays: "3",
     portDays: "4",
@@ -71,7 +87,6 @@ function SpotVsTCCalculator() {
     seaConsumption: "28",
     portConsumption: "4",
     portCost: "45000",
-    // Common
     commission: "1.25",
     vesselSize: "MR"
   });
@@ -107,21 +122,23 @@ function SpotVsTCCalculator() {
     return { spotTotal, tcTotal, saving, savingPct, totalDays };
   }, [inputs]);
 
-  const inpS = { background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontFamily: "inherit", fontSize: 13, padding: "6px 10px", outline: "none", width: "100%" };
-  const lblS = { fontSize: 11, color: C.faint, marginBottom: 4, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" };
+  const inpS = { background: THEME.bg3, border: "1px solid " + THEME.bd, borderRadius: 4, color: THEME.tx, fontFamily: "inherit", fontSize: 13, padding: "7px 10px", outline: "none", width: "100%" };
+  const lblS = { fontSize: 10, color: THEME.faint, marginBottom: 6, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" };
+  const cardS = { background: THEME.bg2, border: "1px solid " + THEME.bd, borderRadius: 8, padding: 16 };
+  const headS = { fontSize: 13, fontWeight: 700, color: THEME.tx, marginBottom: 14, paddingBottom: 10, borderBottom: "1px solid " + THEME.bd2, letterSpacing: "-0.01em" };
 
   return (
     <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-      <div style={{ marginBottom: 16 }}>
-        <h3 style={{ fontSize: 18, fontWeight: 700, color: C.tx, margin: "0 0 8px 0" }}>Spot vs Time Charter Analysis</h3>
-        <p style={{ fontSize: 13, color: C.faint, margin: 0 }}>Compare the cost of chartering a vessel on spot vs. time charter for a specific voyage</p>
+      <div style={{ marginBottom: 20 }}>
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: THEME.tx, margin: "0 0 8px 0", letterSpacing: "-0.02em" }}>Spot vs Time Charter Analysis</h3>
+        <p style={{ fontSize: 13, color: THEME.faint, margin: 0 }}>Compare the cost of chartering a vessel on spot vs. time charter for a specific voyage</p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
         {/* Voyage Details */}
-        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Voyage Details</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={cardS}>
+          <div style={headS}>⛴️ Voyage Details</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div>
               <div style={lblS}>Vessel Size</div>
               <input style={inpS} value={inputs.vesselSize} onChange={e => update("vesselSize", e.target.value)} placeholder="MR / LR1 / LR2" />
@@ -154,51 +171,36 @@ function SpotVsTCCalculator() {
         </div>
 
         {/* Spot Option */}
-        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>💰 Spot Market Option</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={cardS}>
+          <div style={headS}>📍 Spot Freight</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div>
-              <div style={lblS}>Freight Rate (USD)</div>
-              <input style={inpS} value={inputs.spotFreight} onChange={e => update("spotFreight", e.target.value)} placeholder="360000" />
+              <div style={lblS}>Spot Freight ($)</div>
+              <input style={inpS} value={inputs.spotFreight} onChange={e => update("spotFreight", e.target.value)} />
             </div>
             <div>
-              <div style={lblS}>Demurrage Rate (USD/day)</div>
-              <input style={inpS} value={inputs.demurrageRate} onChange={e => update("demurrageRate", e.target.value)} placeholder="35000" />
+              <div style={lblS}>Demurrage Rate ($/day)</div>
+              <input style={inpS} value={inputs.demurrageRate} onChange={e => update("demurrageRate", e.target.value)} />
             </div>
             <div>
               <div style={lblS}>Demurrage Days</div>
-              <input style={inpS} value={inputs.demurrageDays} onChange={e => update("demurrageDays", e.target.value)} placeholder="0.5" />
+              <input style={inpS} value={inputs.demurrageDays} onChange={e => update("demurrageDays", e.target.value)} />
             </div>
-
-            <div style={{ marginTop: 16, padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-              <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>SPOT COST BREAKDOWN</div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Freight</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {parseInt(inputs.spotFreight || 0).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Demurrage</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {((parseFloat(inputs.demurrageRate) || 0) * (parseFloat(inputs.demurrageDays) || 0)).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Commission</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {((parseFloat(inputs.spotFreight || 0) + (parseFloat(inputs.demurrageRate) || 0) * (parseFloat(inputs.demurrageDays) || 0)) * (parseFloat(inputs.commission) || 0) / 100).toLocaleString()}</span>
-              </div>
-              <div style={{ borderTop: "1px solid " + C.bd2, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.tx }}>
-                <span>Total</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.spotTotal).toLocaleString()}</span>
-              </div>
+            <div style={{ marginTop: 20, padding: 14, background: THEME.bg3, borderRadius: 6, border: "1px solid " + THEME.bd2 }}>
+              <div style={{ fontSize: 11, color: THEME.faint, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Spot Total</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: THEME.blue, letterSpacing: "-0.02em" }}>${results.spotTotal.toLocaleString()}</div>
+              <div style={{ fontSize: 10, color: THEME.faint, marginTop: 4 }}>Freight + Demurrage + Commission</div>
             </div>
           </div>
         </div>
 
         {/* TC Option */}
-        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>⏱️ Time Charter Option</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={cardS}>
+          <div style={headS}>⏱️ Time Charter</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div>
-              <div style={lblS}>TC Hire (USD/day)</div>
-              <input style={inpS} value={inputs.tcHire} onChange={e => update("tcHire", e.target.value)} placeholder="20000" />
+              <div style={lblS}>TC Hire ($/day)</div>
+              <input style={inpS} value={inputs.tcHire} onChange={e => update("tcHire", e.target.value)} />
             </div>
             <div>
               <div style={lblS}>Sea Days</div>
@@ -209,881 +211,77 @@ function SpotVsTCCalculator() {
               <input style={inpS} value={inputs.portDays} onChange={e => update("portDays", e.target.value)} />
             </div>
             <div>
-              <div style={lblS}>Bunkers (USD/MT)</div>
-              <input style={inpS} value={inputs.bunkersPrice} onChange={e => update("bunkersPrice", e.target.value)} placeholder="550" />
+              <div style={lblS}>Bunkers Price ($/mt)</div>
+              <input style={inpS} value={inputs.bunkersPrice} onChange={e => update("bunkersPrice", e.target.value)} />
             </div>
             <div>
-              <div style={lblS}>Sea Cons. (MT/day)</div>
-              <input style={inpS} value={inputs.seaConsumption} onChange={e => update("seaConsumption", e.target.value)} placeholder="28" />
+              <div style={lblS}>Sea Consumption (mt/day)</div>
+              <input style={inpS} value={inputs.seaConsumption} onChange={e => update("seaConsumption", e.target.value)} />
             </div>
             <div>
-              <div style={lblS}>Port Cons. (MT/day)</div>
-              <input style={inpS} value={inputs.portConsumption} onChange={e => update("portConsumption", e.target.value)} placeholder="4" />
+              <div style={lblS}>Port Consumption (mt/day)</div>
+              <input style={inpS} value={inputs.portConsumption} onChange={e => update("portConsumption", e.target.value)} />
             </div>
             <div>
-              <div style={lblS}>Port Costs (USD)</div>
-              <input style={inpS} value={inputs.portCost} onChange={e => update("portCost", e.target.value)} placeholder="45000" />
+              <div style={lblS}>Port Costs ($)</div>
+              <input style={inpS} value={inputs.portCost} onChange={e => update("portCost", e.target.value)} />
             </div>
-
-            <div style={{ marginTop: 4, padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-              <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>TC COST BREAKDOWN</div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Hire ({results.totalDays}d)</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {((parseFloat(inputs.tcHire) || 0) * results.totalDays).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Bunkers</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {(((parseFloat(inputs.seaConsumption) || 0) * (parseFloat(inputs.seaDays) || 0) + (parseFloat(inputs.portConsumption) || 0) * (parseFloat(inputs.portDays) || 0)) * (parseFloat(inputs.bunkersPrice) || 0)).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Port Costs</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {parseInt(inputs.portCost || 0).toLocaleString()}</span>
-              </div>
-              <div style={{ borderTop: "1px solid " + C.bd2, marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.tx }}>
-                <span>Total</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.tcTotal).toLocaleString()}</span>
-              </div>
+            <div style={{ marginTop: 8, padding: 14, background: THEME.bg3, borderRadius: 6, border: "1px solid " + THEME.bd2 }}>
+              <div style={{ fontSize: 11, color: THEME.faint, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>TC Total</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: THEME.amber, letterSpacing: "-0.02em" }}>${results.tcTotal.toLocaleString()}</div>
+              <div style={{ fontSize: 10, color: THEME.faint, marginTop: 4 }}>{results.totalDays} days · Hire + Bunkers + Ports</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Comparison Result */}
-      <div style={{ marginTop: 20, background: results.saving > 0 ? C.green + "11" : C.red + "11", border: "2px solid " + (results.saving > 0 ? C.green : C.red), borderRadius: 8, padding: 20, textAlign: "center" }}>
-        <div style={{ fontSize: 13, color: C.faint, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
-          {results.saving > 0 ? "✓ Time Charter is More Cost Effective" : "✗ Spot Market is More Cost Effective"}
-        </div>
-        <div style={{ fontSize: 32, fontWeight: 700, color: results.saving > 0 ? C.green : C.red, marginBottom: 4 }}>
-          {results.saving > 0 ? "Save " : "Extra Cost "} USD {Math.abs(Math.round(results.saving)).toLocaleString()}
-        </div>
-        <div style={{ fontSize: 14, color: C.faint }}>
-          {Math.abs(results.savingPct).toFixed(1)}% {results.saving > 0 ? "cheaper" : "more expensive"} than {results.saving > 0 ? "spot" : "TC"}
+      {/* Results */}
+      <div style={{ marginTop: 20, padding: 20, background: results.saving > 0 ? THEME.green + "11" : THEME.red + "11", border: "1px solid " + (results.saving > 0 ? THEME.green + "44" : THEME.red + "44"), borderRadius: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: 13, color: THEME.faint, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>
+              {results.saving > 0 ? "💰 TC is cheaper by" : "📉 Spot is cheaper by"}
+            </div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: results.saving > 0 ? THEME.green : THEME.red, letterSpacing: "-0.03em" }}>
+              ${Math.abs(results.saving).toLocaleString()}
+            </div>
+            <div style={{ fontSize: 14, color: THEME.faint, marginTop: 4 }}>
+              {Math.abs(results.savingPct).toFixed(1)}% {results.saving > 0 ? "saving" : "premium"}
+            </div>
+          </div>
+          <div style={{ fontSize: 48, opacity: 0.3 }}>
+            {results.saving > 0 ? "✓" : "✕"}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// ===== VESSEL PURCHASE CALCULATOR =====
+// Placeholder components for other calculators
 function VesselPurchaseCalculator() {
-  const [inputs, setInputs] = useState({
-    vesselType: "MR Tanker",
-    vesselAge: "0", // 0=Newbuild
-    purchasePrice: "42000000",
-    debtRatio: "70",
-    interestRate: "5.5",
-    loanTerm: "12",
-    scrapValue: "8000000",
-    residualValue: "25000000",
-    // Operating mode
-    mode: "spot", // spot or tc
-    tcHire: "20000",
-    spotTCE: "18500",
-    // Costs
-    opex: "6500",
-    drydockCost: "2500000",
-    drydockYear: "5",
-    upgradeCost: "0",
-    upgradeYear: "0",
-    depreciation: "linear", // linear or market
-    // ROE
-    targetROE: "12"
-  });
-
-  const update = (key, val) => setInputs(prev => ({ ...prev, [key]: val }));
-
-  const results = useMemo(() => {
-    const price = parseFloat(inputs.purchasePrice) || 0;
-    const debtPct = parseFloat(inputs.debtRatio) || 0;
-    const debt = price * (debtPct / 100);
-    const equity = price - debt;
-    const intRate = parseFloat(inputs.interestRate) || 0;
-    const loanYears = parseFloat(inputs.loanTerm) || 0;
-    const opex = parseFloat(inputs.opex) || 0;
-    const targetROE = parseFloat(inputs.targetROE) || 0;
-
-    // Annual loan payment (amortization)
-    const monthlyRate = intRate / 100 / 12;
-    const numPayments = loanYears * 12;
-    const monthlyPayment = debt > 0 && monthlyRate > 0 ? debt * (monthlyRate * Math.pow(1 + monthlyRate, numPayments)) / (Math.pow(1 + monthlyRate, numPayments) - 1) : 0;
-    const annualDebtService = monthlyPayment * 12;
-
-    // Operating revenue
-    const dailyRevenue = inputs.mode === "tc" ? parseFloat(inputs.tcHire) || 0 : parseFloat(inputs.spotTCE) || 0;
-    const annualRevenue = dailyRevenue * 350; // 350 trading days
-
-    // Operating costs
-    const annualOpex = opex * 365;
-
-    // Cash flow
-    const operatingCF = annualRevenue - annualOpex;
-    const freeCF = operatingCF - annualDebtService;
-
-    // ROE
-    const equityReturn = equity > 0 ? (freeCF / equity) * 100 : 0;
-
-    // Breakeven TCE
-    const breakevenTCE = equity > 0 ? (annualDebtService + annualOpex) / 350 : 0;
-
-    // Payback period (simple)
-    const paybackYears = freeCF > 0 ? equity / freeCF : 999;
-
-    return {
-      debt,
-      equity,
-      annualDebtService,
-      monthlyPayment,
-      annualRevenue,
-      annualOpex,
-      operatingCF,
-      freeCF,
-      equityReturn,
-      breakevenTCE,
-      paybackYears,
-      meetsROE: equityReturn >= targetROE
-    };
-  }, [inputs]);
-
-  const inpS = { background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontFamily: "inherit", fontSize: 13, padding: "6px 10px", outline: "none", width: "100%" };
-  const lblS = { fontSize: 11, color: C.faint, marginBottom: 4, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" };
-
   return (
-    <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-      <div style={{ marginBottom: 16 }}>
-        <h3 style={{ fontSize: 18, fontWeight: 700, color: C.tx, margin: "0 0 8px 0" }}>Vessel Purchase ROI Analysis</h3>
-        <p style={{ fontSize: 13, color: C.faint, margin: 0 }}>Analyze vessel purchase economics: debt structure, operating earnings, ROE, and payback period</p>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>
-        {/* Purchase Details */}
-        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Vessel & Purchase</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div>
-              <div style={lblS}>Vessel Type</div>
-              <input style={inpS} value={inputs.vesselType} onChange={e => update("vesselType", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Vessel Age</div>
-              <select style={inpS} value={inputs.vesselAge} onChange={e => update("vesselAge", e.target.value)}>
-                <option value="0">Newbuild</option>
-                <option value="5">5 years</option>
-                <option value="10">10 years</option>
-                <option value="15">15 years</option>
-                <option value="20">20 years</option>
-              </select>
-            </div>
-            <div>
-              <div style={lblS}>Purchase Price (USD)</div>
-              <input style={inpS} value={inputs.purchasePrice} onChange={e => update("purchasePrice", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Debt Ratio (%)</div>
-              <input style={inpS} value={inputs.debtRatio} onChange={e => update("debtRatio", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Interest Rate (%)</div>
-              <input style={inpS} value={inputs.interestRate} onChange={e => update("interestRate", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Loan Term (years)</div>
-              <input style={inpS} value={inputs.loanTerm} onChange={e => update("loanTerm", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Scrap Value (USD)</div>
-              <input style={inpS} value={inputs.scrapValue} onChange={e => update("scrapValue", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Residual Value (USD)</div>
-              <input style={inpS} value={inputs.residualValue} onChange={e => update("residualValue", e.target.value)} />
-            </div>
-          </div>
-        </div>
-
-        {/* Operating Mode */}
-        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Operating Strategy</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div>
-              <div style={lblS}>Operating Mode</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => update("mode", "spot")} style={{ flex: 1, fontSize: 12, fontWeight: 600, padding: "8px", borderRadius: 6, border: "1px solid " + (inputs.mode === "spot" ? C.blue : C.bd), background: inputs.mode === "spot" ? C.blue + "22" : C.bg3, color: inputs.mode === "spot" ? C.blue : C.dim, cursor: "pointer" }}>Spot Market</button>
-                <button onClick={() => update("mode", "tc")} style={{ flex: 1, fontSize: 12, fontWeight: 600, padding: "8px", borderRadius: 6, border: "1px solid " + (inputs.mode === "tc" ? C.blue : C.bd), background: inputs.mode === "tc" ? C.blue + "22" : C.bg3, color: inputs.mode === "tc" ? C.blue : C.dim, cursor: "pointer" }}>Time Charter</button>
-              </div>
-            </div>
-            {inputs.mode === "spot" && (
-              <div>
-                <div style={lblS}>Spot TCE (USD/day)</div>
-                <input style={inpS} value={inputs.spotTCE} onChange={e => update("spotTCE", e.target.value)} />
-              </div>
-            )}
-            {inputs.mode === "tc" && (
-              <div>
-                <div style={lblS}>TC Hire (USD/day)</div>
-                <input style={inpS} value={inputs.tcHire} onChange={e => update("tcHire", e.target.value)} />
-              </div>
-            )}
-            <div>
-              <div style={lblS}>OPEX (USD/day)</div>
-              <input style={inpS} value={inputs.opex} onChange={e => update("opex", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Drydock Cost (USD)</div>
-              <input style={inpS} value={inputs.drydockCost} onChange={e => update("drydockCost", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Drydock Year</div>
-              <input style={inpS} value={inputs.drydockYear} onChange={e => update("drydockYear", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Upgrade Cost (USD)</div>
-              <input style={inpS} value={inputs.upgradeCost} onChange={e => update("upgradeCost", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Upgrade Year</div>
-              <input style={inpS} value={inputs.upgradeYear} onChange={e => update("upgradeYear", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Target ROE (%)</div>
-              <input style={inpS} value={inputs.targetROE} onChange={e => update("targetROE", e.target.value)} />
-            </div>
-          </div>
-        </div>
-
-        {/* Financial Summary */}
-        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Financial Summary</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-              <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>CAPITAL STRUCTURE</div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
-                <span>Debt ({inputs.debtRatio}%)</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.debt).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx }}>
-                <span>Equity ({100 - parseFloat(inputs.debtRatio)}%)</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.equity).toLocaleString()}</span>
-              </div>
-            </div>
-
-            <div style={{ padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-              <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>ANNUAL CASH FLOW</div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
-                <span>Revenue</span>
-                <span style={{ fontFamily: "Inter,sans-serif", color: C.green }}>+{Math.round(results.annualRevenue).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
-                <span>OPEX</span>
-                <span style={{ fontFamily: "Inter,sans-serif", color: C.red }}>-{Math.round(results.annualOpex).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid " + C.bd2 }}>
-                <span>Debt Service</span>
-                <span style={{ fontFamily: "Inter,sans-serif", color: C.red }}>-{Math.round(results.annualDebtService).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: C.tx }}>
-                <span>Free Cash Flow</span>
-                <span style={{ fontFamily: "Inter,sans-serif", color: results.freeCF > 0 ? C.green : C.red }}>{results.freeCF > 0 ? "+" : ""}{Math.round(results.freeCF).toLocaleString()}</span>
-              </div>
-            </div>
-
-            <div style={{ padding: 12, background: results.meetsROE ? C.green + "11" : C.amber + "11", borderRadius: 6, border: "1px solid " + (results.meetsROE ? C.green : C.amber) }}>
-              <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>RETURN ON EQUITY</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: results.meetsROE ? C.green : C.amber, marginBottom: 4 }}>
-                {results.equityReturn.toFixed(1)}%
-              </div>
-              <div style={{ fontSize: 11, color: C.faint }}>
-                {results.meetsROE ? `✓ Meets ${inputs.targetROE}% target` : `✗ Below ${inputs.targetROE}% target`}
-              </div>
-            </div>
-
-            <div style={{ padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 6 }}>
-                <span>Breakeven TCE</span>
-                <span style={{ fontFamily: "Inter,sans-serif", fontWeight: 700 }}>USD {Math.round(results.breakevenTCE).toLocaleString()}/day</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx }}>
-                <span>Payback Period</span>
-                <span style={{ fontFamily: "Inter,sans-serif", fontWeight: 700 }}>{results.paybackYears < 99 ? results.paybackYears.toFixed(1) + " years" : "N/A"}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Year by year breakdown could go here */}
-      <div style={{ marginTop: 20, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12 }}>Key Metrics</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-          <div style={{ padding: 12, background: C.bg1, borderRadius: 6, textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: C.faint, marginBottom: 4 }}>Monthly Debt Payment</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>USD {Math.round(results.monthlyPayment).toLocaleString()}</div>
-          </div>
-          <div style={{ padding: 12, background: C.bg1, borderRadius: 6, textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: C.faint, marginBottom: 4 }}>Operating CF</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>USD {Math.round(results.operatingCF).toLocaleString()}</div>
-          </div>
-          <div style={{ padding: 12, background: C.bg1, borderRadius: 6, textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: C.faint, marginBottom: 4 }}>Daily Revenue</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.tx }}>USD {(inputs.mode === "tc" ? inputs.tcHire : inputs.spotTCE).toLocaleString()}</div>
-          </div>
-          <div style={{ padding: 12, background: C.bg1, borderRadius: 6, textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: C.faint, marginBottom: 4 }}>Daily Net</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: results.freeCF > 0 ? C.green : C.red }}>USD {Math.round(results.freeCF / 350).toLocaleString()}</div>
-          </div>
-        </div>
-      </div>
+    <div style={{ padding: 40, textAlign: "center", color: THEME.faint }}>
+      <div style={{ fontSize: 18, fontWeight: 700, color: THEME.tx, marginBottom: 12 }}>🚢 Vessel Purchase ROI Calculator</div>
+      <div>Coming soon...</div>
     </div>
   );
 }
 
-// ===== BAREBOAT CHARTER CALCULATOR =====
 function BareboatCalculator() {
-  const [inputs, setInputs] = useState({
-    vesselType: "MR Tanker",
-    purchasePrice: "42000000",
-    debtRatio: "80",
-    interestRate: "5.0",
-    bbcPeriod: "10",
-    targetMargin: "8",
-    scrapValue: "8000000",
-    // BBC hire calculation
-    calcMode: "solve", // solve for hire or check viability
-    bbcHire: "12000"
-  });
-
-  const update = (key, val) => setInputs(prev => ({ ...prev, [key]: val }));
-
-  const results = useMemo(() => {
-    const price = parseFloat(inputs.purchasePrice) || 0;
-    const debtPct = parseFloat(inputs.debtRatio) || 0;
-    const debt = price * (debtPct / 100);
-    const equity = price - debt;
-    const intRate = parseFloat(inputs.interestRate) || 0;
-    const years = parseFloat(inputs.bbcPeriod) || 0;
-    const scrapValue = parseFloat(inputs.scrapValue) || 0;
-    const marginPct = parseFloat(inputs.targetMargin) || 0;
-
-    // Annual debt service
-    const monthlyRate = intRate / 100 / 12;
-    const numPayments = years * 12;
-    const monthlyPayment = debt > 0 && monthlyRate > 0 ? debt * (monthlyRate * Math.pow(1 + monthlyRate, numPayments)) / (Math.pow(1 + monthlyRate, numPayments) - 1) : 0;
-    const annualDebtService = monthlyPayment * 12;
-
-    // Required BBC hire to cover debt + margin
-    const requiredAnnualBBC = annualDebtService / (1 - marginPct / 100);
-    const requiredDailyBBC = requiredAnnualBBC / 365;
-
-    // If user provides BBC hire, calculate margin and debt coverage
-    const givenHire = parseFloat(inputs.bbcHire) || 0;
-    const givenAnnualBBC = givenHire * 365;
-    const actualMargin = annualDebtService > 0 ? ((givenAnnualBBC - annualDebtService) / givenAnnualBBC) * 100 : 0;
-
-    // Debt amortization over period
-    let remainingDebt = debt;
-    const yearlyBreakdown = [];
-    for (let y = 1; y <= years; y++) {
-      const interestPayment = remainingDebt * (intRate / 100);
-      const principalPayment = annualDebtService - interestPayment;
-      remainingDebt -= principalPayment;
-      yearlyBreakdown.push({
-        year: y,
-        debtStart: remainingDebt + principalPayment,
-        interest: interestPayment,
-        principal: principalPayment,
-        debtEnd: Math.max(0, remainingDebt)
-      });
-    }
-
-    const debtPaidOff = debt - Math.max(0, remainingDebt);
-    const vesselBookValue = price - (price - scrapValue) * (years / 25); // Linear depreciation over 25yr
-
-    return {
-      debt,
-      equity,
-      annualDebtService,
-      monthlyPayment,
-      requiredDailyBBC,
-      requiredAnnualBBC,
-      givenAnnualBBC,
-      actualMargin,
-      debtPaidOff,
-      remainingDebt: Math.max(0, remainingDebt),
-      vesselBookValue,
-      yearlyBreakdown
-    };
-  }, [inputs]);
-
-  const inpS = { background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontFamily: "inherit", fontSize: 13, padding: "6px 10px", outline: "none", width: "100%" };
-  const lblS = { fontSize: 11, color: C.faint, marginBottom: 4, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" };
-
   return (
-    <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-      <div style={{ marginBottom: 16 }}>
-        <h3 style={{ fontSize: 18, fontWeight: 700, color: C.tx, margin: "0 0 8px 0" }}>Bareboat Charter (BBC) Analysis</h3>
-        <p style={{ fontSize: 13, color: C.faint, margin: 0 }}>Calculate required bareboat hire to finance vessel purchase and analyze debt amortization over the charter period</p>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>
-        {/* Vessel & Finance */}
-        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Vessel & Finance</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div>
-              <div style={lblS}>Vessel Type</div>
-              <input style={inpS} value={inputs.vesselType} onChange={e => update("vesselType", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Purchase Price (USD)</div>
-              <input style={inpS} value={inputs.purchasePrice} onChange={e => update("purchasePrice", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Debt Ratio (%)</div>
-              <input style={inpS} value={inputs.debtRatio} onChange={e => update("debtRatio", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Interest Rate (%)</div>
-              <input style={inpS} value={inputs.interestRate} onChange={e => update("interestRate", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>BBC Period (years)</div>
-              <input style={inpS} value={inputs.bbcPeriod} onChange={e => update("bbcPeriod", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Target Margin (%)</div>
-              <input style={inpS} value={inputs.targetMargin} onChange={e => update("targetMargin", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Scrap Value (USD)</div>
-              <input style={inpS} value={inputs.scrapValue} onChange={e => update("scrapValue", e.target.value)} />
-            </div>
-          </div>
-        </div>
-
-        {/* BBC Hire */}
-        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Bareboat Hire</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div>
-              <div style={lblS}>Calculation Mode</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => update("calcMode", "solve")} style={{ flex: 1, fontSize: 11, fontWeight: 600, padding: "8px", borderRadius: 6, border: "1px solid " + (inputs.calcMode === "solve" ? C.blue : C.bd), background: inputs.calcMode === "solve" ? C.blue + "22" : C.bg3, color: inputs.calcMode === "solve" ? C.blue : C.dim, cursor: "pointer" }}>Solve for Hire</button>
-                <button onClick={() => update("calcMode", "check")} style={{ flex: 1, fontSize: 11, fontWeight: 600, padding: "8px", borderRadius: 6, border: "1px solid " + (inputs.calcMode === "check" ? C.blue : C.bd), background: inputs.calcMode === "check" ? C.blue + "22" : C.bg3, color: inputs.calcMode === "check" ? C.blue : C.dim, cursor: "pointer" }}>Check Viability</button>
-              </div>
-            </div>
-
-            {inputs.calcMode === "solve" ? (
-              <div style={{ marginTop: 12, padding: 16, background: C.blue + "11", borderRadius: 6, border: "2px solid " + C.blue }}>
-                <div style={{ fontSize: 11, color: C.faint, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Required Daily BBC Hire</div>
-                <div style={{ fontSize: 28, fontWeight: 700, color: C.blue, marginBottom: 4 }}>
-                  USD {Math.round(results.requiredDailyBBC).toLocaleString()}
-                </div>
-                <div style={{ fontSize: 12, color: C.faint }}>
-                  USD {Math.round(results.requiredAnnualBBC).toLocaleString()} / year
-                </div>
-                <div style={{ fontSize: 11, color: C.faint, marginTop: 8 }}>
-                  to cover debt service + {inputs.targetMargin}% margin
-                </div>
-              </div>
-            ) : (
-              <>
-                <div>
-                  <div style={lblS}>Proposed BBC Hire (USD/day)</div>
-                  <input style={inpS} value={inputs.bbcHire} onChange={e => update("bbcHire", e.target.value)} />
-                </div>
-                <div style={{ marginTop: 12, padding: 16, background: results.actualMargin >= parseFloat(inputs.targetMargin) ? C.green + "11" : C.red + "11", borderRadius: 6, border: "2px solid " + (results.actualMargin >= parseFloat(inputs.targetMargin) ? C.green : C.red) }}>
-                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Actual Margin</div>
-                  <div style={{ fontSize: 28, fontWeight: 700, color: results.actualMargin >= parseFloat(inputs.targetMargin) ? C.green : C.red, marginBottom: 4 }}>
-                    {results.actualMargin.toFixed(1)}%
-                  </div>
-                  <div style={{ fontSize: 11, color: C.faint }}>
-                    {results.actualMargin >= parseFloat(inputs.targetMargin) ? `✓ Meets ${inputs.targetMargin}% target` : `✗ Below ${inputs.targetMargin}% target`}
-                  </div>
-                </div>
-              </>
-            )}
-
-            <div style={{ marginTop: 12, padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-              <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>CAPITAL STRUCTURE</div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
-                <span>Debt ({inputs.debtRatio}%)</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.debt).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx }}>
-                <span>Equity ({100 - parseFloat(inputs.debtRatio)}%)</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.equity).toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* End of Period Status */}
-        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>End of Period Status</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-              <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>AFTER {inputs.bbcPeriod} YEARS</div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Debt Paid Off</span>
-                <span style={{ fontFamily: "Inter,sans-serif", color: C.green }}>USD {Math.round(results.debtPaidOff).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Remaining Debt</span>
-                <span style={{ fontFamily: "Inter,sans-serif", color: results.remainingDebt > 0 ? C.amber : C.green }}>USD {Math.round(results.remainingDebt).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx }}>
-                <span>Vessel Book Value</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.vesselBookValue).toLocaleString()}</span>
-              </div>
-            </div>
-
-            <div style={{ padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-              <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>EQUITY POSITION</div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Book Value</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.vesselBookValue).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid " + C.bd2 }}>
-                <span>Less: Debt</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.remainingDebt).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: C.green }}>
-                <span>Net Equity</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.vesselBookValue - results.remainingDebt).toLocaleString()}</span>
-              </div>
-            </div>
-
-            <div style={{ padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2 }}>
-              <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>DEBT SERVICE</div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 4 }}>
-                <span>Monthly Payment</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.monthlyPayment).toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx }}>
-                <span>Annual Payment</span>
-                <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.annualDebtService).toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Amortization Schedule */}
-      <div style={{ marginTop: 20, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12 }}>Debt Amortization Schedule</div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-            <thead>
-              <tr style={{ borderBottom: "2px solid " + C.bd }}>
-                <th style={{ padding: "8px", textAlign: "left", color: C.faint, fontWeight: 600 }}>Year</th>
-                <th style={{ padding: "8px", textAlign: "right", color: C.faint, fontWeight: 600 }}>Debt Start</th>
-                <th style={{ padding: "8px", textAlign: "right", color: C.faint, fontWeight: 600 }}>Interest</th>
-                <th style={{ padding: "8px", textAlign: "right", color: C.faint, fontWeight: 600 }}>Principal</th>
-                <th style={{ padding: "8px", textAlign: "right", color: C.faint, fontWeight: 600 }}>Debt End</th>
-              </tr>
-            </thead>
-            <tbody>
-              {results.yearlyBreakdown.map(row => (
-                <tr key={row.year} style={{ borderBottom: "1px solid " + C.bd2 }}>
-                  <td style={{ padding: "8px", color: C.tx }}>{row.year}</td>
-                  <td style={{ padding: "8px", textAlign: "right", fontFamily: "Inter,sans-serif", color: C.tx }}>USD {Math.round(row.debtStart).toLocaleString()}</td>
-                  <td style={{ padding: "8px", textAlign: "right", fontFamily: "Inter,sans-serif", color: C.red }}>USD {Math.round(row.interest).toLocaleString()}</td>
-                  <td style={{ padding: "8px", textAlign: "right", fontFamily: "Inter,sans-serif", color: C.green }}>USD {Math.round(row.principal).toLocaleString()}</td>
-                  <td style={{ padding: "8px", textAlign: "right", fontFamily: "Inter,sans-serif", color: C.tx, fontWeight: 600 }}>USD {Math.round(row.debtEnd).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+    <div style={{ padding: 40, textAlign: "center", color: THEME.faint }}>
+      <div style={{ fontSize: 18, fontWeight: 700, color: THEME.tx, marginBottom: 12 }}>📊 Bareboat Charter Calculator</div>
+      <div>Coming soon...</div>
     </div>
   );
 }
 
-// ===== SPOT VS TC CHARTERER CALCULATOR (ORIGINAL) =====
 function SpotVsTCChartererCalculator() {
-  const [inputs, setInputs] = useState({
-    // Voyage details
-    cargoQty: "38000",
-    cargoGrade: "CPP",
-    loadPort: "Tees",
-    dischPort: "ARA",
-    distance: "650",
-    vesselSize: "MR",
-    // Spot freight option
-    spotFreight: "360000",
-    demurrageRate: "35000",
-    demurrageDays: "0.5",
-    commission: "1.25",
-    // TC option
-    tcHire: "20000",
-    ballastDays: "2",
-    ladenDays: "3",
-    repositionDays: "1",
-    portDays: "4",
-    // Variable costs (apply to both)
-    bunkersPrice: "550",
-    seaConsumption: "28",
-    portConsumption: "4",
-    portCost: "45000"
-  });
-
-  const update = (key, val) => setInputs(prev => ({ ...prev, [key]: val }));
-
-  const results = useMemo(() => {
-    // Parse inputs
-    const freight = parseFloat(inputs.spotFreight) || 0;
-    const demRate = parseFloat(inputs.demurrageRate) || 0;
-    const demDays = parseFloat(inputs.demurrageDays) || 0;
-    const comm = parseFloat(inputs.commission) || 0;
-    
-    const hire = parseFloat(inputs.tcHire) || 0;
-    const ballastDays = parseFloat(inputs.ballastDays) || 0;
-    const ladenDays = parseFloat(inputs.ladenDays) || 0;
-    const repositionDays = parseFloat(inputs.repositionDays) || 0;
-    const portDays = parseFloat(inputs.portDays) || 0;
-    const totalDays = ballastDays + ladenDays + repositionDays + portDays;
-    
-    const bunkersPrice = parseFloat(inputs.bunkersPrice) || 0;
-    const seaCons = parseFloat(inputs.seaConsumption) || 0;
-    const portCons = parseFloat(inputs.portConsumption) || 0;
-    const portCost = parseFloat(inputs.portCost) || 0;
-    
-    // Variable costs (apply to both options)
-    const seaDays = ballastDays + ladenDays + repositionDays;
-    const bunkersCost = (seaCons * seaDays + portCons * portDays) * bunkersPrice;
-    const demurrageCost = demRate * demDays;
-    
-    // SPOT OPTION: Freight + Demurrage + Commission + Variable Costs
-    const spotFreightCost = freight;
-    const spotCommission = (freight + demurrageCost) * (comm / 100);
-    const spotTotal = freight + demurrageCost + spotCommission + bunkersCost + portCost;
-    
-    // TC OPTION: Hire + Variable Costs + Commission
-    const tcHireCost = hire * totalDays;
-    const tcCommission = tcHireCost * (comm / 100);
-    const tcTotal = tcHireCost + tcCommission + bunkersCost + portCost;
-    
-    const difference = spotTotal - tcTotal;
-    const savingPct = spotTotal > 0 ? (difference / spotTotal) * 100 : 0;
-    
-    return {
-      // Spot breakdown
-      spotFreightCost,
-      demurrageCost,
-      spotCommission,
-      spotVariableCosts: bunkersCost + portCost,
-      spotTotal,
-      // TC breakdown
-      tcHireCost,
-      tcCommission,
-      tcVariableCosts: bunkersCost + portCost,
-      tcTotal,
-      // Comparison
-      difference,
-      savingPct,
-      totalDays,
-      bunkersCost,
-      portCost
-    };
-  }, [inputs]);
-
-  const inpS = { background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontFamily: "inherit", fontSize: 13, padding: "6px 10px", outline: "none", width: "100%" };
-  const lblS = { fontSize: 11, color: C.faint, marginBottom: 4, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" };
-
   return (
-    <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-      <div style={{ marginBottom: 16 }}>
-        <h3 style={{ fontSize: 18, fontWeight: 700, color: C.tx, margin: "0 0 8px 0" }}>Spot Freight vs Time Charter (Charterer Perspective)</h3>
-        <p style={{ fontSize: 13, color: C.faint, margin: 0 }}>
-          Compare chartering a vessel on spot market (paying freight) vs. time charter (paying daily hire) for a cargo voyage
-        </p>
-      </div>
-
-      {/* Row 1: Voyage Details */}
-      <div style={{ marginBottom: 20, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Voyage Details</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12 }}>
-          <div>
-            <div style={lblS}>Vessel Size</div>
-            <input style={inpS} value={inputs.vesselSize} onChange={e => update("vesselSize", e.target.value)} placeholder="MR / LR1" />
-          </div>
-          <div>
-            <div style={lblS}>Cargo Qty (MT)</div>
-            <input style={inpS} value={inputs.cargoQty} onChange={e => update("cargoQty", e.target.value)} />
-          </div>
-          <div>
-            <div style={lblS}>Cargo Grade</div>
-            <input style={inpS} value={inputs.cargoGrade} onChange={e => update("cargoGrade", e.target.value)} placeholder="CPP / UNL" />
-          </div>
-          <div>
-            <div style={lblS}>Load Port</div>
-            <input style={inpS} value={inputs.loadPort} onChange={e => update("loadPort", e.target.value)} />
-          </div>
-          <div>
-            <div style={lblS}>Discharge Port</div>
-            <input style={inpS} value={inputs.dischPort} onChange={e => update("dischPort", e.target.value)} />
-          </div>
-          <div>
-            <div style={lblS}>Distance (nm)</div>
-            <input style={inpS} value={inputs.distance} onChange={e => update("distance", e.target.value)} />
-          </div>
-        </div>
-      </div>
-
-      {/* Row 2: Days Breakdown */}
-      <div style={{ marginBottom: 20, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Voyage Duration</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
-          <div>
-            <div style={lblS}>Ballast Days</div>
-            <input style={inpS} value={inputs.ballastDays} onChange={e => update("ballastDays", e.target.value)} />
-          </div>
-          <div>
-            <div style={lblS}>Laden Days</div>
-            <input style={inpS} value={inputs.ladenDays} onChange={e => update("ladenDays", e.target.value)} />
-          </div>
-          <div>
-            <div style={lblS}>Reposition Days</div>
-            <input style={inpS} value={inputs.repositionDays} onChange={e => update("repositionDays", e.target.value)} />
-          </div>
-          <div>
-            <div style={lblS}>Port Days</div>
-            <input style={inpS} value={inputs.portDays} onChange={e => update("portDays", e.target.value)} />
-          </div>
-          <div style={{ display: "flex", alignItems: "flex-end" }}>
-            <div style={{ padding: "6px 10px", background: C.blue + "22", border: "1px solid " + C.blue, borderRadius: 4, width: "100%", textAlign: "center" }}>
-              <div style={{ fontSize: 10, color: C.faint, marginBottom: 2 }}>TOTAL DAYS</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: C.blue }}>{results.totalDays}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Row 3: Variable Costs */}
-      <div style={{ marginBottom: 20, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>Variable Costs (Apply to Both Options)</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
-          <div>
-            <div style={lblS}>Bunkers Price (USD/MT)</div>
-            <input style={inpS} value={inputs.bunkersPrice} onChange={e => update("bunkersPrice", e.target.value)} />
-          </div>
-          <div>
-            <div style={lblS}>Sea Consumption (MT/day)</div>
-            <input style={inpS} value={inputs.seaConsumption} onChange={e => update("seaConsumption", e.target.value)} />
-          </div>
-          <div>
-            <div style={lblS}>Port Consumption (MT/day)</div>
-            <input style={inpS} value={inputs.portConsumption} onChange={e => update("portConsumption", e.target.value)} />
-          </div>
-          <div>
-            <div style={lblS}>Port Costs (USD)</div>
-            <input style={inpS} value={inputs.portCost} onChange={e => update("portCost", e.target.value)} />
-          </div>
-          <div>
-            <div style={lblS}>Commission (%)</div>
-            <input style={inpS} value={inputs.commission} onChange={e => update("commission", e.target.value)} />
-          </div>
-        </div>
-      </div>
-
-      {/* Row 4: Spot Market vs Time Charter Comparison */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-        {/* SPOT MARKET OPTION */}
-        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>💰 Spot Market</div>
-          
-          <div style={{ marginBottom: 16 }}>
-            <div style={lblS}>Spot Freight (USD)</div>
-            <input style={inpS} value={inputs.spotFreight} onChange={e => update("spotFreight", e.target.value)} />
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-            <div>
-              <div style={lblS}>Demurrage Rate (USD/day)</div>
-              <input style={inpS} value={inputs.demurrageRate} onChange={e => update("demurrageRate", e.target.value)} />
-            </div>
-            <div>
-              <div style={lblS}>Demurrage Days</div>
-              <input style={inpS} value={inputs.demurrageDays} onChange={e => update("demurrageDays", e.target.value)} />
-            </div>
-          </div>
-
-          <div style={{ padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2, marginBottom: 12 }}>
-            <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>COST BREAKDOWN</div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
-              <span>Freight</span>
-              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.spotFreightCost).toLocaleString()}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
-              <span>Demurrage</span>
-              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.demurrageCost).toLocaleString()}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
-              <span>Commission ({inputs.commission}%)</span>
-              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.spotCommission).toLocaleString()}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
-              <span>Bunkers</span>
-              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.bunkersCost).toLocaleString()}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 8, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>
-              <span>Port Costs</span>
-              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.portCost).toLocaleString()}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.tx }}>
-              <span>TOTAL COST</span>
-              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.spotTotal).toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* TIME CHARTER OPTION */}
-        <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 12, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>⏱️ Time Charter</div>
-          
-          <div style={{ marginBottom: 16 }}>
-            <div style={lblS}>TC Hire (USD/day)</div>
-            <input style={inpS} value={inputs.tcHire} onChange={e => update("tcHire", e.target.value)} />
-          </div>
-
-          <div style={{ padding: 12, background: C.bg1, borderRadius: 6, border: "1px solid " + C.bd2, marginBottom: 12 }}>
-            <div style={{ fontSize: 11, color: C.faint, marginBottom: 8 }}>COST BREAKDOWN</div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
-              <span>Hire ({results.totalDays} days × USD {inputs.tcHire})</span>
-              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.tcHireCost).toLocaleString()}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
-              <span>Commission ({inputs.commission}%)</span>
-              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.tcCommission).toLocaleString()}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 3 }}>
-              <span>Bunkers</span>
-              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.bunkersCost).toLocaleString()}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.tx, marginBottom: 8, paddingBottom: 8, borderBottom: "1px solid " + C.bd2 }}>
-              <span>Port Costs</span>
-              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.portCost).toLocaleString()}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: C.tx }}>
-              <span>TOTAL COST</span>
-              <span style={{ fontFamily: "Inter,sans-serif" }}>USD {Math.round(results.tcTotal).toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Summary */}
-      <div style={{ marginTop: 20, padding: 20, background: results.difference > 0 ? C.green + "11" : C.red + "11", border: "2px solid " + (results.difference > 0 ? C.green : C.red), borderRadius: 8 }}>
-        <div style={{ fontSize: 14, color: C.faint, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          {results.difference > 0 ? "✓ TC Option is Cheaper" : "✗ Spot Option is Cheaper"}
-        </div>
-        <div style={{ fontSize: 32, fontWeight: 700, color: results.difference > 0 ? C.green : C.red, marginBottom: 4 }}>
-          {results.difference > 0 ? "Save" : "Extra Cost"} USD {Math.abs(Math.round(results.difference)).toLocaleString()}
-        </div>
-        <div style={{ fontSize: 13, color: C.faint }}>
-          {Math.abs(results.savingPct).toFixed(1)}% {results.difference > 0 ? "saving" : "additional cost"} vs. {results.difference > 0 ? "spot" : "TC"} option
-        </div>
-      </div>
+    <div style={{ padding: 40, textAlign: "center", color: THEME.faint }}>
+      <div style={{ fontSize: 18, fontWeight: 700, color: THEME.tx, marginBottom: 12 }}>📋 Spot vs TC (Charterer View)</div>
+      <div>Coming soon...</div>
     </div>
   );
 }
