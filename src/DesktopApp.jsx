@@ -48,7 +48,7 @@ const [segmentFilter,setSegmentFilter]=useState("");
 
   const mobile=isMobile();
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
-  const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
+  const td={padding:"8px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
   const fb=on=>({fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid "+(on?C.blue:C.bd),background:on?"rgba(88,166,255,.12)":"transparent",color:on?C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
 
   // Tag component for vessel specs
@@ -269,10 +269,10 @@ const filtV=useMemo(()=>{
         </div>
       </div>
       <div style={{padding:"12px 16px",maxWidth:1900,margin:"0 auto"}}>
-        <div style={{display:"flex",flexWrap:"wrap",borderBottom:"1px solid "+C.bd2,marginBottom:12,gap:mobile?"2px 0":0}}>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
           {[["pos","⚓ Pos",vessels.length],["cargo","📦 Cargo",cargoTotal||cargoes.length],["fix","🎯 Fix",0],["projects","🧮 Projects",0],["matrix","🔗 Matrix",0],["tce","⚡ TCE",0],["dash","📊 Dash",0]].map(([id,label,cnt])=>(
-            <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}} style={{fontFamily:"sans-serif",fontWeight:700,fontSize:mobile?11:12,padding:mobile?"6px 10px":"7px 16px",border:"none",background:"transparent",color:tab===id?C.blue:C.dim,borderBottom:"2px solid "+(tab===id?C.blue:"transparent"),cursor:"pointer",whiteSpace:"nowrap"}}>
-              {label}{cnt>0?(<span style={{fontSize:11,marginLeft:3,background:C.bg3,padding:"1px 5px",borderRadius:8}}>{cnt}</span>):null}
+            <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}} style={{fontFamily:"sans-serif",fontWeight:700,fontSize:13,padding:"10px 20px",border:"1px solid "+(tab===id?C.blue:C.bd),borderRadius:6,background:tab===id?"rgba(88,166,255,.12)":C.bg2,color:tab===id?C.blue:C.dim,cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.15s ease"}}>
+              {label}{cnt>0?(<span style={{fontSize:11,marginLeft:5,background:tab===id?"rgba(88,166,255,.2)":C.bg3,padding:"2px 7px",borderRadius:10,fontWeight:600}}>{cnt}</span>):null}
             </button>
           ))}
         </div>
@@ -525,19 +525,20 @@ const filtV=useMemo(()=>{
                         {filtV.slice(0, posPage*POS_PAGE_SIZE).map((v,i)=>{
                           const isSel=sel===v.vessel;
                           const ppt=isOpenPPT(v.date);
-                          const bg=isSel?"rgba(88,166,255,.07)":i%2===0?C.bg:C.bg2;
+                          const rowBg=i%2===0?"#0d1829":"#1a2942";
+                          const bg=isSel?"rgba(88,166,255,.07)":rowBg;
                           return(
                             <tr key={v.vessel} style={{background:bg,outline:isSel?"1px solid rgba(88,166,255,.2)":"1px solid transparent",cursor:"pointer"}} onClick={()=>{setSel(sel===v.vessel?null:v.vessel);setSelectedAISVessels([v.vessel]);}}>
                               <td style={{...td,width:28,padding:"0 2px",textAlign:"center",cursor:"pointer"}} onClick={e=>{e.stopPropagation();setSelVessels(p=>{const n=new Set(p);n.has(v.vessel)?n.delete(v.vessel):n.add(v.vessel);return n;})}}><span style={{fontSize:12,color:selVessels.has(v.vessel)?"#4fc3f7":C.faint}}>{selVessels.has(v.vessel)?"[✓]":"[ ]"}</span></td>
                               <EC value={v.operator} color={C.purple} placeholder="Operator" onSave={val=>onUpdateV(v.vessel,"operator",val)} data-vid={v.vessel+"-op"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-vessel"]`)?.click()} onShiftTab={()=>{const prev=filtV[i-1];if(prev)document.querySelector(`[data-vid="${prev.vessel}-comment"]`)?.click();}} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-op"]`)?.click();}}/>
-                              <EC value={toTCase(v.vessel)} color={C.blue} bold={true} placeholder="Vessel" onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)} data-vid={v.vessel+"-vessel"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-op"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-vessel"]`)?.click();}}/>
+                              <EC value={toTCase(v.vessel)} color={"#79c0ff"} bold={true} placeholder="Vessel" onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)} data-vid={v.vessel+"-vessel"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-op"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-vessel"]`)?.click();}}/>
                               <td style={{...td,color:C.dim,whiteSpace:"nowrap",cursor:"default",overflow:"hidden",maxWidth:0}} title={v.built||""}>{v.built||""}</td>
                               <td style={{...td,color:C.amber,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={fmtN(v.dwt)}>{fmtN(v.dwt)}</td>
                               <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.loa||""}>{v.loa||""}</td>
                               <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.beam||""}>{v.beam||""}</td>
                               <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={fmtN(v.cbm)}>{fmtN(v.cbm)}</td>
                               <EC value={v.date} color={ppt?C.green:"#58a6ff"} placeholder="Date" onSave={val=>{const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];let fmt=val.trim();const m1=fmt.match(/^(\d{1,2})[\/\-](\d{1,2})$/);if(m1){const mo=parseInt(m1[2])-1;if(mo>=0&&mo<12)fmt=parseInt(m1[1])+" "+MON[mo];}else{const m2=fmt.match(/^(\d{1,2})\s+([A-Za-z]{3})/i);if(m2){const mi=MON.findIndex(m=>m.toLowerCase()===m2[2].toLowerCase().slice(0,3));if(mi>=0)fmt=parseInt(m2[1])+" "+MON[mi];}}onUpdateV(v.vessel,"date",fmt);}} data-vid={v.vessel+"-date"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-vessel"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-date"]`)?.click();}}/>
-                              <EC value={v.openPort} color={v.openPort==="EMPLOYED"?C.purple:C.amber} placeholder="Port" onSave={val=>onUpdateV(v.vessel,"openPort",val)} data-vid={v.vessel+"-port"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-comment"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-port"]`)?.click();}}/>
+                              <EC value={v.openPort} color={v.openPort==="EMPLOYED"?C.purple:"#a8e6a3"} placeholder="Port" onSave={val=>onUpdateV(v.vessel,"openPort",val)} data-vid={v.vessel+"-port"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-comment"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-port"]`)?.click();}}/>
                               <EC value={v.comment} color={C.dim} placeholder="Comment" onSave={val=>onUpdateV(v.vessel,"comment",val)} data-vid={v.vessel+"-comment"} onTab={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-op"]`)?.click();}} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-comment"]`)?.click();}}/>
                               <td style={{...td,fontSize:12,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",width:colWidthsV.FileDate||60,textAlign:"center"}}>{v.fileDate?new Date(v.fileDate).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
                               <td style={{...td,width:18,minWidth:18,maxWidth:18,textAlign:"center",padding:0}} onClick={e=>e.stopPropagation()}>
@@ -761,7 +762,8 @@ const filtV=useMemo(()=>{
                       v=v.replace(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*-\s*(\d{1,2})\s+\2/gi,(m,d1,mo,d2)=>d1+"-"+d2+" "+mo);
                       return v;
                     };
-                    return <tr key={f.id} style={{background:ri%2===0?C.bg:C.bg2}}>
+                    const rowBg=ri%2===0?"#0d1829":"#1a2942";
+                    return <tr key={f.id} style={{background:rowBg}}>
                       <td style={{...td,width:28,padding:"0 2px",textAlign:"center",cursor:"pointer"}} onClick={e=>{e.stopPropagation();setSelCargoes(p=>{const n=new Set(p);n.has(f.id)?n.delete(f.id):n.add(f.id);return n;})}}><span style={{fontSize:12,color:selCargoes.has(f.id)?"#4fc3f7":C.faint}}>{selCargoes.has(f.id)?"[✓]":"[ ]"}</span></td>
                       <td style={{...td,width:colWidthsC.Status||60,cursor:"pointer",overflow:"hidden"}} onClick={e=>{e.stopPropagation();const opts=["SUBS","FIXED","FAILED",""];const cur=opts.indexOf(f.status||"");onUpdateC(f.id,"status",opts[(cur+1)%opts.length]);}} title="Click to cycle status">
                         <span style={{color:sc,fontWeight:700}}>{f.status||""}</span>
