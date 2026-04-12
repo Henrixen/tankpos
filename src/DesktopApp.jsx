@@ -37,6 +37,7 @@ const [segmentFilter,setSegmentFilter]=useState("");
   const [selVessels,setSelVessels]=useState(()=>new Set());
   const [history,setHistory]=useState([]);
   useEffect(()=>{loadHistory().then(setHistory);},[vessels]);
+  useEffect(()=>{document.body.style.zoom="110%";},[]);
   const [pendingDel,setPendingDel]=useState(null);
   const [restoreMsg,setRestoreMsg]=useState("");
   const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
