@@ -566,7 +566,7 @@ function Dashboard({vessels, cargoes, history}) {
     if (!v.fileDate || !v.date) return null;
     
     // Parse fileDate (should be ISO format like "2026-03-30")
-    const fileDt = new Date(v.fileDate);
+    const fileDt = new Date(v.updatedAt || v.fileDate);
     if (isNaN(fileDt)) {
       console.warn('Invalid fileDate:', v.fileDate, 'for vessel:', v.vessel);
       return null;
