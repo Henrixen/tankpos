@@ -82,6 +82,15 @@ export default function TankPos(){
   }
 
   async function fetchPositions(){
+  const REGION_RENAME={
+    "East Coast South America":"EC SAM",
+    "Europe (Mediterranean)":"Med",
+    "South-East-Asia Far-East":"SEA-FEA",
+    "West Africa":"WAF",
+    "West Coast US":"WC US",
+    "West Coast South America":"WC SAM",
+    "North West Europe":"NWE",
+  };
   const{data,error}=await supabase.from("positions_latest").select("*").limit(10000);
   if(error){console.error("fetchPositions error:",error);return;}
   console.log("fetchPositions:",data?.length,"rows");
@@ -109,16 +118,15 @@ export default function TankPos(){
       dirtyClean:  r.dirty_clean||"",
       iceClass:    r.ice_class||"",
       segment:     r.segment||"",
-      superRegion: r.super_region||"",
+      superRegion: REGION_RENAME[r.super_region]||r.super_region||"",
       updatedAt:   r.updated_at||"",
-      fileDate:    r.updated_at || r.file_date || null,
+      fileDate:    r.file_date||null,
       source:      r.source||"external",
-      // ✅ CREATE SPEC OBJECT FROM VIEW COLUMNS
       spec: {
         iceClass: r.ice_class||null,
         lastCargo: r.last_3_cargoes||null,
         segment: r.segment||null,
-        coated: null,  // Not in view, could add if needed
+        coated: null,
       }
     };
   }));
