@@ -96,7 +96,7 @@ export default function TankPos(){
     "Southern Ocean": "Pacific",
     "AG": "Suez-AG-India",
     "AG-India-Red Sea": "Suez-India",
-    "Red Sea": "Suez-India"
+    "Red Sea": "Suez-India",
     "India": "Suez-India",
         
   };
