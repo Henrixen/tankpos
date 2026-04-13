@@ -103,7 +103,7 @@ const filtV=useMemo(()=>{
     list=list.filter(v=>{
       if(v.openPort==="EMPLOYED") return false;
       const d=daysBetween(v.date);
-      const inPPT=d!==null && d>=0 && d<=1;
+      const inPPT=d!==null && d>=0 && d<=1 && vesselsTodayUpdated.has(v.vessel);
       const in24=d!==null && d>=2 && d<=4;
       const in48=d!==null && d>=5 && d<=8;
       const in8p=d!==null && d>8;
@@ -192,6 +192,16 @@ const filtV=useMemo(()=>{
       const d=new Date(v.updatedAt);
       return !isNaN(d) && d>=cutoff;
     });
+  },[vessels]);
+  // For PPT bucket: only vessels updated today
+  const vesselsTodayUpdated=useMemo(()=>{
+    const todayStart=new Date();
+    todayStart.setHours(0,0,0,0);
+    return new Set(vessels.filter(v=>{
+      if(!v.updatedAt) return false;
+      const d=new Date(v.updatedAt);
+      return !isNaN(d) && d>=todayStart;
+    }).map(v=>v.vessel));
   },[vessels]);
   const selV=sel?vessels.find(v=>v.vessel===sel):null;
   const selFixes=sel?cargoes.filter(c=>c.vessel&&c.vessel.toLowerCase()===sel.toLowerCase()):[];
@@ -332,8 +342,8 @@ const filtV=useMemo(()=>{
                   {!mobile&&(
                     <div style={{width:"32%",height:200}}>
                       <OpeningBreakdown
-                        vessels={vessels14d}
-                        filteredVessels={filtV.filter(v=>vessels14d.some(u=>u.id===v.id||u.vessel===v.vessel))}
+                        vessels={vessels14d.map(v=>vesselsTodayUpdated.has(v.vessel)?v:{...v,date:""})}
+                        filteredVessels={filtV.filter(v=>vessels14d.some(u=>u.id===v.id||u.vessel===v.vessel)).map(v=>vesselsTodayUpdated.has(v.vessel)?v:{...v,date:""})}
                         bucketFilters={bucketFilters}
                         onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
                         fillHeight={false}
@@ -454,14 +464,14 @@ const filtV=useMemo(()=>{
                     </div>
                   </div>
 
-                  {/* RIGHT: Ask AI (34%) - matches PPT height */}
+                  {/* RIGHT: Ask AI (34%) - fills remaining height */}
 {!mobile&&(
-  <div style={{width:"34%"}}>
-    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+  <div style={{width:"34%",display:"flex",flexDirection:"column",alignSelf:"stretch"}}>
+    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",flex:1}}>
       <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
         <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
       </div>
-      <div style={{padding:"10px"}}>
+      <div style={{padding:"10px",flex:1,display:"flex",flexDirection:"column"}}>
         <RightPanel vessels={vessels} cargoes={cargoes}/>
       </div>
     </div>
