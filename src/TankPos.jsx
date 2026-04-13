@@ -81,19 +81,6 @@ export default function TankPos(){
     }
   }
 
-  function extractCoating(text){
-    if(!text) return "";
-    const t = text.toLowerCase();
-    if(t.includes("phenolic")) return "Phenolic";
-    if(t.includes("epoxy")) return "Epoxy";
-    if(t.includes("zinc silicate")||t.includes("zinc sil")) return "Zinc Silicate";
-    if(t.includes("marineline")||t.includes("marine line")) return "Marineline";
-    if(t.includes("interline")) return "Interline";
-    if(t.includes("coated")) return "Coated";
-    if(t.includes("uncoated")) return "Uncoated";
-    return "";
-  }
-
   async function fetchPositions(){
   const REGION_RENAME={
     "East Coast South America":"EC SAM",
@@ -103,6 +90,14 @@ export default function TankPos(){
     "West Coast US":"WC US",
     "West Coast South America":"WC SAM",
     "North West Europe":"NWE",
+    "Med-Black Sea": "Med",
+    "Arabian Gulf": "AG",
+    "West Pacific": "Pacific",
+    "Southern Ocean": "Pacific",
+    "AG": "Suez-AG-India",
+    "AG-India-Red Sea": "Suez-India",
+    "Red Sea": "Suez-India",
+    "India": "Suez-India",
   };
   const SEGMENT_RENAME={
     "1. Small (<10)":"Sub 10k",
@@ -212,7 +207,8 @@ export default function TankPos(){
     operator: "operator",
     dwt: "dwt",
     beam: "beam",
-    cbm: "cbm"
+    cbm: "cbm",
+    coating: "coating",
   };
 
   const dbField = fieldMap[field] || field;
@@ -244,8 +240,21 @@ export default function TankPos(){
 
   const addVessels = useCallback(async (parsed) => {
     const vdb = window.vesselDB || vesselDB;
-    const nowIso = new Date().toISOString(); // The "Current Time" for the file upload
+    const nowIso = new Date().toISOString();
     let r = { added: 0, updated: 0, total: 0 };
+
+    function extractCoating(text){
+      if(!text) return "";
+      const t=text.toLowerCase();
+      if(t.includes("phenolic")) return "Phenolic";
+      if(t.includes("epoxy")) return "Epoxy";
+      if(t.includes("zinc silicate")||t.includes("zinc sil")) return "Zinc Silicate";
+      if(t.includes("marineline")||t.includes("marine line")) return "Marineline";
+      if(t.includes("interline")) return "Interline";
+      if(t.includes("coated")) return "Coated";
+      if(t.includes("uncoated")) return "Uncoated";
+      return "";
+    }
 
     setVessels(prev => {
       const before = prev.length;
