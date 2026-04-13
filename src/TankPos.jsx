@@ -81,6 +81,19 @@ export default function TankPos(){
     }
   }
 
+  function extractCoating(text){
+    if(!text) return "";
+    const t = text.toLowerCase();
+    if(t.includes("phenolic")) return "Phenolic";
+    if(t.includes("epoxy")) return "Epoxy";
+    if(t.includes("zinc silicate")||t.includes("zinc sil")) return "Zinc Silicate";
+    if(t.includes("marineline")||t.includes("marine line")) return "Marineline";
+    if(t.includes("interline")) return "Interline";
+    if(t.includes("coated")) return "Coated";
+    if(t.includes("uncoated")) return "Uncoated";
+    return "";
+  }
+
   async function fetchPositions(){
   const REGION_RENAME={
     "East Coast South America":"EC SAM",
@@ -90,15 +103,15 @@ export default function TankPos(){
     "West Coast US":"WC US",
     "West Coast South America":"WC SAM",
     "North West Europe":"NWE",
-    "Med-Black Sea": "Med",
-    "Arabian Gulf": "AG",
-    "West Pacific": "Pacific",
-    "Southern Ocean": "Pacific",
-    "AG": "Suez-AG-India",
-    "AG-India-Red Sea": "Suez-India",
-    "Red Sea": "Suez-India",
-    "India": "Suez-India",
-        
+  };
+  const SEGMENT_RENAME={
+    "1. Small (<10)":"Sub 10k",
+    "2. Cityclass (10-15)":"City",
+    "3. Intermediate (14-19)":"Inter",
+    "4. J19 (19-22)":"J19",
+    "5. Flexi (22-30)":"Flexi",
+    "6. Handy (30-40)":"Handy",
+    "7. MR (>40)":"MR",
   };
   const{data,error}=await supabase.from("positions_latest").select("*").limit(10000);
   if(error){console.error("fetchPositions error:",error);return;}
@@ -122,11 +135,12 @@ export default function TankPos(){
       loa:         r.overall_length||null,
       beam:        r.beam||null,
       cbm:         r.cbm||null,
+      coating:     r.coating||r.coated||"",
       comment:     r.details||"",
       last3:       r.last_3_cargoes||"",
       dirtyClean:  r.dirty_clean||"",
       iceClass:    r.ice_class||"",
-      segment:     r.segment||"",
+      segment:     SEGMENT_RENAME[r.segment]||r.segment||"",
       superRegion: REGION_RENAME[r.super_region]||r.super_region||"",
       updatedAt:   r.updated_at||"",
       fileDate:    r.file_date||null,
@@ -135,7 +149,7 @@ export default function TankPos(){
         iceClass: r.ice_class||null,
         lastCargo: r.last_3_cargoes||null,
         segment: r.segment||null,
-        coated: null,
+        coated: r.coating||r.coated||null,
       }
     };
   }));
@@ -274,6 +288,7 @@ export default function TankPos(){
   overall_length: ev.loa || null,
   beam: ev.beam || null,
   cbm: ev.cbm || null,
+  coating: ev.coating || extractCoating(ev.comment||"") || null,
   details: ev.comment || null,
   file_date: nowIso,
   updated_at_manual: nowIso,
