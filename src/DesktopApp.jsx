@@ -27,8 +27,8 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
 const [posPage,setPosPage]=useState(1);
 const POS_PAGE_SIZE=100;
-const [superRegionFilter,setSuperRegionFilter]=useState("ALL");
-const [segmentFilter,setSegmentFilter]=useState("");
+const [superRegionFilter,setSuperRegionFilter]=useState(new Set());
+const [segmentFilter,setSegmentFilter]=useState(new Set());
 const [dwtFilter,setDwtFilter]=useState("");   // "" | "<10" | "10-15" | "15-20" | "20-30" | "30-40" | ">40"
 const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" | "2010-2015" | "2015-2020" | ">2020"
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
@@ -129,11 +129,11 @@ const filtV=useMemo(()=>{
   const normOp=s=>(s||"Unknown").trim().toLowerCase();
   if(opFilter) list=list.filter(v=>normOp(v.operator)===normOp(opFilter));
 
-  if(superRegionFilter!=="ALL"){
-    list=list.filter(v=>String(v.superRegion||"").trim()===superRegionFilter);
+  if(superRegionFilter.size>0){
+    list=list.filter(v=>superRegionFilter.has(String(v.superRegion||"").trim()));
   }
-  if(segmentFilter){
-    list=list.filter(v=>String(v.segment||"").trim()===segmentFilter);
+  if(segmentFilter.size>0){
+    list=list.filter(v=>segmentFilter.has(String(v.segment||"").trim()));
   }
 
   if(dwtFilter){
@@ -437,18 +437,31 @@ const filtV=useMemo(()=>{
                       <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
                         <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>S.Region</span>
                         {superRegionOptions.filter(r=>r!=="ALL").map(r=>(
-                          <button key={r} onClick={()=>setSuperRegionFilter(superRegionFilter===r?"ALL":r)} style={fb(superRegionFilter===r)}>{r}</button>
+                          <button key={r} onClick={e=>{
+                            if(e.ctrlKey||e.metaKey){
+                              setSuperRegionFilter(prev=>{const n=new Set(prev);n.has(r)?n.delete(r):n.add(r);return n;});
+                            } else {
+                              setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));
+                            }
+                          }} style={fb(superRegionFilter.has(r))}>{r}</button>
                         ))}
-                        {superRegionFilter!=="ALL"&&<button onClick={()=>setSuperRegionFilter("ALL")} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+                        {superRegionFilter.size>0&&<button onClick={()=>setSuperRegionFilter(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
                       </div>
 
                       {/* Segment */}
                       <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
                         <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>Segment</span>
                         {[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort().map(s=>(
-                          <button key={s} onClick={()=>{setSegmentFilter(segmentFilter===s?"":s);setPosPage(1);}} style={fb(segmentFilter===s)}>{s}</button>
+                          <button key={s} onClick={e=>{
+                            if(e.ctrlKey||e.metaKey){
+                              setSegmentFilter(prev=>{const n=new Set(prev);n.has(s)?n.delete(s):n.add(s);return n;});
+                            } else {
+                              setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));
+                            }
+                            setPosPage(1);
+                          }} style={fb(segmentFilter.has(s))}>{s}</button>
                         ))}
-                        {segmentFilter&&<button onClick={()=>{setSegmentFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+                        {segmentFilter.size>0&&<button onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
                       </div>
 
                       {/* DWT */}
