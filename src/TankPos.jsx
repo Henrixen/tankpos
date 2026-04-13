@@ -111,7 +111,7 @@ export default function TankPos(){
       segment:     r.segment||"",
       superRegion: r.super_region||"",
       updatedAt:   r.updated_at||"",
-      fileDate:    r.file_date||null,
+      fileDate:    r.source === 'manual' ? (r.file_date||r.updated_at||null) : (r.updated_at||r.file_date||null),
       source:      r.source||"external",
       // ✅ CREATE SPEC OBJECT FROM VIEW COLUMNS
       spec: {
