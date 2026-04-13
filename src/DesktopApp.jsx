@@ -351,7 +351,7 @@ const filtV=useMemo(()=>{
                     </div>
                   )}
 
-                  {/* CENTER: File Date + Filters (34%) */}
+                  {/* CENTER: Filters (34%) - same height as PPT */}
                   <div style={{width:mobile?"100%":"34%",display:"flex",flexDirection:"column",gap:6}}>
 
                     {selVessels.size>0&&(
@@ -376,91 +376,52 @@ const filtV=useMemo(()=>{
                       </div>
                     )}
 
-                    {/* FILE DATE WINDOW */}
-                    <div style={{display:"flex",flexDirection:"column",gap:8,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>
-                          File Date Window
-                        </span>
-                        <span style={{fontSize:12,color:C.tx,fontWeight:700}}>
-                          {posFileDaysBack>=90
-                            ? "Showing all positions"
-                            : `${fmtShortDate(new Date(new Date().setDate(new Date().getDate()-posFileDaysBack)))} → ${fmtShortDate(new Date())}`}
-                        </span>
-                      </div>
+                    {/* UNIFIED FILTER PANEL */}
+                    <div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 12px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,height:200,boxSizing:"border-box",overflowY:"auto"}}>
 
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <span style={{fontSize:11,color:C.dim,width:70}}>From</span>
-                        <input
-                          type="range"
-                          min="0"
-                          max="90"
-                          step="1"
-                          value={posFileDaysBack}
-                          onChange={e=>{setPosFileDaysBack(Number(e.target.value));setPosPage(1);}}
-                          style={{flex:1}}
-                        />
-                        <span style={{fontSize:11,color:C.dim,width:80,textAlign:"right"}}>
-                          {posFileDaysBack===90?"All":posFileDaysBack===0?"Today only":posFileDaysBack+"d"}
-                        </span>
-                      </div>
-
-                      <span style={{fontSize:11,color:C.faint}}>Right edge is always today</span>
-                    </div>
-
-                    {/* STATUS, REGION, UPDATED filters */}
-                    <div style={{display:"flex",flexDirection:"column",gap:6,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
-                      {FILTER_GROUPS.map(({label,items})=>(
-                        <div key={label} style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-                          <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>{label}</span>
-                          {items.map(([f,l])=>(
-                            <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
-                          ))}
-                          {filters.size?(<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:4}}>✕ Clear</button>):null}
-                        </div>
-                      ))}
-
+                      {/* Status */}
                       <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>Updated</span>
-                        {[["","All"],["today","Today"],["week","This week"]].map(([v,l])=>(
+                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>Status</span>
+                        {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Hide Emp"]].map(([f,l])=>(
+                          <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
+                        ))}
+                        {filters.size>0&&<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+                      </div>
+
+                      {/* Updated */}
+                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>Updated</span>
+                        {[["","All"],["today","Today"],["week","This wk"]].map(([v,l])=>(
                           <button key={v} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&v!=="")}>{l}</button>
                         ))}
                       </div>
 
-                      {/* SEGMENT and SUPER REGION */}
-                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Segment</span>
-                        <select
-                          value={segmentFilter}
-                          onChange={e=>{setSegmentFilter(e.target.value);setPosPage(1);}}
-                          style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 8px",outline:"none"}}
-                        >
-                          <option value="">All</option>
-                          {[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort().map(s=><option key={s} value={s}>{s}</option>)}
-                        </select>
-
-                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginLeft:8}}>
-                          Super Region
-                        </span>
-                        <select
-                          value={superRegionFilter}
-                          onChange={e=>setSuperRegionFilter(e.target.value)}
-                          style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 8px",outline:"none"}}
-                        >
-                          {superRegionOptions.map(r=>(
-                            <option key={r} value={r}>{r}</option>
-                          ))}
-                        </select>
-
-                        {superRegionFilter!=="ALL" && (
-                          <button
-                            onClick={()=>setSuperRegionFilter("ALL")}
-                            style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,color:C.dim,fontSize:12,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit"}}
-                          >
-                            ✕
-                          </button>
-                        )}
+                      {/* Region */}
+                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>Region</span>
+                        {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(
+                          <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
+                        ))}
                       </div>
+
+                      {/* Super Region */}
+                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>S.Region</span>
+                        {superRegionOptions.filter(r=>r!=="ALL").map(r=>(
+                          <button key={r} onClick={()=>setSuperRegionFilter(superRegionFilter===r?"ALL":r)} style={fb(superRegionFilter===r)}>{r}</button>
+                        ))}
+                        {superRegionFilter!=="ALL"&&<button onClick={()=>setSuperRegionFilter("ALL")} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+                      </div>
+
+                      {/* Segment */}
+                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>Segment</span>
+                        {[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort().map(s=>(
+                          <button key={s} onClick={()=>{setSegmentFilter(segmentFilter===s?"":s);setPosPage(1);}} style={fb(segmentFilter===s)}>{s}</button>
+                        ))}
+                        {segmentFilter&&<button onClick={()=>{setSegmentFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+                      </div>
+
                     </div>
                   </div>
 
