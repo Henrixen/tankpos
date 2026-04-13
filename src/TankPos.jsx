@@ -90,6 +90,15 @@ export default function TankPos(){
     "West Coast US":"WC US",
     "West Coast South America":"WC SAM",
     "North West Europe":"NWE",
+    "Med-Black Sea": "Med",
+    "Arabian Gulf": "AG",
+    "West Pacific": "Pacific",
+    "Southern Ocean": "Pacific",
+    "AG": "Suez-AG-India",
+    "AG-India-Red Sea": "Suez-India",
+    "Red Sea": "Suez-India"
+    "India": "Suez-India",
+        
   };
   const{data,error}=await supabase.from("positions_latest").select("*").limit(10000);
   if(error){console.error("fetchPositions error:",error);return;}
