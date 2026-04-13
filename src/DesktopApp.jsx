@@ -48,7 +48,7 @@ const [segmentFilter,setSegmentFilter]=useState("");
 
   const mobile=isMobile();
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
-  const td={padding:"8px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
+  const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
   const fb=on=>({fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid "+(on?C.blue:C.bd),background:on?"rgba(88,166,255,.12)":"transparent",color:on?C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
 
   // Tag component for vessel specs
@@ -183,6 +183,16 @@ const filtV=useMemo(()=>{
   useEffect(()=>{setPosPage(1);},[vessels,filters,search,sortK,opFilter,bucketFilters,updFilter,posFileDaysBack,superRegionFilter]);
 
   const stats={total:vessels.length,ppt:filtV.filter(v=>isOpenPPT(v.date)).length,subs:filtV.filter(v=>v.openPort==="EMPLOYED").length};
+  const vessels14d=useMemo(()=>{
+    const cutoff=new Date();
+    cutoff.setDate(cutoff.getDate()-14);
+    cutoff.setHours(0,0,0,0);
+    return vessels.filter(v=>{
+      if(!v.updatedAt) return false;
+      const d=new Date(v.updatedAt);
+      return !isNaN(d) && d>=cutoff;
+    });
+  },[vessels]);
   const selV=sel?vessels.find(v=>v.vessel===sel):null;
   const selFixes=sel?cargoes.filter(c=>c.vessel&&c.vessel.toLowerCase()===sel.toLowerCase()):[];
   const cTokens=cSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -269,10 +279,10 @@ const filtV=useMemo(()=>{
         </div>
       </div>
       <div style={{padding:"12px 16px",maxWidth:1900,margin:"0 auto"}}>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
+        <div style={{display:"flex",flexWrap:"wrap",borderBottom:"1px solid "+C.bd2,marginBottom:12,gap:mobile?"2px 0":0}}>
           {[["pos","⚓ Pos",vessels.length],["cargo","📦 Cargo",cargoTotal||cargoes.length],["fix","🎯 Fix",0],["projects","🧮 Projects",0],["matrix","🔗 Matrix",0],["tce","⚡ TCE",0],["dash","📊 Dash",0]].map(([id,label,cnt])=>(
-            <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}} style={{fontFamily:"sans-serif",fontWeight:700,fontSize:13,padding:"10px 20px",border:"1px solid "+(tab===id?C.blue:C.bd),borderRadius:6,background:tab===id?"rgba(88,166,255,.12)":C.bg2,color:tab===id?C.blue:C.dim,cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.15s ease"}}>
-              {label}{cnt>0?(<span style={{fontSize:11,marginLeft:5,background:tab===id?"rgba(88,166,255,.2)":C.bg3,padding:"2px 7px",borderRadius:10,fontWeight:600}}>{cnt}</span>):null}
+            <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}} style={{fontFamily:"sans-serif",fontWeight:700,fontSize:mobile?11:12,padding:mobile?"6px 10px":"7px 16px",border:"none",background:"transparent",color:tab===id?C.blue:C.dim,borderBottom:"2px solid "+(tab===id?C.blue:"transparent"),cursor:"pointer",whiteSpace:"nowrap"}}>
+              {label}{cnt>0?(<span style={{fontSize:11,marginLeft:3,background:C.bg3,padding:"1px 5px",borderRadius:8}}>{cnt}</span>):null}
             </button>
           ))}
         </div>
@@ -287,7 +297,7 @@ const filtV=useMemo(()=>{
               {/* LEFT: Parse + Fixing (32%) */}
               <div style={{width:mobile?"100%":"32%",display:"flex",flexDirection:"column",gap:10}}>
   <div><ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/></div>
-  <div><FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} /></div>
+  <div><FixingWindow vessels={vessels14d} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} /></div>
 </div>
  
               {/* CENTER: Rate Matrix (34%) */}
@@ -315,149 +325,128 @@ const filtV=useMemo(()=>{
  </div>
             {vessels.length > 0 && (
               <>
-                {/* Rows 2 & 3: Combined layout with Ask AI spanning both rows */}
-                <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row",marginTop:-5}}>
+                {/* Second row: PPT + Filters (grid aligned) */}
+<div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row",marginTop:-5}}>
                   
-                  {/* LEFT + CENTER COLUMN (66%) - contains row 2 and row 3 stacked */}
-                  <div style={{width:mobile?"100%":"66%",display:"flex",flexDirection:"column",gap:10}}>
-                    
-                    {/* Row 2: PPT + Filters */}
-                    <div style={{display:"flex",gap:10}}>
-                      {/* LEFT: PPT Timeline (48.5% of 66%) */}
-                      {!mobile&&(
-                        <div style={{width:"48.5%",height:200}}>
-                          <OpeningBreakdown
-                            vessels={vessels}
-                            filteredVessels={filtV}
-                            bucketFilters={bucketFilters}
-                            onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
-                            fillHeight={false}
-                          />
-                        </div>
-                      )}
+                  {/* LEFT: PPT Timeline (32%) */}
+                  {!mobile&&(
+                    <div style={{width:"32%",height:200}}>
+                      <OpeningBreakdown
+                        vessels={vessels14d}
+                        filteredVessels={filtV.filter(v=>vessels14d.some(u=>u.id===v.id||u.vessel===v.vessel))}
+                        bucketFilters={bucketFilters}
+                        onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
+                        fillHeight={false}
+                      />
+                    </div>
+                  )}
 
-                      {/* CENTER: File Date + Filters (51.5% of 66%) */}
-                      <div style={{width:mobile?"100%":"51.5%",display:"flex",flexDirection:"column",gap:6}}>
+                  {/* CENTER: File Date + Filters (34%) */}
+                  <div style={{width:mobile?"100%":"34%",display:"flex",flexDirection:"column",gap:6}}>
 
-                        {opFilter&&(
-                          <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:"rgba(79,195,247,0.08)",border:"1px solid rgba(79,195,247,0.25)",borderRadius:5}}>
-                            <span style={{fontSize:12,color:C.blue,fontWeight:700}}>🔍 Filtered: {opFilter}</span>
-                            <button onClick={()=>setOpFilter(null)} style={{background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:12,padding:"0 2px"}}>✕ Clear</button>
-                          </div>
-                        )}
+                    {selVessels.size>0&&(
+                      <button
+                        onClick={()=>setPendingDel({type:"all",id:"__SELECTED__",label:selVessels.size+" vessel"+(selVessels.size!==1?"s":"")})}
+                        style={{fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:5,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}
+                      >
+                        🗑 Delete ({selVessels.size})
+                      </button>
+                    )}
 
-                        {bucketFilters.size>0&&(
-                          <div style={{fontSize:12,color:C.blue,cursor:"pointer"}} onClick={()=>setBucketFilters(new Set())}>
-                            ✕ Clear segment filter ({[...bucketFilters].join(", ")})
-                          </div>
-                        )}
-
-                        {/* FILE DATE WINDOW */}
-                        <div style={{display:"flex",flexDirection:"column",gap:8,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                            <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>
-                              File Date Window
-                            </span>
-                            <span style={{fontSize:12,color:C.tx,fontWeight:700}}>
-                              {posFileDaysBack>=90
-                                ? "Showing all positions"
-                                : `${fmtShortDate(new Date(new Date().setDate(new Date().getDate()-posFileDaysBack)))} → ${fmtShortDate(new Date())}`}
-                            </span>
-                          </div>
-
-                          <div style={{display:"flex",alignItems:"center",gap:8}}>
-                            <span style={{fontSize:11,color:C.dim,width:70}}>From</span>
-                            <input
-                              type="range"
-                              min="0"
-                              max="90"
-                              step="1"
-                              value={posFileDaysBack}
-                              onChange={e=>{setPosFileDaysBack(Number(e.target.value));setPosPage(1);}}
-                              style={{flex:1}}
-                            />
-                            <span style={{fontSize:11,color:C.dim,width:80,textAlign:"right"}}>
-                              {posFileDaysBack===90?"All":posFileDaysBack===0?"Today only":posFileDaysBack+"d"}
-                            </span>
-                          </div>
-
-                          <span style={{fontSize:11,color:C.faint}}>Right edge is always today</span>
-                        </div>
-
-                        {/* STATUS, REGION, UPDATED filters */}
-                        <div style={{display:"flex",flexDirection:"column",gap:6,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
-                          {FILTER_GROUPS.map(({label,items})=>(
-                            <div key={label} style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-                              <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>{label}</span>
-                              {items.map(([f,l])=>(
-                                <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
-                              ))}
-                              {filters.size?(<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:4}}>✕ Clear</button>):null}
-                            </div>
-                          ))}
-
-                          <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-                            <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>Updated</span>
-                            {[["","All"],["today","Today"],["week","This week"]].map(([v,l])=>(
-                              <button key={v} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&v!=="")}>{l}</button>
-                            ))}
-                          </div>
-
-                          {/* SEGMENT and SUPER REGION */}
-                          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                            <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Segment</span>
-                            <select
-                              value={segmentFilter}
-                              onChange={e=>{setSegmentFilter(e.target.value);setPosPage(1);}}
-                              style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 8px",outline:"none"}}
-                            >
-                              <option value="">All</option>
-                              {[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort().map(s=><option key={s} value={s}>{s}</option>)}
-                            </select>
-
-                            <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginLeft:8}}>
-                              Super Region
-                            </span>
-                            <select
-                              value={superRegionFilter}
-                              onChange={e=>setSuperRegionFilter(e.target.value)}
-                              style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 8px",outline:"none"}}
-                            >
-                              {superRegionOptions.map(r=>(
-                                <option key={r} value={r}>{r}</option>
-                              ))}
-                            </select>
-
-                            {superRegionFilter!=="ALL" && (
-                              <button
-                                onClick={()=>setSuperRegionFilter("ALL")}
-                                style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,color:C.dim,fontSize:12,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit"}}
-                              >
-                                ✕
-                              </button>
-                            )}
-                          </div>
-                        </div>
+                    {opFilter&&(
+                      <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:"rgba(79,195,247,0.08)",border:"1px solid rgba(79,195,247,0.25)",borderRadius:5}}>
+                        <span style={{fontSize:12,color:C.blue,fontWeight:700}}>🔍 Filtered: {opFilter}</span>
+                        <button onClick={()=>setOpFilter(null)} style={{background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:12,padding:"0 2px"}}>✕ Clear</button>
                       </div>
+                    )}
+
+                    {bucketFilters.size>0&&(
+                      <div style={{fontSize:12,color:C.blue,cursor:"pointer"}} onClick={()=>setBucketFilters(new Set())}>
+                        ✕ Clear segment filter ({[...bucketFilters].join(", ")})
+                      </div>
+                    )}
+
+                    {/* FILE DATE WINDOW */}
+                    <div style={{display:"flex",flexDirection:"column",gap:8,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>
+                          File Date Window
+                        </span>
+                        <span style={{fontSize:12,color:C.tx,fontWeight:700}}>
+                          {posFileDaysBack>=90
+                            ? "Showing all positions"
+                            : `${fmtShortDate(new Date(new Date().setDate(new Date().getDate()-posFileDaysBack)))} → ${fmtShortDate(new Date())}`}
+                        </span>
+                      </div>
+
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:11,color:C.dim,width:70}}>From</span>
+                        <input
+                          type="range"
+                          min="0"
+                          max="90"
+                          step="1"
+                          value={posFileDaysBack}
+                          onChange={e=>{setPosFileDaysBack(Number(e.target.value));setPosPage(1);}}
+                          style={{flex:1}}
+                        />
+                        <span style={{fontSize:11,color:C.dim,width:80,textAlign:"right"}}>
+                          {posFileDaysBack===90?"All":posFileDaysBack===0?"Today only":posFileDaysBack+"d"}
+                        </span>
+                      </div>
+
+                      <span style={{fontSize:11,color:C.faint}}>Right edge is always today</span>
                     </div>
 
-                    {/* Row 3: Fleet count + Export + Search */}
-                    <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,flexWrap:"wrap"}}>
-                      <ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/>
-                      <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{vessels.length}</span></span>
-                      <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtV.length}</span></span>
-                      <span style={{color:C.faint}}>Selected <span style={{color:"#4fc3f7",fontWeight:700}}>{selVessels.size}</span></span>
-                      
-                      {/* MOVED SEARCH FIELD HERE */}
-                      <div style={{position:"relative",marginLeft:"auto",minWidth:300}}>
-                        <input
-                          value={search}
-                          onChange={e=>setSearch(e.target.value)}
-                          placeholder="🔍 Multi-search: e.g. belfast ulsd 1A"
-                          style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}
-                        />
-                        {search&&(
-                          <button onClick={()=>setSearch("")} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>
+                    {/* STATUS, REGION, UPDATED filters */}
+                    <div style={{display:"flex",flexDirection:"column",gap:6,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
+                      {FILTER_GROUPS.map(({label,items})=>(
+                        <div key={label} style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                          <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>{label}</span>
+                          {items.map(([f,l])=>(
+                            <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
+                          ))}
+                          {filters.size?(<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:4}}>✕ Clear</button>):null}
+                        </div>
+                      ))}
+
+                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>Updated</span>
+                        {[["","All"],["today","Today"],["week","This week"]].map(([v,l])=>(
+                          <button key={v} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&v!=="")}>{l}</button>
+                        ))}
+                      </div>
+
+                      {/* SEGMENT and SUPER REGION */}
+                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Segment</span>
+                        <select
+                          value={segmentFilter}
+                          onChange={e=>{setSegmentFilter(e.target.value);setPosPage(1);}}
+                          style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 8px",outline:"none"}}
+                        >
+                          <option value="">All</option>
+                          {[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort().map(s=><option key={s} value={s}>{s}</option>)}
+                        </select>
+
+                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginLeft:8}}>
+                          Super Region
+                        </span>
+                        <select
+                          value={superRegionFilter}
+                          onChange={e=>setSuperRegionFilter(e.target.value)}
+                          style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 8px",outline:"none"}}
+                        >
+                          {superRegionOptions.map(r=>(
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+
+                        {superRegionFilter!=="ALL" && (
+                          <button
+                            onClick={()=>setSuperRegionFilter("ALL")}
+                            style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,color:C.dim,fontSize:12,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit"}}
+                          >
                             ✕
                           </button>
                         )}
@@ -465,19 +454,42 @@ const filtV=useMemo(()=>{
                     </div>
                   </div>
 
-                  {/* RIGHT: Ask AI (34%) - spans rows 2 and 3 */}
-                  {!mobile&&(
-                    <div style={{width:"34%"}}>
-                      <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:"100%",minHeight:280}}>
-                        <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
-                          <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
-                        </div>
-                        <div style={{padding:"10px",flex:1,overflowY:"auto"}}>
-                          <RightPanel vessels={vessels} cargoes={cargoes}/>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  {/* RIGHT: Ask AI (34%) - matches PPT height */}
+{!mobile&&(
+  <div style={{width:"34%"}}>
+    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
+        <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
+      </div>
+      <div style={{padding:"10px"}}>
+        <RightPanel vessels={vessels} cargoes={cargoes}/>
+      </div>
+    </div>
+  </div>
+)}
+</div>
+
+                {/* MOVED: Fleet count + Export + Search to same row */}
+                <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,flexWrap:"wrap"}}>
+                  <ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/>
+                  <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{vessels.length}</span></span>
+                  <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtV.length}</span></span>
+                  <span style={{color:C.faint}}>Selected <span style={{color:"#4fc3f7",fontWeight:700}}>{selVessels.size}</span></span>
+                  
+                  {/* MOVED SEARCH FIELD HERE */}
+                  <div style={{position:"relative",marginLeft:"auto",minWidth:300}}>
+                    <input
+                      value={search}
+                      onChange={e=>setSearch(e.target.value)}
+                      placeholder="🔍 Multi-search: e.g. belfast ulsd 1A"
+                      style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}
+                    />
+                    {search&&(
+                      <button onClick={()=>setSearch("")} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Vessel Table */}
@@ -513,31 +525,34 @@ const filtV=useMemo(()=>{
                           <th style={{...th,width:colWidthsV["OpenPort"]||100,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("openPort")}><span style={{userSelect:"none",paddingRight:6}}>Open Port{sortK==="openPort"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["OpenPort"]||100;const mv=m=>setColWidthsV(p=>({...p,"OpenPort":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["Comment"]||120,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("comment")}><span style={{userSelect:"none",paddingRight:6}}>Comment{sortK==="comment"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Comment"]||120;const mv=m=>setColWidthsV(p=>({...p,"Comment":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["FileDate"]||90,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("fileDate")}>
-                            <span style={{userSelect:"none",paddingRight:6}}>UPDATED{sortK==="fileDate"?(sortD>0?" ↑":" ↓"):""}</span>
+                            <span style={{userSelect:"none",paddingRight:6}}>FILE DATE{sortK==="fileDate"?(sortD>0?" ↑":" ↓"):""}</span>
                             <span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["FileDate"]||90;const mv=m=>setColWidthsV(p=>({...p,"FileDate":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/>
                           </th>
+                          <th style={{...th,width:18,minWidth:18,maxWidth:18,textAlign:"right",paddingRight:2}}></th>
                         </tr>
                       </thead>
                       <tbody>
                         {filtV.slice(0, posPage*POS_PAGE_SIZE).map((v,i)=>{
                           const isSel=sel===v.vessel;
                           const ppt=isOpenPPT(v.date);
-                          const rowBg=i%2===0?"#0d1829":"#1a2942";
-                          const bg=isSel?"rgba(88,166,255,.07)":rowBg;
+                          const bg=isSel?"rgba(88,166,255,.07)":i%2===0?C.bg:C.bg2;
                           return(
                             <tr key={v.vessel} style={{background:bg,outline:isSel?"1px solid rgba(88,166,255,.2)":"1px solid transparent",cursor:"pointer"}} onClick={()=>{setSel(sel===v.vessel?null:v.vessel);setSelectedAISVessels([v.vessel]);}}>
                               <td style={{...td,width:28,padding:"0 2px",textAlign:"center",cursor:"pointer"}} onClick={e=>{e.stopPropagation();setSelVessels(p=>{const n=new Set(p);n.has(v.vessel)?n.delete(v.vessel):n.add(v.vessel);return n;})}}><span style={{fontSize:12,color:selVessels.has(v.vessel)?"#4fc3f7":C.faint}}>{selVessels.has(v.vessel)?"[✓]":"[ ]"}</span></td>
-                              <EC value={v.operator} color={C.dim} placeholder="Operator" onSave={val=>onUpdateV(v.vessel,"operator",val)} data-vid={v.vessel+"-op"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-vessel"]`)?.click()} onShiftTab={()=>{const prev=filtV[i-1];if(prev)document.querySelector(`[data-vid="${prev.vessel}-comment"]`)?.click();}} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-op"]`)?.click();}}/>
-                              <EC value={toTCase(v.vessel)} color={"#a8e6a3"} bold={true} placeholder="Vessel" onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)} data-vid={v.vessel+"-vessel"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-op"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-vessel"]`)?.click();}}/>
+                              <EC value={v.operator} color={C.purple} placeholder="Operator" onSave={val=>onUpdateV(v.vessel,"operator",val)} data-vid={v.vessel+"-op"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-vessel"]`)?.click()} onShiftTab={()=>{const prev=filtV[i-1];if(prev)document.querySelector(`[data-vid="${prev.vessel}-comment"]`)?.click();}} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-op"]`)?.click();}}/>
+                              <EC value={toTCase(v.vessel)} color={C.blue} bold={true} placeholder="Vessel" onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)} data-vid={v.vessel+"-vessel"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-op"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-vessel"]`)?.click();}}/>
                               <td style={{...td,color:C.dim,whiteSpace:"nowrap",cursor:"default",overflow:"hidden",maxWidth:0}} title={v.built||""}>{v.built||""}</td>
-                              <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={fmtN(v.dwt)}>{fmtN(v.dwt)}</td>
+                              <td style={{...td,color:C.amber,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={fmtN(v.dwt)}>{fmtN(v.dwt)}</td>
                               <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.loa||""}>{v.loa||""}</td>
                               <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.beam||""}>{v.beam||""}</td>
                               <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={fmtN(v.cbm)}>{fmtN(v.cbm)}</td>
-                              <EC value={v.date} color={"#a8e6a3"} placeholder="Date" onSave={val=>{const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];let fmt=val.trim();const m1=fmt.match(/^(\d{1,2})[\/\-](\d{1,2})$/);if(m1){const mo=parseInt(m1[2])-1;if(mo>=0&&mo<12)fmt=parseInt(m1[1])+" "+MON[mo];}else{const m2=fmt.match(/^(\d{1,2})\s+([A-Za-z]{3})/i);if(m2){const mi=MON.findIndex(m=>m.toLowerCase()===m2[2].toLowerCase().slice(0,3));if(mi>=0)fmt=parseInt(m2[1])+" "+MON[mi];}}onUpdateV(v.vessel,"date",fmt);}} data-vid={v.vessel+"-date"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-vessel"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-date"]`)?.click();}}/>
-                              <EC value={v.openPort} color={"#a8e6a3"} placeholder="Port" onSave={val=>onUpdateV(v.vessel,"openPort",val)} data-vid={v.vessel+"-port"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-comment"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-port"]`)?.click();}}/>
+                              <EC value={v.date} color={ppt?C.green:"#58a6ff"} placeholder="Date" onSave={val=>{const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];let fmt=val.trim();const m1=fmt.match(/^(\d{1,2})[\/\-](\d{1,2})$/);if(m1){const mo=parseInt(m1[2])-1;if(mo>=0&&mo<12)fmt=parseInt(m1[1])+" "+MON[mo];}else{const m2=fmt.match(/^(\d{1,2})\s+([A-Za-z]{3})/i);if(m2){const mi=MON.findIndex(m=>m.toLowerCase()===m2[2].toLowerCase().slice(0,3));if(mi>=0)fmt=parseInt(m2[1])+" "+MON[mi];}}onUpdateV(v.vessel,"date",fmt);}} data-vid={v.vessel+"-date"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-vessel"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-date"]`)?.click();}}/>
+                              <EC value={v.openPort} color={v.openPort==="EMPLOYED"?C.purple:C.amber} placeholder="Port" onSave={val=>onUpdateV(v.vessel,"openPort",val)} data-vid={v.vessel+"-port"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-comment"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-port"]`)?.click();}}/>
                               <EC value={v.comment} color={C.dim} placeholder="Comment" onSave={val=>onUpdateV(v.vessel,"comment",val)} data-vid={v.vessel+"-comment"} onTab={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-op"]`)?.click();}} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-comment"]`)?.click();}}/>
                               <td style={{...td,fontSize:12,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",width:colWidthsV.FileDate||60,textAlign:"center"}}>{v.fileDate?new Date(v.fileDate).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
+                              <td style={{...td,width:18,minWidth:18,maxWidth:18,textAlign:"center",padding:0}} onClick={e=>e.stopPropagation()}>
+                                <button onClick={(e)=>{e.stopPropagation();setPendingDel({type:"vessel",id:v.vessel,label:v.vessel});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:10,padding:"0 2px",opacity:0.7}} title="Delete">✕</button>
+                              </td>
                             </tr>
                           );
                         })}
@@ -635,18 +650,6 @@ const filtV=useMemo(()=>{
                       }}
                     >
                       Show more ({filtV.length - posPage * POS_PAGE_SIZE} remaining)
-                    </button>
-                  </div>
-                )}
-
-                {/* Delete selected button below table */}
-                {selVessels.size > 0 && (
-                  <div style={{padding:"12px 10px",borderTop:"1px solid "+C.bd2,background:C.bg2}}>
-                    <button
-                      onClick={()=>setPendingDel({type:"all",id:"__SELECTED__",label:selVessels.size+" vessel"+(selVessels.size!==1?"s":"")})}
-                      style={{fontSize:12,fontWeight:700,padding:"6px 16px",borderRadius:5,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",width:"100%"}}
-                    >
-                      🗑 Delete Selected ({selVessels.size})
                     </button>
                   </div>
                 )}
@@ -768,8 +771,7 @@ const filtV=useMemo(()=>{
                       v=v.replace(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*-\s*(\d{1,2})\s+\2/gi,(m,d1,mo,d2)=>d1+"-"+d2+" "+mo);
                       return v;
                     };
-                    const rowBg=ri%2===0?"#0d1829":"#1a2942";
-                    return <tr key={f.id} style={{background:rowBg}}>
+                    return <tr key={f.id} style={{background:ri%2===0?C.bg:C.bg2}}>
                       <td style={{...td,width:28,padding:"0 2px",textAlign:"center",cursor:"pointer"}} onClick={e=>{e.stopPropagation();setSelCargoes(p=>{const n=new Set(p);n.has(f.id)?n.delete(f.id):n.add(f.id);return n;})}}><span style={{fontSize:12,color:selCargoes.has(f.id)?"#4fc3f7":C.faint}}>{selCargoes.has(f.id)?"[✓]":"[ ]"}</span></td>
                       <td style={{...td,width:colWidthsC.Status||60,cursor:"pointer",overflow:"hidden"}} onClick={e=>{e.stopPropagation();const opts=["SUBS","FIXED","FAILED",""];const cur=opts.indexOf(f.status||"");onUpdateC(f.id,"status",opts[(cur+1)%opts.length]);}} title="Click to cycle status">
                         <span style={{color:sc,fontWeight:700}}>{f.status||""}</span>
