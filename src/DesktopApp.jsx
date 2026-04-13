@@ -81,6 +81,16 @@ function fmtShortDate(d){
   return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
 }
 
+const vesselsTodayUpdated=useMemo(()=>{
+    const todayStart=new Date();
+    todayStart.setHours(0,0,0,0);
+    return new Set(vessels.filter(v=>{
+      if(!v.updatedAt) return false;
+      const d=new Date(v.updatedAt);
+      return !isNaN(d) && d>=todayStart;
+    }).map(v=>v.vessel));
+  },[vessels]);
+
 const filtV=useMemo(()=>{
   let list=vessels;
 
@@ -192,16 +202,6 @@ const filtV=useMemo(()=>{
       const d=new Date(v.updatedAt);
       return !isNaN(d) && d>=cutoff;
     });
-  },[vessels]);
-  // For PPT bucket: only vessels updated today
-  const vesselsTodayUpdated=useMemo(()=>{
-    const todayStart=new Date();
-    todayStart.setHours(0,0,0,0);
-    return new Set(vessels.filter(v=>{
-      if(!v.updatedAt) return false;
-      const d=new Date(v.updatedAt);
-      return !isNaN(d) && d>=todayStart;
-    }).map(v=>v.vessel));
   },[vessels]);
   const selV=sel?vessels.find(v=>v.vessel===sel):null;
   const selFixes=sel?cargoes.filter(c=>c.vessel&&c.vessel.toLowerCase()===sel.toLowerCase()):[];
@@ -342,8 +342,8 @@ const filtV=useMemo(()=>{
                   {!mobile&&(
                     <div style={{width:"32%",height:200}}>
                       <OpeningBreakdown
-                        vessels={vessels14d.map(v=>vesselsTodayUpdated.has(v.vessel)?v:{...v,date:""})}
-                        filteredVessels={filtV.filter(v=>vessels14d.some(u=>u.id===v.id||u.vessel===v.vessel)).map(v=>vesselsTodayUpdated.has(v.vessel)?v:{...v,date:""})}
+                        vessels={vessels14d.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+                        filteredVessels={filtV.filter(v=>vesselsTodayUpdated.has(v.vessel))}
                         bucketFilters={bucketFilters}
                         onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
                         fillHeight={false}
