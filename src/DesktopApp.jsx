@@ -29,6 +29,8 @@ const [posPage,setPosPage]=useState(1);
 const POS_PAGE_SIZE=100;
 const [superRegionFilter,setSuperRegionFilter]=useState("ALL");
 const [segmentFilter,setSegmentFilter]=useState("");
+const [dwtFilter,setDwtFilter]=useState("");   // "" | "<10" | "10-15" | "15-20" | "20-30" | "30-40" | ">40"
+const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" | "2010-2015" | "2015-2020" | ">2020"
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
   const [mxSearch,setMxSearch]=useState("");
@@ -40,7 +42,7 @@ const [segmentFilter,setSegmentFilter]=useState("");
   const [pendingDel,setPendingDel]=useState(null);
   const [restoreMsg,setRestoreMsg]=useState("");
   const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
-  const [colWidthsV,setColWidthsV]=useState({Operator:120,Vessel:120,Built:48,DWT:55,LOA:48,Beam:46,CBM:55,Date:68,OpenPort:100,Comment:200,FileDate:60,Spec:72});
+  const [colWidthsV,setColWidthsV]=useState({Operator:120,Vessel:120,Built:48,DWT:55,Coating:60,LOA:48,Beam:46,CBM:55,Date:68,OpenPort:100,Comment:200,FileDate:60,Spec:72});
   const [colWidthsC,setColWidthsC]=useState({Status:60,Vessel:130,Charterer:110,Cargo:80,Qty:60,Load:100,Disch:100,LaycanStart:90,LaycanEnd:90,Freight:90,Comment:120,Updated:88});
   const [askAiExpanded,setAskAiExpanded]=useState(false);
   const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
@@ -134,6 +136,31 @@ const filtV=useMemo(()=>{
     list=list.filter(v=>String(v.segment||"").trim()===segmentFilter);
   }
 
+  if(dwtFilter){
+    list=list.filter(v=>{
+      const d=parseFloat(v.dwt)||0;
+      if(dwtFilter==="<10") return d<10000;
+      if(dwtFilter==="10-15") return d>=10000&&d<15000;
+      if(dwtFilter==="15-20") return d>=15000&&d<20000;
+      if(dwtFilter==="20-30") return d>=20000&&d<30000;
+      if(dwtFilter==="30-40") return d>=30000&&d<40000;
+      if(dwtFilter===">40") return d>=40000;
+      return true;
+    });
+  }
+
+  if(builtFilter){
+    list=list.filter(v=>{
+      const b=parseInt(v.built)||0;
+      if(builtFilter==="<2005") return b>0&&b<2005;
+      if(builtFilter==="2005-10") return b>=2005&&b<2010;
+      if(builtFilter==="2010-15") return b>=2010&&b<2015;
+      if(builtFilter==="2015-20") return b>=2015&&b<2020;
+      if(builtFilter===">2020") return b>=2020;
+      return true;
+    });
+  }
+
   list=list.filter(matchesSearch);
 
    if(updFilter){
@@ -187,7 +214,9 @@ const filtV=useMemo(()=>{
   updFilter,
   posFileDaysBack,
   superRegionFilter,
-  segmentFilter
+  segmentFilter,
+  dwtFilter,
+  builtFilter
 ]);
   // Reset page when filters change
   useEffect(()=>{setPosPage(1);},[vessels,filters,search,sortK,opFilter,bucketFilters,updFilter,posFileDaysBack,superRegionFilter]);
@@ -377,7 +406,7 @@ const filtV=useMemo(()=>{
                     )}
 
                     {/* UNIFIED FILTER PANEL */}
-                    <div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 12px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,height:200,boxSizing:"border-box",overflowY:"auto"}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 12px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,height:200,boxSizing:"border-box",overflowY:"auto",flex:1}}>
 
                       {/* Status */}
                       <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
@@ -420,6 +449,24 @@ const filtV=useMemo(()=>{
                           <button key={s} onClick={()=>{setSegmentFilter(segmentFilter===s?"":s);setPosPage(1);}} style={fb(segmentFilter===s)}>{s}</button>
                         ))}
                         {segmentFilter&&<button onClick={()=>{setSegmentFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+                      </div>
+
+                      {/* DWT */}
+                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>DWT</span>
+                        {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(
+                          <button key={v} onClick={()=>{setDwtFilter(dwtFilter===v?"":v);setPosPage(1);}} style={fb(dwtFilter===v)}>{l}</button>
+                        ))}
+                        {dwtFilter&&<button onClick={()=>{setDwtFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+                      </div>
+
+                      {/* Built */}
+                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>Built</span>
+                        {[["<2005","<2005"],["2005-10","05-10"],["2010-15","10-15"],["2015-20","15-20"],[">2020",">2020"]].map(([v,l])=>(
+                          <button key={v} onClick={()=>{setBuiltFilter(builtFilter===v?"":v);setPosPage(1);}} style={fb(builtFilter===v)}>{l}</button>
+                        ))}
+                        {builtFilter&&<button onClick={()=>{setBuiltFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
                       </div>
 
                     </div>
@@ -473,6 +520,7 @@ const filtV=useMemo(()=>{
                         <col style={{width:colWidthsV.Vessel||130}}/>
                         <col style={{width:colWidthsV.Built||50}}/>
                         <col style={{width:colWidthsV.DWT||58}}/>
+                        <col style={{width:colWidthsV.Coating||60}}/>
                         <col style={{width:colWidthsV.LOA||50}}/>
                         <col style={{width:colWidthsV.Beam||50}}/>
                         <col style={{width:colWidthsV.CBM||58}}/>
@@ -489,6 +537,7 @@ const filtV=useMemo(()=>{
                           <th style={{...th,width:colWidthsV["Vessel"]||120,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("vessel")}><span style={{userSelect:"none",paddingRight:6}}>Vessel{sortK==="vessel"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Vessel"]||120;const mv=m=>setColWidthsV(p=>({...p,"Vessel":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["Built"]||48,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("built")}><span style={{userSelect:"none",paddingRight:6}}>Built{sortK==="built"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Built"]||48;const mv=m=>setColWidthsV(p=>({...p,"Built":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["DWT"]||55,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("dwt")}><span style={{userSelect:"none",paddingRight:6}}>DWT{sortK==="dwt"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["DWT"]||55;const mv=m=>setColWidthsV(p=>({...p,"DWT":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
+                          <th style={{...th,width:colWidthsV["Coating"]||60,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("coating")}><span style={{userSelect:"none",paddingRight:6}}>Coating{sortK==="coating"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Coating"]||60;const mv=m=>setColWidthsV(p=>({...p,"Coating":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["LOA"]||48,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("loa")}><span style={{userSelect:"none",paddingRight:6}}>LOA{sortK==="loa"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["LOA"]||48;const mv=m=>setColWidthsV(p=>({...p,"LOA":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["Beam"]||46,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("beam")}><span style={{userSelect:"none",paddingRight:6}}>Beam{sortK==="beam"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Beam"]||46;const mv=m=>setColWidthsV(p=>({...p,"Beam":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["CBM"]||55,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("cbm")}><span style={{userSelect:"none",paddingRight:6}}>CBM{sortK==="cbm"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["CBM"]||55;const mv=m=>setColWidthsV(p=>({...p,"CBM":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
@@ -514,6 +563,7 @@ const filtV=useMemo(()=>{
                               <EC value={toTCase(v.vessel)} color={"#79c0ff"} bold={true} placeholder="Vessel" onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)} data-vid={v.vessel+"-vessel"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-op"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-vessel"]`)?.click();}}/>
                               <td style={{...td,color:C.dim,whiteSpace:"nowrap",cursor:"default",overflow:"hidden",maxWidth:0}} title={v.built||""}>{v.built||""}</td>
                               <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={fmtN(v.dwt)}>{fmtN(v.dwt)}</td>
+                              <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.coating||""}>{v.coating||""}</td>
                               <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.loa||""}>{v.loa||""}</td>
                               <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.beam||""}>{v.beam||""}</td>
                               <td style={{...td,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={fmtN(v.cbm)}>{fmtN(v.cbm)}</td>
