@@ -451,7 +451,7 @@ const filtV=useMemo(()=>{
                       {/* Segment */}
                       <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
                         <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>Segment</span>
-                        {[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort().map(s=>(
+                        {(()=>{const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];const segs=[...new Set(vessels.map(v=>v.segment).filter(Boolean))];return segs.sort((a,b)=>{const ai=ORDER.indexOf(a);const bi=ORDER.indexOf(b);return(ai===-1?99:ai)-(bi===-1?99:bi);}).map(s=>(
                           <button key={s} onClick={e=>{
                             if(e.ctrlKey||e.metaKey){
                               setSegmentFilter(prev=>{const n=new Set(prev);n.has(s)?n.delete(s):n.add(s);return n;});
@@ -460,7 +460,7 @@ const filtV=useMemo(()=>{
                             }
                             setPosPage(1);
                           }} style={fb(segmentFilter.has(s))}>{s}</button>
-                        ))}
+                        ));})()}
                         {segmentFilter.size>0&&<button onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
                       </div>
 
