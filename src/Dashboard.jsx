@@ -14,7 +14,7 @@ const ROUTES = [
 
 const FFA_PERIODS = ["Feb/26","Mar/26","Apr/26","Q1/26","Q2/26","AVE/25"];
 
-// Helper to load image files
+// Helper to load image files for paste functionality
 function loadImg(file, setImg) {
   if (!file) return;
   const reader = new FileReader();
@@ -577,7 +577,7 @@ function Dashboard({vessels, cargoes, history}) {
     if (!v.fileDate || !v.date) return null;
     
     // Parse fileDate (should be ISO format like "2026-03-30")
-    const fileDt = new Date(v.fileDate);
+    const fileDt = new Date(v.updatedAt || v.fileDate);
     if (isNaN(fileDt)) {
       console.warn('Invalid fileDate:', v.fileDate, 'for vessel:', v.vessel);
       return null;
