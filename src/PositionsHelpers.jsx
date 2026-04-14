@@ -95,16 +95,16 @@ function FixingWindow({vessels, fileDate, opFilter, onOpFilter}){
   const avgPct=allAvg!=null?toPct(allAvg):0.5;
 
   return(
-    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,padding:"8px 12px 10px",marginBottom:10}}>
-      <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>⏱ Fixing Window - Open Fleet by Operator</div>
+    <div style={{background:"#0d1a2e",border:"1px solid rgba(58,130,246,0.22)",borderRadius:8,padding:"12px 16px",marginBottom:10}}>
+      <div style={{fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.45)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:12}}>⏱ Fixing Window - Open Fleet by Operator</div>
       {/* Chart area with themed scrollbar */}
       <div style={{position:"relative",marginBottom:6,maxHeight:220,overflowY:"auto",overflowX:"hidden",scrollbarWidth:"thin",scrollbarColor:C.bd2+" transparent"}}>
         {rows.map((r,i)=>{
           const pct=toPct(r.days);
           return(
             <div key={r.op} onClick={()=>onOpFilter&&onOpFilter(r.op)} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,cursor:onOpFilter?"pointer":"default",borderRadius:4,padding:"1px 4px 1px 0",background:opFilter===r.op?"rgba(79,195,247,0.08)":"transparent",outline:opFilter===r.op?"1px solid rgba(79,195,247,0.3)":"none"}}>
-              <div style={{minWidth:140,maxWidth:140,fontSize:12,color:opFilter===r.op?C.blue:C.dim,fontWeight:opFilter===r.op?700:400,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"right",paddingRight:4}}>{r.op}</div>
-              <div style={{flex:1,position:"relative",height:18,background:C.bg3,borderRadius:3}}>
+              <div style={{minWidth:140,maxWidth:140,fontSize:12,color:opFilter===r.op?C.blue:"rgba(160,200,255,0.6)",fontWeight:opFilter===r.op?700:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"right",paddingRight:4}}>{r.op}</div>
+              <div style={{flex:1,position:"relative",height:18,background:"#162540",borderRadius:3}}>
                 {/* Filled bar from left up to pct */}
                 <div style={{position:"absolute",left:0,top:0,height:"100%",width:(pct*100)+"%",background:r.col+"66",borderRadius:3,transition:"width 0.4s"}}/>
                 {/* Bright right edge line */}
@@ -119,8 +119,8 @@ function FixingWindow({vessels, fileDate, opFilter, onOpFilter}){
         })}
         {/* Fleet avg row */}
         <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8,paddingTop:8,borderTop:"1px solid "+C.bd2}}>
-          <div style={{minWidth:140,maxWidth:140,fontSize:12,color:C.tx,fontWeight:700,textAlign:"right",paddingRight:4}}>Fleet avg</div>
-          <div style={{flex:1,position:"relative",height:18,background:C.bg3,borderRadius:3}}>
+          <div style={{minWidth:140,maxWidth:140,fontSize:12,color:"#e8f2ff",fontWeight:700,textAlign:"right",paddingRight:4}}>Fleet avg</div>
+          <div style={{flex:1,position:"relative",height:18,background:"#162540",borderRadius:3}}>
             <div style={{position:"absolute",left:0,top:0,height:"100%",width:(avgPct*100)+"%",background:"rgba(79,195,247,0.12)",borderRadius:3}}/>
             <div style={{position:"absolute",left:"calc("+(avgPct*100)+"% - 1px)",top:0,height:"100%",width:2,background:"rgba(79,195,247,0.7)"}}/>
           </div>
