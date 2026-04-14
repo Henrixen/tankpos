@@ -59,15 +59,9 @@ const [segmentFilter,setSegmentFilter]=useState("");
 
   // Tag component for vessel specs
   const Tag=({col,children})=><span style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:3,background:col+"18",border:"1px solid "+col+"44",color:col}}>{children}</span>;
-  const [askAiExpanded,setAskAiExpanded]=useState(false);
-  const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
-  const [selectedAISVessels,setSelectedAISVessels]=useState([]);
-
 
 
   // Tag component for vessel specs
-  const Tag=({col,children})=><span style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:3,background:col+"18",border:"1px solid "+col+"44",color:col}}>{children}</span>;
-
   function toggleFilter(f){setFilters(prev=>{const n=new Set(prev);n.has(f)?n.delete(f):n.add(f);return n;});}
   function srt(k){setSortD(sortK===k?sortD*-1:1);setSortK(k);}
 
