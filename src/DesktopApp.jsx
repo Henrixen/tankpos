@@ -27,8 +27,10 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
 const [posPage,setPosPage]=useState(1);
 const POS_PAGE_SIZE=100;
-const [superRegionFilter,setSuperRegionFilter]=useState("ALL");
-const [segmentFilter,setSegmentFilter]=useState("");
+const [superRegionFilter,setSuperRegionFilter]=useState(new Set());
+const [segmentFilter,setSegmentFilter]=useState(new Set());
+const [dwtFilter,setDwtFilter]=useState("");   // "" | "<10" | "10-15" | "15-20" | "20-30" | "30-40" | ">40"
+const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" | "2010-2015" | "2015-2020" | ">2020"
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
   const [mxSearch,setMxSearch]=useState("");
@@ -40,7 +42,7 @@ const [segmentFilter,setSegmentFilter]=useState("");
   const [pendingDel,setPendingDel]=useState(null);
   const [restoreMsg,setRestoreMsg]=useState("");
   const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
-  const [colWidthsV,setColWidthsV]=useState({Operator:120,Vessel:120,Built:48,DWT:55,LOA:48,Beam:46,CBM:55,Date:68,OpenPort:100,Comment:200,FileDate:60,Spec:72});
+  const [colWidthsV,setColWidthsV]=useState({Operator:120,Vessel:120,Built:48,DWT:55,Coating:60,LOA:48,Beam:46,CBM:55,Date:68,OpenPort:100,Comment:200,FileDate:60,Spec:72});
   const [colWidthsC,setColWidthsC]=useState({Status:60,Vessel:130,Charterer:110,Cargo:80,Qty:60,Load:100,Disch:100,LaycanStart:90,LaycanEnd:90,Freight:90,Comment:120,Updated:88});
   const [askAiExpanded,setAskAiExpanded]=useState(false);
   const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
@@ -48,11 +50,11 @@ const [segmentFilter,setSegmentFilter]=useState("");
 
   const mobile=isMobile();
   
-  // Professional table styling - Dashboard theme
+  // Dashboard theme table styling - matches bunker prices table exactly
   const th2={padding:"6px 10px",color:"rgba(120,160,220,0.45)",fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.07em",textAlign:"left"};
   const td2={padding:"7px 10px",color:"rgba(160,200,255,0.6)",fontWeight:600,fontSize:12};
-  const thRight={padding:"6px 10px",color:"rgba(120,160,220,0.45)",fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.07em",textAlign:"right"};
-  const tdRight={padding:"7px 10px",fontWeight:700,textAlign:"right",fontSize:12};
+  
+  // Legacy styles
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
   const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
   const fb=on=>({fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid "+(on?C.blue:C.bd),background:on?"rgba(88,166,255,.12)":"transparent",color:on?C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
@@ -60,8 +62,6 @@ const [segmentFilter,setSegmentFilter]=useState("");
   // Tag component for vessel specs
   const Tag=({col,children})=><span style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:3,background:col+"18",border:"1px solid "+col+"44",color:col}}>{children}</span>;
 
-
-  // Tag component for vessel specs
   function toggleFilter(f){setFilters(prev=>{const n=new Set(prev);n.has(f)?n.delete(f):n.add(f);return n;});}
   function srt(k){setSortD(sortK===k?sortD*-1:1);setSortK(k);}
 
@@ -89,6 +89,16 @@ function fmtShortDate(d){
   return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
 }
 
+const vesselsTodayUpdated=useMemo(()=>{
+    const todayStart=new Date();
+    todayStart.setHours(0,0,0,0);
+    return new Set(vessels.filter(v=>{
+      if(!v.updatedAt) return false;
+      const d=new Date(v.updatedAt);
+      return !isNaN(d) && d>=todayStart;
+    }).map(v=>v.vessel));
+  },[vessels]);
+
 const filtV=useMemo(()=>{
   let list=vessels;
 
@@ -111,7 +121,7 @@ const filtV=useMemo(()=>{
     list=list.filter(v=>{
       if(v.openPort==="EMPLOYED") return false;
       const d=daysBetween(v.date);
-      const inPPT=d!==null && d>=0 && d<=1;
+      const inPPT=d!==null && d>=0 && d<=1 && vesselsTodayUpdated.has(v.vessel);
       const in24=d!==null && d>=2 && d<=4;
       const in48=d!==null && d>=5 && d<=8;
       const in8p=d!==null && d>8;
@@ -125,11 +135,36 @@ const filtV=useMemo(()=>{
   const normOp=s=>(s||"Unknown").trim().toLowerCase();
   if(opFilter) list=list.filter(v=>normOp(v.operator)===normOp(opFilter));
 
-  if(superRegionFilter!=="ALL"){
-    list=list.filter(v=>String(v.superRegion||"").trim()===superRegionFilter);
+  if(superRegionFilter.size>0){
+    list=list.filter(v=>superRegionFilter.has(String(v.superRegion||"").trim()));
   }
-  if(segmentFilter){
-    list=list.filter(v=>String(v.segment||"").trim()===segmentFilter);
+  if(segmentFilter.size>0){
+    list=list.filter(v=>segmentFilter.has(String(v.segment||"").trim()));
+  }
+
+  if(dwtFilter){
+    list=list.filter(v=>{
+      const d=parseFloat(v.dwt)||0;
+      if(dwtFilter==="<10") return d<10000;
+      if(dwtFilter==="10-15") return d>=10000&&d<15000;
+      if(dwtFilter==="15-20") return d>=15000&&d<20000;
+      if(dwtFilter==="20-30") return d>=20000&&d<30000;
+      if(dwtFilter==="30-40") return d>=30000&&d<40000;
+      if(dwtFilter===">40") return d>=40000;
+      return true;
+    });
+  }
+
+  if(builtFilter){
+    list=list.filter(v=>{
+      const b=parseInt(v.built)||0;
+      if(builtFilter==="<2005") return b>0&&b<2005;
+      if(builtFilter==="2005-10") return b>=2005&&b<2010;
+      if(builtFilter==="2010-15") return b>=2010&&b<2015;
+      if(builtFilter==="2015-20") return b>=2015&&b<2020;
+      if(builtFilter===">2020") return b>=2020;
+      return true;
+    });
   }
 
   list=list.filter(matchesSearch);
@@ -185,12 +220,24 @@ const filtV=useMemo(()=>{
   updFilter,
   posFileDaysBack,
   superRegionFilter,
-  segmentFilter
+  segmentFilter,
+  dwtFilter,
+  builtFilter
 ]);
   // Reset page when filters change
   useEffect(()=>{setPosPage(1);},[vessels,filters,search,sortK,opFilter,bucketFilters,updFilter,posFileDaysBack,superRegionFilter]);
 
   const stats={total:vessels.length,ppt:filtV.filter(v=>isOpenPPT(v.date)).length,subs:filtV.filter(v=>v.openPort==="EMPLOYED").length};
+  const vessels14d=useMemo(()=>{
+    const cutoff=new Date();
+    cutoff.setDate(cutoff.getDate()-14);
+    cutoff.setHours(0,0,0,0);
+    return vessels.filter(v=>{
+      if(!v.updatedAt) return false;
+      const d=new Date(v.updatedAt);
+      return !isNaN(d) && d>=cutoff;
+    });
+  },[vessels]);
   const selV=sel?vessels.find(v=>v.vessel===sel):null;
   const selFixes=sel?cargoes.filter(c=>c.vessel&&c.vessel.toLowerCase()===sel.toLowerCase()):[];
   const cTokens=cSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -276,64 +323,13 @@ const filtV=useMemo(()=>{
           {tab==="pos"&&vessels.length>0&&(<button onClick={()=>setPendingDel({type:"all",id:"__ALL__",label:"ALL "+vessels.length+" vessels"})} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 10px",color:C.dim,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✕ Clear Positions</button>)}
         </div>
       </div>
-
-      {/* Main Content Container */}
       <div style={{padding:"12px 16px",maxWidth:1900,margin:"0 auto"}}>
-        {/* Professional Top Banner */}
-        <div style={{background:`linear-gradient(135deg, ${C.bg2} 0%, ${C.bg} 100%)`,borderRadius:8,padding:"16px 20px",marginBottom:16,border:`1px solid ${C.bd}`,position:"relative",overflow:"hidden"}}>
-          <div style={{position:"absolute",top:0,right:0,width:"40%",height:"100%",background:`linear-gradient(135deg, transparent 0%, ${C.blue}08 100%)`,pointerEvents:"none"}}/>
-          
-          <div style={{position:"relative",zIndex:1,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:20,flexWrap:"wrap"}}>
-            {/* LEFT: Tab Navigation */}
-            <div style={{display:"flex",gap:10,flexWrap:"wrap",flex:"1 1 auto"}}>
-              {[
-                ["pos","⚓","POSITIONS",vessels.length,C.blue],
-                ["cargo","📦","CARGOES",cargoTotal||cargoes.length,C.amber],
-                ["fix","🎯","FIXING",filtV.filter(v=>v.openPort==="EMPLOYED").length,C.purple],
-                ["matrix","🔗","MATRIX",0,C.green],
-                ["projects","🧮","PROJECTS",0,C.blue],
-                ["tce","⚡","TCE",0,C.amber],
-                ["dash","📊","DASHBOARD",0,C.green]
-              ].map(([id,icon,label,count,color])=>(
-                <button 
-                  key={id} 
-                  onClick={()=>{setTab(id);setBucketFilters(new Set());}} 
-                  style={{
-                    background:tab===id?`linear-gradient(135deg, ${color}15 0%, ${color}08 100%)`:"transparent",
-                    border:`2px solid ${tab===id?color+"88":C.bd}`,
-                    borderRadius:8,
-                    padding:"12px 18px",
-                    cursor:"pointer",
-                    transition:"all 0.2s",
-                    minWidth:mobile?0:130,
-                    flex:mobile?"1 1 calc(50% - 5px)":"0 0 auto",
-                    boxShadow:tab===id?`0 4px 12px ${color}22`:"none"
-                  }}
-                >
-                  <div style={{fontSize:24,marginBottom:4}}>{icon}</div>
-                  <div style={{fontSize:11,fontWeight:700,color:tab===id?C.tx:C.dim,textTransform:"uppercase",letterSpacing:"0.05em"}}>
-                    {label}
-                  </div>
-                  {count>0&&(
-                    <div style={{fontSize:18,fontWeight:800,color:tab===id?color:C.faint,marginTop:4}}>
-                      {count}
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-            
-            {/* RIGHT: Title Section */}
-            <div style={{textAlign:"right",minWidth:mobile?"100%":"300px"}}>
-              <div style={{fontSize:13,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.1em"}}>SIGNAL — TANKER INTELLIGENCE</div>
-              <div style={{fontSize:20,fontWeight:800,color:C.tx,marginTop:2}}>
-                {tab==="pos"?"Positions Dashboard":tab==="cargo"?"Cargo Overview":tab==="fix"?"Fixing Monitor":tab==="projects"?"Project Calculators":tab==="matrix"?"Voyage Matrix":tab==="tce"?"TCE Calculator":"Market Dashboard"}
-              </div>
-              <div style={{fontSize:12,color:C.dim,marginTop:4}}>
-                Clean products · UKC / Med / TA · {new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
-              </div>
-            </div>
-          </div>
+        <div style={{display:"flex",flexWrap:"wrap",borderBottom:"1px solid "+C.bd2,marginBottom:12,gap:mobile?"2px 0":0}}>
+          {[["pos","⚓ Pos",vessels.length],["cargo","📦 Cargo",cargoTotal||cargoes.length],["fix","🎯 Fix",0],["projects","🧮 Projects",0],["matrix","🔗 Matrix",0],["tce","⚡ TCE",0],["dash","📊 Dash",0]].map(([id,label,cnt])=>(
+            <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}} style={{fontFamily:"sans-serif",fontWeight:700,fontSize:mobile?11:12,padding:mobile?"6px 10px":"7px 16px",border:"none",background:"transparent",color:tab===id?C.blue:C.dim,borderBottom:"2px solid "+(tab===id?C.blue:"transparent"),cursor:"pointer",whiteSpace:"nowrap"}}>
+              {label}{cnt>0?(<span style={{fontSize:11,marginLeft:3,background:C.bg3,padding:"1px 5px",borderRadius:8}}>{cnt}</span>):null}
+            </button>
+          ))}
         </div>
 
         {/* ── POSITIONS ── */}
@@ -346,7 +342,7 @@ const filtV=useMemo(()=>{
               {/* LEFT: Parse + Fixing (32%) */}
               <div style={{width:mobile?"100%":"32%",display:"flex",flexDirection:"column",gap:10}}>
   <div><ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/></div>
-  <div><FixingWindow vessels={filtV} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} /></div>
+  <div><FixingWindow vessels={vessels14d} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} /></div>
 </div>
  
               {/* CENTER: Rate Matrix (34%) */}
@@ -381,8 +377,8 @@ const filtV=useMemo(()=>{
                   {!mobile&&(
                     <div style={{width:"32%",height:200}}>
                       <OpeningBreakdown
-                        vessels={vessels}
-                        filteredVessels={filtV}
+                        vessels={vessels14d.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+                        filteredVessels={filtV.filter(v=>vesselsTodayUpdated.has(v.vessel))}
                         bucketFilters={bucketFilters}
                         onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
                         fillHeight={false}
@@ -390,7 +386,7 @@ const filtV=useMemo(()=>{
                     </div>
                   )}
 
-                  {/* CENTER: File Date + Filters (34%) */}
+                  {/* CENTER: Filters (34%) - same height as PPT */}
                   <div style={{width:mobile?"100%":"34%",display:"flex",flexDirection:"column",gap:6}}>
 
                     {selVessels.size>0&&(
@@ -415,102 +411,94 @@ const filtV=useMemo(()=>{
                       </div>
                     )}
 
-                    {/* FILE DATE WINDOW */}
-                    <div style={{display:"flex",flexDirection:"column",gap:8,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>
-                          File Date Window
-                        </span>
-                        <span style={{fontSize:12,color:C.tx,fontWeight:700}}>
-                          {posFileDaysBack>=90
-                            ? "Showing all positions"
-                            : `${fmtShortDate(new Date(new Date().setDate(new Date().getDate()-posFileDaysBack)))} → ${fmtShortDate(new Date())}`}
-                        </span>
-                      </div>
+                    {/* UNIFIED FILTER PANEL */}
+                    <div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 12px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,height:200,boxSizing:"border-box",overflowY:"auto",flex:1}}>
 
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <span style={{fontSize:11,color:C.dim,width:70}}>From</span>
-                        <input
-                          type="range"
-                          min="0"
-                          max="90"
-                          step="1"
-                          value={posFileDaysBack}
-                          onChange={e=>{setPosFileDaysBack(Number(e.target.value));setPosPage(1);}}
-                          style={{flex:1}}
-                        />
-                        <span style={{fontSize:11,color:C.dim,width:80,textAlign:"right"}}>
-                          {posFileDaysBack===90?"All":posFileDaysBack===0?"Today only":posFileDaysBack+"d"}
-                        </span>
-                      </div>
-
-                      <span style={{fontSize:11,color:C.faint}}>Right edge is always today</span>
-                    </div>
-
-                    {/* STATUS, REGION, UPDATED filters */}
-                    <div style={{display:"flex",flexDirection:"column",gap:6,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
-                      {FILTER_GROUPS.map(({label,items})=>(
-                        <div key={label} style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-                          <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>{label}</span>
-                          {items.map(([f,l])=>(
-                            <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
-                          ))}
-                          {filters.size?(<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:4}}>✕ Clear</button>):null}
-                        </div>
-                      ))}
-
+                      {/* Status */}
                       <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:40}}>Updated</span>
-                        {[["","All"],["today","Today"],["week","This week"]].map(([v,l])=>(
+                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>Status</span>
+                        {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Hide Emp"]].map(([f,l])=>(
+                          <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
+                        ))}
+                        {filters.size>0&&<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+                      </div>
+
+                      {/* Updated */}
+                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>Updated</span>
+                        {[["","All"],["today","Today"],["week","This wk"]].map(([v,l])=>(
                           <button key={v} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&v!=="")}>{l}</button>
                         ))}
                       </div>
 
-                      {/* SEGMENT and SUPER REGION */}
-                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Segment</span>
-                        <select
-                          value={segmentFilter}
-                          onChange={e=>{setSegmentFilter(e.target.value);setPosPage(1);}}
-                          style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 8px",outline:"none"}}
-                        >
-                          <option value="">All</option>
-                          {[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort().map(s=><option key={s} value={s}>{s}</option>)}
-                        </select>
-
-                        <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginLeft:8}}>
-                          Super Region
-                        </span>
-                        <select
-                          value={superRegionFilter}
-                          onChange={e=>setSuperRegionFilter(e.target.value)}
-                          style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 8px",outline:"none"}}
-                        >
-                          {superRegionOptions.map(r=>(
-                            <option key={r} value={r}>{r}</option>
-                          ))}
-                        </select>
-
-                        {superRegionFilter!=="ALL" && (
-                          <button
-                            onClick={()=>setSuperRegionFilter("ALL")}
-                            style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,color:C.dim,fontSize:12,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit"}}
-                          >
-                            ✕
-                          </button>
-                        )}
+                      {/* Region */}
+                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>Region</span>
+                        {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(
+                          <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
+                        ))}
                       </div>
+
+                      {/* Super Region */}
+                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>S.Region</span>
+                        {superRegionOptions.filter(r=>r!=="ALL").map(r=>(
+                          <button key={r} onClick={e=>{
+                            if(e.ctrlKey||e.metaKey){
+                              setSuperRegionFilter(prev=>{const n=new Set(prev);n.has(r)?n.delete(r):n.add(r);return n;});
+                            } else {
+                              setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));
+                            }
+                          }} style={fb(superRegionFilter.has(r))}>{r}</button>
+                        ))}
+                        {superRegionFilter.size>0&&<button onClick={()=>setSuperRegionFilter(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+                      </div>
+
+                      {/* Segment */}
+                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>Segment</span>
+                        {(()=>{const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];const segs=[...new Set(vessels.map(v=>v.segment).filter(Boolean))];return segs.sort((a,b)=>{const ai=ORDER.indexOf(a);const bi=ORDER.indexOf(b);return(ai===-1?99:ai)-(bi===-1?99:bi);}).map(s=>(
+                          <button key={s} onClick={e=>{
+                            if(e.ctrlKey||e.metaKey){
+                              setSegmentFilter(prev=>{const n=new Set(prev);n.has(s)?n.delete(s):n.add(s);return n;});
+                            } else {
+                              setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));
+                            }
+                            setPosPage(1);
+                          }} style={fb(segmentFilter.has(s))}>{s}</button>
+                        ));})()}
+                        {segmentFilter.size>0&&<button onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+                      </div>
+
+                      {/* DWT */}
+                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>DWT</span>
+                        {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(
+                          <button key={v} onClick={()=>{setDwtFilter(dwtFilter===v?"":v);setPosPage(1);}} style={fb(dwtFilter===v)}>{l}</button>
+                        ))}
+                        {dwtFilter&&<button onClick={()=>{setDwtFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+                      </div>
+
+                      {/* Built */}
+                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",minWidth:52}}>Built</span>
+                        {[["<2005","<2005"],["2005-10","05-10"],["2010-15","10-15"],["2015-20","15-20"],[">2020",">2020"]].map(([v,l])=>(
+                          <button key={v} onClick={()=>{setBuiltFilter(builtFilter===v?"":v);setPosPage(1);}} style={fb(builtFilter===v)}>{l}</button>
+                        ))}
+                        {builtFilter&&<button onClick={()=>{setBuiltFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+                      </div>
+
                     </div>
                   </div>
 
-                  {/* RIGHT: Ask AI (34%) - matches PPT height */}
+                  {/* RIGHT: Ask AI (34%) - fills remaining height */}
 {!mobile&&(
-  <div style={{width:"34%"}}>
-    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+  <div style={{width:"34%",display:"flex",flexDirection:"column",alignSelf:"stretch"}}>
+    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",flex:1}}>
       <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
         <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
       </div>
-      <div style={{padding:"10px"}}>
+      <div style={{padding:"10px",flex:1,display:"flex",flexDirection:"column"}}>
         <RightPanel vessels={vessels} cargoes={cargoes}/>
       </div>
     </div>
@@ -551,6 +539,7 @@ const filtV=useMemo(()=>{
                         <col style={{width:colWidthsV.Vessel||130}}/>
                         <col style={{width:colWidthsV.Built||50}}/>
                         <col style={{width:colWidthsV.DWT||58}}/>
+                        <col style={{width:colWidthsV.Coating||60}}/>
                         <col style={{width:colWidthsV.LOA||50}}/>
                         <col style={{width:colWidthsV.Beam||50}}/>
                         <col style={{width:colWidthsV.CBM||58}}/>
@@ -567,14 +556,15 @@ const filtV=useMemo(()=>{
                           <th style={{...th,width:colWidthsV["Vessel"]||120,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("vessel")}><span style={{userSelect:"none",paddingRight:6}}>Vessel{sortK==="vessel"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Vessel"]||120;const mv=m=>setColWidthsV(p=>({...p,"Vessel":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["Built"]||48,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("built")}><span style={{userSelect:"none",paddingRight:6}}>Built{sortK==="built"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Built"]||48;const mv=m=>setColWidthsV(p=>({...p,"Built":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["DWT"]||55,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("dwt")}><span style={{userSelect:"none",paddingRight:6}}>DWT{sortK==="dwt"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["DWT"]||55;const mv=m=>setColWidthsV(p=>({...p,"DWT":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
+                          <th style={{...th,width:colWidthsV["Coating"]||60,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("coating")}><span style={{userSelect:"none",paddingRight:6}}>Coating{sortK==="coating"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Coating"]||60;const mv=m=>setColWidthsV(p=>({...p,"Coating":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["LOA"]||48,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("loa")}><span style={{userSelect:"none",paddingRight:6}}>LOA{sortK==="loa"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["LOA"]||48;const mv=m=>setColWidthsV(p=>({...p,"LOA":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["Beam"]||46,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("beam")}><span style={{userSelect:"none",paddingRight:6}}>Beam{sortK==="beam"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Beam"]||46;const mv=m=>setColWidthsV(p=>({...p,"Beam":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["CBM"]||55,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("cbm")}><span style={{userSelect:"none",paddingRight:6}}>CBM{sortK==="cbm"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["CBM"]||55;const mv=m=>setColWidthsV(p=>({...p,"CBM":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["Date"]||68,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("date")}><span style={{userSelect:"none",paddingRight:6}}>Date{sortK==="date"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Date"]||68;const mv=m=>setColWidthsV(p=>({...p,"Date":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["OpenPort"]||100,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("openPort")}><span style={{userSelect:"none",paddingRight:6}}>Open Port{sortK==="openPort"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["OpenPort"]||100;const mv=m=>setColWidthsV(p=>({...p,"OpenPort":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["Comment"]||120,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("comment")}><span style={{userSelect:"none",paddingRight:6}}>Comment{sortK==="comment"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Comment"]||120;const mv=m=>setColWidthsV(p=>({...p,"Comment":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                          <th style={{...th,width:colWidthsV["FileDate"]||90,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("fileDate")}>
-                            <span style={{userSelect:"none",paddingRight:6}}>FILE DATE{sortK==="fileDate"?(sortD>0?" ↑":" ↓"):""}</span>
+                          <th style={{...th,width:colWidthsV["FileDate"]||90,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("updatedAt")}>
+                            <span style={{userSelect:"none",paddingRight:6}}>UPDATED{sortK==="updatedAt"?(sortD>0?" ↑":" ↓"):""}</span>
                             <span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["FileDate"]||90;const mv=m=>setColWidthsV(p=>({...p,"FileDate":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/>
                           </th>
                           <th style={{...th,width:18,minWidth:18,maxWidth:18,textAlign:"right",paddingRight:2}}></th>
@@ -588,17 +578,18 @@ const filtV=useMemo(()=>{
                           return(
                             <tr key={v.vessel} style={{background:bg,outline:isSel?"1px solid rgba(88,166,255,.2)":"1px solid transparent",cursor:"pointer"}} onClick={()=>{setSel(sel===v.vessel?null:v.vessel);setSelectedAISVessels([v.vessel]);}}>
                               <td style={{...td2,width:28,padding:"0 2px",textAlign:"center",cursor:"pointer"}} onClick={e=>{e.stopPropagation();setSelVessels(p=>{const n=new Set(p);n.has(v.vessel)?n.delete(v.vessel):n.add(v.vessel);return n;})}}><span style={{fontSize:12,color:selVessels.has(v.vessel)?"#4fc3f7":C.faint}}>{selVessels.has(v.vessel)?"[✓]":"[ ]"}</span></td>
-                              <EC value={v.operator} color={C.purple} placeholder="Operator" onSave={val=>onUpdateV(v.vessel,"operator",val)} data-vid={v.vessel+"-op"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-vessel"]`)?.click()} onShiftTab={()=>{const prev=filtV[i-1];if(prev)document.querySelector(`[data-vid="${prev.vessel}-comment"]`)?.click();}} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-op"]`)?.click();}}/>
-                              <EC value={toTCase(v.vessel)} color={C.blue} bold={true} placeholder="Vessel" onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)} data-vid={v.vessel+"-vessel"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-op"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-vessel"]`)?.click();}}/>
+                              <EC value={v.operator} color={C.dim} placeholder="Operator" onSave={val=>onUpdateV(v.vessel,"operator",val)} data-vid={v.vessel+"-op"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-vessel"]`)?.click()} onShiftTab={()=>{const prev=filtV[i-1];if(prev)document.querySelector(`[data-vid="${prev.vessel}-comment"]`)?.click();}} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-op"]`)?.click();}}/>
+                              <EC value={toTCase(v.vessel)} color={"#79c0ff"} bold={true} placeholder="Vessel" onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)} data-vid={v.vessel+"-vessel"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-op"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-vessel"]`)?.click();}}/>
                               <td style={{...td2,color:C.dim,whiteSpace:"nowrap",cursor:"default",overflow:"hidden",maxWidth:0}} title={v.built||""}>{v.built||""}</td>
-                              <td style={{...td2,color:C.amber,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={fmtN(v.dwt)}>{fmtN(v.dwt)}</td>
+                              <td style={{...td2,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={fmtN(v.dwt)}>{fmtN(v.dwt)}</td>
+                              <td style={{...td2,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.coating||""}>{v.coating||""}</td>
                               <td style={{...td2,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.loa||""}>{v.loa||""}</td>
                               <td style={{...td2,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.beam||""}>{v.beam||""}</td>
                               <td style={{...td2,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={fmtN(v.cbm)}>{fmtN(v.cbm)}</td>
-                              <EC value={v.date} color={ppt?C.green:"#58a6ff"} placeholder="Date" onSave={val=>{const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];let fmt=val.trim();const m1=fmt.match(/^(\d{1,2})[\/\-](\d{1,2})$/);if(m1){const mo=parseInt(m1[2])-1;if(mo>=0&&mo<12)fmt=parseInt(m1[1])+" "+MON[mo];}else{const m2=fmt.match(/^(\d{1,2})\s+([A-Za-z]{3})/i);if(m2){const mi=MON.findIndex(m=>m.toLowerCase()===m2[2].toLowerCase().slice(0,3));if(mi>=0)fmt=parseInt(m2[1])+" "+MON[mi];}}onUpdateV(v.vessel,"date",fmt);}} data-vid={v.vessel+"-date"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-vessel"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-date"]`)?.click();}}/>
-                              <EC value={v.openPort} color={v.openPort==="EMPLOYED"?C.purple:C.amber} placeholder="Port" onSave={val=>onUpdateV(v.vessel,"openPort",val)} data-vid={v.vessel+"-port"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-comment"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-port"]`)?.click();}}/>
+                              <EC value={v.date} color={ppt?"#a8e6a3":"#79c0ff"} placeholder="Date" onSave={val=>{const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];let fmt=val.trim();const m1=fmt.match(/^(\d{1,2})[\/\-](\d{1,2})$/);if(m1){const mo=parseInt(m1[2])-1;if(mo>=0&&mo<12)fmt=parseInt(m1[1])+" "+MON[mo];}else{const m2=fmt.match(/^(\d{1,2})\s+([A-Za-z]{3})/i);if(m2){const mi=MON.findIndex(m=>m.toLowerCase()===m2[2].toLowerCase().slice(0,3));if(mi>=0)fmt=parseInt(m2[1])+" "+MON[mi];}}onUpdateV(v.vessel,"date",fmt);}} data-vid={v.vessel+"-date"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-vessel"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-date"]`)?.click();}}/>
+                              <EC value={v.openPort} color={v.openPort==="EMPLOYED"?C.purple:"#79c0ff"} placeholder="Port" onSave={val=>onUpdateV(v.vessel,"openPort",val)} data-vid={v.vessel+"-port"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-comment"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-port"]`)?.click();}}/>
                               <EC value={v.comment} color={C.dim} placeholder="Comment" onSave={val=>onUpdateV(v.vessel,"comment",val)} data-vid={v.vessel+"-comment"} onTab={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-op"]`)?.click();}} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-comment"]`)?.click();}}/>
-                              <td style={{...td2,fontSize:12,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",width:colWidthsV.FileDate||60,textAlign:"center"}}>{v.fileDate?new Date(v.fileDate).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
+                              <td style={{...td2,fontSize:12,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",width:colWidthsV.FileDate||60,textAlign:"center"}}>{v.updatedAt?new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
                               <td style={{...td2,width:18,minWidth:18,maxWidth:18,textAlign:"center",padding:0}} onClick={e=>e.stopPropagation()}>
                                 <button onClick={(e)=>{e.stopPropagation();setPendingDel({type:"vessel",id:v.vessel,label:v.vessel});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:10,padding:"0 2px",opacity:0.7}} title="Delete">✕</button>
                               </td>
@@ -794,8 +785,7 @@ const filtV=useMemo(()=>{
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
                 :<table style={{width:"100%",borderCollapse:"collapse",fontSize:12,tableLayout:"fixed",fontFamily:"sans-serif"}}>
-                  <thead>
-                        <tr style={{background:"#111f35"}}>
+                  <thead><tr>
                     <th style={{...th,width:28,minWidth:28,padding:"4px 2px",cursor:"pointer",textAlign:"center"}} onClick={()=>{if(selCargoes.size===filtC.length)setSelCargoes(new Set());else setSelCargoes(new Set(filtC.map(c=>c.id)));}} title={selCargoes.size>0?"Deselect all":"Select all"}><span style={{color:selCargoes.size>0?"#4fc3f7":C.faint,fontSize:12}}>{selCargoes.size>0?"[✓]":"[ ]"}</span></th>
                     <th style={{...th,width:colWidthsC["Status"]||60,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Status"){setCsortD(d=>d*-1);}else{setCsortK("Status");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Status{cSortK==="Status"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Status"]||60;const mv=m=>setColWidthsC(p=>({...p,"Status":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                     <th style={{...th,width:colWidthsC["Vessel"]||130,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Vessel"){setCsortD(d=>d*-1);}else{setCsortK("Vessel");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Vessel{cSortK==="Vessel"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Vessel"]||130;const mv=m=>setColWidthsC(p=>({...p,"Vessel":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
