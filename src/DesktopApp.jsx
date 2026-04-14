@@ -13,6 +13,7 @@ import { loadHistory } from "./supabaseHelpers";
 import { OpeningBreakdown, FixingWindow, ExportPanel } from "./PositionsHelpers";
 import IntelVault from "./IntelVault";
 import AISMap from "./AISMap";
+import MatrixTable from "./components/ui/MatrixTable";
 
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB}){
   const [tab,setTab]=useState("pos");
@@ -82,7 +83,39 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   };
   const tableStyle={width:mobile?"max-content":"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12,tableLayout:"fixed",fontFamily:"sans-serif"};
   const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
-  
+  const posColumns = [
+  { key: "select", label: "", align: "center" },
+  { key: "operator", label: "Operator" },
+  { key: "vessel", label: "Vessel" },
+  { key: "built", label: "Built", align: "right" },
+  { key: "dwt", label: "DWT", align: "right" },
+  { key: "coating", label: "Coating" },
+  { key: "loa", label: "LOA", align: "right" },
+  { key: "beam", label: "Beam", align: "right" },
+  { key: "cbm", label: "CBM", align: "right" },
+  { key: "date", label: "Date" },
+  { key: "openPort", label: "Open Port" },
+  { key: "comment", label: "Comment" },
+  { key: "updatedAt", label: "Updated" },
+  { key: "delete", label: "", align: "center" },
+];
+
+const cargoColumns = [
+  { key: "select", label: "", align: "center" },
+  { key: "status", label: "Status" },
+  { key: "vessel", label: "Vessel" },
+  { key: "charterer", label: "Charterer" },
+  { key: "qty", label: "Qty", align: "right" },
+  { key: "cargo", label: "Cargo" },
+  { key: "load", label: "Load" },
+  { key: "disch", label: "Disch" },
+  { key: "from", label: "From" },
+  { key: "to", label: "To" },
+  { key: "freight", label: "Freight", align: "right" },
+  { key: "comment", label: "Comment" },
+  { key: "updated", label: "Updated" },
+  { key: "delete", label: "", align: "center" },
+];
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
   const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
   const fb=on=>({fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid "+(on?C.blue:C.bd),background:on?"rgba(88,166,255,.12)":"transparent",color:on?C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
@@ -582,72 +615,97 @@ const filtV=useMemo(()=>{
                 {/* Vessel Table */}
                 <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
                   <div style={tableWrap}>
-                    <table style={tableStyle}>
-                      <colgroup>
-                        <col style={{width:28}}/>
-                        <col style={{width:colWidthsV.Operator||130}}/>
-                        <col style={{width:colWidthsV.Vessel||130}}/>
-                        <col style={{width:colWidthsV.Built||50}}/>
-                        <col style={{width:colWidthsV.DWT||58}}/>
-                        <col style={{width:colWidthsV.Coating||60}}/>
-                        <col style={{width:colWidthsV.LOA||50}}/>
-                        <col style={{width:colWidthsV.Beam||50}}/>
-                        <col style={{width:colWidthsV.CBM||58}}/>
-                        <col style={{width:colWidthsV.Date||72}}/>
-                        <col style={{width:colWidthsV.OpenPort||110}}/>
-                        <col style={{width:colWidthsV.Comment||130}}/>
-                        <col style={{width:colWidthsV.FileDate||60}}/>
-                        <col style={{width:18}}/>
-                      </colgroup>
-                      <thead>
-                        <tr style={{background:C.bg4}}>
-                          <th style={{...th2,width:28,minWidth:28,padding:"4px 2px",cursor:"pointer",textAlign:"center"}} onClick={()=>{if(selVessels.size===filtV.length)setSelVessels(new Set());else setSelVessels(new Set(filtV.map(v=>v.vessel)));}} title={selVessels.size>0?"Deselect all":"Select all"}><span style={{color:selVessels.size>0?"#4fc3f7":C.faint,fontSize:12}}>{selVessels.size>0?"[✓]":"[ ]"}</span></th>
-                          <th style={{...th2,width:colWidthsV["Operator"]||120,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("operator")}><span style={{userSelect:"none",paddingRight:6}}>Operator{sortK==="operator"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Operator"]||120;const mv=m=>setColWidthsV(p=>({...p,"Operator":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                          <th style={{...th2,width:colWidthsV["Vessel"]||120,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("vessel")}><span style={{userSelect:"none",paddingRight:6}}>Vessel{sortK==="vessel"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Vessel"]||120;const mv=m=>setColWidthsV(p=>({...p,"Vessel":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                          <th style={{...th2,width:colWidthsV["Built"]||48,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("built")}><span style={{userSelect:"none",paddingRight:6}}>Built{sortK==="built"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Built"]||48;const mv=m=>setColWidthsV(p=>({...p,"Built":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                          <th style={{...th2,width:colWidthsV["DWT"]||55,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("dwt")}><span style={{userSelect:"none",paddingRight:6}}>DWT{sortK==="dwt"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["DWT"]||55;const mv=m=>setColWidthsV(p=>({...p,"DWT":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                          <th style={{...th2,width:colWidthsV["Coating"]||60,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("coating")}><span style={{userSelect:"none",paddingRight:6}}>Coating{sortK==="coating"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Coating"]||60;const mv=m=>setColWidthsV(p=>({...p,"Coating":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                          <th style={{...th2,width:colWidthsV["LOA"]||48,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("loa")}><span style={{userSelect:"none",paddingRight:6}}>LOA{sortK==="loa"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["LOA"]||48;const mv=m=>setColWidthsV(p=>({...p,"LOA":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                          <th style={{...th2,width:colWidthsV["Beam"]||46,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("beam")}><span style={{userSelect:"none",paddingRight:6}}>Beam{sortK==="beam"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Beam"]||46;const mv=m=>setColWidthsV(p=>({...p,"Beam":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                          <th style={{...th2,width:colWidthsV["CBM"]||55,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("cbm")}><span style={{userSelect:"none",paddingRight:6}}>CBM{sortK==="cbm"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["CBM"]||55;const mv=m=>setColWidthsV(p=>({...p,"CBM":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                          <th style={{...th2,width:colWidthsV["Date"]||68,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("date")}><span style={{userSelect:"none",paddingRight:6}}>Date{sortK==="date"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Date"]||68;const mv=m=>setColWidthsV(p=>({...p,"Date":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                          <th style={{...th2,width:colWidthsV["OpenPort"]||100,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("openPort")}><span style={{userSelect:"none",paddingRight:6}}>Open Port{sortK==="openPort"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["OpenPort"]||100;const mv=m=>setColWidthsV(p=>({...p,"OpenPort":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                          <th style={{...th2,width:colWidthsV["Comment"]||120,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("comment")}><span style={{userSelect:"none",paddingRight:6}}>Comment{sortK==="comment"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Comment"]||120;const mv=m=>setColWidthsV(p=>({...p,"Comment":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                          <th style={{...th2,width:colWidthsV["FileDate"]||90,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("updatedAt")}>
-                            <span style={{userSelect:"none",paddingRight:6}}>UPDATED{sortK==="updatedAt"?(sortD>0?" ↑":" ↓"):""}</span>
-                            <span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["FileDate"]||90;const mv=m=>setColWidthsV(p=>({...p,"FileDate":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/>
-                          </th>
-                          <th style={{...th2,width:18,minWidth:18,maxWidth:18,textAlign:"right",paddingRight:2}}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filtV.slice(0, posPage*POS_PAGE_SIZE).map((v,i)=>{
-                          const isSel=sel===v.vessel;
-                          const ppt=isOpenPPT(v.date);
-                          const bg=isSel?"rgba(88,166,255,.10)":rowBg(i);
-                          return(
-                            <tr key={v.vessel} style={{background:bg,outline:isSel?"1px solid rgba(88,166,255,.2)":"1px solid transparent",cursor:"pointer"}} onClick={()=>{setSel(sel===v.vessel?null:v.vessel);setSelectedAISVessels([v.vessel]);}}>
-                              <td style={{...td2,width:28,padding:"0 2px",textAlign:"center",cursor:"pointer"}} onClick={e=>{e.stopPropagation();setSelVessels(p=>{const n=new Set(p);n.has(v.vessel)?n.delete(v.vessel):n.add(v.vessel);return n;})}}><span style={{fontSize:12,color:selVessels.has(v.vessel)?"#4fc3f7":C.faint}}>{selVessels.has(v.vessel)?"[✓]":"[ ]"}</span></td>
-                              <EC value={v.operator} color={C.dim} placeholder="Operator" onSave={val=>onUpdateV(v.vessel,"operator",val)} data-vid={v.vessel+"-op"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-vessel"]`)?.click()} onShiftTab={()=>{const prev=filtV[i-1];if(prev)document.querySelector(`[data-vid="${prev.vessel}-comment"]`)?.click();}} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-op"]`)?.click();}}/>
-                              <EC value={toTCase(v.vessel)} color={"#79c0ff"} bold={true} placeholder="Vessel" onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)} data-vid={v.vessel+"-vessel"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-op"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-vessel"]`)?.click();}}/>
-                              <td style={{...td2,color:C.dim,whiteSpace:"nowrap",cursor:"default",overflow:"hidden",maxWidth:0}} title={v.built||""}>{v.built||""}</td>
-                              <td style={{...td2,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={fmtN(v.dwt)}>{fmtN(v.dwt)}</td>
-                              <td style={{...td2,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.coating||""}>{v.coating||""}</td>
-                              <td style={{...td2,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.loa||""}>{v.loa||""}</td>
-                              <td style={{...td2,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={v.beam||""}>{v.beam||""}</td>
-                              <td style={{...td2,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",maxWidth:0}} title={fmtN(v.cbm)}>{fmtN(v.cbm)}</td>
-                              <EC value={v.date} color={ppt?"#a8e6a3":"#79c0ff"} placeholder="Date" onSave={val=>{const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];let fmt=val.trim();const m1=fmt.match(/^(\d{1,2})[\/\-](\d{1,2})$/);if(m1){const mo=parseInt(m1[2])-1;if(mo>=0&&mo<12)fmt=parseInt(m1[1])+" "+MON[mo];}else{const m2=fmt.match(/^(\d{1,2})\s+([A-Za-z]{3})/i);if(m2){const mi=MON.findIndex(m=>m.toLowerCase()===m2[2].toLowerCase().slice(0,3));if(mi>=0)fmt=parseInt(m2[1])+" "+MON[mi];}}onUpdateV(v.vessel,"date",fmt);}} data-vid={v.vessel+"-date"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-vessel"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-date"]`)?.click();}}/>
-                              <EC value={v.openPort} color={v.openPort==="EMPLOYED"?C.purple:"#79c0ff"} placeholder="Port" onSave={val=>onUpdateV(v.vessel,"openPort",val)} data-vid={v.vessel+"-port"} onTab={()=>document.querySelector(`[data-vid="${v.vessel}-comment"]`)?.click()} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-date"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-port"]`)?.click();}}/>
-                              <EC value={v.comment} color={C.dim} placeholder="Comment" onSave={val=>onUpdateV(v.vessel,"comment",val)} data-vid={v.vessel+"-comment"} onTab={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-op"]`)?.click();}} onShiftTab={()=>document.querySelector(`[data-vid="${v.vessel}-port"]`)?.click()} onEnter={()=>{const next=filtV[i+1];if(next)document.querySelector(`[data-vid="${next.vessel}-comment"]`)?.click();}}/>
-                              <td style={{...td2,fontSize:12,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",width:colWidthsV.FileDate||60,textAlign:"center"}}>{v.updatedAt?new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
-                              <td style={{...td2,width:18,minWidth:18,maxWidth:18,textAlign:"center",padding:0}} onClick={e=>e.stopPropagation()}>
-                                <button onClick={(e)=>{e.stopPropagation();setPendingDel({type:"vessel",id:v.vessel,label:v.vessel});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:10,padding:"0 2px",opacity:0.7}} title="Delete">✕</button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                    <MatrixTable
+  columns={posColumns}
+  data={filtV.slice(0, posPage * POS_PAGE_SIZE)}
+  keyField="vessel"
+  renderRow={(v, td, i) => {
+    const isSel = sel === v.vessel;
+    const ppt = isOpenPPT(v.date);
+    const rowStyle = {
+      background: isSel ? "rgba(88,166,255,.10)" : rowBg(i),
+      outline: isSel ? "1px solid rgba(88,166,255,.2)" : "1px solid transparent",
+      cursor: "pointer"
+    };
+
+    return (
+      <tr
+        key={v.vessel}
+        style={rowStyle}
+        onClick={() => {
+          setSel(sel === v.vessel ? null : v.vessel);
+          setSelectedAISVessels([v.vessel]);
+        }}
+      >
+        <td style={{ ...td, width: 28, textAlign: "center", padding: "0 2px" }}
+            onClick={e => {
+              e.stopPropagation();
+              setSelVessels(p => {
+                const n = new Set(p);
+                n.has(v.vessel) ? n.delete(v.vessel) : n.add(v.vessel);
+                return n;
+              });
+            }}>
+          <span style={{ fontSize: 12, color: selVessels.has(v.vessel) ? "#4fc3f7" : C.faint }}>
+            {selVessels.has(v.vessel) ? "[✓]" : "[ ]"}
+          </span>
+        </td>
+
+        <EC value={v.operator} color={C.dim} placeholder="Operator" onSave={val=>onUpdateV(v.vessel,"operator",val)} />
+        <EC value={toTCase(v.vessel)} color={"#79c0ff"} bold={true} placeholder="Vessel" onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)} />
+
+        <td style={{ ...td, textAlign: "right", color: C.dim }}>{v.built || ""}</td>
+        <td style={{ ...td, textAlign: "right", color: C.dim }}>{fmtN(v.dwt)}</td>
+        <td style={{ ...td, color: C.dim }}>{v.coating || ""}</td>
+        <td style={{ ...td, textAlign: "right", color: C.dim }}>{v.loa || ""}</td>
+        <td style={{ ...td, textAlign: "right", color: C.dim }}>{v.beam || ""}</td>
+        <td style={{ ...td, textAlign: "right", color: C.dim }}>{fmtN(v.cbm)}</td>
+
+        <EC
+          value={v.date}
+          color={ppt ? "#a8e6a3" : "#79c0ff"}
+          placeholder="Date"
+          onSave={val => {
+            const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            let fmt=val.trim();
+            const m1=fmt.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+            if(m1){
+              const mo=parseInt(m1[2])-1;
+              if(mo>=0&&mo<12) fmt=parseInt(m1[1])+" "+MON[mo];
+            } else {
+              const m2=fmt.match(/^(\d{1,2})\s+([A-Za-z]{3})/i);
+              if(m2){
+                const mi=MON.findIndex(m=>m.toLowerCase()===m2[2].toLowerCase().slice(0,3));
+                if(mi>=0) fmt=parseInt(m2[1])+" "+MON[mi];
+              }
+            }
+            onUpdateV(v.vessel,"date",fmt);
+          }}
+        />
+
+        <EC value={v.openPort} color={v.openPort==="EMPLOYED"?C.purple:"#79c0ff"} placeholder="Port" onSave={val=>onUpdateV(v.vessel,"openPort",val)} />
+        <EC value={v.comment} color={C.dim} placeholder="Comment" onSave={val=>onUpdateV(v.vessel,"comment",val)} />
+
+        <td style={{ ...td, fontSize: 12, color: C.faint, textAlign: "center" }}>
+          {v.updatedAt ? new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
+        </td>
+
+        <td style={{ ...td, width: 18, textAlign: "center", padding: 0 }} onClick={e=>e.stopPropagation()}>
+          <button
+            onClick={(e)=>{
+              e.stopPropagation();
+              setPendingDel({type:"vessel",id:v.vessel,label:v.vessel});
+            }}
+            style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:10,padding:"0 2px",opacity:0.7}}
+            title="Delete"
+          >
+            ✕
+          </button>
+        </td>
+      </tr>
+    );
+  }}
+/>
                   </div>
 
                   {/* Side panel */}
@@ -834,83 +892,70 @@ const filtV=useMemo(()=>{
             <div style={tableWrap}>
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
-                :<table style={{...tableStyle,width:"100%"}}>
-                  <thead><tr>
-                    <th style={{...th2,width:28,minWidth:28,padding:"4px 2px",cursor:"pointer",textAlign:"center"}} onClick={()=>{if(selCargoes.size===filtC.length)setSelCargoes(new Set());else setSelCargoes(new Set(filtC.map(c=>c.id)));}} title={selCargoes.size>0?"Deselect all":"Select all"}><span style={{color:selCargoes.size>0?"#4fc3f7":C.faint,fontSize:12}}>{selCargoes.size>0?"[✓]":"[ ]"}</span></th>
-                    <th style={{...th2,width:colWidthsC["Status"]||60,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Status"){setCsortD(d=>d*-1);}else{setCsortK("Status");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Status{cSortK==="Status"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Status"]||60;const mv=m=>setColWidthsC(p=>({...p,"Status":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                    <th style={{...th2,width:colWidthsC["Vessel"]||130,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Vessel"){setCsortD(d=>d*-1);}else{setCsortK("Vessel");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Vessel{cSortK==="Vessel"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Vessel"]||130;const mv=m=>setColWidthsC(p=>({...p,"Vessel":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                    <th style={{...th2,width:colWidthsC["Charterer"]||110,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Charterer"){setCsortD(d=>d*-1);}else{setCsortK("Charterer");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Charterer{cSortK==="Charterer"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Charterer"]||110;const mv=m=>setColWidthsC(p=>({...p,"Charterer":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                    <th style={{...th2,width:colWidthsC["Qty"]||55,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Qty"){setCsortD(d=>d*-1);}else{setCsortK("Qty");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Qty{cSortK==="Qty"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Qty"]||55;const mv=m=>setColWidthsC(p=>({...p,"Qty":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                    <th style={{...th2,width:colWidthsC["Cargo"]||80,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Cargo"){setCsortD(d=>d*-1);}else{setCsortK("Cargo");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Cargo{cSortK==="Cargo"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Cargo"]||80;const mv=m=>setColWidthsC(p=>({...p,"Cargo":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                    <th style={{...th2,width:colWidthsC["Load"]||100,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Load"){setCsortD(d=>d*-1);}else{setCsortK("Load");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Load{cSortK==="Load"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Load"]||100;const mv=m=>setColWidthsC(p=>({...p,"Load":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                    <th style={{...th2,width:colWidthsC["Disch"]||100,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Disch"){setCsortD(d=>d*-1);}else{setCsortK("Disch");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Disch{cSortK==="Disch"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Disch"]||100;const mv=m=>setColWidthsC(p=>({...p,"Disch":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                    <th style={{...th2,width:colWidthsC["LaycanStart"]||90,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="LaycanStart"){setCsortD(d=>d*-1);}else{setCsortK("LaycanStart");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>From{cSortK==="LaycanStart"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["LaycanStart"]||90;const mv=m=>setColWidthsC(p=>({...p,"LaycanStart":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                    <th style={{...th2,width:colWidthsC["LaycanEnd"]||90,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="LaycanEnd"){setCsortD(d=>d*-1);}else{setCsortK("LaycanEnd");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>To{cSortK==="LaycanEnd"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["LaycanEnd"]||90;const mv=m=>setColWidthsC(p=>({...p,"LaycanEnd":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                    <th style={{...th2,width:colWidthsC["Freight"]||90,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Freight"){setCsortD(d=>d*-1);}else{setCsortK("Freight");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Freight{cSortK==="Freight"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Freight"]||90;const mv=m=>setColWidthsC(p=>({...p,"Freight":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                    <th style={{...th2,width:colWidthsC["Comment"]||130,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Comment"){setCsortD(d=>d*-1);}else{setCsortK("Comment");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Comment{cSortK==="Comment"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Comment"]||130;const mv=m=>setColWidthsC(p=>({...p,"Comment":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                    <th style={{...th2,width:colWidthsC["Updated"]||88,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Updated"){setCsortD(d=>d*-1);}else{setCsortK("Updated");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Updated{cSortK==="Updated"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Updated"]||88;const mv=m=>setColWidthsC(p=>({...p,"Updated":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
-                    <th style={{...th2,width:26,minWidth:26,padding:"4px 2px"}}></th>
-                  </tr></thead>
-                  <tbody>{filtC.map((f,ri)=>{
-                    const sc=f.status==="FIXED"?C.green:f.status==="SUBS"?C.purple:f.status==="FAILED"?C.red:C.faint;
-                    const fmtLC=s=>{
-                      if(!s)return"";
-                      // Strip year first
-                      let v=s.replace(/\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{2,4}\b/gi,(m,d,mo)=>d+" "+mo);
-                      // Compact: "04 Apr - 05 Apr" -> "04-05 Apr", "04 Apr - 05 May" stays as "04 Apr - 05 May"
-                      v=v.replace(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*-\s*(\d{1,2})\s+\2/gi,(m,d1,mo,d2)=>d1+"-"+d2+" "+mo);
-                      return v;
-                    };
-                    return <tr key={f.id} style={{background:rowBg(ri)}}>
-                      <td style={{...td2,width:28,padding:"0 2px",textAlign:"center",cursor:"pointer"}} onClick={e=>{e.stopPropagation();setSelCargoes(p=>{const n=new Set(p);n.has(f.id)?n.delete(f.id):n.add(f.id);return n;})}}><span style={{fontSize:12,color:selCargoes.has(f.id)?"#4fc3f7":C.faint}}>{selCargoes.has(f.id)?"[✓]":"[ ]"}</span></td>
-                      <td style={{...td2,width:colWidthsC.Status||60,cursor:"pointer",overflow:"hidden"}} onClick={e=>{e.stopPropagation();const opts=["SUBS","FIXED","FAILED",""];const cur=opts.indexOf(f.status||"");onUpdateC(f.id,"status",opts[(cur+1)%opts.length]);}} title="Click to cycle status">
-                        <span style={{color:sc,fontWeight:700}}>{f.status||""}</span>
-                      </td>
-                      <EC value={f.vessel} color={C.blue} bold placeholder="TBN" onSave={v2=>onUpdateC(f.id,"vessel",v2)} width={colWidthsC.Vessel||130} data-cid={f.id+"-vessel"}
-                        onTab={()=>document.querySelector(`[data-cid="${f.id}-chtr"]`)?.click()}
-                        onShiftTab={()=>{const prev=filtC[ri-1];if(prev)document.querySelector(`[data-cid="${prev.id}-cmnt"]`)?.click();else document.querySelector(`[data-cid="${f.id}-vessel"]`)?.blur();}}
-                        onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-vessel"]`)?.click();}}/>
-                      <EC value={toTCase(f.charterer)} color={"#79c0ff"} placeholder="" onSave={v2=>onUpdateC(f.id,"charterer",toTCase(v2))} width={colWidthsC.Charterer||110} data-cid={f.id+"-chtr"}
-                        onTab={()=>document.querySelector(`[data-cid="${f.id}-qty"]`)?.click()}
-                        onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-vessel"]`)?.click()}
-                        onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-chtr"]`)?.click();}}/>
-                      <EC value={normaliseQty(f.qty)} color={C.amber} placeholder="" onSave={v2=>onUpdateC(f.id,"qty",normaliseQty(v2))} width={colWidthsC.Qty||55} data-cid={f.id+"-qty"}
-                        onTab={()=>document.querySelector(`[data-cid="${f.id}-cargo"]`)?.click()}
-                        onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-chtr"]`)?.click()}
-                        onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-qty"]`)?.click();}}/>
-                      <EC value={f.cargo||""} placeholder="" onSave={v2=>onUpdateC(f.id,"cargo",v2)} width={colWidthsC.Cargo||80} data-cid={f.id+"-cargo"}
-                        onTab={()=>document.querySelector(`[data-cid="${f.id}-load"]`)?.click()}
-                        onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-qty"]`)?.click()}
-                        onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-cargo"]`)?.click();}}/>
-                      <EC value={toTCase(f.load||"")} placeholder="" onSave={v2=>onUpdateC(f.id,"load",v2)} width={colWidthsC.Load||100} data-cid={f.id+"-load"}
-                        onTab={()=>document.querySelector(`[data-cid="${f.id}-disch"]`)?.click()}
-                        onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-cargo"]`)?.click()}
-                        onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-load"]`)?.click();}}/>
-                      <EC value={toTCase(f.disch||"")} placeholder="" onSave={v2=>onUpdateC(f.id,"disch",v2)} width={colWidthsC.Disch||100} data-cid={f.id+"-disch"}
-                        onTab={()=>document.querySelector(`[data-cid="${f.id}-lcstart"]`)?.click()}
-                        onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-load"]`)?.click()}
-                        onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-disch"]`)?.click();}}/>
-                      <EC value={fmtDateShort(f.from)} placeholder="" onSave={v2=>onUpdateC(f.id,"from",v2)} width={colWidthsC.LaycanStart||90} data-cid={f.id+"-lcstart"}
-                        onTab={()=>document.querySelector(`[data-cid="${f.id}-lcend"]`)?.click()}
-                        onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-disch"]`)?.click()}
-                        onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-lcstart"]`)?.click();}}/>
-                      <EC value={fmtDateShort(f.to)} placeholder="" onSave={v2=>onUpdateC(f.id,"to",v2)} width={colWidthsC.LaycanEnd||90} data-cid={f.id+"-lcend"}
-                        onTab={()=>document.querySelector(`[data-cid="${f.id}-fr"]`)?.click()}
-                        onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-lcstart"]`)?.click()}
-                        onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-lcend"]`)?.click();}}/>
-                      <EC value={fmtFreight(f.freight)||f.freight} color={"#a8e6a3"} placeholder="" onSave={v2=>onUpdateC(f.id,"freight",fmtFreight(v2)||v2)} width={colWidthsC.Freight||90} data-cid={f.id+"-fr"}
-                        onTab={()=>document.querySelector(`[data-cid="${f.id}-cmnt"]`)?.click()}
-                        onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-lcend"]`)?.click()}
-                        onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-fr"]`)?.click();}}/>
-                      <EC value={f.comment||""} color={C.dim} placeholder="" onSave={v2=>onUpdateC(f.id,"comment",v2)} width={colWidthsC.Comment||130} data-cid={f.id+"-cmnt"}
-                        onTab={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-vessel"]`)?.click();}}
-                        onShiftTab={()=>document.querySelector(`[data-cid="${f.id}-fr"]`)?.click()}
-                        onEnter={()=>{const next=filtC[ri+1];if(next)document.querySelector(`[data-cid="${next.id}-vessel"]`)?.click();}}/>
-                      <td style={{...td2,width:colWidthsC.Updated||88,fontSize:12,color:C.faint,whiteSpace:"nowrap",overflow:"hidden"}}>{f.updated?new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
-                      <td style={{...td2,width:26,padding:"0 2px"}}><button onClick={(e)=>{e.stopPropagation();setPendingDel({type:"cargo",id:f.id,label:f.vessel||"cargo"});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.7}} title="Delete">✕</button></td>
-                    </tr>
-                  })}</tbody>
-                </table>}
+                : <MatrixTable
+    columns={cargoColumns}
+    data={filtC}
+    keyField="id"
+    renderRow={(f, td, ri) => {
+      const sc=f.status==="FIXED"?C.green:f.status==="SUBS"?C.purple:f.status==="FAILED"?C.red:C.faint;
+
+      return (
+        <tr key={f.id} style={{ background: rowBg(ri) }}>
+          <td style={{ ...td, width: 28, textAlign: "center", padding: "0 2px" }}
+              onClick={e => {
+                e.stopPropagation();
+                setSelCargoes(p => {
+                  const n = new Set(p);
+                  n.has(f.id) ? n.delete(f.id) : n.add(f.id);
+                  return n;
+                });
+              }}>
+            <span style={{ fontSize: 12, color: selCargoes.has(f.id) ? "#4fc3f7" : C.faint }}>
+              {selCargoes.has(f.id) ? "[✓]" : "[ ]"}
+            </span>
+          </td>
+
+          <td style={{ ...td, color: sc, fontWeight: 700, cursor: "pointer" }}
+              onClick={e => {
+                e.stopPropagation();
+                const opts=["SUBS","FIXED","FAILED",""];
+                const cur=opts.indexOf(f.status||"");
+                onUpdateC(f.id,"status",opts[(cur+1)%opts.length]);
+              }}>
+            {f.status || ""}
+          </td>
+
+          <EC value={f.vessel} color={C.blue} bold placeholder="TBN" onSave={v2=>onUpdateC(f.id,"vessel",v2)} />
+          <EC value={toTCase(f.charterer)} color={"#79c0ff"} placeholder="" onSave={v2=>onUpdateC(f.id,"charterer",toTCase(v2))} />
+          <EC value={normaliseQty(f.qty)} color={C.amber} placeholder="" onSave={v2=>onUpdateC(f.id,"qty",normaliseQty(v2))} />
+          <EC value={f.cargo||""} placeholder="" onSave={v2=>onUpdateC(f.id,"cargo",v2)} />
+          <EC value={toTCase(f.load||"")} placeholder="" onSave={v2=>onUpdateC(f.id,"load",v2)} />
+          <EC value={toTCase(f.disch||"")} placeholder="" onSave={v2=>onUpdateC(f.id,"disch",v2)} />
+          <EC value={fmtDateShort(f.from)} placeholder="" onSave={v2=>onUpdateC(f.id,"from",v2)} />
+          <EC value={fmtDateShort(f.to)} placeholder="" onSave={v2=>onUpdateC(f.id,"to",v2)} />
+          <EC value={fmtFreight(f.freight)||f.freight} color={"#a8e6a3"} placeholder="" onSave={v2=>onUpdateC(f.id,"freight",fmtFreight(v2)||v2)} />
+          <EC value={f.comment||""} color={C.dim} placeholder="" onSave={v2=>onUpdateC(f.id,"comment",v2)} />
+
+          <td style={{ ...td, fontSize: 12, color: C.faint }}>
+            {f.updated ? new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
+          </td>
+
+          <td style={{ ...td, width: 26, padding: "0 2px", textAlign:"center" }}>
+            <button
+              onClick={(e)=>{
+                e.stopPropagation();
+                setPendingDel({type:"cargo",id:f.id,label:f.vessel||"cargo"});
+              }}
+              style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.7}}
+              title="Delete"
+            >
+              ✕
+            </button>
+          </td>
+        </tr>
+      );
+    }}
+  />}
               {hasMore&&
               <div style={{textAlign:"center",padding:"12px"}}>
                 <button onClick={onLoadMore} style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"4px 16px",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Load more</button>
