@@ -46,6 +46,23 @@ const [segmentFilter,setSegmentFilter]=useState("");
   const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
   const [selectedAISVessels,setSelectedAISVessels]=useState([]);
 
+  const mobile=isMobile();
+  
+  // Professional table styling - Dashboard theme
+  const th2={padding:"6px 10px",color:"rgba(120,160,220,0.45)",fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.07em",textAlign:"left"};
+  const td2={padding:"7px 10px",color:"rgba(160,200,255,0.6)",fontWeight:600,fontSize:12};
+  const thRight={padding:"6px 10px",color:"rgba(120,160,220,0.45)",fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.07em",textAlign:"right"};
+  const tdRight={padding:"7px 10px",fontWeight:700,textAlign:"right",fontSize:12};
+  const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
+  const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
+  const fb=on=>({fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid "+(on?C.blue:C.bd),background:on?"rgba(88,166,255,.12)":"transparent",color:on?C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
+
+  // Tag component for vessel specs
+  const Tag=({col,children})=><span style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:3,background:col+"18",border:"1px solid "+col+"44",color:col}}>{children}</span>;
+  const [askAiExpanded,setAskAiExpanded]=useState(false);
+  const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
+  const [selectedAISVessels,setSelectedAISVessels]=useState([]);
+
 
 
   // Tag component for vessel specs
