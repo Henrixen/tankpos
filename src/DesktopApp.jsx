@@ -46,17 +46,7 @@ const [segmentFilter,setSegmentFilter]=useState("");
   const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
   const [selectedAISVessels,setSelectedAISVessels]=useState([]);
 
-  const mobile=isMobile();
-  
-  // Professional table styling - EXACT match to Dashboard bunker prices table
-  const th2={padding:"6px 10px",color:C.faint,fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.07em",textAlign:"left"};
-  const td2={padding:"7px 10px",color:C.dim,fontWeight:600,fontSize:12};
-  const thRight={padding:"6px 10px",color:C.faint,fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.07em",textAlign:"right"};
-  const tdRight={padding:"7px 10px",fontWeight:700,textAlign:"right",fontSize:12};
-  
-  const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
-  const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
-  const fb=on=>({fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid "+(on?C.blue:C.bd),background:on?"rgba(88,166,255,.12)":"transparent",color:on?C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
+
 
   // Tag component for vessel specs
   const Tag=({col,children})=><span style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:3,background:col+"18",border:"1px solid "+col+"44",color:col}}>{children}</span>;
@@ -560,7 +550,7 @@ const filtV=useMemo(()=>{
                         <col style={{width:18}}/>
                       </colgroup>
                       <thead>
-                        <tr style={{background:C.bg3}}>
+                        <tr style={{background:"#111f35"}}>
                           <th style={{...th,width:28,minWidth:28,padding:"4px 2px",cursor:"pointer",textAlign:"center"}} onClick={()=>{if(selVessels.size===filtV.length)setSelVessels(new Set());else setSelVessels(new Set(filtV.map(v=>v.vessel)));}} title={selVessels.size>0?"Deselect all":"Select all"}><span style={{color:selVessels.size>0?"#4fc3f7":C.faint,fontSize:12}}>{selVessels.size>0?"[✓]":"[ ]"}</span></th>
                           <th style={{...th,width:colWidthsV["Operator"]||120,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("operator")}><span style={{userSelect:"none",paddingRight:6}}>Operator{sortK==="operator"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Operator"]||120;const mv=m=>setColWidthsV(p=>({...p,"Operator":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                           <th style={{...th,width:colWidthsV["Vessel"]||120,minWidth:30,position:"relative",overflow:"hidden"}} onClick={()=>srt("vessel")}><span style={{userSelect:"none",paddingRight:6}}>Vessel{sortK==="vessel"?(sortD>0?" ↑":" ↓"):""}</span><span onMouseDown={e=>{e.preventDefault();e.stopPropagation();const sx=e.clientX;const sw=colWidthsV["Vessel"]||120;const mv=m=>setColWidthsV(p=>({...p,"Vessel":Math.max(30,sw+(m.clientX-sx))}));const up=()=>{{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);}};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
@@ -583,7 +573,7 @@ const filtV=useMemo(()=>{
                         {filtV.slice(0, posPage*POS_PAGE_SIZE).map((v,i)=>{
                           const isSel=sel===v.vessel;
                           const ppt=isOpenPPT(v.date);
-                          const bg=isSel?"rgba(88,166,255,.07)":i%2===0?"transparent":C.bg3;
+                          const bg=isSel?"rgba(88,166,255,.07)":i%2===0?"transparent":"#162540";
                           return(
                             <tr key={v.vessel} style={{background:bg,outline:isSel?"1px solid rgba(88,166,255,.2)":"1px solid transparent",cursor:"pointer"}} onClick={()=>{setSel(sel===v.vessel?null:v.vessel);setSelectedAISVessels([v.vessel]);}}>
                               <td style={{...td2,width:28,padding:"0 2px",textAlign:"center",cursor:"pointer"}} onClick={e=>{e.stopPropagation();setSelVessels(p=>{const n=new Set(p);n.has(v.vessel)?n.delete(v.vessel):n.add(v.vessel);return n;})}}><span style={{fontSize:12,color:selVessels.has(v.vessel)?"#4fc3f7":C.faint}}>{selVessels.has(v.vessel)?"[✓]":"[ ]"}</span></td>
@@ -794,7 +784,7 @@ const filtV=useMemo(()=>{
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
                 :<table style={{width:"100%",borderCollapse:"collapse",fontSize:12,tableLayout:"fixed",fontFamily:"sans-serif"}}>
                   <thead>
-                        <tr style={{background:C.bg3}}>
+                        <tr style={{background:"#111f35"}}>
                     <th style={{...th,width:28,minWidth:28,padding:"4px 2px",cursor:"pointer",textAlign:"center"}} onClick={()=>{if(selCargoes.size===filtC.length)setSelCargoes(new Set());else setSelCargoes(new Set(filtC.map(c=>c.id)));}} title={selCargoes.size>0?"Deselect all":"Select all"}><span style={{color:selCargoes.size>0?"#4fc3f7":C.faint,fontSize:12}}>{selCargoes.size>0?"[✓]":"[ ]"}</span></th>
                     <th style={{...th,width:colWidthsC["Status"]||60,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Status"){setCsortD(d=>d*-1);}else{setCsortK("Status");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Status{cSortK==="Status"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Status"]||60;const mv=m=>setColWidthsC(p=>({...p,"Status":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                     <th style={{...th,width:colWidthsC["Vessel"]||130,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Vessel"){setCsortD(d=>d*-1);}else{setCsortK("Vessel");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Vessel{cSortK==="Vessel"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Vessel"]||130;const mv=m=>setColWidthsC(p=>({...p,"Vessel":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
@@ -820,7 +810,7 @@ const filtV=useMemo(()=>{
                       v=v.replace(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*-\s*(\d{1,2})\s+\2/gi,(m,d1,mo,d2)=>d1+"-"+d2+" "+mo);
                       return v;
                     };
-                    return <tr key={f.id} style={{background:ri%2===0?"transparent":C.bg3,borderBottom:"1px solid "+C.bd}}>
+                    return <tr key={f.id} style={{background:ri%2===0?"transparent":"#162540",borderBottom:"1px solid rgba(58,130,246,0.14)"}}>
                       <td style={{...td2,width:28,padding:"0 2px",textAlign:"center",cursor:"pointer"}} onClick={e=>{e.stopPropagation();setSelCargoes(p=>{const n=new Set(p);n.has(f.id)?n.delete(f.id):n.add(f.id);return n;})}}><span style={{fontSize:12,color:selCargoes.has(f.id)?"#4fc3f7":C.faint}}>{selCargoes.has(f.id)?"[✓]":"[ ]"}</span></td>
                       <td style={{...td2,width:colWidthsC.Status||60,cursor:"pointer",overflow:"hidden"}} onClick={e=>{e.stopPropagation();const opts=["SUBS","FIXED","FAILED",""];const cur=opts.indexOf(f.status||"");onUpdateC(f.id,"status",opts[(cur+1)%opts.length]);}} title="Click to cycle status">
                         <span style={{color:sc,fontWeight:700}}>{f.status||""}</span>
