@@ -24,7 +24,7 @@ function RateMatrixBunkerInput(){
       defaultValue={val}
       onBlur={e=>{const n=parseFloat(e.target.value.replace(/[^0-9.]/g,""));if(!isNaN(n)&&n>0){const bs=getBunkerState();bs.val=n;bs.listeners.forEach(cb=>cb(n));}else{e.target.value=val;}}}
       onKeyDown={e=>{if(e.key==="Enter"){e.target.blur();}if(e.key==="Escape"){e.target.value=val;e.target.blur();}}}
-      style={{width:60,background:C.bg3,border:"1px solid "+C.amber,borderRadius:4,color:C.amber,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"2px 6px",outline:"none",textAlign:"right"}}
+      style={{width:60,background:"#162540",border:"1px solid "+C.amber,borderRadius:4,color:C.amber,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"2px 6px",outline:"none",textAlign:"right"}}
       title="Bunker price used for TCE auto-calculation"/>
   );
 }
@@ -196,21 +196,21 @@ function RateMatrix({onBunkerChange}){
           <input autoFocus defaultValue={from}
             onBlur={e=>{section==="eu"?updateEuRoute(rtIdx,"from",e.target.value):updateRgRoute(rgIdx,rtIdx,"from",e.target.value);setEditingRoute(null);}}
             onKeyDown={e=>{if(e.key==="Tab"||e.key==="Enter"){e.preventDefault();const v=e.target.value;section==="eu"?updateEuRoute(rtIdx,"from",v):updateRgRoute(rgIdx,rtIdx,"from",v);e.target.blur();}if(e.key==="Escape")setEditingRoute(null);}}
-            style={{width:52,background:C.bg3,border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"0 3px",outline:"none"}}/>
-          <span style={{color:C.faint,fontSize:12}}>→</span>
+            style={{width:52,background:"#162540",border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"0 3px",outline:"none"}}/>
+          <span style={{color:"rgba(120,160,220,0.45)",fontSize:12}}>→</span>
           <input defaultValue={to}
             onBlur={e=>{section==="eu"?updateEuRoute(rtIdx,"to",e.target.value):updateRgRoute(rgIdx,rtIdx,"to",e.target.value);setEditingRoute(null);}}
             onKeyDown={e=>{if(e.key==="Enter"||e.key==="Escape"){section==="eu"?updateEuRoute(rtIdx,"to",e.target.value):updateRgRoute(rgIdx,rtIdx,"to",e.target.value);setEditingRoute(null);}}}
-            style={{width:52,background:C.bg3,border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"0 3px",outline:"none"}}/>
+            style={{width:52,background:"#162540",border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"0 3px",outline:"none"}}/>
         </span>
       );
     }
     return(
       <span onClick={()=>setEditingRoute(key)} style={{cursor:"pointer"}} title="Click to edit route">
-        <span style={{fontWeight:600,fontSize:12,color:C.dim}}>{from}</span>
-        <span style={{color:C.faint,fontSize:12}}> → </span>
-        <span style={{fontWeight:600,fontSize:12,color:C.dim}}>{to}</span>
-        <span style={{color:C.faint,fontSize:8,marginLeft:3,opacity:0.5}}>✎</span>
+        <span style={{fontWeight:600,fontSize:12,color:"rgba(160,200,255,0.6)"}}>{from}</span>
+        <span style={{color:"rgba(120,160,220,0.45)",fontSize:12}}> → </span>
+        <span style={{fontWeight:600,fontSize:12,color:"rgba(160,200,255,0.6)"}}>{to}</span>
+        <span style={{color:"rgba(120,160,220,0.45)",fontSize:8,marginLeft:3,opacity:0.5}}>✎</span>
       </span>
     );
   }
@@ -250,7 +250,7 @@ function RateMatrix({onBunkerChange}){
     if(loadedRef.current)saveRates(matrixRef.current);
   }
 
-  const thS={padding:"4px 5px",fontSize:12,fontWeight:700,color:C.faint,background:C.bg,textAlign:"center",whiteSpace:"nowrap",borderBottom:"1px solid "+C.bd2};
+  const thS={padding:"4px 5px",fontSize:12,fontWeight:700,color:"rgba(120,160,220,0.45)",background:C.bg,textAlign:"center",whiteSpace:"nowrap",borderBottom:"1px solid rgba(58,130,246,0.14)"};
   const tdR={fontSize:12,padding:"1px 2px",borderBottom:"1px solid "+C.bg,verticalAlign:"middle"};
 
   // RCell is defined outside this component (see above)
@@ -258,8 +258,8 @@ function RateMatrix({onBunkerChange}){
   return(
     <div style={{display:"flex",flexDirection:"column",gap:9}}>
       {editComment&&(
-        <div style={{display:"flex",gap:4,alignItems:"center",background:C.bg3,border:"1px solid "+C.blue,borderRadius:4,padding:"3px 6px"}}>
-          <span style={{fontSize:12,color:C.faint}}>Comment for {editComment}:</span>
+        <div style={{display:"flex",gap:4,alignItems:"center",background:"#162540",border:"1px solid "+C.blue,borderRadius:4,padding:"3px 6px"}}>
+          <span style={{fontSize:12,color:"rgba(120,160,220,0.45)"}}>Comment for {editComment}:</span>
           <input defaultValue={matrixRef.current[editComment]?.comment||""}
             autoFocus
             onBlur={e=>{updComment(editComment,e.target.value.trim());setEditComment(null);}}
@@ -283,7 +283,7 @@ function RateMatrix({onBunkerChange}){
           <tbody>
             {euRoutes.map((rt,i)=>(
               <tr key={rt.id||i} style={{background:i%2===0?C.bg:C.bg2}}>
-                <td style={{...tdR,color:C.dim,paddingLeft:4}}>
+                <td style={{...tdR,color:"rgba(160,200,255,0.6)",paddingLeft:4}}>
                   <RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/>
                 </td>
                 <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-rate"} col={REGION_COLORS.Europe} rev={rev}/></td>
@@ -310,7 +310,7 @@ function RateMatrix({onBunkerChange}){
             <tbody>
               {rg.routes.map((rt,rtIdx)=>(
                 <tr key={rt.id||rtIdx} style={{background:rtIdx%2===0?C.bg:C.bg2}}>
-                  <td style={{...tdR,color:C.dim,paddingLeft:4}}>
+                  <td style={{...tdR,color:"rgba(160,200,255,0.6)",paddingLeft:4}}>
                     <RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/>
                   </td>
                   {RATE_SIZES.map(sz=>(
