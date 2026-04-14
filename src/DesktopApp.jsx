@@ -50,11 +50,10 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
 
   const mobile=isMobile();
   
-  // Dashboard bunker prices theme
+  // Dashboard theme styles
   const th2={padding:"6px 10px",color:"rgba(120,160,220,0.45)",fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.07em",textAlign:"left"};
   const td2={padding:"7px 10px",color:"rgba(160,200,255,0.6)",fontWeight:600,fontSize:12};
   
-  // Legacy styles (keep for editable cells)
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
   const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
   const fb=on=>({fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid "+(on?C.blue:C.bd),background:on?"rgba(88,166,255,.12)":"transparent",color:on?C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
@@ -324,12 +323,34 @@ const filtV=useMemo(()=>{
         </div>
       </div>
       <div style={{padding:"12px 16px",maxWidth:1900,margin:"0 auto"}}>
-        <div style={{display:"flex",flexWrap:"wrap",borderBottom:"1px solid "+C.bd2,marginBottom:12,gap:mobile?"2px 0":0}}>
-          {[["pos","⚓ Pos",vessels.length],["cargo","📦 Cargo",cargoTotal||cargoes.length],["fix","🎯 Fix",0],["projects","🧮 Projects",0],["matrix","🔗 Matrix",0],["tce","⚡ TCE",0],["dash","📊 Dash",0]].map(([id,label,cnt])=>(
-            <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}} style={{fontFamily:"sans-serif",fontWeight:700,fontSize:mobile?11:12,padding:mobile?"6px 10px":"7px 16px",border:"none",background:"transparent",color:tab===id?C.blue:C.dim,borderBottom:"2px solid "+(tab===id?C.blue:"transparent"),cursor:"pointer",whiteSpace:"nowrap"}}>
-              {label}{cnt>0?(<span style={{fontSize:11,marginLeft:3,background:C.bg3,padding:"1px 5px",borderRadius:8}}>{cnt}</span>):null}
-            </button>
-          ))}
+        {/* Professional tab navigation */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,gap:16,flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {[
+              ["pos","⚓","Positions",vessels.length,"#58a6ff"],
+              ["cargo","📦","Cargoes",cargoTotal||cargoes.length,"#faa356"],
+              ["fix","🎯","Fixing",0,"#c792ea"],
+              ["matrix","🔗","Matrix",0,"#43e97b"],
+              ["projects","🧮","Projects",0,"#58a6ff"],
+              ["tce","⚡","TCE",0,"#faa356"],
+              ["dash","📊","Dashboard",0,"#43e97b"]
+            ].map(([id,icon,label,count,col])=>(
+              <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
+                style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+                  minWidth:mobile?80:110,padding:"10px 12px",borderRadius:8,
+                  border:"1px solid "+(tab===id?col:C.bd),
+                  background:tab===id?"linear-gradient(135deg, "+col+"15, "+col+"05)":"transparent",
+                  boxShadow:tab===id?"0 4px 12px "+col+"33":"none",
+                  cursor:"pointer",transition:"all 0.2s",fontFamily:"inherit"}}>
+                <div style={{fontSize:mobile?18:20}}>{icon}</div>
+                <div style={{fontSize:mobile?9:10,fontWeight:700,color:tab===id?col:C.dim,
+                  textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</div>
+                {count>0&&<div style={{fontSize:11,fontWeight:700,color:tab===id?col:C.faint,
+                  background:C.bg3,padding:"1px 6px",borderRadius:8}}>{count}</div>}
+              </button>
+            ))}
+          </div>
+          <div style={{fontSize:13,fontWeight:700,color:C.faint,textAlign:"right"}}>SIGNAL — TANKER INTELLIGENCE</div>
         </div>
 
         {/* ── POSITIONS ── */}
@@ -785,8 +806,7 @@ const filtV=useMemo(()=>{
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
                 :<table style={{width:"100%",borderCollapse:"collapse",fontSize:12,tableLayout:"fixed",fontFamily:"sans-serif"}}>
-                  <thead>
-                        <tr style={{background:"#111f35"}}>
+                  <thead><tr>
                     <th style={{...th2,width:28,minWidth:28,padding:"4px 2px",cursor:"pointer",textAlign:"center"}} onClick={()=>{if(selCargoes.size===filtC.length)setSelCargoes(new Set());else setSelCargoes(new Set(filtC.map(c=>c.id)));}} title={selCargoes.size>0?"Deselect all":"Select all"}><span style={{color:selCargoes.size>0?"#4fc3f7":C.faint,fontSize:12}}>{selCargoes.size>0?"[✓]":"[ ]"}</span></th>
                     <th style={{...th2,width:colWidthsC["Status"]||60,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Status"){setCsortD(d=>d*-1);}else{setCsortK("Status");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Status{cSortK==="Status"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Status"]||60;const mv=m=>setColWidthsC(p=>({...p,"Status":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
                     <th style={{...th2,width:colWidthsC["Vessel"]||130,minWidth:40,position:"relative",overflow:"hidden"}}><span onClick={()=>{if(cSortK==="Vessel"){setCsortD(d=>d*-1);}else{setCsortK("Vessel");setCsortD(-1);}}} style={{cursor:"pointer",userSelect:"none",paddingRight:8}}>Vessel{cSortK==="Vessel"?(cSortD===1?" ▲":" ▼"):""}</span><span onMouseDown={e=>{e.preventDefault();const sx=e.clientX;const sw=colWidthsC["Vessel"]||130;const mv=m=>setColWidthsC(p=>({...p,"Vessel":Math.max(40,sw+(m.clientX-sx))}));const up=()=>{document.removeEventListener("mousemove",mv);document.removeEventListener("mouseup",up);};document.addEventListener("mousemove",mv);document.addEventListener("mouseup",up);}} style={{position:"absolute",right:0,top:"15%",bottom:"15%",width:3,cursor:"col-resize",zIndex:1,background:"rgba(100,150,200,0.4)",borderRadius:2}}/></th>
