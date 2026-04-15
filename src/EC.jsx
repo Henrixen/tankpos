@@ -1,45 +1,118 @@
 import React, { useState, useRef } from "react";
 import { C } from "./constants";
 
-export default function EC({ value, onSave }) {
+export default function EC({
+  value,
+  color,
+  placeholder,
+  onSave,
+  bold,
+  onTab,
+  onShiftTab,
+  onEnter,
+  onUp,
+  onDown,
+  ...rest
+}) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value || "");
+  const [draft, setDraft] = useState("");
+  const [hover, setHover] = useState(false);
   const ref = useRef(null);
 
-  function start() {
+  function start(e) {
+    e?.stopPropagation?.();
     setDraft(value || "");
     setEditing(true);
-    setTimeout(() => ref.current?.focus(), 50);
+    setTimeout(() => {
+      if (ref.current) {
+        ref.current.focus();
+        ref.current.select?.();
+      }
+    }, 15);
   }
 
   function commit() {
     setEditing(false);
-    if (draft !== value) onSave?.(draft);
+    const t = (draft || "").trim();
+    if (t !== (value || "")) onSave?.(t);
   }
 
-  function onKey(e) {
-    if (e.key === "Enter") commit();
-    if (e.key === "Escape") setEditing(false);
+  function handleKey(e) {
+    e.stopPropagation();
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit();
+      if (onEnter) setTimeout(onEnter, 20);
+      return;
+    }
+
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setEditing(false);
+      return;
+    }
+
+    if (e.key === "Tab") {
+      e.preventDefault();
+      commit();
+      if (e.shiftKey) {
+        if (onShiftTab) setTimeout(onShiftTab, 20);
+      } else {
+        if (onTab) setTimeout(onTab, 20);
+      }
+      return;
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      commit();
+      if (onUp) setTimeout(onUp, 20);
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      commit();
+      if (onDown) setTimeout(onDown, 20);
+      return;
+    }
+
+    // ArrowLeft / ArrowRight are NOT prevented,
+    // so they move between letters naturally inside the input.
   }
 
   if (editing) {
     return (
-      <td style={{ padding: "6px 10px" }}>
+      <td
+        onClick={e => e.stopPropagation()}
+        style={{
+          padding: "6px 10px",
+          background: C.bg3,
+          border: "1px solid " + C.bd,
+          borderRadius: 4,
+          verticalAlign: "middle"
+        }}
+      >
         <input
           ref={ref}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={e => setDraft(e.target.value)}
           onBlur={commit}
-          onKeyDown={onKey}
+          onKeyDown={handleKey}
+          placeholder={placeholder || ""}
           style={{
             background: C.bg3,
             border: "1px solid " + C.bd,
             borderRadius: 4,
             color: C.tx,
+            fontFamily: "inherit",
             fontSize: 12,
             padding: "4px 6px",
             width: "100%",
-            outline: "none"
+            outline: "none",
+            boxSizing: "border-box",
+            textTransform: "uppercase"
           }}
         />
       </td>
@@ -49,14 +122,40 @@ export default function EC({ value, onSave }) {
   return (
     <td
       onClick={start}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={value || (placeholder || "Click to edit")}
       style={{
         padding: "6px 10px",
-        background: "transparent",
+        cursor: "text",
+        background: hover ? "rgba(255,255,255,0.03)" : "transparent",
         border: "none",
-        cursor: "text"
+        verticalAlign: "middle",
+        transition: "background .1s",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        maxWidth: 0
       }}
+      {...rest}
     >
-      {value}
+      <div style={{ display: "flex", alignItems: "center", gap: 2, overflow: "hidden" }}>
+        <span
+          style={{
+            color: value ? (color || C.tx) : C.faint,
+            fontWeight: bold ? 700 : 400,
+            fontSize: 12,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            display: "block",
+            minWidth: 0,
+            textTransform: "uppercase"
+          }}
+        >
+          {value || ""}
+        </span>
+        <span style={{ color: C.faint, fontSize: 12, opacity: hover ? 1 : 0 }}>✎</span>
+      </div>
     </td>
   );
 }
