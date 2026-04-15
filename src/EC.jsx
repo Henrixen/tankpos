@@ -87,12 +87,11 @@ export default function EC({
       <td
         onClick={e => e.stopPropagation()}
         style={{
-          padding: "6px 10px",
-          background: C.bg3,
-          border: "1px solid " + C.bd,
-          borderRadius: 4,
-          verticalAlign: "middle"
-        }}
+  padding: "4px 6px",
+  background: "transparent",
+  border: "none",
+  verticalAlign: "middle"
+}}
       >
         <input
           ref={ref}
@@ -108,7 +107,7 @@ export default function EC({
             color: C.tx,
             fontFamily: "inherit",
             fontSize: 12,
-            padding: "4px 6px",
+            padding: "5px 8px",
             width: "100%",
             outline: "none",
             boxSizing: "border-box",
