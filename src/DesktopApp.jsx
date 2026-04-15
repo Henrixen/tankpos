@@ -103,9 +103,9 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   overflow:"hidden",
   textOverflow:"ellipsis"
 };
-  const tdNum = {...td2, textAlign:"right", fontVariantNumeric:"tabular-nums"};
-  const tdCtr = {...td2, textAlign:"center", fontVariantNumeric:"tabular-nums"};
-  const tdTxt = {...td2, textAlign:"left"};
+  const tdNum = {...td2, textAlign:"right", fontVariantNumeric:"tabular-nums", textTransform:"uppercase"};
+const tdCtr = {...td2, textAlign:"center", fontVariantNumeric:"tabular-nums", textTransform:"uppercase"};
+const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
   const tableWrap={
     border:"1px solid "+C.bd,
     borderRadius:8,
@@ -118,37 +118,37 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   const tableStyle={width:mobile?"max-content":"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12,tableLayout:"fixed",fontFamily:"sans-serif"};
   const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
   const posColumns = [
-  { key: "select", label: "", align: "center" },
-  { key: "operator", label: "Operator" },
-  { key: "vessel", label: "Vessel" },
-  { key: "built", label: "Built", align: "right" },
-  { key: "dwt", label: "DWT", align: "right" },
-  { key: "coating", label: "Coating" },
-  { key: "loa", label: "LOA", align: "right" },
-  { key: "beam", label: "Beam", align: "right" },
-  { key: "cbm", label: "CBM", align: "right" },
-  { key: "date", label: "Date" },
-  { key: "openPort", label: "Open Port" },
-  { key: "comment", label: "Comment" },
-  { key: "updatedAt", label: "Updated" },
-  { key: "delete", label: "", align: "center" },
+  { key: "select", label: "", align: "center", width: 28 },
+  { key: "operator", label: "Operator", width: colWidthsV.Operator },
+  { key: "vessel", label: "Vessel", width: colWidthsV.Vessel },
+  { key: "built", label: "Built", align: "right", width: colWidthsV.Built },
+  { key: "dwt", label: "DWT", align: "right", width: colWidthsV.DWT },
+  { key: "coating", label: "Coating", width: colWidthsV.Coating },
+  { key: "loa", label: "LOA", align: "right", width: colWidthsV.LOA },
+  { key: "beam", label: "Beam", align: "right", width: colWidthsV.Beam },
+  { key: "cbm", label: "CBM", align: "right", width: colWidthsV.CBM },
+  { key: "date", label: "Date", align: "center", width: colWidthsV.Date },
+  { key: "openPort", label: "Open Port", width: colWidthsV.OpenPort },
+  { key: "comment", label: "Comment", width: colWidthsV.Comment },
+  { key: "updatedAt", label: "Updated", align: "center", width: colWidthsV.FileDate },
+  { key: "delete", label: "", align: "center", width: 24 },
 ];
 
 const cargoColumns = [
-  { key: "select", label: "", align: "center" },
-  { key: "status", label: "Status" },
-  { key: "vessel", label: "Vessel" },
-  { key: "charterer", label: "Charterer" },
-  { key: "qty", label: "Qty", align: "right" },
-  { key: "cargo", label: "Cargo" },
-  { key: "load", label: "Load" },
-  { key: "disch", label: "Disch" },
-  { key: "from", label: "From" },
-  { key: "to", label: "To" },
-  { key: "freight", label: "Freight", align: "right" },
-  { key: "comment", label: "Comment" },
-  { key: "updated", label: "Updated" },
-  { key: "delete", label: "", align: "center" },
+  { key: "select", label: "", align: "center", width: 28 },
+  { key: "status", label: "Status", align: "center", width: colWidthsC.Status },
+  { key: "vessel", label: "Vessel", width: colWidthsC.Vessel },
+  { key: "charterer", label: "Charterer", width: colWidthsC.Charterer },
+  { key: "qty", label: "Qty", align: "right", width: colWidthsC.Qty },
+  { key: "cargo", label: "Cargo", width: colWidthsC.Cargo },
+  { key: "load", label: "Load", width: colWidthsC.Load },
+  { key: "disch", label: "Disch", width: colWidthsC.Disch },
+  { key: "from", label: "From", align: "center", width: colWidthsC.LaycanStart },
+  { key: "to", label: "To", align: "center", width: colWidthsC.LaycanEnd },
+  { key: "freight", label: "Freight", align: "right", width: colWidthsC.Freight },
+  { key: "comment", label: "Comment", width: colWidthsC.Comment },
+  { key: "updated", label: "Updated", align: "center", width: colWidthsC.Updated },
+  { key: "delete", label: "", align: "center", width: 26 },
 ];
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
   const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
@@ -159,6 +159,11 @@ const cargoColumns = [
 
   function toggleFilter(f){setFilters(prev=>{const n=new Set(prev);n.has(f)?n.delete(f):n.add(f);return n;});}
   function srt(k){setSortD(sortK===k?sortD*-1:1);setSortK(k);}
+
+  function focusCell(row, key){
+  const el = document.querySelector(`[data-cell="${row}-${key}"]`);
+  el?.click();
+}
 
   // Multi-token search across all text fields
   const tokens=search.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -683,10 +688,10 @@ const filtV=useMemo(()=>{
   placeholder="Operator"
   onSave={val=>onUpdateV(v.vessel,"operator",val)}
   data-cell={`${i}-operator`}
-  onTab={() => document.querySelector(`[data-cell="${i}-vessel"]`)?.click()}
-  onShiftTab={() => document.querySelector(`[data-cell="${i}-select"]`)?.click()}
-  onDown={() => document.querySelector(`[data-cell="${i+1}-operator"]`)?.click()}
-  onUp={() => document.querySelector(`[data-cell="${i-1}-operator"]`)?.click()}
+  onTab={() => focusCell(i, "vessel")}
+  onShiftTab={() => focusCell(i-1, "comment")}
+  onDown={() => focusCell(i+1, "operator")}
+  onUp={() => focusCell(i-1, "operator")}
 />
 
       {/* VESSEL */}
@@ -697,28 +702,17 @@ const filtV=useMemo(()=>{
   placeholder="Vessel"
   onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)}
   data-cell={`${i}-vessel`}
-  onTab={() => document.querySelector(`[data-cell="${i}-date"]`)?.click()}
-  onShiftTab={() => document.querySelector(`[data-cell="${i}-operator"]`)?.click()}
-  onDown={() => document.querySelector(`[data-cell="${i+1}-vessel"]`)?.click()}
-  onUp={() => document.querySelector(`[data-cell="${i-1}-vessel"]`)?.click()}
+  onTab={() => focusCell(i, "date")}
+  onShiftTab={() => focusCell(i, "operator")}
+  onDown={() => focusCell(i+1, "vessel")}
+  onUp={() => focusCell(i-1, "vessel")}
 />
 
-      {/* BUILT */}
       <td style={{ ...tdNum, color: C.dim }}>{v.built || ""}</td>
-
-      {/* DWT */}
       <td style={{ ...tdNum, color: C.dim }}>{fmtN(v.dwt)}</td>
-
-      {/* COATING */}
       <td style={{ ...tdTxt, color: C.dim }}>{v.coating || ""}</td>
-
-      {/* LOA */}
       <td style={{ ...tdNum, color: C.dim }}>{v.loa || ""}</td>
-
-      {/* BEAM */}
       <td style={{ ...tdNum, color: C.dim }}>{v.beam || ""}</td>
-
-      {/* CBM */}
       <td style={{ ...tdNum, color: C.dim }}>{fmtN(v.cbm)}</td>
 
       {/* DATE */}
@@ -743,12 +737,11 @@ const filtV=useMemo(()=>{
     onUpdateV(v.vessel,"date",fmt);
   }}
   data-cell={`${i}-date`}
-  onTab={() => document.querySelector(`[data-cell="${i}-port"]`)?.click()}
-  onShiftTab={() => document.querySelector(`[data-cell="${i}-vessel"]`)?.click()}
-  onDown={() => document.querySelector(`[data-cell="${i+1}-date"]`)?.click()}
-  onUp={() => document.querySelector(`[data-cell="${i-1}-date"]`)?.click()}
+  onTab={() => focusCell(i, "port")}
+  onShiftTab={() => focusCell(i, "vessel")}
+  onDown={() => focusCell(i+1, "date")}
+  onUp={() => focusCell(i-1, "date")}
 />
-
       {/* PORT */}
       <EC
   value={v.openPort}
@@ -756,10 +749,10 @@ const filtV=useMemo(()=>{
   placeholder="Port"
   onSave={val=>onUpdateV(v.vessel,"openPort",val)}
   data-cell={`${i}-port`}
-  onTab={() => document.querySelector(`[data-cell="${i}-comment"]`)?.click()}
-  onShiftTab={() => document.querySelector(`[data-cell="${i}-date"]`)?.click()}
-  onDown={() => document.querySelector(`[data-cell="${i+1}-port"]`)?.click()}
-  onUp={() => document.querySelector(`[data-cell="${i-1}-port"]`)?.click()}
+  onTab={() => focusCell(i, "comment")}
+  onShiftTab={() => focusCell(i, "date")}
+  onDown={() => focusCell(i+1, "port")}
+  onUp={() => focusCell(i-1, "port")}
 />
 
       {/* COMMENT */}
@@ -769,10 +762,10 @@ const filtV=useMemo(()=>{
   placeholder="Comment"
   onSave={val=>onUpdateV(v.vessel,"comment",val)}
   data-cell={`${i}-comment`}
-  onTab={() => document.querySelector(`[data-cell="${i+1}-vessel"]`)?.click()}
-  onShiftTab={() => document.querySelector(`[data-cell="${i}-port"]`)?.click()}
-  onDown={() => document.querySelector(`[data-cell="${i+1}-comment"]`)?.click()}
-  onUp={() => document.querySelector(`[data-cell="${i-1}-comment"]`)?.click()}
+  onTab={() => focusCell(i+1, "vessel")}
+  onShiftTab={() => focusCell(i, "port")}
+  onDown={() => focusCell(i+1, "comment")}
+  onUp={() => focusCell(i-1, "comment")}
 />
 
       {/* UPDATED */}
@@ -781,10 +774,7 @@ const filtV=useMemo(()=>{
       </td>
 
       {/* DELETE */}
-      <td
-        style={{ ...tdCtr, width: 24, minWidth: 24, maxWidth: 24, padding: "0 2px" }}
-        onClick={e=>e.stopPropagation()}
-      >
+      <td style={{ ...tdCtr, width: 24, minWidth: 24, maxWidth: 24, padding: "0 2px" }} onClick={e=>e.stopPropagation()}>
         <button
           onClick={(e)=>{
             e.stopPropagation();
