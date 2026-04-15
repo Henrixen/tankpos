@@ -1,6 +1,8 @@
 import React, { useState, useRef } from "react";
 import { C } from "./constants";
 
+const CELL_HEIGHT = 34;
+
 export default function EC({
   value,
   color,
@@ -84,10 +86,14 @@ export default function EC({
       <td
         onClick={e => e.stopPropagation()}
         style={{
-          padding: "6px 10px",
+          height: CELL_HEIGHT,
+          minHeight: CELL_HEIGHT,
+          maxHeight: CELL_HEIGHT,
+          padding: "0 8px",
+          verticalAlign: "middle",
           background: "transparent",
           border: "none",
-          verticalAlign: "middle"
+          boxSizing: "border-box"
         }}
       >
         <input
@@ -98,18 +104,21 @@ export default function EC({
           onKeyDown={handleKey}
           placeholder={placeholder || ""}
           style={{
+            display: "block",
+            width: "100%",
+            height: 28,
+            margin: 0,
+            padding: "0 8px",
             background: C.bg3,
             border: "1px solid " + C.bd,
             borderRadius: 4,
             color: C.tx,
             fontFamily: "inherit",
             fontSize: 12,
-            padding: "5px 8px",
-            width: "100%",
+            lineHeight: "28px",
             outline: "none",
             boxSizing: "border-box",
-            textTransform: "uppercase",
-            lineHeight: "16px"
+            textTransform: "uppercase"
           }}
         />
       </td>
@@ -123,7 +132,10 @@ export default function EC({
       onMouseLeave={() => setHover(false)}
       title={value || (placeholder || "Click to edit")}
       style={{
-        padding: "6px 10px",
+        height: CELL_HEIGHT,
+        minHeight: CELL_HEIGHT,
+        maxHeight: CELL_HEIGHT,
+        padding: "0 8px",
         cursor: "text",
         background: hover ? "rgba(255,255,255,0.03)" : "transparent",
         border: "none",
@@ -131,11 +143,20 @@ export default function EC({
         transition: "background .1s",
         whiteSpace: "nowrap",
         overflow: "hidden",
-        maxWidth: 0
+        maxWidth: 0,
+        boxSizing: "border-box"
       }}
       {...rest}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 2, overflow: "hidden" }}>
+      <div
+        style={{
+          height: 28,
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          overflow: "hidden"
+        }}
+      >
         <span
           style={{
             color: value ? (color || C.tx) : C.faint,
@@ -147,12 +168,21 @@ export default function EC({
             display: "block",
             minWidth: 0,
             textTransform: "uppercase",
-            lineHeight: "16px"
+            lineHeight: "28px"
           }}
         >
           {value || ""}
         </span>
-        <span style={{ color: C.faint, fontSize: 12, opacity: hover ? 1 : 0 }}>✎</span>
+        <span
+          style={{
+            color: C.faint,
+            fontSize: 12,
+            opacity: hover ? 1 : 0,
+            flex: "0 0 auto"
+          }}
+        >
+          ✎
+        </span>
       </div>
     </td>
   );
