@@ -720,9 +720,9 @@ const filtV=useMemo(()=>{
         <EC value={v.openPort} color={v.openPort==="EMPLOYED"?C.purple:"#79c0ff"} placeholder="Port" onSave={val=>onUpdateV(v.vessel,"openPort",val)} />
         <EC value={v.comment} color={C.dim} placeholder="Comment" onSave={val=>onUpdateV(v.vessel,"comment",val)} />
 
-        <td style={{ ...td, fontSize: 12, color: C.faint, textAlign: "center" }}>
-          {v.updatedAt ? new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
-        </td>
+        <td style={{ ...tdCtr, color: C.faint }}>
+  {v.updatedAt ? new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
+</td>
 
         <td style={{ ...td, width: 18, textAlign: "center", padding: 0 }} onClick={e=>e.stopPropagation()}>
           <button
@@ -970,22 +970,21 @@ const filtV=useMemo(()=>{
           <EC value={fmtFreight(f.freight)||f.freight} color={"#a8e6a3"} placeholder="" onSave={v2=>onUpdateC(f.id,"freight",fmtFreight(v2)||v2)} />
           <EC value={f.comment||""} color={C.dim} placeholder="" onSave={v2=>onUpdateC(f.id,"comment",v2)} />
 
-          <td style={{ ...td, fontSize: 12, color: C.faint }}>
-            {f.updated ? new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
-          </td>
-
-          <td style={{ ...td, width: 26, padding: "0 2px", textAlign:"center" }}>
-            <button
-              onClick={(e)=>{
-                e.stopPropagation();
-                setPendingDel({type:"cargo",id:f.id,label:f.vessel||"cargo"});
-              }}
-              style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.7}}
-              title="Delete"
-            >
-              ✕
-            </button>
-          </td>
+          <td
+  style={{ ...tdCtr, width: 26, minWidth: 26, maxWidth: 26, padding: "0 2px" }}
+  onClick={e=>e.stopPropagation()}
+>
+  <button
+    onClick={(e)=>{
+      e.stopPropagation();
+      setPendingDel({type:"cargo",id:f.id,label:f.vessel||"cargo"});
+    }}
+    style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.7}}
+    title="Delete"
+  >
+    ✕
+  </button>
+</td>
         </tr>
       );
     }}
