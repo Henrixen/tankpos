@@ -77,9 +77,6 @@ export default function EC({
       if (onDown) setTimeout(onDown, 20);
       return;
     }
-
-    // ArrowLeft / ArrowRight are NOT prevented,
-    // so they move between letters naturally inside the input.
   }
 
   if (editing) {
@@ -87,11 +84,11 @@ export default function EC({
       <td
         onClick={e => e.stopPropagation()}
         style={{
-  padding: "4px 6px",
-  background: "transparent",
-  border: "none",
-  verticalAlign: "middle"
-}}
+          padding: "6px 10px",
+          background: "transparent",
+          border: "none",
+          verticalAlign: "middle"
+        }}
       >
         <input
           ref={ref}
@@ -111,7 +108,8 @@ export default function EC({
             width: "100%",
             outline: "none",
             boxSizing: "border-box",
-            textTransform: "uppercase"
+            textTransform: "uppercase",
+            lineHeight: "16px"
           }}
         />
       </td>
@@ -148,7 +146,8 @@ export default function EC({
             whiteSpace: "nowrap",
             display: "block",
             minWidth: 0,
-            textTransform: "uppercase"
+            textTransform: "uppercase",
+            lineHeight: "16px"
           }}
         >
           {value || ""}
