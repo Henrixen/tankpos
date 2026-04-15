@@ -654,91 +654,105 @@ const filtV=useMemo(()=>{
   data={filtV.slice(0, posPage * POS_PAGE_SIZE)}
   keyField="vessel"
   renderRow={(v, td, i) => {
-    const isSel = sel === v.vessel;
-    const ppt = isOpenPPT(v.date);
-    const rowStyle = {
-      background: isSel ? "rgba(88,166,255,.10)" : rowBg(i),
-      outline: isSel ? "1px solid rgba(88,166,255,.2)" : "1px solid transparent",
-      cursor: "pointer"
-    };
+  const isSel = sel === v.vessel;
+  const ppt = isOpenPPT(v.date);
 
-    return (
-      <tr
-        key={v.vessel}
-        style={rowStyle}
-        onClick={() => {
-          setSel(sel === v.vessel ? null : v.vessel);
-          setSelectedAISVessels([v.vessel]);
+  return (
+    <>
+      {/* SELECT */}
+      <td
+        style={{ ...tdCtr, width: 28, padding: "0 2px" }}
+        onClick={e => {
+          e.stopPropagation();
+          setSelVessels(p => {
+            const n = new Set(p);
+            n.has(v.vessel) ? n.delete(v.vessel) : n.add(v.vessel);
+            return n;
+          });
         }}
       >
-        <td style={{ ...td, width: 28, textAlign: "center", padding: "0 2px" }}
-            onClick={e => {
-              e.stopPropagation();
-              setSelVessels(p => {
-                const n = new Set(p);
-                n.has(v.vessel) ? n.delete(v.vessel) : n.add(v.vessel);
-                return n;
-              });
-            }}>
-          <span style={{ fontSize: 12, color: selVessels.has(v.vessel) ? "#4fc3f7" : C.faint }}>
-            {selVessels.has(v.vessel) ? "[✓]" : "[ ]"}
-          </span>
-        </td>
+        <span style={{ fontSize: 12, color: selVessels.has(v.vessel) ? "#4fc3f7" : C.faint }}>
+          {selVessels.has(v.vessel) ? "[✓]" : "[ ]"}
+        </span>
+      </td>
 
-        <EC value={v.operator} color={C.dim} placeholder="Operator" onSave={val=>onUpdateV(v.vessel,"operator",val)} />
-        <EC value={toTCase(v.vessel)} color={"#79c0ff"} bold={true} placeholder="Vessel" onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)} />
+      {/* OPERATOR */}
+      <EC value={v.operator} color={C.dim} placeholder="Operator" onSave={val=>onUpdateV(v.vessel,"operator",val)} />
 
-        <td style={{ ...td, textAlign: "right", color: C.dim }}>{v.built || ""}</td>
-        <td style={{ ...td, textAlign: "right", color: C.dim }}>{fmtN(v.dwt)}</td>
-        <td style={{ ...td, color: C.dim }}>{v.coating || ""}</td>
-        <td style={{ ...td, textAlign: "right", color: C.dim }}>{v.loa || ""}</td>
-        <td style={{ ...td, textAlign: "right", color: C.dim }}>{v.beam || ""}</td>
-        <td style={{ ...td, textAlign: "right", color: C.dim }}>{fmtN(v.cbm)}</td>
+      {/* VESSEL */}
+      <EC value={toTCase(v.vessel)} color={"#79c0ff"} bold={true} placeholder="Vessel" onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)} />
 
-        <EC
-          value={v.date}
-          color={ppt ? "#a8e6a3" : "#79c0ff"}
-          placeholder="Date"
-          onSave={val => {
-            const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-            let fmt=val.trim();
-            const m1=fmt.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
-            if(m1){
-              const mo=parseInt(m1[2])-1;
-              if(mo>=0&&mo<12) fmt=parseInt(m1[1])+" "+MON[mo];
-            } else {
-              const m2=fmt.match(/^(\d{1,2})\s+([A-Za-z]{3})/i);
-              if(m2){
-                const mi=MON.findIndex(m=>m.toLowerCase()===m2[2].toLowerCase().slice(0,3));
-                if(mi>=0) fmt=parseInt(m2[1])+" "+MON[mi];
-              }
+      {/* BUILT */}
+      <td style={{ ...tdNum, color: C.dim }}>{v.built || ""}</td>
+
+      {/* DWT */}
+      <td style={{ ...tdNum, color: C.dim }}>{fmtN(v.dwt)}</td>
+
+      {/* COATING */}
+      <td style={{ ...tdTxt, color: C.dim }}>{v.coating || ""}</td>
+
+      {/* LOA */}
+      <td style={{ ...tdNum, color: C.dim }}>{v.loa || ""}</td>
+
+      {/* BEAM */}
+      <td style={{ ...tdNum, color: C.dim }}>{v.beam || ""}</td>
+
+      {/* CBM */}
+      <td style={{ ...tdNum, color: C.dim }}>{fmtN(v.cbm)}</td>
+
+      {/* DATE */}
+      <EC
+        value={v.date}
+        color={ppt ? "#a8e6a3" : "#79c0ff"}
+        placeholder="Date"
+        onSave={val => {
+          const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+          let fmt=val.trim();
+          const m1=fmt.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+          if(m1){
+            const mo=parseInt(m1[2])-1;
+            if(mo>=0&&mo<12) fmt=parseInt(m1[1])+" "+MON[mo];
+          } else {
+            const m2=fmt.match(/^(\d{1,2})\s+([A-Za-z]{3})/i);
+            if(m2){
+              const mi=MON.findIndex(m=>m.toLowerCase()===m2[2].toLowerCase().slice(0,3));
+              if(mi>=0) fmt=parseInt(m2[1])+" "+MON[mi];
             }
-            onUpdateV(v.vessel,"date",fmt);
+          }
+          onUpdateV(v.vessel,"date",fmt);
+        }}
+      />
+
+      {/* PORT */}
+      <EC value={v.openPort} color={v.openPort==="EMPLOYED"?C.purple:"#79c0ff"} placeholder="Port" onSave={val=>onUpdateV(v.vessel,"openPort",val)} />
+
+      {/* COMMENT */}
+      <EC value={v.comment} color={C.dim} placeholder="Comment" onSave={val=>onUpdateV(v.vessel,"comment",val)} />
+
+      {/* UPDATED */}
+      <td style={{ ...tdCtr, color: C.faint }}>
+        {v.updatedAt ? new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
+      </td>
+
+      {/* DELETE */}
+      <td
+        style={{ ...tdCtr, width: 24, minWidth: 24, maxWidth: 24, padding: "0 2px" }}
+        onClick={e=>e.stopPropagation()}
+      >
+        <button
+          onClick={(e)=>{
+            e.stopPropagation();
+            setPendingDel({type:"vessel",id:v.vessel,label:v.vessel});
           }}
-        />
-
-        <EC value={v.openPort} color={v.openPort==="EMPLOYED"?C.purple:"#79c0ff"} placeholder="Port" onSave={val=>onUpdateV(v.vessel,"openPort",val)} />
-        <EC value={v.comment} color={C.dim} placeholder="Comment" onSave={val=>onUpdateV(v.vessel,"comment",val)} />
-
-        <td style={{ ...tdCtr, color: C.faint }}>
-  {v.updatedAt ? new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
-</td>
-
-        <td style={{ ...td, width: 18, textAlign: "center", padding: 0 }} onClick={e=>e.stopPropagation()}>
-          <button
-            onClick={(e)=>{
-              e.stopPropagation();
-              setPendingDel({type:"vessel",id:v.vessel,label:v.vessel});
-            }}
-            style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:10,padding:"0 2px",opacity:0.7}}
-            title="Delete"
-          >
-            ✕
-          </button>
-        </td>
-      </tr>
-    );
-  }}
+          style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:10,padding:"0 2px",opacity:0.7}}
+          title="Delete"
+        >
+          ✕
+        </button>
+      </td>
+    </>
+  );
+}}
 />
                   </div>
 
@@ -931,63 +945,94 @@ const filtV=useMemo(()=>{
     data={filtC}
     keyField="id"
     renderRow={(f, td, ri) => {
-      const sc=f.status==="FIXED"?C.green:f.status==="SUBS"?C.purple:f.status==="FAILED"?C.red:C.faint;
+  const sc = f.status==="FIXED" ? C.green : f.status==="SUBS" ? C.purple : f.status==="FAILED" ? C.red : C.faint;
 
-      return (
-        <tr key={f.id} style={{ background: rowBg(ri) }}>
-          <td style={{ ...td, width: 28, textAlign: "center", padding: "0 2px" }}
-              onClick={e => {
-                e.stopPropagation();
-                setSelCargoes(p => {
-                  const n = new Set(p);
-                  n.has(f.id) ? n.delete(f.id) : n.add(f.id);
-                  return n;
-                });
-              }}>
-            <span style={{ fontSize: 12, color: selCargoes.has(f.id) ? "#4fc3f7" : C.faint }}>
-              {selCargoes.has(f.id) ? "[✓]" : "[ ]"}
-            </span>
-          </td>
+  return (
+    <>
+      {/* SELECT */}
+      <td
+        style={{ ...tdCtr, width: 28, padding: "0 2px" }}
+        onClick={e => {
+          e.stopPropagation();
+          setSelCargoes(p => {
+            const n = new Set(p);
+            n.has(f.id) ? n.delete(f.id) : n.add(f.id);
+            return n;
+          });
+        }}
+      >
+        <span style={{ fontSize: 12, color: selCargoes.has(f.id) ? "#4fc3f7" : C.faint }}>
+          {selCargoes.has(f.id) ? "[✓]" : "[ ]"}
+        </span>
+      </td>
 
-          <td style={{ ...td, color: sc, fontWeight: 700, cursor: "pointer" }}
-              onClick={e => {
-                e.stopPropagation();
-                const opts=["SUBS","FIXED","FAILED",""];
-                const cur=opts.indexOf(f.status||"");
-                onUpdateC(f.id,"status",opts[(cur+1)%opts.length]);
-              }}>
-            {f.status || ""}
-          </td>
+      {/* STATUS */}
+      <td
+        style={{ ...tdCtr, color: sc, fontWeight: 700, cursor: "pointer" }}
+        onClick={e => {
+          e.stopPropagation();
+          const opts = ["SUBS","FIXED","FAILED",""];
+          const cur = opts.indexOf(f.status || "");
+          onUpdateC(f.id, "status", opts[(cur + 1) % opts.length]);
+        }}
+      >
+        {f.status || ""}
+      </td>
 
-          <EC value={f.vessel} color={C.blue} bold placeholder="TBN" onSave={v2=>onUpdateC(f.id,"vessel",v2)} />
-          <EC value={toTCase(f.charterer)} color={"#79c0ff"} placeholder="" onSave={v2=>onUpdateC(f.id,"charterer",toTCase(v2))} />
-          <EC value={normaliseQty(f.qty)} color={C.amber} placeholder="" onSave={v2=>onUpdateC(f.id,"qty",normaliseQty(v2))} />
-          <EC value={f.cargo||""} placeholder="" onSave={v2=>onUpdateC(f.id,"cargo",v2)} />
-          <EC value={toTCase(f.load||"")} placeholder="" onSave={v2=>onUpdateC(f.id,"load",v2)} />
-          <EC value={toTCase(f.disch||"")} placeholder="" onSave={v2=>onUpdateC(f.id,"disch",v2)} />
-          <EC value={fmtDateShort(f.from)} placeholder="" onSave={v2=>onUpdateC(f.id,"from",v2)} />
-          <EC value={fmtDateShort(f.to)} placeholder="" onSave={v2=>onUpdateC(f.id,"to",v2)} />
-          <EC value={fmtFreight(f.freight)||f.freight} color={"#a8e6a3"} placeholder="" onSave={v2=>onUpdateC(f.id,"freight",fmtFreight(v2)||v2)} />
-          <EC value={f.comment||""} color={C.dim} placeholder="" onSave={v2=>onUpdateC(f.id,"comment",v2)} />
+      {/* VESSEL */}
+      <EC value={f.vessel} color={C.blue} bold placeholder="TBN" onSave={v2=>onUpdateC(f.id,"vessel",v2)} />
 
-          <td
-  style={{ ...tdCtr, width: 26, minWidth: 26, maxWidth: 26, padding: "0 2px" }}
-  onClick={e=>e.stopPropagation()}
->
-  <button
-    onClick={(e)=>{
-      e.stopPropagation();
-      setPendingDel({type:"cargo",id:f.id,label:f.vessel||"cargo"});
-    }}
-    style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.7}}
-    title="Delete"
-  >
-    ✕
-  </button>
-</td>
-        </tr>
-      );
-    }}
+      {/* CHARTERER */}
+      <EC value={toTCase(f.charterer)} color={"#79c0ff"} placeholder="" onSave={v2=>onUpdateC(f.id,"charterer",toTCase(v2))} />
+
+      {/* QTY */}
+      <EC value={normaliseQty(f.qty)} color={C.amber} placeholder="" onSave={v2=>onUpdateC(f.id,"qty",normaliseQty(v2))} />
+
+      {/* CARGO */}
+      <EC value={f.cargo || ""} placeholder="" onSave={v2=>onUpdateC(f.id,"cargo",v2)} />
+
+      {/* LOAD */}
+      <EC value={toTCase(f.load || "")} placeholder="" onSave={v2=>onUpdateC(f.id,"load",v2)} />
+
+      {/* DISCH */}
+      <EC value={toTCase(f.disch || "")} placeholder="" onSave={v2=>onUpdateC(f.id,"disch",v2)} />
+
+      {/* FROM */}
+      <EC value={fmtDateShort(f.from)} placeholder="" onSave={v2=>onUpdateC(f.id,"from",v2)} />
+
+      {/* TO */}
+      <EC value={fmtDateShort(f.to)} placeholder="" onSave={v2=>onUpdateC(f.id,"to",v2)} />
+
+      {/* FREIGHT */}
+      <EC value={fmtFreight(f.freight) || f.freight} color={"#a8e6a3"} placeholder="" onSave={v2=>onUpdateC(f.id,"freight",fmtFreight(v2) || v2)} />
+
+      {/* COMMENT */}
+      <EC value={f.comment || ""} color={C.dim} placeholder="" onSave={v2=>onUpdateC(f.id,"comment",v2)} />
+
+      {/* UPDATED */}
+      <td style={{ ...tdCtr, color: C.faint }}>
+        {f.updated ? new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
+      </td>
+
+      {/* DELETE */}
+      <td
+        style={{ ...tdCtr, width: 26, minWidth: 26, maxWidth: 26, padding: "0 2px" }}
+        onClick={e=>e.stopPropagation()}
+      >
+        <button
+          onClick={(e)=>{
+            e.stopPropagation();
+            setPendingDel({type:"cargo",id:f.id,label:f.vessel||"cargo"});
+          }}
+          style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.7}}
+          title="Delete"
+        >
+          ✕
+        </button>
+      </td>
+    </>
+  );
+}}
   />}
               {hasMore&&
               <div style={{textAlign:"center",padding:"12px"}}>
