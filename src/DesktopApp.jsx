@@ -677,10 +677,31 @@ const filtV=useMemo(()=>{
       </td>
 
       {/* OPERATOR */}
-      <EC value={v.operator} color={C.dim} placeholder="Operator" onSave={val=>onUpdateV(v.vessel,"operator",val)} />
+      <EC
+  value={v.operator}
+  color={C.dim}
+  placeholder="Operator"
+  onSave={val=>onUpdateV(v.vessel,"operator",val)}
+  data-cell={`${i}-operator`}
+  onTab={() => document.querySelector(`[data-cell="${i}-vessel"]`)?.click()}
+  onShiftTab={() => document.querySelector(`[data-cell="${i}-select"]`)?.click()}
+  onDown={() => document.querySelector(`[data-cell="${i+1}-operator"]`)?.click()}
+  onUp={() => document.querySelector(`[data-cell="${i-1}-operator"]`)?.click()}
+/>
 
       {/* VESSEL */}
-      <EC value={toTCase(v.vessel)} color={"#79c0ff"} bold={true} placeholder="Vessel" onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)} />
+      <EC
+  value={toTCase(v.vessel)}
+  color={ppt ? "#a8e6a3" : "#79c0ff"}
+  bold={true}
+  placeholder="Vessel"
+  onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)}
+  data-cell={`${i}-vessel`}
+  onTab={() => document.querySelector(`[data-cell="${i}-date"]`)?.click()}
+  onShiftTab={() => document.querySelector(`[data-cell="${i}-operator"]`)?.click()}
+  onDown={() => document.querySelector(`[data-cell="${i+1}-vessel"]`)?.click()}
+  onUp={() => document.querySelector(`[data-cell="${i-1}-vessel"]`)?.click()}
+/>
 
       {/* BUILT */}
       <td style={{ ...tdNum, color: C.dim }}>{v.built || ""}</td>
@@ -702,32 +723,57 @@ const filtV=useMemo(()=>{
 
       {/* DATE */}
       <EC
-        value={v.date}
-        color={ppt ? "#a8e6a3" : "#79c0ff"}
-        placeholder="Date"
-        onSave={val => {
-          const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-          let fmt=val.trim();
-          const m1=fmt.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
-          if(m1){
-            const mo=parseInt(m1[2])-1;
-            if(mo>=0&&mo<12) fmt=parseInt(m1[1])+" "+MON[mo];
-          } else {
-            const m2=fmt.match(/^(\d{1,2})\s+([A-Za-z]{3})/i);
-            if(m2){
-              const mi=MON.findIndex(m=>m.toLowerCase()===m2[2].toLowerCase().slice(0,3));
-              if(mi>=0) fmt=parseInt(m2[1])+" "+MON[mi];
-            }
-          }
-          onUpdateV(v.vessel,"date",fmt);
-        }}
-      />
+  value={v.date}
+  color={ppt ? "#a8e6a3" : "#79c0ff"}
+  placeholder="Date"
+  onSave={val => {
+    const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    let fmt=val.trim();
+    const m1=fmt.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+    if(m1){
+      const mo=parseInt(m1[2])-1;
+      if(mo>=0&&mo<12) fmt=parseInt(m1[1])+" "+MON[mo];
+    } else {
+      const m2=fmt.match(/^(\d{1,2})\s+([A-Za-z]{3})/i);
+      if(m2){
+        const mi=MON.findIndex(m=>m.toLowerCase()===m2[2].toLowerCase().slice(0,3));
+        if(mi>=0) fmt=parseInt(m2[1])+" "+MON[mi];
+      }
+    }
+    onUpdateV(v.vessel,"date",fmt);
+  }}
+  data-cell={`${i}-date`}
+  onTab={() => document.querySelector(`[data-cell="${i}-port"]`)?.click()}
+  onShiftTab={() => document.querySelector(`[data-cell="${i}-vessel"]`)?.click()}
+  onDown={() => document.querySelector(`[data-cell="${i+1}-date"]`)?.click()}
+  onUp={() => document.querySelector(`[data-cell="${i-1}-date"]`)?.click()}
+/>
 
       {/* PORT */}
-      <EC value={v.openPort} color={v.openPort==="EMPLOYED"?C.purple:"#79c0ff"} placeholder="Port" onSave={val=>onUpdateV(v.vessel,"openPort",val)} />
+      <EC
+  value={v.openPort}
+  color={v.openPort==="EMPLOYED"?C.purple:"#79c0ff"}
+  placeholder="Port"
+  onSave={val=>onUpdateV(v.vessel,"openPort",val)}
+  data-cell={`${i}-port`}
+  onTab={() => document.querySelector(`[data-cell="${i}-comment"]`)?.click()}
+  onShiftTab={() => document.querySelector(`[data-cell="${i}-date"]`)?.click()}
+  onDown={() => document.querySelector(`[data-cell="${i+1}-port"]`)?.click()}
+  onUp={() => document.querySelector(`[data-cell="${i-1}-port"]`)?.click()}
+/>
 
       {/* COMMENT */}
-      <EC value={v.comment} color={C.dim} placeholder="Comment" onSave={val=>onUpdateV(v.vessel,"comment",val)} />
+      <EC
+  value={v.comment}
+  color={C.dim}
+  placeholder="Comment"
+  onSave={val=>onUpdateV(v.vessel,"comment",val)}
+  data-cell={`${i}-comment`}
+  onTab={() => document.querySelector(`[data-cell="${i+1}-vessel"]`)?.click()}
+  onShiftTab={() => document.querySelector(`[data-cell="${i}-port"]`)?.click()}
+  onDown={() => document.querySelector(`[data-cell="${i+1}-comment"]`)?.click()}
+  onUp={() => document.querySelector(`[data-cell="${i-1}-comment"]`)?.click()}
+/>
 
       {/* UPDATED */}
       <td style={{ ...tdCtr, color: C.faint }}>
