@@ -462,9 +462,33 @@ const filtV=useMemo(()=>{
             <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
               
               {/* LEFT: Parse + Fixing (32%) */}
-              <div style={{width:mobile?"100%":"32%",display:"flex",flexDirection:"column",gap:10}}>
-  <div><ParsePanel vessels={vessels} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="pos" vesselDB={{}}/></div>
-  <div><FixingWindow vessels={vessels14d} opFilter={opFilter} onOpFilter={op=>setOpFilter(o=>o===op?null:op)} /></div>
+              <div
+  style={{
+    width: mobile ? "100%" : "32%",
+    height: mobile ? "auto" : 460,
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    overflow: "hidden"
+  }}
+>
+  <div style={{ flex: "0 0 auto" }}>
+    <ParsePanel
+      vessels={vessels}
+      onAddVessels={onAddVessels}
+      onAddCargoes={onAddCargoes}
+      lockedMode="pos"
+      vesselDB={{}}
+    />
+  </div>
+
+  <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+    <FixingWindow
+      vessels={vessels14d}
+      opFilter={opFilter}
+      onOpFilter={op => setOpFilter(o => o === op ? null : op)}
+    />
+  </div>
 </div>
  
               {/* CENTER: Rate Matrix (34%) */}
