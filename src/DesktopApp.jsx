@@ -43,8 +43,35 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   const [pendingDel,setPendingDel]=useState(null);
   const [restoreMsg,setRestoreMsg]=useState("");
   const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
-  const [colWidthsV,setColWidthsV]=useState({Operator:120,Vessel:120,Built:48,DWT:55,Coating:60,LOA:48,Beam:46,CBM:55,Date:68,OpenPort:100,Comment:200,FileDate:60,Spec:72});
-  const [colWidthsC,setColWidthsC]=useState({Status:60,Vessel:130,Charterer:110,Cargo:80,Qty:60,Load:100,Disch:100,LaycanStart:90,LaycanEnd:90,Freight:90,Comment:120,Updated:88});
+  const [colWidthsV,setColWidthsV]=useState({
+  Operator:190,
+  Vessel:155,
+  Built:60,
+  DWT:72,
+  Coating:78,
+  LOA:62,
+  Beam:56,
+  CBM:78,
+  Date:74,
+  OpenPort:150,
+  Comment:220,
+  FileDate:96,
+  Spec:72
+});
+  const [colWidthsC,setColWidthsC]=useState({
+  Status:68,
+  Vessel:150,
+  Charterer:150,
+  Cargo:95,
+  Qty:68,
+  Load:120,
+  Disch:120,
+  LaycanStart:82,
+  LaycanEnd:82,
+  Freight:96,
+  Comment:180,
+  Updated:96
+});
   const [askAiExpanded,setAskAiExpanded]=useState(false);
   const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
   const [selectedAISVessels,setSelectedAISVessels]=useState([]);
@@ -53,25 +80,32 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   
   // Dashboard / bunker-matrix theme styles
   const th2={
-    padding:"8px 10px",
-    color:"rgba(120,160,220,0.45)",
-    fontWeight:700,
-    fontSize:11,
-    textTransform:"uppercase",
-    letterSpacing:"0.07em",
-    textAlign:"left",
-    background:C.bg4,
-    borderBottom:"1px solid "+C.bd2,
-    whiteSpace:"nowrap"
-  };
+  padding:"7px 10px",
+  color:"rgba(120,160,220,0.55)",
+  fontWeight:700,
+  fontSize:11,
+  textTransform:"uppercase",
+  letterSpacing:"0.08em",
+  textAlign:"left",
+  background:C.bg4,
+  borderBottom:"1px solid rgba(58,130,246,0.14)",
+  whiteSpace:"nowrap",
+  verticalAlign:"middle"
+};
   const td2={
-    padding:"9px 10px",
-    color:"#d9e8ff",
-    fontWeight:600,
-    fontSize:12,
-    borderBottom:"1px solid rgba(58,130,246,0.10)",
-    verticalAlign:"middle"
-  };
+  padding:"6px 10px",
+  color:"#d9e8ff",
+  fontWeight:500,
+  fontSize:12,
+  borderBottom:"1px solid rgba(255,255,255,0.035)",
+  verticalAlign:"middle",
+  whiteSpace:"nowrap",
+  overflow:"hidden",
+  textOverflow:"ellipsis"
+};
+  const tdNum = {...td2, textAlign:"right", fontVariantNumeric:"tabular-nums"};
+  const tdCtr = {...td2, textAlign:"center", fontVariantNumeric:"tabular-nums"};
+  const tdTxt = {...td2, textAlign:"left"};
   const tableWrap={
     border:"1px solid "+C.bd,
     borderRadius:8,
