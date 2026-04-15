@@ -170,8 +170,6 @@ export default function EC({
             textTransform: "uppercase",
             lineHeight: "28px"
           }}
-        import React, { useState, useRef } from "react";
-import { C } from "./constants";
 
 const CELL_HEIGHT = 34;
 const INNER_HEIGHT = 28;
