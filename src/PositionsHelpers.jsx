@@ -100,7 +100,7 @@ function FixingWindow({vessels, fileDate, opFilter, onOpFilter}){
         ⏱ Fixing window by operator
       </div>
 
-      <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:308,overflowY:"auto",paddingRight:2}}>
+      <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:220,overflowY:"auto",paddingRight:2}}>
         {rows.map(r=>{
           const pct = Math.max(4, Math.round((Math.max(0, r.days ?? 0) / maxDays) * 100));
           const active = opFilter===r.op;
