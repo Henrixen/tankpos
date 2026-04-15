@@ -15,32 +15,50 @@ export default function MatrixTable({
   };
 
   const th = {
-    padding: "6px 10px",
-    background: "rgba(20,30,50,0.9)",
-    color: "rgba(120,160,220,0.6)",
+    padding: "7px 10px",
+    background: "rgba(20,30,50,0.92)",
+    color: "rgba(120,160,220,0.58)",
     fontSize: 11,
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.08em",
-    borderBottom: "1px solid " + C.bd2,
-    whiteSpace: "nowrap"
-  };
-
-  const td = {
-    padding: "6px 10px",
-    fontSize: 12,
-    color: C.tx,
-    borderBottom: "1px solid rgba(255,255,255,0.04)",
-    whiteSpace: "nowrap"
+    borderBottom: "1px solid rgba(58,130,246,0.14)",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis"
   };
 
   return (
     <div style={wrap}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <table
+        style={{
+          width: "100%",
+          tableLayout: "fixed",
+          borderCollapse: "collapse",
+          fontSize: 12
+        }}
+      >
+        <colgroup>
+          {columns.map((col) => (
+            <col
+              key={col.key}
+              style={{
+                width: col.width ? `${col.width}px` : "auto"
+              }}
+            />
+          ))}
+        </colgroup>
+
         <thead>
           <tr>
             {columns.map((col) => (
-              <th key={col.key} style={{ ...th, textAlign: col.align || "left" }}>
+              <th
+                key={col.key}
+                style={{
+                  ...th,
+                  textAlign: col.align || "left"
+                }}
+              >
                 {col.label}
               </th>
             ))}
@@ -55,7 +73,7 @@ export default function MatrixTable({
                 background: i % 2 ? "rgba(255,255,255,0.02)" : "transparent"
               }}
             >
-              {renderRow(row, td)}
+              {renderRow(row, null, i)}
             </tr>
           ))}
         </tbody>
