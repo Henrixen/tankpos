@@ -33,7 +33,18 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
   const totalCount = buckets.reduce((sum, b) => sum + b.vessels.length, 0) || 1;
 
   return(
-    <div style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:7,padding:"10px 14px 14px 14px",flex:1,boxSizing:"border-box",display:"flex",flexDirection:"column",minHeight:220,height:"100%"}}>
+    <div style={{
+  background:C.bg2,
+  border:"1px solid "+C.bd2,
+  borderRadius:7,
+  padding:"8px 12px 10px 12px",
+  flex:1,
+  boxSizing:"border-box",
+  display:"flex",
+  flexDirection:"column",
+  minHeight:150,
+  height:"100%"
+}}>
       {nodateOpen.length>0&&<div style={{fontSize:11,color:C.faint,marginBottom:8,textAlign:"right"}}>{nodateOpen.length} no date</div>}
       {/* Bar chart */}
       <div style={{display:"flex",gap:8,flex:1}}>
@@ -44,12 +55,12 @@ const barH = Math.max(pct * 100, b.vessels.length > 0 ? 4 : 0);
             <div key={b.label} onClick={()=>onBucketFilter&&onBucketFilter(b.sublabel)}
               style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",cursor:b.vessels.length>0?"pointer":"default",borderRadius:6,padding:"2px 2px 0 2px",outline:bucketFilters.has(b.sublabel)?"2px solid "+b.col:"2px solid transparent",transition:"outline 0.15s"}}
               title={b.vessels.length>0?b.vessels.map(v=>v.vessel).join(", "):b.sublabel}>
-              <div style={{fontSize:13,fontWeight:800,color:b.vessels.length>0?b.col:"transparent",marginBottom:3,minHeight:18}}>{b.vessels.length>0?b.vessels.length:""}</div>
-              <div style={{width:"100%",background:C.bg3,borderRadius:4,flex:1,display:"flex",alignItems:"flex-end",overflow:"hidden",minHeight:120,height:"100%"}}>
+              <div style={{fontSize:12,fontWeight:800,color:b.vessels.length>0?b.col:"transparent",marginBottom:2,minHeight:14}}>{b.vessels.length>0?b.vessels.length:""}</div>
+              <div style={{width:"100%",background:C.bg3,borderRadius:4,flex:1,display:"flex",alignItems:"flex-end",overflow:"hidden",minHeight:70,height:"100%"}}>
                 <div style={{width:"100%",height:b.vessels.length>0?Math.max(barH,8)+"%":"4%",background:b.col+(b.vessels.length>0?"cc":"22"),borderRadius:4,transition:"height 0.3s"}}/>
               </div>
-              <div style={{fontSize:12,color:b.vessels.length>0?b.col:C.faint,fontWeight:700,textAlign:"center",marginTop:7,lineHeight:1.2}}>{b.sublabel}</div>
-              <div style={{fontSize:10,color:C.faint,textAlign:"center",marginTop:3,lineHeight:1.3,maxWidth:"100%",wordBreak:"break-word"}}>{b.label}</div>
+              <div style={{fontSize:11,color:b.vessels.length>0?b.col:C.faint,fontWeight:700,textAlign:"center",marginTop:4,lineHeight:1.1}}>{b.sublabel}</div>
+              <div style={{fontSize:9,color:C.faint,textAlign:"center",marginTop:2,lineHeight:1.15,maxWidth:"100%",wordBreak:"break-word"}}>{b.label}</div>
             </div>
           );
         })}
