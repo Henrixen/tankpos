@@ -519,21 +519,21 @@ const filtV=useMemo(()=>{
                 {/* Second row: PPT + Filters (grid aligned) */}
 <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row",marginTop:-5}}>
                   
-                  {/* LEFT: PPT Timeline (32%) */}
-                  {!mobile&&(
-                    <div style={{width:"32%",height:220}}>
-                      <OpeningBreakdown
-                        vessels={vessels14d.filter(v=>vesselsTodayUpdated.has(v.vessel))}
-                        filteredVessels={filtV.filter(v=>vesselsTodayUpdated.has(v.vessel))}
-                        bucketFilters={bucketFilters}
-                        onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
-                        fillHeight={false}
-                      />
-                    </div>
-                  )}
+  {/* LEFT: PPT Timeline (32%) */}
+  {!mobile&&(
+    <div style={{width:"32%",height:220}}>
+      <OpeningBreakdown
+        vessels={vessels14d.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+        filteredVessels={filtV.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+        bucketFilters={bucketFilters}
+        onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
+        fillHeight={false}
+      />
+    </div>
+  )}
 
-                  {/* CENTER: Filters (34%) - same height as PPT */}
-                  <div style={{width:mobile?"100%":"34%",display:"flex",flexDirection:"column",gap:6}}>
+  {/* CENTER: Filters (34%) - same height as PPT */}
+  <div style={{width:mobile?"100%":"34%",height:mobile?"auto":220,display:"flex",flexDirection:"column",gap:6}}>
 
                     {selVessels.size>0&&(
                       <button
