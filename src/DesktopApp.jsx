@@ -873,6 +873,11 @@ const filtV=useMemo(()=>{
   columns={posColumns}
   data={filtV.slice(0, posPage * POS_PAGE_SIZE)}
   keyField="vessel"
+  selectedKey={sel}
+  onRowClick={(row) => {
+    setSel(sel === row.vessel ? null : row.vessel);
+    setSelectedAISVessels([row.vessel]);
+  }}
   renderRow={(v, td, i) => {
   const isSel = sel === v.vessel;
   const ppt = isOpenPPT(v.date);
