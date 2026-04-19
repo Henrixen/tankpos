@@ -572,174 +572,262 @@ const filtV=useMemo(()=>{
                     )}
 
                     {/* UNIFIED FILTER PANEL */}
-                    <div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 12px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,height:200,boxSizing:"border-box",overflowY:"visible",flex:1}}>
-
-                      {/* STATUS */}
 <div style={{
   display:"flex",
-  alignItems:"center",
-  gap:10,
-  borderBottom:"1px solid "+C.bd2,
-  paddingBottom:6,
-  marginBottom:6
+  flexDirection:"column",
+  gap:8,
+  padding:"10px 12px",
+  background:C.bg3,
+  border:"1px solid "+C.bd2,
+  borderRadius:6,
+  height:200,
+  boxSizing:"border-box",
+  overflowY:"auto",
+  flex:1
 }}>
+
+  {/* STATUS */}
   <div style={{
-    width:70,
-    fontSize:11,
-    fontWeight:700,
-    color:C.amber,
-    textTransform:"uppercase"
+    display:"flex",
+    alignItems:"center",
+    gap:10,
+    borderBottom:"1px solid "+C.bd2,
+    paddingBottom:6,
+    marginBottom:6
   }}>
-    Status
-  </div>
-
-  <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-    {/* status buttons */}
-  </div>
-</div>
-
-{/* UPDATED */}
-<div style={{
-  display:"flex",
-  alignItems:"center",
-  gap:10,
-  borderBottom:"1px solid "+C.bd2,
-  paddingBottom:6,
-  marginBottom:6
-}}>
-  <div style={{
-    width:70,
-    fontSize:11,
-    fontWeight:700,
-    color:C.blue,
-    textTransform:"uppercase"
-  }}>
-    Updated
-  </div>
-
-  <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-    {/* updated buttons */}
-  </div>
-</div>
-
-{/* REGION */}
-<div style={{
-  display:"flex",
-  alignItems:"center",
-  gap:10,
-  borderBottom:"1px solid "+C.bd2,
-  paddingBottom:6,
-  marginBottom:6
-}}>
-  <div style={{
-    width:70,
-    fontSize:11,
-    fontWeight:700,
-    color:"#7dd3fc",
-    textTransform:"uppercase"
-  }}>
-    Region
-  </div>
-
-  <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-    {/* region buttons */}
-  </div>
-</div>
-
-{/* S.REGION */}
-<div style={{
-  display:"flex",
-  alignItems:"center",
-  gap:10,
-  borderBottom:"1px solid "+C.bd2,
-  paddingBottom:6,
-  marginBottom:6
-}}>
-  <div style={{
-    width:70,
-    fontSize:11,
-    fontWeight:700,
-    color:C.purple,
-    textTransform:"uppercase"
-  }}>
-    S.Region
-  </div>
-
-  <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-    {/* super region buttons */}
-  </div>
-</div>
-
-{/* SEGMENT */}
-<div style={{
-  display:"flex",
-  alignItems:"center",
-  gap:10,
-  borderBottom:"1px solid "+C.bd2,
-  paddingBottom:6,
-  marginBottom:6
-}}>
-  <div style={{
-    width:70,
-    fontSize:11,
-    fontWeight:700,
-    color:C.green,
-    textTransform:"uppercase"
-  }}>
-    Segment
-  </div>
-
-  <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-    {/* segment buttons */}
-  </div>
-</div>
-
-{/* DWT */}
-<div style={{
-  display:"flex",
-  alignItems:"center",
-  gap:10,
-  borderBottom:"1px solid "+C.bd2,
-  paddingBottom:6,
-  marginBottom:6
-}}>
-  <div style={{
-    width:70,
-    fontSize:11,
-    fontWeight:700,
-    color:"#f59e0b",
-    textTransform:"uppercase"
-  }}>
-    DWT
-  </div>
-
-  <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-    {/* dwt buttons */}
-  </div>
-</div>
-
-{/* BUILT (last — no divider) */}
-<div style={{
-  display:"flex",
-  alignItems:"center",
-  gap:10
-}}>
-  <div style={{
-    width:70,
-    fontSize:11,
-    fontWeight:700,
-    color:"#94a3b8",
-    textTransform:"uppercase"
-  }}>
-    Built
-  </div>
-
-  <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-    {/* built buttons */}
+    <div style={{
+      width:70,
+      fontSize:11,
+      fontWeight:700,
+      color:C.amber,
+      textTransform:"uppercase"
+    }}>
+      Status
     </div>
-   </div>
+
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
+      {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Hide Emp"]].map(([f,l])=>(
+        <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
+      ))}
+      {filters.size>0&&(
+        <button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
+      )}
+    </div>
   </div>
-</div>
+
+  {/* UPDATED */}
+  <div style={{
+    display:"flex",
+    alignItems:"center",
+    gap:10,
+    borderBottom:"1px solid "+C.bd2,
+    paddingBottom:6,
+    marginBottom:6
+  }}>
+    <div style={{
+      width:70,
+      fontSize:11,
+      fontWeight:700,
+      color:C.blue,
+      textTransform:"uppercase"
+    }}>
+      Updated
+    </div>
+
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
+      {[["","All"],["today","Today"],["week","This wk"]].map(([v,l])=>(
+        <button
+          key={v||"all"}
+          onClick={()=>setUpdFilter(v)}
+          style={fb(updFilter===v && (v!=="" || updFilter===""))}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
+  </div>
+
+  {/* REGION */}
+  <div style={{
+    display:"flex",
+    alignItems:"center",
+    gap:10,
+    borderBottom:"1px solid "+C.bd2,
+    paddingBottom:6,
+    marginBottom:6
+  }}>
+    <div style={{
+      width:70,
+      fontSize:11,
+      fontWeight:700,
+      color:"#7dd3fc",
+      textTransform:"uppercase"
+    }}>
+      Region
+    </div>
+
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
+      {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(
+        <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
+      ))}
+    </div>
+  </div>
+
+  {/* S.REGION */}
+  <div style={{
+    display:"flex",
+    alignItems:"center",
+    gap:10,
+    borderBottom:"1px solid "+C.bd2,
+    paddingBottom:6,
+    marginBottom:6
+  }}>
+    <div style={{
+      width:70,
+      fontSize:11,
+      fontWeight:700,
+      color:C.purple,
+      textTransform:"uppercase"
+    }}>
+      S.Region
+    </div>
+
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
+      {superRegionOptions.filter(r=>r!=="ALL").map(r=>(
+        <button
+          key={r}
+          onClick={e=>{
+            if(e.ctrlKey||e.metaKey){
+              setSuperRegionFilter(prev=>{
+                const n=new Set(prev);
+                n.has(r)?n.delete(r):n.add(r);
+                return n;
+              });
+            } else {
+              setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));
+            }
+          }}
+          style={fb(superRegionFilter.has(r))}
+        >
+          {r}
+        </button>
+      ))}
+      {superRegionFilter.size>0&&(
+        <button onClick={()=>setSuperRegionFilter(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
+      )}
+    </div>
+  </div>
+
+  {/* SEGMENT */}
+  <div style={{
+    display:"flex",
+    alignItems:"center",
+    gap:10,
+    borderBottom:"1px solid "+C.bd2,
+    paddingBottom:6,
+    marginBottom:6
+  }}>
+    <div style={{
+      width:70,
+      fontSize:11,
+      fontWeight:700,
+      color:C.green,
+      textTransform:"uppercase"
+    }}>
+      Segment
+    </div>
+
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
+      {(()=>{
+        const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];
+        const segs=[...new Set(vessels.map(v=>v.segment).filter(Boolean))];
+        return segs
+          .sort((a,b)=>{
+            const ai=ORDER.indexOf(a), bi=ORDER.indexOf(b);
+            return (ai===-1?99:ai)-(bi===-1?99:bi);
+          })
+          .map(s=>(
+            <button
+              key={s}
+              onClick={e=>{
+                if(e.ctrlKey||e.metaKey){
+                  setSegmentFilter(prev=>{
+                    const n=new Set(prev);
+                    n.has(s)?n.delete(s):n.add(s);
+                    return n;
+                  });
+                } else {
+                  setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));
+                }
+                setPosPage(1);
+              }}
+              style={fb(segmentFilter.has(s))}
+            >
+              {s}
+            </button>
+          ));
+      })()}
+      {segmentFilter.size>0&&(
+        <button onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
+      )}
+    </div>
+  </div>
+
+  {/* DWT */}
+  <div style={{
+    display:"flex",
+    alignItems:"center",
+    gap:10,
+    borderBottom:"1px solid "+C.bd2,
+    paddingBottom:6,
+    marginBottom:6
+  }}>
+    <div style={{
+      width:70,
+      fontSize:11,
+      fontWeight:700,
+      color:"#f59e0b",
+      textTransform:"uppercase"
+    }}>
+      DWT
+    </div>
+
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
+      {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(
+        <button key={v} onClick={()=>{setDwtFilter(dwtFilter===v?"":v);setPosPage(1);}} style={fb(dwtFilter===v)}>{l}</button>
+      ))}
+      {dwtFilter&&(
+        <button onClick={()=>{setDwtFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
+      )}
+    </div>
+  </div>
+
+  {/* BUILT */}
+  <div style={{
+    display:"flex",
+    alignItems:"center",
+    gap:10
+  }}>
+    <div style={{
+      width:70,
+      fontSize:11,
+      fontWeight:700,
+      color:"#94a3b8",
+      textTransform:"uppercase"
+    }}>
+      Built
+    </div>
+
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
+      {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(
+        <button key={v} onClick={()=>{setBuiltFilter(builtFilter===v?"":v);setPosPage(1);}} style={fb(builtFilter===v)}>{l}</button>
+      ))}
+      {builtFilter&&(
+        <button onClick={()=>{setBuiltFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
+      )}
+    </div>
+  </div>
+</div></div>
                   {/* RIGHT: Ask AI (34%) - fills remaining height */}
 {!mobile&&(
   <div style={{width:"34%",display:"flex",flexDirection:"column",alignSelf:"stretch"}}>
