@@ -73,17 +73,18 @@ export default function MatrixTable({
 
             return (
               <tr
-                key={row[keyField] || i}
-                onClick={() => onRowClick && onRowClick(row)}
-                style={{
-                  background: isSelected
-                    ? "rgba(88,166,255,0.14)"
-                    : i % 2
-                    ? "rgba(255,255,255,0.02)"
-                    : "transparent",
-                  cursor: onRowClick ? "pointer" : "default"
-                }}
-              >
+  key={row[keyField] || i}
+  onClick={() => onRowClick && onRowClick(row)}
+  style={{
+    background:
+      selectedKey && (row[keyField] === selectedKey || row.vessel === selectedKey)
+        ? "rgba(88,166,255,0.14)"
+        : i % 2
+        ? "rgba(255,255,255,0.02)"
+        : "transparent",
+    cursor: onRowClick ? "pointer" : "default"
+  }}
+>
                 {renderRow(row, null, i)}
               </tr>
             );
