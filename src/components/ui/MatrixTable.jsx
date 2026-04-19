@@ -5,7 +5,9 @@ export default function MatrixTable({
   columns = [],
   data = [],
   renderRow,
-  keyField = "id"
+  keyField = "id",
+  onRowClick,
+  selectedKey
 }) {
   const wrap = {
     background: C.bg2,
@@ -42,9 +44,7 @@ export default function MatrixTable({
           {columns.map((col) => (
             <col
               key={col.key}
-              style={{
-                width: col.width ? `${col.width}px` : "auto"
-              }}
+              style={{ width: col.width ? `${col.width}px` : "auto" }}
             />
           ))}
         </colgroup>
@@ -66,16 +66,28 @@ export default function MatrixTable({
         </thead>
 
         <tbody>
-          {data.map((row, i) => (
-            <tr
-              key={row[keyField] || i}
-              style={{
-                background: i % 2 ? "rgba(255,255,255,0.02)" : "transparent"
-              }}
-            >
-              {renderRow(row, null, i)}
-            </tr>
-          ))}
+          {data.map((row, i) => {
+            const isSelected =
+              selectedKey != null &&
+              (row[keyField] === selectedKey || row.vessel === selectedKey);
+
+            return (
+              <tr
+                key={row[keyField] || i}
+                onClick={() => onRowClick && onRowClick(row)}
+                style={{
+                  background: isSelected
+                    ? "rgba(88,166,255,0.14)"
+                    : i % 2
+                    ? "rgba(255,255,255,0.02)"
+                    : "transparent",
+                  cursor: onRowClick ? "pointer" : "default"
+                }}
+              >
+                {renderRow(row, null, i)}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
