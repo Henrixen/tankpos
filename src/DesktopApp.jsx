@@ -726,7 +726,7 @@ const filtV=useMemo(()=>{
     {/* built buttons */}
   </div>
 </div>
-
+</div>
                   {/* RIGHT: Ask AI (34%) - fills remaining height */}
 {!mobile&&(
   <div style={{width:"34%",display:"flex",flexDirection:"column",alignSelf:"stretch"}}>
