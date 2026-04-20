@@ -11,7 +11,7 @@ import { TCECalculator } from "./TCECalculator";
 import Dashboard from "./Dashboard";
 import { loadHistory } from "./supabaseHelpers";
 import { OpeningBreakdown, FixingWindow, ExportPanel } from "./PositionsHelpers";
-import IntelVault from "./IntelVault";
+import IntelVault, { IntelVaultStrip } from "./IntelVault";
 import AISMap from "./AISMap";
 import MatrixTable from "./components/ui/MatrixTable";
 
@@ -439,8 +439,8 @@ const filtV=useMemo(()=>{
       </div>
       <div style={{padding:"12px 16px",maxWidth:1900,margin:"0 auto"}}>
         {/* Professional tab navigation */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,gap:16,flexWrap:"wrap"}}>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",marginBottom:16,gap:12,flexWrap:"nowrap"}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",flexShrink:0}}>
             {[
               ["pos","⚓","Positions",vessels.length,"#58a6ff"],
               ["cargo","📦","Cargoes",cargoTotal||cargoes.length,"#faa356"],
@@ -465,7 +465,12 @@ const filtV=useMemo(()=>{
               </button>
             ))}
           </div>
-          <div style={{fontSize:13,fontWeight:700,color:C.faint,textAlign:"right"}}>SIGNAL — TANKER INTELLIGENCE</div>
+          {/* Global Intel Vault strip — always visible next to tabs */}
+          {!mobile&&(
+            <div style={{flex:1,minWidth:0,display:"flex",justifyContent:"flex-end"}}>
+              <IntelVaultStrip onVaultUpdate={()=>{}}/>
+            </div>
+          )}
         </div>
 
         {/* ── POSITIONS ── */}
@@ -1112,14 +1117,14 @@ const filtV=useMemo(()=>{
         {/* ── CARGOES ── */}
         {tab==="cargo"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {/* Top row: Parse 50% | Ask AI 25% | Intel Vault 25% — same height */}
+            {/* Top row: Parse | Ask AI */}
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
               {/* Parse */}
-              <div style={{flex:mobile?"1 1 auto":"0 0 50%",display:"flex",flexDirection:"column"}}>
+              <div style={{flex:mobile?"1 1 auto":"0 0 65%",display:"flex",flexDirection:"column"}}>
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
               </div>
               {/* Ask AI */}
-              <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:askAiExpanded?600:142,transition:"height 0.3s ease"}}>
+              <div style={{flex:1,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:askAiExpanded?600:142,transition:"height 0.3s ease"}}>
                 <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
                   <button onClick={()=>setAskAiExpanded(!askAiExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 8px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit"}} title={askAiExpanded?"Collapse":"Expand"}>
@@ -1130,19 +1135,7 @@ const filtV=useMemo(()=>{
                   <RightPanel vessels={vessels} cargoes={cargoes}/>
                 </div>
               </div>
-              {/* Intel Vault */}
-              <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:intelVaultExpanded?600:142,transition:"height 0.3s ease"}}>
-                <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📡 Intel Vault</span>
-                  <button onClick={()=>setIntelVaultExpanded(!intelVaultExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 8px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit"}} title={intelVaultExpanded?"Collapse":"Expand"}>
-                    {intelVaultExpanded?"▲":"▼"}
-                  </button>
-                </div>
-                <div style={{flex:1,padding:"10px",overflowY:"auto"}} className="custom-scrollbar">
-                  <IntelVault onVaultUpdate={()=>{}}/>
-                </div>
-              </div>
-            </div>
+            </div>            </div>
             <style>{`
               .custom-scrollbar::-webkit-scrollbar {
                 width: 8px;
