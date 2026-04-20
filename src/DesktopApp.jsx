@@ -1235,35 +1235,121 @@ const filtV=useMemo(()=>{
         {f.status || ""}
       </td>
 
-      {/* VESSEL */}
-      <EC value={f.vessel} color={C.blue} bold placeholder="TBN" onSave={v2=>onUpdateC(f.id,"vessel",v2)} />
+      <EC
+  value={f.vessel}
+  color={C.blue}
+  bold
+  placeholder="TBN"
+  onSave={v2 => onUpdateC(f.id, "vessel", v2)}
+  data-cell={`${i}-cvessel`}
+  onTab={() => focusCell(i, "charterer")}
+  onShiftTab={() => focusCell(i, "status")}
+  onDown={() => focusCell(i + 1, "cvessel")}
+  onUp={() => focusCell(i - 1, "cvessel")}
+/>
 
-      {/* CHARTERER */}
-      <EC value={toTCase(f.charterer)} color={"#79c0ff"} placeholder="" onSave={v2=>onUpdateC(f.id,"charterer",toTCase(v2))} />
+<EC
+  value={toTCase(f.charterer)}
+  color={"#79c0ff"}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "charterer", toTCase(v2))}
+  data-cell={`${i}-charterer`}
+  onTab={() => focusCell(i, "qty")}
+  onShiftTab={() => focusCell(i, "cvessel")}
+  onDown={() => focusCell(i + 1, "charterer")}
+  onUp={() => focusCell(i - 1, "charterer")}
+/>
 
-      {/* QTY */}
-      <EC value={normaliseQty(f.qty)} color={C.amber} placeholder="" onSave={v2=>onUpdateC(f.id,"qty",normaliseQty(v2))} />
+<EC
+  value={normaliseQty(f.qty)}
+  color={C.amber}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "qty", normaliseQty(v2))}
+  data-cell={`${i}-qty`}
+  onTab={() => focusCell(i, "cargo")}
+  onShiftTab={() => focusCell(i, "charterer")}
+  onDown={() => focusCell(i + 1, "qty")}
+  onUp={() => focusCell(i - 1, "qty")}
+/>
 
-      {/* CARGO */}
-      <EC value={f.cargo || ""} placeholder="" onSave={v2=>onUpdateC(f.id,"cargo",v2)} />
+<EC
+  value={f.cargo || ""}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "cargo", v2)}
+  data-cell={`${i}-cargo`}
+  onTab={() => focusCell(i, "load")}
+  onShiftTab={() => focusCell(i, "qty")}
+  onDown={() => focusCell(i + 1, "cargo")}
+  onUp={() => focusCell(i - 1, "cargo")}
+/>
 
-      {/* LOAD */}
-      <EC value={toTCase(f.load || "")} placeholder="" onSave={v2=>onUpdateC(f.id,"load",v2)} />
+<EC
+  value={toTCase(f.load || "")}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "load", toTCase(v2))}
+  data-cell={`${i}-load`}
+  onTab={() => focusCell(i, "disch")}
+  onShiftTab={() => focusCell(i, "cargo")}
+  onDown={() => focusCell(i + 1, "load")}
+  onUp={() => focusCell(i - 1, "load")}
+/>
 
-      {/* DISCH */}
-      <EC value={toTCase(f.disch || "")} placeholder="" onSave={v2=>onUpdateC(f.id,"disch",v2)} />
+<EC
+  value={toTCase(f.disch || "")}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "disch", toTCase(v2))}
+  data-cell={`${i}-disch`}
+  onTab={() => focusCell(i, "from")}
+  onShiftTab={() => focusCell(i, "load")}
+  onDown={() => focusCell(i + 1, "disch")}
+  onUp={() => focusCell(i - 1, "disch")}
+/>
 
-      {/* FROM */}
-      <EC value={fmtDateShort(f.from)} placeholder="" onSave={v2=>onUpdateC(f.id,"from",v2)} />
+<EC
+  value={fmtDateShort(f.from)}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "from", v2)}
+  data-cell={`${i}-from`}
+  onTab={() => focusCell(i, "to")}
+  onShiftTab={() => focusCell(i, "disch")}
+  onDown={() => focusCell(i + 1, "from")}
+  onUp={() => focusCell(i - 1, "from")}
+/>
 
-      {/* TO */}
-      <EC value={fmtDateShort(f.to)} placeholder="" onSave={v2=>onUpdateC(f.id,"to",v2)} />
+<EC
+  value={fmtDateShort(f.to)}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "to", v2)}
+  data-cell={`${i}-to`}
+  onTab={() => focusCell(i, "freight")}
+  onShiftTab={() => focusCell(i, "from")}
+  onDown={() => focusCell(i + 1, "to")}
+  onUp={() => focusCell(i - 1, "to")}
+/>
 
-      {/* FREIGHT */}
-      <EC value={fmtFreight(f.freight) || f.freight} color={"#a8e6a3"} placeholder="" onSave={v2=>onUpdateC(f.id,"freight",fmtFreight(v2) || v2)} />
+<EC
+  value={fmtFreight(f.freight) || f.freight}
+  color={"#a8e6a3"}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "freight", fmtFreight(v2) || v2)}
+  data-cell={`${i}-freight`}
+  onTab={() => focusCell(i, "comment")}
+  onShiftTab={() => focusCell(i, "to")}
+  onDown={() => focusCell(i + 1, "freight")}
+  onUp={() => focusCell(i - 1, "freight")}
+/>
 
-      {/* COMMENT */}
-      <EC value={f.comment || ""} color={C.dim} placeholder="" onSave={v2=>onUpdateC(f.id,"comment",v2)} />
+<EC
+  value={f.comment || ""}
+  color={C.dim}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "comment", v2)}
+  data-cell={`${i}-comment`}
+  onTab={() => focusCell(i + 1, "cvessel")}
+  onShiftTab={() => focusCell(i, "freight")}
+  onDown={() => focusCell(i + 1, "comment")}
+  onUp={() => focusCell(i - 1, "comment")}
+/>
 
       {/* UPDATED */}
       <td style={{ ...tdCtr, color: C.faint }}>
