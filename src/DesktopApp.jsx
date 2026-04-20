@@ -3,7 +3,7 @@ import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
 import EC from "./EC";
 import ParsePanel from "./ParsePanel";
-import RightPanel from "./AIAsk";
+import RightPanel, { AskAIStrip } from "./AIAsk";
 import { RateMatrix, RateMatrixBunkerInput } from "./RateMatrix";
 import FixingTab from "./FixingTab";
 import ProjectsTab from "./ProjectsTab";
@@ -42,6 +42,7 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   const [selVessels,setSelVessels]=useState(()=>new Set());
   const [history,setHistory]=useState([]);
   useEffect(()=>{loadHistory().then(setHistory);},[vessels]);
+  const [intelItems,setIntelItems]=useState([]);
   const [pendingDel,setPendingDel]=useState(null);
   const [restoreMsg,setRestoreMsg]=useState("");
   const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
@@ -465,10 +466,16 @@ const filtV=useMemo(()=>{
               </button>
             ))}
           </div>
-          {/* Global Intel Vault strip — always visible next to tabs */}
+          {/* Global Ask AI strip — between tabs and Intel Vault */}
           {!mobile&&(
-            <div style={{flex:1,minWidth:0,display:"flex",justifyContent:"flex-end"}}>
-              <IntelVaultStrip onVaultUpdate={()=>{}}/>
+            <div style={{flex:1,minWidth:0,display:"flex",justifyContent:"center"}}>
+              <AskAIStrip vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>
+            </div>
+          )}
+          {/* Global Intel Vault strip — always visible */}
+          {!mobile&&(
+            <div style={{flexShrink:0}}>
+              <IntelVaultStrip onVaultUpdate={setIntelItems}/>
             </div>
           )}
         </div>
