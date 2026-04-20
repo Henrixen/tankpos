@@ -1200,7 +1200,8 @@ const filtV=useMemo(()=>{
     columns={cargoColumns}
     data={filtC}
     keyField="id"
-    renderRow={(f, td, ri) => {
+    renderRow={(f, td) => {
+  const i = filtC.findIndex(x => x.id === f.id);
   const sc = f.status==="FIXED" ? C.green : f.status==="SUBS" ? C.purple : f.status==="FAILED" ? C.red : C.faint;
 
   return (
