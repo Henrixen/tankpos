@@ -70,11 +70,11 @@ export function IntelVaultStrip({onVaultUpdate}){
 
   return(
     <div style={{position:"relative",display:"flex",flexDirection:"column",minWidth:0}}>
-      {/* ── Compact always-visible strip ── */}
+      {/* ── Compact always-visible strip — matches tab button height ── */}
       <div style={{
         display:"flex",alignItems:"stretch",gap:0,
-        background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,
-        overflow:"hidden",height:58,minWidth:360
+        background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,
+        overflow:"hidden",height:78,minWidth:480
       }}>
         {/* Left: paste area */}
         <div style={{flex:1,position:"relative",minWidth:0}}>
@@ -82,59 +82,62 @@ export function IntelVaultStrip({onVaultUpdate}){
             value={text}
             onChange={e=>setText(e.target.value)}
             onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
-            placeholder={"📡 Paste rates, fixtures, broker reports, market colour…"}
+            placeholder={"Paste rates, fixtures, broker reports, market colour…"}
             style={{
               width:"100%",height:"100%",background:"transparent",border:"none",
               color:C.tx,fontFamily:"inherit",fontSize:12,
-              padding:"8px 10px",resize:"none",outline:"none",boxSizing:"border-box",
-              lineHeight:1.4
+              padding:"10px 12px",resize:"none",outline:"none",boxSizing:"border-box",
+              lineHeight:1.5,color:"rgba(180,210,255,0.85)"
             }}
           />
-          {img&&<span style={{position:"absolute",bottom:4,right:6,fontSize:11,color:C.purple}}>📷 img attached</span>}
-          {status&&<span style={{position:"absolute",bottom:4,left:10,fontSize:11,color:sc}}>{status.m}</span>}
+          {img&&<span style={{position:"absolute",bottom:5,right:8,fontSize:11,color:C.purple,letterSpacing:"0.03em"}}>↑ image attached</span>}
+          {status&&<span style={{position:"absolute",bottom:5,left:12,fontSize:11,color:sc,letterSpacing:"0.03em"}}>{status.m}</span>}
         </div>
 
         {/* Right: controls */}
         <div style={{
-          display:"flex",flexDirection:"column",gap:4,
-          padding:"6px 8px",
-          background:"rgba(7,15,28,0.6)",
-          borderLeft:"1px solid "+C.bd2,
-          flexShrink:0,minWidth:168,
+          display:"flex",flexDirection:"column",gap:5,
+          padding:"8px 10px",
+          background:"rgba(4,10,22,0.55)",
+          borderLeft:"1px solid rgba(58,130,246,0.12)",
+          flexShrink:0,width:192,
           justifyContent:"center"
         }}>
           {/* Top row: date + attach */}
-          <div style={{display:"flex",gap:5,alignItems:"center"}}>
+          <div style={{display:"flex",gap:4,alignItems:"center"}}>
             <input type="date" value={intelDate} onChange={e=>setIntelDate(e.target.value)}
-              style={{flex:1,background:"rgba(88,166,255,0.07)",border:"1px solid "+C.bd2,borderRadius:4,color:C.dim,fontFamily:"inherit",fontSize:11,padding:"2px 5px",outline:"none",minWidth:0}}/>
-            <button onClick={()=>fRef.current?.click()} title="Attach image"
-              style={{background:"rgba(88,166,255,0.08)",border:"1px solid "+C.bd2,borderRadius:4,color:C.dim,padding:"2px 7px",fontFamily:"inherit",fontSize:11,cursor:"pointer",flexShrink:0}}>🖼</button>
+              style={{flex:1,background:"transparent",border:"1px solid rgba(88,166,255,0.18)",borderRadius:4,color:"rgba(140,180,240,0.7)",fontFamily:"inherit",fontSize:11,padding:"3px 6px",outline:"none",minWidth:0,letterSpacing:"0.02em"}}/>
+            <button onClick={()=>fRef.current?.click()} title="Attach screenshot"
+              style={{background:"transparent",border:"1px solid rgba(88,166,255,0.18)",borderRadius:4,color:"rgba(140,180,240,0.55)",padding:"3px 8px",fontFamily:"inherit",fontSize:11,cursor:"pointer",flexShrink:0,letterSpacing:"0.03em"}}>img</button>
             <input ref={fRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
           </div>
           {/* Bottom row: Save + Vault toggle */}
-          <div style={{display:"flex",gap:5,alignItems:"center"}}>
+          <div style={{display:"flex",gap:4,alignItems:"center"}}>
             <button onClick={ingest} disabled={busy||(!text.trim()&&!img)}
               style={{
                 flex:1,
-                background:busy?"rgba(31,111,235,0.5)":"linear-gradient(135deg,#1f6feb,#0d4fb5)",
-                border:"1px solid rgba(88,166,255,0.4)",
-                borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:11,
-                padding:"4px 0",cursor:busy?"default":"pointer",
-                opacity:(!text.trim()&&!img&&!busy)?0.45:1,
-                letterSpacing:"0.04em",whiteSpace:"nowrap"
+                background:"transparent",
+                border:"1px solid "+((!text.trim()&&!img&&!busy)?"rgba(88,166,255,0.2)":"rgba(88,166,255,0.55)"),
+                borderRadius:4,
+                color:(!text.trim()&&!img&&!busy)?"rgba(88,166,255,0.3)":"rgba(140,200,255,0.9)",
+                fontFamily:"inherit",fontWeight:600,fontSize:11,
+                padding:"5px 0",cursor:busy?"default":"pointer",
+                letterSpacing:"0.08em",textTransform:"uppercase",whiteSpace:"nowrap",
+                transition:"border-color 0.15s,color 0.15s"
               }}>
-              {busy?"⟳ Extracting…":"💾 Save Intel"}
+              {busy?"extracting…":"Save Intel"}
             </button>
             <button onClick={()=>setExpanded(v=>!v)}
-              title={expanded?"Hide vault":"Browse saved intel"}
+              title={expanded?"Close vault":"Browse intel"}
               style={{
-                background:expanded?"rgba(88,166,255,0.15)":"rgba(88,166,255,0.07)",
-                border:"1px solid "+(expanded?"rgba(88,166,255,0.4)":C.bd2),
-                borderRadius:4,color:expanded?C.blue:C.dim,
-                padding:"4px 8px",fontFamily:"inherit",fontSize:11,cursor:"pointer",
-                flexShrink:0,fontWeight:700
+                background:expanded?"rgba(88,166,255,0.1)":"transparent",
+                border:"1px solid "+(expanded?"rgba(88,166,255,0.45)":"rgba(88,166,255,0.2)"),
+                borderRadius:4,color:expanded?"rgba(140,200,255,0.9)":"rgba(88,166,255,0.45)",
+                padding:"5px 9px",fontFamily:"inherit",fontSize:11,cursor:"pointer",
+                flexShrink:0,fontWeight:600,letterSpacing:"0.04em",
+                transition:"all 0.15s"
               }}>
-              {expanded?"▲":"▼"} {parsedItems.length>0?parsedItems.length:""}
+              {parsedItems.length>0?parsedItems.length:"▾"}
             </button>
           </div>
         </div>
