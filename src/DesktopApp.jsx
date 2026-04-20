@@ -1135,7 +1135,7 @@ const filtV=useMemo(()=>{
                   <RightPanel vessels={vessels} cargoes={cargoes}/>
                 </div>
               </div>
-            </div>            </div>
+            </div>
             <style>{`
               .custom-scrollbar::-webkit-scrollbar {
                 width: 8px;
