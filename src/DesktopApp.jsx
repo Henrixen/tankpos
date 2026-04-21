@@ -604,7 +604,13 @@ const filtV=useMemo(()=>{
         {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>))}
       </FR>
       <FR label="S.Region" col={C.purple}>
-        {superRegionOptions.filter(r=>r!=="ALL").map(r=>(<button key={r} onClick={e=>{if(e.ctrlKey||e.metaKey){setSuperRegionFilter(prev=>{const n=new Set(prev);n.has(r)?n.delete(r):n.add(r);return n;});}else{setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));}}}} style={fb(superRegionFilter.has(r))}>{r}</button>))}
+        {superRegionOptions.filter(r=>r!=="ALL").map(r=>{
+          const toggle=e=>{
+            if(e.ctrlKey||e.metaKey){setSuperRegionFilter(prev=>{const n=new Set(prev);n.has(r)?n.delete(r):n.add(r);return n;});}
+            else{setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));}
+          };
+          return <button key={r} onClick={toggle} style={fb(superRegionFilter.has(r))}>{r}</button>;
+        })}
         {superRegionFilter.size>0&&<button onClick={()=>setSuperRegionFilter(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
       </FR>
       <FR label="Segment" col={C.green}>
