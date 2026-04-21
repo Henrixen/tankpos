@@ -29,16 +29,21 @@ export default function TankPos(){
     let from = 0;
     const pageSize = 1000;
     while(true){
-      const {data, error} = await supabase.from("vessels_db").select("vessel,dwt,built,loa,beam,cbm,coating,ice_class,fuel,operator").range(from, from+pageSize-1);
+      const {data, error} = await supabase.from("vessels_db").select("vessel,imo,dwt,built,loa,beam,cbm,coating,ice_class,fuel,operator").range(from, from+pageSize-1);
       if(error || !data || data.length === 0) break;
       allRows = [...allRows, ...data];
       if(data.length < pageSize) break;
       from += pageSize;
     }
     const map = {};
-    allRows.forEach(r => { if(r.vessel) map[r.vessel.toLowerCase().trim()] = r; });
+    const imoMap = {};
+    allRows.forEach(r => {
+      if(r.vessel) map[r.vessel.toLowerCase().trim()] = r;
+      if(r.imo) imoMap[String(r.imo).trim()] = r;
+    });
     setVesselDB(map);
     window.vesselDB = map;
+    window.vesselDBByIMO = imoMap;
     setVesselDBLoaded(true);
     setVesselDBLoading(false);
     console.log("vesselDB loaded on demand:", allRows.length);
@@ -119,6 +124,9 @@ export default function TankPos(){
       const d=new Date(rawDate);
       if(!isNaN(d))fmtDate=d.getDate()+" "+mn[d.getMonth()];
     }
+    const imoKey = String(r.imo_number||r.imo||"").trim();
+    const dbByIMO = window.vesselDBByIMO||{};
+    const imoRec = imoKey ? dbByIMO[imoKey] : null;
     return{
       id:          String(r.id||""),
       vessel:      String(r.vessel_name||"").toUpperCase(),
@@ -129,8 +137,8 @@ export default function TankPos(){
       built:       r.build_year||null,
       loa:         r.overall_length!=null?Math.round(Number(r.overall_length))||null:null,
       beam:        r.beam!=null?Math.round(Number(r.beam))||null:null,
-      cbm:         r.cbm||null,
-      coating:     r.coating_type_1||r.coating||r.coated||"",
+      cbm:         r.cbm||imoRec?.cbm||null,
+      coating:     r.coating_type_2||r.coating||r.coated||"",
       comment:     r.details||"",
       last3:       r.last_3_cargoes||"",
       dirtyClean:  r.dirty_clean||"",
