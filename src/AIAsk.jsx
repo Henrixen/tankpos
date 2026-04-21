@@ -109,7 +109,7 @@ export function AskAIStrip({vessels,cargoes,intelItems}){
       <div style={{
         display:"flex",alignItems:"stretch",
         background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,
-        overflow:"hidden",height:78,minWidth:360
+        overflow:"hidden",height:78,minWidth:480
       }}>
         {/* Input area */}
         <div style={{flex:1,display:"flex",alignItems:"center",padding:"0 12px",minWidth:0}}>
