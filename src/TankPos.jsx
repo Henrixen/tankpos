@@ -29,7 +29,7 @@ export default function TankPos(){
     let from = 0;
     const pageSize = 1000;
     while(true){
-      const {data, error} = await supabase.from("vessels_db").select("vessel,dwt,built,loa,beam,cbm,ice_class,fuel,operator").range(from, from+pageSize-1);
+      const {data, error} = await supabase.from("vessels_db").select("vessel,dwt,built,loa,beam,cbm,coating,ice_class,fuel,operator").range(from, from+pageSize-1);
       if(error || !data || data.length === 0) break;
       allRows = [...allRows, ...data];
       if(data.length < pageSize) break;
@@ -127,10 +127,10 @@ export default function TankPos(){
       date:        fmtDate,
       dwt:         r.dwt||null,
       built:       r.build_year||null,
-      loa:         r.overall_length||null,
-      beam:        r.beam||null,
+      loa:         r.overall_length!=null?Math.round(Number(r.overall_length))||null:null,
+      beam:        r.beam!=null?Math.round(Number(r.beam))||null:null,
       cbm:         r.cbm||null,
-      coating:     r.coating||r.coated||"",
+      coating:     r.coating_type_1||r.coating||r.coated||"",
       comment:     r.details||"",
       last3:       r.last_3_cargoes||"",
       dirtyClean:  r.dirty_clean||"",
@@ -246,13 +246,12 @@ export default function TankPos(){
     function extractCoating(text){
       if(!text) return "";
       const t=text.toLowerCase();
-      if(t.includes("phenolic")) return "Phenolic";
-      if(t.includes("epoxy")) return "Epoxy";
-      if(t.includes("zinc silicate")||t.includes("zinc sil")) return "Zinc Silicate";
+      if(t.includes("stainless")||t.includes("stst")||t.includes("ss ")) return "Stainless";
       if(t.includes("marineline")||t.includes("marine line")) return "Marineline";
       if(t.includes("interline")) return "Interline";
-      if(t.includes("coated")) return "Coated";
-      if(t.includes("uncoated")) return "Uncoated";
+      if(t.includes("zinc")) return "Zinc";
+      if(t.includes("epoxy")) return "Epoxy";
+      if(t.includes("phenolic")) return "Epoxy";
       return "";
     }
 
