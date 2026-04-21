@@ -1,350 +1,416 @@
-import React from "react";
-import { C, PORTS, REGION_MAP } from "./constants";
+// CACHE_BUSTER_030
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { supabase } from "./supabaseclient";
+import { isMobile } from "./constants";
+import { enrichV, normaliseCargo, mergeVessels, toISODate } from "./utils";
+import { saveV, saveSnapshot, loadHistory } from "./supabaseHelpers";
+import { v4 as uuidv4 } from 'uuid';
+import DesktopApp from "./DesktopApp";
 
-// ─── Re-export for convenience ────────────────────────────────────────────────
-export const MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
-export const MON_DISPLAY_LIST = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-// ─── Date helpers ─────────────────────────────────────────────────────────────
-export function toISODate(d){
-  if(!d) return null;
-  const months={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-  const s=String(d).trim();
-  const m1=s.match(/^(\d{1,2})\s+([A-Za-z]{3})/);
-  if(m1){
-    const dt=new Date(new Date().getFullYear(),months[m1[2].charAt(0).toUpperCase()+m1[2].slice(1,3).toLowerCase()],parseInt(m1[1]));
-    if(isNaN(dt)) return null;
-    return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
+// ─── Root ─────────────────────────────────────────────────────────────────────
+export default function TankPos(){
+
+  const [vesselDB, setVesselDB] = useState({});
+  const [vesselDBLoaded, setVesselDBLoaded] = useState(false);
+  const [vesselDBLoading, setVesselDBLoading] = useState(false);
+  const [vessels,setVessels]=useState([]);
+  const [cargoes,setCargoes]=useState([]);
+  const [cargoTotal,setCargoTotal]=useState(0);
+  const [hasMore,setHasMore]=useState(false);
+  const searchTimer=useRef(null);
+  const [mobile,setMobile]=useState(()=>isMobile());
+  const [fileDate, setFileDate] = useState(() => new Date().toISOString().slice(0,10));
+
+  async function loadVesselDB(){
+    if(vesselDBLoaded||vesselDBLoading) return;
+    setVesselDBLoading(true);
+    let allRows = [];
+    let from = 0;
+    const pageSize = 1000;
+    while(true){
+      const {data, error} = await supabase.from("vessels_db").select("vessel,imo,dwt,built,loa,beam,cbm,coating,ice_class,fuel,operator").range(from, from+pageSize-1);
+      if(error || !data || data.length === 0) break;
+      allRows = [...allRows, ...data];
+      if(data.length < pageSize) break;
+      from += pageSize;
+    }
+    const map = {};
+    const imoMap = {};
+    allRows.forEach(r => {
+      if(r.vessel) map[r.vessel.toLowerCase().trim()] = r;
+      if(r.imo) imoMap[String(r.imo).trim()] = r;
+    });
+    setVesselDB(map);
+    window.vesselDB = map;
+    window.vesselDBByIMO = imoMap;
+    setVesselDBLoaded(true);
+    setVesselDBLoading(false);
+    console.log("vesselDB loaded on demand:", allRows.length);
   }
-  const m2=s.match(/^(\d{1,2})[\/\-](\d{1,2})/);
-  if(m2){
-    const day=parseInt(m2[1]);
-    const month=parseInt(m2[2])-1;
-    const dt=new Date(new Date().getFullYear(),month,day);
-    if(isNaN(dt)) return null;
-    return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
+
+  function onCargoSearch(term){
+    clearTimeout(searchTimer.current);
+    searchTimer.current=setTimeout(()=>fetchCargoes(term),300);
   }
-  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  return null;
-}
+  // Load vessels from local storage, cargoes from Supabase
+  useEffect(()=>{
+  fetchPositions();
+  fetchCargoes();
+},[]);
 
-export function qtyToNum(q){
-  if(!q) return null;
-  const s=String(q).replace(/\s/g,"").toLowerCase();
-  if(/^\d+$/.test(s)) return parseInt(s);
-  const m=s.match(/([\d,]+\.?\d*)\s*(k|kt|kmt|mt)?/);
-  if(!m) return null;
-  const n=parseFloat(m[1].replace(/,/g,""));
-  return m[2]&&m[2].startsWith("k")?Math.round(n*1000):Math.round(n);
-}
+  // Auto-load vesselDB on startup
+  useEffect(() => {
+    loadVesselDB();
+  }, []);
 
-export function numToQty(n){
-  if(!n&&n!==0) return "";
-  return n>=1000?Math.round(n/1000)+"kt":n+"t";
-}
+  useEffect(()=>{const fn=()=>setMobile(isMobile());window.addEventListener("resize",fn);return()=>window.removeEventListener("resize",fn);},[]);
 
-export const stripHtml = s => {
-  if(!s) return "";
-  let out="", inTag=false;
-  for(let i=0;i<s.length;i++){
-    const c=s[i];
-    if(c==="<"){inTag=true;}
-    else if(c===">"){inTag=false;}
-    else if(!inTag){out+=c;}
-  }
-  return out.replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&nbsp;/g," ").replace(/&#\d+;/g,"").trim();
-};
-
-export function dbLookup(name, vesselDB) {
-  if (!name || !vesselDB) return null;
-  const k = name.toLowerCase().trim();
-  const clean = k.replace(/[.-]/g," ").replace(/\s+/g," ").trim();
-  if (vesselDB[clean]) return vesselDB[clean];
-  if (vesselDB[k]) return vesselDB[k];
-  const exactKey = Object.keys(vesselDB).find(dk => dk === clean || dk === k);
-  if (exactKey) return vesselDB[exactKey];
-  const words = clean.split(" ").filter(w => w.length > 1);
-  if (words.length >= 2) {
-    for (const [dk, dv] of Object.entries(vesselDB)) {
-      if (words.every(w => dk.includes(w))) return dv;
+  async function fetchCargoes(searchTerm=""){
+    if(searchTerm.trim()){
+      const t=searchTerm.trim();
+      const{data,error}=await supabase.from("cargoes").select("*")
+        .or(`charterer.ilike.%${t}%,vessel.ilike.%${t}%,load.ilike.%${t}%,disch.ilike.%${t}%,cargo.ilike.%${t}%,status.ilike.%${t}%`)
+        .range(0,499).order("updated",{ascending:false});
+      if(error){console.error(error);return;}
+      setCargoes(data.map(normaliseCargo));
+    } else {
+      const[{data,error},{count}]=await Promise.all([
+        supabase.from("cargoes").select("*").range(0,199).order("updated",{ascending:false}),
+        supabase.from("cargoes").select("*",{count:"exact",head:true})
+      ]);
+      if(error){console.error(error);return;}
+      setCargoes(data.map(normaliseCargo));
+      setHasMore(data.length===200);
+      if(count!=null)setCargoTotal(count);
     }
   }
-  let bestKey=null, bestScore=0;
-  for(const dk of Object.keys(vesselDB)){
-    const shorter=Math.min(clean.length,dk.length);
-    let matches=0;
-    for(let i=0;i<shorter;i++) if(clean[i]===dk[i]) matches++;
-    const score=matches/Math.max(clean.length,dk.length);
-    if(score>0.850&&score>bestScore){bestScore=score;bestKey=dk;}
-  }
-  if(bestKey) return vesselDB[bestKey];
-  return null;
-}
 
-export function enrichV(v, vesselDB) {
-  const d = dbLookup(v.vessel, vesselDB);
-  if (!d) return v;
-  const resolvedOp = v.operatorManual ? v.operator : (v.operator || d.operator || null);
-  return {
-    ...v,
-    built:    v.built    || d.built    || null,
-    dwt:      (v.dwt&&parseInt(String(v.dwt).replace(/[^0-9]/g,""))>=1000?v.dwt:null) || d.dwt || v.dwt || null,
-    loa:      v.loa      || d.loa      || null,
-    beam:     v.beam     || d.beam     || null,
-    cbm:      v.cbm      || d.cbm      || null,
-    coating:  v.coating  || d.coating  || null,
-    operator: resolvedOp,
-    spec: {
-      ...v.spec,
-      iceClass: v.spec?.iceClass || d.ice_class || null,
-      fuel:     v.spec?.fuel     || d.fuel      || null,
+  async function fetchPositions(){
+  const REGION_RENAME={
+    "East Coast South America":"EC SAM",
+    "Europe (Mediterranean)":"Med",
+    "South-East-Asia Far-East":"SEA-FEA",
+    "West Africa":"WAF",
+    "West Coast US":"WC US",
+    "West Coast South America":"WC SAM",
+    "North West Europe":"NWE",
+    "Med-Black Sea":"Med",
+    "Arabian Gulf":"Suez-AG-India",
+    "AG":"Suez-AG-India",
+    "AG-India-Red Sea":"Suez-AG-India",
+    "Red Sea":"Suez-India",
+    "India":"Suez-India",
+    "West Pacific":"Pacific",
+    "Southern Ocean":"Pacific",
+  };
+  const SEGMENT_RENAME={
+    "1. Small (<10)":"Sub 10k",
+    "2. Cityclass (10-15)":"City",
+    "3. Intermediate (14-19)":"Inter",
+    "4. J19 (19-22)":"J19",
+    "5. Flexi (22-30)":"Flexi",
+    "6. Handy (30-40)":"Handy",
+    "7. MR (>40)":"MR",
+  };
+  const{data,error}=await supabase.from("positions_latest").select("*").limit(10000);
+  if(error){console.error("fetchPositions error:",error);return;}
+  console.log("fetchPositions:",data?.length,"rows");
+  const mn=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  setVessels((data||[]).map(r=>{
+    const rawDate=String(r.open_date||"");
+    let fmtDate=rawDate;
+    if(rawDate&&!/^\d{1,2}\s[A-Za-z]/.test(rawDate)){
+      const d=new Date(rawDate);
+      if(!isNaN(d))fmtDate=d.getDate()+" "+mn[d.getMonth()];
     }
+    const imoKey = String(r.imo_number||r.imo||"").trim();
+    const dbByIMO = window.vesselDBByIMO||{};
+    const imoRec = imoKey ? dbByIMO[imoKey] : null;
+    return{
+      id:          String(r.id||""),
+      vessel:      String(r.vessel_name||"").toUpperCase(),
+      operator:    r.operator||"",
+      openPort:    r.port_name||"",
+      date:        fmtDate,
+      dwt:         r.dwt||null,
+      built:       r.build_year||null,
+      loa:         r.overall_length!=null?Math.round(Number(r.overall_length))||null:null,
+      beam:        r.beam!=null?Math.round(Number(r.beam))||null:null,
+      cbm:         r.cbm||imoRec?.cbm||null,
+      coating:     r.coating_type_2||r.coating||r.coated||"",
+      comment:     r.details||"",
+      last3:       r.last_3_cargoes||"",
+      dirtyClean:  r.dirty_clean||"",
+      iceClass:    r.ice_class||"",
+      segment:     SEGMENT_RENAME[r.segment]||r.segment||"",
+      superRegion: REGION_RENAME[r.super_region]||r.super_region||"",
+      updatedAt:   r.updated_at||"",
+      fileDate:    r.file_date||null,
+      source:      r.source||"external",
+      spec: {
+        iceClass: r.ice_class||null,
+        lastCargo: r.last_3_cargoes||null,
+        segment: r.segment||null,
+        coated: r.coating||r.coated||null,
+      }
+    };
+  }));
+}
+  async function loadMoreCargoes(){
+    const{data,error}=await supabase.from("cargoes").select("*")
+      .range(cargoes.length,cargoes.length+199).order("updated",{ascending:false});
+    if(error){console.error(error);return;}
+    if(data.length<200) setHasMore(false);
+    setCargoes(prev=>[...prev,...data.map(normaliseCargo)]);
+  }
+
+  const renameV=useCallback((oldName,newName)=>{
+    if(!newName||!newName.trim()||newName.trim().toUpperCase()===oldName)return;
+    const n=newName.trim().toUpperCase();
+    setVessels(prev=>{const next=prev.map(v=>v.vessel===oldName?{...v,vessel:n,updatedAt:new Date().toISOString()}:v);saveV(next);return next;});
+    setCargoes(prev=>prev.map(c=>c.vessel===oldName?{...c,vessel:n}:c));
+    setSel(n);
+  },[]);
+
+  const updateV = useCallback(async(name, field, value) => {
+  setVessels(prev => {
+    const now2 = new Date().toISOString();
+
+    const next = prev.map(v => {
+      if (v.vessel !== name) return v;
+
+      if (field.includes(".")) {
+        const [a, b] = field.split(".");
+        return {
+          ...v,
+          updatedAt: now2,
+          [a]: {
+            ...(v[a] || {}),
+            [b]: value || null
+          }
+        };
+      }
+
+      const extra = field === "operator" ? { operatorManual: true } : {};
+
+      return {
+        ...v,
+        updatedAt: now2,
+        [field]: value || null,
+        ...extra
+      };
+    });
+
+    saveV(next);
+    return next;
+  });
+
+  const fieldMap = {
+    openPort: "port_name",
+    date: "open_date",
+    built: "build_year",
+    loa: "overall_length",
+    comment: "details",
+    operator: "operator",
+    dwt: "dwt",
+    beam: "beam",
+    cbm: "cbm",
+    coating: "coating",
   };
-}
 
-// ─── Geo helpers ──────────────────────────────────────────────────────────────
-export function findPort(n) {
-  if (!n) return null;
-  const s = n.toLowerCase().trim();
-  if (PORTS[s]) return PORTS[s];
-  for (const [k,v] of Object.entries(PORTS)) { if (s.includes(k)||k.includes(s)) return v; }
-  return null;
-}
+  const dbField = fieldMap[field] || field;
 
-export function haversine(a,b) {
-  if (!a||!b) return null;
-  const R=3440.07,dLat=(b[0]-a[0])*Math.PI/180,dLon=(b[1]-a[1])*Math.PI/180;
-  const h=Math.sin(dLat/2)**2+Math.cos(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R*2*Math.asin(Math.sqrt(h));
-}
+  const { error } = await supabase
+    .from("positions")
+    .update({
+      [dbField]: value || null,
+      updated_at: new Date().toISOString()
+    })
+    .ilike("vessel_name", name);
 
-// ─── Date utilities ───────────────────────────────────────────────────────────
-const _MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
-const _MON_D  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  if (error) console.error("updateV error:", error);
+}, []);
 
-export function rollOpenDateForward(dateStr, baseDate = null) {
-  if (!dateStr) return dateStr;
+  // Universal cargo updater — optimistic local update + Supabase write
+  const updateC=useCallback(async(id,field,value)=>{
+    const displayValue=(field==="from"||field==="to")?(() => {
+      const iso=toISODate(value);
+      if(!iso) return value;
+      const dt=new Date(iso);
+      return dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
+    })():value;
+    setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:displayValue}:c));
+    const dbValue=(field==="from"||field==="to")?toISODate(value):value;
+    const{error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id);
+    if(error)console.error(error);
+  },[]);
 
-  const ref = baseDate ? new Date(baseDate) : new Date();
-  ref.setHours(0, 0, 0, 0);
+  const addVessels = useCallback(async (parsed) => {
+    const vdb = window.vesselDB || vesselDB;
+    const nowIso = new Date().toISOString();
+    let r = { added: 0, updated: 0, total: 0 };
 
-  const s = String(dateStr).trim();
-  const m = s.match(/^(\d{1,2})\s+([A-Za-z]{3})$/);
-  if (!m) return dateStr;
-
-  const day = parseInt(m[1], 10);
-  const mon = _MONTHS.findIndex(x => x === m[2].slice(0, 3).toLowerCase());
-  if (mon < 0) return dateStr;
-
-  const d = new Date(ref.getFullYear(), mon, day);
-  d.setHours(0, 0, 0, 0);
-
-  // reject impossible dates like 31 Feb
-  if (d.getMonth() !== mon || d.getDate() !== day) return dateStr;
-
-  if (d < ref) d.setMonth(d.getMonth() + 1);
-
-  return String(d.getDate()).padStart(2, "0") + " " + _MON_D[d.getMonth()];
-}
-
-export function parseDate(s) {
-  if (!s) return null;
-  const lo = s.toLowerCase();
-  let day = null, mon = null;
-  for (const part of lo.split(/[\s\-\/]+/)) {
-    const mi = _MONTHS.findIndex(m => part.startsWith(m));
-    if (mi >= 0) mon = mi;
-    else if (/^\d+$/.test(part)) day = parseInt(part);
-  }
-  if (day == null || mon == null) return null;
-  return new Date(new Date().getFullYear(), mon, day);
-}
-
-export function addDays(dateStr, days) {
-  const d = parseDate(dateStr);
-  if (!d) return null;
-  d.setDate(d.getDate() + Math.round(days));
-  return String(d.getDate()).padStart(2,"0") + " " + _MON_D[d.getMonth()];
-}
-
-export function daysBetween(dateStr, baseDate = null) {
-  const d = parseDate(dateStr);
-  if (!d) return null;
-  const ref = baseDate ? new Date(baseDate) : new Date();
-  ref.setHours(0,0,0,0);
-  return Math.round((d - ref) / 86400000);
-}
-
-export function isOpenPPT(dateStr) {
-  if(!dateStr)return false;
-  if(dateStr.toLowerCase().trim()==="ppt")return true;
-  const d = parseDate(dateStr);
-  if (!d) return false;
-  const today = new Date(); today.setHours(0,0,0,0);
-  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate()+1); tomorrow.setHours(23,59,59,999);
-  return d >= today && d <= tomorrow;
-}
-
-export function fmtDateShort(d){
-  if(!d) return "";
-  const s=String(d).trim();
-  if(/^\d{1,2}\s[A-Za-z]{3}/.test(s)) return s.slice(0,6);
-  const x = new Date(s);
-  if(isNaN(x)) return s;
-  return x.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
-}
-
-// ─── Region ───────────────────────────────────────────────────────────────────
-export function classifyRegion(portName) {
-  if (!portName || portName === "EMPLOYED") return null;
-  const n = portName.toLowerCase().trim();
-  if (!n) return null;
-  const direct = Object.keys(REGION_MAP).find(r => r.toLowerCase() === n);
-  if (direct) return direct;
-  for (const [region, ports] of Object.entries(REGION_MAP)) {
-    if (ports.some(p => p && (n.includes(p) || p.includes(n) || n.split(/[\s/+,]/)[0]===p))) return region;
-  }
-  return null;
-}
-
-// ─── Voyage calc ──────────────────────────────────────────────────────────────
-export function calcVoyage(vessel, cargo) {
-  const oc=findPort(vessel.openPort),lc=findPort(cargo.load),dc=findPort(cargo.disch);
-  const bNm=haversine(oc,lc),lNm=haversine(lc,dc);
-  const bDays=bNm!=null?bNm/12.5/24:null,lDays=lNm!=null?lNm/12.5/24:null;
-  const etaLoad=vessel.date&&bDays!=null?addDays(vessel.date,bDays):null;
-  let loadDate=etaLoad;
-  if (etaLoad&&cargo.from) {
-    const m=cargo.from.match(/(\d+)/),monM=cargo.from.toLowerCase().match(new RegExp(_MONTHS.join("|")));
-    if(m&&monM){const ld=new Date(new Date().getFullYear(),_MONTHS.indexOf(monM[0].slice(0,3)),parseInt(m[1]));const ed=parseDate(etaLoad);if(ed&&ld>ed)loadDate=addDays(ld.toDateString(),0)||etaLoad;}
-  }
-  const openDate=loadDate&&lDays!=null?addDays(loadDate,1+lDays+0.75):null;
-  return {
-    ballastNm:bNm?Math.round(bNm):null,ladenNm:lNm?Math.round(lNm):null,
-    ballastDays:bDays?Math.round(bDays*10)/10:null,ladenDays:lDays?Math.round(lDays*10)/10:null,
-    etaLoad,loadDate,openPort:cargo.disch,openDate,hasCoords:!!(oc&&lc&&dc),
-  };
-}
-
-// ─── Vessel merge ─────────────────────────────────────────────────────────────
-function mKey(inc,keys){if(!inc)return null;const s=inc.toLowerCase().trim();if(keys.has(s))return s;for(const k of keys){const[a,b]=s.length<=k.length?[s.split(" "),k.split(" ")]:[k.split(" "),s.split(" ")];if(a.every(w=>b.includes(w)))return k;}for(const k of keys){if(k.endsWith(s)||s.endsWith(k)||k.startsWith(s)||s.startsWith(k))return k;}return null;}
-
-export function mergeVessels(existing,incoming,vesselDB){
-  const map=new Map(existing.filter(v=>v.vessel).map(v=>[v.vessel.toLowerCase(),v]));
-  for(const v of incoming){
-    const rk=v.vessel?.toLowerCase().trim();if(!rk)continue;
-    const mk=mKey(rk,new Set([...map.keys()].filter(Boolean)));const prev=map.get(mk||rk)||{};
-    let merged={...prev};
-    if(!mk||v.vessel.length>(prev.vessel||"").length)merged.vessel=v.vessel;
-    const positionChanged=(v.openPort&&v.openPort!==prev.openPort)||(v.date&&v.date!==prev.date);
-    for(const[k,val]of Object.entries(v)){
-      if(k==="vessel"||val==null||val==="")continue;
-      if(k==="operator"&&prev.operatorManual)continue;
-      if(k==="updatedAt"){if(positionChanged||!prev.updatedAt)merged[k]=val;continue;}
-      if(k==="spec"&&typeof val==="object"){merged.spec={...(prev.spec||{})};for(const[sk,sv]of Object.entries(val)){if(sv!=null&&sv!=="")merged.spec[sk]=sv;}}
-      else merged[k]=val;
+    function extractCoating(text){
+      if(!text) return "";
+      const t=text.toLowerCase();
+      if(t.includes("stainless")||t.includes("stst")||t.includes("ss ")) return "Stainless";
+      if(t.includes("marineline")||t.includes("marine line")) return "Marineline";
+      if(t.includes("interline")) return "Interline";
+      if(t.includes("zinc")) return "Zinc";
+      if(t.includes("epoxy")) return "Epoxy";
+      if(t.includes("phenolic")) return "Epoxy";
+      return "";
     }
-    const canon=(merged.vessel||"").toLowerCase();if(mk&&mk!==canon)map.delete(mk);
-    map.set(canon,enrichV(merged,vesselDB));
-  }
-  return Array.from(map.values());
-}
 
-export function xJSON(raw){if(!raw)throw new Error("Empty");const cl=raw.trim().replace(/^```[\w]*/,"").replace(/```/g,"").trim();try{return JSON.parse(cl);}catch(_){}const s=cl.indexOf("["),e=cl.lastIndexOf("]");if(s>=0&&e>s){try{return JSON.parse(cl.slice(s,e+1));}catch(_){}}throw new Error("Parse failed: "+raw.slice(0,60));}
+    setVessels(prev => {
+      const before = prev.length;
+      // We pass nowIso into the local state so the UI updates immediately
+      const next = mergeVessels(prev, parsed.map(p => ({ ...p, fileDate: nowIso })), vdb);
+      r = { 
+        added: next.length - before, 
+        updated: parsed.length - Math.max(0, next.length - before), 
+        total: next.length 
+      };
+      saveV(next);
+      setTimeout(() => saveSnapshot(next), 100);
+      return next;
+    });
 
-// ─── Formatting ───────────────────────────────────────────────────────────────
-export const normaliseQty = q => {
-  if(!q && q!==0) return q;
-  const s = String(q).replace(/\s+/g,"").toUpperCase();
-  if(/^[\d.\-]+KT$/i.test(s)) return s.replace(/KT$/i,"kt");
-  if(/^[\d.]+-[\d.]+KT$/i.test(s)) return s.toLowerCase();
-  const num = parseFloat(s.replace(/[^0-9.]/g,""));
-  if(isNaN(num)||num===0) return q;
-  const kt = num >= 500 ? Math.round(num/1000) : num;
-  return kt+"kt";
+    const rows = parsed.map(v => {
+      const ev = enrichV(v, vdb);
+      
+      // Spec data is already in v.spec from ParsePanel OR look it up in vesselDB
+      const vesselKey = ev.vessel?.toUpperCase();
+      const dbVessel = vdb[vesselKey?.toLowerCase()];
+      
+      // Priority: use spec from parsed object first, then fallback to vesselDB
+      const spec = v.spec || (dbVessel ? {
+        iceClass: dbVessel.ice_class,
+        lastCargo: dbVessel.last_cargo,
+        segment: dbVessel.segment,
+      } : {});
+      
+      console.log("Saving to DB - vessel:", ev.vessel, "spec:", spec);
+      
+      return {
+  id: uuidv4(),
+  vessel_name: ev.vessel,
+  operator: ev.operator || null,
+  port_name: ev.openPort || null,
+  open_date: ev.date || null,
+  dwt: ev.dwt || null,
+  build_year: ev.built || null,
+  overall_length: ev.loa || null,
+  beam: ev.beam || null,
+  cbm: ev.cbm || null,
+  coating: ev.coating || extractCoating(ev.comment||"") || null,
+  details: ev.comment || null,
+  file_date: nowIso,
+  updated_at_manual: nowIso,
+  updated_at: nowIso,
+  spec: spec,
 };
+    });
 
-export const fmtN = n => { if(!n && n!==0) return ""; const v=Number(String(n).replace(/[,\s]/g,"")); if(isNaN(v)) return String(n); return Math.round(v).toLocaleString("de-DE").replace(/\./g," "); };
-export const fmtFreight = s => { if(!s) return s; return String(s).trim().replace(/\s+/g," "); };
+    const { error } = await supabase
+  .from("positions")
+  .upsert(rows, { onConflict: 'vessel_name' });
+    if (error) console.error("positions insert error:", error);
+    else console.log("positions saved ok:", rows.length, "rows");
+    
+    return r;
+  }, [vesselDB, saveV, saveSnapshot]);
 
-export const toTCase = s => {
-  if(!s) return s;
-  const ALLCAPS=new Set(["ARA","USG","USGC","USAC","UKC","UKG","WMed","ECUK","WCUK","MED","MR","LR","LR1","LR2","VLCC","ULCC","LNG","LPG","IMO","DWT","LOA","CBM","GT","FOB","CIF","DNB","BNP","BP","CPP","DPP","TBN","PPT","ETA","ETC","AIS","ATA","ATD","TCE","FFA","WS","PJG","RTM","HAM","ANR","GBR","NWE","WAF","MEG","AG","SPORE","STS","FSU"]);
-  const lo=["of","the","and","a","an","to","for","in","on","at","by","or","via"];
-  return s.split(" ").map((w,i)=>{
-    if(!w) return w;
-    const up=w.toUpperCase();
-    if(w===up&&w.length>=2&&w.length<=6)return up;
-    if(ALLCAPS.has(up))return up;
-    if(i>0&&lo.includes(w.toLowerCase()))return w.toLowerCase();
-    return w.charAt(0).toUpperCase()+w.slice(1).toLowerCase();
-  }).join(" ");
-};
-
-// ─── Cargo normaliser ─────────────────────────────────────────────────────────
-export function normaliseCargo(c){
-  function fmtDate(d){
-    if(!d) return "";
-    if(/^\d{1,2}\s[A-Za-z]{3}$/.test(String(d).trim())) return d;
-    const dt=new Date(d);
-    if(isNaN(dt)) return "";
-    return dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
+  const addCargoes=useCallback(async(parsed)=>{
+    const stamped=parsed.map((f,i)=>normaliseCargo({
+      ...f,
+      id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
+      updated: new Date().toISOString(),
+    }));
+    // Dedup by id and by charterer+load+disch+from
+    let added=0;
+    setCargoes(prev=>{
+      const existingIds=new Set(prev.map(c=>c.id));
+      const toAdd=stamped.filter(f=>{
+        if(existingIds.has(f.id))return false;
+        if(f.charterer&&f.load&&f.from){
+  const dupIdx=prev.findIndex(e=>
+    (e.charterer||"").toLowerCase()===(f.charterer||"").toLowerCase()&&
+    (e.load||"").toLowerCase()===(f.load||"").toLowerCase()&&
+    (e.from||"")===(f.from||"")
+  );
+  if(dupIdx>=0){
+    // Update existing record instead of adding new
+    prev[dupIdx]={...prev[dupIdx],...f};
+    return false;
   }
-  return {
-    id:        c.id,
-    status:    c.status    || "",
-    vessel:    c.vessel    || "",
-    charterer: c.charterer || "",
-    cargo:     c.cargo     || "",
-    qty:       c.qty       || "",
-    load:      c.load      || "",
-    disch:     c.disch     || "",
-    from:      fmtDate(c.from),
-    to:        fmtDate(c.to),
-    freight:   c.freight   || "",
-    comment:   c.comment   || "",
-    updated:   c.updated   || "",
-  };
 }
+        return true;
+      });
+      added=toAdd.length;
+      return [...prev,...toAdd];
+    });
+    // Write new rows to Supabase
+    if(stamped.length>0){
+      const rows=stamped.map(c=>({...c,from:toISODate(c.from),to:toISODate(c.to)}));
+      console.log("upserting cargo ids:", rows.map(r=>r.id));
+      const{error}=await supabase.from("cargoes").upsert(rows,{onConflict:"id"});
+      if(error)console.error("cargo upsert error:",error);
+    }
+    setVessels(prev=>{const next=prev.map(v=>{const fix=stamped.find(f=>f.vessel&&f.vessel.toLowerCase()===v.vessel.toLowerCase());if(fix&&fix.status==="FIXED"){return{...v,openPort:"EMPLOYED"};}return v;});saveV(next);return next;});
+    return added;
+  },[]);
 
-// ─── Image loader ─────────────────────────────────────────────────────────────
-export function loadImg(file,cb){
-  if(!file)return;const r=new FileReader();
-  r.onload=ev=>{const du=ev.target.result;const el=new Image();
-    el.onload=()=>{try{const c=document.createElement("canvas");c.width=el.naturalWidth||el.width;c.height=el.naturalHeight||el.height;c.getContext("2d").drawImage(el,0,0);const j=c.toDataURL("image/jpeg",.92);cb({base64:j.split(",")[1],mime:"image/jpeg",dataUrl:j});}catch(_){cb({base64:du.split(",")[1],mime:file.type||"image/jpeg",dataUrl:null});}};
-    el.onerror=()=>cb({base64:du.split(",")[1],mime:file.type||"image/jpeg",dataUrl:null});
-    try{el.src=du;}catch(_){el.onerror();}
-  };r.readAsDataURL(file);
-}
+  const addV=useCallback(async(v)=>{
+  setVessels(prev=>{const idx=prev.findIndex(x=>x.vessel?.toLowerCase()===v.vessel.toLowerCase());const next=idx>=0?prev.map((x,i)=>i===idx?enrichV(v,vesselDB):x):[...prev,enrichV(v,vesselDB)];saveV(next);return next;});
+  const{error}=await supabase.from("positions").upsert([{...v,updated_at:new Date().toISOString()}],{onConflict:"vessel_name"});
+  if(error)console.error(error);
+},[vesselDB]);
+  const addC=useCallback(async(c)=>{
+    const norm=normaliseCargo({...c,id:c.id||("c_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),updated:c.updated||new Date().toISOString()});
+    setCargoes(prev=>[...prev,norm]);
+    const row={...norm,from:toISODate(norm.from),to:toISODate(norm.to)};
+    const{error}=await supabase.from("cargoes").upsert([row],{onConflict:"id"});
+    if(error)console.error(error);
+    if(norm.status==="FIXED"&&norm.vessel&&norm.disch){setVessels(prev=>{const next=prev.map(v=>v.vessel?.toLowerCase()!==norm.vessel.toLowerCase()?v:{...v,openPort:norm.disch});saveV(next);return next;});}
+  },[]);
+  const delV = useCallback(async(name)=>{
+  setVessels(prev=>{
+    const next = name==="__ALL__" ? [] : prev.filter(v => v.vessel !== name);
+    saveV(next);
+    return next;
+  });
 
-// ─── Small UI components ──────────────────────────────────────────────────────
-export function Tag({col,children}){return <span style={{fontSize:12,fontWeight:700,padding:"2px 6px",borderRadius:4,border:"1px solid "+col+"44",background:col+"11",color:col,whiteSpace:"nowrap"}}>{children}</span>;}
+  if(name==="__ALL__"){
+    const { error } = await supabase
+      .from("positions")
+      .delete()
+      .neq("vessel_name", "__none__");
+    if(error) console.error("delV all error:", error);
+  } else {
+    const { error } = await supabase
+      .from("positions")
+      .delete()
+      .ilike("vessel_name", name);
+    if(error) console.error("delV error:", error, name);
+  }
+},[]);
+  const delC=useCallback(async(id)=>{
+    setCargoes(prev=>id==="__ALLCARGO__"?[]:prev.filter(c=>c.id!==id));
+    setCargoTotal(prev=>id==="__ALLCARGO__"?0:Math.max(0,prev-1));
+    if(id==="__ALLCARGO__"){
+      const{error}=await supabase.from("cargoes").delete().neq("id","__none__");
+      if(error)console.error("delC all error:",error);
+    } else {
+      const{error}=await supabase.from("cargoes").delete().eq("id",id);
+      if(error){
+        console.error("delC error:",error,id);
+        alert("Delete failed: "+error.message+" (id: "+id+")");
+      }
+    }
+  },[]);
 
-export function calcEuEts(
-  ballastNm,
-  ladenNm,
-  ballastCons,
-  ladenCons,
-  portDaysLoad,
-  portDaysDisch,
-  co2Factor,
-  etsPrice,
-  scopeEU,
-  scopeUK,
-  scopeExtra,
-  idleDays,
-  speed,
-  ice
-){
-  const ballastDays = ballastNm / (speed * 24);
-  const ladenDays = ladenNm / (speed * 24);
-
-  const ballastFuel = ballastDays * ballastCons;
-  const ladenFuel = ladenDays * ladenCons;
-
-  const totalFuel = ballastFuel + ladenFuel;
-  const emissions = totalFuel * co2Factor;
-  const cost = emissions * etsPrice * scopeEU;
-
-  return Math.round(cost || 0);
+  const props={vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
+  return <DesktopApp {...props}/>;
 }
