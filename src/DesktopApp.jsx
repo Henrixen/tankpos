@@ -156,10 +156,10 @@ const cargoColumns = [
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
   const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
   const fb=on=>({
-  fontSize:12,
-  fontWeight:700,
-  padding:"4px 10px",
-  borderRadius:4,
+  fontSize:11,
+  fontWeight:600,
+  padding:"2px 7px",
+  borderRadius:3,
   border:"1px solid "+(on ? C.blue : "rgba(120,160,220,0.35)"),
   background:on ? "rgba(88,166,255,.22)" : C.bg4,
   color:on ? "#d9ecff" : "#9fc3f5",
@@ -584,262 +584,44 @@ const filtV=useMemo(()=>{
                     )}
 
                     {/* UNIFIED FILTER PANEL */}
-<div style={{
-  display:"flex",
-  flexDirection:"column",
-  gap:8,
-  padding:"10px 12px",
-  background:C.bg3,
-  border:"1px solid "+C.bd2,
-  borderRadius:6,
-  height:200,
-  boxSizing:"border-box",
-  overflowY:"auto",
-  flex:1
-}}>
-
-  {/* STATUS */}
-  <div style={{
-    display:"flex",
-    alignItems:"center",
-    gap:10,
-    borderBottom:"1px solid "+C.bd2,
-    paddingBottom:6,
-    marginBottom:6
-  }}>
-    <div style={{
-      width:70,
-      fontSize:11,
-      fontWeight:700,
-      color:C.amber,
-      textTransform:"uppercase"
-    }}>
-      Status
+{(()=>{
+  const FR=({label,col,children})=>(
+    <div style={{display:"flex",alignItems:"center",gap:6,borderBottom:"1px solid "+C.bd2,paddingBottom:3}}>
+      <div style={{width:54,fontSize:10,fontWeight:700,color:col,textTransform:"uppercase",flexShrink:0}}>{label}</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:3,flex:1}}>{children}</div>
     </div>
-
-    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-      {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Hide Emp"]].map(([f,l])=>(
-        <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
-      ))}
-      {filters.size>0&&(
-        <button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
-      )}
+  );
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:3,padding:"7px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1}}>
+      <FR label="Status" col={C.amber}>
+        {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Hide Emp"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>))}
+        {filters.size>0&&<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+      </FR>
+      <FR label="Updated" col={C.blue}>
+        {[["","All"],["today","Today"],["week","This wk"]].map(([v,l])=>(<button key={v||"all"} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&(v!==""||updFilter===""))}>{l}</button>))}
+      </FR>
+      <FR label="Region" col="#7dd3fc">
+        {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>))}
+      </FR>
+      <FR label="S.Region" col={C.purple}>
+        {superRegionOptions.filter(r=>r!=="ALL").map(r=>(<button key={r} onClick={e=>{if(e.ctrlKey||e.metaKey){setSuperRegionFilter(prev=>{const n=new Set(prev);n.has(r)?n.delete(r):n.add(r);return n;});}else{setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));}}}} style={fb(superRegionFilter.has(r))}>{r}</button>))}
+        {superRegionFilter.size>0&&<button onClick={()=>setSuperRegionFilter(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+      </FR>
+      <FR label="Segment" col={C.green}>
+        {(()=>{const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];return[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort((a,b)=>(ORDER.indexOf(a)===-1?99:ORDER.indexOf(a))-(ORDER.indexOf(b)===-1?99:ORDER.indexOf(b))).map(s=>(<button key={s} onClick={e=>{if(e.ctrlKey||e.metaKey){setSegmentFilter(prev=>{const n=new Set(prev);n.has(s)?n.delete(s):n.add(s);return n;});}else{setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));}setPosPage(1);}} style={fb(segmentFilter.has(s))}>{s}</button>));})()}
+        {segmentFilter.size>0&&<button onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+      </FR>
+      <FR label="DWT" col="#f59e0b">
+        {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<button key={v} onClick={()=>{setDwtFilter(dwtFilter===v?"":v);setPosPage(1);}} style={fb(dwtFilter===v)}>{l}</button>))}
+        {dwtFilter&&<button onClick={()=>{setDwtFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+      </FR>
+      <FR label="Built" col="#94a3b8">
+        {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<button key={v} onClick={()=>{setBuiltFilter(builtFilter===v?"":v);setPosPage(1);}} style={fb(builtFilter===v)}>{l}</button>))}
+        {builtFilter&&<button onClick={()=>{setBuiltFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+      </FR>
     </div>
-  </div>
-
-  {/* UPDATED */}
-  <div style={{
-    display:"flex",
-    alignItems:"center",
-    gap:10,
-    borderBottom:"1px solid "+C.bd2,
-    paddingBottom:6,
-    marginBottom:6
-  }}>
-    <div style={{
-      width:70,
-      fontSize:11,
-      fontWeight:700,
-      color:C.blue,
-      textTransform:"uppercase"
-    }}>
-      Updated
-    </div>
-
-    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-      {[["","All"],["today","Today"],["week","This wk"]].map(([v,l])=>(
-        <button
-          key={v||"all"}
-          onClick={()=>setUpdFilter(v)}
-          style={fb(updFilter===v && (v!=="" || updFilter===""))}
-        >
-          {l}
-        </button>
-      ))}
-    </div>
-  </div>
-
-  {/* REGION */}
-  <div style={{
-    display:"flex",
-    alignItems:"center",
-    gap:10,
-    borderBottom:"1px solid "+C.bd2,
-    paddingBottom:6,
-    marginBottom:6
-  }}>
-    <div style={{
-      width:70,
-      fontSize:11,
-      fontWeight:700,
-      color:"#7dd3fc",
-      textTransform:"uppercase"
-    }}>
-      Region
-    </div>
-
-    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-      {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(
-        <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
-      ))}
-    </div>
-  </div>
-
-  {/* S.REGION */}
-  <div style={{
-    display:"flex",
-    alignItems:"center",
-    gap:10,
-    borderBottom:"1px solid "+C.bd2,
-    paddingBottom:6,
-    marginBottom:6
-  }}>
-    <div style={{
-      width:70,
-      fontSize:11,
-      fontWeight:700,
-      color:C.purple,
-      textTransform:"uppercase"
-    }}>
-      S.Region
-    </div>
-
-    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-      {superRegionOptions.filter(r=>r!=="ALL").map(r=>(
-        <button
-          key={r}
-          onClick={e=>{
-            if(e.ctrlKey||e.metaKey){
-              setSuperRegionFilter(prev=>{
-                const n=new Set(prev);
-                n.has(r)?n.delete(r):n.add(r);
-                return n;
-              });
-            } else {
-              setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));
-            }
-          }}
-          style={fb(superRegionFilter.has(r))}
-        >
-          {r}
-        </button>
-      ))}
-      {superRegionFilter.size>0&&(
-        <button onClick={()=>setSuperRegionFilter(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
-      )}
-    </div>
-  </div>
-
-  {/* SEGMENT */}
-  <div style={{
-    display:"flex",
-    alignItems:"center",
-    gap:10,
-    borderBottom:"1px solid "+C.bd2,
-    paddingBottom:6,
-    marginBottom:6
-  }}>
-    <div style={{
-      width:70,
-      fontSize:11,
-      fontWeight:700,
-      color:C.green,
-      textTransform:"uppercase"
-    }}>
-      Segment
-    </div>
-
-    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-      {(()=>{
-        const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];
-        const segs=[...new Set(vessels.map(v=>v.segment).filter(Boolean))];
-        return segs
-          .sort((a,b)=>{
-            const ai=ORDER.indexOf(a), bi=ORDER.indexOf(b);
-            return (ai===-1?99:ai)-(bi===-1?99:bi);
-          })
-          .map(s=>(
-            <button
-              key={s}
-              onClick={e=>{
-                if(e.ctrlKey||e.metaKey){
-                  setSegmentFilter(prev=>{
-                    const n=new Set(prev);
-                    n.has(s)?n.delete(s):n.add(s);
-                    return n;
-                  });
-                } else {
-                  setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));
-                }
-                setPosPage(1);
-              }}
-              style={fb(segmentFilter.has(s))}
-            >
-              {s}
-            </button>
-          ));
-      })()}
-      {segmentFilter.size>0&&(
-        <button onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
-      )}
-    </div>
-  </div>
-
-  {/* DWT */}
-  <div style={{
-    display:"flex",
-    alignItems:"center",
-    gap:10,
-    borderBottom:"1px solid "+C.bd2,
-    paddingBottom:6,
-    marginBottom:6
-  }}>
-    <div style={{
-      width:70,
-      fontSize:11,
-      fontWeight:700,
-      color:"#f59e0b",
-      textTransform:"uppercase"
-    }}>
-      DWT
-    </div>
-
-    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-      {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(
-        <button key={v} onClick={()=>{setDwtFilter(dwtFilter===v?"":v);setPosPage(1);}} style={fb(dwtFilter===v)}>{l}</button>
-      ))}
-      {dwtFilter&&(
-        <button onClick={()=>{setDwtFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
-      )}
-    </div>
-  </div>
-
-  {/* BUILT */}
-  <div style={{
-    display:"flex",
-    alignItems:"center",
-    gap:10
-  }}>
-    <div style={{
-      width:70,
-      fontSize:11,
-      fontWeight:700,
-      color:"#94a3b8",
-      textTransform:"uppercase"
-    }}>
-      Built
-    </div>
-
-    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-      {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(
-        <button key={v} onClick={()=>{setBuiltFilter(builtFilter===v?"":v);setPosPage(1);}} style={fb(builtFilter===v)}>{l}</button>
-      ))}
-      {builtFilter&&(
-        <button onClick={()=>{setBuiltFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
-      )}
-    </div>
-  </div>
-</div></div>
+  );
+})()}</div>
 
 </div>
 
