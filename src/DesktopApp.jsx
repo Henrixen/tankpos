@@ -559,7 +559,7 @@ const filtV=useMemo(()=>{
   )}
 
   {/* CENTER: Filters (34%) - same height as PPT */}
-  <div style={{width:mobile?"100%":"34%",height:mobile?"auto":260,display:"flex",flexDirection:"column",gap:8}}>
+  <div style={{flex:1,minWidth:0,height:mobile?"auto":260,display:"flex",flexDirection:"column",gap:8}}>
 
                     {selVessels.size>0&&(
                       <button
@@ -840,19 +840,7 @@ const filtV=useMemo(()=>{
     </div>
   </div>
 </div></div>
-                  {/* RIGHT: Ask AI (34%) - fills remaining height */}
-{!mobile&&(
-  <div style={{width:"34%",display:"flex",flexDirection:"column",alignSelf:"stretch"}}>
-    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",flex:1}}>
-      <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
-        <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
-      </div>
-      <div style={{padding:"10px",flex:1,display:"flex",flexDirection:"column"}}>
-        <RightPanel vessels={vessels} cargoes={cargoes}/>
-      </div>
-    </div>
-  </div>
-)}
+
 </div>
 
                 {/* MOVED: Fleet count + Export + Search to same row */}
