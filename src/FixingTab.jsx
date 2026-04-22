@@ -135,7 +135,7 @@ function RichEditor({
           minHeight:Math.max(60, height - 38),
           color,
           fontFamily:"Inter, system-ui, -apple-system, Segoe UI, sans-serif",
-          fontSize:14,
+          fontSize:12,
           lineHeight:1.55,
           outline:"none",
           whiteSpace:"pre-wrap"
