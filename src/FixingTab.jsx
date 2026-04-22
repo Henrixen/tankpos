@@ -583,7 +583,6 @@ const titleText = summary || stripHtml(job.cargo_details||"") || "New cargo";
       {/* Cargo details 10% */}
       <div style={{flex:"0 0 10%",minWidth:120,display:"flex",flexDirection:"column",gap:4,alignSelf:"stretch"}}>
         
-        <RichEditor
   <RichEditor
   jobId={job.id}
   field="cargo_details"
