@@ -845,8 +845,6 @@ function FixingTab({vessels}){
         )}
         </div>
       </div>
-    </div>
-  </div>
   );
 }
 
