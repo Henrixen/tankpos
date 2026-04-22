@@ -398,9 +398,28 @@ function FixingTab({vessels}){
     return C.red;
   }
 
-  function daysSince(ts){
+    function daysSince(ts){
     if(!ts)return null;
     return Math.floor((new Date()-new Date(ts))/86400000);
+  }
+
+  function jobDateToISO(s){
+    if(!s) return "";
+    const m = String(s).match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
+    if(!m) return "";
+    const mons = {Jan:"01",Feb:"02",Mar:"03",Apr:"04",May:"05",Jun:"06",Jul:"07",Aug:"08",Sep:"09",Oct:"10",Nov:"11",Dec:"12"};
+    const dd = String(parseInt(m[1],10)).padStart(2,"0");
+    const mm = mons[m[2]] || "";
+    const yyyy = m[3];
+    return mm ? `${yyyy}-${mm}-${dd}` : "";
+  }
+
+  function isoToJobDate(s){
+    if(!s) return "";
+    const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if(!m) return s;
+    const mons = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${parseInt(m[3],10)} ${mons[parseInt(m[2],10)-1]} ${m[1]}`;
   }
 
   return(
@@ -492,231 +511,247 @@ function FixingTab({vessels}){
         </div>
 
         {filteredJobs.length===0&&<div style={{color:C.faint,fontSize:12,padding:"40px",textAlign:"center"}}>No fixing jobs. Click + New to start.</div>}
-        {charterersList.map(charterer=>{
-          const chartererJobs=filteredJobs.filter(j=>{
-            if(clientFilter==="ALL") return (j.charterer||"")===charterer;
-            return (j.charterer||"")===clientFilter;
+                {charterersList.map(charterer => {
+          const chartererJobs = filteredJobs.filter(j => {
+            if (clientFilter === "ALL") return (j.charterer || "") === charterer;
+            return (j.charterer || "") === clientFilter;
           });
-          if(chartererJobs.length===0)return null;
-          const isChartererOpen=expandedJob===charterer;
-          return(
-  <div key={charterer} style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",marginBottom:6}}>
-    {/* Charterer header - click to expand/collapse */}
-    <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",cursor:"pointer",background:C.bg1}} onClick={()=>setExpandedJob(isChartererOpen?null:charterer)}>
-      <span style={{fontWeight:700,fontSize:13,color:C.blue,flex:1}}>{charterer||"—"}</span>
-      <span style={{fontSize:11,color:C.faint}}>{chartererJobs.length} cargo{chartererJobs.length!==1?"es":""}</span>
-      <span style={{fontSize:11,color:C.faint}}>{isChartererOpen?"▲":"▼"}</span>
-    </div>
-    
-    {/* All jobs for this charterer */}
-    {isChartererOpen&&chartererJobs.map(job=>{
-          const scol=JOB_STATUS_COL[job.status]||C.dim;
-          const summary=[job.qty,job.product,job.load&&job.disch?`${job.load} → ${job.disch}`:job.load||job.disch,job.laycan].filter(Boolean).join("  ");
-const titleText = summary || stripHtml(job.cargo_details||"") || "New cargo";
+          if (chartererJobs.length === 0) return null;
 
-          return(
-            <div key={job.id} style={{borderTop:"1px solid "+C.bd2,padding:"10px 12px"}}>
-              {/* Job summary line */}
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-  <input
-  type="date"
-  value={jobDateToISO(job.added_date)}
-  onChange={e=>updateJob(job.id,{added_date:isoToJobDate(e.target.value)})}
-  style={{
-    ...inpS,
-    minWidth:128,
-    width:128,
-    padding:"3px 8px",
-    fontSize:12,
-    color:C.faint,
-    background:C.bg3,
-    border:"1px solid "+C.bd,
-    borderRadius:5
-  }}
-/>
+          const isChartererOpen = expandedJob === charterer;
 
-  <span style={{
-    fontSize:12,
-    color:C.tx,
-    flex:1,
-    fontWeight:700,
-    whiteSpace:"nowrap",
-    overflow:"hidden",
-    textOverflow:"ellipsis"
-  }}>
-    {titleText}
-  </span>
+          return (
+            <div
+              key={charterer}
+              style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",marginBottom:6}}
+            >
+              <div
+                style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",cursor:"pointer",background:C.bg2}}
+                onClick={() => setExpandedJob(isChartererOpen ? null : charterer)}
+              >
+                <span style={{fontWeight:700,fontSize:13,color:C.blue,flex:1}}>
+                  {charterer || "—"}
+                </span>
+                <span style={{fontSize:11,color:C.faint}}>
+                  {chartererJobs.length} cargo{chartererJobs.length !== 1 ? "es" : ""}
+                </span>
+                <span style={{fontSize:11,color:C.faint}}>
+                  {isChartererOpen ? "▲" : "▼"}
+                </span>
+              </div>
 
-  <div style={{display:"flex",gap:3,flexShrink:0}}>
-    {JOB_STATUS.map(s=>(
-      <button
-        key={s}
-        onClick={()=>updateJob(job.id,{status:s})}
-        style={{
-          fontSize:10,
-          fontWeight:700,
-          padding:"1px 6px",
-          borderRadius:3,
-          border:"1px solid "+(job.status===s?JOB_STATUS_COL[s]:C.bd),
-          background:job.status===s?JOB_STATUS_COL[s]+"33":"transparent",
-          color:job.status===s?JOB_STATUS_COL[s]:C.faint,
-          cursor:"pointer",
-          fontFamily:"inherit"
-        }}
-      >
-        {s}
-      </button>
-    ))}
-  </div>
+              {isChartererOpen && chartererJobs.map(job => {
+                const summary = [
+                  job.qty,
+                  job.product,
+                  job.load && job.disch ? `${job.load} → ${job.disch}` : job.load || job.disch,
+                  job.laycan
+                ].filter(Boolean).join("  ");
 
-  <button
-    onClick={e=>{
-      e.stopPropagation();
-      setPendingDelJob({id:job.id,label:titleText || job.charterer || "job"});
-    }}
-    style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.4,padding:"0 2px"}}
-  >
-    ✕
-  </button>
-</div>
+                const titleText = summary || stripHtml(job.cargo_details || "") || "New cargo";
 
-              {/* Job details */}
-  <div style={{display:"flex",flexDirection:"column",gap:8}}>
-    {/* Row 1: 3 columns */}
-    <div style={{display:"flex",gap:8,alignItems:"stretch"}}>
-      {/* Cargo details 10% */}
-      <div style={{flex:"0 0 10%",minWidth:120,display:"flex",flexDirection:"column",gap:4,alignSelf:"stretch"}}>
-        
-  <RichEditor
-  jobId={job.id}
-  field="cargo_details"
-  title="Cargo"
-  value={job.cargo_details || ""}
-  placeholder="Cargo details…"
-  height={job.ui_heights?.cargo_details || 150}
-  onChange={val => updateJob(job.id,{cargo_details:val})}
-  onResizeSave={h => updateJobHeight(job.id,"cargo_details",h)}
-/>
+                return (
+                  <div key={job.id} style={{borderTop:"1px solid "+C.bd2,padding:"10px 12px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                      <input
+                        type="date"
+                        value={jobDateToISO(job.added_date)}
+                        onChange={e => updateJob(job.id, { added_date: isoToJobDate(e.target.value) })}
+                        style={{
+                          ...inpS,
+                          minWidth:128,
+                          width:128,
+                          padding:"3px 8px",
+                          fontSize:12,
+                          color:C.faint,
+                          background:C.bg3,
+                          border:"1px solid "+C.bd,
+                          borderRadius:5
+                        }}
+                      />
+
+                      <span
+                        style={{
+                          fontSize:12,
+                          color:C.tx,
+                          flex:1,
+                          fontWeight:700,
+                          whiteSpace:"nowrap",
+                          overflow:"hidden",
+                          textOverflow:"ellipsis"
+                        }}
+                      >
+                        {titleText}
+                      </span>
+
+                      <div style={{display:"flex",gap:3,flexShrink:0}}>
+                        {JOB_STATUS.map(s => (
+                          <button
+                            key={s}
+                            onClick={() => updateJob(job.id, { status: s })}
+                            style={{
+                              fontSize:10,
+                              fontWeight:700,
+                              padding:"1px 6px",
+                              borderRadius:3,
+                              border:"1px solid "+(job.status===s ? JOB_STATUS_COL[s] : C.bd),
+                              background:job.status===s ? JOB_STATUS_COL[s]+"33" : "transparent",
+                              color:job.status===s ? JOB_STATUS_COL[s] : C.faint,
+                              cursor:"pointer",
+                              fontFamily:"inherit"
+                            }}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          setPendingDelJob({id:job.id,label:titleText || job.charterer || "job"});
+                        }}
+                        style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.4,padding:"0 2px"}}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      <div style={{display:"flex",gap:8,alignItems:"stretch"}}>
+                        <div style={{flex:"0 0 10%",minWidth:120,display:"flex",flexDirection:"column",gap:4,alignSelf:"stretch"}}>
+                          <RichEditor
+                            jobId={job.id}
+                            field="cargo_details"
+                            title="Cargo"
+                            value={job.cargo_details || ""}
+                            placeholder="Cargo details…"
+                            height={job.ui_heights?.cargo_details || 150}
+                            onChange={val => updateJob(job.id,{cargo_details:val})}
+                            onResizeSave={h => updateJobHeight(job.id,"cargo_details",h)}
+                          />
+                        </div>
+
+                        <div style={{flex:"0 0 30%",minWidth:0,display:"flex",flexDirection:"column",gap:4,alignSelf:"stretch"}}>
+                          <RichEditor
+                            jobId={job.id}
+                            field="notes"
+                            title="Notes & Guidance"
+                            value={job.notes || ""}
+                            placeholder="Notes & guidance…"
+                            height={job.ui_heights?.notes || 150}
+                            onChange={val => updateJob(job.id,{notes:val})}
+                            onResizeSave={h => updateJobHeight(job.id,"notes",h)}
+                          />
+                        </div>
+
+                        <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
+                          <RichEditor
+                            jobId={job.id}
+                            field="indications"
+                            title="Indications"
+                            titleRight={
+                              <>
+                                <select
+                                  tabIndex={-1}
+                                  value={job.segment || ""}
+                                  onChange={e => updateJob(job.id,{segment:e.target.value})}
+                                  style={{
+                                    ...inpS,
+                                    padding:"2px 8px",
+                                    fontSize:11,
+                                    height:26,
+                                    background:C.bg3,
+                                    border:"1px solid "+C.bd,
+                                    borderRadius:5,
+                                    color:C.tx,
+                                    appearance:"none"
+                                  }}
+                                >
+                                  <option value="">Seg...</option>
+                                  {SEGMENTS.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+
+                                <select
+                                  tabIndex={-1}
+                                  value={job.trade || ""}
+                                  onChange={e => updateJob(job.id,{trade:e.target.value})}
+                                  style={{
+                                    ...inpS,
+                                    padding:"2px 8px",
+                                    fontSize:11,
+                                    height:26,
+                                    background:C.bg3,
+                                    border:"1px solid "+C.bd,
+                                    borderRadius:5,
+                                    color:C.tx,
+                                    appearance:"none"
+                                  }}
+                                >
+                                  <option value="">Trade...</option>
+                                  {TRADES.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+
+                                <button
+                                  tabIndex={-1}
+                                  onClick={() => {
+                                    const matches = owners.filter(o =>
+                                      (job.segment ? o.segment === job.segment : true) &&
+                                      (job.trade ? o.trade === job.trade : true)
+                                    );
+                                    if (!matches.length) return;
+                                    const lines = matches.map(o => `${o.company} /`).join("\n");
+                                    updateJob(job.id,{
+                                      indications:(job.indications ? job.indications + "\n" : "") + lines
+                                    });
+                                  }}
+                                  style={{
+                                    fontSize:11,
+                                    fontWeight:700,
+                                    height:26,
+                                    padding:"0 10px",
+                                    background:"rgba(88,166,255,.15)",
+                                    border:"1px solid "+C.blue+"44",
+                                    borderRadius:5,
+                                    color:C.blue,
+                                    cursor:"pointer",
+                                    fontFamily:"inherit",
+                                    whiteSpace:"nowrap"
+                                  }}
+                                >
+                                  Import owners
+                                </button>
+                              </>
+                            }
+                            value={job.indications || ""}
+                            placeholder="Indications…"
+                            height={job.ui_heights?.indications || 150}
+                            onChange={val => updateJob(job.id,{indications:val})}
+                            onResizeSave={h => updateJobHeight(job.id,"indications",h)}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{borderTop:"1px solid "+C.bd2,paddingTop:8}}>
+                        <RichEditor
+                          jobId={job.id}
+                          field="subs_fixed"
+                          title={job.status==="FIXED" ? "✓ Fixed" : job.status==="SUBS" ? "On Subs" : "Subs / Fixed"}
+                          value={job.subs_fixed || ""}
+                          placeholder="Subs / fixed…"
+                          height={job.ui_heights?.subs_fixed || 100}
+                          onChange={val => updateJob(job.id,{subs_fixed:val})}
+                          onResizeSave={h => updateJobHeight(job.id,"subs_fixed",h)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
-      {/* Notes 30% */}
-      <div style={{flex:"0 0 30%",minWidth:0,display:"flex",flexDirection:"column",gap:4,alignSelf:"stretch"}}>
-        
-  <RichEditor
-  jobId={job.id}
-  field="notes"
-  title="Notes & Guidance"
-  value={job.notes || ""}
-  placeholder="Notes & guidance…"
-  height={job.ui_heights?.notes || 150}
-  onChange={val => updateJob(job.id,{notes:val})}
-  onResizeSave={h => updateJobHeight(job.id,"notes",h)}
-/>
-      </div>
-      {/* Indications 60% */}
-<div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
-  <RichEditor
-    jobId={job.id}
-    field="indications"
-    title="Indications"
-    titleRight={
-      <>
-        <select
-          tabIndex={-1}
-          value={job.segment||""}
-          onChange={e=>updateJob(job.id,{segment:e.target.value})}
-          style={{
-            ...inpS,
-            padding:"2px 8px",
-            fontSize:11,
-            height:26,
-            background:C.bg3,
-            border:"1px solid "+C.bd,
-            borderRadius:5,
-            color:C.tx,
-            appearance:"none"
-          }}
-        >
-          <option value="">Seg...</option>
-          {SEGMENTS.map(s=><option key={s} value={s}>{s}</option>)}
-        </select>
-
-        <select
-          tabIndex={-1}
-          value={job.trade||""}
-          onChange={e=>updateJob(job.id,{trade:e.target.value})}
-          style={{
-            ...inpS,
-            padding:"2px 8px",
-            fontSize:11,
-            height:26,
-            background:C.bg3,
-            border:"1px solid "+C.bd,
-            borderRadius:5,
-            color:C.tx,
-            appearance:"none"
-          }}
-        >
-          <option value="">Trade...</option>
-          {TRADES.map(t=><option key={t} value={t}>{t}</option>)}
-        </select>
-
-        <button
-          tabIndex={-1}
-          onClick={()=>{
-            const matches=owners.filter(o=>(job.segment?o.segment===job.segment:true)&&(job.trade?o.trade===job.trade:true));
-            if(!matches.length)return;
-            const lines=matches.map(o=>`${o.company} /`).join("\n");
-            updateJob(job.id,{indications:(job.indications?job.indications+"\n":"")+lines});
-          }}
-          style={{
-            fontSize:11,
-            fontWeight:700,
-            height:26,
-            padding:"0 10px",
-            background:"rgba(88,166,255,.15)",
-            border:"1px solid "+C.blue+"44",
-            borderRadius:5,
-            color:C.blue,
-            cursor:"pointer",
-            fontFamily:"inherit",
-            whiteSpace:"nowrap"
-          }}
-        >
-          Import owners
-        </button>
-      </>
-    }
-    value={job.indications || ""}
-    placeholder="Indications…"
-    height={job.ui_heights?.indications || 150}
-    onChange={val => updateJob(job.id,{indications:val})}
-    onResizeSave={h => updateJobHeight(job.id,"indications",h)}
-  />
-</div>
-
-   {/* Row 2: Subs / Fixed */}
-    <div style={{borderTop:"1px solid "+C.bd2,paddingTop:8}}>
-      
-      <RichEditor
-  jobId={job.id}
-  field="subs_fixed"
-  title={job.status==="FIXED" ? "✓ Fixed" : job.status==="SUBS" ? "On Subs" : "Subs / Fixed"}
-  value={job.subs_fixed || ""}
-  placeholder="Subs / fixed…"
-  height={job.ui_heights?.subs_fixed || 100}
-  onChange={val => updateJob(job.id,{subs_fixed:val})}
-  onResizeSave={h => updateJobHeight(job.id,"subs_fixed",h)}
-   />
-    </div>
-  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
-      </div>
-
       {/* Owner Directory */}
       <div style={{flex:"0 0 260px",width:260,display:"flex",flexDirection:"column",gap:6}}>
         {pendingDelOwner&&(
