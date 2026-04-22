@@ -597,7 +597,6 @@ const titleText = summary || stripHtml(job.cargo_details||"") || "New cargo";
       {/* Notes 30% */}
       <div style={{flex:"0 0 30%",minWidth:0,display:"flex",flexDirection:"column",gap:4,alignSelf:"stretch"}}>
         
-        <RichEditor
   <RichEditor
   jobId={job.id}
   field="notes"
