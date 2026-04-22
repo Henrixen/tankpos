@@ -809,6 +809,9 @@ const titleText = summary || stripHtml(job.cargo_details||"") || "New cargo";
         )}
       </div>
     </div>
+  </div>
+  </div>
+  </div>
   );
 }
 
