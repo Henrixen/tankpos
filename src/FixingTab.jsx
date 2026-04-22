@@ -8,6 +8,24 @@ import { isMobile } from "./constants";
 const JOB_STATUS = ["OPEN","WORKING","SUBS","FIXED","FAILED"];
 const JOB_STATUS_COL = {OPEN:C.blue,WORKING:C.amber,SUBS:C.purple,FIXED:C.green,FAILED:C.red};
 const TRADES = ["UKC","Med","EU Feast","AG","TA West","Ex US","Asia"];
+const EDIT_FIELDS = ["cargo_details","notes","indications","subs_fixed"];
+
+function focusJobField(jobId, field){
+  const el = document.querySelector(`[data-job-field="${jobId}-${field}"]`);
+  if (el) {
+    el.focus();
+    if (el.select) el.select();
+  }
+}
+
+function cycleJobField(jobId, currentField, backwards=false){
+  const idx = EDIT_FIELDS.indexOf(currentField);
+  if (idx === -1) return;
+  const nextIdx = backwards
+    ? (idx - 1 + EDIT_FIELDS.length) % EDIT_FIELDS.length
+    : (idx + 1) % EDIT_FIELDS.length;
+  focusJobField(jobId, EDIT_FIELDS[nextIdx]);
+}
 
 function FixingTab({vessels}){
   const mobile=isMobile();
