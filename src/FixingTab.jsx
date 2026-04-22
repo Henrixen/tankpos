@@ -31,6 +31,7 @@ function RichEditor({
   jobId,
   field,
   title,
+  titleRight,
   value,
   onChange,
   onResizeSave,
