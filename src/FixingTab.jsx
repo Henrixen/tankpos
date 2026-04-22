@@ -128,22 +128,25 @@ React.useEffect(()=>{
     {title}
   </span>
 
-  <button
-    type="button"
-    onMouseDown={e=>e.preventDefault()}
-    onClick={()=>exec("insertUnorderedList")}
-    style={{
-      fontSize:11,
-      padding:"2px 8px",
-      borderRadius:4,
-      border:"1px solid "+C.bd,
-      background:C.bg3,
-      color:C.tx,
-      cursor:"pointer"
-    }}
-  >
-    List
-  </button>
+  <div style={{display:"flex",alignItems:"center",gap:6}}>
+    {titleRight}
+    <button
+      type="button"
+      onMouseDown={e=>e.preventDefault()}
+      onClick={()=>exec("insertUnorderedList")}
+      style={{
+        fontSize:11,
+        padding:"2px 8px",
+        borderRadius:4,
+        border:"1px solid "+C.bd,
+        background:C.bg3,
+        color:C.tx,
+        cursor:"pointer"
+      }}
+    >
+      List
+    </button>
+  </div>
 </div>
       <div
         ref={editorRef}
@@ -515,21 +518,21 @@ const titleText = summary || stripHtml(job.cargo_details||"") || "New cargo";
               {/* Job summary line */}
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
   <input
-    value={job.added_date || ""}
-    onChange={e=>updateJob(job.id,{added_date:e.target.value})}
-    placeholder="Date"
-    style={{
-      ...inpS,
-      minWidth:90,
-      width:90,
-      padding:"3px 6px",
-      fontSize:12,
-      color:C.faint,
-      background:"transparent",
-      border:"1px solid transparent",
-      borderRadius:4
-    }}
-  />
+  type="date"
+  value={jobDateToISO(job.added_date)}
+  onChange={e=>updateJob(job.id,{added_date:isoToJobDate(e.target.value)})}
+  style={{
+    ...inpS,
+    minWidth:128,
+    width:128,
+    padding:"3px 8px",
+    fontSize:12,
+    color:C.faint,
+    background:C.bg3,
+    border:"1px solid "+C.bd,
+    borderRadius:5
+  }}
+/>
 
   <span style={{
     fontSize:12,
@@ -609,42 +612,86 @@ const titleText = summary || stripHtml(job.cargo_details||"") || "New cargo";
 />
       </div>
       {/* Indications 60% */}
-      <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
-          
-          <div style={{display:"flex",gap:4,alignItems:"center"}}>
-            <select value={job.segment||""} 
-  onChange={e=>updateJob(job.id,{segment:e.target.value})}
-  style={{...inpS,padding:"1px 4px",fontSize:10,background:C.bg3,appearance:"none"}}>
-  <option value="">Seg…</option>
-  {SEGMENTS.map(s=><option key={s} value={s}>{s}</option>)}
-</select>
-<select value={job.trade||""}
-  onChange={e=>updateJob(job.id,{trade:e.target.value})}
-  style={{...inpS,padding:"1px 4px",fontSize:10,background:C.bg3,appearance:"none"}}>
-  <option value="">Trade…</option>
-  {TRADES.map(t=><option key={t} value={t}>{t}</option>)}
-</select>
-            <button onClick={()=>{
-  const matches=owners.filter(o=>(job.segment?o.segment===job.segment:true)&&(job.trade?o.trade===job.trade:true));
-  if(!matches.length)return;
-  const lines=matches.map(o=>`${o.company} /`).join("\n");
-  updateJob(job.id,{indications:(job.indications?job.indications+"\n":"")+lines});
-}} style={{fontSize:10,fontWeight:700,background:"rgba(88,166,255,.15)",border:"1px solid "+C.blue+"44",borderRadius:4,color:C.blue,padding:"2px 7px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-  Import owners
-</button>
-          </div>
-        </div>
-        <RichEditor
-  jobId={job.id}
-  field="indications"
-  title="Indications"
-  value={job.indications || ""}
-  placeholder="Indications…"
-  height={job.ui_heights?.indications || 150}
-  onChange={val => updateJob(job.id,{indications:val})}
-  onResizeSave={h => updateJobHeight(job.id,"indications",h)}
-/>
+<div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
+  <RichEditor
+    jobId={job.id}
+    field="indications"
+    title="Indications"
+    titleRight={
+      <>
+        <select
+          tabIndex={-1}
+          value={job.segment||""}
+          onChange={e=>updateJob(job.id,{segment:e.target.value})}
+          style={{
+            ...inpS,
+            padding:"2px 8px",
+            fontSize:11,
+            height:26,
+            background:C.bg3,
+            border:"1px solid "+C.bd,
+            borderRadius:5,
+            color:C.tx,
+            appearance:"none"
+          }}
+        >
+          <option value="">Seg...</option>
+          {SEGMENTS.map(s=><option key={s} value={s}>{s}</option>)}
+        </select>
+
+        <select
+          tabIndex={-1}
+          value={job.trade||""}
+          onChange={e=>updateJob(job.id,{trade:e.target.value})}
+          style={{
+            ...inpS,
+            padding:"2px 8px",
+            fontSize:11,
+            height:26,
+            background:C.bg3,
+            border:"1px solid "+C.bd,
+            borderRadius:5,
+            color:C.tx,
+            appearance:"none"
+          }}
+        >
+          <option value="">Trade...</option>
+          {TRADES.map(t=><option key={t} value={t}>{t}</option>)}
+        </select>
+
+        <button
+          tabIndex={-1}
+          onClick={()=>{
+            const matches=owners.filter(o=>(job.segment?o.segment===job.segment:true)&&(job.trade?o.trade===job.trade:true));
+            if(!matches.length)return;
+            const lines=matches.map(o=>`${o.company} /`).join("\n");
+            updateJob(job.id,{indications:(job.indications?job.indications+"\n":"")+lines});
+          }}
+          style={{
+            fontSize:11,
+            fontWeight:700,
+            height:26,
+            padding:"0 10px",
+            background:"rgba(88,166,255,.15)",
+            border:"1px solid "+C.blue+"44",
+            borderRadius:5,
+            color:C.blue,
+            cursor:"pointer",
+            fontFamily:"inherit",
+            whiteSpace:"nowrap"
+          }}
+        >
+          Import owners
+        </button>
+      </>
+    }
+    value={job.indications || ""}
+    placeholder="Indications…"
+    height={job.ui_heights?.indications || 150}
+    onChange={val => updateJob(job.id,{indications:val})}
+    onResizeSave={h => updateJobHeight(job.id,"indications",h)}
+  />
+</div>
       </div>
     </div>
    {/* Row 2: Subs / Fixed */}
