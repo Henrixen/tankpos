@@ -693,8 +693,7 @@ const titleText = summary || stripHtml(job.cargo_details||"") || "New cargo";
     onResizeSave={h => updateJobHeight(job.id,"indications",h)}
   />
 </div>
-      </div>
-    </div>
+
    {/* Row 2: Subs / Fixed */}
     <div style={{borderTop:"1px solid "+C.bd2,paddingTop:8}}>
       
