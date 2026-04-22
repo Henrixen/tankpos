@@ -27,6 +27,125 @@ function cycleJobField(jobId, currentField, backwards=false){
   focusJobField(jobId, EDIT_FIELDS[nextIdx]);
 }
 
+function RichEditor({
+  jobId,
+  field,
+  value,
+  onChange,
+  onResizeSave,
+  height = 120,
+  placeholder = "",
+  color = C.tx
+}){
+  const editorRef = React.useRef(null);
+  const wrapRef = React.useRef(null);
+
+  React.useEffect(()=>{
+    const el = editorRef.current;
+    if (!el) return;
+    if (document.activeElement === el) return;
+    const next = value || "";
+    if (el.innerHTML !== next) el.innerHTML = next;
+  }, [value]);
+
+  function exec(cmd){
+    editorRef.current?.focus();
+    document.execCommand(cmd, false, null);
+    onChange(editorRef.current?.innerHTML || "");
+  }
+
+  function handleInput(){
+    onChange(editorRef.current?.innerHTML || "");
+  }
+
+  function handleKeyDown(e){
+    if (e.key === "Tab") {
+      e.preventDefault();
+      cycleJobField(jobId, field, e.shiftKey);
+    }
+  }
+
+  function saveHeight(){
+    const h = wrapRef.current?.offsetHeight;
+    if (h) onResizeSave?.(h);
+  }
+
+  return (
+    <div
+      ref={wrapRef}
+      style={{
+        background:C.bg3,
+        border:"1px solid "+C.bd,
+        borderRadius:6,
+        minHeight:height,
+        height:height,
+        resize:"vertical",
+        overflow:"auto",
+        boxSizing:"border-box"
+      }}
+      onMouseUp={saveHeight}
+      onTouchEnd={saveHeight}
+    >
+      <div style={{
+        display:"flex",
+        gap:6,
+        alignItems:"center",
+        padding:"6px 8px",
+        borderBottom:"1px solid "+C.bd2,
+        background:C.bg4,
+        position:"sticky",
+        top:0,
+        zIndex:1
+      }}>
+        <button
+          type="button"
+          onMouseDown={e=>e.preventDefault()}
+          onClick={()=>exec("bold")}
+          style={{fontSize:12,fontWeight:700,padding:"2px 8px",borderRadius:4,border:"1px solid "+C.bd,background:C.bg3,color:C.tx,cursor:"pointer"}}
+        >
+          B
+        </button>
+        <button
+          type="button"
+          onMouseDown={e=>e.preventDefault()}
+          onClick={()=>exec("underline")}
+          style={{fontSize:12,textDecoration:"underline",padding:"2px 8px",borderRadius:4,border:"1px solid "+C.bd,background:C.bg3,color:C.tx,cursor:"pointer"}}
+        >
+          U
+        </button>
+        <button
+          type="button"
+          onMouseDown={e=>e.preventDefault()}
+          onClick={()=>exec("insertUnorderedList")}
+          style={{fontSize:12,padding:"2px 8px",borderRadius:4,border:"1px solid "+C.bd,background:C.bg3,color:C.tx,cursor:"pointer"}}
+        >
+          • List
+        </button>
+      </div>
+
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        data-job-field={`${jobId}-${field}`}
+        onInput={handleInput}
+        onKeyDown={handleKeyDown}
+        style={{
+          padding:"10px 12px",
+          minHeight:Math.max(60, height - 38),
+          color,
+          fontFamily:"Inter, system-ui, -apple-system, Segoe UI, sans-serif",
+          fontSize:14,
+          lineHeight:1.55,
+          outline:"none",
+          whiteSpace:"pre-wrap"
+        }}
+        data-placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
 function FixingTab({vessels}){
   const mobile=isMobile();
   const [jobs,setJobs]=useState([]);
@@ -119,7 +238,18 @@ function FixingTab({vessels}){
     clientFilter==="ALL"?[...new Set(jobs.map(j=>j.charterer||""))]:[ clientFilter]
   ,[jobs,clientFilter]);
 
-  const inpS=useMemo(()=>({background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"4px 7px",outline:"none",boxSizing:"border-box"}),[]);
+  const inpS=useMemo(()=>({
+  background:C.bg3,
+  border:"1px solid "+C.bd,
+  borderRadius:6,
+  color:C.tx,
+  fontFamily:"Inter, system-ui, -apple-system, Segoe UI, sans-serif",
+  fontSize:14,
+  lineHeight:1.5,
+  padding:"7px 10px",
+  outline:"none",
+  boxSizing:"border-box"
+}),[]);
   const fb2=useCallback((on,col)=>({fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:4,border:"1px solid "+(on?col||C.blue:C.bd),background:on?(col||C.blue)+"22":"transparent",color:on?col||C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}),[]);
 
   function suggestVessels(job){
@@ -358,15 +488,28 @@ function FixingTab({vessels}){
       {/* Cargo details 10% */}
       <div style={{flex:"0 0 10%",minWidth:120,display:"flex",flexDirection:"column",gap:4,alignSelf:"stretch"}}>
         <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>Cargo</div>
-        <textarea value={job.cargo_details||""} onChange={e=>updateJob(job.id,{cargo_details:e.target.value})}
-          style={{...inpS,width:"100%",flex:1,resize:"none",fontSize:11,boxSizing:"border-box"}}/>
+        <RichEditor
+  jobId={job.id}
+  field="cargo_details"
+  value={job.cargo_details || ""}
+  placeholder="Cargo details…"
+  height={job.ui_heights?.cargo_details || 120}
+  onChange={val => updateJob(job.id,{cargo_details:val})}
+  onResizeSave={h => updateJobHeight(job.id,"cargo_details",h)}
+/>
       </div>
       {/* Notes 30% */}
       <div style={{flex:"0 0 30%",minWidth:0,display:"flex",flexDirection:"column",gap:4,alignSelf:"stretch"}}>
         <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>Notes & Guidance</div>
-        <textarea id={"notes_"+job.id} value={job.notes||""} onChange={e=>updateJob(job.id,{notes:e.target.value})}
-  onKeyDown={e=>{if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();document.getElementById("indications_"+job.id)?.focus();}}}
-  style={{...inpS,width:"100%",flex:1,resize:"none",fontSize:11,boxSizing:"border-box"}}/>
+        <RichEditor
+  jobId={job.id}
+  field="notes"
+  value={job.notes || ""}
+  placeholder="Notes & guidance…"
+  height={job.ui_heights?.notes || 120}
+  onChange={val => updateJob(job.id,{notes:val})}
+  onResizeSave={h => updateJobHeight(job.id,"notes",h)}
+/>
       </div>
       {/* Indications 60% */}
       <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
@@ -395,8 +538,15 @@ function FixingTab({vessels}){
 </button>
           </div>
         </div>
-        <textarea id={"indications_"+job.id} value={job.indications||""} onChange={e=>updateJob(job.id,{indications:e.target.value})}
-  style={{...inpS,width:"100%",minHeight:120,resize:"vertical",fontSize:11,boxSizing:"border-box",fontFamily:"monospace"}}/>
+        <RichEditor
+  jobId={job.id}
+  field="indications"
+  value={job.indications || ""}
+  placeholder="Indications…"
+  height={job.ui_heights?.indications || 140}
+  onChange={val => updateJob(job.id,{indications:val})}
+  onResizeSave={h => updateJobHeight(job.id,"indications",h)}
+/>
       </div>
     </div>
    {/* Row 2: Subs / Fixed */}
@@ -404,8 +554,15 @@ function FixingTab({vessels}){
       <div style={{fontSize:10,color:job.status==="FIXED"?C.green:job.status==="SUBS"?C.purple:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4,fontWeight:700}}>
         {job.status==="FIXED"?`✓ Fixed`:job.status==="SUBS"?`On Subs`:`Subs / Fixed`}
       </div>
-      <textarea value={job.subs_fixed||""} onChange={e=>updateJob(job.id,{subs_fixed:e.target.value})}
-        style={{...inpS,width:"100%",minHeight:36,resize:"vertical",fontSize:11,boxSizing:"border-box"}}/>
+      <RichEditor
+  jobId={job.id}
+  field="subs_fixed"
+  value={job.subs_fixed || ""}
+  placeholder="Subs / fixed…"
+  height={job.ui_heights?.subs_fixed || 90}
+  onChange={val => updateJob(job.id,{subs_fixed:val})}
+  onResizeSave={h => updateJobHeight(job.id,"subs_fixed",h)}
+/>
     </div>
   </div>
             </div>
