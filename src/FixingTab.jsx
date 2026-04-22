@@ -270,21 +270,27 @@ function FixingTab({vessels}){
   const today = new Date();
   const formattedDate = `${today.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][today.getMonth()]} ${today.getFullYear()}`;
   const job = {
-    id,
-    charterer,
-    status: "OPEN",
-    laycan: "",
-    laytime: "",
-    notes: "",
-    indications: "",
-    cargo_details: "",
-    subs_fixed: "",
-    owners: [],
-    added_date: formattedDate,
-    segment: "",
-    trade: "",
-    created_at: new Date().toISOString(),
-  };
+  id,
+  charterer,
+  status: "OPEN",
+  laycan: "",
+  laytime: "",
+  notes: "",
+  indications: "",
+  cargo_details: "",
+  subs_fixed: "",
+  owners: [],
+  added_date: formattedDate,
+  segment: "",
+  trade: "",
+  ui_heights: {
+    cargo_details: 120,
+    notes: 120,
+    indications: 140,
+    subs_fixed: 90
+  },
+  created_at: new Date().toISOString(),
+};
   await saveFixingJob(job);
   setJobs(prev => [job, ...prev]);
   setExpandedJob(id);
@@ -301,6 +307,18 @@ function FixingTab({vessels}){
     if(job)saveFixingJob({...job,...changes});
   },800);
 },[]);
+
+  function updateJobHeight(jobId, field, height){
+  const job = jobsRef.current.find(j => j.id === jobId);
+  if (!job) return;
+
+  updateJob(jobId, {
+    ui_heights: {
+      ...(job.ui_heights || {}),
+      [field]: height
+    }
+  });
+}
 
   async function removeJob(id){
     setJobs(prev=>prev.filter(j=>j.id!==id));
