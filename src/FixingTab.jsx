@@ -707,15 +707,15 @@ const titleText = summary || stripHtml(job.cargo_details||"") || "New cargo";
   onChange={val => updateJob(job.id,{subs_fixed:val})}
   onResizeSave={h => updateJobHeight(job.id,"subs_fixed",h)}
    />
-    </div>
-  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
-      </div>
+</div>
+</div>
+</div>
+);
+})}
+</div>
+);
+})}
+</div>
 
       {/* Owner Directory */}
       <div style={{flex:"0 0 260px",width:260,display:"flex",flexDirection:"column",gap:6}}>
