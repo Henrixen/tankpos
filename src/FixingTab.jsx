@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "./supabaseclient";
 import { C, SEGMENTS } from "./constants";
-import { classifyRegion, daysBetween } from "./utils";
+import { classifyRegion, daysBetween, stripHtml } from "./utils";
 import { loadFixingJobs, saveFixingJob, deleteFixingJob, loadClients, saveClient, deleteClient } from "./supabaseHelpers";
 import { isMobile } from "./constants";
 
@@ -481,12 +481,28 @@ function FixingTab({vessels}){
     {isChartererOpen&&chartererJobs.map(job=>{
           const scol=JOB_STATUS_COL[job.status]||C.dim;
           const summary=[job.qty,job.product,job.load&&job.disch?`${job.load} → ${job.disch}`:job.load||job.disch,job.laycan].filter(Boolean).join("  ");
+const titleText = summary || stripHtml(job.cargo_details||"") || "New cargo";
 
           return(
             <div key={job.id} style={{borderTop:"1px solid "+C.bd2,padding:"10px 12px"}}>
               {/* Job summary line */}
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                <span style={{fontSize:11,color:C.faint,minWidth:90}}>{job.added_date||"—"}</span>
+                <input
+  value={job.added_date || ""}
+  onChange={e=>updateJob(job.id,{added_date:e.target.value})}
+  placeholder="Date"
+  style={{
+    ...inpS,
+    minWidth:90,
+    width:90,
+    padding:"3px 6px",
+    fontSize:12,
+    color:C.faint,
+    background:"transparent",
+    border:"1px solid transparent",
+    borderRadius:4
+  }}
+/>
 <div style={{display:"flex",gap:3,flexShrink:0}}>
                   {JOB_STATUS.map(s=>(
                     <button key={s} onClick={()=>updateJob(job.id,{status:s})}
@@ -495,8 +511,10 @@ function FixingTab({vessels}){
                     </button>
                   ))}
                 </div>
-                <span style={{fontSize:11,color:C.tx,flex:1}}>{summary||job.cargo_details||"New cargo"}</span>
-                <button onClick={e=>{e.stopPropagation();setPendingDelJob({id:job.id,label:summary||job.charterer||"job"});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.4,padding:"0 2px"}}>✕</button>
+                <span style={{fontSize:12,color:C.tx,flex:1,fontWeight:700}}>
+  {titleText}
+</span>
+                <button onClick={e=>{e.stopPropagation();setPendingDelJob({id:job.id,label:titleText || job.charterer || "job"});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.4,padding:"0 2px"}}>✕</button>
               </div>
 
               {/* Job details */}
