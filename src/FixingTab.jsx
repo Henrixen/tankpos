@@ -30,6 +30,7 @@ function cycleJobField(jobId, currentField, backwards=false){
 function RichEditor({
   jobId,
   field,
+  title,
   value,
   onChange,
   onResizeSave,
@@ -66,9 +67,29 @@ function RichEditor({
   }
 
   function saveHeight(){
-    const h = wrapRef.current?.offsetHeight;
-    if (h) onResizeSave?.(h);
-  }
+  const h = wrapRef.current?.offsetHeight;
+  if (h) onResizeSave?.(Math.round(h));
+}
+
+React.useEffect(()=>{
+  const el = wrapRef.current;
+  if (!el || !window.ResizeObserver) return;
+
+  let t = null;
+  const ro = new ResizeObserver(() => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      const h = el.offsetHeight;
+      if (h) onResizeSave?.(Math.round(h));
+    }, 180);
+  });
+
+  ro.observe(el);
+  return () => {
+    clearTimeout(t);
+    ro.disconnect();
+  };
+}, [jobId, field, onResizeSave]);
 
   return (
     <div
@@ -87,42 +108,43 @@ function RichEditor({
       onTouchEnd={saveHeight}
     >
       <div style={{
-        display:"flex",
-        gap:6,
-        alignItems:"center",
-        padding:"6px 8px",
-        borderBottom:"1px solid "+C.bd2,
-        background:C.bg4,
-        position:"sticky",
-        top:0,
-        zIndex:1
-      }}>
-        <button
-          type="button"
-          onMouseDown={e=>e.preventDefault()}
-          onClick={()=>exec("bold")}
-          style={{fontSize:12,fontWeight:700,padding:"2px 8px",borderRadius:4,border:"1px solid "+C.bd,background:C.bg3,color:C.tx,cursor:"pointer"}}
-        >
-          B
-        </button>
-        <button
-          type="button"
-          onMouseDown={e=>e.preventDefault()}
-          onClick={()=>exec("underline")}
-          style={{fontSize:12,textDecoration:"underline",padding:"2px 8px",borderRadius:4,border:"1px solid "+C.bd,background:C.bg3,color:C.tx,cursor:"pointer"}}
-        >
-          U
-        </button>
-        <button
-          type="button"
-          onMouseDown={e=>e.preventDefault()}
-          onClick={()=>exec("insertUnorderedList")}
-          style={{fontSize:12,padding:"2px 8px",borderRadius:4,border:"1px solid "+C.bd,background:C.bg3,color:C.tx,cursor:"pointer"}}
-        >
-          • List
-        </button>
-      </div>
+  display:"flex",
+  alignItems:"center",
+  justifyContent:"space-between",
+  padding:"6px 10px",
+  borderBottom:"1px solid "+C.bd2,
+  background:C.bg4,
+  position:"sticky",
+  top:0,
+  zIndex:1
+}}>
+  <span style={{
+    fontSize:11,
+    color:C.faint,
+    textTransform:"uppercase",
+    letterSpacing:"0.06em",
+    fontWeight:700
+  }}>
+    {title}
+  </span>
 
+  <button
+    type="button"
+    onMouseDown={e=>e.preventDefault()}
+    onClick={()=>exec("insertUnorderedList")}
+    style={{
+      fontSize:11,
+      padding:"2px 8px",
+      borderRadius:4,
+      border:"1px solid "+C.bd,
+      background:C.bg3,
+      color:C.tx,
+      cursor:"pointer"
+    }}
+  >
+    List
+  </button>
+</div>
       <div
         ref={editorRef}
         contentEditable
@@ -136,7 +158,7 @@ function RichEditor({
           color,
           fontFamily:"Inter, system-ui, -apple-system, Segoe UI, sans-serif",
           fontSize:12,
-          lineHeight:1.55,
+          lineHeight:1.6,
           outline:"none",
           whiteSpace:"pre-wrap"
         }}
@@ -284,11 +306,11 @@ function FixingTab({vessels}){
   segment: "",
   trade: "",
   ui_heights: {
-    cargo_details: 120,
-    notes: 120,
-    indications: 140,
-    subs_fixed: 90
-  },
+  cargo_details: 150,
+  notes: 150,
+  indications: 150,
+  subs_fixed: 100
+},
   created_at: new Date().toISOString(),
 };
   await saveFixingJob(job);
@@ -312,12 +334,17 @@ function FixingTab({vessels}){
   const job = jobsRef.current.find(j => j.id === jobId);
   if (!job) return;
 
-  updateJob(jobId, {
-    ui_heights: {
-      ...(job.ui_heights || {}),
-      [field]: height
-    }
-  });
+  const nextHeights = {...(job.ui_heights || {})};
+
+  if (field === "cargo_details" || field === "notes" || field === "indications") {
+    nextHeights.cargo_details = height;
+    nextHeights.notes = height;
+    nextHeights.indications = height;
+  } else {
+    nextHeights[field] = height;
+  }
+
+  updateJob(jobId, { ui_heights: nextHeights });
 }
 
   async function removeJob(id){
@@ -487,35 +514,67 @@ const titleText = summary || stripHtml(job.cargo_details||"") || "New cargo";
             <div key={job.id} style={{borderTop:"1px solid "+C.bd2,padding:"10px 12px"}}>
               {/* Job summary line */}
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                <input
-  value={job.added_date || ""}
-  onChange={e=>updateJob(job.id,{added_date:e.target.value})}
-  placeholder="Date"
-  style={{
-    ...inpS,
-    minWidth:90,
-    width:90,
-    padding:"3px 6px",
+  <input
+    value={job.added_date || ""}
+    onChange={e=>updateJob(job.id,{added_date:e.target.value})}
+    placeholder="Date"
+    style={{
+      ...inpS,
+      minWidth:90,
+      width:90,
+      padding:"3px 6px",
+      fontSize:12,
+      color:C.faint,
+      background:"transparent",
+      border:"1px solid transparent",
+      borderRadius:4
+    }}
+  />
+
+  <span style={{
     fontSize:12,
-    color:C.faint,
-    background:"transparent",
-    border:"1px solid transparent",
-    borderRadius:4
-  }}
-/>
-<div style={{display:"flex",gap:3,flexShrink:0}}>
-                  {JOB_STATUS.map(s=>(
-                    <button key={s} onClick={()=>updateJob(job.id,{status:s})}
-                      style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,border:"1px solid "+(job.status===s?JOB_STATUS_COL[s]:C.bd),background:job.status===s?JOB_STATUS_COL[s]+"33":"transparent",color:job.status===s?JOB_STATUS_COL[s]:C.faint,cursor:"pointer",fontFamily:"inherit"}}>
-                      {s}
-                    </button>
-                  ))}
-                </div>
-                <span style={{fontSize:12,color:C.tx,flex:1,fontWeight:700}}>
-  {titleText}
-</span>
-                <button onClick={e=>{e.stopPropagation();setPendingDelJob({id:job.id,label:titleText || job.charterer || "job"});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.4,padding:"0 2px"}}>✕</button>
-              </div>
+    color:C.tx,
+    flex:1,
+    fontWeight:700,
+    whiteSpace:"nowrap",
+    overflow:"hidden",
+    textOverflow:"ellipsis"
+  }}>
+    {titleText}
+  </span>
+
+  <div style={{display:"flex",gap:3,flexShrink:0}}>
+    {JOB_STATUS.map(s=>(
+      <button
+        key={s}
+        onClick={()=>updateJob(job.id,{status:s})}
+        style={{
+          fontSize:10,
+          fontWeight:700,
+          padding:"1px 6px",
+          borderRadius:3,
+          border:"1px solid "+(job.status===s?JOB_STATUS_COL[s]:C.bd),
+          background:job.status===s?JOB_STATUS_COL[s]+"33":"transparent",
+          color:job.status===s?JOB_STATUS_COL[s]:C.faint,
+          cursor:"pointer",
+          fontFamily:"inherit"
+        }}
+      >
+        {s}
+      </button>
+    ))}
+  </div>
+
+  <button
+    onClick={e=>{
+      e.stopPropagation();
+      setPendingDelJob({id:job.id,label:titleText || job.charterer || "job"});
+    }}
+    style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.4,padding:"0 2px"}}
+  >
+    ✕
+  </button>
+</div>
 
               {/* Job details */}
   <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -523,26 +582,30 @@ const titleText = summary || stripHtml(job.cargo_details||"") || "New cargo";
     <div style={{display:"flex",gap:8,alignItems:"stretch"}}>
       {/* Cargo details 10% */}
       <div style={{flex:"0 0 10%",minWidth:120,display:"flex",flexDirection:"column",gap:4,alignSelf:"stretch"}}>
-        <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>Cargo</div>
+        
         <RichEditor
+  <RichEditor
   jobId={job.id}
   field="cargo_details"
+  title="Cargo"
   value={job.cargo_details || ""}
   placeholder="Cargo details…"
-  height={job.ui_heights?.cargo_details || 120}
+  height={job.ui_heights?.cargo_details || 150}
   onChange={val => updateJob(job.id,{cargo_details:val})}
   onResizeSave={h => updateJobHeight(job.id,"cargo_details",h)}
 />
       </div>
       {/* Notes 30% */}
       <div style={{flex:"0 0 30%",minWidth:0,display:"flex",flexDirection:"column",gap:4,alignSelf:"stretch"}}>
-        <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>Notes & Guidance</div>
+        
         <RichEditor
+  <RichEditor
   jobId={job.id}
   field="notes"
+  title="Notes & Guidance"
   value={job.notes || ""}
   placeholder="Notes & guidance…"
-  height={job.ui_heights?.notes || 120}
+  height={job.ui_heights?.notes || 150}
   onChange={val => updateJob(job.id,{notes:val})}
   onResizeSave={h => updateJobHeight(job.id,"notes",h)}
 />
@@ -550,7 +613,7 @@ const titleText = summary || stripHtml(job.cargo_details||"") || "New cargo";
       {/* Indications 60% */}
       <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
-          <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>Indications</span>
+          
           <div style={{display:"flex",gap:4,alignItems:"center"}}>
             <select value={job.segment||""} 
   onChange={e=>updateJob(job.id,{segment:e.target.value})}
@@ -577,9 +640,10 @@ const titleText = summary || stripHtml(job.cargo_details||"") || "New cargo";
         <RichEditor
   jobId={job.id}
   field="indications"
+  title="Indications"
   value={job.indications || ""}
   placeholder="Indications…"
-  height={job.ui_heights?.indications || 140}
+  height={job.ui_heights?.indications || 150}
   onChange={val => updateJob(job.id,{indications:val})}
   onResizeSave={h => updateJobHeight(job.id,"indications",h)}
 />
@@ -587,15 +651,14 @@ const titleText = summary || stripHtml(job.cargo_details||"") || "New cargo";
     </div>
    {/* Row 2: Subs / Fixed */}
     <div style={{borderTop:"1px solid "+C.bd2,paddingTop:8}}>
-      <div style={{fontSize:10,color:job.status==="FIXED"?C.green:job.status==="SUBS"?C.purple:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4,fontWeight:700}}>
-        {job.status==="FIXED"?`✓ Fixed`:job.status==="SUBS"?`On Subs`:`Subs / Fixed`}
-      </div>
+      
       <RichEditor
   jobId={job.id}
   field="subs_fixed"
+  title={job.status==="FIXED" ? "✓ Fixed" : job.status==="SUBS" ? "On Subs" : "Subs / Fixed"}
   value={job.subs_fixed || ""}
   placeholder="Subs / fixed…"
-  height={job.ui_heights?.subs_fixed || 90}
+  height={job.ui_heights?.subs_fixed || 100}
   onChange={val => updateJob(job.id,{subs_fixed:val})}
   onResizeSave={h => updateJobHeight(job.id,"subs_fixed",h)}
 />
