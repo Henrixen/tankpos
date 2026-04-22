@@ -21,3 +21,9 @@ input, textarea, select, button {
 ::-webkit-scrollbar-track { background: #070f1c; }
 ::-webkit-scrollbar-thumb { background: rgba(58,130,246,0.3); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(58,130,246,0.5); }
+
+[contenteditable][data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: rgba(110,155,215,0.45);
+  pointer-events: none;
+}
