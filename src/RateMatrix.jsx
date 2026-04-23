@@ -103,17 +103,76 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
       }}
       onContextMenu={e=>{e.preventDefault();onComment(ck);}}
       title={matrixRef.current[ck]?.comment?"💬 "+matrixRef.current[ck].comment:"Right-click for comment"}
-      style={{width:"100%",background:v?c+"33":"transparent",
-        border:"none",outline:"none",
-        color:v?"#fff":C.faint,fontWeight:v?700:400,
-        fontFamily:"inherit",fontSize:12,
-        padding:"3px 3px",textAlign:"center",boxSizing:"border-box",minWidth:0}}/>
+            style={{
+        width:"100%",
+        height:30,
+        background:v ? c+"22" : "transparent",
+        border:"none",
+        outline:"none",
+        color:v ? "#d9ecff" : C.faint,
+        fontWeight:v ? 700 : 500,
+        fontFamily:"inherit",
+        fontSize:12,
+        padding:"0 8px",
+        textAlign:"center",
+        boxSizing:"border-box",
+        minWidth:0,
+        textTransform:"uppercase"
+      }}/>
   );
 }
 function RateMatrix({onBunkerChange}){
   const [rev,forceUpdate]=useState(0);
   const matrixRef=useRef(defaultRateMatrix());
   const loadedRef=useRef(false);
+    const tableWrap={
+    border:"1px solid "+C.bd,
+    borderRadius:8,
+    overflow:"auto",
+    flex:1,
+    minWidth:0,
+    background:C.bg2,
+    boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)"
+  };
+
+  const tableStyle={
+    width:"100%",
+    borderCollapse:"separate",
+    borderSpacing:0,
+    fontSize:12,
+    tableLayout:"fixed",
+    fontFamily:"sans-serif"
+  };
+
+  const th2={
+    padding:"7px 10px",
+    color:"rgba(120,160,220,0.55)",
+    fontWeight:700,
+    fontSize:11,
+    textTransform:"uppercase",
+    letterSpacing:"0.08em",
+    textAlign:"left",
+    background:C.bg4,
+    borderBottom:"1px solid rgba(58,130,246,0.14)",
+    whiteSpace:"nowrap",
+    verticalAlign:"middle"
+  };
+
+  const td2={
+    padding:"6px 10px",
+    color:"#d9e8ff",
+    fontWeight:500,
+    fontSize:12,
+    borderBottom:"1px solid rgba(255,255,255,0.035)",
+    verticalAlign:"middle",
+    whiteSpace:"nowrap",
+    overflow:"hidden",
+    textOverflow:"ellipsis"
+  };
+
+  const tdTxt={...td2,textAlign:"left",textTransform:"uppercase"};
+  const tdCtr={...td2,textAlign:"center",fontVariantNumeric:"tabular-nums",textTransform:"uppercase"};
+  const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
 
   useEffect(()=>{
     loadRates().then(d=>{
@@ -207,9 +266,9 @@ function RateMatrix({onBunkerChange}){
     }
     return(
       <span onClick={()=>setEditingRoute(key)} style={{cursor:"pointer"}} title="Click to edit route">
-        <span style={{fontWeight:600,fontSize:12,color:"rgba(160,200,255,0.6)"}}>{from}</span>
-        <span style={{color:"rgba(120,160,220,0.45)",fontSize:12}}> → </span>
-        <span style={{fontWeight:600,fontSize:12,color:"rgba(160,200,255,0.6)"}}>{to}</span>
+        <span style={{fontWeight:600,fontSize:12,color:"#d9e8ff"}}>{from}</span>
+<span style={{color:"rgba(120,160,220,0.45)",fontSize:12}}> → </span>
+<span style={{fontWeight:600,fontSize:12,color:"#d9e8ff"}}>{to}</span>
         <span style={{color:"rgba(120,160,220,0.45)",fontSize:8,marginLeft:3,opacity:0.5}}>✎</span>
       </span>
     );
@@ -255,70 +314,136 @@ function RateMatrix({onBunkerChange}){
 
   // RCell is defined outside this component (see above)
 
-  return(
-    <div style={{display:"flex",flexDirection:"column",gap:9}}>
+    return(
+    <div style={{display:"flex",flexDirection:"column",gap:10,minWidth:0}}>
       {editComment&&(
-        <div style={{display:"flex",gap:4,alignItems:"center",background:"#162540",border:"1px solid "+C.blue,borderRadius:4,padding:"3px 6px"}}>
-          <span style={{fontSize:12,color:"rgba(120,160,220,0.45)"}}>Comment for {editComment}:</span>
-          <input defaultValue={matrixRef.current[editComment]?.comment||""}
+        <div style={{
+          display:"flex",
+          gap:6,
+          alignItems:"center",
+          background:C.bg2,
+          border:"1px solid "+C.blue,
+          borderRadius:8,
+          padding:"8px 10px"
+        }}>
+          <span style={{fontSize:12,color:C.faint,whiteSpace:"nowrap"}}>
+            Comment for {editComment}
+          </span>
+          <input
+            defaultValue={matrixRef.current[editComment]?.comment||""}
             autoFocus
             onBlur={e=>{updComment(editComment,e.target.value.trim());setEditComment(null);}}
-            onKeyDown={e=>{if(e.key==="Enter"){updComment(editComment,e.target.value.trim());setEditComment(null);}if(e.key==="Escape")setEditComment(null);}}
-            style={{flex:1,background:"transparent",border:"none",color:C.tx,fontFamily:"inherit",fontSize:12,padding:"0 2px",outline:"none"}}/>
+            onKeyDown={e=>{
+              if(e.key==="Enter"){updComment(editComment,e.target.value.trim());setEditComment(null);}
+              if(e.key==="Escape")setEditComment(null);
+            }}
+            style={{
+              flex:1,
+              background:C.bg3,
+              border:"1px solid "+C.bd,
+              borderRadius:6,
+              color:C.tx,
+              fontFamily:"inherit",
+              fontSize:12,
+              padding:"6px 10px",
+              outline:"none"
+            }}
+          />
         </div>
       )}
 
-      {/* Intra Europe: Rate + TCE columns */}
-      <div>
-        <div style={{fontSize:12,fontWeight:700,color:REGION_COLORS.Europe,textTransform:"uppercase",letterSpacing:"0.07em",padding:"3px 5px",background:REGION_COLORS.Europe+"18",borderLeft:"2px solid "+REGION_COLORS.Europe,marginBottom:2}}>
-          Intra Europe
-        </div>
-        <table style={{borderCollapse:"collapse",width:"100%"}}>
-          <thead><tr>
-            <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
-            <th style={{...thS,width:"15%"}}>Rate ($ lsum)</th>
-            <th style={{...thS,width:"15%",color:C.green}}>TCE $/day</th>
-            <th style={{...thS,width:"40%"}}>Comment</th>
-          </tr></thead>
+      <div style={tableWrap}>
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={{...th2,width:170}}>Route</th>
+              <th style={{...th2,width:110,textAlign:"center"}}>Rate</th>
+              <th style={{...th2,width:110,textAlign:"center"}}>TCE</th>
+              <th style={{...th2,width:220}}>Comment</th>
+            </tr>
+          </thead>
           <tbody>
             {euRoutes.map((rt,i)=>(
-              <tr key={rt.id||i} style={{background:i%2===0?C.bg:C.bg2}}>
-                <td style={{...tdR,color:"rgba(160,200,255,0.6)",paddingLeft:4}}>
+              <tr key={rt.id||i} style={{background:rowBg(i)}}>
+                <td style={{...tdTxt,color:"rgba(160,200,255,0.7)"}}>
                   <RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/>
                 </td>
-                <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-rate"} col={REGION_COLORS.Europe} rev={rev}/></td>
-                <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-tce"} col={C.green} rev={rev}/></td>
-                <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-comment"} col={C.faint} rev={rev}/></td>
+                <td style={{...tdCtr,padding:0}}>
+                  <RCell
+                    matrixRef={matrixRef}
+                    onSave={onSave}
+                    onComment={onComment}
+                    ck={rt.id+"-rate"}
+                    col={REGION_COLORS.Europe}
+                    rev={rev}
+                  />
+                </td>
+                <td style={{...tdCtr,padding:0}}>
+                  <RCell
+                    matrixRef={matrixRef}
+                    onSave={onSave}
+                    onComment={onComment}
+                    ck={rt.id+"-tce"}
+                    col={C.green}
+                    rev={rev}
+                  />
+                </td>
+                <td style={{...tdTxt,padding:0}}>
+                  <RCell
+                    matrixRef={matrixRef}
+                    onSave={onSave}
+                    onComment={onComment}
+                    ck={rt.id+"-comment"}
+                    col={C.faint}
+                    rev={rev}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Asia + TA: by size */}
       {rateRoutes.map((rg,rgIdx)=>(
-        <div key={rg.region}>
-          <div style={{fontSize:12,fontWeight:700,color:REGION_COLORS[rg.region],textTransform:"uppercase",letterSpacing:"0.07em",padding:"3px 5px",background:REGION_COLORS[rg.region]+"18",borderLeft:"2px solid "+REGION_COLORS[rg.region],marginBottom:2}}>
-            {rg.label}
-          </div>
-          <table style={{borderCollapse:"collapse",width:"100%"}}>
-            <thead><tr>
-              <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
-              {RATE_SIZES.map(sz=>(<th key={sz} style={{...thS,width:"11.67%"}}>{sz}</th>))}
-              <th style={{...thS,width:"40%"}}>Comment</th>
-            </tr></thead>
+        <div key={rg.region} style={tableWrap}>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                <th style={{...th2,width:170}}>{rg.label}</th>
+                {RATE_SIZES.map(sz=>(
+                  <th key={sz} style={{...th2,width:90,textAlign:"center"}}>{sz}</th>
+                ))}
+                <th style={{...th2,width:220}}>Comment</th>
+              </tr>
+            </thead>
             <tbody>
               {rg.routes.map((rt,rtIdx)=>(
-                <tr key={rt.id||rtIdx} style={{background:rtIdx%2===0?C.bg:C.bg2}}>
-                  <td style={{...tdR,color:"rgba(160,200,255,0.6)",paddingLeft:4}}>
+                <tr key={rt.id||rtIdx} style={{background:rowBg(rtIdx)}}>
+                  <td style={{...tdTxt,color:"rgba(160,200,255,0.7)"}}>
                     <RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/>
                   </td>
                   {RATE_SIZES.map(sz=>(
-                    <td key={sz} style={{...tdR,padding:0}}>
-                      <RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-"+sz} col={REGION_COLORS[rg.region]} rev={rev}/>
+                    <td key={sz} style={{...tdCtr,padding:0}}>
+                      <RCell
+                        matrixRef={matrixRef}
+                        onSave={onSave}
+                        onComment={onComment}
+                        ck={rt.id+"-"+sz}
+                        col={REGION_COLORS[rg.region]}
+                        rev={rev}
+                      />
                     </td>
                   ))}
-                  <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-comment"} col={C.faint} rev={rev}/></td>
+                  <td style={{...tdTxt,padding:0}}>
+                    <RCell
+                      matrixRef={matrixRef}
+                      onSave={onSave}
+                      onComment={onComment}
+                      ck={rt.id+"-comment"}
+                      col={C.faint}
+                      rev={rev}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>
