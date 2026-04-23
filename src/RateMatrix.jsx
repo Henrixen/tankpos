@@ -121,7 +121,7 @@ el.style.fontWeight=raw?"700":"500";
       title={matrixRef.current[ck]?.comment?"💬 "+matrixRef.current[ck].comment:"Right-click for comment"}
  style={{
   width:"100%",
-  height:28,
+  height:26,
   background:"transparent",
   border:"none",
   outline:"none",
@@ -142,14 +142,15 @@ function RateMatrix({onBunkerChange}){
   const matrixRef=useRef(defaultRateMatrix());
   const loadedRef=useRef(false);
     const tableWrap={
-    border:"1px solid "+C.bd,
-    borderRadius:8,
-    overflow:"auto",
-    flex:1,
-    minWidth:0,
-    background:C.bg2,
-    boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)"
-  };
+  border:"1px solid "+C.bd,
+  borderRadius:8,
+  overflowX:"auto",
+  overflowY:"hidden",
+  flex:"0 0 auto",
+  minWidth:0,
+  background:C.bg2,
+  boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)"
+};
 
   const tableStyle={
     width:"100%",
@@ -161,7 +162,7 @@ function RateMatrix({onBunkerChange}){
   };
 
   const th2={
-    padding:"7px 10px",
+    padding:"5px 10px",
     color:"rgba(120,160,220,0.55)",
     fontWeight:700,
     fontSize:11,
@@ -175,7 +176,7 @@ function RateMatrix({onBunkerChange}){
   };
 
   const td2={
-    padding:"6px 10px",
+    padding:"4px 10px",
     color:"#d9e8ff",
     fontWeight:500,
     fontSize:12,
@@ -340,7 +341,7 @@ function RateMatrix({onBunkerChange}){
   // RCell is defined outside this component (see above)
 
     return(
-    <div style={{display:"flex",flexDirection:"column",gap:10,minWidth:0}}>
+    <div style={{display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
       {editComment&&(
         <div style={{
           display:"flex",
