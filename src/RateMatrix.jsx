@@ -189,7 +189,7 @@ function RateMatrix({onBunkerChange}){
 
   const tdTxt={...td2,textAlign:"left",textTransform:"uppercase"};
   const tdCtr={...td2,textAlign:"center",fontVariantNumeric:"tabular-nums",textTransform:"uppercase"};
-  const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
+  const rowBg=i=>i%2===0?C.bg:C.bg2;
 
   useEffect(()=>{
     loadRates().then(d=>{
@@ -391,18 +391,18 @@ function RateMatrix({onBunkerChange}){
           <tbody>
             {euRoutes.map((rt,i)=>(
               <tr key={rt.id||i} style={{background:rowBg(i)}}>
-                <td style={{...tdTxt,color:"rgba(160,200,255,0.7)"}}>
+                <td style={{...tdTxt,color:C.blue}}>
                   <RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/>
                 </td>
                 <td style={{...tdCtr,padding:0}}>
   <RCell
-    matrixRef={matrixRef}
-    onSave={onSave}
-    onComment={onComment}
-    ck={rt.id+"-rate"}
-    col={C.tx}
-    rev={rev}
-  />
+  matrixRef={matrixRef}
+  onSave={onSave}
+  onComment={onComment}
+  ck={rt.id+"-rate"}
+  col={C.tx}
+  rev={rev}
+/>
 </td>
                 <td style={{...tdCtr,padding:0}}>
   <RCell
