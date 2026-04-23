@@ -68,7 +68,7 @@ function defaultRateMatrix(){
 // RCell: fully uncontrolled input — no parent re-render on keystroke, no cursor jump
 function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
   const inputRef=useRef(null);
-  const c=col||REGION_COLORS.Europe;
+  const c=col||C.tx;
   useEffect(()=>{
     const el=inputRef.current;
     if(!el||document.activeElement===el)return;
@@ -76,7 +76,7 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
     const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));
     el.value=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;
     el.style.background="transparent";
-el.style.color=raw?C.tx:C.faint;
+el.style.color=raw?c:C.faint;
 el.style.fontWeight=raw?"700":"500";
   },[extRev,ck]);
   const vRaw=matrixRef.current[ck]?.rate||"";
@@ -99,8 +99,8 @@ el.style.fontWeight=raw?"700":"500";
   const display=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;
   e.target.value=display;
   e.target.style.background="transparent";
-  e.target.style.color=raw?C.tx:C.faint;
-  e.target.style.fontWeight=raw?"700":"500";
+e.target.style.color=raw?c:C.faint;
+e.target.style.fontWeight=raw?"700":"500";
   onSave(ck,raw);
 }}
       onKeyDown={e=>{
@@ -125,7 +125,7 @@ el.style.fontWeight=raw?"700":"500";
   background:"transparent",
   border:"none",
   outline:"none",
-  color:v ? C.tx : C.faint,
+  color:v ? c : C.faint,
   fontWeight:v ? 700 : 500,
   fontFamily:"inherit",
   fontSize:12,
@@ -144,22 +144,22 @@ function RateMatrix({onBunkerChange}){
     const tableWrap={
   border:"1px solid "+C.bd,
   borderRadius:8,
-  overflowX:"auto",
-  overflowY:"hidden",
+  overflow:"hidden",
   flex:"0 0 auto",
   minWidth:0,
+  width:"100%",
   background:C.bg2,
   boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)"
 };
 
   const tableStyle={
-    width:"100%",
-    borderCollapse:"separate",
-    borderSpacing:0,
-    fontSize:12,
-    tableLayout:"fixed",
-    fontFamily:"sans-serif"
-  };
+  width:"100%",
+  borderCollapse:"separate",
+  borderSpacing:0,
+  fontSize:12,
+  tableLayout:"fixed",
+  fontFamily:"sans-serif"
+};
 
   const th2={
     padding:"5px 10px",
@@ -189,7 +189,7 @@ function RateMatrix({onBunkerChange}){
 
   const tdTxt={...td2,textAlign:"left",textTransform:"uppercase"};
   const tdCtr={...td2,textAlign:"center",fontVariantNumeric:"tabular-nums",textTransform:"uppercase"};
-  const rowBg=i=>i%2===0?"rgba(10,20,38,0.92)":"rgba(14,26,48,0.92)";
+  const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
 
   useEffect(()=>{
     loadRates().then(d=>{
@@ -382,10 +382,10 @@ function RateMatrix({onBunkerChange}){
         <table style={tableStyle}>
           <thead>
             <tr>
-              <th style={{...th2,width:170}}>Route</th>
-              <th style={{...th2,width:110,textAlign:"center"}}>Rate</th>
-              <th style={{...th2,width:110,textAlign:"center"}}>TCE</th>
-              <th style={{...th2,width:220}}>Comment</th>
+              <th style={{...th2,width:"34%"}}>Route</th>
+<th style={{...th2,width:"16%",textAlign:"center"}}>Rate</th>
+<th style={{...th2,width:"16%",textAlign:"center"}}>TCE</th>
+<th style={{...th2,width:"34%"}}>Comment</th>
             </tr>
           </thead>
           <tbody>
@@ -395,25 +395,25 @@ function RateMatrix({onBunkerChange}){
                   <RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/>
                 </td>
                 <td style={{...tdCtr,padding:0}}>
-                  <RCell
-                    matrixRef={matrixRef}
-                    onSave={onSave}
-                    onComment={onComment}
-                    ck={rt.id+"-rate"}
-                    col={REGION_COLORS.Europe}
-                    rev={rev}
-                  />
-                </td>
+  <RCell
+    matrixRef={matrixRef}
+    onSave={onSave}
+    onComment={onComment}
+    ck={rt.id+"-rate"}
+    col={C.tx}
+    rev={rev}
+  />
+</td>
                 <td style={{...tdCtr,padding:0}}>
-                  <RCell
-                    matrixRef={matrixRef}
-                    onSave={onSave}
-                    onComment={onComment}
-                    ck={rt.id+"-tce"}
-                    col={C.green}
-                    rev={rev}
-                  />
-                </td>
+  <RCell
+    matrixRef={matrixRef}
+    onSave={onSave}
+    onComment={onComment}
+    ck={rt.id+"-tce"}
+    col={C.green}
+    rev={rev}
+  />
+</td>
                 <td style={{...tdTxt,padding:0}}>
                   <RCell
                     matrixRef={matrixRef}
@@ -435,29 +435,29 @@ function RateMatrix({onBunkerChange}){
           <table style={tableStyle}>
             <thead>
               <tr>
-                <th style={{...th2,width:170}}>{rg.label}</th>
-                {RATE_SIZES.map(sz=>(
-                  <th key={sz} style={{...th2,width:90,textAlign:"center"}}>{sz}</th>
-                ))}
-                <th style={{...th2,width:220}}>Comment</th>
+                <th style={{...th2,width:"34%"}}>{rg.label}</th>
+{RATE_SIZES.map(sz=>(
+  <th key={sz} style={{...th2,width:"13%",textAlign:"center"}}>{sz}</th>
+))}
+<th style={{...th2,width:"27%"}}>Comment</th>
               </tr>
             </thead>
             <tbody>
               {rg.routes.map((rt,rtIdx)=>(
                 <tr key={rt.id||rtIdx} style={{background:rowBg(rtIdx)}}>
-                  <td style={{...tdTxt,color:"rgba(160,200,255,0.7)"}}>
+                  <td style={{...tdTxt,color:"rgba(120,170,235,0.85)"}}>
                     <RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/>
                   </td>
                   {RATE_SIZES.map(sz=>(
                     <td key={sz} style={{...tdCtr,padding:0}}>
                       <RCell
-                        matrixRef={matrixRef}
-                        onSave={onSave}
-                        onComment={onComment}
-                        ck={rt.id+"-"+sz}
-                        col={REGION_COLORS[rg.region]}
-                        rev={rev}
-                      />
+  matrixRef={matrixRef}
+  onSave={onSave}
+  onComment={onComment}
+  ck={rt.id+"-"+sz}
+  col={C.tx}
+  rev={rev}
+/>
                     </td>
                   ))}
                   <td style={{...tdTxt,padding:0}}>
