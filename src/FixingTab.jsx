@@ -149,29 +149,46 @@ React.useEffect(()=>{
     </button>
   </div>
 </div>
-      <div
-        ref={editorRef}
-        contentEditable
-        suppressContentEditableWarning
-        data-job-field={`${jobId}-${field}`}
-        onInput={handleInput}
-        onKeyDown={handleKeyDown}
-        style={{
-          padding:"10px 12px",
-          minHeight:Math.max(60, height - 38),
-          color,
-          fontFamily:"Inter, system-ui, -apple-system, Segoe UI, sans-serif",
-          fontSize:12,
-          lineHeight:1.6,
-          outline:"none",
-          whiteSpace:"pre-wrap"
-        }}
-        data-placeholder={placeholder}
-      />
-    </div>
+<div
+  ref={editorRef}
+  contentEditable
+  suppressContentEditableWarning
+  data-job-field={`${jobId}-${field}`}
+  onInput={handleInput}
+  onKeyDown={handleKeyDown}
+  style={{
+    padding:"10px 12px",
+    minHeight:Math.max(60, height - 38),
+    color,
+    fontFamily:"Inter, system-ui, -apple-system, Segoe UI, sans-serif",
+    fontSize:12,
+    lineHeight:1.6,
+    outline:"none",
+    whiteSpace:"pre-wrap"
+  }}
+  data-placeholder={placeholder}
+/>
+<style>{`
+  [data-job-field="${jobId}-${field}"] ul{
+    margin: 0;
+    padding-left: 16px;
+  }
+  [data-job-field="${jobId}-${field}"] ol{
+    margin: 0;
+    padding-left: 16px;
+  }
+  [data-job-field="${jobId}-${field}"] li{
+    margin: 0;
+    padding: 0;
+  }
+  [data-job-field="${jobId}-${field}"] p{
+    margin: 0;
+  }
+`}</style>
+</div>
+
   );
 }
-
 function FixingTab({vessels}){
   const mobile=isMobile();
   const [jobs,setJobs]=useState([]);
