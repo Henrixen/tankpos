@@ -75,9 +75,9 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
     const raw=matrixRef.current[ck]?.rate||"";
     const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));
     el.value=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;
-    el.style.background=raw?c+"33":"transparent";
-    el.style.color=raw?"#fff":C.faint;
-    el.style.fontWeight=raw?"700":"400";
+    el.style.background="transparent";
+el.style.color=raw?C.tx:C.faint;
+el.style.fontWeight=raw?"700":"500";
   },[extRev,ck]);
   const vRaw=matrixRef.current[ck]?.rate||"";
   const vNum=parseFloat(vRaw.replace(/[^0-9.\-]/g,""));
@@ -85,8 +85,24 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
   return(
     <input ref={inputRef} data-ck={ck}
       defaultValue={v}
-      onFocus={e=>{e.target.style.outline="1px solid rgba(88,166,255,.5)";e.target.style.background="rgba(88,166,255,.07)";const raw=matrixRef.current[ck]?.rate||"";e.target.value=raw;e.target.select();}}
-      onBlur={e=>{e.target.style.outline="none";const raw=e.target.value.trim();const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));const display=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;e.target.value=display;e.target.style.background=raw?c+"33":"transparent";e.target.style.color=raw?"#fff":C.faint;e.target.style.fontWeight=raw?"700":"400";onSave(ck,raw);}}
+      onFocus={e=>{
+  e.target.style.outline="1px solid rgba(88,166,255,.5)";
+  e.target.style.background=C.bg3;
+  const raw=matrixRef.current[ck]?.rate||"";
+  e.target.value=raw;
+  e.target.select();
+}}
+      onBlur={e=>{
+  e.target.style.outline="none";
+  const raw=e.target.value.trim();
+  const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));
+  const display=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;
+  e.target.value=display;
+  e.target.style.background="transparent";
+  e.target.style.color=raw?C.tx:C.faint;
+  e.target.style.fontWeight=raw?"700":"500";
+  onSave(ck,raw);
+}}
       onKeyDown={e=>{
         if(e.key==="Tab"||e.key==="Enter"){
           e.preventDefault();
@@ -103,22 +119,22 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
       }}
       onContextMenu={e=>{e.preventDefault();onComment(ck);}}
       title={matrixRef.current[ck]?.comment?"💬 "+matrixRef.current[ck].comment:"Right-click for comment"}
-            style={{
-        width:"100%",
-        height:30,
-        background:v ? c+"22" : "transparent",
-        border:"none",
-        outline:"none",
-        color:v ? "#d9ecff" : C.faint,
-        fontWeight:v ? 700 : 500,
-        fontFamily:"inherit",
-        fontSize:12,
-        padding:"0 8px",
-        textAlign:"center",
-        boxSizing:"border-box",
-        minWidth:0,
-        textTransform:"uppercase"
-      }}/>
+ style={{
+  width:"100%",
+  height:28,
+  background:"transparent",
+  border:"none",
+  outline:"none",
+  color:v ? C.tx : C.faint,
+  fontWeight:v ? 700 : 500,
+  fontFamily:"inherit",
+  fontSize:12,
+  padding:"0 8px",
+  textAlign:"center",
+  boxSizing:"border-box",
+  minWidth:0,
+  textTransform:"uppercase"
+}}/>
   );
 }
 function RateMatrix({onBunkerChange}){
@@ -172,7 +188,7 @@ function RateMatrix({onBunkerChange}){
 
   const tdTxt={...td2,textAlign:"left",textTransform:"uppercase"};
   const tdCtr={...td2,textAlign:"center",fontVariantNumeric:"tabular-nums",textTransform:"uppercase"};
-  const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
+  const rowBg=i=>i%2===0?"rgba(10,20,38,0.92)":"rgba(14,26,48,0.92)";
 
   useEffect(()=>{
     loadRates().then(d=>{
@@ -225,7 +241,13 @@ function RateMatrix({onBunkerChange}){
         const etsFmt=ets>0?" (incl. ETS $"+ets.toLocaleString("nb-NO")+")":"";
         matrixRef.current={...matrixRef.current,[tceKey]:{...(matrixRef.current[tceKey]||{}),rate:String(r.tce),comment:"Auto-calc: freight $"+freight.toLocaleString()+etsFmt}};
         setTimeout(()=>{
-          document.querySelectorAll("input[data-ck='"+tceKey+"']").forEach(el=>{el.value=r.tce.toLocaleString("nb-NO");el.style.background=REGION_COLORS.Europe+"33";el.style.color="#fff";el.style.fontWeight="700";el.title="Auto-calc TCE"+etsFmt;});
+          document.querySelectorAll("input[data-ck='"+tceKey+"']").forEach(el=>{
+  el.value=r.tce.toLocaleString("nb-NO");
+  el.style.background="transparent";
+  el.style.color=C.tx;
+  el.style.fontWeight="700";
+  el.title="Auto-calc TCE"+etsFmt;
+});
         },30);
       }
     });
@@ -295,7 +317,13 @@ function RateMatrix({onBunkerChange}){
           matrixRef.current={...matrixRef.current,[tceKey]:{...(matrixRef.current[tceKey]||{}),rate:String(r.tce),comment:"Auto-calc: freight $"+freight.toLocaleString()+etsFmt}};
           setTimeout(()=>{
             const inputs=document.querySelectorAll("input[data-ck='"+tceKey+"']");
-            inputs.forEach(el=>{el.value=r.tce.toLocaleString("nb-NO");el.style.background=REGION_COLORS.Europe+"33";el.style.color="#fff";el.style.fontWeight="700";el.title="Auto-calc TCE"+etsFmt;});
+            inputs.forEach(el=>{
+  el.value=r.tce.toLocaleString("nb-NO");
+  el.style.background="transparent";
+  el.style.color=C.tx;
+  el.style.fontWeight="700";
+  el.title="Auto-calc TCE"+etsFmt;
+});
           },30);
         }
       }
@@ -308,9 +336,6 @@ function RateMatrix({onBunkerChange}){
     matrixRef.current={...matrixRef.current,[key]:{...prev,comment:val}};
     if(loadedRef.current)saveRates(matrixRef.current);
   }
-
-  const thS={padding:"4px 5px",fontSize:12,fontWeight:700,color:"rgba(120,160,220,0.45)",background:C.bg,textAlign:"center",whiteSpace:"nowrap",borderBottom:"1px solid "+C.bd2};
-  const tdR={fontSize:12,padding:"1px 2px",borderBottom:"1px solid "+C.bg,verticalAlign:"middle"};
 
   // RCell is defined outside this component (see above)
 
