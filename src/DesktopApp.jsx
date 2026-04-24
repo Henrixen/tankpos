@@ -3,7 +3,8 @@ import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
 import EC from "./EC";
 import ParsePanel from "./ParsePanel";
-import RightPanel, { AskAIStrip } from "./AIAsk";
+import RightPanel from "./AIAsk";
+import NotesTab from "./NotesTab";
 import { RateMatrix, RateMatrixBunkerInput } from "./RateMatrix";
 import FixingTab from "./FixingTab";
 import ProjectsTab from "./ProjectsTab";
@@ -11,7 +12,7 @@ import { TCECalculator } from "./TCECalculator";
 import Dashboard from "./Dashboard";
 import { loadHistory } from "./supabaseHelpers";
 import { OpeningBreakdown, FixingWindow, ExportPanel } from "./PositionsHelpers";
-import IntelVault, { IntelVaultStrip } from "./IntelVault";
+import IntelVault from "./IntelVault";
 import AISMap from "./AISMap";
 import MatrixTable from "./components/ui/MatrixTable";
 
@@ -42,7 +43,6 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   const [selVessels,setSelVessels]=useState(()=>new Set());
   const [history,setHistory]=useState([]);
   useEffect(()=>{loadHistory().then(setHistory);},[vessels]);
-  const [intelItems,setIntelItems]=useState([]);
   const [pendingDel,setPendingDel]=useState(null);
   const [restoreMsg,setRestoreMsg]=useState("");
   const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
@@ -156,10 +156,10 @@ const cargoColumns = [
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
   const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
   const fb=on=>({
-  fontSize:11,
-  fontWeight:600,
-  padding:"2px 7px",
-  borderRadius:3,
+  fontSize:12,
+  fontWeight:700,
+  padding:"4px 10px",
+  borderRadius:4,
   border:"1px solid "+(on ? C.blue : "rgba(120,160,220,0.35)"),
   background:on ? "rgba(88,166,255,.22)" : C.bg4,
   color:on ? "#d9ecff" : "#9fc3f5",
@@ -440,8 +440,8 @@ const filtV=useMemo(()=>{
       </div>
       <div style={{padding:"12px 16px",maxWidth:1900,margin:"0 auto"}}>
         {/* Professional tab navigation */}
-        <div style={{display:"flex",alignItems:"center",marginBottom:16,gap:12,flexWrap:"nowrap"}}>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap",flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,gap:16,flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             {[
               ["pos","⚓","Positions",vessels.length,"#58a6ff"],
               ["cargo","📦","Cargoes",cargoTotal||cargoes.length,"#faa356"],
@@ -449,7 +449,8 @@ const filtV=useMemo(()=>{
               ["matrix","🔗","Matrix",0,"#43e97b"],
               ["projects","🧮","Projects",0,"#58a6ff"],
               ["tce","⚡","TCE",0,"#faa356"],
-              ["dash","📊","Dashboard",0,"#43e97b"]
+              ["dash","📊","Dashboard",0,"#43e97b"],
+              ["notes","📝","Notes",0,"#f472b6"]
             ].map(([id,icon,label,count,col])=>(
               <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
                 style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
@@ -466,18 +467,7 @@ const filtV=useMemo(()=>{
               </button>
             ))}
           </div>
-          {/* Global Ask AI strip — between tabs and Intel Vault */}
-          {!mobile&&(
-            <div style={{flex:1,minWidth:0,display:"flex",justifyContent:"center"}}>
-              <AskAIStrip vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>
-            </div>
-          )}
-          {/* Global Intel Vault strip — always visible */}
-          {!mobile&&(
-            <div style={{flexShrink:0}}>
-              <IntelVaultStrip onVaultUpdate={setIntelItems}/>
-            </div>
-          )}
+          <div style={{fontSize:13,fontWeight:700,color:C.faint,textAlign:"right"}}>SIGNAL — TANKER INTELLIGENCE</div>
         </div>
 
         {/* ── POSITIONS ── */}
@@ -559,7 +549,7 @@ const filtV=useMemo(()=>{
   )}
 
   {/* CENTER: Filters (34%) - same height as PPT */}
-  <div style={{flex:1,minWidth:0,height:mobile?"auto":260,display:"flex",flexDirection:"column",gap:8}}>
+  <div style={{width:mobile?"100%":"34%",height:mobile?"auto":260,display:"flex",flexDirection:"column",gap:8}}>
 
                     {selVessels.size>0&&(
                       <button
@@ -584,51 +574,275 @@ const filtV=useMemo(()=>{
                     )}
 
                     {/* UNIFIED FILTER PANEL */}
-{(()=>{
-  const FR=({label,col,children})=>(
-    <div style={{display:"flex",alignItems:"center",gap:6,borderBottom:"1px solid "+C.bd2,paddingBottom:3}}>
-      <div style={{width:54,fontSize:10,fontWeight:700,color:col,textTransform:"uppercase",flexShrink:0}}>{label}</div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:3,flex:1}}>{children}</div>
-    </div>
-  );
-  return(
-    <div style={{display:"flex",flexDirection:"column",justifyContent:"space-between",padding:"7px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1}}>
-      <FR label="Status" col={C.amber}>
-        {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Hide Emp"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>))}
-        {filters.size>0&&<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
-      </FR>
-      <FR label="Updated" col={C.blue}>
-        {[["","All"],["today","Today"],["week","This wk"]].map(([v,l])=>(<button key={v||"all"} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&(v!==""||updFilter===""))}>{l}</button>))}
-      </FR>
-      <FR label="Region" col="#7dd3fc">
-        {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>))}
-      </FR>
-      <FR label="S.Region" col={C.purple}>
-        {superRegionOptions.filter(r=>r!=="ALL").map(r=>{
-          const toggle=e=>{
-            if(e.ctrlKey||e.metaKey){setSuperRegionFilter(prev=>{const n=new Set(prev);n.has(r)?n.delete(r):n.add(r);return n;});}
-            else{setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));}
-          };
-          return <button key={r} onClick={toggle} style={fb(superRegionFilter.has(r))}>{r}</button>;
-        })}
-        {superRegionFilter.size>0&&<button onClick={()=>setSuperRegionFilter(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
-      </FR>
-      <FR label="Segment" col={C.green}>
-        {(()=>{const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];return[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort((a,b)=>(ORDER.indexOf(a)===-1?99:ORDER.indexOf(a))-(ORDER.indexOf(b)===-1?99:ORDER.indexOf(b))).map(s=>(<button key={s} onClick={e=>{if(e.ctrlKey||e.metaKey){setSegmentFilter(prev=>{const n=new Set(prev);n.has(s)?n.delete(s):n.add(s);return n;});}else{setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));}setPosPage(1);}} style={fb(segmentFilter.has(s))}>{s}</button>));})()}
-        {segmentFilter.size>0&&<button onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
-      </FR>
-      <FR label="DWT" col="#f59e0b">
-        {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<button key={v} onClick={()=>{setDwtFilter(dwtFilter===v?"":v);setPosPage(1);}} style={fb(dwtFilter===v)}>{l}</button>))}
-        {dwtFilter&&<button onClick={()=>{setDwtFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
-      </FR>
-      <FR label="Built" col="#94a3b8">
-        {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<button key={v} onClick={()=>{setBuiltFilter(builtFilter===v?"":v);setPosPage(1);}} style={fb(builtFilter===v)}>{l}</button>))}
-        {builtFilter&&<button onClick={()=>{setBuiltFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
-      </FR>
-    </div>
-  );
-})()}</div>
+<div style={{
+  display:"flex",
+  flexDirection:"column",
+  gap:8,
+  padding:"10px 12px",
+  background:C.bg3,
+  border:"1px solid "+C.bd2,
+  borderRadius:6,
+  height:200,
+  boxSizing:"border-box",
+  overflowY:"auto",
+  flex:1
+}}>
 
+  {/* STATUS */}
+  <div style={{
+    display:"flex",
+    alignItems:"center",
+    gap:10,
+    borderBottom:"1px solid "+C.bd2,
+    paddingBottom:6,
+    marginBottom:6
+  }}>
+    <div style={{
+      width:70,
+      fontSize:11,
+      fontWeight:700,
+      color:C.amber,
+      textTransform:"uppercase"
+    }}>
+      Status
+    </div>
+
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
+      {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Hide Emp"]].map(([f,l])=>(
+        <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
+      ))}
+      {filters.size>0&&(
+        <button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
+      )}
+    </div>
+  </div>
+
+  {/* UPDATED */}
+  <div style={{
+    display:"flex",
+    alignItems:"center",
+    gap:10,
+    borderBottom:"1px solid "+C.bd2,
+    paddingBottom:6,
+    marginBottom:6
+  }}>
+    <div style={{
+      width:70,
+      fontSize:11,
+      fontWeight:700,
+      color:C.blue,
+      textTransform:"uppercase"
+    }}>
+      Updated
+    </div>
+
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
+      {[["","All"],["today","Today"],["week","This wk"]].map(([v,l])=>(
+        <button
+          key={v||"all"}
+          onClick={()=>setUpdFilter(v)}
+          style={fb(updFilter===v && (v!=="" || updFilter===""))}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
+  </div>
+
+  {/* REGION */}
+  <div style={{
+    display:"flex",
+    alignItems:"center",
+    gap:10,
+    borderBottom:"1px solid "+C.bd2,
+    paddingBottom:6,
+    marginBottom:6
+  }}>
+    <div style={{
+      width:70,
+      fontSize:11,
+      fontWeight:700,
+      color:"#7dd3fc",
+      textTransform:"uppercase"
+    }}>
+      Region
+    </div>
+
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
+      {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(
+        <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
+      ))}
+    </div>
+  </div>
+
+  {/* S.REGION */}
+  <div style={{
+    display:"flex",
+    alignItems:"center",
+    gap:10,
+    borderBottom:"1px solid "+C.bd2,
+    paddingBottom:6,
+    marginBottom:6
+  }}>
+    <div style={{
+      width:70,
+      fontSize:11,
+      fontWeight:700,
+      color:C.purple,
+      textTransform:"uppercase"
+    }}>
+      S.Region
+    </div>
+
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
+      {superRegionOptions.filter(r=>r!=="ALL").map(r=>(
+        <button
+          key={r}
+          onClick={e=>{
+            if(e.ctrlKey||e.metaKey){
+              setSuperRegionFilter(prev=>{
+                const n=new Set(prev);
+                n.has(r)?n.delete(r):n.add(r);
+                return n;
+              });
+            } else {
+              setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));
+            }
+          }}
+          style={fb(superRegionFilter.has(r))}
+        >
+          {r}
+        </button>
+      ))}
+      {superRegionFilter.size>0&&(
+        <button onClick={()=>setSuperRegionFilter(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
+      )}
+    </div>
+  </div>
+
+  {/* SEGMENT */}
+  <div style={{
+    display:"flex",
+    alignItems:"center",
+    gap:10,
+    borderBottom:"1px solid "+C.bd2,
+    paddingBottom:6,
+    marginBottom:6
+  }}>
+    <div style={{
+      width:70,
+      fontSize:11,
+      fontWeight:700,
+      color:C.green,
+      textTransform:"uppercase"
+    }}>
+      Segment
+    </div>
+
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
+      {(()=>{
+        const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];
+        const segs=[...new Set(vessels.map(v=>v.segment).filter(Boolean))];
+        return segs
+          .sort((a,b)=>{
+            const ai=ORDER.indexOf(a), bi=ORDER.indexOf(b);
+            return (ai===-1?99:ai)-(bi===-1?99:bi);
+          })
+          .map(s=>(
+            <button
+              key={s}
+              onClick={e=>{
+                if(e.ctrlKey||e.metaKey){
+                  setSegmentFilter(prev=>{
+                    const n=new Set(prev);
+                    n.has(s)?n.delete(s):n.add(s);
+                    return n;
+                  });
+                } else {
+                  setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));
+                }
+                setPosPage(1);
+              }}
+              style={fb(segmentFilter.has(s))}
+            >
+              {s}
+            </button>
+          ));
+      })()}
+      {segmentFilter.size>0&&(
+        <button onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
+      )}
+    </div>
+  </div>
+
+  {/* DWT */}
+  <div style={{
+    display:"flex",
+    alignItems:"center",
+    gap:10,
+    borderBottom:"1px solid "+C.bd2,
+    paddingBottom:6,
+    marginBottom:6
+  }}>
+    <div style={{
+      width:70,
+      fontSize:11,
+      fontWeight:700,
+      color:"#f59e0b",
+      textTransform:"uppercase"
+    }}>
+      DWT
+    </div>
+
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
+      {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(
+        <button key={v} onClick={()=>{setDwtFilter(dwtFilter===v?"":v);setPosPage(1);}} style={fb(dwtFilter===v)}>{l}</button>
+      ))}
+      {dwtFilter&&(
+        <button onClick={()=>{setDwtFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
+      )}
+    </div>
+  </div>
+
+  {/* BUILT */}
+  <div style={{
+    display:"flex",
+    alignItems:"center",
+    gap:10
+  }}>
+    <div style={{
+      width:70,
+      fontSize:11,
+      fontWeight:700,
+      color:"#94a3b8",
+      textTransform:"uppercase"
+    }}>
+      Built
+    </div>
+
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
+      {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(
+        <button key={v} onClick={()=>{setBuiltFilter(builtFilter===v?"":v);setPosPage(1);}} style={fb(builtFilter===v)}>{l}</button>
+      ))}
+      {builtFilter&&(
+        <button onClick={()=>{setBuiltFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
+      )}
+    </div>
+  </div>
+</div></div>
+                  {/* RIGHT: Ask AI (34%) - fills remaining height */}
+{!mobile&&(
+  <div style={{width:"34%",display:"flex",flexDirection:"column",alignSelf:"stretch"}}>
+    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",flex:1}}>
+      <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
+        <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
+      </div>
+      <div style={{padding:"10px",flex:1,display:"flex",flexDirection:"column"}}>
+        <RightPanel vessels={vessels} cargoes={cargoes}/>
+      </div>
+    </div>
+  </div>
+)}
 </div>
 
                 {/* MOVED: Fleet count + Export + Search to same row */}
@@ -900,14 +1114,14 @@ const filtV=useMemo(()=>{
         {/* ── CARGOES ── */}
         {tab==="cargo"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {/* Top row: Parse | Ask AI */}
+            {/* Top row: Parse 50% | Ask AI 25% | Intel Vault 25% — same height */}
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
               {/* Parse */}
-              <div style={{flex:mobile?"1 1 auto":"0 0 65%",display:"flex",flexDirection:"column"}}>
+              <div style={{flex:mobile?"1 1 auto":"0 0 50%",display:"flex",flexDirection:"column"}}>
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
               </div>
               {/* Ask AI */}
-              <div style={{flex:1,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:askAiExpanded?600:142,transition:"height 0.3s ease"}}>
+              <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:askAiExpanded?600:142,transition:"height 0.3s ease"}}>
                 <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
                   <button onClick={()=>setAskAiExpanded(!askAiExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 8px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit"}} title={askAiExpanded?"Collapse":"Expand"}>
@@ -916,6 +1130,18 @@ const filtV=useMemo(()=>{
                 </div>
                 <div style={{flex:1,padding:"10px",overflowY:"auto"}} className="custom-scrollbar">
                   <RightPanel vessels={vessels} cargoes={cargoes}/>
+                </div>
+              </div>
+              {/* Intel Vault */}
+              <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:intelVaultExpanded?600:142,transition:"height 0.3s ease"}}>
+                <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📡 Intel Vault</span>
+                  <button onClick={()=>setIntelVaultExpanded(!intelVaultExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 8px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit"}} title={intelVaultExpanded?"Collapse":"Expand"}>
+                    {intelVaultExpanded?"▲":"▼"}
+                  </button>
+                </div>
+                <div style={{flex:1,padding:"10px",overflowY:"auto"}} className="custom-scrollbar">
+                  <IntelVault onVaultUpdate={()=>{}}/>
                 </div>
               </div>
             </div>
@@ -1256,6 +1482,11 @@ const filtV=useMemo(()=>{
         )}
         {tab==="dash"&&(
           <Dashboard vessels={vessels} cargoes={cargoes} history={history||[]}/>
+        )}
+        {tab==="notes"&&(
+          <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
+            <NotesTab/>
+          </div>
         )}
       </div>
     </div>
