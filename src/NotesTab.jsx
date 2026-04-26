@@ -170,11 +170,15 @@ export default function NotesTab(){
   }
 
   async function saveEdit(id,body,editTitle,editTopics,editImages){
+    const updated_at=new Date().toISOString();
     await supabase.from("notes").update({
       body,title:editTitle||null,topics:editTopics,
-      images:editImages,updated_at:new Date().toISOString(),
+      images:editImages,updated_at,
     }).eq("id",id);
-    setEditingId(null);await load();
+    // Update in-place — no full reload to prevent grid jump
+    setNotes(prev=>prev.map(n=>n.id===id
+      ?{...n,body,title:editTitle||null,topics:editTopics,images:editImages,updated_at}
+      :n));
   }
 
   async function togglePin(note){
@@ -192,12 +196,17 @@ export default function NotesTab(){
 
   async function confirmDeleteImage(){
     if(!confirmDelImg)return;
-    const {noteId,imgIndex}=confirmDelImg;
-    const note=notes.find(n=>n.id===noteId);
-    if(!note)return;
-    const newImgs=(note.images||[]).filter((_,i)=>i!==imgIndex);
-    await supabase.from("notes").update({images:newImgs,updated_at:new Date().toISOString()}).eq("id",noteId);
-    setNotes(prev=>prev.map(n=>n.id===noteId?{...n,images:newImgs}:n));
+    const {noteId,imgIndex,onConfirm}=confirmDelImg;
+    if(noteId==="__compose__"&&onConfirm){
+      onConfirm();
+    } else {
+      const note=notes.find(n=>n.id===noteId);
+      if(note){
+        const newImgs=(note.images||[]).filter((_,i)=>i!==imgIndex);
+        await supabase.from("notes").update({images:newImgs,updated_at:new Date().toISOString()}).eq("id",noteId);
+        setNotes(prev=>prev.map(n=>n.id===noteId?{...n,images:newImgs}:n));
+      }
+    }
     setConfirmDelImg(null);
   }
 
@@ -229,29 +238,25 @@ export default function NotesTab(){
   function ImageStrip({imgs,noteId,editMode,onEditRemove}){
     if(!imgs||imgs.length===0)return null;
     return(
-      <div style={{display:"flex",gap:8,padding:"6px 12px 10px",flexWrap:"wrap"}}>
+      <div style={{display:"flex",gap:6,padding:"6px 12px 10px",flexWrap:"wrap",alignItems:"flex-start"}}>
         {imgs.map((src,i)=>(
-          <div key={i} style={{position:"relative",display:"inline-block"}}>
+          <div key={i} style={{position:"relative",display:"inline-block",flexShrink:0}}>
+            {/* Small 48px thumbnail — click to expand in lightbox */}
             <img src={src}
-              onClick={()=>setLightbox(src)}
-              style={{height:editMode?70:120,borderRadius:5,border:"1px solid rgba(58,130,246,0.18)",
+              onClick={e=>{e.stopPropagation();setLightbox(src);}}
+              style={{width:48,height:48,borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",
                 objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
-            {/* X button on saved images (with confirm) */}
-            {noteId&&!editMode&&(
-              <button onClick={e=>{e.stopPropagation();setConfirmDelImg({noteId,imgIndex:i});}}
-                style={{position:"absolute",top:-5,right:-5,background:"rgba(20,30,50,0.9)",
-                  border:"1px solid #ff6b6b",borderRadius:"50%",width:18,height:18,color:"#ff6b6b",
-                  fontSize:10,cursor:"pointer",display:"flex",alignItems:"center",
-                  justifyContent:"center",fontWeight:700,lineHeight:1}}>&#x2715;</button>
-            )}
-            {/* X button while editing (no confirm needed, not saved yet) */}
-            {editMode&&onEditRemove&&(
-              <button onClick={()=>onEditRemove(i)}
-                style={{position:"absolute",top:-5,right:-5,background:"rgba(20,30,50,0.9)",
-                  border:"1px solid #ff6b6b",borderRadius:"50%",width:18,height:18,color:"#ff6b6b",
-                  fontSize:10,cursor:"pointer",display:"flex",alignItems:"center",
-                  justifyContent:"center",fontWeight:700,lineHeight:1}}>&#x2715;</button>
-            )}
+            {/* X always shown — saved images ask confirm, compose images remove immediately */}
+            <button
+              onClick={e=>{
+                e.stopPropagation();
+                if(noteId&&!editMode) setConfirmDelImg({noteId,imgIndex:i});
+                else if(editMode&&onEditRemove) setConfirmDelImg({noteId:"__compose__",imgIndex:i,onConfirm:()=>onEditRemove(i)});
+              }}
+              style={{position:"absolute",top:-5,right:-5,background:"rgba(10,18,35,0.95)",
+                border:"1px solid #ff6b6b",borderRadius:"50%",width:16,height:16,color:"#ff6b6b",
+                fontSize:9,cursor:"pointer",display:"flex",alignItems:"center",
+                justifyContent:"center",fontWeight:700,lineHeight:1}}>&#x2715;</button>
           </div>
         ))}
       </div>
@@ -281,7 +286,7 @@ export default function NotesTab(){
           )}
           <div style={{flex:1,minWidth:0}}>
             {note.title&&<div style={{fontSize:13,fontWeight:700,color:"#e8f2ff",marginBottom:2}}>{note.title}</div>}
-            <div style={{fontSize:12,color:"rgba(160,200,255,0.65)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{preview||"—"}</div>
+            <div style={{fontSize:13,color:"rgba(160,200,255,0.65)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{preview||"—"}</div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
             <span style={{fontSize:11,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.updated_at||note.created_at)}</span>
@@ -319,8 +324,8 @@ export default function NotesTab(){
             <span key={t} style={{fontSize:9,fontWeight:700,padding:"1px 4px",borderRadius:2,
               background:col+"18",color:col,display:"inline-block",marginRight:3}}>{t}</span>
           );})}</div>
-          {note.title&&<div style={{fontSize:12,fontWeight:700,color:"#e8f2ff"}}>{note.title}</div>}
-          <div style={{fontSize:11,color:"rgba(160,200,255,0.65)",lineHeight:1.4,flex:1,
+          {note.title&&<div style={{fontSize:13,fontWeight:700,color:"#e8f2ff"}}>{note.title}</div>}
+          <div style={{fontSize:13,color:"rgba(160,200,255,0.65)",lineHeight:1.4,flex:1,
             overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical"}}>{preview}</div>
           <div style={{fontSize:10,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.created_at)}</div>
         </div>
@@ -330,24 +335,33 @@ export default function NotesTab(){
 
   // Modal overlay for expanded note (used by both grid and list click)
   function NoteModal({note}){
-    const [eTitle,setETitle]=React.useState(note.title||"");
-    const [eTopics,setETopics]=React.useState(note.topics||[]);
-    const [eImgs,setEImgs]=React.useState(note.images||[]);
+    const titleRef=React.useRef(null);
     const eRef=React.useRef(null);
-    const isDirty=React.useRef(false);
+    const topicsRef=React.useRef(note.topics||[]);
+    const imgsRef=React.useRef(note.images||[]);
+    const [topicsDisplay,setTopicsDisplay]=React.useState(note.topics||[]);
+    const [imgsDisplay,setImgsDisplay]=React.useState(note.images||[]);
+    const saveTimer=React.useRef(null);
 
     function doSave(){
-      if(!isDirty.current)return;
-      const html=eRef.current?.innerHTML?.trim()||"";
-      saveEdit(note.id,html,eTitle,eTopics,eImgs);
-      isDirty.current=false;
+      clearTimeout(saveTimer.current);
+      const title=titleRef.current?.value?.trim()||null;
+      const body=eRef.current?.innerHTML?.trim()||"";
+      saveEdit(note.id,body,title,topicsRef.current,imgsRef.current);
     }
-
-    // Save on unmount
-    React.useEffect(()=>()=>doSave(),[eTitle,eTopics,eImgs]);
+    function scheduleSave(){
+      clearTimeout(saveTimer.current);
+      saveTimer.current=setTimeout(doSave,1500);
+    }
+    function closeModal(){
+      clearTimeout(saveTimer.current);
+      doSave();
+      setExpandedId(null);
+    }
+    React.useEffect(()=>()=>{clearTimeout(saveTimer.current);doSave();},[]);
 
     return(
-      <div onClick={e=>{if(e.target===e.currentTarget){doSave();setExpandedId(null);setEditingId(null);}}}
+      <div onClick={e=>{if(e.target===e.currentTarget)closeModal();}}
         style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:500,
           display:"flex",alignItems:"flex-start",justifyContent:"center",
           paddingTop:60,paddingLeft:16,paddingRight:16}}>
@@ -355,56 +369,53 @@ export default function NotesTab(){
           border:"1px solid "+(note.pinned?"rgba(88,166,255,0.4)":"rgba(58,130,246,0.28)"),
           borderRadius:10,overflow:"hidden",boxShadow:"0 16px 48px rgba(0,0,0,0.7)",
           maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
-
-          {/* Modal header */}
           <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
             borderBottom:"1px solid rgba(58,130,246,0.10)",background:"#111f35",flexShrink:0}}>
             <button onClick={()=>togglePin(note)} style={{background:"none",border:"none",cursor:"pointer",
-              fontSize:13,color:note.pinned?"#f5a623":"rgba(110,155,215,0.45)",opacity:note.pinned?1:0.4}}>
-              &#x1F4CC;
-            </button>
-            <input value={eTitle} onChange={e=>{setETitle(e.target.value);isDirty.current=true;}}
-              onBlur={doSave}
+              fontSize:13,color:note.pinned?"#f5a623":"rgba(110,155,215,0.45)",opacity:note.pinned?1:0.4}}>&#x1F4CC;</button>
+            <input ref={titleRef} defaultValue={note.title||""} onChange={scheduleSave}
               placeholder="Title..."
               style={{flex:1,background:"transparent",border:"none",color:"#e8f2ff",
                 fontFamily:"inherit",fontSize:14,fontWeight:700,outline:"none"}}/>
             <span style={{fontSize:11,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.updated_at||note.created_at)}</span>
             <button onClick={()=>setConfirmDel(note.id)} style={{background:"none",border:"none",
               color:"#ff6b6b",cursor:"pointer",fontSize:12,opacity:0.6}}>&#x2715;</button>
-            <button onClick={()=>{doSave();setExpandedId(null);setEditingId(null);}}
+            <button onClick={closeModal}
               style={{background:"none",border:"1px solid rgba(58,130,246,0.25)",borderRadius:4,
                 color:"rgba(160,200,255,0.7)",cursor:"pointer",fontSize:11,padding:"2px 10px",
                 fontFamily:"inherit"}}>Close</button>
           </div>
-
-          {/* Topic pills */}
           <div style={{display:"flex",gap:3,flexWrap:"wrap",padding:"6px 14px",
             borderBottom:"1px solid rgba(58,130,246,0.08)",flexShrink:0}}>
-            {TOPICS.map(t=>pill(t,eTopics.includes(t),()=>{
-              setETopics(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
-              isDirty.current=true;
-            }))}
+            {TOPICS.map(t=>{
+              const col=TOPIC_COLORS[t]||"#58a6ff";
+              const active=topicsDisplay.includes(t);
+              return(
+                <button key={t} onClick={()=>{
+                  const next=active?topicsDisplay.filter(x=>x!==t):[...topicsDisplay,t];
+                  topicsRef.current=next;setTopicsDisplay(next);scheduleSave();
+                }} style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:3,
+                  border:"1px solid "+(active?col:col+"44"),
+                  background:active?col+"22":"transparent",color:active?col:col+"66",
+                  cursor:"pointer",fontFamily:"inherit",letterSpacing:"0.03em",whiteSpace:"nowrap"}}>{t}</button>
+              );
+            })}
           </div>
-
-          {/* Toolbar */}
           <Toolbar/>
-
-          {/* Body */}
           <div ref={eRef} contentEditable suppressContentEditableWarning
             dangerouslySetInnerHTML={{__html:note.body}}
-            onInput={()=>{isDirty.current=true;}}
-            onBlur={doSave}
+            onInput={scheduleSave}
             style={{flex:1,overflowY:"auto",padding:"12px 16px",color:"#e8f2ff",
               fontFamily:"inherit",fontSize:13,outline:"none",lineHeight:1.7,caretColor:"#58a6ff"}}/>
-
-          {/* Images */}
-          <ImageStrip imgs={eImgs} noteId={note.id}
-            editMode={true} onEditRemove={i=>{setEImgs(p=>p.filter((_,j)=>j!==i));isDirty.current=true;}}/>
+          <ImageStrip imgs={imgsDisplay} noteId={note.id}
+            editMode={true} onEditRemove={i=>{
+              const next=imgsDisplay.filter((_,j)=>j!==i);
+              imgsRef.current=next;setImgsDisplay(next);scheduleSave();
+            }}/>
         </div>
       </div>
     );
   }
-
 
   function NoteList({items}){
     if(viewMode==="list")return(
@@ -490,17 +501,18 @@ export default function NotesTab(){
           data-placeholder="Write your note... (Ctrl+Enter to save, paste screenshots)"
           style={{minHeight:80,padding:"10px 14px",color:"#e8f2ff",
             fontFamily:"inherit",fontSize:12,outline:"none",lineHeight:1.65,caretColor:"#58a6ff"}}/>
-        {/* Compose image previews */}
+        {/* Compose image previews — small thumbnails */}
         {images.length>0&&(
-          <div style={{display:"flex",gap:6,padding:"6px 12px",borderTop:"1px solid rgba(58,130,246,0.08)",flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:6,padding:"6px 12px",borderTop:"1px solid rgba(58,130,246,0.08)",flexWrap:"wrap",alignItems:"flex-start"}}>
             {images.map((img,i)=>(
-              <div key={i} style={{position:"relative"}}>
-                <img src={img.dataUrl} style={{height:70,borderRadius:4,border:"1px solid rgba(58,130,246,0.18)",objectFit:"cover",cursor:"zoom-in"}}
-                  onClick={()=>setLightbox(img.dataUrl)}/>
-                <button onClick={()=>setImages(p=>p.filter((_,j)=>j!==i))}
-                  style={{position:"absolute",top:-5,right:-5,background:"rgba(20,30,50,0.9)",
-                    border:"1px solid #ff6b6b",borderRadius:"50%",width:18,height:18,color:"#ff6b6b",
-                    fontSize:10,cursor:"pointer",display:"flex",alignItems:"center",
+              <div key={i} style={{position:"relative",flexShrink:0}}>
+                <img src={img.dataUrl}
+                  onClick={()=>setLightbox(img.dataUrl)}
+                  style={{width:48,height:48,borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
+                <button onClick={()=>setConfirmDelImg({noteId:"__compose__",imgIndex:i,onConfirm:()=>setImages(p=>p.filter((_,j)=>j!==i))})}
+                  style={{position:"absolute",top:-5,right:-5,background:"rgba(10,18,35,0.95)",
+                    border:"1px solid #ff6b6b",borderRadius:"50%",width:16,height:16,color:"#ff6b6b",
+                    fontSize:9,cursor:"pointer",display:"flex",alignItems:"center",
                     justifyContent:"center",fontWeight:700,lineHeight:1}}>&#x2715;</button>
               </div>
             ))}
