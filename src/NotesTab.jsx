@@ -1,17 +1,18 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./supabaseclient";
 import { C } from "./constants";
 
 const TOPICS = ["UKC","Med","Asia","J19","Inter","C18","TA","Parcel","TCE","SnP","TC"];
 const TOPIC_COLORS = {
-  UKC:"#58a6ff", Med:"#fb923c", Asia:"#a78bfa", J19:"#3fb950",
-  Inter:"#38bdf8", C18:"#fbbf24", TA:"#f472b6", Parcel:"#34d399",
-  TCE:"#e2e8f0", SnP:"#ff6b6b", TC:"#c084fc"
+  UKC:"#58a6ff",Med:"#fb923c",Asia:"#a78bfa",J19:"#3fb950",
+  Inter:"#38bdf8",C18:"#fbbf24",TA:"#f472b6",Parcel:"#34d399",
+  TCE:"#e2e8f0",SnP:"#ff6b6b",TC:"#c084fc"
 };
 const DATE_FILTERS = [
   {label:"All time",value:"all"},{label:"Today",value:"today"},
   {label:"This week",value:"week"},{label:"This month",value:"month"},
 ];
+const VM_KEY = "notes_viewMode";
 
 function fmtTs(iso){
   if(!iso)return"";
@@ -19,7 +20,6 @@ function fmtTs(iso){
   return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})
     +" "+d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
 }
-
 function passesDate(iso,filter){
   if(filter==="all")return true;
   const d=new Date(iso),now=new Date();
@@ -28,23 +28,42 @@ function passesDate(iso,filter){
   if(filter==="month")return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
   return true;
 }
-
 function applyFmt(cmd){document.execCommand(cmd,false,null);}
+function stripHtml(h){return(h||"").replace(/<[^>]+>/g,"");}
 
+// Toolbar component - stable reference
 function Toolbar(){
   const btn=(label,action)=>(
     <button key={action} onMouseDown={e=>{e.preventDefault();applyFmt(action);}} style={{
-      background:"transparent",border:"1px solid rgba(58,130,246,0.10)",borderRadius:3,
+      background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
       color:"rgba(160,200,255,0.65)",padding:"2px 7px",fontFamily:"inherit",fontSize:11,cursor:"pointer",
       fontWeight:action==="bold"?700:400,fontStyle:action==="italic"?"italic":"normal",
       textDecoration:action==="underline"?"underline":"none",
     }}>{label}</button>
   );
   return(
-    <div style={{display:"flex",gap:4,padding:"5px 10px",borderBottom:"1px solid rgba(58,130,246,0.10)",background:"rgba(4,10,22,0.4)",flexWrap:"wrap"}}>
+    <div style={{display:"flex",gap:4,padding:"5px 10px",borderBottom:"1px solid rgba(58,130,246,0.08)",background:"rgba(4,10,22,0.4)",flexWrap:"wrap"}}>
       {btn("B","bold")}{btn("U","underline")}{btn("I","italic")}
       <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px"}}/>
       {btn("\u2022 List","insertUnorderedList")}{btn("1. List","insertOrderedList")}
+    </div>
+  );
+}
+
+// Image lightbox
+function Lightbox({src,onClose}){
+  useEffect(()=>{
+    const h=e=>{if(e.key==="Escape")onClose();};
+    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);
+  },[onClose]);
+  return(
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:1000,
+      display:"flex",alignItems:"center",justifyContent:"center",cursor:"zoom-out"}}>
+      <img src={src} onClick={e=>e.stopPropagation()}
+        style={{maxWidth:"90vw",maxHeight:"90vh",borderRadius:6,objectFit:"contain",cursor:"default"}}/>
+      <button onClick={onClose} style={{position:"absolute",top:16,right:20,background:"rgba(255,255,255,0.1)",
+        border:"none",borderRadius:"50%",width:36,height:36,color:"#fff",fontSize:18,cursor:"pointer",
+        display:"flex",alignItems:"center",justifyContent:"center"}}>&#x2715;</button>
     </div>
   );
 }
@@ -55,16 +74,21 @@ export default function NotesTab(){
   const [search,setSearch]=useState("");
   const [topicFilter,setTopicFilter]=useState(null);
   const [dateFilter,setDateFilter]=useState("all");
-  const [viewMode,setViewMode]=useState("list");
+  // Persist view mode in localStorage
+  const [viewMode,setViewMode]=useState(()=>localStorage.getItem(VM_KEY)||"list");
   const [selTopics,setSelTopics]=useState([]);
   const [title,setTitle]=useState("");
   const [saving,setSaving]=useState(false);
   const [editingId,setEditingId]=useState(null);
   const [expandedId,setExpandedId]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
+  const [confirmDelImg,setConfirmDelImg]=useState(null); // {noteId, imgIndex}
   const [images,setImages]=useState([]);
+  const [lightbox,setLightbox]=useState(null);
   const editorRef=useRef(null);
   const fileRef=useRef(null);
+
+  const setView=v=>{setViewMode(v);localStorage.setItem(VM_KEY,v);};
 
   async function load(){
     setLoading(true);
@@ -74,7 +98,11 @@ export default function NotesTab(){
   }
   useEffect(()=>{load();},[]);
 
+  // Expose notes globally so AskAI can access them
+  useEffect(()=>{window.__notesData=notes;},[notes]);
+
   function handlePaste(e){
+    // Preserve pasted text formatting — only intercept images
     for(const item of Array.from(e.clipboardData?.items||[])){
       if(item.type.startsWith("image/")){
         e.preventDefault();
@@ -83,6 +111,7 @@ export default function NotesTab(){
         r.readAsDataURL(item.getAsFile());return;
       }
     }
+    // Let text paste through naturally — browser keeps source formatting stripped by contentEditable
   }
 
   function handleDrop(e){
@@ -110,9 +139,10 @@ export default function NotesTab(){
     await load();setSaving(false);
   }
 
-  async function saveEdit(id,body,editTitle,editTopics){
+  async function saveEdit(id,body,editTitle,editTopics,editImages){
     await supabase.from("notes").update({
-      body,title:editTitle,topics:editTopics,updated_at:new Date().toISOString(),
+      body,title:editTitle||null,topics:editTopics,
+      images:editImages,updated_at:new Date().toISOString(),
     }).eq("id",id);
     setEditingId(null);await load();
   }
@@ -130,13 +160,23 @@ export default function NotesTab(){
     setNotes(n=>n.filter(x=>x.id!==confirmDel));setConfirmDel(null);
   }
 
+  async function confirmDeleteImage(){
+    if(!confirmDelImg)return;
+    const {noteId,imgIndex}=confirmDelImg;
+    const note=notes.find(n=>n.id===noteId);
+    if(!note)return;
+    const newImgs=(note.images||[]).filter((_,i)=>i!==imgIndex);
+    await supabase.from("notes").update({images:newImgs,updated_at:new Date().toISOString()}).eq("id",noteId);
+    setNotes(prev=>prev.map(n=>n.id===noteId?{...n,images:newImgs}:n));
+    setConfirmDelImg(null);
+  }
+
   const filtered=notes.filter(n=>{
     if(topicFilter&&!(n.topics||[]).includes(topicFilter))return false;
     if(!n.pinned&&!passesDate(n.created_at,dateFilter))return false;
     if(search){
       const s=search.toLowerCase();
-      if(!(n.body||"").replace(/<[^>]+>/g,"").toLowerCase().includes(s)&&
-         !(n.title||"").toLowerCase().includes(s))return false;
+      if(!stripHtml(n.body).toLowerCase().includes(s)&&!(n.title||"").toLowerCase().includes(s))return false;
     }
     return true;
   });
@@ -155,24 +195,86 @@ export default function NotesTab(){
     );
   };
 
+  // Image strip used in both read and edit mode
+  function ImageStrip({imgs,noteId,editMode,onEditRemove}){
+    if(!imgs||imgs.length===0)return null;
+    return(
+      <div style={{display:"flex",gap:8,padding:"6px 12px 10px",flexWrap:"wrap"}}>
+        {imgs.map((src,i)=>(
+          <div key={i} style={{position:"relative",display:"inline-block"}}>
+            <img src={src}
+              onClick={()=>setLightbox(src)}
+              style={{height:editMode?70:120,borderRadius:5,border:"1px solid rgba(58,130,246,0.18)",
+                objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
+            {/* X button on saved images (with confirm) */}
+            {noteId&&!editMode&&(
+              <button onClick={e=>{e.stopPropagation();setConfirmDelImg({noteId,imgIndex:i});}}
+                style={{position:"absolute",top:-5,right:-5,background:"rgba(20,30,50,0.9)",
+                  border:"1px solid #ff6b6b",borderRadius:"50%",width:18,height:18,color:"#ff6b6b",
+                  fontSize:10,cursor:"pointer",display:"flex",alignItems:"center",
+                  justifyContent:"center",fontWeight:700,lineHeight:1}}>&#x2715;</button>
+            )}
+            {/* X button while editing (no confirm needed, not saved yet) */}
+            {editMode&&onEditRemove&&(
+              <button onClick={()=>onEditRemove(i)}
+                style={{position:"absolute",top:-5,right:-5,background:"rgba(20,30,50,0.9)",
+                  border:"1px solid #ff6b6b",borderRadius:"50%",width:18,height:18,color:"#ff6b6b",
+                  fontSize:10,cursor:"pointer",display:"flex",alignItems:"center",
+                  justifyContent:"center",fontWeight:700,lineHeight:1}}>&#x2715;</button>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // NoteCard — inline editing, auto-save on blur
   function NoteCard({note}){
     const isEdit=editingId===note.id;
-    const isOpen=expandedId===note.id;
+    const isOpen=expandedId===note.id||isEdit;
     const [eTitle,setETitle]=useState(note.title||"");
     const [eTopics,setETopics]=useState(note.topics||[]);
+    const [eImgs,setEImgs]=useState(note.images||[]);
     const eRef=useRef(null);
-    const preview=(note.body||"").replace(/<[^>]+>/g,"").slice(0,140);
+    const saveTimerRef=useRef(null);
+    const preview=stripHtml(note.body).slice(0,140);
+
+    // Start editing on click when already expanded
+    function startEdit(){
+      setEditingId(note.id);
+      setExpandedId(note.id);
+    }
+
+    // Auto-save after 1.5s of inactivity
+    function scheduleAutoSave(){
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current=setTimeout(()=>{
+        const html=eRef.current?.innerHTML?.trim();
+        if(html!==undefined)saveEdit(note.id,html,eTitle,eTopics,eImgs);
+      },1500);
+    }
+
+    function doSave(){
+      clearTimeout(saveTimerRef.current);
+      const html=eRef.current?.innerHTML?.trim()||"";
+      saveEdit(note.id,html,eTitle,eTopics,eImgs);
+    }
+
     return(
       <div style={{background:note.pinned?"rgba(88,166,255,0.05)":"#0c1729",
         border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.18)"),
         borderRadius:7,overflow:"hidden"}}>
+
+        {/* Header row */}
         <div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 12px",
-          borderBottom:(isEdit||isOpen)?"1px solid rgba(58,130,246,0.10)":"none",
-          background:(isEdit||isOpen)?"#111f35":"transparent"}}>
+          borderBottom:isOpen?"1px solid rgba(58,130,246,0.10)":"none",
+          background:isOpen?"#111f35":"transparent"}}>
           <button onClick={()=>togglePin(note)} title={note.pinned?"Unpin":"Pin"}
             style={{background:"none",border:"none",cursor:"pointer",fontSize:13,padding:"0 2px",
               color:note.pinned?"#f5a623":"rgba(110,155,215,0.45)",
               opacity:note.pinned?1:0.4,flexShrink:0,lineHeight:1,paddingTop:2}}>&#x1F4CC;</button>
+
+          {/* Topic tags */}
           {(note.topics||[]).length>0&&!isEdit&&(
             <div style={{display:"flex",gap:3,flexWrap:"wrap",flexShrink:0,paddingTop:2}}>
               {(note.topics||[]).map(t=>{const col=TOPIC_COLORS[t]||"#58a6ff";return(
@@ -181,100 +283,204 @@ export default function NotesTab(){
               );})}
             </div>
           )}
-          <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={()=>!isEdit&&setExpandedId(isOpen?null:note.id)}>
-            {!isEdit&&note.title&&<div style={{fontSize:13,fontWeight:700,color:"#e8f2ff",marginBottom:2}}>{note.title}</div>}
-            {!isEdit&&!isOpen&&<div style={{fontSize:12,color:"rgba(160,200,255,0.65)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{preview||"\u2014"}</div>}
+
+          {/* Title / preview — click to expand, double-click to edit */}
+          <div style={{flex:1,minWidth:0,cursor:"pointer"}}
+            onClick={()=>!isEdit&&setExpandedId(isOpen?null:note.id)}
+            onDoubleClick={()=>startEdit()}>
+            {isEdit
+              ? <input value={eTitle} onChange={e=>setETitle(e.target.value)}
+                  placeholder="Title..."
+                  style={{width:"100%",background:"transparent",border:"none",color:"#e8f2ff",
+                    fontFamily:"inherit",fontSize:13,fontWeight:600,outline:"none"}}/>
+              : <>
+                  {note.title&&<div style={{fontSize:13,fontWeight:700,color:"#e8f2ff",marginBottom:2}}>{note.title}</div>}
+                  {!isOpen&&<div style={{fontSize:12,color:"rgba(160,200,255,0.65)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{preview||"\u2014"}</div>}
+                </>
+            }
           </div>
+
+          {/* Right actions */}
           <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
             <span style={{fontSize:11,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.updated_at||note.created_at)}</span>
-            {!isEdit&&<button onClick={()=>{setEditingId(note.id);setExpandedId(note.id);}}
-              style={{background:"none",border:"1px solid rgba(58,130,246,0.10)",borderRadius:3,
-                color:"rgba(160,200,255,0.65)",cursor:"pointer",fontSize:10,padding:"1px 7px",fontFamily:"inherit",fontWeight:600}}>Edit</button>}
-            {isEdit&&<>
-              <button onClick={()=>saveEdit(note.id,eRef.current?.innerHTML||"",eTitle,eTopics)}
+            {isEdit&&(
+              <button onClick={doSave}
                 style={{background:"transparent",border:"1px solid rgba(88,166,255,0.55)",borderRadius:3,
                   color:"rgba(140,200,255,0.9)",cursor:"pointer",fontSize:10,padding:"2px 9px",
                   fontFamily:"inherit",fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase"}}>Save</button>
+            )}
+            {isEdit&&(
               <button onClick={()=>setEditingId(null)}
                 style={{background:"none",border:"1px solid rgba(58,130,246,0.10)",borderRadius:3,
-                  color:"rgba(160,200,255,0.65)",cursor:"pointer",fontSize:10,padding:"1px 7px",fontFamily:"inherit"}}>Cancel</button>
-            </>}
+                  color:"rgba(160,200,255,0.65)",cursor:"pointer",fontSize:10,padding:"1px 7px",fontFamily:"inherit"}}>Done</button>
+            )}
             <button onClick={()=>setConfirmDel(note.id)}
               style={{background:"none",border:"none",color:"#ff6b6b",cursor:"pointer",fontSize:11,opacity:0.5,padding:"0 2px",lineHeight:1}}>&#x2715;</button>
-            {!isEdit&&<span onClick={()=>setExpandedId(isOpen?null:note.id)}
-              style={{fontSize:11,color:"rgba(110,155,215,0.45)",cursor:"pointer"}}>{isOpen?"\u25b2":"\u25bc"}</span>}
+            {!isEdit&&(
+              <span onClick={()=>setExpandedId(isOpen?null:note.id)}
+                style={{fontSize:11,color:"rgba(110,155,215,0.45)",cursor:"pointer"}}>{isOpen?"\u25b2":"\u25bc"}</span>
+            )}
           </div>
         </div>
+
+        {/* Edit mode body */}
         {isEdit&&(
           <div>
-            <div style={{padding:"6px 12px",borderBottom:"1px solid rgba(58,130,246,0.10)",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-              <input value={eTitle} onChange={e=>setETitle(e.target.value)} placeholder="Title\u2026"
-                style={{flex:1,background:"transparent",border:"none",color:"#e8f2ff",
-                  fontFamily:"inherit",fontSize:13,fontWeight:600,outline:"none",minWidth:80}}/>
-              <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-                {TOPICS.map(t=>pill(t,eTopics.includes(t),()=>setETopics(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t])))}
-              </div>
+            {/* Topic selector in edit mode */}
+            <div style={{padding:"4px 12px",borderBottom:"1px solid rgba(58,130,246,0.08)",display:"flex",gap:3,flexWrap:"wrap"}}>
+              {TOPICS.map(t=>pill(t,eTopics.includes(t),()=>setETopics(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t])))}
             </div>
             <Toolbar/>
             <div ref={eRef} contentEditable suppressContentEditableWarning
               dangerouslySetInnerHTML={{__html:note.body}}
+              onInput={scheduleAutoSave}
               style={{minHeight:80,padding:"10px 14px",color:"#e8f2ff",
-                fontFamily:"inherit",fontSize:12,outline:"none",lineHeight:1.65}}/>
-            {(note.images||[]).length>0&&(
-              <div style={{display:"flex",gap:6,padding:"6px 12px",flexWrap:"wrap"}}>
-                {(note.images||[]).map((src,i)=>(
-                  <img key={i} src={src} style={{maxHeight:100,borderRadius:4,border:"1px solid rgba(58,130,246,0.18)",cursor:"pointer"}}
-                    onClick={()=>window.open(src,"_blank")}/>
-                ))}
-              </div>
-            )}
+                fontFamily:"inherit",fontSize:12,outline:"none",lineHeight:1.65,
+                caretColor:"#58a6ff"}}/>
+            <ImageStrip imgs={eImgs} editMode={true}
+              onEditRemove={i=>setEImgs(p=>p.filter((_,j)=>j!==i))}/>
           </div>
         )}
+
+        {/* Read mode expanded body */}
         {isOpen&&!isEdit&&(
-          <div>
+          <div onClick={startEdit} title="Click to edit" style={{cursor:"text"}}>
             <div dangerouslySetInnerHTML={{__html:note.body}}
               style={{padding:"12px 16px",fontSize:13,color:"#e8f2ff",lineHeight:1.7,fontFamily:"inherit"}}/>
-            {(note.images||[]).length>0&&(
-              <div style={{display:"flex",gap:8,padding:"0 16px 12px",flexWrap:"wrap"}}>
-                {(note.images||[]).map((src,i)=>(
-                  <img key={i} src={src} style={{maxHeight:160,borderRadius:5,border:"1px solid rgba(58,130,246,0.18)",cursor:"pointer",objectFit:"cover"}}
-                    onClick={()=>window.open(src,"_blank")}/>
-                ))}
-              </div>
-            )}
+            <ImageStrip imgs={note.images||[]} noteId={note.id}/>
           </div>
         )}
       </div>
     );
   }
 
+  // NoteThumb — grid card, expands inline (no switch to list)
   function NoteThumb({note}){
-    const preview=(note.body||"").replace(/<[^>]+>/g,"").slice(0,100);
+    const isExpanded=expandedId===note.id;
+    const isEdit=editingId===note.id;
+    const preview=stripHtml(note.body).slice(0,100);
     const img=(note.images||[])[0];
-    return(
-      <div onClick={()=>{setExpandedId(note.id);setViewMode("list");}}
-        style={{background:note.pinned?"rgba(88,166,255,0.06)":"#0c1729",
-          border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.18)"),
-          borderRadius:7,overflow:"hidden",cursor:"pointer",display:"flex",
-          flexDirection:"column",minHeight:130,transition:"border-color 0.15s"}}>
-        {img&&<img src={img} style={{width:"100%",height:80,objectFit:"cover"}}/>}
-        <div style={{padding:"8px 10px",flex:1,display:"flex",flexDirection:"column",gap:4}}>
-          {note.pinned&&<span style={{fontSize:10,color:"#f5a623"}}>&#x1F4CC;</span>}
-          <div>{(note.topics||[]).slice(0,3).map(t=>{const col=TOPIC_COLORS[t]||"#58a6ff";return(
-            <span key={t} style={{fontSize:9,fontWeight:700,padding:"1px 4px",borderRadius:2,
-              background:col+"18",color:col,display:"inline-block",marginRight:3}}>{t}</span>
-          );})}</div>
-          {note.title&&<div style={{fontSize:12,fontWeight:700,color:"#e8f2ff"}}>{note.title}</div>}
-          <div style={{fontSize:11,color:"rgba(160,200,255,0.65)",lineHeight:1.4,flex:1,
-            overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical"}}>{preview}</div>
-          <div style={{fontSize:10,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.created_at)}</div>
+    const [eTitle,setETitle]=useState(note.title||"");
+    const [eTopics,setETopics]=useState(note.topics||[]);
+    const [eImgs,setEImgs]=useState(note.images||[]);
+    const eRef=useRef(null);
+    const saveTimerRef=useRef(null);
+
+    function scheduleAutoSave(){
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current=setTimeout(()=>{
+        const html=eRef.current?.innerHTML?.trim();
+        if(html!==undefined)saveEdit(note.id,html,eTitle,eTopics,eImgs);
+      },1500);
+    }
+    function doSave(){
+      clearTimeout(saveTimerRef.current);
+      const html=eRef.current?.innerHTML?.trim()||"";
+      saveEdit(note.id,html,eTitle,eTopics,eImgs);
+    }
+
+    // Collapsed thumbnail
+    if(!isExpanded&&!isEdit){
+      return(
+        <div onClick={()=>setExpandedId(note.id)}
+          style={{background:note.pinned?"rgba(88,166,255,0.06)":"#0c1729",
+            border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.18)"),
+            borderRadius:7,overflow:"hidden",cursor:"pointer",display:"flex",
+            flexDirection:"column",minHeight:130,transition:"border-color 0.15s"}}>
+          {img&&<img src={img} style={{width:"100%",height:80,objectFit:"cover"}}/>}
+          <div style={{padding:"8px 10px",flex:1,display:"flex",flexDirection:"column",gap:4}}>
+            {note.pinned&&<span style={{fontSize:10,color:"#f5a623"}}>&#x1F4CC;</span>}
+            <div>{(note.topics||[]).slice(0,3).map(t=>{const col=TOPIC_COLORS[t]||"#58a6ff";return(
+              <span key={t} style={{fontSize:9,fontWeight:700,padding:"1px 4px",borderRadius:2,
+                background:col+"18",color:col,display:"inline-block",marginRight:3}}>{t}</span>
+            );})}</div>
+            {note.title&&<div style={{fontSize:12,fontWeight:700,color:"#e8f2ff"}}>{note.title}</div>}
+            <div style={{fontSize:11,color:"rgba(160,200,255,0.65)",lineHeight:1.4,flex:1,
+              overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical"}}>{preview}</div>
+            <div style={{fontSize:10,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.created_at)}</div>
+          </div>
         </div>
+      );
+    }
+
+    // Expanded / edit state in grid — spans full width
+    return(
+      <div style={{gridColumn:"1 / -1",background:note.pinned?"rgba(88,166,255,0.05)":"#0c1729",
+        border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.28)"),
+        borderRadius:7,overflow:"hidden"}}>
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",
+          borderBottom:"1px solid rgba(58,130,246,0.10)",background:"#111f35"}}>
+          <button onClick={()=>togglePin(note)} style={{background:"none",border:"none",cursor:"pointer",
+            fontSize:13,color:note.pinned?"#f5a623":"rgba(110,155,215,0.45)",opacity:note.pinned?1:0.4}}>&#x1F4CC;</button>
+          {isEdit
+            ? <input value={eTitle} onChange={e=>setETitle(e.target.value)} placeholder="Title..."
+                style={{flex:1,background:"transparent",border:"none",color:"#e8f2ff",
+                  fontFamily:"inherit",fontSize:13,fontWeight:600,outline:"none"}}/>
+            : <span style={{flex:1,fontSize:13,fontWeight:700,color:"#e8f2ff"}}>{note.title||"\u2014"}</span>
+          }
+          <span style={{fontSize:11,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.updated_at||note.created_at)}</span>
+          {isEdit
+            ? <>
+                <button onClick={doSave} style={{background:"transparent",border:"1px solid rgba(88,166,255,0.55)",
+                  borderRadius:3,color:"rgba(140,200,255,0.9)",cursor:"pointer",fontSize:10,padding:"2px 9px",
+                  fontFamily:"inherit",fontWeight:700,textTransform:"uppercase"}}>Save</button>
+                <button onClick={()=>setEditingId(null)} style={{background:"none",border:"1px solid rgba(58,130,246,0.10)",
+                  borderRadius:3,color:"rgba(160,200,255,0.65)",cursor:"pointer",fontSize:10,padding:"1px 7px",fontFamily:"inherit"}}>Done</button>
+              </>
+            : <button onClick={()=>setEditingId(note.id)} style={{background:"none",border:"1px solid rgba(58,130,246,0.10)",
+                borderRadius:3,color:"rgba(160,200,255,0.65)",cursor:"pointer",fontSize:10,padding:"1px 7px",fontFamily:"inherit",fontWeight:600}}>Edit</button>
+          }
+          <button onClick={()=>setConfirmDel(note.id)} style={{background:"none",border:"none",color:"#ff6b6b",cursor:"pointer",fontSize:11,opacity:0.5}}>&#x2715;</button>
+          <span onClick={()=>{setExpandedId(null);setEditingId(null);}}
+            style={{fontSize:11,color:"rgba(110,155,215,0.45)",cursor:"pointer"}}>\u25b2</span>
+        </div>
+
+        {isEdit&&(
+          <div>
+            <div style={{padding:"4px 12px",borderBottom:"1px solid rgba(58,130,246,0.08)",display:"flex",gap:3,flexWrap:"wrap"}}>
+              {TOPICS.map(t=>pill(t,eTopics.includes(t),()=>setETopics(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t])))}
+            </div>
+            <Toolbar/>
+            <div ref={eRef} contentEditable suppressContentEditableWarning
+              dangerouslySetInnerHTML={{__html:note.body}}
+              onInput={scheduleAutoSave}
+              style={{minHeight:100,padding:"10px 14px",color:"#e8f2ff",
+                fontFamily:"inherit",fontSize:12,outline:"none",lineHeight:1.65,caretColor:"#58a6ff"}}/>
+            <ImageStrip imgs={eImgs} editMode={true} onEditRemove={i=>setEImgs(p=>p.filter((_,j)=>j!==i))}/>
+          </div>
+        )}
+        {!isEdit&&(
+          <div onClick={()=>setEditingId(note.id)} style={{cursor:"text"}} title="Click to edit">
+            <div dangerouslySetInnerHTML={{__html:note.body}}
+              style={{padding:"12px 16px",fontSize:13,color:"#e8f2ff",lineHeight:1.7,fontFamily:"inherit"}}/>
+            <ImageStrip imgs={note.images||[]} noteId={note.id}/>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function NoteList({items}){
+    if(viewMode==="list")return(
+      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+        {items.map(n=><NoteCard key={n.id} note={n}/>)}
+      </div>
+    );
+    return(
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:8}}>
+        {items.map(n=><NoteThumb key={n.id} note={n}/>)}
       </div>
     );
   }
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:10,height:"100%",minHeight:0}}>
+
+      {/* Lightbox */}
+      {lightbox&&<Lightbox src={lightbox} onClose={()=>setLightbox(null)}/>}
+
+      {/* Delete note confirm */}
       {confirmDel&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:999,
           display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -294,11 +500,32 @@ export default function NotesTab(){
         </div>
       )}
 
+      {/* Delete image confirm */}
+      {confirmDelImg&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:999,
+          display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"#0c1729",border:"1px solid #ff6b6b",borderRadius:8,
+            padding:"20px 28px",display:"flex",flexDirection:"column",gap:14,
+            boxShadow:"0 8px 32px rgba(0,0,0,0.6)",minWidth:260}}>
+            <div style={{fontSize:13,color:"#e8f2ff"}}>Remove this image?</div>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button onClick={()=>setConfirmDelImg(null)} style={{background:"#111f35",
+                border:"1px solid rgba(58,130,246,0.18)",borderRadius:5,color:"rgba(160,200,255,0.65)",
+                padding:"6px 16px",cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Cancel</button>
+              <button onClick={confirmDeleteImage} style={{background:"#ff6b6b",border:"none",
+                borderRadius:5,color:"#fff",padding:"6px 16px",cursor:"pointer",
+                fontFamily:"inherit",fontWeight:700,fontSize:12}}>Remove</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Compose panel */}
       <div style={{background:"#0c1729",border:"1px solid rgba(58,130,246,0.18)",borderRadius:8,overflow:"hidden",flexShrink:0}}
         onDrop={handleDrop} onDragOver={e=>e.preventDefault()}>
         <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",
-          borderBottom:"1px solid rgba(58,130,246,0.10)",flexWrap:"wrap"}}>
-          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Title (optional)\u2026"
+          borderBottom:"1px solid rgba(58,130,246,0.08)",flexWrap:"wrap"}}>
+          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Title (optional)..."
             style={{flex:"0 0 180px",background:"transparent",border:"none",color:"#e8f2ff",
               fontFamily:"inherit",fontSize:13,fontWeight:600,outline:"none",minWidth:0}}/>
           <div style={{display:"flex",gap:3,flexWrap:"wrap",flex:1}}>
@@ -309,26 +536,29 @@ export default function NotesTab(){
         <div ref={editorRef} contentEditable suppressContentEditableWarning
           onPaste={handlePaste}
           onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))save();}}
-          data-placeholder="Write your note\u2026 (Ctrl+Enter to save, paste screenshots directly)"
+          data-placeholder="Write your note... (Ctrl+Enter to save, paste screenshots)"
           style={{minHeight:80,padding:"10px 14px",color:"#e8f2ff",
-            fontFamily:"inherit",fontSize:12,outline:"none",lineHeight:1.65}}/>
+            fontFamily:"inherit",fontSize:12,outline:"none",lineHeight:1.65,caretColor:"#58a6ff"}}/>
+        {/* Compose image previews */}
         {images.length>0&&(
-          <div style={{display:"flex",gap:6,padding:"6px 12px",borderTop:"1px solid rgba(58,130,246,0.10)",flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:6,padding:"6px 12px",borderTop:"1px solid rgba(58,130,246,0.08)",flexWrap:"wrap"}}>
             {images.map((img,i)=>(
               <div key={i} style={{position:"relative"}}>
-                <img src={img.dataUrl} style={{height:70,borderRadius:4,border:"1px solid rgba(58,130,246,0.18)",objectFit:"cover"}}/>
+                <img src={img.dataUrl} style={{height:70,borderRadius:4,border:"1px solid rgba(58,130,246,0.18)",objectFit:"cover",cursor:"zoom-in"}}
+                  onClick={()=>setLightbox(img.dataUrl)}/>
                 <button onClick={()=>setImages(p=>p.filter((_,j)=>j!==i))}
-                  style={{position:"absolute",top:-4,right:-4,background:"#ff6b6b",border:"none",
-                    borderRadius:"50%",width:16,height:16,color:"#fff",fontSize:9,cursor:"pointer",
-                    display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>&#x2715;</button>
+                  style={{position:"absolute",top:-5,right:-5,background:"rgba(20,30,50,0.9)",
+                    border:"1px solid #ff6b6b",borderRadius:"50%",width:18,height:18,color:"#ff6b6b",
+                    fontSize:10,cursor:"pointer",display:"flex",alignItems:"center",
+                    justifyContent:"center",fontWeight:700,lineHeight:1}}>&#x2715;</button>
               </div>
             ))}
           </div>
         )}
         <div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",
-          borderTop:"1px solid rgba(58,130,246,0.10)",background:"rgba(4,10,22,0.4)"}}>
+          borderTop:"1px solid rgba(58,130,246,0.08)",background:"rgba(4,10,22,0.4)"}}>
           <button onClick={()=>fileRef.current?.click()}
-            style={{background:"transparent",border:"1px solid rgba(58,130,246,0.10)",borderRadius:3,
+            style={{background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
               color:"rgba(110,155,215,0.45)",padding:"3px 9px",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>
             + Image
           </button>
@@ -343,13 +573,14 @@ export default function NotesTab(){
             borderRadius:4,color:saving?"rgba(88,166,255,0.3)":"rgba(140,200,255,0.9)",
             fontFamily:"inherit",fontWeight:600,fontSize:11,padding:"4px 16px",
             cursor:saving?"default":"pointer",letterSpacing:"0.07em",textTransform:"uppercase",
-          }}>{saving?"Saving\u2026":"Save Note"}</button>
+          }}>{saving?"Saving...":"Save Note"}</button>
         </div>
       </div>
 
+      {/* Filter bar */}
       <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",flexShrink:0}}>
-        <div style={{position:"relative",flex:"0 0 200px"}}>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search notes\u2026"
+        <div style={{position:"relative",flex:"0 0 180px"}}>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search notes..."
             style={{width:"100%",background:"#0c1729",border:"1px solid rgba(58,130,246,0.18)",
               borderRadius:5,color:"#e8f2ff",fontFamily:"inherit",fontSize:12,
               padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
@@ -380,7 +611,7 @@ export default function NotesTab(){
         </span>
         <div style={{display:"flex",gap:0,border:"1px solid rgba(58,130,246,0.18)",borderRadius:4,overflow:"hidden"}}>
           {[["list","\u2630"],["grid","\u229e"]].map(([v,icon])=>(
-            <button key={v} onClick={()=>setViewMode(v)} style={{
+            <button key={v} onClick={()=>setView(v)} style={{
               background:viewMode===v?"rgba(88,166,255,0.15)":"transparent",
               border:"none",borderRight:v==="list"?"1px solid rgba(58,130,246,0.18)":"none",
               color:viewMode===v?"#58a6ff":"rgba(110,155,215,0.45)",
@@ -390,8 +621,9 @@ export default function NotesTab(){
         </div>
       </div>
 
+      {/* Notes list/grid */}
       <div style={{flex:1,minHeight:0,overflowY:"auto"}}>
-        {loading&&<div style={{fontSize:12,color:"rgba(110,155,215,0.45)",padding:"20px",textAlign:"center"}}>Loading\u2026</div>}
+        {loading&&<div style={{fontSize:12,color:"rgba(110,155,215,0.45)",padding:"20px",textAlign:"center"}}>Loading...</div>}
         {!loading&&filtered.length===0&&(
           <div style={{fontSize:12,color:"rgba(110,155,215,0.45)",padding:"20px",textAlign:"center",fontStyle:"italic"}}>
             {search||topicFilter||dateFilter!=="all"?"No notes match your filter.":"No notes yet. Write one above."}
@@ -403,19 +635,13 @@ export default function NotesTab(){
               textTransform:"uppercase",marginBottom:6,padding:"0 2px"}}>
               &#x1F4CC; Pinned
             </div>
-            {viewMode==="list"
-              ?<div style={{display:"flex",flexDirection:"column",gap:5}}>{pinned.map(n=><NoteCard key={n.id} note={n}/>)}</div>
-              :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:8}}>{pinned.map(n=><NoteThumb key={n.id} note={n}/>)}</div>
-            }
+            <NoteList items={pinned}/>
           </div>
         )}
         {unpinned.length>0&&(
           <div>
             {pinned.length>0&&<div style={{fontSize:10,fontWeight:700,color:"rgba(110,155,215,0.45)",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:6,padding:"0 2px"}}>Notes</div>}
-            {viewMode==="list"
-              ?<div style={{display:"flex",flexDirection:"column",gap:5}}>{unpinned.map(n=><NoteCard key={n.id} note={n}/>)}</div>
-              :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:8}}>{unpinned.map(n=><NoteThumb key={n.id} note={n}/>)}</div>
-            }
+            <NoteList items={unpinned}/>
           </div>
         )}
       </div>
@@ -425,6 +651,7 @@ export default function NotesTab(){
         [contenteditable] ul{padding-left:18px;margin:4px 0;}
         [contenteditable] ol{padding-left:18px;margin:4px 0;}
         [contenteditable] li{margin:2px 0;}
+        [contenteditable]{caret-color:#58a6ff;}
       `}</style>
     </div>
   );
