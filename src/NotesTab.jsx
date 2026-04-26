@@ -244,7 +244,7 @@ export default function NotesTab(){
             {/* Small 48px thumbnail — click to expand in lightbox */}
             <img src={src}
               onClick={e=>{e.stopPropagation();setLightbox(src);}}
-              style={{width:36,height:36,borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",
+              style={{width:18,height:18,borderRadius:3,border:"1px solid rgba(58,130,246,0.25)",
                 objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
             {/* X always shown — saved images ask confirm, compose images remove immediately */}
             <button
@@ -253,9 +253,9 @@ export default function NotesTab(){
                 if(noteId&&!editMode) setConfirmDelImg({noteId,imgIndex:i});
                 else if(editMode&&onEditRemove) setConfirmDelImg({noteId:"__compose__",imgIndex:i,onConfirm:()=>onEditRemove(i)});
               }}
-              style={{position:"absolute",top:-5,right:-5,background:"rgba(10,18,35,0.95)",
-                border:"1px solid #ff6b6b",borderRadius:"50%",width:16,height:16,color:"#ff6b6b",
-                fontSize:9,cursor:"pointer",display:"flex",alignItems:"center",
+              style={{position:"absolute",top:-4,right:-4,background:"rgba(10,18,35,0.95)",
+                border:"1px solid #ff6b6b",borderRadius:"50%",width:12,height:12,color:"#ff6b6b",
+                fontSize:7,cursor:"pointer",display:"flex",alignItems:"center",
                 justifyContent:"center",fontWeight:700,lineHeight:1}}>&#x2715;</button>
           </div>
         ))}
@@ -297,7 +297,7 @@ export default function NotesTab(){
         {(note.images||[]).length>0&&(
           <div style={{padding:"0 12px 8px",display:"flex",gap:6,flexWrap:"wrap"}}>
             {(note.images||[]).slice(0,3).map((src,i)=>(
-              <img key={i} src={src} style={{width:36,height:36,borderRadius:4,border:"1px solid rgba(58,130,246,0.18)",objectFit:"cover"}}/>
+              <img key={i} src={src} style={{width:18,height:18,borderRadius:3,border:"1px solid rgba(58,130,246,0.18)",objectFit:"cover",cursor:"zoom-in"}}/>
             ))}
           </div>
         )}
@@ -450,16 +450,16 @@ export default function NotesTab(){
             {imgsDisplay.map((src,i)=>(
               <div key={i} style={{position:"relative",flexShrink:0}}>
                 <img src={src} onClick={()=>setLightbox(src)}
-                  style={{width:36,height:36,borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",
+                  style={{width:18,height:18,borderRadius:3,border:"1px solid rgba(58,130,246,0.25)",
                     objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
                 <button onClick={()=>setConfirmDelImg({noteId:note.id,imgIndex:i,onConfirm:()=>{
                   const next=imgsDisplay.filter((_,j)=>j!==i);
                   imgsRef.current=next;setImgsDisplay(next);scheduleSave();
                 }})}
-                  style={{position:"absolute",top:-5,right:-5,background:"rgba(10,18,35,0.95)",
-                    border:"1px solid #ff6b6b",borderRadius:"50%",width:16,height:16,
-                    color:"#ff6b6b",fontSize:9,cursor:"pointer",display:"flex",
-                    alignItems:"center",justifyContent:"center",fontWeight:700}}>&#x2715;</button>
+                  style={{position:"absolute",top:-4,right:-4,background:"rgba(10,18,35,0.95)",
+                    border:"1px solid #ff6b6b",borderRadius:"50%",width:12,height:12,
+                    color:"#ff6b6b",fontSize:7,cursor:"pointer",display:"flex",
+                    alignItems:"center",justifyContent:"center",fontWeight:700,lineHeight:1}}>&#x2715;</button>
               </div>
             ))}
           </div>
@@ -560,7 +560,7 @@ export default function NotesTab(){
               <div key={i} style={{position:"relative",flexShrink:0}}>
                 <img src={img.dataUrl}
                   onClick={()=>setLightbox(img.dataUrl)}
-                  style={{width:36,height:36,borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
+                  style={{width:18,height:18,borderRadius:3,border:"1px solid rgba(58,130,246,0.25)",objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
                 <button onClick={()=>setConfirmDelImg({noteId:"__compose__",imgIndex:i,onConfirm:()=>setImages(p=>p.filter((_,j)=>j!==i))})}
                   style={{position:"absolute",top:-5,right:-5,background:"rgba(10,18,35,0.95)",
                     border:"1px solid #ff6b6b",borderRadius:"50%",width:16,height:16,color:"#ff6b6b",
