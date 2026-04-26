@@ -333,32 +333,52 @@ export default function NotesTab(){
     );
   }
 
-  // Modal overlay for expanded note (used by both grid and list click)
+  // Modal overlay — fully isolated from parent re-renders
+  // Uses a portal-style fixed overlay. All state is local refs only.
+  // Parent saveEdit updates notes in-place (no reload) so modal never remounts.
   function NoteModal({note}){
     const titleRef=React.useRef(null);
-    const eRef=React.useRef(null);
+    const bodyRef=React.useRef(null);
     const topicsRef=React.useRef(note.topics||[]);
     const imgsRef=React.useRef(note.images||[]);
     const [topicsDisplay,setTopicsDisplay]=React.useState(note.topics||[]);
     const [imgsDisplay,setImgsDisplay]=React.useState(note.images||[]);
     const saveTimer=React.useRef(null);
+    const savedOnce=React.useRef(false);
+
+    // Set body HTML once on mount only — never overwrite after that
+    React.useEffect(()=>{
+      if(bodyRef.current&&!savedOnce.current){
+        bodyRef.current.innerHTML=note.body||"";
+      }
+    },[]);
 
     function doSave(){
       clearTimeout(saveTimer.current);
-      const title=titleRef.current?.value?.trim()||null;
-      const body=eRef.current?.innerHTML?.trim()||"";
-      saveEdit(note.id,body,title,topicsRef.current,imgsRef.current);
+      const title=titleRef.current?.value||"";
+      const body=bodyRef.current?.innerHTML||"";
+      // Only save if something actually exists
+      if(!body&&!title.trim())return;
+      savedOnce.current=true;
+      saveEdit(note.id,body,title.trim()||null,topicsRef.current,imgsRef.current);
     }
+
     function scheduleSave(){
       clearTimeout(saveTimer.current);
-      saveTimer.current=setTimeout(doSave,1500);
+      saveTimer.current=setTimeout(doSave,2000);
     }
+
     function closeModal(){
       clearTimeout(saveTimer.current);
       doSave();
       setExpandedId(null);
     }
-    React.useEffect(()=>()=>{clearTimeout(saveTimer.current);doSave();},[]);
+
+    // Save on unmount
+    React.useEffect(()=>()=>{
+      clearTimeout(saveTimer.current);
+      doSave();
+    },[]);
 
     return(
       <div onClick={e=>{if(e.target===e.currentTarget)closeModal();}}
@@ -369,10 +389,13 @@ export default function NotesTab(){
           border:"1px solid "+(note.pinned?"rgba(88,166,255,0.4)":"rgba(58,130,246,0.28)"),
           borderRadius:10,overflow:"hidden",boxShadow:"0 16px 48px rgba(0,0,0,0.7)",
           maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+
+          {/* Header */}
           <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
             borderBottom:"1px solid rgba(58,130,246,0.10)",background:"#111f35",flexShrink:0}}>
-            <button onClick={()=>togglePin(note)} style={{background:"none",border:"none",cursor:"pointer",
-              fontSize:13,color:note.pinned?"#f5a623":"rgba(110,155,215,0.45)",opacity:note.pinned?1:0.4}}>&#x1F4CC;</button>
+            <button onClick={()=>togglePin(note)} style={{background:"none",border:"none",
+              cursor:"pointer",fontSize:13,color:note.pinned?"#f5a623":"rgba(110,155,215,0.45)",
+              opacity:note.pinned?1:0.4}}>&#x1F4CC;</button>
             <input ref={titleRef} defaultValue={note.title||""} onChange={scheduleSave}
               placeholder="Title..."
               style={{flex:1,background:"transparent",border:"none",color:"#e8f2ff",
@@ -385,6 +408,8 @@ export default function NotesTab(){
                 color:"rgba(160,200,255,0.7)",cursor:"pointer",fontSize:11,padding:"2px 10px",
                 fontFamily:"inherit"}}>Close</button>
           </div>
+
+          {/* Topics */}
           <div style={{display:"flex",gap:3,flexWrap:"wrap",padding:"6px 14px",
             borderBottom:"1px solid rgba(58,130,246,0.08)",flexShrink:0}}>
             {TOPICS.map(t=>{
@@ -401,17 +426,34 @@ export default function NotesTab(){
               );
             })}
           </div>
+
+          {/* Toolbar */}
           <Toolbar/>
-          <div ref={eRef} contentEditable suppressContentEditableWarning
-            dangerouslySetInnerHTML={{__html:note.body}}
+
+          {/* Body — innerHTML set once on mount via useEffect, never via prop after that */}
+          <div ref={bodyRef} contentEditable suppressContentEditableWarning
             onInput={scheduleSave}
             style={{flex:1,overflowY:"auto",padding:"12px 16px",color:"#e8f2ff",
               fontFamily:"inherit",fontSize:13,outline:"none",lineHeight:1.7,caretColor:"#58a6ff"}}/>
-          <ImageStrip imgs={imgsDisplay} noteId={note.id}
-            editMode={true} onEditRemove={i=>{
-              const next=imgsDisplay.filter((_,j)=>j!==i);
-              imgsRef.current=next;setImgsDisplay(next);scheduleSave();
-            }}/>
+
+          {/* Images */}
+          <div style={{display:"flex",gap:6,padding:"6px 12px 10px",flexWrap:"wrap",alignItems:"flex-start"}}>
+            {imgsDisplay.map((src,i)=>(
+              <div key={i} style={{position:"relative",flexShrink:0}}>
+                <img src={src} onClick={()=>setLightbox(src)}
+                  style={{width:48,height:48,borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",
+                    objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
+                <button onClick={()=>setConfirmDelImg({noteId:note.id,imgIndex:i,onConfirm:()=>{
+                  const next=imgsDisplay.filter((_,j)=>j!==i);
+                  imgsRef.current=next;setImgsDisplay(next);scheduleSave();
+                }})}
+                  style={{position:"absolute",top:-5,right:-5,background:"rgba(10,18,35,0.95)",
+                    border:"1px solid #ff6b6b",borderRadius:"50%",width:16,height:16,
+                    color:"#ff6b6b",fontSize:9,cursor:"pointer",display:"flex",
+                    alignItems:"center",justifyContent:"center",fontWeight:700}}>&#x2715;</button>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -436,10 +478,11 @@ export default function NotesTab(){
       {/* Lightbox */}
       {lightbox&&<Lightbox src={lightbox} onClose={()=>setLightbox(null)}/>}
 
-      {/* Note modal — fixed overlay, same position always */}
+      {/* Note modal — fixed overlay. key=expandedId ensures single mount per open. */}
       {expandedId&&(()=>{
         const n=notes.find(x=>x.id===expandedId);
-        return n?<NoteModal key={expandedId} note={n}/>:null;
+        // Pass a frozen snapshot so parent re-renders don't affect modal internals
+        return n?<NoteModal key={expandedId} note={Object.freeze({...n})}/>:null;
       })()}
 
       {/* Delete note confirm */}
