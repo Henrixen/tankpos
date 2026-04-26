@@ -13,7 +13,8 @@ function AIAsk({vessels,cargoes,intelItems}){
     const cargoSummary=cargoes.map(c=>[c.status||"",c.charterer,c.cargo,c.qty,c.load,c.disch,c.from&&c.to?c.from+" - "+c.to:c.from||c.to,c.freight,c.vessel].filter(Boolean).join("|")).join("\n");
     const vesselSummary=vessels.map(v=>[v.vessel,v.operator,v.openPort,v.date,v.dwt&&v.dwt+"dwt",v.built&&"built:"+v.built,v.spec?.iceClass,v.spec?.lastCargo&&"lastcargo:"+v.spec.lastCargo].filter(Boolean).join("|")).join("\n");
     const vault=(intelItems||[]).map(i=>i.extracted).join("\n---\n");
-    return `Today: ${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}\nCARGO FIXTURES (${cargoes.length}):\n${cargoSummary||"none"}\nVESSEL POSITIONS (${vessels.length}):\n${vesselSummary||"none"}\nMARKET INTEL VAULT (${(intelItems||[]).length} items):\n${vault||"none"}`;
+    const notesData=(window.__notesData||[]).map(n=>[n.title,(n.body||"").replace(/<[^>]+>/g,"")].filter(Boolean).join(": ")).join("\n---\n");
+    return `Today: ${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}\nCARGO FIXTURES (${cargoes.length}):\n${cargoSummary||"none"}\nVESSEL POSITIONS (${vessels.length}):\n${vesselSummary||"none"}\nMARKET INTEL VAULT (${(intelItems||[]).length} items):\n${vault||"none"}\nNOTES (${(window.__notesData||[]).length}):\n${notesData||"none"}`;
   }
 
   async function ask(){
@@ -82,7 +83,8 @@ export function AskAIStrip({vessels,cargoes,intelItems}){
     const cargoSummary=cargoes.map(c=>[c.status||"",c.charterer,c.cargo,c.qty,c.load,c.disch,c.from&&c.to?c.from+" - "+c.to:c.from||c.to,c.freight,c.vessel].filter(Boolean).join("|")).join("\n");
     const vesselSummary=vessels.map(v=>[v.vessel,v.operator,v.openPort,v.date,v.dwt&&v.dwt+"dwt",v.built&&"built:"+v.built,v.spec?.iceClass,v.spec?.lastCargo&&"lastcargo:"+v.spec.lastCargo].filter(Boolean).join("|")).join("\n");
     const vault=(intelItems||[]).map(i=>i.extracted).join("\n---\n");
-    return `Today: ${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}\nCARGO FIXTURES (${cargoes.length}):\n${cargoSummary||"none"}\nVESSEL POSITIONS (${vessels.length}):\n${vesselSummary||"none"}\nMARKET INTEL VAULT (${(intelItems||[]).length} items):\n${vault||"none"}`;
+    const notesData=(window.__notesData||[]).map(n=>[n.title,(n.body||"").replace(/<[^>]+>/g,"")].filter(Boolean).join(": ")).join("\n---\n");
+    return `Today: ${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}\nCARGO FIXTURES (${cargoes.length}):\n${cargoSummary||"none"}\nVESSEL POSITIONS (${vessels.length}):\n${vesselSummary||"none"}\nMARKET INTEL VAULT (${(intelItems||[]).length} items):\n${vault||"none"}\nNOTES (${(window.__notesData||[]).length}):\n${notesData||"none"}`;
   }
 
   async function ask(){
@@ -109,7 +111,7 @@ export function AskAIStrip({vessels,cargoes,intelItems}){
       <div style={{
         display:"flex",alignItems:"stretch",
         background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,
-        overflow:"hidden",height:78,minWidth:480
+        overflow:"hidden",height:78,minWidth:360
       }}>
         {/* Input area */}
         <div style={{flex:1,display:"flex",alignItems:"center",padding:"0 12px",minWidth:0}}>
