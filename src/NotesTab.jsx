@@ -318,13 +318,22 @@ export default function NotesTab(){
           flexDirection:"column",minHeight:130,transition:"border-color 0.15s,box-shadow 0.15s",
           boxShadow:"0 2px 8px rgba(0,0,0,0.3)"}}>
         {img&&<img src={img} style={{width:"100%",height:80,objectFit:"cover"}}/>}
-        <div style={{padding:"8px 10px",flex:1,display:"flex",flexDirection:"column",gap:4}}>
-          {note.pinned&&<span style={{fontSize:10,color:"#f5a623"}}>&#x1F4CC;</span>}
-          <div>{(note.topics||[]).slice(0,3).map(t=>{const col=TOPIC_COLORS[t]||"#58a6ff";return(
-            <span key={t} style={{fontSize:9,fontWeight:700,padding:"1px 4px",borderRadius:2,
-              background:col+"18",color:col,display:"inline-block",marginRight:3}}>{t}</span>
-          );})}</div>
-          {note.title&&<div style={{fontSize:13,fontWeight:700,color:"#e8f2ff"}}>{note.title}</div>}
+        <div style={{padding:"8px 10px",flex:1,display:"flex",flexDirection:"column",gap:5}}>
+          {/* Title left, tags right — same row */}
+          <div style={{display:"flex",alignItems:"flex-start",gap:4,minWidth:0}}>
+            <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:4}}>
+              {note.pinned&&<span style={{fontSize:10,color:"#f5a623",flexShrink:0}}>&#x1F4CC;</span>}
+              {note.title&&<div style={{fontSize:13,fontWeight:700,color:"#e8f2ff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{note.title}</div>}
+            </div>
+            {(note.topics||[]).length>0&&(
+              <div style={{display:"flex",gap:2,flexWrap:"wrap",justifyContent:"flex-end",flexShrink:0,maxWidth:"55%"}}>
+                {(note.topics||[]).slice(0,3).map(t=>{const col=TOPIC_COLORS[t]||"#58a6ff";return(
+                  <span key={t} style={{fontSize:9,fontWeight:700,padding:"1px 4px",borderRadius:2,
+                    background:col+"18",color:col,whiteSpace:"nowrap"}}>{t}</span>
+                );})}
+              </div>
+            )}
+          </div>
           <div style={{fontSize:13,color:"rgba(160,200,255,0.65)",lineHeight:1.4,flex:1,
             overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical"}}>{preview}</div>
           <div style={{fontSize:10,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.created_at)}</div>
