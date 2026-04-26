@@ -258,54 +258,20 @@ export default function NotesTab(){
     );
   }
 
-  // NoteCard — inline editing, auto-save on blur
+  // NoteCard — click to open modal, no inline edit
   function NoteCard({note}){
-    const isEdit=editingId===note.id;
-    const isOpen=expandedId===note.id||isEdit;
-    const [eTitle,setETitle]=useState(note.title||"");
-    const [eTopics,setETopics]=useState(note.topics||[]);
-    const [eImgs,setEImgs]=useState(note.images||[]);
-    const eRef=useRef(null);
-    const saveTimerRef=useRef(null);
-    const preview=stripHtml(note.body).slice(0,140);
-
-    // Start editing on click when already expanded
-    function startEdit(){
-      setEditingId(note.id);
-      setExpandedId(note.id);
-    }
-
-    // Auto-save after 1.5s of inactivity
-    function scheduleAutoSave(){
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current=setTimeout(()=>{
-        const html=eRef.current?.innerHTML?.trim();
-        if(html!==undefined)saveEdit(note.id,html,eTitle,eTopics,eImgs);
-      },1500);
-    }
-
-    function doSave(){
-      clearTimeout(saveTimerRef.current);
-      const html=eRef.current?.innerHTML?.trim()||"";
-      saveEdit(note.id,html,eTitle,eTopics,eImgs);
-    }
-
+    const preview=stripHtml(note.body).slice(0,160);
     return(
       <div style={{background:note.pinned?"rgba(88,166,255,0.05)":"#0c1729",
         border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.18)"),
-        borderRadius:7,overflow:"hidden"}}>
-
-        {/* Header row */}
-        <div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 12px",
-          borderBottom:isOpen?"1px solid rgba(58,130,246,0.10)":"none",
-          background:isOpen?"#111f35":"transparent"}}>
-          <button onClick={()=>togglePin(note)} title={note.pinned?"Unpin":"Pin"}
+        borderRadius:7,overflow:"hidden",cursor:"pointer"}}
+        onClick={()=>setExpandedId(note.id)}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 12px"}}>
+          <button onClick={e=>{e.stopPropagation();togglePin(note);}} title={note.pinned?"Unpin":"Pin"}
             style={{background:"none",border:"none",cursor:"pointer",fontSize:13,padding:"0 2px",
               color:note.pinned?"#f5a623":"rgba(110,155,215,0.45)",
               opacity:note.pinned?1:0.4,flexShrink:0,lineHeight:1,paddingTop:2}}>&#x1F4CC;</button>
-
-          {/* Topic tags */}
-          {(note.topics||[]).length>0&&!isEdit&&(
+          {(note.topics||[]).length>0&&(
             <div style={{display:"flex",gap:3,flexWrap:"wrap",flexShrink:0,paddingTop:2}}>
               {(note.topics||[]).map(t=>{const col=TOPIC_COLORS[t]||"#58a6ff";return(
                 <span key={t} style={{fontSize:10,fontWeight:700,padding:"1px 5px",borderRadius:2,
@@ -313,183 +279,132 @@ export default function NotesTab(){
               );})}
             </div>
           )}
-
-          {/* Title / preview — click to expand, double-click to edit */}
-          <div style={{flex:1,minWidth:0,cursor:"pointer"}}
-            onClick={()=>!isEdit&&setExpandedId(isOpen?null:note.id)}
-            onDoubleClick={()=>startEdit()}>
-            {isEdit
-              ? <input value={eTitle} onChange={e=>setETitle(e.target.value)}
-                  placeholder="Title..."
-                  style={{width:"100%",background:"transparent",border:"none",color:"#e8f2ff",
-                    fontFamily:"inherit",fontSize:13,fontWeight:600,outline:"none"}}/>
-              : <>
-                  {note.title&&<div style={{fontSize:13,fontWeight:700,color:"#e8f2ff",marginBottom:2}}>{note.title}</div>}
-                  {!isOpen&&<div style={{fontSize:12,color:"rgba(160,200,255,0.65)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{preview||"\u2014"}</div>}
-                </>
-            }
+          <div style={{flex:1,minWidth:0}}>
+            {note.title&&<div style={{fontSize:13,fontWeight:700,color:"#e8f2ff",marginBottom:2}}>{note.title}</div>}
+            <div style={{fontSize:12,color:"rgba(160,200,255,0.65)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{preview||"—"}</div>
           </div>
-
-          {/* Right actions */}
           <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
             <span style={{fontSize:11,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.updated_at||note.created_at)}</span>
-            {isEdit&&(
-              <button onClick={doSave}
-                style={{background:"transparent",border:"1px solid rgba(88,166,255,0.55)",borderRadius:3,
-                  color:"rgba(140,200,255,0.9)",cursor:"pointer",fontSize:10,padding:"2px 9px",
-                  fontFamily:"inherit",fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase"}}>Save</button>
-            )}
-            {isEdit&&(
-              <button onClick={()=>setEditingId(null)}
-                style={{background:"none",border:"1px solid rgba(58,130,246,0.10)",borderRadius:3,
-                  color:"rgba(160,200,255,0.65)",cursor:"pointer",fontSize:10,padding:"1px 7px",fontFamily:"inherit"}}>Done</button>
-            )}
-            <button onClick={()=>setConfirmDel(note.id)}
+            <button onClick={e=>{e.stopPropagation();setConfirmDel(note.id);}}
               style={{background:"none",border:"none",color:"#ff6b6b",cursor:"pointer",fontSize:11,opacity:0.5,padding:"0 2px",lineHeight:1}}>&#x2715;</button>
-            {!isEdit&&(
-              <span onClick={()=>setExpandedId(isOpen?null:note.id)}
-                style={{fontSize:11,color:"rgba(110,155,215,0.45)",cursor:"pointer"}}>{isOpen?"\u25b2":"\u25bc"}</span>
-            )}
           </div>
         </div>
-
-        {/* Edit mode body */}
-        {isEdit&&(
-          <div>
-            {/* Topic selector in edit mode */}
-            <div style={{padding:"4px 12px",borderBottom:"1px solid rgba(58,130,246,0.08)",display:"flex",gap:3,flexWrap:"wrap"}}>
-              {TOPICS.map(t=>pill(t,eTopics.includes(t),()=>setETopics(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t])))}
-            </div>
-            <Toolbar/>
-            <div ref={eRef} contentEditable suppressContentEditableWarning
-              dangerouslySetInnerHTML={{__html:note.body}}
-              onInput={scheduleAutoSave}
-              style={{minHeight:80,padding:"10px 14px",color:"#e8f2ff",
-                fontFamily:"inherit",fontSize:12,outline:"none",lineHeight:1.65,
-                caretColor:"#58a6ff"}}/>
-            <ImageStrip imgs={eImgs} editMode={true}
-              onEditRemove={i=>setEImgs(p=>p.filter((_,j)=>j!==i))}/>
-          </div>
-        )}
-
-        {/* Read mode expanded body */}
-        {isOpen&&!isEdit&&(
-          <div onClick={startEdit} title="Click to edit" style={{cursor:"text"}}>
-            <div dangerouslySetInnerHTML={{__html:note.body}}
-              style={{padding:"12px 16px",fontSize:13,color:"#e8f2ff",lineHeight:1.7,fontFamily:"inherit"}}/>
-            <ImageStrip imgs={note.images||[]} noteId={note.id}/>
+        {(note.images||[]).length>0&&(
+          <div style={{padding:"0 12px 8px",display:"flex",gap:6,flexWrap:"wrap"}}>
+            {(note.images||[]).slice(0,3).map((src,i)=>(
+              <img key={i} src={src} style={{height:50,borderRadius:4,border:"1px solid rgba(58,130,246,0.18)",objectFit:"cover"}}/>
+            ))}
           </div>
         )}
       </div>
     );
   }
 
-  // NoteThumb — grid card, expands inline (no switch to list)
+
+  // NoteThumb — tappable card, opens modal overlay
   function NoteThumb({note}){
-    const isExpanded=expandedId===note.id;
-    const isEdit=editingId===note.id;
     const preview=stripHtml(note.body).slice(0,100);
     const img=(note.images||[])[0];
-    const [eTitle,setETitle]=useState(note.title||"");
-    const [eTopics,setETopics]=useState(note.topics||[]);
-    const [eImgs,setEImgs]=useState(note.images||[]);
-    const eRef=useRef(null);
-    const saveTimerRef=useRef(null);
-
-    function scheduleAutoSave(){
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current=setTimeout(()=>{
-        const html=eRef.current?.innerHTML?.trim();
-        if(html!==undefined)saveEdit(note.id,html,eTitle,eTopics,eImgs);
-      },1500);
-    }
-    function doSave(){
-      clearTimeout(saveTimerRef.current);
-      const html=eRef.current?.innerHTML?.trim()||"";
-      saveEdit(note.id,html,eTitle,eTopics,eImgs);
-    }
-
-    // Collapsed thumbnail
-    if(!isExpanded&&!isEdit){
-      return(
-        <div onClick={()=>setExpandedId(note.id)}
-          style={{background:note.pinned?"rgba(88,166,255,0.06)":"#0c1729",
-            border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.18)"),
-            borderRadius:7,overflow:"hidden",cursor:"pointer",display:"flex",
-            flexDirection:"column",minHeight:130,transition:"border-color 0.15s"}}>
-          {img&&<img src={img} style={{width:"100%",height:80,objectFit:"cover"}}/>}
-          <div style={{padding:"8px 10px",flex:1,display:"flex",flexDirection:"column",gap:4}}>
-            {note.pinned&&<span style={{fontSize:10,color:"#f5a623"}}>&#x1F4CC;</span>}
-            <div>{(note.topics||[]).slice(0,3).map(t=>{const col=TOPIC_COLORS[t]||"#58a6ff";return(
-              <span key={t} style={{fontSize:9,fontWeight:700,padding:"1px 4px",borderRadius:2,
-                background:col+"18",color:col,display:"inline-block",marginRight:3}}>{t}</span>
-            );})}</div>
-            {note.title&&<div style={{fontSize:12,fontWeight:700,color:"#e8f2ff"}}>{note.title}</div>}
-            <div style={{fontSize:11,color:"rgba(160,200,255,0.65)",lineHeight:1.4,flex:1,
-              overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical"}}>{preview}</div>
-            <div style={{fontSize:10,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.created_at)}</div>
-          </div>
-        </div>
-      );
-    }
-
-    // Expanded / edit state in grid — spans full width
     return(
-      <div style={{gridColumn:"1 / -1",background:note.pinned?"rgba(88,166,255,0.05)":"#0c1729",
-        border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.28)"),
-        borderRadius:7,overflow:"hidden"}}>
-        {/* Header */}
-        <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",
-          borderBottom:"1px solid rgba(58,130,246,0.10)",background:"#111f35"}}>
-          <button onClick={()=>togglePin(note)} style={{background:"none",border:"none",cursor:"pointer",
-            fontSize:13,color:note.pinned?"#f5a623":"rgba(110,155,215,0.45)",opacity:note.pinned?1:0.4}}>&#x1F4CC;</button>
-          {isEdit
-            ? <input value={eTitle} onChange={e=>setETitle(e.target.value)} placeholder="Title..."
-                style={{flex:1,background:"transparent",border:"none",color:"#e8f2ff",
-                  fontFamily:"inherit",fontSize:13,fontWeight:600,outline:"none"}}/>
-            : <span style={{flex:1,fontSize:13,fontWeight:700,color:"#e8f2ff"}}>{note.title||"\u2014"}</span>
-          }
-          <span style={{fontSize:11,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.updated_at||note.created_at)}</span>
-          {isEdit
-            ? <>
-                <button onClick={doSave} style={{background:"transparent",border:"1px solid rgba(88,166,255,0.55)",
-                  borderRadius:3,color:"rgba(140,200,255,0.9)",cursor:"pointer",fontSize:10,padding:"2px 9px",
-                  fontFamily:"inherit",fontWeight:700,textTransform:"uppercase"}}>Save</button>
-                <button onClick={()=>setEditingId(null)} style={{background:"none",border:"1px solid rgba(58,130,246,0.10)",
-                  borderRadius:3,color:"rgba(160,200,255,0.65)",cursor:"pointer",fontSize:10,padding:"1px 7px",fontFamily:"inherit"}}>Done</button>
-              </>
-            : <button onClick={()=>setEditingId(note.id)} style={{background:"none",border:"1px solid rgba(58,130,246,0.10)",
-                borderRadius:3,color:"rgba(160,200,255,0.65)",cursor:"pointer",fontSize:10,padding:"1px 7px",fontFamily:"inherit",fontWeight:600}}>Edit</button>
-          }
-          <button onClick={()=>setConfirmDel(note.id)} style={{background:"none",border:"none",color:"#ff6b6b",cursor:"pointer",fontSize:11,opacity:0.5}}>&#x2715;</button>
-          <span onClick={()=>{setExpandedId(null);setEditingId(null);}}
-            style={{fontSize:11,color:"rgba(110,155,215,0.45)",cursor:"pointer"}}>\u25b2</span>
+      <div onClick={()=>setExpandedId(note.id)}
+        style={{background:note.pinned?"rgba(88,166,255,0.06)":"#0c1729",
+          border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.18)"),
+          borderRadius:7,overflow:"hidden",cursor:"pointer",display:"flex",
+          flexDirection:"column",minHeight:130,transition:"border-color 0.15s,box-shadow 0.15s",
+          boxShadow:"0 2px 8px rgba(0,0,0,0.3)"}}>
+        {img&&<img src={img} style={{width:"100%",height:80,objectFit:"cover"}}/>}
+        <div style={{padding:"8px 10px",flex:1,display:"flex",flexDirection:"column",gap:4}}>
+          {note.pinned&&<span style={{fontSize:10,color:"#f5a623"}}>&#x1F4CC;</span>}
+          <div>{(note.topics||[]).slice(0,3).map(t=>{const col=TOPIC_COLORS[t]||"#58a6ff";return(
+            <span key={t} style={{fontSize:9,fontWeight:700,padding:"1px 4px",borderRadius:2,
+              background:col+"18",color:col,display:"inline-block",marginRight:3}}>{t}</span>
+          );})}</div>
+          {note.title&&<div style={{fontSize:12,fontWeight:700,color:"#e8f2ff"}}>{note.title}</div>}
+          <div style={{fontSize:11,color:"rgba(160,200,255,0.65)",lineHeight:1.4,flex:1,
+            overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical"}}>{preview}</div>
+          <div style={{fontSize:10,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.created_at)}</div>
         </div>
-
-        {isEdit&&(
-          <div>
-            <div style={{padding:"4px 12px",borderBottom:"1px solid rgba(58,130,246,0.08)",display:"flex",gap:3,flexWrap:"wrap"}}>
-              {TOPICS.map(t=>pill(t,eTopics.includes(t),()=>setETopics(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t])))}
-            </div>
-            <Toolbar/>
-            <div ref={eRef} contentEditable suppressContentEditableWarning
-              dangerouslySetInnerHTML={{__html:note.body}}
-              onInput={scheduleAutoSave}
-              style={{minHeight:100,padding:"10px 14px",color:"#e8f2ff",
-                fontFamily:"inherit",fontSize:12,outline:"none",lineHeight:1.65,caretColor:"#58a6ff"}}/>
-            <ImageStrip imgs={eImgs} editMode={true} onEditRemove={i=>setEImgs(p=>p.filter((_,j)=>j!==i))}/>
-          </div>
-        )}
-        {!isEdit&&(
-          <div onClick={()=>setEditingId(note.id)} style={{cursor:"text"}} title="Click to edit">
-            <div dangerouslySetInnerHTML={{__html:note.body}}
-              style={{padding:"12px 16px",fontSize:13,color:"#e8f2ff",lineHeight:1.7,fontFamily:"inherit"}}/>
-            <ImageStrip imgs={note.images||[]} noteId={note.id}/>
-          </div>
-        )}
       </div>
     );
   }
+
+  // Modal overlay for expanded note (used by both grid and list click)
+  function NoteModal({note}){
+    const [eTitle,setETitle]=React.useState(note.title||"");
+    const [eTopics,setETopics]=React.useState(note.topics||[]);
+    const [eImgs,setEImgs]=React.useState(note.images||[]);
+    const eRef=React.useRef(null);
+    const isDirty=React.useRef(false);
+
+    function doSave(){
+      if(!isDirty.current)return;
+      const html=eRef.current?.innerHTML?.trim()||"";
+      saveEdit(note.id,html,eTitle,eTopics,eImgs);
+      isDirty.current=false;
+    }
+
+    // Save on unmount
+    React.useEffect(()=>()=>doSave(),[eTitle,eTopics,eImgs]);
+
+    return(
+      <div onClick={e=>{if(e.target===e.currentTarget){doSave();setExpandedId(null);setEditingId(null);}}}
+        style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:500,
+          display:"flex",alignItems:"flex-start",justifyContent:"center",
+          paddingTop:60,paddingLeft:16,paddingRight:16}}>
+        <div style={{width:"100%",maxWidth:720,background:"#0c1729",
+          border:"1px solid "+(note.pinned?"rgba(88,166,255,0.4)":"rgba(58,130,246,0.28)"),
+          borderRadius:10,overflow:"hidden",boxShadow:"0 16px 48px rgba(0,0,0,0.7)",
+          maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+
+          {/* Modal header */}
+          <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
+            borderBottom:"1px solid rgba(58,130,246,0.10)",background:"#111f35",flexShrink:0}}>
+            <button onClick={()=>togglePin(note)} style={{background:"none",border:"none",cursor:"pointer",
+              fontSize:13,color:note.pinned?"#f5a623":"rgba(110,155,215,0.45)",opacity:note.pinned?1:0.4}}>
+              &#x1F4CC;
+            </button>
+            <input value={eTitle} onChange={e=>{setETitle(e.target.value);isDirty.current=true;}}
+              onBlur={doSave}
+              placeholder="Title..."
+              style={{flex:1,background:"transparent",border:"none",color:"#e8f2ff",
+                fontFamily:"inherit",fontSize:14,fontWeight:700,outline:"none"}}/>
+            <span style={{fontSize:11,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.updated_at||note.created_at)}</span>
+            <button onClick={()=>setConfirmDel(note.id)} style={{background:"none",border:"none",
+              color:"#ff6b6b",cursor:"pointer",fontSize:12,opacity:0.6}}>&#x2715;</button>
+            <button onClick={()=>{doSave();setExpandedId(null);setEditingId(null);}}
+              style={{background:"none",border:"1px solid rgba(58,130,246,0.25)",borderRadius:4,
+                color:"rgba(160,200,255,0.7)",cursor:"pointer",fontSize:11,padding:"2px 10px",
+                fontFamily:"inherit"}}>Close</button>
+          </div>
+
+          {/* Topic pills */}
+          <div style={{display:"flex",gap:3,flexWrap:"wrap",padding:"6px 14px",
+            borderBottom:"1px solid rgba(58,130,246,0.08)",flexShrink:0}}>
+            {TOPICS.map(t=>pill(t,eTopics.includes(t),()=>{
+              setETopics(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
+              isDirty.current=true;
+            }))}
+          </div>
+
+          {/* Toolbar */}
+          <Toolbar/>
+
+          {/* Body */}
+          <div ref={eRef} contentEditable suppressContentEditableWarning
+            dangerouslySetInnerHTML={{__html:note.body}}
+            onInput={()=>{isDirty.current=true;}}
+            onBlur={doSave}
+            style={{flex:1,overflowY:"auto",padding:"12px 16px",color:"#e8f2ff",
+              fontFamily:"inherit",fontSize:13,outline:"none",lineHeight:1.7,caretColor:"#58a6ff"}}/>
+
+          {/* Images */}
+          <ImageStrip imgs={eImgs} noteId={note.id}
+            editMode={true} onEditRemove={i=>{setEImgs(p=>p.filter((_,j)=>j!==i));isDirty.current=true;}}/>
+        </div>
+      </div>
+    );
+  }
+
 
   function NoteList({items}){
     if(viewMode==="list")return(
@@ -509,6 +424,12 @@ export default function NotesTab(){
 
       {/* Lightbox */}
       {lightbox&&<Lightbox src={lightbox} onClose={()=>setLightbox(null)}/>}
+
+      {/* Note modal — fixed overlay, same position always */}
+      {expandedId&&(()=>{
+        const n=notes.find(x=>x.id===expandedId);
+        return n?<NoteModal key={expandedId} note={n}/>:null;
+      })()}
 
       {/* Delete note confirm */}
       {confirmDel&&(
