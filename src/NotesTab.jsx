@@ -102,7 +102,7 @@ export default function NotesTab(){
   useEffect(()=>{window.__notesData=notes;},[notes]);
 
   function handlePaste(e){
-    // Preserve pasted text formatting — only intercept images
+    // Intercept images
     for(const item of Array.from(e.clipboardData?.items||[])){
       if(item.type.startsWith("image/")){
         e.preventDefault();
@@ -111,7 +111,37 @@ export default function NotesTab(){
         r.readAsDataURL(item.getAsFile());return;
       }
     }
-    // Let text paste through naturally — browser keeps source formatting stripped by contentEditable
+    // Strip colours/fonts but keep bold, italic, underline, lists
+    const html=e.clipboardData?.getData("text/html");
+    if(html){
+      e.preventDefault();
+      // Parse pasted HTML, strip style/color/font attrs, keep semantic tags
+      const tmp=document.createElement("div");
+      tmp.innerHTML=html;
+      // Remove all style attributes and font/color tags
+      tmp.querySelectorAll("*").forEach(el=>{
+        el.removeAttribute("style");
+        el.removeAttribute("color");
+        el.removeAttribute("face");
+        el.removeAttribute("size");
+        el.removeAttribute("bgcolor");
+        el.removeAttribute("class");
+      });
+      // Replace <font> with <span>, <h1-6> with <b>
+      tmp.querySelectorAll("font").forEach(el=>{
+        const span=document.createElement("span");
+        span.innerHTML=el.innerHTML;
+        el.replaceWith(span);
+      });
+      ["h1","h2","h3","h4","h5","h6"].forEach(tag=>{
+        tmp.querySelectorAll(tag).forEach(el=>{
+          const b=document.createElement("b");
+          b.innerHTML=el.innerHTML;
+          el.replaceWith(b);
+        });
+      });
+      document.execCommand("insertHTML",false,tmp.innerHTML);
+    }
   }
 
   function handleDrop(e){
