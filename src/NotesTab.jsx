@@ -405,20 +405,17 @@ export default function NotesTab(){
   function NoteThumb({note}){
     const imgs=note.images||[];
     const hasContent=note.body&&note.body!=="<br>";
-    // Fixed card height — with images taller, without images shorter but uniform
-    const cardH=imgs.length>0?260:200;
     return(
       <div onClick={()=>setExpandedId(note.id)}
         style={{background:note.pinned?"rgba(88,166,255,0.06)":"#0c1729",
           border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.18)"),
           borderRadius:7,overflow:"hidden",cursor:"pointer",
-          height:cardH,display:"flex",flexDirection:"column",
+          height:200,display:"flex",flexDirection:"column",
           transition:"border-color 0.15s,box-shadow 0.15s",
           boxShadow:"0 2px 8px rgba(0,0,0,0.3)"}}>
-        {/* Inner layout: fixed height, flex col, content fills middle, date at bottom */}
         <div style={{padding:"8px 10px",flex:1,minHeight:0,display:"flex",flexDirection:"column",gap:4}}>
 
-          {/* 1: title + tags — fixed, never grows */}
+          {/* 1: title + tags */}
           <div style={{display:"flex",alignItems:"flex-start",gap:4,flexShrink:0}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
@@ -437,8 +434,8 @@ export default function NotesTab(){
             )}
           </div>
 
-          {/* 2: body — takes all remaining space, clipped, no overflow */}
-          <div style={{flex:1,minHeight:0,overflow:"hidden",position:"relative"}}>
+          {/* 2: body — fills all middle space, clipped */}
+          <div style={{flex:1,minHeight:0,overflow:"hidden"}}>
             {hasContent&&(
               <div className="note-preview-html"
                 style={{fontSize:12,color:"rgba(160,200,255,0.65)",lineHeight:1.45,
@@ -447,20 +444,24 @@ export default function NotesTab(){
             )}
           </div>
 
-          {/* 3: images — fixed size, only if present */}
-          {imgs.length>0&&(
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",flexShrink:0}}>
-              {imgs.slice(0,3).map((src,i)=>(
-                <img key={i} src={src}
-                  onClick={e=>{e.stopPropagation();setLightbox(src);}}
-                  style={{width:72,height:72,borderRadius:5,border:"1px solid rgba(58,130,246,0.18)",
-                    objectFit:"cover",cursor:"zoom-in",flexShrink:0}}/>
-              ))}
-            </div>
-          )}
+          {/* 3: date row — date left, thumbnail right */}
+          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+            <span style={{fontSize:10,color:"rgba(110,155,215,0.45)",flex:1}}>{fmtTs(note.created_at)}</span>
+            {imgs.length>0&&(
+              <div style={{position:"relative",flexShrink:0}}>
+                <img src={imgs[0]}
+                  onClick={e=>{e.stopPropagation();setLightbox(imgs[0]);}}
+                  style={{width:36,height:36,borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",
+                    objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
+                {imgs.length>1&&(
+                  <div style={{position:"absolute",bottom:2,right:2,background:"rgba(0,0,0,0.65)",
+                    borderRadius:2,fontSize:8,color:"#e8f2ff",padding:"0 3px",lineHeight:"14px",
+                    fontWeight:700}}>+{imgs.length-1}</div>
+                )}
+              </div>
+            )}
+          </div>
 
-          {/* 4: date — always at bottom, never pushed out */}
-          <div style={{fontSize:10,color:"rgba(110,155,215,0.45)",flexShrink:0}}>{fmtTs(note.created_at)}</div>
         </div>
       </div>
     );
