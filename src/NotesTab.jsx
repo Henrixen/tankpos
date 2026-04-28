@@ -31,10 +31,10 @@ function passesDate(iso,filter){
 function applyFmt(cmd){document.execCommand(cmd,false,null);}
 function stripHtml(h){return(h||"").replace(/<[^>]+>/g,"");}
 
-// Toolbar component - stable reference
-function Toolbar(){
+// ── Toolbar ──────────────────────────────────────────────────────────────────
+function Toolbar({onInsertTable}){
   const btn=(label,action)=>(
-    <button key={action} onMouseDown={e=>{e.preventDefault();applyFmt(action);}} style={{
+    <button key={action+label} onMouseDown={e=>{e.preventDefault();applyFmt(action);}} style={{
       background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
       color:"rgba(160,200,255,0.65)",padding:"2px 7px",fontFamily:"inherit",fontSize:11,cursor:"pointer",
       fontWeight:action==="bold"?700:400,fontStyle:action==="italic"?"italic":"normal",
@@ -42,15 +42,54 @@ function Toolbar(){
     }}>{label}</button>
   );
   return(
-    <div style={{display:"flex",gap:4,padding:"5px 10px",borderBottom:"1px solid rgba(58,130,246,0.08)",background:"rgba(4,10,22,0.4)",flexWrap:"wrap"}}>
+    <div style={{display:"flex",gap:4,padding:"5px 10px",borderBottom:"1px solid rgba(58,130,246,0.08)",
+      background:"rgba(4,10,22,0.4)",flexWrap:"wrap",alignItems:"center"}}>
       {btn("B","bold")}{btn("U","underline")}{btn("I","italic")}
-      <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px"}}/>
+      <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px",height:14}}/>
       {btn("\u2022 List","insertUnorderedList")}{btn("1. List","insertOrderedList")}
+      <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px",height:14}}/>
+      <button onMouseDown={e=>{e.preventDefault();onInsertTable&&onInsertTable();}} style={{
+        background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
+        color:"rgba(160,200,255,0.65)",padding:"2px 7px",fontFamily:"inherit",fontSize:11,cursor:"pointer",
+      }}>&#x229e; Table</button>
     </div>
   );
 }
 
-// Image lightbox
+// ── Table size picker ─────────────────────────────────────────────────────────
+function TablePicker({onPick,onClose}){
+  const [hov,setHov]=useState([0,0]);
+  const MAX=8;
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:900,display:"flex",alignItems:"center",justifyContent:"center"}}
+      onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#0c1729",border:"1px solid rgba(58,130,246,0.3)",
+        borderRadius:8,padding:16,boxShadow:"0 8px 32px rgba(0,0,0,0.7)"}}>
+        <div style={{fontSize:12,color:"rgba(160,200,255,0.65)",marginBottom:10,textAlign:"center"}}>
+          {hov[0]>0?`${hov[1]} \xd7 ${hov[0]} table`:"Hover to select size"}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:`repeat(${MAX},22px)`,gap:3}}>
+          {Array.from({length:MAX*MAX},(_,i)=>{
+            const r=Math.floor(i/MAX)+1,c=(i%MAX)+1;
+            const on=r<=hov[0]&&c<=hov[1];
+            return(
+              <div key={i} onMouseEnter={()=>setHov([r,c])}
+                onClick={()=>onPick(hov[0]||1,hov[1]||1)}
+                style={{width:18,height:18,borderRadius:2,cursor:"pointer",
+                  background:on?"rgba(88,166,255,0.3)":"rgba(58,130,246,0.08)",
+                  border:"1px solid "+(on?"rgba(88,166,255,0.5)":"rgba(58,130,246,0.15)")}}/>
+            );
+          })}
+        </div>
+        <div style={{fontSize:11,color:"rgba(110,155,215,0.4)",textAlign:"center",marginTop:8}}>
+          Click to insert
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Lightbox ──────────────────────────────────────────────────────────────────
 function Lightbox({src,onClose}){
   useEffect(()=>{
     const h=e=>{if(e.key==="Escape")onClose();};
@@ -68,23 +107,80 @@ function Lightbox({src,onClose}){
   );
 }
 
+// ── Alert banner — export so Dashboard can also use it ───────────────────────
+export function NotesAlertBanner(){
+  const [alerts,setAlerts]=useState([]);
+  const [dismissed,setDismissed]=useState(()=>{
+    try{return new Set(JSON.parse(localStorage.getItem("notes_dismissed_alerts")||"[]"));}
+    catch{return new Set();}
+  });
+
+  useEffect(()=>{
+    async function check(){
+      const{data}=await supabase.from("notes").select("id,title,body,alert_at")
+        .not("alert_at","is",null);
+      const now=new Date();
+      // show if within 5 min future or up to 24h past and not dismissed
+      const due=(data||[]).filter(n=>{
+        if(dismissed.has(String(n.id)))return false;
+        const t=new Date(n.alert_at);
+        return t<=new Date(now.getTime()+5*60*1000)&&t>new Date(now.getTime()-24*60*60*1000);
+      });
+      setAlerts(due);
+    }
+    check();
+    const iv=setInterval(check,60*1000);
+    return()=>clearInterval(iv);
+  },[dismissed]);
+
+  function dismiss(id){
+    const next=new Set([...dismissed,String(id)]);
+    setDismissed(next);
+    localStorage.setItem("notes_dismissed_alerts",JSON.stringify([...next]));
+  }
+
+  if(alerts.length===0)return null;
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      {alerts.map(n=>(
+        <div key={n.id} style={{background:"rgba(245,166,35,0.12)",border:"1px solid rgba(245,166,35,0.5)",
+          borderRadius:6,padding:"8px 12px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <span style={{fontSize:15}}>&#x23F0;</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#f5a623"}}>{n.title||"Note reminder"}</div>
+            <div style={{fontSize:11,color:"rgba(160,200,255,0.65)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              {stripHtml(n.body).slice(0,100)}
+            </div>
+          </div>
+          <span style={{fontSize:11,color:"rgba(160,200,255,0.5)",whiteSpace:"nowrap"}}>
+            {fmtTs(n.alert_at)}
+          </span>
+          <button onClick={()=>dismiss(n.id)} style={{background:"none",border:"none",
+            color:"rgba(110,155,215,0.45)",cursor:"pointer",fontSize:13,padding:0,lineHeight:1}}>&#x2715;</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 export default function NotesTab(){
   const [notes,setNotes]=useState([]);
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState("");
   const [topicFilter,setTopicFilter]=useState(null);
   const [dateFilter,setDateFilter]=useState("all");
-  // Persist view mode in localStorage
   const [viewMode,setViewMode]=useState(()=>localStorage.getItem(VM_KEY)||"list");
   const [selTopics,setSelTopics]=useState([]);
   const [title,setTitle]=useState("");
+  const [alertAt,setAlertAt]=useState("");
   const [saving,setSaving]=useState(false);
-  const [editingId,setEditingId]=useState(null);
   const [expandedId,setExpandedId]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
-  const [confirmDelImg,setConfirmDelImg]=useState(null); // {noteId, imgIndex}
+  const [confirmDelImg,setConfirmDelImg]=useState(null);
   const [images,setImages]=useState([]);
   const [lightbox,setLightbox]=useState(null);
+  const [showTablePicker,setShowTablePicker]=useState(false);
   const editorRef=useRef(null);
   const fileRef=useRef(null);
 
@@ -97,12 +193,17 @@ export default function NotesTab(){
     setNotes(data||[]);setLoading(false);
   }
   useEffect(()=>{load();},[]);
-
-  // Expose notes globally so AskAI can access them
   useEffect(()=>{window.__notesData=notes;},[notes]);
 
+  function buildTableHtml(rows,cols){
+    const td=(h)=>`<${h?"th":"td"} style="border:1px solid rgba(88,166,255,0.3);padding:4px 8px;min-width:60px;background:${h?"rgba(88,166,255,0.1)":"transparent"};color:#e8f2ff;font-size:12px;">&nbsp;</${h?"th":"td"}>`;
+    return `<table style="border-collapse:collapse;margin:8px 0;">`
+      +`<tr>${Array(cols).fill(td(true)).join("")}</tr>`
+      +Array(rows-1).fill(null).map(()=>`<tr>${Array(cols).fill(td(false)).join("")}</tr>`).join("")
+      +`</table><p></p>`;
+  }
+
   function handlePaste(e){
-    // Intercept images
     for(const item of Array.from(e.clipboardData?.items||[])){
       if(item.type.startsWith("image/")){
         e.preventDefault();
@@ -111,33 +212,22 @@ export default function NotesTab(){
         r.readAsDataURL(item.getAsFile());return;
       }
     }
-    // Strip colours/fonts but keep bold, italic, underline, lists
     const html=e.clipboardData?.getData("text/html");
     if(html){
       e.preventDefault();
-      // Parse pasted HTML, strip style/color/font attrs, keep semantic tags
       const tmp=document.createElement("div");
       tmp.innerHTML=html;
-      // Remove all style attributes and font/color tags
       tmp.querySelectorAll("*").forEach(el=>{
-        el.removeAttribute("style");
-        el.removeAttribute("color");
-        el.removeAttribute("face");
-        el.removeAttribute("size");
-        el.removeAttribute("bgcolor");
-        el.removeAttribute("class");
+        el.removeAttribute("style");el.removeAttribute("color");
+        el.removeAttribute("face");el.removeAttribute("size");
+        el.removeAttribute("bgcolor");el.removeAttribute("class");
       });
-      // Replace <font> with <span>, <h1-6> with <b>
       tmp.querySelectorAll("font").forEach(el=>{
-        const span=document.createElement("span");
-        span.innerHTML=el.innerHTML;
-        el.replaceWith(span);
+        const span=document.createElement("span");span.innerHTML=el.innerHTML;el.replaceWith(span);
       });
       ["h1","h2","h3","h4","h5","h6"].forEach(tag=>{
         tmp.querySelectorAll(tag).forEach(el=>{
-          const b=document.createElement("b");
-          b.innerHTML=el.innerHTML;
-          el.replaceWith(b);
+          const b=document.createElement("b");b.innerHTML=el.innerHTML;el.replaceWith(b);
         });
       });
       document.execCommand("insertHTML",false,tmp.innerHTML);
@@ -162,22 +252,22 @@ export default function NotesTab(){
     await supabase.from("notes").insert({
       title:title.trim()||null,body:html,topics:selTopics,
       images:images.map(i=>i.dataUrl),pinned:false,
+      alert_at:alertAt||null,
       created_at:new Date().toISOString(),updated_at:new Date().toISOString(),
     });
     if(editorRef.current)editorRef.current.innerHTML="";
-    setTitle("");setSelTopics([]);setImages([]);
+    setTitle("");setSelTopics([]);setImages([]);setAlertAt("");
     await load();setSaving(false);
   }
 
-  async function saveEdit(id,body,editTitle,editTopics,editImages){
+  async function saveEdit(id,body,editTitle,editTopics,editImages,editAlertAt){
     const updated_at=new Date().toISOString();
     await supabase.from("notes").update({
       body,title:editTitle||null,topics:editTopics,
-      images:editImages,updated_at,
+      images:editImages,updated_at,alert_at:editAlertAt||null,
     }).eq("id",id);
-    // Update in-place — no full reload to prevent grid jump
     setNotes(prev=>prev.map(n=>n.id===id
-      ?{...n,body,title:editTitle||null,topics:editTopics,images:editImages,updated_at}
+      ?{...n,body,title:editTitle||null,topics:editTopics,images:editImages,updated_at,alert_at:editAlertAt||null}
       :n));
   }
 
@@ -196,10 +286,9 @@ export default function NotesTab(){
 
   async function confirmDeleteImage(){
     if(!confirmDelImg)return;
-    const {noteId,imgIndex,onConfirm}=confirmDelImg;
-    if(noteId==="__compose__"&&onConfirm){
-      onConfirm();
-    } else {
+    const{noteId,imgIndex,onConfirm}=confirmDelImg;
+    if(noteId==="__compose__"&&onConfirm){onConfirm();}
+    else{
       const note=notes.find(n=>n.id===noteId);
       if(note){
         const newImgs=(note.images||[]).filter((_,i)=>i!==imgIndex);
@@ -234,28 +323,26 @@ export default function NotesTab(){
     );
   };
 
-  // Image strip used in both read and edit mode
+  // ── ImageStrip (72px thumbnails) ──
   function ImageStrip({imgs,noteId,editMode,onEditRemove}){
     if(!imgs||imgs.length===0)return null;
     return(
-      <div style={{display:"flex",gap:6,padding:"6px 12px 10px",flexWrap:"wrap",alignItems:"flex-start"}}>
+      <div style={{display:"flex",gap:8,padding:"6px 12px 10px",flexWrap:"wrap",alignItems:"flex-start"}}>
         {imgs.map((src,i)=>(
           <div key={i} style={{position:"relative",display:"inline-block",flexShrink:0}}>
-            {/* Small 48px thumbnail — click to expand in lightbox */}
             <img src={src}
               onClick={e=>{e.stopPropagation();setLightbox(src);}}
-              style={{width:18,height:18,borderRadius:3,border:"1px solid rgba(58,130,246,0.25)",
+              style={{width:72,height:72,borderRadius:5,border:"1px solid rgba(58,130,246,0.25)",
                 objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
-            {/* X always shown — saved images ask confirm, compose images remove immediately */}
             <button
               onClick={e=>{
                 e.stopPropagation();
                 if(noteId&&!editMode) setConfirmDelImg({noteId,imgIndex:i});
                 else if(editMode&&onEditRemove) setConfirmDelImg({noteId:"__compose__",imgIndex:i,onConfirm:()=>onEditRemove(i)});
               }}
-              style={{position:"absolute",top:-4,right:-4,background:"rgba(10,18,35,0.95)",
-                border:"1px solid #ff6b6b",borderRadius:"50%",width:12,height:12,color:"#ff6b6b",
-                fontSize:7,cursor:"pointer",display:"flex",alignItems:"center",
+              style={{position:"absolute",top:-5,right:-5,background:"rgba(10,18,35,0.95)",
+                border:"1px solid #ff6b6b",borderRadius:"50%",width:16,height:16,color:"#ff6b6b",
+                fontSize:9,cursor:"pointer",display:"flex",alignItems:"center",
                 justifyContent:"center",fontWeight:700,lineHeight:1}}>&#x2715;</button>
           </div>
         ))}
@@ -263,9 +350,9 @@ export default function NotesTab(){
     );
   }
 
-  // NoteCard — click to open modal, no inline edit
+  // ── NoteCard (list view) ──
   function NoteCard({note}){
-    const preview=stripHtml(note.body).slice(0,160);
+    const hasContent=note.body&&note.body!=="<br>";
     return(
       <div style={{background:note.pinned?"rgba(88,166,255,0.05)":"#0c1729",
         border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.18)"),
@@ -285,19 +372,28 @@ export default function NotesTab(){
             </div>
           )}
           <div style={{flex:1,minWidth:0}}>
-            {note.title&&<div style={{fontSize:13,fontWeight:700,color:"#e8f2ff",marginBottom:2}}>{note.title}</div>}
-            <div style={{fontSize:13,color:"rgba(160,200,255,0.65)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{preview||"—"}</div>
+            {note.title&&<div style={{fontSize:13,fontWeight:700,color:"#e8f2ff",marginBottom:3}}>{note.title}</div>}
+            {/* Render HTML preview preserving bold, lists, tables etc */}
+            {hasContent&&(
+              <div className="note-preview-html"
+                style={{fontSize:12,color:"rgba(160,200,255,0.72)",lineHeight:1.55,
+                  maxHeight:64,overflow:"hidden",pointerEvents:"none"}}
+                dangerouslySetInnerHTML={{__html:note.body}}/>
+            )}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-            <span style={{fontSize:11,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.updated_at||note.created_at)}</span>
+            {note.alert_at&&<span title={"Alert: "+fmtTs(note.alert_at)} style={{fontSize:12,opacity:0.7}}>&#x23F0;</span>}
+            <span style={{fontSize:11,color:"rgba(110,155,215,0.45)",whiteSpace:"nowrap"}}>{fmtTs(note.updated_at||note.created_at)}</span>
             <button onClick={e=>{e.stopPropagation();setConfirmDel(note.id);}}
               style={{background:"none",border:"none",color:"#ff6b6b",cursor:"pointer",fontSize:11,opacity:0.5,padding:"0 2px",lineHeight:1}}>&#x2715;</button>
           </div>
         </div>
         {(note.images||[]).length>0&&(
-          <div style={{padding:"0 12px 8px",display:"flex",gap:6,flexWrap:"wrap"}}>
+          <div style={{padding:"0 12px 8px",display:"flex",gap:8,flexWrap:"wrap"}}>
             {(note.images||[]).slice(0,3).map((src,i)=>(
-              <img key={i} src={src} style={{width:18,height:18,borderRadius:3,border:"1px solid rgba(58,130,246,0.18)",objectFit:"cover",cursor:"zoom-in"}}/>
+              <img key={i} src={src}
+                onClick={e=>{e.stopPropagation();setLightbox(src);}}
+                style={{width:72,height:72,borderRadius:5,border:"1px solid rgba(58,130,246,0.18)",objectFit:"cover",cursor:"zoom-in"}}/>
             ))}
           </div>
         )}
@@ -305,11 +401,10 @@ export default function NotesTab(){
     );
   }
 
-
-  // NoteThumb — tappable card, opens modal overlay
+  // ── NoteThumb (grid view) ──
   function NoteThumb({note}){
-    const preview=stripHtml(note.body).slice(0,100);
     const img=(note.images||[])[0];
+    const hasContent=note.body&&note.body!=="<br>";
     return(
       <div onClick={()=>setExpandedId(note.id)}
         style={{background:note.pinned?"rgba(88,166,255,0.06)":"#0c1729",
@@ -319,10 +414,10 @@ export default function NotesTab(){
           boxShadow:"0 2px 8px rgba(0,0,0,0.3)"}}>
         {img&&<img src={img} style={{width:"100%",height:80,objectFit:"cover"}}/>}
         <div style={{padding:"8px 10px",flex:1,display:"flex",flexDirection:"column",gap:5}}>
-          {/* Title left, tags right — same row */}
           <div style={{display:"flex",alignItems:"flex-start",gap:4,minWidth:0}}>
             <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:4}}>
               {note.pinned&&<span style={{fontSize:10,color:"#f5a623",flexShrink:0}}>&#x1F4CC;</span>}
+              {note.alert_at&&<span style={{fontSize:10,flexShrink:0}}>&#x23F0;</span>}
               {note.title&&<div style={{fontSize:13,fontWeight:700,color:"#e8f2ff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{note.title}</div>}
             </div>
             {(note.topics||[]).length>0&&(
@@ -334,28 +429,33 @@ export default function NotesTab(){
               </div>
             )}
           </div>
-          <div style={{fontSize:13,color:"rgba(160,200,255,0.65)",lineHeight:1.4,flex:1,
-            overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical"}}>{preview}</div>
+          {/* HTML preview — keeps formatting instead of stripped text */}
+          {hasContent&&(
+            <div className="note-preview-html"
+              style={{fontSize:12,color:"rgba(160,200,255,0.65)",lineHeight:1.4,flex:1,
+                maxHeight:72,overflow:"hidden",pointerEvents:"none"}}
+              dangerouslySetInnerHTML={{__html:note.body}}/>
+          )}
           <div style={{fontSize:10,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.created_at)}</div>
         </div>
       </div>
     );
   }
 
-  // Modal overlay — fully isolated from parent re-renders
-  // Uses a portal-style fixed overlay. All state is local refs only.
-  // Parent saveEdit updates notes in-place (no reload) so modal never remounts.
+  // ── NoteModal ─────────────────────────────────────────────────────────────
   function NoteModal({note}){
     const titleRef=React.useRef(null);
     const bodyRef=React.useRef(null);
+    const alertRef=React.useRef(null);
     const topicsRef=React.useRef(note.topics||[]);
     const imgsRef=React.useRef(note.images||[]);
     const [topicsDisplay,setTopicsDisplay]=React.useState(note.topics||[]);
     const [imgsDisplay,setImgsDisplay]=React.useState(note.images||[]);
+    const [alertDisplay,setAlertDisplay]=React.useState(note.alert_at?note.alert_at.slice(0,16):"");
+    const [showTblPicker,setShowTblPicker]=React.useState(false);
     const saveTimer=React.useRef(null);
     const savedOnce=React.useRef(false);
 
-    // Set body HTML once on mount only — never overwrite after that
     React.useEffect(()=>{
       if(bodyRef.current&&!savedOnce.current){
         bodyRef.current.innerHTML=note.body||"";
@@ -364,57 +464,62 @@ export default function NotesTab(){
 
     function doSave(){
       clearTimeout(saveTimer.current);
-      const title=titleRef.current?.value||"";
-      const body=bodyRef.current?.innerHTML||"";
-      // Only save if something actually exists
-      if(!body&&!title.trim())return;
+      const t=titleRef.current?.value||"";
+      const b=bodyRef.current?.innerHTML||"";
+      const a=alertRef.current?.value||"";
+      if(!b&&!t.trim())return;
       savedOnce.current=true;
-      saveEdit(note.id,body,title.trim()||null,topicsRef.current,imgsRef.current);
+      saveEdit(note.id,b,t.trim()||null,topicsRef.current,imgsRef.current,a||null);
+    }
+    function scheduleSave(){clearTimeout(saveTimer.current);saveTimer.current=setTimeout(doSave,2000);}
+    function closeModal(){clearTimeout(saveTimer.current);doSave();setExpandedId(null);}
+    React.useEffect(()=>()=>{clearTimeout(saveTimer.current);doSave();},[]);
+
+    function modalPaste(e){
+      for(const item of Array.from(e.clipboardData?.items||[])){
+        if(item.type.startsWith("image/")){
+          e.preventDefault();
+          const r=new FileReader();
+          r.onload=ev=>{const next=[...imgsRef.current,ev.target.result];imgsRef.current=next;setImgsDisplay(next);scheduleSave();};
+          r.readAsDataURL(item.getAsFile());return;
+        }
+      }
     }
 
-    function scheduleSave(){
-      clearTimeout(saveTimer.current);
-      saveTimer.current=setTimeout(doSave,2000);
+    function insertModalTable(rows,cols){
+      const html=buildTableHtml(rows,cols);
+      if(bodyRef.current){bodyRef.current.focus();document.execCommand("insertHTML",false,html);}
+      scheduleSave();setShowTblPicker(false);
     }
-
-    function closeModal(){
-      clearTimeout(saveTimer.current);
-      doSave();
-      setExpandedId(null);
-    }
-
-    // Save on unmount
-    React.useEffect(()=>()=>{
-      clearTimeout(saveTimer.current);
-      doSave();
-    },[]);
 
     return(
       <div onClick={e=>{if(e.target===e.currentTarget)closeModal();}}
         style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:500,
           display:"flex",alignItems:"flex-start",justifyContent:"center",
-          paddingTop:60,paddingLeft:16,paddingRight:16}}>
+          paddingTop:"clamp(16px,5vh,60px)",paddingLeft:16,paddingRight:16,paddingBottom:16,
+          overflowY:"auto"}}>
+        {showTblPicker&&<TablePicker onPick={insertModalTable} onClose={()=>setShowTblPicker(false)}/>}
         <div style={{width:"100%",maxWidth:720,background:"#0c1729",
           border:"1px solid "+(note.pinned?"rgba(88,166,255,0.4)":"rgba(58,130,246,0.28)"),
           borderRadius:10,overflow:"hidden",boxShadow:"0 16px 48px rgba(0,0,0,0.7)",
-          maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+          maxHeight:"calc(100dvh - 80px)",display:"flex",flexDirection:"column"}}>
 
           {/* Header */}
           <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
-            borderBottom:"1px solid rgba(58,130,246,0.10)",background:"#111f35",flexShrink:0}}>
+            borderBottom:"1px solid rgba(58,130,246,0.10)",background:"#111f35",flexShrink:0,flexWrap:"wrap"}}>
             <button onClick={()=>togglePin(note)} style={{background:"none",border:"none",
               cursor:"pointer",fontSize:13,color:note.pinned?"#f5a623":"rgba(110,155,215,0.45)",
               opacity:note.pinned?1:0.4}}>&#x1F4CC;</button>
             <input ref={titleRef} defaultValue={note.title||""} onChange={scheduleSave}
               placeholder="Title..."
-              style={{flex:1,background:"transparent",border:"none",color:"#e8f2ff",
+              style={{flex:1,minWidth:100,background:"transparent",border:"none",color:"#e8f2ff",
                 fontFamily:"inherit",fontSize:14,fontWeight:700,outline:"none"}}/>
-            <span style={{fontSize:11,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.updated_at||note.created_at)}</span>
+            <span style={{fontSize:11,color:"rgba(110,155,215,0.45)",whiteSpace:"nowrap"}}>{fmtTs(note.updated_at||note.created_at)}</span>
             <button onClick={()=>setConfirmDel(note.id)} style={{background:"none",border:"none",
               color:"#ff6b6b",cursor:"pointer",fontSize:12,opacity:0.6}}>&#x2715;</button>
             <button onClick={closeModal}
               style={{background:"none",border:"1px solid rgba(58,130,246,0.25)",borderRadius:4,
-                color:"rgba(160,200,255,0.7)",cursor:"pointer",fontSize:11,padding:"2px 10px",
+                color:"rgba(160,200,255,0.7)",cursor:"pointer",fontSize:11,padding:"4px 12px",
                 fontFamily:"inherit"}}>Close</button>
           </div>
 
@@ -422,8 +527,7 @@ export default function NotesTab(){
           <div style={{display:"flex",gap:3,flexWrap:"wrap",padding:"6px 14px",
             borderBottom:"1px solid rgba(58,130,246,0.08)",flexShrink:0}}>
             {TOPICS.map(t=>{
-              const col=TOPIC_COLORS[t]||"#58a6ff";
-              const active=topicsDisplay.includes(t);
+              const col=TOPIC_COLORS[t]||"#58a6ff";const active=topicsDisplay.includes(t);
               return(
                 <button key={t} onClick={()=>{
                   const next=active?topicsDisplay.filter(x=>x!==t):[...topicsDisplay,t];
@@ -436,33 +540,55 @@ export default function NotesTab(){
             })}
           </div>
 
-          {/* Toolbar */}
-          <Toolbar/>
+          {/* Alert/Timeline row */}
+          <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 14px",
+            borderBottom:"1px solid rgba(58,130,246,0.08)",flexShrink:0,flexWrap:"wrap"}}>
+            <span style={{fontSize:11,color:"rgba(110,155,215,0.45)",whiteSpace:"nowrap"}}>&#x23F0; Alert at:</span>
+            <input ref={alertRef} type="datetime-local" value={alertDisplay}
+              onChange={e=>{setAlertDisplay(e.target.value);scheduleSave();}}
+              style={{background:"#0c1729",border:"1px solid rgba(58,130,246,0.2)",borderRadius:4,
+                color:"#e8f2ff",fontFamily:"inherit",fontSize:11,padding:"3px 8px",outline:"none",
+                colorScheme:"dark"}}/>
+            {alertDisplay&&(
+              <button onClick={()=>{setAlertDisplay("");if(alertRef.current)alertRef.current.value="";scheduleSave();}}
+                style={{background:"none",border:"none",color:"rgba(110,155,215,0.45)",cursor:"pointer",fontSize:11}}>
+                Clear
+              </button>
+            )}
+          </div>
 
-          {/* Body — innerHTML set once on mount via useEffect, never via prop after that */}
+          {/* Toolbar */}
+          <Toolbar onInsertTable={()=>setShowTblPicker(true)}/>
+
+          {/* Body */}
           <div ref={bodyRef} contentEditable suppressContentEditableWarning
             onInput={scheduleSave}
+            onPaste={modalPaste}
             style={{flex:1,overflowY:"auto",padding:"12px 16px",color:"#e8f2ff",
-              fontFamily:"inherit",fontSize:13,outline:"none",lineHeight:1.7,caretColor:"#58a6ff"}}/>
+              fontFamily:"inherit",fontSize:13,outline:"none",lineHeight:1.7,caretColor:"#58a6ff",
+              minHeight:120}}/>
 
-          {/* Images */}
-          <div style={{display:"flex",gap:6,padding:"6px 12px 10px",flexWrap:"wrap",alignItems:"flex-start"}}>
-            {imgsDisplay.map((src,i)=>(
-              <div key={i} style={{position:"relative",flexShrink:0}}>
-                <img src={src} onClick={()=>setLightbox(src)}
-                  style={{width:18,height:18,borderRadius:3,border:"1px solid rgba(58,130,246,0.25)",
-                    objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
-                <button onClick={()=>setConfirmDelImg({noteId:note.id,imgIndex:i,onConfirm:()=>{
-                  const next=imgsDisplay.filter((_,j)=>j!==i);
-                  imgsRef.current=next;setImgsDisplay(next);scheduleSave();
-                }})}
-                  style={{position:"absolute",top:-4,right:-4,background:"rgba(10,18,35,0.95)",
-                    border:"1px solid #ff6b6b",borderRadius:"50%",width:12,height:12,
-                    color:"#ff6b6b",fontSize:7,cursor:"pointer",display:"flex",
-                    alignItems:"center",justifyContent:"center",fontWeight:700,lineHeight:1}}>&#x2715;</button>
-              </div>
-            ))}
-          </div>
+          {/* Images in modal */}
+          {imgsDisplay.length>0&&(
+            <div style={{display:"flex",gap:8,padding:"6px 12px 10px",flexWrap:"wrap",alignItems:"flex-start",
+              borderTop:"1px solid rgba(58,130,246,0.08)",flexShrink:0}}>
+              {imgsDisplay.map((src,i)=>(
+                <div key={i} style={{position:"relative",flexShrink:0}}>
+                  <img src={src} onClick={()=>setLightbox(src)}
+                    style={{width:72,height:72,borderRadius:5,border:"1px solid rgba(58,130,246,0.25)",
+                      objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
+                  <button onClick={()=>setConfirmDelImg({noteId:note.id,imgIndex:i,onConfirm:()=>{
+                    const next=imgsDisplay.filter((_,j)=>j!==i);
+                    imgsRef.current=next;setImgsDisplay(next);scheduleSave();
+                  }})}
+                    style={{position:"absolute",top:-5,right:-5,background:"rgba(10,18,35,0.95)",
+                      border:"1px solid #ff6b6b",borderRadius:"50%",width:16,height:16,
+                      color:"#ff6b6b",fontSize:9,cursor:"pointer",display:"flex",
+                      alignItems:"center",justifyContent:"center",fontWeight:700,lineHeight:1}}>&#x2715;</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -481,26 +607,43 @@ export default function NotesTab(){
     );
   }
 
+  function buildTableHtml(rows,cols){
+    const td=(h)=>`<${h?"th":"td"} style="border:1px solid rgba(88,166,255,0.3);padding:4px 8px;min-width:60px;background:${h?"rgba(88,166,255,0.1)":"transparent"};color:#e8f2ff;font-size:12px;">&nbsp;</${h?"th":"td"}>`;
+    return `<table style="border-collapse:collapse;margin:8px 0;">`
+      +`<tr>${Array(cols).fill(td(true)).join("")}</tr>`
+      +Array(rows-1).fill(null).map(()=>`<tr>${Array(cols).fill(td(false)).join("")}</tr>`).join("")
+      +`</table><p></p>`;
+  }
+
   return(
     <div style={{display:"flex",flexDirection:"column",gap:10,height:"100%",minHeight:0}}>
+      {showTablePicker&&(
+        <TablePicker
+          onPick={(r,c)=>{
+            const html=buildTableHtml(r,c);
+            if(editorRef.current){editorRef.current.focus();document.execCommand("insertHTML",false,html);}
+            setShowTablePicker(false);
+          }}
+          onClose={()=>setShowTablePicker(false)}/>
+      )}
 
-      {/* Lightbox */}
       {lightbox&&<Lightbox src={lightbox} onClose={()=>setLightbox(null)}/>}
 
-      {/* Note modal — fixed overlay. key=expandedId ensures single mount per open. */}
       {expandedId&&(()=>{
         const n=notes.find(x=>x.id===expandedId);
-        // Pass a frozen snapshot so parent re-renders don't affect modal internals
         return n?<NoteModal key={expandedId} note={Object.freeze({...n})}/>:null;
       })()}
+
+      {/* Alert banner — shows when notes have due alerts */}
+      <NotesAlertBanner/>
 
       {/* Delete note confirm */}
       {confirmDel&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:999,
-          display:"flex",alignItems:"center",justifyContent:"center"}}>
+          display:"flex",alignItems:"center",justifyContent:"center",padding:"0 16px"}}>
           <div style={{background:"#0c1729",border:"1px solid #ff6b6b",borderRadius:8,
             padding:"20px 28px",display:"flex",flexDirection:"column",gap:14,
-            boxShadow:"0 8px 32px rgba(0,0,0,0.6)",minWidth:280}}>
+            boxShadow:"0 8px 32px rgba(0,0,0,0.6)",minWidth:"min(280px,90vw)"}}>
             <div style={{fontSize:13,color:"#e8f2ff"}}>Delete this note permanently?</div>
             <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
               <button onClick={()=>setConfirmDel(null)} style={{background:"#111f35",
@@ -517,10 +660,10 @@ export default function NotesTab(){
       {/* Delete image confirm */}
       {confirmDelImg&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:999,
-          display:"flex",alignItems:"center",justifyContent:"center"}}>
+          display:"flex",alignItems:"center",justifyContent:"center",padding:"0 16px"}}>
           <div style={{background:"#0c1729",border:"1px solid #ff6b6b",borderRadius:8,
             padding:"20px 28px",display:"flex",flexDirection:"column",gap:14,
-            boxShadow:"0 8px 32px rgba(0,0,0,0.6)",minWidth:260}}>
+            boxShadow:"0 8px 32px rgba(0,0,0,0.6)",minWidth:"min(260px,90vw)"}}>
             <div style={{fontSize:13,color:"#e8f2ff"}}>Remove this image?</div>
             <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
               <button onClick={()=>setConfirmDelImg(null)} style={{background:"#111f35",
@@ -540,27 +683,36 @@ export default function NotesTab(){
         <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",
           borderBottom:"1px solid rgba(58,130,246,0.08)",flexWrap:"wrap"}}>
           <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Title (optional)..."
-            style={{flex:"0 0 180px",background:"transparent",border:"none",color:"#e8f2ff",
-              fontFamily:"inherit",fontSize:13,fontWeight:600,outline:"none",minWidth:0}}/>
-          <div style={{display:"flex",gap:3,flexWrap:"wrap",flex:1}}>
+            style={{flex:"1 1 140px",minWidth:100,background:"transparent",border:"none",color:"#e8f2ff",
+              fontFamily:"inherit",fontSize:13,fontWeight:600,outline:"none"}}/>
+          <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
             {TOPICS.map(t=>pill(t,selTopics.includes(t),()=>setSelTopics(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t])))}
           </div>
         </div>
-        <Toolbar/>
+        {/* Alert row in compose */}
+        <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 12px",
+          borderBottom:"1px solid rgba(58,130,246,0.08)",background:"rgba(4,10,22,0.25)",flexWrap:"wrap"}}>
+          <span style={{fontSize:11,color:"rgba(110,155,215,0.4)",whiteSpace:"nowrap"}}>&#x23F0; Alert:</span>
+          <input type="datetime-local" value={alertAt} onChange={e=>setAlertAt(e.target.value)}
+            style={{background:"transparent",border:"1px solid rgba(58,130,246,0.15)",borderRadius:4,
+              color:"rgba(160,200,255,0.7)",fontFamily:"inherit",fontSize:11,padding:"2px 7px",
+              outline:"none",colorScheme:"dark"}}/>
+          {alertAt&&<button onClick={()=>setAlertAt("")} style={{background:"none",border:"none",
+            color:"rgba(110,155,215,0.4)",cursor:"pointer",fontSize:11}}>Clear</button>}
+        </div>
+        <Toolbar onInsertTable={()=>setShowTablePicker(true)}/>
         <div ref={editorRef} contentEditable suppressContentEditableWarning
           onPaste={handlePaste}
           onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))save();}}
-          data-placeholder="Write your note... (Ctrl+Enter to save, paste screenshots)"
+          data-placeholder="Write your note\u2026 (Ctrl+Enter to save, paste screenshots)"
           style={{minHeight:80,padding:"10px 14px",color:"#e8f2ff",
             fontFamily:"inherit",fontSize:12,outline:"none",lineHeight:1.65,caretColor:"#58a6ff"}}/>
-        {/* Compose image previews — small thumbnails */}
         {images.length>0&&(
-          <div style={{display:"flex",gap:6,padding:"6px 12px",borderTop:"1px solid rgba(58,130,246,0.08)",flexWrap:"wrap",alignItems:"flex-start"}}>
+          <div style={{display:"flex",gap:8,padding:"6px 12px",borderTop:"1px solid rgba(58,130,246,0.08)",flexWrap:"wrap",alignItems:"flex-start"}}>
             {images.map((img,i)=>(
               <div key={i} style={{position:"relative",flexShrink:0}}>
-                <img src={img.dataUrl}
-                  onClick={()=>setLightbox(img.dataUrl)}
-                  style={{width:18,height:18,borderRadius:3,border:"1px solid rgba(58,130,246,0.25)",objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
+                <img src={img.dataUrl} onClick={()=>setLightbox(img.dataUrl)}
+                  style={{width:72,height:72,borderRadius:5,border:"1px solid rgba(58,130,246,0.25)",objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
                 <button onClick={()=>setConfirmDelImg({noteId:"__compose__",imgIndex:i,onConfirm:()=>setImages(p=>p.filter((_,j)=>j!==i))})}
                   style={{position:"absolute",top:-5,right:-5,background:"rgba(10,18,35,0.95)",
                     border:"1px solid #ff6b6b",borderRadius:"50%",width:16,height:16,color:"#ff6b6b",
@@ -594,7 +746,7 @@ export default function NotesTab(){
 
       {/* Filter bar */}
       <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",flexShrink:0}}>
-        <div style={{position:"relative",flex:"0 0 180px"}}>
+        <div style={{position:"relative",flex:"0 0 150px",minWidth:100}}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search notes..."
             style={{width:"100%",background:"#0c1729",border:"1px solid rgba(58,130,246,0.18)",
               borderRadius:5,color:"#e8f2ff",fontFamily:"inherit",fontSize:12,
@@ -667,6 +819,20 @@ export default function NotesTab(){
         [contenteditable] ol{padding-left:18px;margin:4px 0;}
         [contenteditable] li{margin:2px 0;}
         [contenteditable]{caret-color:#58a6ff;}
+        [contenteditable] table{border-collapse:collapse;margin:6px 0;}
+        [contenteditable] td,[contenteditable] th{border:1px solid rgba(88,166,255,0.3);padding:4px 8px;min-width:50px;color:#e8f2ff;font-size:12px;}
+        [contenteditable] th{background:rgba(88,166,255,0.1);font-weight:700;}
+        .note-preview-html ul{padding-left:16px;margin:2px 0;}
+        .note-preview-html ol{padding-left:16px;margin:2px 0;}
+        .note-preview-html li{margin:1px 0;}
+        .note-preview-html table{border-collapse:collapse;font-size:11px;margin:2px 0;}
+        .note-preview-html td,.note-preview-html th{border:1px solid rgba(88,166,255,0.2);padding:2px 5px;color:rgba(160,200,255,0.7);}
+        .note-preview-html b,.note-preview-html strong{color:#e8f2ff;}
+        /* iOS / mobile touch targets */
+        @media (max-width:640px){
+          [contenteditable]{font-size:16px!important;} /* prevent iOS zoom */
+          input[type="text"],input[type="datetime-local"]{font-size:16px!important;}
+        }
       `}</style>
     </div>
   );
