@@ -405,16 +405,21 @@ export default function NotesTab(){
   function NoteThumb({note}){
     const imgs=note.images||[];
     const hasContent=note.body&&note.body!=="<br>";
+    // Fixed card height — with images taller, without images shorter but uniform
+    const cardH=imgs.length>0?260:200;
     return(
       <div onClick={()=>setExpandedId(note.id)}
         style={{background:note.pinned?"rgba(88,166,255,0.06)":"#0c1729",
           border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.18)"),
-          borderRadius:7,overflow:"hidden",cursor:"pointer",display:"flex",
-          flexDirection:"column",minHeight:130,transition:"border-color 0.15s,box-shadow 0.15s",
+          borderRadius:7,overflow:"hidden",cursor:"pointer",
+          height:cardH,display:"flex",flexDirection:"column",
+          transition:"border-color 0.15s,box-shadow 0.15s",
           boxShadow:"0 2px 8px rgba(0,0,0,0.3)"}}>
-        <div style={{padding:"8px 10px",flex:1,display:"flex",flexDirection:"column",gap:5}}>
-          {/* 1: title + tags */}
-          <div style={{display:"flex",alignItems:"flex-start",gap:4,minWidth:0}}>
+        {/* Inner layout: fixed height, flex col, content fills middle, date at bottom */}
+        <div style={{padding:"8px 10px",flex:1,minHeight:0,display:"flex",flexDirection:"column",gap:4}}>
+
+          {/* 1: title + tags — fixed, never grows */}
+          <div style={{display:"flex",alignItems:"flex-start",gap:4,flexShrink:0}}>
             <div style={{flex:1,minWidth:0}}>
               <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
                 {note.pinned&&<span style={{fontSize:10,color:"#f5a623",flexShrink:0}}>&#x1F4CC;</span>}
@@ -431,17 +436,20 @@ export default function NotesTab(){
               </div>
             )}
           </div>
-          {/* 2: body — grows to fill available space */}
-          {hasContent&&(
-            <div className="note-preview-html"
-              style={{fontSize:12,color:"rgba(160,200,255,0.65)",lineHeight:1.45,flex:1,
-                overflow:"hidden",pointerEvents:"none"}}
-              dangerouslySetInnerHTML={{__html:note.body}}/>
-          )}
-          {!hasContent&&<div style={{flex:1}}/>}
-          {/* 3: images (only if present) */}
+
+          {/* 2: body — takes all remaining space, clipped, no overflow */}
+          <div style={{flex:1,minHeight:0,overflow:"hidden",position:"relative"}}>
+            {hasContent&&(
+              <div className="note-preview-html"
+                style={{fontSize:12,color:"rgba(160,200,255,0.65)",lineHeight:1.45,
+                  height:"100%",overflow:"hidden",pointerEvents:"none"}}
+                dangerouslySetInnerHTML={{__html:note.body}}/>
+            )}
+          </div>
+
+          {/* 3: images — fixed size, only if present */}
           {imgs.length>0&&(
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",flexShrink:0}}>
               {imgs.slice(0,3).map((src,i)=>(
                 <img key={i} src={src}
                   onClick={e=>{e.stopPropagation();setLightbox(src);}}
@@ -450,8 +458,9 @@ export default function NotesTab(){
               ))}
             </div>
           )}
-          {/* 4: date — pinned to bottom */}
-          <div style={{fontSize:10,color:"rgba(110,155,215,0.45)",marginTop:2}}>{fmtTs(note.created_at)}</div>
+
+          {/* 4: date — always at bottom, never pushed out */}
+          <div style={{fontSize:10,color:"rgba(110,155,215,0.45)",flexShrink:0}}>{fmtTs(note.created_at)}</div>
         </div>
       </div>
     );
