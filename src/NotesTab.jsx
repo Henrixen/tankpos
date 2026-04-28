@@ -403,7 +403,7 @@ export default function NotesTab(){
 
   // ── NoteThumb (grid view) ──
   function NoteThumb({note}){
-    const img=(note.images||[])[0];
+    const imgs=note.images||[];
     const hasContent=note.body&&note.body!=="<br>";
     return(
       <div onClick={()=>setExpandedId(note.id)}
@@ -412,16 +412,18 @@ export default function NotesTab(){
           borderRadius:7,overflow:"hidden",cursor:"pointer",display:"flex",
           flexDirection:"column",minHeight:130,transition:"border-color 0.15s,box-shadow 0.15s",
           boxShadow:"0 2px 8px rgba(0,0,0,0.3)"}}>
-        {img&&<img src={img} style={{width:"100%",height:80,objectFit:"cover"}}/>}
         <div style={{padding:"8px 10px",flex:1,display:"flex",flexDirection:"column",gap:5}}>
+          {/* 1: title + tags */}
           <div style={{display:"flex",alignItems:"flex-start",gap:4,minWidth:0}}>
-            <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:4}}>
-              {note.pinned&&<span style={{fontSize:10,color:"#f5a623",flexShrink:0}}>&#x1F4CC;</span>}
-              {note.alert_at&&<span style={{fontSize:10,flexShrink:0}}>&#x23F0;</span>}
-              {note.title&&<div style={{fontSize:13,fontWeight:700,color:"#e8f2ff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{note.title}</div>}
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+                {note.pinned&&<span style={{fontSize:10,color:"#f5a623",flexShrink:0}}>&#x1F4CC;</span>}
+                {note.alert_at&&<span style={{fontSize:10,flexShrink:0}}>&#x23F0;</span>}
+                {note.title&&<span style={{fontSize:13,fontWeight:700,color:"#e8f2ff"}}>{note.title}</span>}
+              </div>
             </div>
             {(note.topics||[]).length>0&&(
-              <div style={{display:"flex",gap:2,flexWrap:"wrap",justifyContent:"flex-end",flexShrink:0,maxWidth:"55%"}}>
+              <div style={{display:"flex",gap:2,flexWrap:"wrap",justifyContent:"flex-end",flexShrink:0}}>
                 {(note.topics||[]).slice(0,3).map(t=>{const col=TOPIC_COLORS[t]||"#58a6ff";return(
                   <span key={t} style={{fontSize:9,fontWeight:700,padding:"1px 4px",borderRadius:2,
                     background:col+"18",color:col,whiteSpace:"nowrap"}}>{t}</span>
@@ -429,14 +431,27 @@ export default function NotesTab(){
               </div>
             )}
           </div>
-          {/* HTML preview — keeps formatting instead of stripped text */}
+          {/* 2: body — grows to fill available space */}
           {hasContent&&(
             <div className="note-preview-html"
-              style={{fontSize:12,color:"rgba(160,200,255,0.65)",lineHeight:1.4,flex:1,
-                maxHeight:72,overflow:"hidden",pointerEvents:"none"}}
+              style={{fontSize:12,color:"rgba(160,200,255,0.65)",lineHeight:1.45,flex:1,
+                overflow:"hidden",pointerEvents:"none"}}
               dangerouslySetInnerHTML={{__html:note.body}}/>
           )}
-          <div style={{fontSize:10,color:"rgba(110,155,215,0.45)"}}>{fmtTs(note.created_at)}</div>
+          {!hasContent&&<div style={{flex:1}}/>}
+          {/* 3: images (only if present) */}
+          {imgs.length>0&&(
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {imgs.slice(0,3).map((src,i)=>(
+                <img key={i} src={src}
+                  onClick={e=>{e.stopPropagation();setLightbox(src);}}
+                  style={{width:72,height:72,borderRadius:5,border:"1px solid rgba(58,130,246,0.18)",
+                    objectFit:"cover",cursor:"zoom-in",flexShrink:0}}/>
+              ))}
+            </div>
+          )}
+          {/* 4: date — pinned to bottom */}
+          <div style={{fontSize:10,color:"rgba(110,155,215,0.45)",marginTop:2}}>{fmtTs(note.created_at)}</div>
         </div>
       </div>
     );
