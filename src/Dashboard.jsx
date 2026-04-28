@@ -3,6 +3,7 @@ import { supabase } from "./supabaseclient";
 import { C, OP_COLORS } from "./constants";
 import { stripHtml, classifyRegion, daysBetween } from "./utils";
 import { apiCall, ocrImage } from "./api";
+import { NotesAlertBanner } from "./NotesTab";
 
 const WS_STORE = "ws-data";
 const ROUTES = [
@@ -13,15 +14,6 @@ const ROUTES = [
 ];
 
 const FFA_PERIODS = ["Feb/26","Mar/26","Apr/26","Q1/26","Q2/26","AVE/25"];
-
-function loadImg(file, setImg) {
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    setImg({ file, dataUrl: e.target.result });
-  };
-  reader.readAsDataURL(file);
-}
 
 function WSTracker() {
   const [data,    setData]    = useState(null);
@@ -698,6 +690,9 @@ function Dashboard({vessels, cargoes, history}) {
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14,background:D.bg,borderRadius:10,padding:"16px",fontFamily:"Inter,sans-serif"}}>
+
+      {/* ── Note alerts ── */}
+      <NotesAlertBanner/>
 
       {/* ── Hero banner ── */}
       <div style={{position:"relative",borderRadius:10,overflow:"hidden",background:"#070f1c",border:"1px solid "+D.border2}}>
