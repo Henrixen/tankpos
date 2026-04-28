@@ -107,6 +107,130 @@ function Lightbox({src,onClose}){
   );
 }
 
+// ── Alert time picker popout ─────────────────────────────────────────────────
+function AlertPicker({value, onChange, onClear}){
+  const [open,setOpen]=useState(false);
+  const ref=useRef(null);
+  const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+  // Close on outside click
+  useEffect(()=>{
+    if(!open)return;
+    function h(e){if(ref.current&&!ref.current.contains(e.target))setOpen(false);}
+    document.addEventListener("mousedown",h);
+    return()=>document.removeEventListener("mousedown",h);
+  },[open]);
+
+  function fmtLabel(iso){
+    if(!iso)return null;
+    const d=new Date(iso);
+    return d.toLocaleDateString("en-GB",{weekday:"short",day:"2-digit",month:"short"})
+      +" "+d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+  }
+
+  function setDay(dayIndex){
+    // dayIndex: 0=Mon … 6=Sun
+    const now=new Date();
+    const todayDow=now.getDay(); // 0=Sun,1=Mon…
+    const targetDow=dayIndex===6?0:dayIndex+1; // convert Mon=0 → JS Sun=0 Mon=1
+    let diff=targetDow-todayDow;
+    if(diff<=0)diff+=7;
+    const d=new Date(now);
+    d.setDate(now.getDate()+diff);
+    d.setSeconds(0,0);
+    onChange(d.toISOString().slice(0,16));
+    setOpen(false);
+  }
+
+  function offset(ms){
+    const base=value?new Date(value):new Date();
+    const d=new Date(base.getTime()+ms);
+    d.setSeconds(0,0);
+    onChange(d.toISOString().slice(0,16));
+  }
+
+  const chip=(label,ms,col)=>(
+    <button onMouseDown={e=>{e.preventDefault();offset(ms);}} style={{
+      background:col+"18",border:"1px solid "+col+"55",borderRadius:4,
+      color:col,fontSize:11,fontWeight:700,padding:"3px 9px",cursor:"pointer",
+      fontFamily:"inherit",whiteSpace:"nowrap",lineHeight:1.4,
+    }}>{label}</button>
+  );
+
+  const dayBtn=(d,i)=>(
+    <button key={d} onMouseDown={e=>{e.preventDefault();setDay(i);}} style={{
+      background:"rgba(88,166,255,0.08)",border:"1px solid rgba(88,166,255,0.2)",
+      borderRadius:4,color:"rgba(160,200,255,0.8)",fontSize:11,fontWeight:700,
+      padding:"5px 0",cursor:"pointer",fontFamily:"inherit",flex:1,lineHeight:1.3,
+    }}>{d}</button>
+  );
+
+  return(
+    <div ref={ref} style={{position:"relative",display:"inline-flex",alignItems:"center",gap:6}}>
+      {/* Trigger */}
+      <button onMouseDown={e=>{e.preventDefault();setOpen(o=>!o);}} style={{
+        display:"flex",alignItems:"center",gap:5,
+        background:value?"rgba(88,166,255,0.1)":"transparent",
+        border:"1px solid "+(value?"rgba(88,166,255,0.45)":"rgba(58,130,246,0.2)"),
+        borderRadius:5,padding:"3px 9px",cursor:"pointer",fontFamily:"inherit",
+        color:value?"#58a6ff":"rgba(110,155,215,0.5)",fontSize:11,fontWeight:600,
+      }}>
+        <span>&#x23F0;</span>
+        <span>{fmtLabel(value)||"Set reminder"}</span>
+      </button>
+      {value&&(
+        <button onMouseDown={e=>{e.preventDefault();onClear();}} style={{
+          background:"none",border:"none",color:"rgba(110,155,215,0.4)",
+          cursor:"pointer",fontSize:12,padding:0,lineHeight:1,
+        }}>&#x2715;</button>
+      )}
+
+      {/* Popout */}
+      {open&&(
+        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:999,
+          background:"#0c1729",border:"1px solid rgba(88,166,255,0.28)",
+          borderRadius:8,boxShadow:"0 8px 32px rgba(0,0,0,0.7)",padding:"12px",
+          minWidth:240,display:"flex",flexDirection:"column",gap:10}}>
+
+          {/* Weekday row */}
+          <div>
+            <div style={{fontSize:10,fontWeight:700,color:"rgba(110,155,215,0.4)",
+              textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Next weekday</div>
+            <div style={{display:"flex",gap:3}}>
+              {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d,i)=>dayBtn(d,i))}
+            </div>
+          </div>
+
+          {/* Separator */}
+          <div style={{height:1,background:"rgba(58,130,246,0.1)"}}/>
+
+          {/* Quick offsets */}
+          <div>
+            <div style={{fontSize:10,fontWeight:700,color:"rgba(110,155,215,0.4)",
+              textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>From {value?"selected":"now"}</div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+              {chip("+5 min", 5*60*1000,"#3fb950")}
+              {chip("+1 hr",  60*60*1000,"#3fb950")}
+              {chip("+1 day", 24*60*60*1000,"#3fb950")}
+              {chip("−5 min",-5*60*1000,"#ff6b6b")}
+              {chip("−1 hr", -60*60*1000,"#ff6b6b")}
+              {chip("−1 day",-24*60*60*1000,"#ff6b6b")}
+            </div>
+          </div>
+
+          {/* Current value display */}
+          {value&&(
+            <div style={{fontSize:11,color:"rgba(110,155,215,0.5)",textAlign:"center",
+              borderTop:"1px solid rgba(58,130,246,0.1)",paddingTop:8}}>
+              {fmtLabel(value)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Alert banner — export so Dashboard can also use it ───────────────────────
 export function NotesAlertBanner(){
   const [alerts,setAlerts]=useState([]);
@@ -471,7 +595,7 @@ export default function NotesTab(){
   function NoteModal({note}){
     const titleRef=React.useRef(null);
     const bodyRef=React.useRef(null);
-    const alertRef=React.useRef(null);
+    const alertValueRef=React.useRef(note.alert_at?note.alert_at.slice(0,16):"");
     const topicsRef=React.useRef(note.topics||[]);
     const imgsRef=React.useRef(note.images||[]);
     const [topicsDisplay,setTopicsDisplay]=React.useState(note.topics||[]);
@@ -487,11 +611,13 @@ export default function NotesTab(){
       }
     },[]);
 
+    function setAlert(v){alertValueRef.current=v;setAlertDisplay(v);}
+
     function doSave(){
       clearTimeout(saveTimer.current);
       const t=titleRef.current?.value||"";
       const b=bodyRef.current?.innerHTML||"";
-      const a=alertRef.current?.value||"";
+      const a=alertValueRef.current||"";
       if(!b&&!t.trim())return;
       savedOnce.current=true;
       saveEdit(note.id,b,t.trim()||null,topicsRef.current,imgsRef.current,a||null);
@@ -568,18 +694,11 @@ export default function NotesTab(){
           {/* Alert/Timeline row */}
           <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 14px",
             borderBottom:"1px solid rgba(58,130,246,0.08)",flexShrink:0,flexWrap:"wrap"}}>
-            <span style={{fontSize:11,color:"rgba(110,155,215,0.45)",whiteSpace:"nowrap"}}>&#x23F0; Alert at:</span>
-            <input ref={alertRef} type="datetime-local" value={alertDisplay}
-              onChange={e=>{setAlertDisplay(e.target.value);scheduleSave();}}
-              style={{background:"#0c1729",border:"1px solid rgba(58,130,246,0.2)",borderRadius:4,
-                color:"#e8f2ff",fontFamily:"inherit",fontSize:11,padding:"3px 8px",outline:"none",
-                colorScheme:"dark"}}/>
-            {alertDisplay&&(
-              <button onClick={()=>{setAlertDisplay("");if(alertRef.current)alertRef.current.value="";scheduleSave();}}
-                style={{background:"none",border:"none",color:"rgba(110,155,215,0.45)",cursor:"pointer",fontSize:11}}>
-                Clear
-              </button>
-            )}
+            <AlertPicker
+              value={alertDisplay}
+              onChange={v=>{setAlert(v);scheduleSave();}}
+              onClear={()=>{setAlert("");scheduleSave();}}
+            />
           </div>
 
           {/* Toolbar */}
@@ -717,13 +836,7 @@ export default function NotesTab(){
         {/* Alert row in compose */}
         <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 12px",
           borderBottom:"1px solid rgba(58,130,246,0.08)",background:"rgba(4,10,22,0.25)",flexWrap:"wrap"}}>
-          <span style={{fontSize:11,color:"rgba(110,155,215,0.4)",whiteSpace:"nowrap"}}>&#x23F0; Alert:</span>
-          <input type="datetime-local" value={alertAt} onChange={e=>setAlertAt(e.target.value)}
-            style={{background:"transparent",border:"1px solid rgba(58,130,246,0.15)",borderRadius:4,
-              color:"rgba(160,200,255,0.7)",fontFamily:"inherit",fontSize:11,padding:"2px 7px",
-              outline:"none",colorScheme:"dark"}}/>
-          {alertAt&&<button onClick={()=>setAlertAt("")} style={{background:"none",border:"none",
-            color:"rgba(110,155,215,0.4)",cursor:"pointer",fontSize:11}}>Clear</button>}
+          <AlertPicker value={alertAt} onChange={setAlertAt} onClear={()=>setAlertAt("")}/>
         </div>
         <Toolbar onInsertTable={()=>setShowTablePicker(true)}/>
         <div ref={editorRef} contentEditable suppressContentEditableWarning
