@@ -230,13 +230,17 @@ function AlertPicker({value, onChange, onClear}){
           <div>
             <div style={{fontSize:10,fontWeight:700,color:"rgba(110,155,215,0.4)",
               textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>From {value?"selected":"now"}</div>
-            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-              {chip("+5 min", 5*60*1000,"#3fb950")}
-              {chip("+1 hr",  60*60*1000,"#3fb950")}
-              {chip("+1 day", 24*60*60*1000,"#3fb950")}
-              {chip("−5 min",-5*60*1000,"#ff6b6b")}
-              {chip("−1 hr", -60*60*1000,"#ff6b6b")}
-              {chip("−1 day",-24*60*60*1000,"#ff6b6b")}
+            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+              <div style={{display:"flex",gap:4}}>
+                {chip("+5 min", 5*60*1000,"#3fb950")}
+                {chip("+1 hr",  60*60*1000,"#3fb950")}
+                {chip("+1 day", 24*60*60*1000,"#3fb950")}
+              </div>
+              <div style={{display:"flex",gap:4}}>
+                {chip("−5 min",-5*60*1000,"#ff6b6b")}
+                {chip("−1 hr", -60*60*1000,"#ff6b6b")}
+                {chip("−1 day",-24*60*60*1000,"#ff6b6b")}
+              </div>
             </div>
           </div>
 
@@ -310,6 +314,51 @@ export function NotesAlertBanner(){
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
+// ── Topic filter row with smart visibility + "+ N more" popout ──────────────
+function TopicFilterRow({visibleTopics,hiddenTopics,topicFilter,setTopicFilter,pill}){
+  const [showMore,setShowMore]=useState(false);
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(!showMore)return;
+    function h(e){if(ref.current&&!ref.current.contains(e.target))setShowMore(false);}
+    document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);
+  },[showMore]);
+  function getPos(){
+    if(!ref.current)return{position:"fixed",top:60,left:0};
+    const r=ref.current.getBoundingClientRect();
+    return{position:"fixed",top:r.bottom+4,left:Math.min(r.left,window.innerWidth-270),zIndex:9999};
+  }
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+      <button onClick={()=>setTopicFilter(null)} style={{
+        fontSize:10,fontWeight:700,padding:"2px 9px",borderRadius:3,
+        border:"1px solid "+(topicFilter===null?"rgba(88,166,255,0.5)":"rgba(58,130,246,0.18)"),
+        background:topicFilter===null?"rgba(88,166,255,0.12)":"transparent",
+        color:topicFilter===null?"rgba(140,200,255,0.9)":"rgba(110,155,215,0.45)",
+        cursor:"pointer",fontFamily:"inherit",
+      }}>All</button>
+      {visibleTopics.map(t=>pill(t,topicFilter===t,()=>setTopicFilter(p=>p===t?null:t)))}
+      {hiddenTopics.length>0&&(
+        <div ref={ref} style={{position:"relative",display:"inline-block"}}>
+          <button onClick={()=>setShowMore(o=>!o)} style={{
+            fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3,
+            border:"1px solid rgba(58,130,246,0.2)",
+            background:showMore?"rgba(88,166,255,0.1)":"transparent",
+            color:"rgba(110,155,215,0.5)",cursor:"pointer",fontFamily:"inherit",
+          }}>+ {hiddenTopics.length} more</button>
+          {showMore&&(
+            <div style={{...getPos(),background:"#0c1729",border:"1px solid rgba(88,166,255,0.28)",
+              borderRadius:7,padding:"10px",boxShadow:"0 8px 24px rgba(0,0,0,0.6)",
+              display:"flex",flexWrap:"wrap",gap:4,maxWidth:260}}>
+              {hiddenTopics.map(t=>pill(t,topicFilter===t,()=>{setTopicFilter(p=>p===t?null:t);setShowMore(false);}))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function NotesTab(){
   const [notes,setNotes]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -922,49 +971,57 @@ export default function NotesTab(){
             borderRadius:4,color:saving?"rgba(88,166,255,0.3)":"rgba(140,200,255,0.9)",
             fontFamily:"inherit",fontWeight:600,fontSize:11,padding:"4px 16px",
             cursor:saving?"default":"pointer",letterSpacing:"0.07em",textTransform:"uppercase",
-          }}>{saving?"Saving...":"Save Note"}</button>
-        </div>
-      </div>
-
       {/* Filter bar */}
-      <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",flexShrink:0}}>
-        <div style={{position:"relative",flex:"0 0 150px",minWidth:100}}>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search notes..."
-            style={{width:"100%",background:"#0c1729",border:"1px solid rgba(58,130,246,0.18)",
-              borderRadius:5,color:"#e8f2ff",fontFamily:"inherit",fontSize:12,
-              padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
-          {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:6,
-            top:"50%",transform:"translateY(-50%)",background:"none",border:"none",
-            color:"rgba(110,155,215,0.45)",cursor:"pointer",fontSize:11}}>&#x2715;</button>}
-        </div>
-        {DATE_FILTERS.map(f=>(
-          <button key={f.value} onClick={()=>setDateFilter(f.value)} style={{
-            fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:3,
-            border:"1px solid "+(dateFilter===f.value?"rgba(88,166,255,0.5)":"rgba(58,130,246,0.18)"),
-            background:dateFilter===f.value?"rgba(88,166,255,0.12)":"transparent",
-            color:dateFilter===f.value?"rgba(140,200,255,0.9)":"rgba(110,155,215,0.45)",
-            cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
-          }}>{f.label}</button>
-        ))}
-        <div style={{width:1,background:"rgba(58,130,246,0.10)",height:18}}/>
-        <button onClick={()=>setTopicFilter(null)} style={{
-          fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:3,
-          border:"1px solid "+(topicFilter===null?"rgba(88,166,255,0.5)":"rgba(58,130,246,0.18)"),
-          background:topicFilter===null?"rgba(88,166,255,0.12)":"transparent",
-          color:topicFilter===null?"rgba(140,200,255,0.9)":"rgba(110,155,215,0.45)",
-          cursor:"pointer",fontFamily:"inherit",
-        }}>All</button>
-        {TOPICS.map(t=>pill(t,topicFilter===t,()=>setTopicFilter(p=>p===t?null:t)))}
-        <span style={{marginLeft:"auto",fontSize:11,color:"rgba(110,155,215,0.45)"}}>
-          {filtered.length} note{filtered.length!==1?"s":""}
-        </span>
-        <div style={{display:"flex",gap:0,border:"1px solid rgba(58,130,246,0.18)",borderRadius:4,overflow:"hidden"}}>
-          {[["list","\u2630"],["grid","\u229e"]].map(([v,icon])=>(
-            <button key={v} onClick={()=>setView(v)} style={{
-              background:viewMode===v?"rgba(88,166,255,0.15)":"transparent",
-              border:"none",borderRight:v==="list"?"1px solid rgba(58,130,246,0.18)":"none",
-              color:viewMode===v?"#58a6ff":"rgba(110,155,215,0.45)",
-              padding:"3px 10px",cursor:"pointer",fontSize:13,lineHeight:1,
+      {(()=>{
+        const usedTopics=TOPICS.filter(t=>notes.some(n=>(n.topics||[]).includes(t)));
+        const visibleTopics=TOPICS.filter(t=>t===topicFilter||usedTopics.includes(t));
+        const hiddenTopics=TOPICS.filter(t=>t!==topicFilter&&!usedTopics.includes(t));
+        return(
+          <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
+            {/* Row 1: search + date filters + count + view toggle */}
+            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+              <div style={{position:"relative",flex:"0 0 150px",minWidth:100}}>
+                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search notes..."
+                  style={{width:"100%",background:"#0c1729",border:"1px solid rgba(58,130,246,0.18)",
+                    borderRadius:5,color:"#e8f2ff",fontFamily:"inherit",fontSize:12,
+                    padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
+                {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:6,
+                  top:"50%",transform:"translateY(-50%)",background:"none",border:"none",
+                  color:"rgba(110,155,215,0.45)",cursor:"pointer",fontSize:11}}>&#x2715;</button>}
+              </div>
+              {DATE_FILTERS.map(f=>(
+                <button key={f.value} onClick={()=>setDateFilter(f.value)} style={{
+                  fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:3,
+                  border:"1px solid "+(dateFilter===f.value?"rgba(88,166,255,0.5)":"rgba(58,130,246,0.18)"),
+                  background:dateFilter===f.value?"rgba(88,166,255,0.12)":"transparent",
+                  color:dateFilter===f.value?"rgba(140,200,255,0.9)":"rgba(110,155,215,0.45)",
+                  cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
+                }}>{f.label}</button>
+              ))}
+              <span style={{marginLeft:"auto",fontSize:11,color:"rgba(110,155,215,0.45)"}}>
+                {filtered.length} note{filtered.length!==1?"s":""}
+              </span>
+              <div style={{display:"flex",gap:0,border:"1px solid rgba(58,130,246,0.18)",borderRadius:4,overflow:"hidden"}}>
+                {[["list","☰"],["grid","⊞"]].map(([v,icon])=>(
+                  <button key={v} onClick={()=>setView(v)} style={{
+                    background:viewMode===v?"rgba(88,166,255,0.15)":"transparent",
+                    border:"none",borderRight:v==="list"?"1px solid rgba(58,130,246,0.18)":"none",
+                    color:viewMode===v?"#58a6ff":"rgba(110,155,215,0.45)",
+                    padding:"3px 10px",cursor:"pointer",fontSize:13,lineHeight:1,
+                  }}>{icon}</button>
+                ))}
+              </div>
+            </div>
+            {/* Row 2: All + visible topics + "+ N more" popout */}
+            <TopicFilterRow
+              visibleTopics={visibleTopics}
+              hiddenTopics={hiddenTopics}
+              topicFilter={topicFilter}
+              setTopicFilter={setTopicFilter}
+              pill={pill}/>
+          </div>
+        );
+      })()}
             }}>{icon}</button>
           ))}
         </div>
