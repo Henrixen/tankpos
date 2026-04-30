@@ -315,6 +315,57 @@ export function NotesAlertBanner(){
 
 // ── Main component ────────────────────────────────────────────────────────────
 // ── Topic filter row with smart visibility + "+ N more" popout ──────────────
+// ── Compose header: title + active topic tags + "+" for more ────────────────
+function ComposeHeader({title,setTitle,selTopics,setSelTopics,pill}){
+  const [showPicker,setShowPicker]=useState(false);
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(!showPicker)return;
+    function h(e){if(ref.current&&!ref.current.contains(e.target))setShowPicker(false);}
+    document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);
+  },[showPicker]);
+  const btnRef=useRef(null);
+  function getPos(){
+    if(!btnRef.current)return{position:"fixed",top:60,left:0};
+    const r=btnRef.current.getBoundingClientRect();
+    return{position:"fixed",top:r.bottom+4,left:Math.min(r.left,window.innerWidth-270),zIndex:9999};
+  }
+  const inactive=TOPICS.filter(t=>!selTopics.includes(t));
+  return(
+    <div ref={ref} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",
+      borderBottom:"1px solid rgba(58,130,246,0.08)",flexWrap:"wrap"}}>
+      <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Title (optional)..."
+        style={{flex:"1 1 140px",minWidth:100,background:"transparent",border:"none",color:"#e8f2ff",
+          fontFamily:"inherit",fontSize:13,fontWeight:600,outline:"none"}}/>
+      {/* Active tags inline next to title */}
+      {selTopics.length>0&&(
+        <div style={{display:"flex",gap:3,flexWrap:"nowrap",alignItems:"center"}}>
+          {selTopics.map(t=>pill(t,true,()=>setSelTopics(p=>p.filter(x=>x!==t))))}
+        </div>
+      )}
+      {/* + button to add more */}
+      {inactive.length>0&&(
+        <div style={{position:"relative",display:"inline-block"}}>
+          <button ref={btnRef} onClick={()=>setShowPicker(o=>!o)} style={{
+            fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:3,
+            border:"1px solid rgba(58,130,246,0.25)",
+            background:showPicker?"rgba(88,166,255,0.1)":"transparent",
+            color:"rgba(110,155,215,0.55)",cursor:"pointer",fontFamily:"inherit",
+            display:"flex",alignItems:"center",gap:2,lineHeight:1.4,
+          }}>+ tag</button>
+          {showPicker&&(
+            <div style={{...getPos(),background:"#0c1729",border:"1px solid rgba(88,166,255,0.28)",
+              borderRadius:7,padding:"10px",boxShadow:"0 8px 24px rgba(0,0,0,0.6)",
+              display:"flex",flexWrap:"wrap",gap:4,maxWidth:280}}>
+              {inactive.map(t=>pill(t,false,()=>{setSelTopics(p=>[...p,t]);setShowPicker(false);}))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TopicFilterRow({visibleTopics,hiddenTopics,topicFilter,setTopicFilter,pill}){
   const [showMore,setShowMore]=useState(false);
   const ref=useRef(null);
@@ -917,15 +968,10 @@ export default function NotesTab(){
       {/* Compose panel */}
       <div style={{background:"#0c1729",border:"1px solid rgba(58,130,246,0.18)",borderRadius:8,overflow:"hidden",flexShrink:0}}
         onDrop={handleDrop} onDragOver={e=>e.preventDefault()}>
-        <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",
-          borderBottom:"1px solid rgba(58,130,246,0.08)",flexWrap:"wrap"}}>
-          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Title (optional)..."
-            style={{flex:"1 1 140px",minWidth:100,background:"transparent",border:"none",color:"#e8f2ff",
-              fontFamily:"inherit",fontSize:13,fontWeight:600,outline:"none"}}/>
-          <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-            {TOPICS.map(t=>pill(t,selTopics.includes(t),()=>setSelTopics(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t])))}
-          </div>
-        </div>
+        <ComposeHeader
+          title={title} setTitle={setTitle}
+          selTopics={selTopics} setSelTopics={setSelTopics}
+          pill={pill}/>
         {/* Alert row in compose */}
         <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 12px",
           borderBottom:"1px solid rgba(58,130,246,0.08)",background:"rgba(4,10,22,0.25)",flexWrap:"wrap"}}>
@@ -971,6 +1017,10 @@ export default function NotesTab(){
             borderRadius:4,color:saving?"rgba(88,166,255,0.3)":"rgba(140,200,255,0.9)",
             fontFamily:"inherit",fontWeight:600,fontSize:11,padding:"4px 16px",
             cursor:saving?"default":"pointer",letterSpacing:"0.07em",textTransform:"uppercase",
+          }}>{saving?"Saving...":"Save Note"}</button>
+        </div>
+      </div>
+
       {/* Filter bar */}
       {(()=>{
         const usedTopics=TOPICS.filter(t=>notes.some(n=>(n.topics||[]).includes(t)));
