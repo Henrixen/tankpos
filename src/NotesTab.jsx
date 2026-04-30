@@ -541,24 +541,27 @@ export default function NotesTab(){
             )}
           </div>
 
-          {/* Row 3: date left | alert + thumbnail right */}
-          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-            <span style={{fontSize:10,color:"rgba(110,155,215,0.4)",flex:1}}>
+          {/* Row 3: date always bottom-left, thumbnail absolutely positioned bottom-right */}
+          <div style={{position:"relative",flexShrink:0,height:16}}>
+            <span style={{fontSize:10,color:"rgba(110,155,215,0.4)",position:"absolute",bottom:0,left:0}}>
               {fmtTs(note.updated_at||note.created_at)}
             </span>
-            {note.alert_at&&<span title={"Alert: "+fmtTs(note.alert_at)} style={{fontSize:11,opacity:0.6}}>&#x23F0;</span>}
+            {note.alert_at&&<span title={"Alert: "+fmtTs(note.alert_at)}
+              style={{fontSize:11,opacity:0.6,position:"absolute",bottom:0,right:imgs.length>0?42:0}}>&#x23F0;</span>}
             {imgs.length>0&&(
-              <div style={{position:"relative",flexShrink:0}}>
-                <img src={imgs[0]}
-                  onClick={e=>{e.stopPropagation();setLightbox(imgs[0]);}}
-                  style={{width:32,height:32,borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",
-                    objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
-                {imgs.length>1&&(
-                  <div style={{position:"absolute",bottom:1,right:1,background:"rgba(0,0,0,0.7)",
-                    borderRadius:2,fontSize:8,color:"#e8f2ff",padding:"0 2px",lineHeight:"12px",fontWeight:700}}>
-                    +{imgs.length-1}
-                  </div>
-                )}
+              <div style={{position:"absolute",bottom:-2,right:0}}>
+                <div style={{position:"relative"}}>
+                  <img src={imgs[0]}
+                    onClick={e=>{e.stopPropagation();setLightbox(imgs[0]);}}
+                    style={{width:32,height:32,borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",
+                      objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
+                  {imgs.length>1&&(
+                    <div style={{position:"absolute",bottom:1,right:1,background:"rgba(0,0,0,0.7)",
+                      borderRadius:2,fontSize:8,color:"#e8f2ff",padding:"0 2px",lineHeight:"12px",fontWeight:700}}>
+                      +{imgs.length-1}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
