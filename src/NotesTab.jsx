@@ -508,7 +508,7 @@ export default function NotesTab(){
         onClick={()=>setExpandedId(note.id)}>
         <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",padding:"8px 12px",gap:4}}>
 
-          {/* Row 1: pin + title (left) | tags + delete (right) */}
+          {/* Row 1: pin + title | date | tags | delete — all in one line */}
           <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
             <button onClick={e=>{e.stopPropagation();togglePin(note);}} title={note.pinned?"Unpin":"Pin"}
               style={{background:"none",border:"none",cursor:"pointer",fontSize:12,padding:0,
@@ -518,6 +518,10 @@ export default function NotesTab(){
               overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
               {note.title||<span style={{color:"rgba(110,155,215,0.3)",fontWeight:400,fontStyle:"italic"}}>No title</span>}
             </span>
+            <span style={{fontSize:10,color:"rgba(110,155,215,0.38)",whiteSpace:"nowrap",flexShrink:0}}>
+              {fmtTs(note.updated_at||note.created_at)}
+            </span>
+            {note.alert_at&&<span title={"Alert: "+fmtTs(note.alert_at)} style={{fontSize:11,opacity:0.55,flexShrink:0}}>&#x23F0;</span>}
             {(note.topics||[]).length>0&&(
               <div style={{display:"flex",gap:3,flexWrap:"nowrap",flexShrink:0}}>
                 {(note.topics||[]).slice(0,4).map(t=>{const col=TOPIC_COLORS[t]||"#58a6ff";return(
@@ -531,29 +535,19 @@ export default function NotesTab(){
                 fontSize:11,opacity:0.4,padding:"0 2px",lineHeight:1,flexShrink:0}}>&#x2715;</button>
           </div>
 
-          {/* Row 2: body — fills remaining height, clipped */}
-          <div style={{flex:1,minHeight:0,overflow:"hidden"}}>
+          {/* Row 2: body — fills all remaining height, thumbnail absolutely at bottom-right */}
+          <div style={{flex:1,minHeight:0,overflow:"hidden",position:"relative"}}>
             {hasContent&&(
               <div className="note-preview-html"
                 style={{fontSize:12,color:"rgba(160,200,255,0.65)",lineHeight:1.5,
                   height:"100%",overflow:"hidden",pointerEvents:"none"}}
                 dangerouslySetInnerHTML={{__html:note.body}}/>
             )}
-          </div>
-
-          {/* Row 3: date always bottom-left, thumbnail absolutely positioned bottom-right */}
-          <div style={{position:"relative",flexShrink:0,height:16}}>
-            <span style={{fontSize:10,color:"rgba(110,155,215,0.4)",position:"absolute",bottom:0,left:0}}>
-              {fmtTs(note.updated_at||note.created_at)}
-            </span>
-            {note.alert_at&&<span title={"Alert: "+fmtTs(note.alert_at)}
-              style={{fontSize:11,opacity:0.6,position:"absolute",bottom:0,right:imgs.length>0?42:0}}>&#x23F0;</span>}
             {imgs.length>0&&(
-              <div style={{position:"absolute",bottom:-2,right:0}}>
+              <div style={{position:"absolute",bottom:0,right:0}} onClick={e=>e.stopPropagation()}>
                 <div style={{position:"relative"}}>
-                  <img src={imgs[0]}
-                    onClick={e=>{e.stopPropagation();setLightbox(imgs[0]);}}
-                    style={{width:32,height:32,borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",
+                  <img src={imgs[0]} onClick={()=>setLightbox(imgs[0])}
+                    style={{width:30,height:30,borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",
                       objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
                   {imgs.length>1&&(
                     <div style={{position:"absolute",bottom:1,right:1,background:"rgba(0,0,0,0.7)",
@@ -614,20 +608,24 @@ export default function NotesTab(){
             )}
           </div>
 
-          {/* 3: date row — date left, thumbnail right */}
-          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-            <span style={{fontSize:10,color:"rgba(110,155,215,0.45)",flex:1}}>{fmtTs(note.created_at)}</span>
+          {/* 3: bottom bar — date always bottom-left, thumbnail absolutely bottom-right */}
+          <div style={{position:"relative",flexShrink:0,height:32}}>
+            <span style={{position:"absolute",bottom:0,left:0,fontSize:10,color:"rgba(110,155,215,0.45)"}}>
+              {fmtTs(note.created_at)}
+            </span>
             {imgs.length>0&&(
-              <div style={{position:"relative",flexShrink:0}}>
-                <img src={imgs[0]}
-                  onClick={e=>{e.stopPropagation();setLightbox(imgs[0]);}}
-                  style={{width:36,height:36,borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",
-                    objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
-                {imgs.length>1&&(
-                  <div style={{position:"absolute",bottom:2,right:2,background:"rgba(0,0,0,0.65)",
-                    borderRadius:2,fontSize:8,color:"#e8f2ff",padding:"0 3px",lineHeight:"14px",
-                    fontWeight:700}}>+{imgs.length-1}</div>
-                )}
+              <div style={{position:"absolute",bottom:0,right:0}} onClick={e=>e.stopPropagation()}>
+                <div style={{position:"relative"}}>
+                  <img src={imgs[0]} onClick={e=>{e.stopPropagation();setLightbox(imgs[0]);}}
+                    style={{width:30,height:30,borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",
+                      objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
+                  {imgs.length>1&&(
+                    <div style={{position:"absolute",bottom:1,right:1,background:"rgba(0,0,0,0.7)",
+                      borderRadius:2,fontSize:8,color:"#e8f2ff",padding:"0 2px",lineHeight:"12px",fontWeight:700}}>
+                      +{imgs.length-1}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
