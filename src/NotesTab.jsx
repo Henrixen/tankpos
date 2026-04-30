@@ -111,7 +111,6 @@ function Lightbox({src,onClose}){
 function AlertPicker({value, onChange, onClear}){
   const [open,setOpen]=useState(false);
   const ref=useRef(null);
-  const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
   // Close on outside click
   useEffect(()=>{
@@ -121,32 +120,42 @@ function AlertPicker({value, onChange, onClear}){
     return()=>document.removeEventListener("mousedown",h);
   },[open]);
 
-  function fmtLabel(iso){
-    if(!iso)return null;
-    const d=new Date(iso);
+  // Format a Date to local datetime-local string (no UTC shift)
+  function toLocalInput(d){
+    const pad=n=>String(n).padStart(2,"0");
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  // Parse the stored value (already local string) back to a Date
+  function fromInput(v){return v?new Date(v):null;}
+
+  function fmtLabel(v){
+    if(!v)return null;
+    const d=fromInput(v);
     return d.toLocaleDateString("en-GB",{weekday:"short",day:"2-digit",month:"short"})
       +" "+d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
   }
 
   function setDay(dayIndex){
-    // dayIndex: 0=Mon … 6=Sun
+    // dayIndex: 0=Mon … 6=Sun → convert to JS getDay() where Sun=0,Mon=1
     const now=new Date();
-    const todayDow=now.getDay(); // 0=Sun,1=Mon…
-    const targetDow=dayIndex===6?0:dayIndex+1; // convert Mon=0 → JS Sun=0 Mon=1
+    const todayDow=now.getDay();
+    const targetDow=dayIndex===6?0:dayIndex+1;
     let diff=targetDow-todayDow;
     if(diff<=0)diff+=7;
     const d=new Date(now);
     d.setDate(now.getDate()+diff);
     d.setSeconds(0,0);
-    onChange(d.toISOString().slice(0,16));
+    onChange(toLocalInput(d));
     setOpen(false);
   }
 
   function offset(ms){
-    const base=value?new Date(value):new Date();
+    // base: parse existing value as local time, or use now
+    const base=value?fromInput(value):new Date();
     const d=new Date(base.getTime()+ms);
     d.setSeconds(0,0);
-    onChange(d.toISOString().slice(0,16));
+    onChange(toLocalInput(d));
   }
 
   const chip=(label,ms,col)=>(
@@ -165,10 +174,23 @@ function AlertPicker({value, onChange, onClear}){
     }}>{d}</button>
   );
 
+  // Detect if popout should open upward (fixed position to escape any overflow:hidden)
+  const btnRef=useRef(null);
+  function getPopoutStyle(){
+    if(!btnRef.current)return{position:"fixed",top:40,left:0};
+    const r=btnRef.current.getBoundingClientRect();
+    const spaceBelow=window.innerHeight-r.bottom;
+    const popH=210; // approx popout height
+    if(spaceBelow<popH){
+      return{position:"fixed",bottom:window.innerHeight-r.top+6,left:Math.min(r.left,window.innerWidth-260)};
+    }
+    return{position:"fixed",top:r.bottom+6,left:Math.min(r.left,window.innerWidth-260)};
+  }
+
   return(
     <div ref={ref} style={{position:"relative",display:"inline-flex",alignItems:"center",gap:6}}>
       {/* Trigger */}
-      <button onMouseDown={e=>{e.preventDefault();setOpen(o=>!o);}} style={{
+      <button ref={btnRef} onMouseDown={e=>{e.preventDefault();setOpen(o=>!o);}} style={{
         display:"flex",alignItems:"center",gap:5,
         background:value?"rgba(88,166,255,0.1)":"transparent",
         border:"1px solid "+(value?"rgba(88,166,255,0.45)":"rgba(58,130,246,0.2)"),
@@ -185,12 +207,12 @@ function AlertPicker({value, onChange, onClear}){
         }}>&#x2715;</button>
       )}
 
-      {/* Popout */}
+      {/* Popout — rendered via portal-style fixed positioning to escape overflow:hidden */}
       {open&&(
-        <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:999,
+        <div style={{...getPopoutStyle(),zIndex:9999,
           background:"#0c1729",border:"1px solid rgba(88,166,255,0.28)",
           borderRadius:8,boxShadow:"0 8px 32px rgba(0,0,0,0.7)",padding:"12px",
-          minWidth:240,display:"flex",flexDirection:"column",gap:10}}>
+          minWidth:248,display:"flex",flexDirection:"column",gap:10}}>
 
           {/* Weekday row */}
           <div>
@@ -477,50 +499,71 @@ export default function NotesTab(){
   // ── NoteCard (list view) ──
   function NoteCard({note}){
     const hasContent=note.body&&note.body!=="<br>";
+    const imgs=note.images||[];
     return(
       <div style={{background:note.pinned?"rgba(88,166,255,0.05)":"#0c1729",
         border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.18)"),
-        borderRadius:7,overflow:"hidden",cursor:"pointer"}}
+        borderRadius:7,overflow:"hidden",cursor:"pointer",
+        height:100,display:"flex",flexDirection:"column"}}
         onClick={()=>setExpandedId(note.id)}>
-        <div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 12px"}}>
-          <button onClick={e=>{e.stopPropagation();togglePin(note);}} title={note.pinned?"Unpin":"Pin"}
-            style={{background:"none",border:"none",cursor:"pointer",fontSize:13,padding:"0 2px",
-              color:note.pinned?"#f5a623":"rgba(110,155,215,0.45)",
-              opacity:note.pinned?1:0.4,flexShrink:0,lineHeight:1,paddingTop:2}}>&#x1F4CC;</button>
-          {(note.topics||[]).length>0&&(
-            <div style={{display:"flex",gap:3,flexWrap:"wrap",flexShrink:0,paddingTop:2}}>
-              {(note.topics||[]).map(t=>{const col=TOPIC_COLORS[t]||"#58a6ff";return(
-                <span key={t} style={{fontSize:10,fontWeight:700,padding:"1px 5px",borderRadius:2,
-                  background:col+"18",border:"1px solid "+col+"44",color:col}}>{t}</span>
-              );})}
-            </div>
-          )}
-          <div style={{flex:1,minWidth:0}}>
-            {note.title&&<div style={{fontSize:13,fontWeight:700,color:"#e8f2ff",marginBottom:3}}>{note.title}</div>}
-            {/* Render HTML preview preserving bold, lists, tables etc */}
+        <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",padding:"8px 12px",gap:4}}>
+
+          {/* Row 1: pin + title (left) | tags + delete (right) */}
+          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+            <button onClick={e=>{e.stopPropagation();togglePin(note);}} title={note.pinned?"Unpin":"Pin"}
+              style={{background:"none",border:"none",cursor:"pointer",fontSize:12,padding:0,
+                color:note.pinned?"#f5a623":"rgba(110,155,215,0.3)",
+                opacity:note.pinned?1:0.5,flexShrink:0,lineHeight:1}}>&#x1F4CC;</button>
+            <span style={{fontSize:13,fontWeight:700,color:"#e8f2ff",flex:1,minWidth:0,
+              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              {note.title||<span style={{color:"rgba(110,155,215,0.3)",fontWeight:400,fontStyle:"italic"}}>No title</span>}
+            </span>
+            {(note.topics||[]).length>0&&(
+              <div style={{display:"flex",gap:3,flexWrap:"nowrap",flexShrink:0}}>
+                {(note.topics||[]).slice(0,4).map(t=>{const col=TOPIC_COLORS[t]||"#58a6ff";return(
+                  <span key={t} style={{fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:2,
+                    background:col+"18",border:"1px solid "+col+"44",color:col,whiteSpace:"nowrap"}}>{t}</span>
+                );})}
+              </div>
+            )}
+            <button onClick={e=>{e.stopPropagation();setConfirmDel(note.id);}}
+              style={{background:"none",border:"none",color:"#ff6b6b",cursor:"pointer",
+                fontSize:11,opacity:0.4,padding:"0 2px",lineHeight:1,flexShrink:0}}>&#x2715;</button>
+          </div>
+
+          {/* Row 2: body — fills remaining height, clipped */}
+          <div style={{flex:1,minHeight:0,overflow:"hidden"}}>
             {hasContent&&(
               <div className="note-preview-html"
-                style={{fontSize:12,color:"rgba(160,200,255,0.72)",lineHeight:1.55,
-                  maxHeight:64,overflow:"hidden",pointerEvents:"none"}}
+                style={{fontSize:12,color:"rgba(160,200,255,0.65)",lineHeight:1.5,
+                  height:"100%",overflow:"hidden",pointerEvents:"none"}}
                 dangerouslySetInnerHTML={{__html:note.body}}/>
             )}
           </div>
+
+          {/* Row 3: date left | alert + thumbnail right */}
           <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-            {note.alert_at&&<span title={"Alert: "+fmtTs(note.alert_at)} style={{fontSize:12,opacity:0.7}}>&#x23F0;</span>}
-            <span style={{fontSize:11,color:"rgba(110,155,215,0.45)",whiteSpace:"nowrap"}}>{fmtTs(note.updated_at||note.created_at)}</span>
-            <button onClick={e=>{e.stopPropagation();setConfirmDel(note.id);}}
-              style={{background:"none",border:"none",color:"#ff6b6b",cursor:"pointer",fontSize:11,opacity:0.5,padding:"0 2px",lineHeight:1}}>&#x2715;</button>
+            <span style={{fontSize:10,color:"rgba(110,155,215,0.4)",flex:1}}>
+              {fmtTs(note.updated_at||note.created_at)}
+            </span>
+            {note.alert_at&&<span title={"Alert: "+fmtTs(note.alert_at)} style={{fontSize:11,opacity:0.6}}>&#x23F0;</span>}
+            {imgs.length>0&&(
+              <div style={{position:"relative",flexShrink:0}}>
+                <img src={imgs[0]}
+                  onClick={e=>{e.stopPropagation();setLightbox(imgs[0]);}}
+                  style={{width:32,height:32,borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",
+                    objectFit:"cover",cursor:"zoom-in",display:"block"}}/>
+                {imgs.length>1&&(
+                  <div style={{position:"absolute",bottom:1,right:1,background:"rgba(0,0,0,0.7)",
+                    borderRadius:2,fontSize:8,color:"#e8f2ff",padding:"0 2px",lineHeight:"12px",fontWeight:700}}>
+                    +{imgs.length-1}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
         </div>
-        {(note.images||[]).length>0&&(
-          <div style={{padding:"0 12px 8px",display:"flex",gap:8,flexWrap:"wrap"}}>
-            {(note.images||[]).slice(0,3).map((src,i)=>(
-              <img key={i} src={src}
-                onClick={e=>{e.stopPropagation();setLightbox(src);}}
-                style={{width:72,height:72,borderRadius:5,border:"1px solid rgba(58,130,246,0.18)",objectFit:"cover",cursor:"zoom-in"}}/>
-            ))}
-          </div>
-        )}
       </div>
     );
   }
