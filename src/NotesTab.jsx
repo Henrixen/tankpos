@@ -1072,10 +1072,6 @@ export default function NotesTab(){
           </div>
         );
       })()}
-            }}>{icon}</button>
-          ))}
-        </div>
-      </div>
 
       {/* Notes list/grid */}
       <div style={{flex:1,minHeight:0,overflowY:"auto"}}>
