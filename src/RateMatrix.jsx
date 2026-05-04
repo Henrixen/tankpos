@@ -76,8 +76,8 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
     const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));
     el.value=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;
     el.style.background=raw?c+"33":"transparent";
-    el.style.color=raw?"rgba(200,220,255,0.9)":"rgba(120,160,220,0.3)";
-    el.style.fontWeight="500";
+    el.style.color=raw?"#fff":C.faint;
+    el.style.fontWeight=raw?"700":"400";
   },[extRev,ck]);
   const vRaw=matrixRef.current[ck]?.rate||"";
   const vNum=parseFloat(vRaw.replace(/[^0-9.\-]/g,""));
@@ -86,7 +86,7 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
     <input ref={inputRef} data-ck={ck}
       defaultValue={v}
       onFocus={e=>{e.target.style.outline="1px solid rgba(88,166,255,.5)";e.target.style.background="rgba(88,166,255,.07)";const raw=matrixRef.current[ck]?.rate||"";e.target.value=raw;e.target.select();}}
-      onBlur={e=>{e.target.style.outline="none";const raw=e.target.value.trim();const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));const display=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;e.target.value=display;e.target.style.background=raw?c+"22":"transparent";e.target.style.color=raw?"rgba(200,220,255,0.9)":"rgba(120,160,220,0.3)";e.target.style.fontWeight="500";onSave(ck,raw);}}
+      onBlur={e=>{e.target.style.outline="none";const raw=e.target.value.trim();const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));const display=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;e.target.value=display;e.target.style.background=raw?c+"33":"transparent";e.target.style.color=raw?"#fff":C.faint;e.target.style.fontWeight=raw?"700":"400";onSave(ck,raw);}}
       onKeyDown={e=>{
         if(e.key==="Tab"||e.key==="Enter"){
           e.preventDefault();
@@ -103,9 +103,9 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
       }}
       onContextMenu={e=>{e.preventDefault();onComment(ck);}}
       title={matrixRef.current[ck]?.comment?"💬 "+matrixRef.current[ck].comment:"Right-click for comment"}
-      style={{width:"100%",background:v?c+"22":"transparent",
+      style={{width:"100%",background:v?c+"33":"transparent",
         border:"none",outline:"none",
-        color:v?"rgba(200,220,255,0.9)":"rgba(120,160,220,0.3)",fontWeight:500,
+        color:v?"#fff":C.faint,fontWeight:v?700:400,
         fontFamily:"inherit",fontSize:12,
         padding:"3px 3px",textAlign:"center",boxSizing:"border-box",minWidth:0}}/>
   );
@@ -250,8 +250,8 @@ function RateMatrix({onBunkerChange}){
     if(loadedRef.current)saveRates(matrixRef.current);
   }
 
-  const thS={padding:"4px 5px",fontSize:12,fontWeight:700,color:"rgba(120,160,220,0.55)",background:"rgba(20,30,50,0.95)",textAlign:"center",whiteSpace:"nowrap",borderBottom:"1px solid rgba(58,130,246,0.14)"};
-  const tdR={fontSize:12,padding:"1px 2px",borderBottom:"1px solid rgba(255,255,255,0.03)",verticalAlign:"middle"};
+  const thS={padding:"5px 8px",fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.55)",background:"rgba(20,30,50,0.92)",textAlign:"center",whiteSpace:"nowrap",borderBottom:"1px solid rgba(58,130,246,0.14)",textTransform:"uppercase",letterSpacing:"0.07em"};
+  const tdR={fontSize:12,padding:"1px 2px",borderBottom:"1px solid rgba(255,255,255,0.035)",verticalAlign:"middle"};
 
   // RCell is defined outside this component (see above)
 
@@ -270,7 +270,7 @@ function RateMatrix({onBunkerChange}){
 
       {/* Intra Europe: Rate + TCE columns */}
       <div>
-        <div style={{fontSize:12,fontWeight:700,color:REGION_COLORS.Europe,textTransform:"uppercase",letterSpacing:"0.07em",padding:"3px 5px",background:REGION_COLORS.Europe+"18",borderLeft:"2px solid "+REGION_COLORS.Europe,marginBottom:2}}>
+        <div style={{fontSize:11,fontWeight:700,color:REGION_COLORS.Europe,textTransform:"uppercase",letterSpacing:"0.08em",padding:"4px 8px",background:"rgba(20,30,50,0.92)",borderBottom:"1px solid rgba(58,130,246,0.14)",borderLeft:"3px solid "+REGION_COLORS.Europe}}>
           Intra Europe
         </div>
         <table style={{borderCollapse:"collapse",width:"100%"}}>
@@ -282,7 +282,7 @@ function RateMatrix({onBunkerChange}){
           </tr></thead>
           <tbody>
             {euRoutes.map((rt,i)=>(
-              <tr key={rt.id||i} style={{background:"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)"}}>
+              <tr key={rt.id||i} style={{background:i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)"}}>
                 <td style={{...tdR,color:C.dim,paddingLeft:4}}>
                   <RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/>
                 </td>
@@ -298,7 +298,7 @@ function RateMatrix({onBunkerChange}){
       {/* Asia + TA: by size */}
       {rateRoutes.map((rg,rgIdx)=>(
         <div key={rg.region}>
-          <div style={{fontSize:12,fontWeight:700,color:REGION_COLORS[rg.region],textTransform:"uppercase",letterSpacing:"0.07em",padding:"3px 5px",background:REGION_COLORS[rg.region]+"18",borderLeft:"2px solid "+REGION_COLORS[rg.region],marginBottom:2}}>
+          <div style={{fontSize:11,fontWeight:700,color:REGION_COLORS[rg.region],textTransform:"uppercase",letterSpacing:"0.08em",padding:"4px 8px",background:"rgba(20,30,50,0.92)",borderBottom:"1px solid rgba(58,130,246,0.14)",borderLeft:"3px solid "+REGION_COLORS[rg.region]}}>
             {rg.label}
           </div>
           <table style={{borderCollapse:"collapse",width:"100%"}}>
@@ -309,7 +309,7 @@ function RateMatrix({onBunkerChange}){
             </tr></thead>
             <tbody>
               {rg.routes.map((rt,rtIdx)=>(
-                <tr key={rt.id||rtIdx} style={{background:"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)"}}>
+                <tr key={rt.id||rtIdx} style={{background:rtIdx%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)"}}>
                   <td style={{...tdR,color:C.dim,paddingLeft:4}}>
                     <RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/>
                   </td>
