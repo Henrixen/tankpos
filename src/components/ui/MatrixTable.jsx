@@ -80,8 +80,8 @@ export default function MatrixTable({
       selectedKey && (row[keyField] === selectedKey || row.vessel === selectedKey)
         ? "rgba(88,166,255,0.14)"
         : i % 2
-        ? "rgba(22,37,64,0.82)"
-        : "rgba(7,15,28,0.96)",
+        ? "rgba(255,255,255,0.02)"
+        : "transparent",
     cursor: onRowClick ? "pointer" : "default"
   }}
 >
