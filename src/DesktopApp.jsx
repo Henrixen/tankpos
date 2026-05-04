@@ -14,6 +14,7 @@ import { OpeningBreakdown, FixingWindow, ExportPanel } from "./PositionsHelpers"
 import IntelVault, { IntelVaultStrip } from "./IntelVault";
 import AISMap from "./AISMap";
 import MatrixTable from "./components/ui/MatrixTable";
+import NotesTab from "./NotesTab";
 
 
 
@@ -449,7 +450,8 @@ const filtV=useMemo(()=>{
               ["matrix","🔗","Matrix",0,"#43e97b"],
               ["projects","🧮","Projects",0,"#58a6ff"],
               ["tce","⚡","TCE",0,"#faa356"],
-              ["dash","📊","Dashboard",0,"#43e97b"]
+              ["dash","📊","Dashboard",0,"#43e97b"],
+              ["notes","📝","Notes",0,"#f472b6"]
             ].map(([id,icon,label,count,col])=>(
               <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
                 style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
@@ -1178,11 +1180,11 @@ const filtV=useMemo(()=>{
         {/* ── MATRIX ── */}
         {tab==="matrix"&&(
           <div style={{border:"1px solid "+C.bd2,borderRadius:7,overflow:"hidden"}}>
-            <div style={{background:C.bg2,padding:"6px 14px",borderBottom:"1px solid "+C.bd2,display:"flex",gap:16,fontSize:12,color:C.dim,alignItems:"center",flexWrap:"wrap"}}>
+            <div style={{background:C.bg2,padding:"6px 14px",borderBottom:"1px solid "+C.bd2,display:"flex",gap:16,fontSize:13,color:C.dim,alignItems:"center",flexWrap:"wrap"}}>
               <span style={{fontWeight:700,color:C.tx}}>🔗 Voyage Matrix</span>
               <span>12.5 kts · 1d load · 18h disch</span>
               <input value={mxSearch||""} onChange={e=>setMxSearch(e.target.value)} placeholder="🔍 Search vessel…"
-                style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"2px 8px",outline:"none",width:160,marginLeft:"auto"}}/>
+                style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:13,padding:"2px 8px",outline:"none",width:160,marginLeft:"auto"}}/>
             </div>
             {vessels.length===0
               ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>🔗</div>Add vessels and cargoes</div>
@@ -1195,47 +1197,47 @@ const filtV=useMemo(()=>{
                   <div key={v.vessel} style={{background:bg,borderBottom:"1px solid "+C.bd2,padding:"9px 14px"}}>
                     <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                       <div style={{minWidth:150,marginRight:4}}>
-                        <div style={{fontWeight:700,fontSize:12,color:C.blue}}>{toTCase(v.vessel)}</div>
-                        <div style={{fontSize:12,color:C.dim}}>{v.operator||""}</div>
+                        <div style={{fontWeight:700,fontSize:13,color:C.blue}}>{toTCase(v.vessel)}</div>
+                        <div style={{fontSize:13,color:C.dim}}>{v.operator||""}</div>
                       </div>
                       <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,padding:"3px 9px",textAlign:"center"}}>
-                        <div style={{fontSize:12,color:C.faint,textTransform:"uppercase"}}>Now open</div>
-                        <div style={{fontSize:12,fontWeight:700,color:v.openPort==="EMPLOYED"?C.purple:C.amber}}>{v.openPort||"?"}</div>
-                        {v.date&&<div style={{fontSize:12,color:C.blue}}>{v.date}</div>}
+                        <div style={{fontSize:11,color:C.faint,textTransform:"uppercase"}}>Now open</div>
+                        <div style={{fontSize:13,fontWeight:700,color:v.openPort==="EMPLOYED"?C.purple:C.amber}}>{v.openPort||"?"}</div>
+                        {v.date&&<div style={{fontSize:13,color:C.blue}}>{v.date}</div>}
                       </div>
                       {cargo&&<>
                         <div style={{textAlign:"center",padding:"0 3px"}}>
-                          {calc?.ballastNm&&<div style={{fontSize:12,color:C.faint}}>{calc.ballastNm}nm</div>}
-                          <div style={{fontSize:14,color:C.faint}}>──▶</div>
-                          {calc?.ballastDays&&<div style={{fontSize:12,color:C.faint}}>{calc.ballastDays}d</div>}
+                          {calc?.ballastNm&&<div style={{fontSize:13,color:C.faint}}>{calc.ballastNm}nm</div>}
+                          <div style={{fontSize:15,color:C.faint}}>──▶</div>
+                          {calc?.ballastDays&&<div style={{fontSize:13,color:C.faint}}>{calc.ballastDays}d</div>}
                         </div>
                         <div style={{background:C.bg3,border:"1px solid "+sc+"55",borderRadius:5,padding:"3px 9px",textAlign:"center"}}>
-                          <div style={{fontSize:12,color:C.faint,textTransform:"uppercase"}}>Load</div>
-                          <div style={{fontSize:12,fontWeight:700}}>{cargo.load||"?"}</div>
-                          <div style={{fontSize:12,color:C.blue}}>{calc?.loadDate||cargo.from||"—"}</div>
+                          <div style={{fontSize:11,color:C.faint,textTransform:"uppercase"}}>Load</div>
+                          <div style={{fontSize:13,fontWeight:700}}>{cargo.load||"?"}</div>
+                          <div style={{fontSize:13,color:C.blue}}>{calc?.loadDate||cargo.from||"—"}</div>
                         </div>
                         <div style={{textAlign:"center",padding:"0 3px"}}>
-                          {calc?.ladenNm&&<div style={{fontSize:12,color:C.faint}}>{calc.ladenNm}nm</div>}
-                          <div style={{fontSize:14,color:sc}}>──▶</div>
-                          {cargo.cargo&&<div style={{fontSize:12,color:C.purple}}>{cargo.cargo}</div>}
+                          {calc?.ladenNm&&<div style={{fontSize:13,color:C.faint}}>{calc.ladenNm}nm</div>}
+                          <div style={{fontSize:15,color:sc}}>──▶</div>
+                          {cargo.cargo&&<div style={{fontSize:13,color:C.purple}}>{cargo.cargo}</div>}
                         </div>
                         <div style={{background:C.bg3,border:"1px solid "+(calc?.openDate?C.green:C.bd)+"88",borderRadius:5,padding:"3px 9px",textAlign:"center"}}>
-                          <div style={{fontSize:12,color:C.faint,textTransform:"uppercase"}}>Next open</div>
-                          <div style={{fontSize:12,fontWeight:700,color:calc?.openDate?C.green:C.dim}}>{cargo.disch||"?"}</div>
-                          {calc?.openDate?(<div style={{fontSize:12,color:C.green}}>~{calc.openDate}</div>):(<div style={{fontSize:12,color:C.faint}}>—</div>)}
+                          <div style={{fontSize:11,color:C.faint,textTransform:"uppercase"}}>Next open</div>
+                          <div style={{fontSize:13,fontWeight:700,color:calc?.openDate?C.green:C.dim}}>{cargo.disch||"?"}</div>
+                          {calc?.openDate?(<div style={{fontSize:13,color:C.green}}>~{calc.openDate}</div>):(<div style={{fontSize:13,color:C.faint}}>—</div>)}
                         </div>
                         <div style={{marginLeft:6,display:"flex",flexDirection:"column",gap:2}}>
-                          <span style={{fontSize:12,fontWeight:700,color:sc,background:sc+"18",border:"1px solid "+sc+"44",borderRadius:3,padding:"1px 7px"}}>{cargo.status}</span>
-                          {cargo.freight&&<span style={{fontSize:12,color:C.purple,fontWeight:700}}>{cargo.freight}</span>}
+                          <span style={{fontSize:13,fontWeight:700,color:sc,background:sc+"18",border:"1px solid "+sc+"44",borderRadius:3,padding:"1px 7px"}}>{cargo.status}</span>
+                          {cargo.freight&&<span style={{fontSize:13,color:C.purple,fontWeight:700}}>{cargo.freight}</span>}
                           {(()=>{
                             const b=calc?.ballastNm||0;const l=calc?.ladenNm||0;
                             if(!l)return null;
                             const ets=calcEuEts(b,l,13,15,3,8,2,1,0.25,1,0.25,0,12.5,false);
-                            return ets>0?<span style={{fontSize:11,color:"#fd79a8",fontWeight:600,background:"rgba(253,121,168,0.08)",border:"1px solid rgba(253,121,168,0.25)",borderRadius:3,padding:"1px 5px",whiteSpace:"nowrap"}} title="Indicative EU ETS cost (50% scope, deep-sea)">ETS ~${ets.toLocaleString()}</span>:null;
+                            return ets>0?<span style={{fontSize:12,color:"#fd79a8",fontWeight:600,background:"rgba(253,121,168,0.08)",border:"1px solid rgba(253,121,168,0.25)",borderRadius:3,padding:"1px 5px",whiteSpace:"nowrap"}} title="Indicative EU ETS cost (50% scope, deep-sea)">ETS ~${ets.toLocaleString()}</span>:null;
                           })()}
                         </div>
                       </>}
-                      {!cargo&&<div style={{marginLeft:8,fontSize:12,color:C.faint,fontStyle:"italic"}}>No fixture - vessel open</div>}
+                      {!cargo&&<div style={{marginLeft:8,fontSize:13,color:C.faint,fontStyle:"italic"}}>No fixture - vessel open</div>}
                     </div>
                     {v.spec?.fuel||v.spec?.iceClass?(<div style={{display:"flex",gap:3,marginTop:4}}>{v.spec?.fuel&&<Tag col={v.spec.fuel==="LNG"?C.green:C.purple}>{v.spec.fuel}</Tag>}{v.spec?.iceClass&&<Tag col={C.blue}>{v.spec.iceClass}</Tag>}</div>):null}
                   </div>
@@ -1256,6 +1258,11 @@ const filtV=useMemo(()=>{
         )}
         {tab==="dash"&&(
           <Dashboard vessels={vessels} cargoes={cargoes} history={history||[]}/>
+        )}
+        {tab==="notes"&&(
+          <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
+            <NotesTab/>
+          </div>
         )}
       </div>
     </div>
