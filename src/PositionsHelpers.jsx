@@ -143,58 +143,81 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels}) {
 
   function fmtDate(){ return new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}); }
 
-  // Format cargo lines: Charterer / Vessel / Qty Cargo / Load to Disch / Laycan / Freight
+  // WhatsApp / text format for positions
   function cargoToText(rows){
-    const UPPER_ABBR=new Set(["ARA","USG","USGC","UKC","UKG","MED","GIB","SPORE","WAF","MEG","AG","CPP","DPP","LNG","LPG","IMO","ULSD","HVO","GTL","LCO","UCO","FAME","LSFO","HSFO","MGO","VME","ARAG","NOLA","LOOP"]);
-    const tc=s=>!s?"":s.toLowerCase().split(" ").map(w=>{if(!w)return w;const up=w.toUpperCase();if(UPPER_ABBR.has(up))return up;return w[0].toUpperCase()+w.slice(1);}).join(" ");
-    const tcCargo=s=>!s?"":s.toLowerCase().split(" ").map(w=>w?w[0].toUpperCase()+w.slice(1):"").join(" ");
-    const fmtQty=q=>{const n=normaliseQty(q)||"";return n.replace(/(\d)\.(\d)/g,"$1,$2");};
-    const fmtLaycan=(from,to)=>{
-      const stripZ=s=>s?s.replace(/^0(\d)/,"$1"):s;
+    // Title case but keep known abbreviations uppercase
+    const UPPER_ABBR=new Set(["ARA","USG","USGC","UKC","UKG","MED","ARA","GIB","SPORE","WAF","MEG","AG","CPP","DPP","LNG","LPG","IMO","FOB","CIF","ETA","STS","FSU","ULSD","HVO","GTL","LCO","UCO","FAME","LSFO","HSFO","MGO","VME"]);
+    const tc = s => !s?"":s.toLowerCase().split(" ").map(w=>{
+      if(!w)return w;
+      const up=w.toUpperCase();
+      if(UPPER_ABBR.has(up))return up;
+      return w[0].toUpperCase()+w.slice(1);
+    }).join(" ");
+    // Title case cargo type (not all caps)
+    const tcCargo = s => !s?"":s.toLowerCase().split(" ").map(w=>w?w[0].toUpperCase()+w.slice(1):"").join(" ");
+    // Format qty: replace . with , for decimals
+    const fmtQty = q => {const n=normaliseQty(q)||"";return n.replace(/(\d)\.(\d)/g,"$1,$2");};
+    // Format laycan: "19 Mar - 21 Mar" → "19-21 Mar", or single date
+    const fmtLaycan = (from,to) => {
       if(!from&&!to)return "";
       if(from&&to){
+        // Try to compact same-month range: "19 Mar - 21 Mar" → "19-21 Mar"
         const m1=from.match(/^(\d{1,2})\s+([A-Za-z]{3})/);
         const m2=to.match(/^(\d{1,2})\s+([A-Za-z]{3})/);
         if(m1&&m2&&m1[2].toLowerCase()===m2[2].toLowerCase())
-          return parseInt(m1[1])+"-"+parseInt(m2[1])+" "+m1[2];
-        if(m1&&m2) return parseInt(m1[1])+" "+m1[2]+" - "+parseInt(m2[1])+" "+m2[2];
-        return (stripZ(from)||"")+" - "+(stripZ(to)||"");
+          return m1[1]+"-"+m2[1]+" "+m1[2];
+        return from+" - "+to;
       }
-      const s=from||to;
-      const m=s.match(/^(\d{1,2})\s+([A-Za-z]{3})/);
-      return m?parseInt(m[1])+" "+m[2]:stripZ(s);
+      return from||to;
     };
-    const fmtFreight=f=>{
-      if(!f||!String(f).trim())return "RNR";
-      const s=String(f).trim();
-      if(s.toUpperCase()==="RNR")return "RNR";
-      if(/^\d/.test(s)||s.toLowerCase().startsWith("usd")){
-        const clean=s.replace(/^usd\s*/i,"").trim();
-        return "USD "+clean+" ls";
-      }
-      return s;
-    };
-    const parts=[];
+    const parts = [];
     for(const c of rows){
-      const charterer=tc(c.charterer||"")||"CNR";
-      const vessel=tc(c.vessel||"");
-      const qty=fmtQty(c.qty);
-      const cargo=tcCargo(c.cargo||"");
-      const load=tc(c.load||"");
-      const disch=tc(c.disch||"");
-      const laycan=fmtLaycan(c.from,c.to);
-      const freight=fmtFreight(c.freight);
-      const qtyCargoStr=[qty,cargo].filter(Boolean).join(" ");
-      const routeStr=load&&disch?load+" to "+disch:load||disch;
-      // Build slash-separated line
-      const segs=[];
-      segs.push(charterer);
-      if(vessel) segs.push(vessel);
-      if(qtyCargoStr) segs.push(qtyCargoStr);
-      if(routeStr) segs.push(routeStr);
-      if(laycan) segs.push(laycan);
-      segs.push(freight);
-      parts.push(segs.join(" / "));
+      const st = c.status||"";
+      const charterer = tc(c.charterer||"");
+      const qty = fmtQty(c.qty);
+      const cargoType = tcCargo(c.cargo||"");
+      const load = tc(c.load||"");
+      const disch = tc(c.disch||"");
+      const laycanStr = fmtLaycan(c.from,c.to);
+      const freight = c.freight||"";
+      const vessel = tc(c.vessel||"");
+      let line = "";
+      if((st==="FIXED"||st==="SUBS") && vessel){
+        const fixWord = st==="SUBS"?"on subs":"fixed";
+        line = [charterer,fixWord,vessel,qty,cargoType,load,"to",disch,laycanStr,freight?"USD "+freight+" ls":""].filter(Boolean).join(" ");
+      } else {
+        line = [vessel||charterer,qty,cargoType,load,"to",disch,laycanStr].filter(Boolean).join(" ");
+      }
+      parts.push(line);
+    }
+    return parts.join("\n").trim();
+  }
+
+  // WhatsApp / text format for cargoes
+  function cargoToText(rows){
+    const tc = s => !s?"":s.toLowerCase().split(" ").map(w=>w?w[0].toUpperCase()+w.slice(1):"").join(" ");
+    const fmtQty = q => normaliseQty(q)||"";
+    const parts = [];
+    parts.push("\ud83d\udce6 *Cargoes* \u2014 "+fmtDate());
+    parts.push("");
+    for(const c of rows){
+      const st = c.status||"";
+      const charterer = tc(c.charterer||"");
+      const qty = fmtQty(c.qty);
+      const cargoType = (c.cargo||"").toUpperCase();
+      const load = tc(c.load||"");
+      const disch = tc(c.disch||"");
+      const laycanStr = c.from&&c.to?"from "+c.from+" to "+c.to:c.from?"from "+c.from:c.to?"to "+c.to:"";
+      const freight = c.freight||"";
+      const vessel = tc(c.vessel||"");
+      let line = "";
+      if((st==="FIXED"||st==="SUBS") && vessel){
+        const fixWord = st==="SUBS"?"on subs":"fixed";
+        line = [charterer,fixWord,vessel,qty,cargoType,load,"to",disch,laycanStr,freight?"USD "+freight+" ls":""].filter(Boolean).join(" ");
+      } else {
+        line = [vessel||charterer,qty,cargoType,load,"to",disch,laycanStr].filter(Boolean).join(" ");
+      }
+      parts.push(line);
     }
     return parts.join("\n").trim();
   }
@@ -235,8 +258,9 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels}) {
   }
 
   const rows = mode==="pos" ? vessels : cargoes;
-  const btnStyle = {fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(120,160,220,0.3)",
-    background:"rgba(15,25,50,0.8)",color:"#9fc3f5",cursor:"pointer",display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap",fontFamily:"inherit"};
+  const btnStyle = {fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,
+    border:"1px solid rgba(120,160,220,0.3)",background:"rgba(15,25,50,0.85)",
+    color:"#9fc3f5",cursor:"pointer",display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap",fontFamily:"inherit"};
 
   function copyText(){
     const selC = selCargoes&&selCargoes.size>0 ? selCargoes : null;
@@ -259,7 +283,7 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels}) {
   if(!rows.length) return null;
   return(
     <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-      <button style={{...btnStyle,borderColor:copied?"rgba(46,204,113,0.5)":undefined,color:copied?"#2ecc71":undefined}}
+      <button style={{...btnStyle,borderColor:copied?"rgba(46,204,113,0.5)":undefined,color:copied?"#2ecc71":"#9fc3f5"}}
         onClick={copyText} title="Copy fixtures">
         {copied?"✓ Copied!":(mode==="cargo"&&selCargoes&&selCargoes.size>0?"📋 Copy ("+selCargoes.size+")":mode==="pos"&&selVessels&&selVessels.size>0?"📋 Copy ("+selVessels.size+")":"📋 Copy all")}
       </button>
