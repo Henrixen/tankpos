@@ -3,7 +3,7 @@ import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
 import EC from "./EC";
 import ParsePanel from "./ParsePanel";
-import RightPanel from "./AIAsk";
+import RightPanel, { AskAIStrip } from "./AIAsk";
 import { RateMatrix, RateMatrixBunkerInput } from "./RateMatrix";
 import FixingTab from "./FixingTab";
 import ProjectsTab from "./ProjectsTab";
@@ -11,7 +11,7 @@ import { TCECalculator } from "./TCECalculator";
 import Dashboard from "./Dashboard";
 import { loadHistory } from "./supabaseHelpers";
 import { OpeningBreakdown, FixingWindow, ExportPanel } from "./PositionsHelpers";
-import IntelVault from "./IntelVault";
+import IntelVault, { IntelVaultStrip } from "./IntelVault";
 import AISMap from "./AISMap";
 import MatrixTable from "./components/ui/MatrixTable";
 
@@ -36,18 +36,13 @@ const [dwtFilter,setDwtFilter]=useState("");   // "" | "<10" | "10-15" | "15-20"
 const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" | "2010-2015" | "2015-2020" | ">2020"
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
-  // Advanced cargo filters: charterer, cargo grade, laycan month/year (AND logic)
-  const [cChartererFilter,setCChartererFilter]=useState("");
-  const [cGradeFilter,setCGradeFilter]=useState("");
-  const [cLaycanMonthFilter,setCLaycanMonthFilter]=useState(""); // "Jan","Feb",...
-  const [cLaycanYearFilter,setCLaycanYearFilter]=useState("");   // "2025","2026",...
-  const [cShowTickedOnly,setCShowTickedOnly]=useState(false);
   const [mxSearch,setMxSearch]=useState("");
   const [cSortK,setCsortK]=useState("updated");
   const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
   const [selVessels,setSelVessels]=useState(()=>new Set());
   const [history,setHistory]=useState([]);
   useEffect(()=>{loadHistory().then(setHistory);},[vessels]);
+  const [intelItems,setIntelItems]=useState([]);
   const [pendingDel,setPendingDel]=useState(null);
   const [restoreMsg,setRestoreMsg]=useState("");
   const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
@@ -145,26 +140,26 @@ const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
 const cargoColumns = [
   { key: "select", label: "", align: "center", width: 28 },
   { key: "status", label: "Status", align: "center", width: colWidthsC.Status },
-  { key: "vessel", label: "Vessel", align: "left", width: colWidthsC.Vessel },
-  { key: "charterer", label: "Charterer", align: "left", width: colWidthsC.Charterer },
-  { key: "qty", label: "Qty", align: "left", width: colWidthsC.Qty },
-  { key: "cargo", label: "Cargo", align: "left", width: colWidthsC.Cargo },
-  { key: "load", label: "Load", align: "left", width: colWidthsC.Load },
-  { key: "disch", label: "Disch", align: "left", width: colWidthsC.Disch },
-  { key: "from", label: "From", align: "left", width: colWidthsC.LaycanStart },
-  { key: "to", label: "To", align: "left", width: colWidthsC.LaycanEnd },
-  { key: "freight", label: "Freight", align: "left", width: colWidthsC.Freight },
-  { key: "comment", label: "Comment", align: "left", width: colWidthsC.Comment },
+  { key: "vessel", label: "Vessel", width: colWidthsC.Vessel },
+  { key: "charterer", label: "Charterer", width: colWidthsC.Charterer },
+  { key: "qty", label: "Qty", align: "right", width: colWidthsC.Qty },
+  { key: "cargo", label: "Cargo", width: colWidthsC.Cargo },
+  { key: "load", label: "Load", width: colWidthsC.Load },
+  { key: "disch", label: "Disch", width: colWidthsC.Disch },
+  { key: "from", label: "From", align: "center", width: colWidthsC.LaycanStart },
+  { key: "to", label: "To", align: "center", width: colWidthsC.LaycanEnd },
+  { key: "freight", label: "Freight", align: "right", width: colWidthsC.Freight },
+  { key: "comment", label: "Comment", width: colWidthsC.Comment },
   { key: "updated", label: "Updated", align: "center", width: colWidthsC.Updated },
   { key: "delete", label: "", align: "center", width: 26 },
 ];
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
   const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
   const fb=on=>({
-  fontSize:12,
-  fontWeight:700,
-  padding:"4px 10px",
-  borderRadius:4,
+  fontSize:11,
+  fontWeight:600,
+  padding:"2px 7px",
+  borderRadius:3,
   border:"1px solid "+(on ? C.blue : "rgba(120,160,220,0.35)"),
   background:on ? "rgba(88,166,255,.22)" : C.bg4,
   color:on ? "#d9ecff" : "#9fc3f5",
@@ -392,23 +387,8 @@ const filtV=useMemo(()=>{
         return String(av).toLowerCase()<String(bv).toLowerCase()?-cSortD:String(av).toLowerCase()>String(bv).toLowerCase()?cSortD:0;
       });
     }
-    if(cChartererFilter) list=list.filter(c=>(c.charterer||"").toLowerCase().includes(cChartererFilter.toLowerCase()));
-    if(cGradeFilter) list=list.filter(c=>(c.cargo||"").toLowerCase().includes(cGradeFilter.toLowerCase()));
-    if(cLaycanMonthFilter){
-      list=list.filter(c=>{
-        const mon=(c.from||c.to||"").toLowerCase();
-        return mon.includes(cLaycanMonthFilter.toLowerCase());
-      });
-    }
-    if(cLaycanYearFilter){
-      list=list.filter(c=>{
-        const d=new Date(c.from||c.updated||0);
-        return !isNaN(d) && String(d.getFullYear())===cLaycanYearFilter;
-      });
-    }
-    if(cShowTickedOnly && selCargoes.size>0) list=list.filter(c=>selCargoes.has(c.id));
     return list;
-  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cChartererFilter,cGradeFilter,cLaycanMonthFilter,cLaycanYearFilter,cShowTickedOnly,selCargoes]);
+  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter]);
 
   const FILTER_GROUPS=[
     {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"],["HIDE_EMP","Hide Employed"]]},
@@ -460,8 +440,8 @@ const filtV=useMemo(()=>{
       </div>
       <div style={{padding:"12px 16px",maxWidth:1900,margin:"0 auto"}}>
         {/* Professional tab navigation */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,gap:16,flexWrap:"wrap"}}>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",marginBottom:16,gap:12,flexWrap:"nowrap"}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",flexShrink:0}}>
             {[
               ["pos","⚓","Positions",vessels.length,"#58a6ff"],
               ["cargo","📦","Cargoes",cargoTotal||cargoes.length,"#faa356"],
@@ -486,7 +466,18 @@ const filtV=useMemo(()=>{
               </button>
             ))}
           </div>
-          <div style={{fontSize:13,fontWeight:700,color:C.faint,textAlign:"right"}}>SIGNAL — TANKER INTELLIGENCE</div>
+          {/* Global Ask AI strip — between tabs and Intel Vault */}
+          {!mobile&&(
+            <div style={{flex:1,minWidth:0,display:"flex",justifyContent:"center"}}>
+              <AskAIStrip vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>
+            </div>
+          )}
+          {/* Global Intel Vault strip — always visible */}
+          {!mobile&&(
+            <div style={{flexShrink:0}}>
+              <IntelVaultStrip onVaultUpdate={setIntelItems}/>
+            </div>
+          )}
         </div>
 
         {/* ── POSITIONS ── */}
@@ -568,7 +559,7 @@ const filtV=useMemo(()=>{
   )}
 
   {/* CENTER: Filters (34%) - same height as PPT */}
-  <div style={{width:mobile?"100%":"34%",height:mobile?"auto":260,display:"flex",flexDirection:"column",gap:8}}>
+  <div style={{flex:1,minWidth:0,height:mobile?"auto":260,display:"flex",flexDirection:"column",gap:8}}>
 
                     {selVessels.size>0&&(
                       <button
@@ -593,275 +584,51 @@ const filtV=useMemo(()=>{
                     )}
 
                     {/* UNIFIED FILTER PANEL */}
-<div style={{
-  display:"flex",
-  flexDirection:"column",
-  gap:8,
-  padding:"10px 12px",
-  background:C.bg3,
-  border:"1px solid "+C.bd2,
-  borderRadius:6,
-  height:200,
-  boxSizing:"border-box",
-  overflowY:"auto",
-  flex:1
-}}>
+{(()=>{
+  const FR=({label,col,children})=>(
+    <div style={{display:"flex",alignItems:"center",gap:6,borderBottom:"1px solid "+C.bd2,paddingBottom:3}}>
+      <div style={{width:54,fontSize:10,fontWeight:700,color:col,textTransform:"uppercase",flexShrink:0}}>{label}</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:3,flex:1}}>{children}</div>
+    </div>
+  );
+  return(
+    <div style={{display:"flex",flexDirection:"column",justifyContent:"space-between",padding:"7px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1}}>
+      <FR label="Status" col={C.amber}>
+        {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Hide Emp"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>))}
+        {filters.size>0&&<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+      </FR>
+      <FR label="Updated" col={C.blue}>
+        {[["","All"],["today","Today"],["week","This wk"]].map(([v,l])=>(<button key={v||"all"} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&(v!==""||updFilter===""))}>{l}</button>))}
+      </FR>
+      <FR label="Region" col="#7dd3fc">
+        {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>))}
+      </FR>
+      <FR label="S.Region" col={C.purple}>
+        {superRegionOptions.filter(r=>r!=="ALL").map(r=>{
+          const toggle=e=>{
+            if(e.ctrlKey||e.metaKey){setSuperRegionFilter(prev=>{const n=new Set(prev);n.has(r)?n.delete(r):n.add(r);return n;});}
+            else{setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));}
+          };
+          return <button key={r} onClick={toggle} style={fb(superRegionFilter.has(r))}>{r}</button>;
+        })}
+        {superRegionFilter.size>0&&<button onClick={()=>setSuperRegionFilter(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+      </FR>
+      <FR label="Segment" col={C.green}>
+        {(()=>{const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];return[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort((a,b)=>(ORDER.indexOf(a)===-1?99:ORDER.indexOf(a))-(ORDER.indexOf(b)===-1?99:ORDER.indexOf(b))).map(s=>(<button key={s} onClick={e=>{if(e.ctrlKey||e.metaKey){setSegmentFilter(prev=>{const n=new Set(prev);n.has(s)?n.delete(s):n.add(s);return n;});}else{setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));}setPosPage(1);}} style={fb(segmentFilter.has(s))}>{s}</button>));})()}
+        {segmentFilter.size>0&&<button onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+      </FR>
+      <FR label="DWT" col="#f59e0b">
+        {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<button key={v} onClick={()=>{setDwtFilter(dwtFilter===v?"":v);setPosPage(1);}} style={fb(dwtFilter===v)}>{l}</button>))}
+        {dwtFilter&&<button onClick={()=>{setDwtFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+      </FR>
+      <FR label="Built" col="#94a3b8">
+        {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<button key={v} onClick={()=>{setBuiltFilter(builtFilter===v?"":v);setPosPage(1);}} style={fb(builtFilter===v)}>{l}</button>))}
+        {builtFilter&&<button onClick={()=>{setBuiltFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
+      </FR>
+    </div>
+  );
+})()}</div>
 
-  {/* STATUS */}
-  <div style={{
-    display:"flex",
-    alignItems:"center",
-    gap:10,
-    borderBottom:"1px solid "+C.bd2,
-    paddingBottom:6,
-    marginBottom:6
-  }}>
-    <div style={{
-      width:70,
-      fontSize:11,
-      fontWeight:700,
-      color:C.amber,
-      textTransform:"uppercase"
-    }}>
-      Status
-    </div>
-
-    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-      {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Hide Emp"]].map(([f,l])=>(
-        <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
-      ))}
-      {filters.size>0&&(
-        <button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
-      )}
-    </div>
-  </div>
-
-  {/* UPDATED */}
-  <div style={{
-    display:"flex",
-    alignItems:"center",
-    gap:10,
-    borderBottom:"1px solid "+C.bd2,
-    paddingBottom:6,
-    marginBottom:6
-  }}>
-    <div style={{
-      width:70,
-      fontSize:11,
-      fontWeight:700,
-      color:C.blue,
-      textTransform:"uppercase"
-    }}>
-      Updated
-    </div>
-
-    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-      {[["","All"],["today","Today"],["week","This wk"]].map(([v,l])=>(
-        <button
-          key={v||"all"}
-          onClick={()=>setUpdFilter(v)}
-          style={fb(updFilter===v && (v!=="" || updFilter===""))}
-        >
-          {l}
-        </button>
-      ))}
-    </div>
-  </div>
-
-  {/* REGION */}
-  <div style={{
-    display:"flex",
-    alignItems:"center",
-    gap:10,
-    borderBottom:"1px solid "+C.bd2,
-    paddingBottom:6,
-    marginBottom:6
-  }}>
-    <div style={{
-      width:70,
-      fontSize:11,
-      fontWeight:700,
-      color:"#7dd3fc",
-      textTransform:"uppercase"
-    }}>
-      Region
-    </div>
-
-    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-      {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(
-        <button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>
-      ))}
-    </div>
-  </div>
-
-  {/* S.REGION */}
-  <div style={{
-    display:"flex",
-    alignItems:"center",
-    gap:10,
-    borderBottom:"1px solid "+C.bd2,
-    paddingBottom:6,
-    marginBottom:6
-  }}>
-    <div style={{
-      width:70,
-      fontSize:11,
-      fontWeight:700,
-      color:C.purple,
-      textTransform:"uppercase"
-    }}>
-      S.Region
-    </div>
-
-    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-      {superRegionOptions.filter(r=>r!=="ALL").map(r=>(
-        <button
-          key={r}
-          onClick={e=>{
-            if(e.ctrlKey||e.metaKey){
-              setSuperRegionFilter(prev=>{
-                const n=new Set(prev);
-                n.has(r)?n.delete(r):n.add(r);
-                return n;
-              });
-            } else {
-              setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));
-            }
-          }}
-          style={fb(superRegionFilter.has(r))}
-        >
-          {r}
-        </button>
-      ))}
-      {superRegionFilter.size>0&&(
-        <button onClick={()=>setSuperRegionFilter(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
-      )}
-    </div>
-  </div>
-
-  {/* SEGMENT */}
-  <div style={{
-    display:"flex",
-    alignItems:"center",
-    gap:10,
-    borderBottom:"1px solid "+C.bd2,
-    paddingBottom:6,
-    marginBottom:6
-  }}>
-    <div style={{
-      width:70,
-      fontSize:11,
-      fontWeight:700,
-      color:C.green,
-      textTransform:"uppercase"
-    }}>
-      Segment
-    </div>
-
-    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-      {(()=>{
-        const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];
-        const segs=[...new Set(vessels.map(v=>v.segment).filter(Boolean))];
-        return segs
-          .sort((a,b)=>{
-            const ai=ORDER.indexOf(a), bi=ORDER.indexOf(b);
-            return (ai===-1?99:ai)-(bi===-1?99:bi);
-          })
-          .map(s=>(
-            <button
-              key={s}
-              onClick={e=>{
-                if(e.ctrlKey||e.metaKey){
-                  setSegmentFilter(prev=>{
-                    const n=new Set(prev);
-                    n.has(s)?n.delete(s):n.add(s);
-                    return n;
-                  });
-                } else {
-                  setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));
-                }
-                setPosPage(1);
-              }}
-              style={fb(segmentFilter.has(s))}
-            >
-              {s}
-            </button>
-          ));
-      })()}
-      {segmentFilter.size>0&&(
-        <button onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
-      )}
-    </div>
-  </div>
-
-  {/* DWT */}
-  <div style={{
-    display:"flex",
-    alignItems:"center",
-    gap:10,
-    borderBottom:"1px solid "+C.bd2,
-    paddingBottom:6,
-    marginBottom:6
-  }}>
-    <div style={{
-      width:70,
-      fontSize:11,
-      fontWeight:700,
-      color:"#f59e0b",
-      textTransform:"uppercase"
-    }}>
-      DWT
-    </div>
-
-    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-      {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(
-        <button key={v} onClick={()=>{setDwtFilter(dwtFilter===v?"":v);setPosPage(1);}} style={fb(dwtFilter===v)}>{l}</button>
-      ))}
-      {dwtFilter&&(
-        <button onClick={()=>{setDwtFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
-      )}
-    </div>
-  </div>
-
-  {/* BUILT */}
-  <div style={{
-    display:"flex",
-    alignItems:"center",
-    gap:10
-  }}>
-    <div style={{
-      width:70,
-      fontSize:11,
-      fontWeight:700,
-      color:"#94a3b8",
-      textTransform:"uppercase"
-    }}>
-      Built
-    </div>
-
-    <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1}}>
-      {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(
-        <button key={v} onClick={()=>{setBuiltFilter(builtFilter===v?"":v);setPosPage(1);}} style={fb(builtFilter===v)}>{l}</button>
-      ))}
-      {builtFilter&&(
-        <button onClick={()=>{setBuiltFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>
-      )}
-    </div>
-  </div>
-</div></div>
-                  {/* RIGHT: Ask AI (34%) - fills remaining height */}
-{!mobile&&(
-  <div style={{width:"34%",display:"flex",flexDirection:"column",alignSelf:"stretch"}}>
-    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",flex:1}}>
-      <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg}}>
-        <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
-      </div>
-      <div style={{padding:"10px",flex:1,display:"flex",flexDirection:"column"}}>
-        <RightPanel vessels={vessels} cargoes={cargoes}/>
-      </div>
-    </div>
-  </div>
-)}
 </div>
 
                 {/* MOVED: Fleet count + Export + Search to same row */}
@@ -1133,22 +900,22 @@ const filtV=useMemo(()=>{
         {/* ── CARGOES ── */}
         {tab==="cargo"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {/* Top row: Parse 50% | Ask AI 25% | Intel Vault 25% — same height */}
+            {/* Top row: Parse | Ask AI */}
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
-              {/* Parse — 75% */}
-              <div style={{flex:mobile?"1 1 auto":"0 0 75%",display:"flex",flexDirection:"column"}}>
+              {/* Parse */}
+              <div style={{flex:mobile?"1 1 auto":"0 0 65%",display:"flex",flexDirection:"column"}}>
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
               </div>
-              {/* Intel Vault */}
-              <div style={{flex:mobile?"1 1 auto":"0 0 calc(25% - 7px)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:intelVaultExpanded?600:142,transition:"height 0.3s ease"}}>
+              {/* Ask AI */}
+              <div style={{flex:1,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:askAiExpanded?600:142,transition:"height 0.3s ease"}}>
                 <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📡 Intel Vault</span>
-                  <button onClick={()=>setIntelVaultExpanded(!intelVaultExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 8px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit"}} title={intelVaultExpanded?"Collapse":"Expand"}>
-                    {intelVaultExpanded?"▲":"▼"}
+                  <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
+                  <button onClick={()=>setAskAiExpanded(!askAiExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 8px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit"}} title={askAiExpanded?"Collapse":"Expand"}>
+                    {askAiExpanded?"▲":"▼"}
                   </button>
                 </div>
                 <div style={{flex:1,padding:"10px",overflowY:"auto"}} className="custom-scrollbar">
-                  <IntelVault onVaultUpdate={()=>{}}/>
+                  <RightPanel vessels={vessels} cargoes={cargoes}/>
                 </div>
               </div>
             </div>
@@ -1171,40 +938,6 @@ const filtV=useMemo(()=>{
                 scrollbar-color: ${C.bd} transparent;
               }
             `}</style>
-            {/* ── Advanced cargo filter bar ── */}
-            {(()=>{
-              const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-              const years=[...new Set(cargoes.map(c=>{const d=new Date(c.from||c.updated||0);return isNaN(d)?"":String(d.getFullYear());}).filter(Boolean))].sort().reverse();
-              const charterers=[...new Set(cargoes.map(c=>(c.charterer||"").trim()).filter(Boolean))].sort();
-              const grades=[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort();
-              const hasFilter=cChartererFilter||cGradeFilter||cLaycanMonthFilter||cLaycanYearFilter;
-              const chipSt=(active)=>({
-                fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:4,cursor:"pointer",whiteSpace:"nowrap",border:"1px solid "+(active?"rgba(88,166,255,.7)":"rgba(120,160,220,0.25)"),
-                background:active?"rgba(88,166,255,.18)":"rgba(15,25,50,.7)",color:active?"#d9ecff":"#7aa0c8",fontFamily:"inherit"
-              });
-              return(
-              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",padding:"6px 0 2px 0",borderBottom:"1px solid rgba(58,130,246,0.12)"}}>
-                <span style={{fontSize:11,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.07em",whiteSpace:"nowrap"}}>Filter</span>
-                {/* Charterer chips */}
-                {charterers.slice(0,12).map(ch=>(
-                  <button key={ch} style={chipSt(cChartererFilter===ch)} onClick={()=>setCChartererFilter(v=>v===ch?"":ch)}>{ch}</button>
-                ))}
-                {/* Grade chips */}
-                {grades.slice(0,10).map(g=>(
-                  <button key={g} style={chipSt(cGradeFilter===g)} onClick={()=>setCGradeFilter(v=>v===g?"":g)}>{g}</button>
-                ))}
-                <span style={{fontSize:11,color:"rgba(120,160,220,0.3)"}}>|</span>
-                {/* Month chips */}
-                {MONTHS.map(m=>(
-                  <button key={m} style={chipSt(cLaycanMonthFilter===m)} onClick={()=>setCLaycanMonthFilter(v=>v===m?"":m)}>{m}</button>
-                ))}
-                {years.map(y=>(
-                  <button key={y} style={chipSt(cLaycanYearFilter===y)} onClick={()=>setCLaycanYearFilter(v=>v===y?"":y)}>{y}</button>
-                ))}
-                {hasFilter&&<button onClick={()=>{setCChartererFilter("");setCGradeFilter("");setCLaycanMonthFilter("");setCLaycanYearFilter("");}} style={{...chipSt(false),color:"#ff6b6b",borderColor:"rgba(255,107,107,0.4)"}}>✕ Clear</button>}
-              </div>
-              );
-            })()}
             {/* Search + Export + Filters — wrap on mobile */}
             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
               <div style={{position:"relative",flex:1}}>
@@ -1212,18 +945,6 @@ const filtV=useMemo(()=>{
                   style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
                 {cSearch&&<button onClick={()=>{setCSearch("");clearTimeout(window._csTimer);onCargoSearch("");}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
               </div>
-              {/* Tick all / none */}
-              <button onClick={()=>setSelCargoes(selCargoes.size===filtC.length?new Set():new Set(filtC.map(c=>c.id)))}
-                style={{...fb(selCargoes.size>0),fontSize:11,padding:"3px 9px"}}>
-                {selCargoes.size===filtC.length&&filtC.length>0?"☑ None":"☐ All"}
-              </button>
-              {/* Show ticked only */}
-              {selCargoes.size>0&&(
-                <button onClick={()=>setCShowTickedOnly(v=>!v)}
-                  style={{...fb(cShowTickedOnly),fontSize:11,padding:"3px 9px",borderColor:cShowTickedOnly?"rgba(79,195,247,.7)":undefined,color:cShowTickedOnly?"#4fc3f7":undefined}}>
-                  👁 Ticked ({selCargoes.size})
-                </button>
-              )}
               <ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/>
               {selCargoes.size>0&&(
                 <button onClick={()=>setPendingDel({type:"allcargo",id:"__SELCARGO__",label:selCargoes.size+" cargo"+(selCargoes.size!==1?"es":"")})}
@@ -1248,84 +969,195 @@ const filtV=useMemo(()=>{
               <span style={{color:C.faint}}>Failed <span style={{color:C.red,fontWeight:700}}>{cargoes.filter(c=>c.status==="FAILED").length}</span></span>
               <span style={{flex:1}}/>
             </div>
-            {/* Cargo table with resizable columns */}
-            {(()=>{
-              function startColResize(colKey, e){
-                e.preventDefault();
-                const startX = e.clientX;
-                const startW = colWidthsC[colKey] || 100;
-                function onMove(ev){
-                  const delta = ev.clientX - startX;
-                  setColWidthsC(prev=>({...prev,[colKey]:Math.max(40,startW+delta)}));
-                }
-                function onUp(){ window.removeEventListener("mousemove",onMove); window.removeEventListener("mouseup",onUp); }
-                window.addEventListener("mousemove",onMove);
-                window.addEventListener("mouseup",onUp);
-              }
-              // Map colKey to colWidthsC key
-              const COL_KEY_MAP={vessel:"Vessel",charterer:"Charterer",qty:"Qty",cargo:"Cargo",load:"Load",disch:"Disch",from:"LaycanStart",to:"LaycanEnd",freight:"Freight",comment:"Comment",updated:"Updated",status:"Status"};
-              return(
             <div style={tableWrap}>
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
-                :<table style={{...tableStyle,tableLayout:"fixed"}}>
-                  <colgroup>
-                    {cargoColumns.map(col=><col key={col.key} style={{width:col.width,minWidth:col.width}}/>)}
-                  </colgroup>
-                  <thead>
-                    <tr style={{background:C.bg4}}>
-                      {cargoColumns.map(col=>{
-                        const ckKey=COL_KEY_MAP[col.key];
-                        return(
-                          <th key={col.key} style={{...th2,textAlign:col.align||"left",position:"relative",width:col.width,userSelect:"none",padding:col.key==="select"||col.key==="delete"?"4px 2px":"7px 10px 7px 8px"}}>
-                            {col.key==="select"?(
-                              <span style={{fontSize:11,color:selCargoes.size>0?"#4fc3f7":C.faint,cursor:"pointer"}} onClick={()=>setSelCargoes(selCargoes.size===filtC.length?new Set():new Set(filtC.map(c=>c.id)))}>
-                                {selCargoes.size===filtC.length&&filtC.length>0?"[✓]":"[ ]"}
-                              </span>
-                            ):col.label}
-                            {ckKey&&<div onMouseDown={e=>startColResize(ckKey,e)} style={{position:"absolute",right:0,top:0,bottom:0,width:5,cursor:"col-resize",background:"transparent",zIndex:2}} title="Drag to resize"/>}
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtC.map((f,i)=>{
-                      const sc = f.status==="FIXED" ? C.green : f.status==="SUBS" ? C.purple : f.status==="FAILED" ? C.red : C.faint;
-                      return(
-                        <tr key={f.id} style={{background:rowBg(i)}}>
-                          <td style={{...tdCtr,width:28,padding:"0 2px"}} onClick={e=>{e.stopPropagation();setSelCargoes(p=>{const n=new Set(p);n.has(f.id)?n.delete(f.id):n.add(f.id);return n;});}}>
-                            <span style={{fontSize:12,color:selCargoes.has(f.id)?"#4fc3f7":C.faint}}>{selCargoes.has(f.id)?"[✓]":"[ ]"}</span>
-                          </td>
-                          <td style={{...tdCtr,color:sc,fontWeight:700,cursor:"pointer"}} onClick={e=>{e.stopPropagation();const opts=["SUBS","FIXED","FAILED",""];const cur=opts.indexOf(f.status||"");onUpdateC(f.id,"status",opts[(cur+1)%opts.length]);}}>
-                            {f.status||""}
-                          </td>
-                          <EC value={f.vessel} color={C.blue} bold placeholder="TBN" onSave={v2=>onUpdateC(f.id,"vessel",v2)} data-cell={`${i}-cvessel`} onTab={()=>focusCell(i,"charterer")} onShiftTab={()=>focusCell(i,"status")} onDown={()=>focusCell(i+1,"cvessel")} onUp={()=>focusCell(i-1,"cvessel")}/>
-                          <EC value={toTCase(f.charterer)} color={"#79c0ff"} placeholder="" onSave={v2=>onUpdateC(f.id,"charterer",toTCase(v2))} data-cell={`${i}-charterer`} onTab={()=>focusCell(i,"qty")} onShiftTab={()=>focusCell(i,"cvessel")} onDown={()=>focusCell(i+1,"charterer")} onUp={()=>focusCell(i-1,"charterer")}/>
-                          <EC value={normaliseQty(f.qty)} color={C.amber} placeholder="" onSave={v2=>onUpdateC(f.id,"qty",normaliseQty(v2))} data-cell={`${i}-qty`} onTab={()=>focusCell(i,"cargo")} onShiftTab={()=>focusCell(i,"charterer")} onDown={()=>focusCell(i+1,"qty")} onUp={()=>focusCell(i-1,"qty")}/>
-                          <EC value={f.cargo||""} placeholder="" onSave={v2=>onUpdateC(f.id,"cargo",v2)} data-cell={`${i}-cargo`} onTab={()=>focusCell(i,"load")} onShiftTab={()=>focusCell(i,"qty")} onDown={()=>focusCell(i+1,"cargo")} onUp={()=>focusCell(i-1,"cargo")}/>
-                          <EC value={toTCase(f.load||"")} placeholder="" onSave={v2=>onUpdateC(f.id,"load",toTCase(v2))} data-cell={`${i}-load`} onTab={()=>focusCell(i,"disch")} onShiftTab={()=>focusCell(i,"cargo")} onDown={()=>focusCell(i+1,"load")} onUp={()=>focusCell(i-1,"load")}/>
-                          <EC value={toTCase(f.disch||"")} placeholder="" onSave={v2=>onUpdateC(f.id,"disch",toTCase(v2))} data-cell={`${i}-disch`} onTab={()=>focusCell(i,"from")} onShiftTab={()=>focusCell(i,"load")} onDown={()=>focusCell(i+1,"disch")} onUp={()=>focusCell(i-1,"disch")}/>
-                          <EC value={fmtDateShort(f.from)} placeholder="" onSave={v2=>onUpdateC(f.id,"from",v2)} data-cell={`${i}-from`} onTab={()=>focusCell(i,"to")} onShiftTab={()=>focusCell(i,"disch")} onDown={()=>focusCell(i+1,"from")} onUp={()=>focusCell(i-1,"from")}/>
-                          <EC value={fmtDateShort(f.to)} placeholder="" onSave={v2=>onUpdateC(f.id,"to",v2)} data-cell={`${i}-to`} onTab={()=>focusCell(i,"freight")} onShiftTab={()=>focusCell(i,"from")} onDown={()=>focusCell(i+1,"to")} onUp={()=>focusCell(i-1,"to")}/>
-                          <EC value={fmtFreight(f.freight)||f.freight} color={"#a8e6a3"} placeholder="" onSave={v2=>onUpdateC(f.id,"freight",fmtFreight(v2)||v2)} data-cell={`${i}-freight`} onTab={()=>focusCell(i,"comment")} onShiftTab={()=>focusCell(i,"to")} onDown={()=>focusCell(i+1,"freight")} onUp={()=>focusCell(i-1,"freight")}/>
-                          <EC value={f.comment||""} color={C.dim} placeholder="" onSave={v2=>onUpdateC(f.id,"comment",v2)} data-cell={`${i}-comment`} onTab={()=>focusCell(i+1,"cvessel")} onShiftTab={()=>focusCell(i,"freight")} onDown={()=>focusCell(i+1,"comment")} onUp={()=>focusCell(i-1,"comment")}/>
-                          <td style={{...tdCtr,color:C.faint}}>
-                            {f.updated?new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}
-                          </td>
-                          <td style={{...tdCtr,width:26,minWidth:26,maxWidth:26,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
-                            <button onClick={e=>{e.stopPropagation();setPendingDel({type:"cargo",id:f.id,label:f.vessel||"cargo"});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.7}} title="Delete">✕</button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              }
-              {hasMore&&<div style={{textAlign:"center",padding:"12px"}}><button onClick={onLoadMore} style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"4px 16px",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Load more</button></div>}
+                : <MatrixTable
+    columns={cargoColumns}
+    data={filtC}
+    keyField="id"
+    renderRow={(f, td) => {
+  const i = filtC.findIndex(x => x.id === f.id);
+  const sc = f.status==="FIXED" ? C.green : f.status==="SUBS" ? C.purple : f.status==="FAILED" ? C.red : C.faint;
+
+  return (
+    <>
+      {/* SELECT */}
+      <td
+        style={{ ...tdCtr, width: 28, padding: "0 2px" }}
+        onClick={e => {
+          e.stopPropagation();
+          setSelCargoes(p => {
+            const n = new Set(p);
+            n.has(f.id) ? n.delete(f.id) : n.add(f.id);
+            return n;
+          });
+        }}
+      >
+        <span style={{ fontSize: 12, color: selCargoes.has(f.id) ? "#4fc3f7" : C.faint }}>
+          {selCargoes.has(f.id) ? "[✓]" : "[ ]"}
+        </span>
+      </td>
+
+      {/* STATUS */}
+      <td
+        style={{ ...tdCtr, color: sc, fontWeight: 700, cursor: "pointer" }}
+        onClick={e => {
+          e.stopPropagation();
+          const opts = ["SUBS","FIXED","FAILED",""];
+          const cur = opts.indexOf(f.status || "");
+          onUpdateC(f.id, "status", opts[(cur + 1) % opts.length]);
+        }}
+      >
+        {f.status || ""}
+      </td>
+
+      <EC
+  value={f.vessel}
+  color={C.blue}
+  bold
+  placeholder="TBN"
+  onSave={v2 => onUpdateC(f.id, "vessel", v2)}
+  data-cell={`${i}-cvessel`}
+  onTab={() => focusCell(i, "charterer")}
+  onShiftTab={() => focusCell(i, "status")}
+  onDown={() => focusCell(i + 1, "cvessel")}
+  onUp={() => focusCell(i - 1, "cvessel")}
+/>
+
+<EC
+  value={toTCase(f.charterer)}
+  color={"#79c0ff"}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "charterer", toTCase(v2))}
+  data-cell={`${i}-charterer`}
+  onTab={() => focusCell(i, "qty")}
+  onShiftTab={() => focusCell(i, "cvessel")}
+  onDown={() => focusCell(i + 1, "charterer")}
+  onUp={() => focusCell(i - 1, "charterer")}
+/>
+
+<EC
+  value={normaliseQty(f.qty)}
+  color={C.amber}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "qty", normaliseQty(v2))}
+  data-cell={`${i}-qty`}
+  onTab={() => focusCell(i, "cargo")}
+  onShiftTab={() => focusCell(i, "charterer")}
+  onDown={() => focusCell(i + 1, "qty")}
+  onUp={() => focusCell(i - 1, "qty")}
+/>
+
+<EC
+  value={f.cargo || ""}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "cargo", v2)}
+  data-cell={`${i}-cargo`}
+  onTab={() => focusCell(i, "load")}
+  onShiftTab={() => focusCell(i, "qty")}
+  onDown={() => focusCell(i + 1, "cargo")}
+  onUp={() => focusCell(i - 1, "cargo")}
+/>
+
+<EC
+  value={toTCase(f.load || "")}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "load", toTCase(v2))}
+  data-cell={`${i}-load`}
+  onTab={() => focusCell(i, "disch")}
+  onShiftTab={() => focusCell(i, "cargo")}
+  onDown={() => focusCell(i + 1, "load")}
+  onUp={() => focusCell(i - 1, "load")}
+/>
+
+<EC
+  value={toTCase(f.disch || "")}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "disch", toTCase(v2))}
+  data-cell={`${i}-disch`}
+  onTab={() => focusCell(i, "from")}
+  onShiftTab={() => focusCell(i, "load")}
+  onDown={() => focusCell(i + 1, "disch")}
+  onUp={() => focusCell(i - 1, "disch")}
+/>
+
+<EC
+  value={fmtDateShort(f.from)}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "from", v2)}
+  data-cell={`${i}-from`}
+  onTab={() => focusCell(i, "to")}
+  onShiftTab={() => focusCell(i, "disch")}
+  onDown={() => focusCell(i + 1, "from")}
+  onUp={() => focusCell(i - 1, "from")}
+/>
+
+<EC
+  value={fmtDateShort(f.to)}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "to", v2)}
+  data-cell={`${i}-to`}
+  onTab={() => focusCell(i, "freight")}
+  onShiftTab={() => focusCell(i, "from")}
+  onDown={() => focusCell(i + 1, "to")}
+  onUp={() => focusCell(i - 1, "to")}
+/>
+
+<EC
+  value={fmtFreight(f.freight) || f.freight}
+  color={"#a8e6a3"}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "freight", fmtFreight(v2) || v2)}
+  data-cell={`${i}-freight`}
+  onTab={() => focusCell(i, "comment")}
+  onShiftTab={() => focusCell(i, "to")}
+  onDown={() => focusCell(i + 1, "freight")}
+  onUp={() => focusCell(i - 1, "freight")}
+/>
+
+<EC
+  value={f.comment || ""}
+  color={C.dim}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "comment", v2)}
+  data-cell={`${i}-comment`}
+  onTab={() => focusCell(i + 1, "cvessel")}
+  onShiftTab={() => focusCell(i, "freight")}
+  onDown={() => focusCell(i + 1, "comment")}
+  onUp={() => focusCell(i - 1, "comment")}
+/>
+
+      {/* UPDATED */}
+      <td style={{ ...tdCtr, color: C.faint }}>
+        {f.updated ? new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
+      </td>
+
+      {/* DELETE */}
+      <td
+        style={{ ...tdCtr, width: 26, minWidth: 26, maxWidth: 26, padding: "0 2px" }}
+        onClick={e=>e.stopPropagation()}
+      >
+        <button
+          onClick={(e)=>{
+            e.stopPropagation();
+            setPendingDel({type:"cargo",id:f.id,label:f.vessel||"cargo"});
+          }}
+          style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.7}}
+          title="Delete"
+        >
+          ✕
+        </button>
+      </td>
+    </>
+  );
+}}
+  />}
+              {hasMore&&
+              <div style={{textAlign:"center",padding:"12px"}}>
+                <button onClick={onLoadMore} style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"4px 16px",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Load more</button>
+              </div>}
             </div>
-              );
-            })()}
           </div>
         )}
 
