@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { C } from "./constants";
-import { supabase } from "./supabaseclient";
 
 // ─── SettingsTab ───────────────────────────────────────────────────────────────
 // Manages cargo filter groups stored in localStorage (no DB needed).
@@ -31,13 +30,9 @@ function saveGroups(groups) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
 }
 
-export function useCargoFilterGroups() {
+export default function SettingsTab() {
   const [groups, setGroups] = useState(loadGroups);
   useEffect(() => { saveGroups(groups); }, [groups]);
-  return [groups, setGroups];
-}
-
-export default function SettingsTab({ groups, setGroups }) {
   const [editing, setEditing] = useState(null); // group id being edited
   const [editLabel, setEditLabel] = useState("");
   const [editAliases, setEditAliases] = useState(""); // comma-separated
