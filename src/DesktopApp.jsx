@@ -15,6 +15,8 @@ import IntelVault, { IntelVaultStrip } from "./IntelVault";
 import AISMap from "./AISMap";
 import MatrixTable from "./components/ui/MatrixTable";
 import NotesTab from "./NotesTab";
+import SettingsTab, { useCargoFilterGroups } from "./SettingsTab";
+import CalendarTab from "./CalendarTab";
 
 
 
@@ -37,19 +39,11 @@ const [dwtFilter,setDwtFilter]=useState("");   // "" | "<10" | "10-15" | "15-20"
 const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" | "2010-2015" | "2015-2020" | ">2020"
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
-  // Advanced cargo filters
-  const [cChartererFilters,setCChartererFilters]=useState(new Set());
-  const [cGradeFilters,setCGradeFilters]=useState(new Set());
+  const [cargoFilterGroups,setCargoFilterGroups]=useCargoFilterGroups();
+  const [activeGroupIds,setActiveGroupIds]=useState(new Set());
   const [cLaycanMonthFilter,setCLaycanMonthFilter]=useState("");
   const [cLaycanYearFilter,setCLaycanYearFilter]=useState("");
   const [cShowTickedOnly,setCShowTickedOnly]=useState(false);
-  // Custom filter button lists (user can add/delete)
-  const [customCharterers,setCustomCharterers]=useState([]);
-  const [customGrades,setCustomGrades]=useState([]);
-  const [addingCharterer,setAddingCharterer]=useState(false);
-  const [addingGrade,setAddingGrade]=useState(false);
-  const [newChartererVal,setNewChartererVal]=useState("");
-  const [newGradeVal,setNewGradeVal]=useState("");
   const [mxSearch,setMxSearch]=useState("");
   const [cSortK,setCsortK]=useState("updated");
   const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
@@ -401,13 +395,19 @@ const filtV=useMemo(()=>{
         return String(av).toLowerCase()<String(bv).toLowerCase()?-cSortD:String(av).toLowerCase()>String(bv).toLowerCase()?cSortD:0;
       });
     }
-    if(cChartererFilters.size>0) list=list.filter(c=>cChartererFilters.has((c.charterer||"").trim()));
-    if(cGradeFilters.size>0) list=list.filter(c=>cGradeFilters.has((c.cargo||"").trim()));
+    // Filter group logic: if any groups active, cargo must match at least one alias in each active group (AND across groups)
+    if(activeGroupIds.size>0){
+      const activeGroups=cargoFilterGroups.filter(g=>activeGroupIds.has(g.id));
+      list=list.filter(c=>{
+        const grade=(c.cargo||"").trim();
+        return activeGroups.every(g=>g.aliases.some(a=>grade.toLowerCase().includes(a.toLowerCase())));
+      });
+    }
     if(cLaycanMonthFilter) list=list.filter(c=>((c.from||"")+" "+(c.to||"")).toLowerCase().includes(cLaycanMonthFilter.toLowerCase()));
     if(cLaycanYearFilter) list=list.filter(c=>{const d=new Date(c.from||c.updated||0);return !isNaN(d)&&String(d.getFullYear())===cLaycanYearFilter;});
     if(cShowTickedOnly&&selCargoes.size>0) list=list.filter(c=>selCargoes.has(c.id));
     return list;
-  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cChartererFilters,cGradeFilters,cLaycanMonthFilter,cLaycanYearFilter,cShowTickedOnly,selCargoes]);
+  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,activeGroupIds,cargoFilterGroups,cLaycanMonthFilter,cLaycanYearFilter,cShowTickedOnly,selCargoes]);
 
   const FILTER_GROUPS=[
     {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"],["HIDE_EMP","Hide Employed"]]},
@@ -469,7 +469,9 @@ const filtV=useMemo(()=>{
               ["projects","🧮","Projects",0,"#58a6ff"],
               ["tce","⚡","TCE",0,"#faa356"],
               ["dash","📊","Dashboard",0,"#43e97b"],
-              ["notes","📝","Notes",0,"#f472b6"]
+              ["notes","📝","Notes",0,"#f472b6"],
+              ["cal","📅","Calendar",0,"#4fc3f7"],
+              ["settings","⚙","Settings",0,"#94a3b8"]
             ].map(([id,icon,label,count,col])=>(
               <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
                 style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
@@ -539,15 +541,15 @@ const filtV=useMemo(()=>{
  
               {/* CENTER: Rate Matrix (34%) */}
               {!mobile&&(
-                <div style={{width:"34%",background:"#070f1c",border:"1px solid rgba(58,130,246,0.18)",borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",alignSelf:"flex-start"}}>
-                  <div style={{padding:"5px 10px",background:"rgba(14,22,40,0.98)",borderBottom:"1px solid rgba(58,130,246,0.12)",display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.08em"}}>Rate Matrix</span>
+                <div style={{width:"34%",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",alignSelf:"flex-start"}}>
+                  <div style={{padding:"6px 12px",borderBottom:"1px solid "+C.bd2,background:C.bg,display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📊 Rate Matrix</span>
                     <span style={{flex:1}}/>
-                    <span style={{fontSize:10,color:"rgba(120,160,220,0.4)",textTransform:"uppercase",letterSpacing:"0.07em"}}>Bunker</span>
+                    <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Bunker</span>
                     <RateMatrixBunkerInput/>
-                    <span style={{fontSize:10,color:"rgba(120,160,220,0.4)"}}>$/mt</span>
+                    <span style={{fontSize:10,color:C.faint}}>$/mt</span>
                   </div>
-                  <div style={{padding:"8px 10px",height:460,overflowY:"auto"}}>
+                  <div style={{padding:"8px 10px",height:424,overflowY:"hidden"}}>
                     <RateMatrix/>
                   </div>
                 </div>
@@ -919,73 +921,31 @@ const filtV=useMemo(()=>{
         )}
         {tab==="cargo"&&(
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {/* Top row: Parse | Filters */}
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
-              {/* Parse — unchanged */}
               <div style={{flex:mobile?"1 1 auto":"0 0 65%",display:"flex",flexDirection:"column"}}>
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
               </div>
-              {/* Filter panel */}
+              {/* Filter panel using groups from Settings */}
               {(()=>{
                 const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
                 const years=[...new Set(cargoes.map(c=>{const d=new Date(c.from||c.updated||0);return isNaN(d)?"":String(d.getFullYear());}).filter(y=>y&&y>"2020"))].sort().reverse();
-                // Use custom lists — populated from cargoes on first render, user can add/delete
-                const chartererList=customCharterers.length>0?customCharterers:[...new Set(cargoes.map(c=>(c.charterer||"").trim()).filter(Boolean))].sort().slice(0,20);
-                const gradeList=customGrades.length>0?customGrades:[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort().slice(0,20);
                 const FR=({label,col,children})=>(
                   <div style={{display:"flex",alignItems:"flex-start",gap:5,paddingBottom:3,borderBottom:"1px solid "+C.bd2}}>
                     <div style={{width:58,fontSize:10,fontWeight:700,color:col,textTransform:"uppercase",flexShrink:0,paddingTop:2}}>{label}</div>
                     <div style={{display:"flex",flexWrap:"wrap",gap:3,flex:1}}>{children}</div>
                   </div>
                 );
-                const addBtn=(onClick)=>(
-                  <button onClick={onClick} style={{...fb(false),fontSize:10,padding:"1px 6px",color:"rgba(120,160,220,0.5)",borderColor:"rgba(120,160,220,0.2)"}}>+ add</button>
-                );
-                const delBtn=(label,onDel)=>(
-                  <span key={label} style={{display:"inline-flex",alignItems:"center",gap:1}}>
-                    <span style={{fontSize:9,color:"rgba(255,100,100,0.5)",cursor:"pointer",padding:"0 1px",lineHeight:1}} onClick={onDel} title="Remove filter">✕</span>
-                  </span>
-                );
-                const toggleSet=(set,setFn,val)=>setFn(prev=>{const n=new Set(prev);n.has(val)?n.delete(val):n.add(val);return n;});
-                const hasAnyFilter=cChartererFilters.size>0||cGradeFilters.size>0||cLaycanMonthFilter||cLaycanYearFilter;
+                const toggleGrp=id=>setActiveGroupIds(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});
+                const hasFilter=activeGroupIds.size>0||cLaycanMonthFilter||cLaycanYearFilter;
                 return(
                   <div style={{flex:1,display:"flex",flexDirection:"column"}}>
                     <div style={{display:"flex",flexDirection:"column",gap:4,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box"}}>
-                      <FR label="Charterer" col={C.amber}>
-                        {chartererList.map(ch=>(
-                          <span key={ch} style={{display:"inline-flex",alignItems:"center",gap:1}}>
-                            <button onClick={()=>toggleSet(cChartererFilters,setCChartererFilters,ch)} style={fb(cChartererFilters.has(ch))}>{ch}</button>
-                            {customCharterers.includes(ch)&&<span style={{fontSize:9,color:"rgba(255,100,100,0.4)",cursor:"pointer",padding:"0 2px"}} onClick={()=>setCustomCharterers(p=>p.filter(x=>x!==ch))}>✕</span>}
-                          </span>
-                        ))}
-                        {addingCharterer
-                          ?<span style={{display:"inline-flex",gap:3,alignItems:"center"}}>
-                              <input autoFocus value={newChartererVal} onChange={e=>setNewChartererVal(e.target.value)}
-                                onKeyDown={e=>{if(e.key==="Enter"&&newChartererVal.trim()){setCustomCharterers(p=>[...new Set([...p,newChartererVal.trim()])]);setNewChartererVal("");setAddingCharterer(false);}if(e.key==="Escape"){setAddingCharterer(false);setNewChartererVal("");}}}
-                                placeholder="charterer…" style={{width:90,background:C.bg,border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:11,padding:"1px 5px",outline:"none"}}/>
-                              <button onClick={()=>{if(newChartererVal.trim()){setCustomCharterers(p=>[...new Set([...p,newChartererVal.trim()])]);setNewChartererVal("");}setAddingCharterer(false);}} style={{...fb(true),fontSize:10,padding:"1px 6px"}}>✓</button>
-                            </span>
-                          :addBtn(()=>setAddingCharterer(true))
-                        }
-                        {cChartererFilters.size>0&&<button onClick={()=>setCChartererFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
-                      </FR>
                       <FR label="Grade" col={C.purple}>
-                        {gradeList.map(g=>(
-                          <span key={g} style={{display:"inline-flex",alignItems:"center",gap:1}}>
-                            <button onClick={()=>toggleSet(cGradeFilters,setCGradeFilters,g)} style={fb(cGradeFilters.has(g))}>{g}</button>
-                            {customGrades.includes(g)&&<span style={{fontSize:9,color:"rgba(255,100,100,0.4)",cursor:"pointer",padding:"0 2px"}} onClick={()=>setCustomGrades(p=>p.filter(x=>x!==g))}>✕</span>}
-                          </span>
+                        {cargoFilterGroups.map(g=>(
+                          <button key={g.id} onClick={()=>toggleGrp(g.id)} style={fb(activeGroupIds.has(g.id))} title={g.aliases.join(", ")}>{g.label}</button>
                         ))}
-                        {addingGrade
-                          ?<span style={{display:"inline-flex",gap:3,alignItems:"center"}}>
-                              <input autoFocus value={newGradeVal} onChange={e=>setNewGradeVal(e.target.value)}
-                                onKeyDown={e=>{if(e.key==="Enter"&&newGradeVal.trim()){setCustomGrades(p=>[...new Set([...p,newGradeVal.trim()])]);setNewGradeVal("");setAddingGrade(false);}if(e.key==="Escape"){setAddingGrade(false);setNewGradeVal("");}}}
-                                placeholder="grade…" style={{width:80,background:C.bg,border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:11,padding:"1px 5px",outline:"none"}}/>
-                              <button onClick={()=>{if(newGradeVal.trim()){setCustomGrades(p=>[...new Set([...p,newGradeVal.trim()])]);setNewGradeVal("");}setAddingGrade(false);}} style={{...fb(true),fontSize:10,padding:"1px 6px"}}>✓</button>
-                            </span>
-                          :addBtn(()=>setAddingGrade(true))
-                        }
-                        {cGradeFilters.size>0&&<button onClick={()=>setCGradeFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
+                        {activeGroupIds.size>0&&<button onClick={()=>setActiveGroupIds(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
+                        <button onClick={()=>setTab("settings")} style={{...fb(false),fontSize:10,color:"rgba(120,160,220,0.45)",borderColor:"rgba(120,160,220,0.18)",marginLeft:4}} title="Manage filter groups in Settings">⚙</button>
                       </FR>
                       <FR label="Month" col="#7dd3fc">
                         {MONTHS.map(m=>(
@@ -996,23 +956,37 @@ const filtV=useMemo(()=>{
                         ))}
                         {(cLaycanMonthFilter||cLaycanYearFilter)&&<button onClick={()=>{setCLaycanMonthFilter("");setCLaycanYearFilter("");}} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
                       </FR>
-                      <FR label="Status" col={C.green}>
-                        {[["ALL","All"],["FIXED","Fixed"],["SUBS","Subs"],["FAILED","Failed"]].map(([f,l])=>(
-                          <button key={f} onClick={()=>setCFilter(f)} style={fb(cFilter===f)}>{l}</button>
-                        ))}
-                      </FR>
                       <FR label="Period" col="#94a3b8">
                         {[["","All"],["tw","This wk"],["lw","Last wk"],["ytd","YTD"]].map(([v,l])=>(
                           <button key={v||"all"} onClick={()=>setCTimeFilter(v)} style={fb(cTimeFilter===v)}>{l}</button>
                         ))}
-                        {hasAnyFilter&&<button onClick={()=>{setCChartererFilters(new Set());setCGradeFilters(new Set());setCLaycanMonthFilter("");setCLaycanYearFilter("");}} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:4}}>✕ Clear all</button>}
+                        {hasFilter&&<button onClick={()=>{setActiveGroupIds(new Set());setCLaycanMonthFilter("");setCLaycanYearFilter("");}} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:8,fontSize:10}}>✕ Clear all</button>}
                       </FR>
                     </div>
                   </div>
                 );
               })()}
             </div>
-            {/* Search + export + tick controls */}
+            <style>{`
+              .custom-scrollbar::-webkit-scrollbar {
+                width: 8px;
+              }
+              .custom-scrollbar::-webkit-scrollbar-track {
+                background: transparent;
+              }
+              .custom-scrollbar::-webkit-scrollbar-thumb {
+                background: ${C.bd};
+                border-radius: 4px;
+              }
+              .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                background: ${C.dim};
+              }
+              .custom-scrollbar {
+                scrollbar-width: thin;
+                scrollbar-color: ${C.bd} transparent;
+              }
+            `}</style>
+            {/* Search + export + tick */}
             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
               <div style={{position:"relative",flex:1}}>
                 <input value={cSearch} onChange={e=>{const v=e.target.value;setCSearch(v);clearTimeout(window._csTimer);window._csTimer=setTimeout(()=>onCargoSearch(v),350);}} placeholder="🔍 Search cargoes…"
@@ -1034,6 +1008,9 @@ const filtV=useMemo(()=>{
                   🗑 {selCargoes.size}
                 </button>
               )}
+              {[["ALL","All"],["FIXED","Fixed"],["SUBS","Subs"],["FAILED","Failed"]].map(([f,l])=>(
+                <button key={f} onClick={()=>setCFilter(f)} style={fb(cFilter===f)}>{l}</button>
+              ))}
             </div>
             <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12}}>
               <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoTotal||cargoes.length}</span></span>
@@ -1334,6 +1311,14 @@ const filtV=useMemo(()=>{
         {tab==="notes"&&(
           <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
             <NotesTab/>
+          </div>
+        )}
+        {tab==="cal"&&(
+          <CalendarTab/>
+        )}
+        {tab==="settings"&&(
+          <div style={{padding:"4px 0"}}>
+            <SettingsTab groups={cargoFilterGroups} setGroups={setCargoFilterGroups}/>
           </div>
         )}
       </div>
