@@ -75,7 +75,7 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
     const raw=matrixRef.current[ck]?.rate||"";
     const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));
     el.value=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;
-    el.style.background=raw?c+"22":"transparent";
+    el.style.background=raw?c+"33":"transparent";
     el.style.color=raw?"rgba(200,220,255,0.9)":"rgba(120,160,220,0.3)";
     el.style.fontWeight="500";
   },[extRev,ck]);
@@ -105,7 +105,7 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
       title={matrixRef.current[ck]?.comment?"💬 "+matrixRef.current[ck].comment:"Right-click for comment"}
       style={{width:"100%",background:v?c+"22":"transparent",
         border:"none",outline:"none",
-        color:v?"rgba(200,220,255,0.9)":"rgba(120,160,220,0.3)",fontWeight:"500",
+        color:v?"rgba(200,220,255,0.9)":"rgba(120,160,220,0.3)",fontWeight:500,
         fontFamily:"inherit",fontSize:12,
         padding:"3px 3px",textAlign:"center",boxSizing:"border-box",minWidth:0}}/>
   );
@@ -166,7 +166,7 @@ function RateMatrix({onBunkerChange}){
         const etsFmt=ets>0?" (incl. ETS $"+ets.toLocaleString("nb-NO")+")":"";
         matrixRef.current={...matrixRef.current,[tceKey]:{...(matrixRef.current[tceKey]||{}),rate:String(r.tce),comment:"Auto-calc: freight $"+freight.toLocaleString()+etsFmt}};
         setTimeout(()=>{
-          document.querySelectorAll("input[data-ck='"+tceKey+"']").forEach(el=>{el.value=r.tce.toLocaleString("nb-NO");el.style.background=REGION_COLORS.Europe+"22";el.style.color="rgba(200,220,255,0.9)";el.style.fontWeight="500";el.title="Auto-calc TCE"+etsFmt;});
+          document.querySelectorAll("input[data-ck='"+tceKey+"']").forEach(el=>{el.value=r.tce.toLocaleString("nb-NO");el.style.background=REGION_COLORS.Europe+"33";el.style.color="#fff";el.style.fontWeight="700";el.title="Auto-calc TCE"+etsFmt;});
         },30);
       }
     });
@@ -207,9 +207,9 @@ function RateMatrix({onBunkerChange}){
     }
     return(
       <span onClick={()=>setEditingRoute(key)} style={{cursor:"pointer"}} title="Click to edit route">
-        <span style={{fontWeight:500,fontSize:12,color:"rgba(180,200,235,0.65)"}}>{from}</span>
+        <span style={{fontWeight:600,fontSize:12,color:C.dim}}>{from}</span>
         <span style={{color:C.faint,fontSize:12}}> → </span>
-        <span style={{fontWeight:500,fontSize:12,color:"rgba(180,200,235,0.65)"}}>{to}</span>
+        <span style={{fontWeight:600,fontSize:12,color:C.dim}}>{to}</span>
         <span style={{color:C.faint,fontSize:8,marginLeft:3,opacity:0.5}}>✎</span>
       </span>
     );
@@ -236,7 +236,7 @@ function RateMatrix({onBunkerChange}){
           matrixRef.current={...matrixRef.current,[tceKey]:{...(matrixRef.current[tceKey]||{}),rate:String(r.tce),comment:"Auto-calc: freight $"+freight.toLocaleString()+etsFmt}};
           setTimeout(()=>{
             const inputs=document.querySelectorAll("input[data-ck='"+tceKey+"']");
-            inputs.forEach(el=>{el.value=r.tce.toLocaleString("nb-NO");el.style.background=REGION_COLORS.Europe+"22";el.style.color="rgba(200,220,255,0.9)";el.style.fontWeight="500";el.title="Auto-calc TCE"+etsFmt;});
+            inputs.forEach(el=>{el.value=r.tce.toLocaleString("nb-NO");el.style.background=REGION_COLORS.Europe+"33";el.style.color="#fff";el.style.fontWeight="700";el.title="Auto-calc TCE"+etsFmt;});
           },30);
         }
       }
@@ -250,7 +250,7 @@ function RateMatrix({onBunkerChange}){
     if(loadedRef.current)saveRates(matrixRef.current);
   }
 
-  const thS={padding:"5px 8px",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.55)",background:"rgba(20,30,50,0.95)",textAlign:"center",whiteSpace:"nowrap",borderBottom:"1px solid rgba(58,130,246,0.14)",textTransform:"uppercase",letterSpacing:"0.08em"};
+  const thS={padding:"4px 5px",fontSize:12,fontWeight:700,color:"rgba(120,160,220,0.55)",background:"rgba(20,30,50,0.95)",textAlign:"center",whiteSpace:"nowrap",borderBottom:"1px solid rgba(58,130,246,0.14)"};
   const tdR={fontSize:12,padding:"1px 2px",borderBottom:"1px solid rgba(255,255,255,0.03)",verticalAlign:"middle"};
 
   // RCell is defined outside this component (see above)
@@ -270,7 +270,7 @@ function RateMatrix({onBunkerChange}){
 
       {/* Intra Europe: Rate + TCE columns */}
       <div>
-        <div style={{fontSize:10,fontWeight:700,color:REGION_COLORS.Europe,textTransform:"uppercase",letterSpacing:"0.09em",padding:"4px 8px",background:"rgba(20,30,50,0.95)",borderBottom:"1px solid rgba(58,130,246,0.14)",borderLeft:"2px solid "+REGION_COLORS.Europe}}>
+        <div style={{fontSize:12,fontWeight:700,color:REGION_COLORS.Europe,textTransform:"uppercase",letterSpacing:"0.07em",padding:"3px 5px",background:REGION_COLORS.Europe+"18",borderLeft:"2px solid "+REGION_COLORS.Europe,marginBottom:2}}>
           Intra Europe
         </div>
         <table style={{borderCollapse:"collapse",width:"100%"}}>
@@ -282,8 +282,8 @@ function RateMatrix({onBunkerChange}){
           </tr></thead>
           <tbody>
             {euRoutes.map((rt,i)=>(
-              <tr key={rt.id||i} style={{background:i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)"}}>
-                <td style={{...tdR,color:"rgba(180,200,235,0.65)",paddingLeft:6}}>
+              <tr key={rt.id||i} style={{background:"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)"}}>
+                <td style={{...tdR,color:C.dim,paddingLeft:4}}>
                   <RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/>
                 </td>
                 <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-rate"} col={REGION_COLORS.Europe} rev={rev}/></td>
@@ -298,7 +298,7 @@ function RateMatrix({onBunkerChange}){
       {/* Asia + TA: by size */}
       {rateRoutes.map((rg,rgIdx)=>(
         <div key={rg.region}>
-          <div style={{fontSize:10,fontWeight:700,color:REGION_COLORS[rg.region],textTransform:"uppercase",letterSpacing:"0.09em",padding:"4px 8px",background:"rgba(20,30,50,0.95)",borderBottom:"1px solid rgba(58,130,246,0.14)",borderLeft:"2px solid "+REGION_COLORS[rg.region]}}>
+          <div style={{fontSize:12,fontWeight:700,color:REGION_COLORS[rg.region],textTransform:"uppercase",letterSpacing:"0.07em",padding:"3px 5px",background:REGION_COLORS[rg.region]+"18",borderLeft:"2px solid "+REGION_COLORS[rg.region],marginBottom:2}}>
             {rg.label}
           </div>
           <table style={{borderCollapse:"collapse",width:"100%"}}>
@@ -309,8 +309,8 @@ function RateMatrix({onBunkerChange}){
             </tr></thead>
             <tbody>
               {rg.routes.map((rt,rtIdx)=>(
-                <tr key={rt.id||rtIdx} style={{background:rtIdx%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)"}}>
-                  <td style={{...tdR,color:"rgba(180,200,235,0.65)",paddingLeft:6}}>
+                <tr key={rt.id||rtIdx} style={{background:"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)"}}>
+                  <td style={{...tdR,color:C.dim,paddingLeft:4}}>
                     <RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/>
                   </td>
                   {RATE_SIZES.map(sz=>(
