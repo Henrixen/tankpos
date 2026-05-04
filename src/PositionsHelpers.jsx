@@ -94,16 +94,16 @@ function FixingWindow({vessels, fileDate, opFilter, onOpFilter}){
   const toPct=d=>Math.max(0,Math.min(1,(d-minDays)/range));
   const avgPct=allAvg!=null?toPct(allAvg):0.5;
 
+  const thFW={padding:"5px 8px",fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.55)",background:"rgba(14,22,40,0.98)",textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:"1px solid rgba(58,130,246,0.12)",whiteSpace:"nowrap"};
+  const tdFW={padding:"3px 8px",fontSize:11,borderBottom:"1px solid rgba(255,255,255,0.04)",verticalAlign:"middle"};
   return(
     <div style={{display:"flex",flexDirection:"column",border:"1px solid rgba(58,130,246,0.18)",borderRadius:7,overflow:"hidden",height:"100%",minHeight:0}}>
-      {/* Header — matches pos table th */}
-      <div style={{padding:"5px 10px",background:"rgba(20,30,50,0.92)",borderBottom:"1px solid rgba(58,130,246,0.14)",flexShrink:0,display:"flex",alignItems:"center"}}>
+      <div style={{padding:"5px 10px",background:"rgba(14,22,40,0.98)",borderBottom:"1px solid rgba(58,130,246,0.12)",flexShrink:0,display:"flex",alignItems:"center"}}>
         <span style={{fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.08em"}}>⏱ Fixing Window — Open Fleet by Operator</span>
         {opFilter&&<button onClick={()=>onOpFilter&&onOpFilter(opFilter)} style={{marginLeft:"auto",background:"none",border:"none",color:"rgba(79,195,247,0.55)",fontSize:11,cursor:"pointer",padding:0,fontFamily:"inherit"}}>✕ clear</button>}
       </div>
-      {/* Scrollable body — vertical only */}
       <div style={{overflowY:"auto",overflowX:"hidden",flex:1,minHeight:0}}>
-        <table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed",fontSize:12}}>
+        <table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed",fontSize:11}}>
           <colgroup>
             <col style={{width:"36%"}}/>
             <col style={{width:"44%"}}/>
@@ -111,48 +111,49 @@ function FixingWindow({vessels, fileDate, opFilter, onOpFilter}){
             <col style={{width:"7%"}}/>
           </colgroup>
           <thead style={{position:"sticky",top:0,zIndex:1}}>
-            <tr style={{background:"rgba(20,30,50,0.92)"}}>
-              {[["Operator","left"],["Window","left"],["Days","right"],["Vsl","right"]].map(([l,a])=>(
-                <th key={l} style={{padding:"4px 8px",fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.08em",textAlign:a,borderBottom:"1px solid rgba(58,130,246,0.14)",whiteSpace:"nowrap"}}>{l}</th>
-              ))}
+            <tr>
+              <th style={{...thFW,textAlign:"left"}}>Operator</th>
+              <th style={{...thFW,textAlign:"left"}}>Window</th>
+              <th style={{...thFW,textAlign:"right"}}>Days</th>
+              <th style={{...thFW,textAlign:"right"}}>Vsl</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r,i)=>(
               <tr key={r.op} onClick={()=>onOpFilter&&onOpFilter(r.op)}
-                style={{background:opFilter===r.op?"rgba(88,166,255,0.12)":i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)",cursor:"pointer"}}>
-                <td style={{padding:"3px 8px",borderBottom:"1px solid rgba(255,255,255,0.035)",color:opFilter===r.op?"#79c0ff":C.dim,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                style={{background:opFilter===r.op?"rgba(88,166,255,0.10)":i%2===0?"rgba(10,18,34,0.95)":"rgba(16,28,52,0.85)",cursor:"pointer"}}>
+                <td style={{...tdFW,color:opFilter===r.op?"#79c0ff":"rgba(180,200,230,0.6)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                   {r.op}
                 </td>
-                <td style={{padding:"3px 8px",borderBottom:"1px solid rgba(255,255,255,0.035)",paddingRight:12}}>
-                  <div style={{position:"relative",height:5,background:"rgba(255,255,255,0.06)",borderRadius:2}}>
-                    <div style={{position:"absolute",left:0,top:0,height:"100%",width:(toPct(r.days)*100)+"%",background:r.col+"55",borderRadius:2,transition:"width 0.3s"}}/>
+                <td style={{...tdFW,paddingRight:12}}>
+                  <div style={{position:"relative",height:4,background:"rgba(255,255,255,0.06)",borderRadius:2}}>
+                    <div style={{position:"absolute",left:0,top:0,height:"100%",width:(toPct(r.days)*100)+"%",background:r.col+"50",borderRadius:2,transition:"width 0.3s"}}/>
                     <div style={{position:"absolute",left:"calc("+(toPct(r.days)*100)+"% - 1px)",top:0,height:"100%",width:2,background:r.col,borderRadius:1}}/>
                     <div style={{position:"absolute",left:(avgPct*100)+"%",top:0,height:"100%",width:1,background:"rgba(79,195,247,0.35)"}}/>
                   </div>
                 </td>
-                <td style={{padding:"3px 8px",borderBottom:"1px solid rgba(255,255,255,0.035)",textAlign:"right",color:r.col,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap",fontWeight:600}}>
+                <td style={{...tdFW,textAlign:"right",color:r.col,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>
                   {r.days!=null?(r.days>=0?"+":"")+r.days+"d":"—"}
                 </td>
-                <td style={{padding:"3px 8px",borderBottom:"1px solid rgba(255,255,255,0.035)",textAlign:"right",color:C.faint,fontVariantNumeric:"tabular-nums"}}>
+                <td style={{...tdFW,textAlign:"right",color:"rgba(120,160,220,0.35)",fontVariantNumeric:"tabular-nums"}}>
                   {r.count}
                 </td>
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr style={{background:"rgba(20,30,50,0.6)"}}>
-              <td style={{padding:"3px 8px",borderTop:"1px solid rgba(58,130,246,0.14)",color:"rgba(120,160,220,0.45)",fontSize:11,textTransform:"uppercase",letterSpacing:"0.07em"}}>Fleet avg</td>
-              <td style={{padding:"3px 12px 3px 8px",borderTop:"1px solid rgba(58,130,246,0.14)"}}>
-                <div style={{position:"relative",height:5,background:"rgba(255,255,255,0.06)",borderRadius:2}}>
-                  <div style={{position:"absolute",left:0,top:0,height:"100%",width:(avgPct*100)+"%",background:"rgba(79,195,247,0.18)",borderRadius:2}}/>
+            <tr style={{background:"rgba(14,22,40,0.98)"}}>
+              <td style={{...tdFW,borderTop:"1px solid rgba(58,130,246,0.12)",color:"rgba(120,160,220,0.45)",fontSize:10,textTransform:"uppercase",letterSpacing:"0.07em"}}>Fleet avg</td>
+              <td style={{...tdFW,borderTop:"1px solid rgba(58,130,246,0.12)",paddingRight:12}}>
+                <div style={{position:"relative",height:4,background:"rgba(255,255,255,0.06)",borderRadius:2}}>
+                  <div style={{position:"absolute",left:0,top:0,height:"100%",width:(avgPct*100)+"%",background:"rgba(79,195,247,0.2)",borderRadius:2}}/>
                   <div style={{position:"absolute",left:"calc("+(avgPct*100)+"% - 1px)",top:0,height:"100%",width:2,background:"rgba(79,195,247,0.55)"}}/>
                 </div>
               </td>
-              <td style={{padding:"3px 8px",borderTop:"1px solid rgba(58,130,246,0.14)",textAlign:"right",color:C.dim,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap",fontWeight:600}}>
+              <td style={{...tdFW,borderTop:"1px solid rgba(58,130,246,0.12)",textAlign:"right",color:"rgba(180,200,230,0.55)",fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>
                 {allAvg!=null?(allAvg>=0?"+":"")+allAvg+"d":"—"}
               </td>
-              <td style={{padding:"3px 8px",borderTop:"1px solid rgba(58,130,246,0.14)",textAlign:"right",color:C.faint,fontVariantNumeric:"tabular-nums"}}>
+              <td style={{...tdFW,borderTop:"1px solid rgba(58,130,246,0.12)",textAlign:"right",color:"rgba(120,160,220,0.35)",fontVariantNumeric:"tabular-nums"}}>
                 {withDays.length}
               </td>
             </tr>
