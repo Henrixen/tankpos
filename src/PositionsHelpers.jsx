@@ -94,49 +94,47 @@ function FixingWindow({vessels, fileDate, opFilter, onOpFilter}){
   const toPct=d=>Math.max(0,Math.min(1,(d-minDays)/range));
   const avgPct=allAvg!=null?toPct(allAvg):0.5;
 
-  const thCol={padding:"4px 8px",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.09em",borderBottom:"1px solid rgba(58,130,246,0.14)",textAlign:"left",whiteSpace:"nowrap",background:"rgba(20,30,50,0.98)"};
-  const tdCol={padding:"3px 8px",fontSize:11,borderBottom:"1px solid rgba(255,255,255,0.03)",verticalAlign:"middle"};
-
   return(
-    <div style={{display:"flex",flexDirection:"column",background:"#070f1c",border:"1px solid rgba(58,130,246,0.18)",borderRadius:7,overflow:"hidden",height:"100%",minHeight:0}}>
-      <div style={{padding:"5px 10px",background:"rgba(20,30,50,0.98)",borderBottom:"1px solid rgba(58,130,246,0.14)",flexShrink:0,display:"flex",alignItems:"center",gap:8}}>
-        <span style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.09em"}}>⏱ Fixing Window — Open Fleet by Operator</span>
-        {opFilter&&<button onClick={()=>onOpFilter&&onOpFilter(opFilter)} style={{marginLeft:"auto",background:"none",border:"none",color:"rgba(79,195,247,0.6)",fontSize:10,cursor:"pointer",padding:0}}>✕ clear</button>}
+    <div style={{display:"flex",flexDirection:"column",border:"1px solid rgba(58,130,246,0.18)",borderRadius:7,overflow:"hidden",height:"100%",minHeight:0}}>
+      {/* Header — matches pos table th */}
+      <div style={{padding:"5px 10px",background:"rgba(20,30,50,0.92)",borderBottom:"1px solid rgba(58,130,246,0.14)",flexShrink:0,display:"flex",alignItems:"center"}}>
+        <span style={{fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.08em"}}>⏱ Fixing Window — Open Fleet by Operator</span>
+        {opFilter&&<button onClick={()=>onOpFilter&&onOpFilter(opFilter)} style={{marginLeft:"auto",background:"none",border:"none",color:"rgba(79,195,247,0.55)",fontSize:11,cursor:"pointer",padding:0,fontFamily:"inherit"}}>✕ clear</button>}
       </div>
+      {/* Scrollable body — vertical only */}
       <div style={{overflowY:"auto",overflowX:"hidden",flex:1,minHeight:0}}>
-        <table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed",fontSize:12}}>
           <colgroup>
             <col style={{width:"36%"}}/>
             <col style={{width:"44%"}}/>
-            <col style={{width:"12%"}}/>
-            <col style={{width:"8%"}}/>
+            <col style={{width:"13%"}}/>
+            <col style={{width:"7%"}}/>
           </colgroup>
           <thead style={{position:"sticky",top:0,zIndex:1}}>
-            <tr>
-              <th style={thCol}>Operator</th>
-              <th style={thCol}>Window</th>
-              <th style={{...thCol,textAlign:"right"}}>Days</th>
-              <th style={{...thCol,textAlign:"right"}}>Vsl</th>
+            <tr style={{background:"rgba(20,30,50,0.92)"}}>
+              {[["Operator","left"],["Window","left"],["Days","right"],["Vsl","right"]].map(([l,a])=>(
+                <th key={l} style={{padding:"4px 8px",fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.08em",textAlign:a,borderBottom:"1px solid rgba(58,130,246,0.14)",whiteSpace:"nowrap"}}>{l}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((r,i)=>(
               <tr key={r.op} onClick={()=>onOpFilter&&onOpFilter(r.op)}
-                style={{background:opFilter===r.op?"rgba(88,166,255,0.10)":i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)",cursor:"pointer"}}>
-                <td style={{...tdCol,color:opFilter===r.op?"#79c0ff":"rgba(200,215,235,0.72)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                style={{background:opFilter===r.op?"rgba(88,166,255,0.12)":i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)",cursor:"pointer"}}>
+                <td style={{padding:"3px 8px",borderBottom:"1px solid rgba(255,255,255,0.035)",color:opFilter===r.op?"#79c0ff":C.dim,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                   {r.op}
                 </td>
-                <td style={{...tdCol,paddingRight:10}}>
-                  <div style={{position:"relative",height:4,background:"rgba(255,255,255,0.05)",borderRadius:2}}>
-                    <div style={{position:"absolute",left:0,top:0,height:"100%",width:(toPct(r.days)*100)+"%",background:r.col+"60",borderRadius:2,transition:"width 0.3s"}}/>
+                <td style={{padding:"3px 8px",borderBottom:"1px solid rgba(255,255,255,0.035)",paddingRight:12}}>
+                  <div style={{position:"relative",height:5,background:"rgba(255,255,255,0.06)",borderRadius:2}}>
+                    <div style={{position:"absolute",left:0,top:0,height:"100%",width:(toPct(r.days)*100)+"%",background:r.col+"55",borderRadius:2,transition:"width 0.3s"}}/>
                     <div style={{position:"absolute",left:"calc("+(toPct(r.days)*100)+"% - 1px)",top:0,height:"100%",width:2,background:r.col,borderRadius:1}}/>
                     <div style={{position:"absolute",left:(avgPct*100)+"%",top:0,height:"100%",width:1,background:"rgba(79,195,247,0.35)"}}/>
                   </div>
                 </td>
-                <td style={{...tdCol,textAlign:"right",color:r.col,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>
+                <td style={{padding:"3px 8px",borderBottom:"1px solid rgba(255,255,255,0.035)",textAlign:"right",color:r.col,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap",fontWeight:600}}>
                   {r.days!=null?(r.days>=0?"+":"")+r.days+"d":"—"}
                 </td>
-                <td style={{...tdCol,textAlign:"right",color:"rgba(120,160,220,0.4)",fontVariantNumeric:"tabular-nums"}}>
+                <td style={{padding:"3px 8px",borderBottom:"1px solid rgba(255,255,255,0.035)",textAlign:"right",color:C.faint,fontVariantNumeric:"tabular-nums"}}>
                   {r.count}
                 </td>
               </tr>
@@ -144,17 +142,17 @@ function FixingWindow({vessels, fileDate, opFilter, onOpFilter}){
           </tbody>
           <tfoot>
             <tr style={{background:"rgba(20,30,50,0.6)"}}>
-              <td style={{...tdCol,color:"rgba(120,160,220,0.45)",fontSize:10,textTransform:"uppercase",letterSpacing:"0.07em",borderTop:"1px solid rgba(58,130,246,0.12)"}}>Fleet avg</td>
-              <td style={{...tdCol,paddingRight:10,borderTop:"1px solid rgba(58,130,246,0.12)"}}>
-                <div style={{position:"relative",height:4,background:"rgba(255,255,255,0.05)",borderRadius:2}}>
-                  <div style={{position:"absolute",left:0,top:0,height:"100%",width:(avgPct*100)+"%",background:"rgba(79,195,247,0.15)",borderRadius:2}}/>
+              <td style={{padding:"3px 8px",borderTop:"1px solid rgba(58,130,246,0.14)",color:"rgba(120,160,220,0.45)",fontSize:11,textTransform:"uppercase",letterSpacing:"0.07em"}}>Fleet avg</td>
+              <td style={{padding:"3px 12px 3px 8px",borderTop:"1px solid rgba(58,130,246,0.14)"}}>
+                <div style={{position:"relative",height:5,background:"rgba(255,255,255,0.06)",borderRadius:2}}>
+                  <div style={{position:"absolute",left:0,top:0,height:"100%",width:(avgPct*100)+"%",background:"rgba(79,195,247,0.18)",borderRadius:2}}/>
                   <div style={{position:"absolute",left:"calc("+(avgPct*100)+"% - 1px)",top:0,height:"100%",width:2,background:"rgba(79,195,247,0.55)"}}/>
                 </div>
               </td>
-              <td style={{...tdCol,textAlign:"right",color:"rgba(180,200,230,0.6)",fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap",borderTop:"1px solid rgba(58,130,246,0.12)"}}>
+              <td style={{padding:"3px 8px",borderTop:"1px solid rgba(58,130,246,0.14)",textAlign:"right",color:C.dim,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap",fontWeight:600}}>
                 {allAvg!=null?(allAvg>=0?"+":"")+allAvg+"d":"—"}
               </td>
-              <td style={{...tdCol,textAlign:"right",color:"rgba(120,160,220,0.4)",fontVariantNumeric:"tabular-nums",borderTop:"1px solid rgba(58,130,246,0.12)"}}>
+              <td style={{padding:"3px 8px",borderTop:"1px solid rgba(58,130,246,0.14)",textAlign:"right",color:C.faint,fontVariantNumeric:"tabular-nums"}}>
                 {withDays.length}
               </td>
             </tr>
