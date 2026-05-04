@@ -37,11 +37,6 @@ const [dwtFilter,setDwtFilter]=useState("");   // "" | "<10" | "10-15" | "15-20"
 const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" | "2010-2015" | "2015-2020" | ">2020"
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
-  const [cChartererFilter,setCChartererFilter]=useState("");
-  const [cGradeFilter,setCGradeFilter]=useState("");
-  const [cLaycanMonthFilter,setCLaycanMonthFilter]=useState("");
-  const [cLaycanYearFilter,setCLaycanYearFilter]=useState("");
-  const [cShowTickedOnly,setCShowTickedOnly]=useState(false);
   const [mxSearch,setMxSearch]=useState("");
   const [cSortK,setCsortK]=useState("updated");
   const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
@@ -146,16 +141,16 @@ const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
 const cargoColumns = [
   { key: "select", label: "", align: "center", width: 28 },
   { key: "status", label: "Status", align: "center", width: colWidthsC.Status },
-  { key: "vessel", label: "Vessel", align: "left", width: colWidthsC.Vessel },
-  { key: "charterer", label: "Charterer", align: "left", width: colWidthsC.Charterer },
-  { key: "qty", label: "Qty", align: "left", width: colWidthsC.Qty },
-  { key: "cargo", label: "Cargo", align: "left", width: colWidthsC.Cargo },
-  { key: "load", label: "Load", align: "left", width: colWidthsC.Load },
-  { key: "disch", label: "Disch", align: "left", width: colWidthsC.Disch },
-  { key: "from", label: "From", align: "left", width: colWidthsC.LaycanStart },
-  { key: "to", label: "To", align: "left", width: colWidthsC.LaycanEnd },
-  { key: "freight", label: "Freight", align: "left", width: colWidthsC.Freight },
-  { key: "comment", label: "Comment", align: "left", width: colWidthsC.Comment },
+  { key: "vessel", label: "Vessel", width: colWidthsC.Vessel },
+  { key: "charterer", label: "Charterer", width: colWidthsC.Charterer },
+  { key: "qty", label: "Qty", align: "right", width: colWidthsC.Qty },
+  { key: "cargo", label: "Cargo", width: colWidthsC.Cargo },
+  { key: "load", label: "Load", width: colWidthsC.Load },
+  { key: "disch", label: "Disch", width: colWidthsC.Disch },
+  { key: "from", label: "From", align: "center", width: colWidthsC.LaycanStart },
+  { key: "to", label: "To", align: "center", width: colWidthsC.LaycanEnd },
+  { key: "freight", label: "Freight", align: "right", width: colWidthsC.Freight },
+  { key: "comment", label: "Comment", width: colWidthsC.Comment },
   { key: "updated", label: "Updated", align: "center", width: colWidthsC.Updated },
   { key: "delete", label: "", align: "center", width: 26 },
 ];
@@ -393,13 +388,8 @@ const filtV=useMemo(()=>{
         return String(av).toLowerCase()<String(bv).toLowerCase()?-cSortD:String(av).toLowerCase()>String(bv).toLowerCase()?cSortD:0;
       });
     }
-    if(cChartererFilter) list=list.filter(c=>(c.charterer||"").toLowerCase().includes(cChartererFilter.toLowerCase()));
-    if(cGradeFilter) list=list.filter(c=>(c.cargo||"").toLowerCase().includes(cGradeFilter.toLowerCase()));
-    if(cLaycanMonthFilter) list=list.filter(c=>((c.from||"")+" "+(c.to||"")).toLowerCase().includes(cLaycanMonthFilter.toLowerCase()));
-    if(cLaycanYearFilter) list=list.filter(c=>{const d=new Date(c.from||c.updated||0);return !isNaN(d)&&String(d.getFullYear())===cLaycanYearFilter;});
-    if(cShowTickedOnly&&selCargoes.size>0) list=list.filter(c=>selCargoes.has(c.id));
     return list;
-  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cChartererFilter,cGradeFilter,cLaycanMonthFilter,cLaycanYearFilter,cShowTickedOnly,selCargoes]);
+  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter]);
 
   const FILTER_GROUPS=[
     {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"],["HIDE_EMP","Hide Employed"]]},
@@ -914,9 +904,21 @@ const filtV=useMemo(()=>{
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {/* Top row: Parse | Ask AI */}
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
-              {/* Parse — full width, no Ask AI */}
-              <div style={{flex:1,display:"flex",flexDirection:"column"}}>
+              {/* Parse */}
+              <div style={{flex:mobile?"1 1 auto":"0 0 65%",display:"flex",flexDirection:"column"}}>
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
+              </div>
+              {/* Ask AI */}
+              <div style={{flex:1,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:askAiExpanded?600:142,transition:"height 0.3s ease"}}>
+                <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
+                  <button onClick={()=>setAskAiExpanded(!askAiExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 8px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit"}} title={askAiExpanded?"Collapse":"Expand"}>
+                    {askAiExpanded?"▲":"▼"}
+                  </button>
+                </div>
+                <div style={{flex:1,padding:"10px",overflowY:"auto"}} className="custom-scrollbar">
+                  <RightPanel vessels={vessels} cargoes={cargoes}/>
+                </div>
               </div>
             </div>
             <style>{`
@@ -938,74 +940,28 @@ const filtV=useMemo(()=>{
                 scrollbar-color: ${C.bd} transparent;
               }
             `}</style>
-            {/* ── Advanced cargo filter chips ── */}
-            {(()=>{
-              const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-              const years=[...new Set(cargoes.map(c=>{const d=new Date(c.from||c.updated||0);return isNaN(d)?"":String(d.getFullYear());}).filter(y=>y&&y>"2020"))].sort().reverse();
-              const charterers=[...new Set(cargoes.map(c=>(c.charterer||"").trim()).filter(Boolean))].sort();
-              const grades=[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort();
-              const hasAdv=cChartererFilter||cGradeFilter||cLaycanMonthFilter||cLaycanYearFilter;
-              const chip=(active)=>({fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:3,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",
-                border:"1px solid "+(active?"rgba(88,166,255,.65)":"rgba(120,160,220,0.22)"),
-                background:active?"rgba(88,166,255,.18)":"rgba(15,25,50,.7)",
-                color:active?"#d9ecff":"#7aa0c8"});
-              return(
-                <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap",padding:"5px 0 3px"}}>
-                  <span style={{fontSize:10,color:"rgba(120,160,220,0.4)",textTransform:"uppercase",letterSpacing:"0.08em",marginRight:2}}>Filter</span>
-                  {charterers.slice(0,15).map(ch=>(
-                    <button key={"ch-"+ch} style={chip(cChartererFilter===ch)} onClick={()=>setCChartererFilter(v=>v===ch?"":ch)}>{ch}</button>
-                  ))}
-                  {grades.length>0&&<span style={{fontSize:10,color:"rgba(120,160,220,0.25)"}}>│</span>}
-                  {grades.slice(0,12).map(g=>(
-                    <button key={"g-"+g} style={chip(cGradeFilter===g)} onClick={()=>setCGradeFilter(v=>v===g?"":g)}>{g}</button>
-                  ))}
-                  <span style={{fontSize:10,color:"rgba(120,160,220,0.25)"}}>│</span>
-                  {MONTHS.map(m=>(
-                    <button key={m} style={chip(cLaycanMonthFilter===m)} onClick={()=>setCLaycanMonthFilter(v=>v===m?"":m)}>{m}</button>
-                  ))}
-                  {years.map(y=>(
-                    <button key={y} style={chip(cLaycanYearFilter===y)} onClick={()=>setCLaycanYearFilter(v=>v===y?"":y)}>{y}</button>
-                  ))}
-                  {hasAdv&&(
-                    <button onClick={()=>{setCChartererFilter("");setCGradeFilter("");setCLaycanMonthFilter("");setCLaycanYearFilter("");}}
-                      style={{...chip(false),color:"#ff6b6b",borderColor:"rgba(255,107,107,0.35)"}}>✕ Clear</button>
-                  )}
-                </div>
-              );
-            })()}
-            {/* Search + Export + Filters */}
+            {/* Search + Export + Filters — wrap on mobile */}
             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
               <div style={{position:"relative",flex:1}}>
                 <input value={cSearch} onChange={e=>{const v=e.target.value;setCSearch(v);clearTimeout(window._csTimer);window._csTimer=setTimeout(()=>onCargoSearch(v),350);}} placeholder="🔍 Search cargoes…"
                   style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
                 {cSearch&&<button onClick={()=>{setCSearch("");clearTimeout(window._csTimer);onCargoSearch("");}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
               </div>
-              {/* Tick all / none */}
-              <button onClick={()=>setSelCargoes(selCargoes.size===filtC.length&&filtC.length>0?new Set():new Set(filtC.map(c=>c.id)))}
-                style={fb(selCargoes.size>0)}>
-                {selCargoes.size===filtC.length&&filtC.length>0?"☑ None":"☐ All"}
-              </button>
-              {selCargoes.size>0&&(
-                <button onClick={()=>setCShowTickedOnly(v=>!v)}
-                  style={{...fb(cShowTickedOnly),color:cShowTickedOnly?"#4fc3f7":undefined,borderColor:cShowTickedOnly?"rgba(79,195,247,.6)":undefined}}>
-                  👁 {selCargoes.size}
-                </button>
-              )}
               <ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/>
               {selCargoes.size>0&&(
                 <button onClick={()=>setPendingDel({type:"allcargo",id:"__SELCARGO__",label:selCargoes.size+" cargo"+(selCargoes.size!==1?"es":"")})}
-                  style={{fontSize:11,fontWeight:700,padding:"2px 9px",borderRadius:3,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                  🗑 {selCargoes.size}
+                  style={{fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:5,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                  🗑 Delete ({selCargoes.size})
                 </button>
               )}
-              {[["ALL","All"],["FIXED","Fixed"],["SUBS","Subs"],["FAILED","Failed"]].map(([f,l])=>(
+              {[["ALL","All"],["FIXED","Fixed"],["SUBS","On Subs"],["FAILED","Failed"]].map(([f,l])=>(
                 <button key={f} onClick={()=>setCFilter(f)} style={fb(cFilter===f)}>{l}</button>
               ))}
-              {[["","All"],["tw","Wk"],["lw","LWk"],["ytd","YTD"]].map(([v,label])=>(
-                <button key={v} onClick={()=>setCTimeFilter(v)} style={fb(cTimeFilter===v)}>{label}</button>
+              {[["","All time"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([v,label])=>(
+                <button key={v} onClick={()=>setCTimeFilter(v)} style={{...fb(cTimeFilter===v),whiteSpace:"nowrap"}}>{label}</button>
               ))}
-              <input value={cDateFilter} onChange={e=>setCDateFilter(e.target.value)} placeholder="date…"
-                style={{width:60,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:11,padding:"2px 6px",outline:"none"}}/>
+              <input value={cDateFilter} onChange={e=>setCDateFilter(e.target.value)} placeholder="🔍 Filter…"
+                style={{width:80,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 7px",outline:"none"}}/>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12}}>
               <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoTotal||cargoes.length}</span></span>
@@ -1018,64 +974,191 @@ const filtV=useMemo(()=>{
             <div style={tableWrap}>
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
-                :(()=>{
-                  const COL_MAP={vessel:"Vessel",charterer:"Charterer",qty:"Qty",cargo:"Cargo",load:"Load",disch:"Disch",from:"LaycanStart",to:"LaycanEnd",freight:"Freight",comment:"Comment",updated:"Updated",status:"Status"};
-                  function startResize(ck,e){
-                    e.preventDefault();
-                    const sx=e.clientX,sw=colWidthsC[ck]||100;
-                    const mm=ev=>setColWidthsC(p=>({...p,[ck]:Math.max(40,sw+(ev.clientX-sx))}));
-                    const mu=()=>{window.removeEventListener("mousemove",mm);window.removeEventListener("mouseup",mu);};
-                    window.addEventListener("mousemove",mm);window.addEventListener("mouseup",mu);
-                  }
-                  const allTicked=filtC.length>0&&filtC.every(c=>selCargoes.has(c.id));
-                  return(
-                  <table style={{...tableStyle,tableLayout:"fixed"}}>
-                    <colgroup>{cargoColumns.map(col=><col key={col.key} style={{width:col.width,minWidth:col.width}}/>)}</colgroup>
-                    <thead><tr style={{background:"rgba(20,30,50,0.92)"}}>
-                      {cargoColumns.map(col=>{
-                        const ck=COL_MAP[col.key];
-                        return(
-                          <th key={col.key} style={{padding:col.key==="select"||col.key==="delete"?"4px 2px":"7px 8px",color:"rgba(120,160,220,0.55)",fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"left",background:"rgba(20,30,50,0.92)",borderBottom:"1px solid rgba(58,130,246,0.14)",whiteSpace:"nowrap",position:"relative",userSelect:"none"}}>
-                            {col.key==="select"
-                              ?<span style={{fontSize:11,color:allTicked?"#4fc3f7":C.faint,cursor:"pointer"}} onClick={()=>setSelCargoes(allTicked?new Set():new Set(filtC.map(c=>c.id)))}>{allTicked?"[✓]":"[ ]"}</span>
-                              :col.label}
-                            {ck&&<div onMouseDown={e=>startResize(ck,e)} style={{position:"absolute",right:0,top:0,bottom:0,width:4,cursor:"col-resize",zIndex:2}}/>}
-                          </th>
-                        );
-                      })}
-                    </tr></thead>
-                    <tbody>
-                      {filtC.map((f,i)=>{
-                        const sc=f.status==="FIXED"?C.green:f.status==="SUBS"?C.purple:f.status==="FAILED"?C.red:C.faint;
-                        return(
-                          <tr key={f.id} style={{background:rowBg(i)}}>
-                            <td style={{...tdCtr,width:28,padding:"0 2px"}} onClick={e=>{e.stopPropagation();setSelCargoes(p=>{const n=new Set(p);n.has(f.id)?n.delete(f.id):n.add(f.id);return n;});}}>
-                              <span style={{fontSize:12,color:selCargoes.has(f.id)?"#4fc3f7":C.faint}}>{selCargoes.has(f.id)?"[✓]":"[ ]"}</span>
-                            </td>
-                            <td style={{...tdCtr,color:sc,fontWeight:700,cursor:"pointer"}} onClick={e=>{e.stopPropagation();const opts=["SUBS","FIXED","FAILED",""];const cur=opts.indexOf(f.status||"");onUpdateC(f.id,"status",opts[(cur+1)%opts.length]);}}>{f.status||""}</td>
-                            <EC value={f.vessel} color={C.blue} bold placeholder="TBN" onSave={v2=>onUpdateC(f.id,"vessel",v2)} data-cell={`${i}-cvessel`} onTab={()=>focusCell(i,"charterer")} onShiftTab={()=>focusCell(i,"status")} onDown={()=>focusCell(i+1,"cvessel")} onUp={()=>focusCell(i-1,"cvessel")}/>
-                            <EC value={toTCase(f.charterer)} color={"#79c0ff"} placeholder="" onSave={v2=>onUpdateC(f.id,"charterer",toTCase(v2))} data-cell={`${i}-charterer`} onTab={()=>focusCell(i,"qty")} onShiftTab={()=>focusCell(i,"cvessel")} onDown={()=>focusCell(i+1,"charterer")} onUp={()=>focusCell(i-1,"charterer")}/>
-                            <EC value={normaliseQty(f.qty)} color={C.amber} placeholder="" onSave={v2=>onUpdateC(f.id,"qty",normaliseQty(v2))} data-cell={`${i}-qty`} onTab={()=>focusCell(i,"cargo")} onShiftTab={()=>focusCell(i,"charterer")} onDown={()=>focusCell(i+1,"qty")} onUp={()=>focusCell(i-1,"qty")}/>
-                            <EC value={f.cargo||""} placeholder="" onSave={v2=>onUpdateC(f.id,"cargo",v2)} data-cell={`${i}-cargo`} onTab={()=>focusCell(i,"load")} onShiftTab={()=>focusCell(i,"qty")} onDown={()=>focusCell(i+1,"cargo")} onUp={()=>focusCell(i-1,"cargo")}/>
-                            <EC value={toTCase(f.load||"")} placeholder="" onSave={v2=>onUpdateC(f.id,"load",toTCase(v2))} data-cell={`${i}-load`} onTab={()=>focusCell(i,"disch")} onShiftTab={()=>focusCell(i,"cargo")} onDown={()=>focusCell(i+1,"load")} onUp={()=>focusCell(i-1,"load")}/>
-                            <EC value={toTCase(f.disch||"")} placeholder="" onSave={v2=>onUpdateC(f.id,"disch",toTCase(v2))} data-cell={`${i}-disch`} onTab={()=>focusCell(i,"from")} onShiftTab={()=>focusCell(i,"load")} onDown={()=>focusCell(i+1,"disch")} onUp={()=>focusCell(i-1,"disch")}/>
-                            <EC value={fmtDateShort(f.from)} placeholder="" onSave={v2=>onUpdateC(f.id,"from",v2)} data-cell={`${i}-from`} onTab={()=>focusCell(i,"to")} onShiftTab={()=>focusCell(i,"disch")} onDown={()=>focusCell(i+1,"from")} onUp={()=>focusCell(i-1,"from")}/>
-                            <EC value={fmtDateShort(f.to)} placeholder="" onSave={v2=>onUpdateC(f.id,"to",v2)} data-cell={`${i}-to`} onTab={()=>focusCell(i,"freight")} onShiftTab={()=>focusCell(i,"from")} onDown={()=>focusCell(i+1,"to")} onUp={()=>focusCell(i-1,"to")}/>
-                            <EC value={fmtFreight(f.freight)||f.freight} color={"#a8e6a3"} placeholder="" onSave={v2=>onUpdateC(f.id,"freight",fmtFreight(v2)||v2)} data-cell={`${i}-freight`} onTab={()=>focusCell(i,"comment")} onShiftTab={()=>focusCell(i,"to")} onDown={()=>focusCell(i+1,"freight")} onUp={()=>focusCell(i-1,"freight")}/>
-                            <EC value={f.comment||""} color={C.dim} placeholder="" onSave={v2=>onUpdateC(f.id,"comment",v2)} data-cell={`${i}-comment`} onTab={()=>focusCell(i+1,"cvessel")} onShiftTab={()=>focusCell(i,"freight")} onDown={()=>focusCell(i+1,"comment")} onUp={()=>focusCell(i-1,"comment")}/>
-                            <td style={{...tdCtr,color:C.faint}}>{f.updated?new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
-                            <td style={{...tdCtr,width:26,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
-                              <button onClick={e=>{e.stopPropagation();setPendingDel({type:"cargo",id:f.id,label:f.vessel||"cargo"});}} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.7}}>✕</button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  );
-                })()
-              }
-              {hasMore&&<div style={{textAlign:"center",padding:"12px"}}><button onClick={onLoadMore} style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"4px 16px",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Load more</button></div>}
+                : <MatrixTable
+    columns={cargoColumns}
+    data={filtC}
+    keyField="id"
+    renderRow={(f, td) => {
+  const i = filtC.findIndex(x => x.id === f.id);
+  const sc = f.status==="FIXED" ? C.green : f.status==="SUBS" ? C.purple : f.status==="FAILED" ? C.red : C.faint;
+
+  return (
+    <>
+      {/* SELECT */}
+      <td
+        style={{ ...tdCtr, width: 28, padding: "0 2px" }}
+        onClick={e => {
+          e.stopPropagation();
+          setSelCargoes(p => {
+            const n = new Set(p);
+            n.has(f.id) ? n.delete(f.id) : n.add(f.id);
+            return n;
+          });
+        }}
+      >
+        <span style={{ fontSize: 12, color: selCargoes.has(f.id) ? "#4fc3f7" : C.faint }}>
+          {selCargoes.has(f.id) ? "[✓]" : "[ ]"}
+        </span>
+      </td>
+
+      {/* STATUS */}
+      <td
+        style={{ ...tdCtr, color: sc, fontWeight: 700, cursor: "pointer" }}
+        onClick={e => {
+          e.stopPropagation();
+          const opts = ["SUBS","FIXED","FAILED",""];
+          const cur = opts.indexOf(f.status || "");
+          onUpdateC(f.id, "status", opts[(cur + 1) % opts.length]);
+        }}
+      >
+        {f.status || ""}
+      </td>
+
+      <EC
+  value={f.vessel}
+  color={C.blue}
+  bold
+  placeholder="TBN"
+  onSave={v2 => onUpdateC(f.id, "vessel", v2)}
+  data-cell={`${i}-cvessel`}
+  onTab={() => focusCell(i, "charterer")}
+  onShiftTab={() => focusCell(i, "status")}
+  onDown={() => focusCell(i + 1, "cvessel")}
+  onUp={() => focusCell(i - 1, "cvessel")}
+/>
+
+<EC
+  value={toTCase(f.charterer)}
+  color={"#79c0ff"}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "charterer", toTCase(v2))}
+  data-cell={`${i}-charterer`}
+  onTab={() => focusCell(i, "qty")}
+  onShiftTab={() => focusCell(i, "cvessel")}
+  onDown={() => focusCell(i + 1, "charterer")}
+  onUp={() => focusCell(i - 1, "charterer")}
+/>
+
+<EC
+  value={normaliseQty(f.qty)}
+  color={C.amber}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "qty", normaliseQty(v2))}
+  data-cell={`${i}-qty`}
+  onTab={() => focusCell(i, "cargo")}
+  onShiftTab={() => focusCell(i, "charterer")}
+  onDown={() => focusCell(i + 1, "qty")}
+  onUp={() => focusCell(i - 1, "qty")}
+/>
+
+<EC
+  value={f.cargo || ""}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "cargo", v2)}
+  data-cell={`${i}-cargo`}
+  onTab={() => focusCell(i, "load")}
+  onShiftTab={() => focusCell(i, "qty")}
+  onDown={() => focusCell(i + 1, "cargo")}
+  onUp={() => focusCell(i - 1, "cargo")}
+/>
+
+<EC
+  value={toTCase(f.load || "")}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "load", toTCase(v2))}
+  data-cell={`${i}-load`}
+  onTab={() => focusCell(i, "disch")}
+  onShiftTab={() => focusCell(i, "cargo")}
+  onDown={() => focusCell(i + 1, "load")}
+  onUp={() => focusCell(i - 1, "load")}
+/>
+
+<EC
+  value={toTCase(f.disch || "")}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "disch", toTCase(v2))}
+  data-cell={`${i}-disch`}
+  onTab={() => focusCell(i, "from")}
+  onShiftTab={() => focusCell(i, "load")}
+  onDown={() => focusCell(i + 1, "disch")}
+  onUp={() => focusCell(i - 1, "disch")}
+/>
+
+<EC
+  value={fmtDateShort(f.from)}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "from", v2)}
+  data-cell={`${i}-from`}
+  onTab={() => focusCell(i, "to")}
+  onShiftTab={() => focusCell(i, "disch")}
+  onDown={() => focusCell(i + 1, "from")}
+  onUp={() => focusCell(i - 1, "from")}
+/>
+
+<EC
+  value={fmtDateShort(f.to)}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "to", v2)}
+  data-cell={`${i}-to`}
+  onTab={() => focusCell(i, "freight")}
+  onShiftTab={() => focusCell(i, "from")}
+  onDown={() => focusCell(i + 1, "to")}
+  onUp={() => focusCell(i - 1, "to")}
+/>
+
+<EC
+  value={fmtFreight(f.freight) || f.freight}
+  color={"#a8e6a3"}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "freight", fmtFreight(v2) || v2)}
+  data-cell={`${i}-freight`}
+  onTab={() => focusCell(i, "comment")}
+  onShiftTab={() => focusCell(i, "to")}
+  onDown={() => focusCell(i + 1, "freight")}
+  onUp={() => focusCell(i - 1, "freight")}
+/>
+
+<EC
+  value={f.comment || ""}
+  color={C.dim}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "comment", v2)}
+  data-cell={`${i}-comment`}
+  onTab={() => focusCell(i + 1, "cvessel")}
+  onShiftTab={() => focusCell(i, "freight")}
+  onDown={() => focusCell(i + 1, "comment")}
+  onUp={() => focusCell(i - 1, "comment")}
+/>
+
+      {/* UPDATED */}
+      <td style={{ ...tdCtr, color: C.faint }}>
+        {f.updated ? new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
+      </td>
+
+      {/* DELETE */}
+      <td
+        style={{ ...tdCtr, width: 26, minWidth: 26, maxWidth: 26, padding: "0 2px" }}
+        onClick={e=>e.stopPropagation()}
+      >
+        <button
+          onClick={(e)=>{
+            e.stopPropagation();
+            setPendingDel({type:"cargo",id:f.id,label:f.vessel||"cargo"});
+          }}
+          style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.7}}
+          title="Delete"
+        >
+          ✕
+        </button>
+      </td>
+    </>
+  );
+}}
+  />}
+              {hasMore&&
+              <div style={{textAlign:"center",padding:"12px"}}>
+                <button onClick={onLoadMore} style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"4px 16px",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Load more</button>
+              </div>}
             </div>
           </div>
         )}
