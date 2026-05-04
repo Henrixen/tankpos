@@ -15,8 +15,6 @@ import IntelVault, { IntelVaultStrip } from "./IntelVault";
 import AISMap from "./AISMap";
 import MatrixTable from "./components/ui/MatrixTable";
 import NotesTab from "./NotesTab";
-import SettingsTab, { useCargoFilterGroups } from "./SettingsTab";
-import CalendarTab from "./CalendarTab";
 
 
 
@@ -39,11 +37,6 @@ const [dwtFilter,setDwtFilter]=useState("");   // "" | "<10" | "10-15" | "15-20"
 const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" | "2010-2015" | "2015-2020" | ">2020"
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
-  const [cargoFilterGroups,setCargoFilterGroups]=useCargoFilterGroups();
-  const [activeGroupIds,setActiveGroupIds]=useState(new Set());
-  const [cLaycanMonthFilter,setCLaycanMonthFilter]=useState("");
-  const [cLaycanYearFilter,setCLaycanYearFilter]=useState("");
-  const [cShowTickedOnly,setCShowTickedOnly]=useState(false);
   const [mxSearch,setMxSearch]=useState("");
   const [cSortK,setCsortK]=useState("updated");
   const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
@@ -145,8 +138,11 @@ const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
   { key: "delete", label: "", align: "center", width: 24 },
 ];
 
+const allCargoTicked=filtC.length>0&&filtC.every(c=>selCargoes.has(c.id));
 const cargoColumns = [
-  { key: "select", label: "", align: "center", width: 28 },
+  { key: "select", label: <span style={{fontSize:11,color:allCargoTicked?"#4fc3f7":C.faint,cursor:"pointer",userSelect:"none"}} onClick={e=>{e.stopPropagation();setSelCargoes(allCargoTicked?new Set():new Set(filtC.map(c=>c.id)));}}>
+      {allCargoTicked?"[✓]":"[ ]"}
+    </span>, align: "center", width: 28 },
   { key: "status", label: "Status", align: "center", width: colWidthsC.Status },
   { key: "vessel", label: "Vessel", width: colWidthsC.Vessel },
   { key: "charterer", label: "Charterer", width: colWidthsC.Charterer },
@@ -395,19 +391,8 @@ const filtV=useMemo(()=>{
         return String(av).toLowerCase()<String(bv).toLowerCase()?-cSortD:String(av).toLowerCase()>String(bv).toLowerCase()?cSortD:0;
       });
     }
-    // Filter group logic: if any groups active, cargo must match at least one alias in each active group (AND across groups)
-    if(activeGroupIds.size>0){
-      const activeGroups=cargoFilterGroups.filter(g=>activeGroupIds.has(g.id));
-      list=list.filter(c=>{
-        const grade=(c.cargo||"").trim();
-        return activeGroups.every(g=>g.aliases.some(a=>grade.toLowerCase().includes(a.toLowerCase())));
-      });
-    }
-    if(cLaycanMonthFilter) list=list.filter(c=>((c.from||"")+" "+(c.to||"")).toLowerCase().includes(cLaycanMonthFilter.toLowerCase()));
-    if(cLaycanYearFilter) list=list.filter(c=>{const d=new Date(c.from||c.updated||0);return !isNaN(d)&&String(d.getFullYear())===cLaycanYearFilter;});
-    if(cShowTickedOnly&&selCargoes.size>0) list=list.filter(c=>selCargoes.has(c.id));
     return list;
-  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,activeGroupIds,cargoFilterGroups,cLaycanMonthFilter,cLaycanYearFilter,cShowTickedOnly,selCargoes]);
+  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter]);
 
   const FILTER_GROUPS=[
     {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"],["HIDE_EMP","Hide Employed"]]},
@@ -458,9 +443,8 @@ const filtV=useMemo(()=>{
         </div>
       </div>
       <div style={{padding:"12px 16px",maxWidth:1900,margin:"0 auto"}}>
-        {/* Professional tab navigation */}
-        <div style={{display:"flex",alignItems:"center",marginBottom:16,gap:12,flexWrap:"nowrap"}}>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap",flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",marginBottom:16,gap:8,flexWrap:"nowrap",overflow:"hidden"}}>
+          <div style={{display:"flex",gap:4,flexWrap:"nowrap",flexShrink:0}}>
             {[
               ["pos","⚓","Positions",vessels.length,"#58a6ff"],
               ["cargo","📦","Cargoes",cargoTotal||cargoes.length,"#faa356"],
@@ -474,27 +458,27 @@ const filtV=useMemo(()=>{
               ["settings","⚙","Settings",0,"#94a3b8"]
             ].map(([id,icon,label,count,col])=>(
               <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
-                style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
-                  minWidth:mobile?80:110,padding:"10px 12px",borderRadius:8,
+                style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,
+                  minWidth:0,width:mobile?60:72,padding:"6px 4px",borderRadius:7,
                   border:"1px solid "+(tab===id?col:C.bd),
                   background:tab===id?"linear-gradient(135deg, "+col+"15, "+col+"05)":"transparent",
-                  boxShadow:tab===id?"0 4px 12px "+col+"33":"none",
-                  cursor:"pointer",transition:"all 0.2s",fontFamily:"inherit"}}>
-                <div style={{fontSize:mobile?18:20}}>{icon}</div>
-                <div style={{fontSize:mobile?9:10,fontWeight:700,color:tab===id?col:C.dim,
-                  textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</div>
-                {count>0&&<div style={{fontSize:11,fontWeight:700,color:tab===id?col:C.faint,
-                  background:C.bg3,padding:"1px 6px",borderRadius:8}}>{count}</div>}
+                  boxShadow:tab===id?"0 3px 10px "+col+"30":"none",
+                  cursor:"pointer",transition:"all 0.2s",fontFamily:"inherit",flexShrink:0}}>
+                <div style={{fontSize:mobile?15:17}}>{icon}</div>
+                <div style={{fontSize:9,fontWeight:700,color:tab===id?col:C.dim,
+                  textTransform:"uppercase",letterSpacing:"0.04em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",width:"100%",textAlign:"center"}}>{label}</div>
+                {count>0&&<div style={{fontSize:10,fontWeight:700,color:tab===id?col:C.faint,
+                  background:C.bg3,padding:"0 5px",borderRadius:7,lineHeight:"16px"}}>{count}</div>}
               </button>
             ))}
           </div>
-          {/* Global Ask AI strip — between tabs and Intel Vault */}
+          {/* Global Ask AI strip */}
           {!mobile&&(
             <div style={{flex:1,minWidth:0,display:"flex",justifyContent:"center"}}>
               <AskAIStrip vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>
             </div>
           )}
-          {/* Global Intel Vault strip — always visible */}
+          {/* Global Intel Vault strip */}
           {!mobile&&(
             <div style={{flexShrink:0}}>
               <IntelVaultStrip onVaultUpdate={setIntelItems}/>
@@ -541,15 +525,15 @@ const filtV=useMemo(()=>{
  
               {/* CENTER: Rate Matrix (34%) */}
               {!mobile&&(
-                <div style={{width:"34%",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",alignSelf:"flex-start"}}>
-                  <div style={{padding:"6px 12px",borderBottom:"1px solid "+C.bd2,background:C.bg,display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📊 Rate Matrix</span>
+                <div style={{width:"34%",height:460,background:"#070f1c",border:"1px solid rgba(58,130,246,0.18)",borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                  <div style={{padding:"5px 10px",background:"rgba(14,22,40,0.98)",borderBottom:"1px solid rgba(58,130,246,0.12)",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                    <span style={{fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.08em"}}>Rate Matrix</span>
                     <span style={{flex:1}}/>
-                    <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Bunker</span>
+                    <span style={{fontSize:10,color:"rgba(120,160,220,0.4)",textTransform:"uppercase",letterSpacing:"0.07em"}}>Bunker</span>
                     <RateMatrixBunkerInput/>
-                    <span style={{fontSize:10,color:C.faint}}>$/mt</span>
+                    <span style={{fontSize:10,color:"rgba(120,160,220,0.4)"}}>$/mt</span>
                   </div>
-                  <div style={{padding:"8px 10px",height:424,overflowY:"hidden"}}>
+                  <div style={{flex:1,padding:"0 8px 6px",overflowY:"auto",overflowX:"hidden"}}>
                     <RateMatrix/>
                   </div>
                 </div>
@@ -608,13 +592,13 @@ const filtV=useMemo(()=>{
                     {/* UNIFIED FILTER PANEL */}
 {(()=>{
   const FR=({label,col,children})=>(
-    <div style={{display:"flex",alignItems:"center",gap:6,borderBottom:"1px solid "+C.bd2,paddingBottom:3}}>
+    <div style={{display:"flex",alignItems:"center",gap:6,borderBottom:"1px solid "+C.bd2,padding:"1px 0 2px"}}>
       <div style={{width:54,fontSize:10,fontWeight:700,color:col,textTransform:"uppercase",flexShrink:0}}>{label}</div>
       <div style={{display:"flex",flexWrap:"wrap",gap:3,flex:1}}>{children}</div>
     </div>
   );
   return(
-    <div style={{display:"flex",flexDirection:"column",justifyContent:"space-between",padding:"7px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1}}>
+    <div style={{display:"flex",flexDirection:"column",justifyContent:"space-between",padding:"4px 8px 4px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1,gap:1}}>
       <FR label="Status" col={C.amber}>
         {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Hide Emp"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>))}
         {filters.size>0&&<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
@@ -919,53 +903,27 @@ const filtV=useMemo(()=>{
             )}
           </div>
         )}
+        {/* ── CARGOES ── */}
         {tab==="cargo"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {/* Top row: Parse | Ask AI */}
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
+              {/* Parse */}
               <div style={{flex:mobile?"1 1 auto":"0 0 65%",display:"flex",flexDirection:"column"}}>
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
               </div>
-              {/* Filter panel using groups from Settings */}
-              {(()=>{
-                const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-                const years=[...new Set(cargoes.map(c=>{const d=new Date(c.from||c.updated||0);return isNaN(d)?"":String(d.getFullYear());}).filter(y=>y&&y>"2020"))].sort().reverse();
-                const FR=({label,col,children})=>(
-                  <div style={{display:"flex",alignItems:"flex-start",gap:5,paddingBottom:3,borderBottom:"1px solid "+C.bd2}}>
-                    <div style={{width:58,fontSize:10,fontWeight:700,color:col,textTransform:"uppercase",flexShrink:0,paddingTop:2}}>{label}</div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:3,flex:1}}>{children}</div>
-                  </div>
-                );
-                const toggleGrp=id=>setActiveGroupIds(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});
-                const hasFilter=activeGroupIds.size>0||cLaycanMonthFilter||cLaycanYearFilter;
-                return(
-                  <div style={{flex:1,display:"flex",flexDirection:"column"}}>
-                    <div style={{display:"flex",flexDirection:"column",gap:4,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box"}}>
-                      <FR label="Grade" col={C.purple}>
-                        {cargoFilterGroups.map(g=>(
-                          <button key={g.id} onClick={()=>toggleGrp(g.id)} style={fb(activeGroupIds.has(g.id))} title={g.aliases.join(", ")}>{g.label}</button>
-                        ))}
-                        {activeGroupIds.size>0&&<button onClick={()=>setActiveGroupIds(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
-                        <button onClick={()=>setTab("settings")} style={{...fb(false),fontSize:10,color:"rgba(120,160,220,0.45)",borderColor:"rgba(120,160,220,0.18)",marginLeft:4}} title="Manage filter groups in Settings">⚙</button>
-                      </FR>
-                      <FR label="Month" col="#7dd3fc">
-                        {MONTHS.map(m=>(
-                          <button key={m} onClick={()=>setCLaycanMonthFilter(v=>v===m?"":m)} style={fb(cLaycanMonthFilter===m)}>{m}</button>
-                        ))}
-                        {years.map(y=>(
-                          <button key={y} onClick={()=>setCLaycanYearFilter(v=>v===y?"":y)} style={fb(cLaycanYearFilter===y)}>{y}</button>
-                        ))}
-                        {(cLaycanMonthFilter||cLaycanYearFilter)&&<button onClick={()=>{setCLaycanMonthFilter("");setCLaycanYearFilter("");}} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
-                      </FR>
-                      <FR label="Period" col="#94a3b8">
-                        {[["","All"],["tw","This wk"],["lw","Last wk"],["ytd","YTD"]].map(([v,l])=>(
-                          <button key={v||"all"} onClick={()=>setCTimeFilter(v)} style={fb(cTimeFilter===v)}>{l}</button>
-                        ))}
-                        {hasFilter&&<button onClick={()=>{setActiveGroupIds(new Set());setCLaycanMonthFilter("");setCLaycanYearFilter("");}} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:8,fontSize:10}}>✕ Clear all</button>}
-                      </FR>
-                    </div>
-                  </div>
-                );
-              })()}
+              {/* Ask AI */}
+              <div style={{flex:1,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:askAiExpanded?600:142,transition:"height 0.3s ease"}}>
+                <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
+                  <button onClick={()=>setAskAiExpanded(!askAiExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 8px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit"}} title={askAiExpanded?"Collapse":"Expand"}>
+                    {askAiExpanded?"▲":"▼"}
+                  </button>
+                </div>
+                <div style={{flex:1,padding:"10px",overflowY:"auto"}} className="custom-scrollbar">
+                  <RightPanel vessels={vessels} cargoes={cargoes}/>
+                </div>
+              </div>
             </div>
             <style>{`
               .custom-scrollbar::-webkit-scrollbar {
@@ -993,14 +951,6 @@ const filtV=useMemo(()=>{
                   style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
                 {cSearch&&<button onClick={()=>{setCSearch("");clearTimeout(window._csTimer);onCargoSearch("");}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
               </div>
-              <button onClick={()=>setSelCargoes(filtC.length>0&&filtC.every(c=>selCargoes.has(c.id))?new Set():new Set(filtC.map(c=>c.id)))} style={fb(selCargoes.size>0)}>
-                {filtC.length>0&&filtC.every(c=>selCargoes.has(c.id))?"☑ None":"☐ All"}
-              </button>
-              {selCargoes.size>0&&(
-                <button onClick={()=>setCShowTickedOnly(v=>!v)} style={{...fb(cShowTickedOnly),color:cShowTickedOnly?"#4fc3f7":undefined,borderColor:cShowTickedOnly?"rgba(79,195,247,.6)":undefined}}>
-                  👁 {selCargoes.size}
-                </button>
-              )}
               <ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/>
               {selCargoes.size>0&&(
                 <button onClick={()=>setPendingDel({type:"allcargo",id:"__SELCARGO__",label:selCargoes.size+" cargo"+(selCargoes.size!==1?"es":"")})}
@@ -1008,9 +958,6 @@ const filtV=useMemo(()=>{
                   🗑 {selCargoes.size}
                 </button>
               )}
-              {[["ALL","All"],["FIXED","Fixed"],["SUBS","Subs"],["FAILED","Failed"]].map(([f,l])=>(
-                <button key={f} onClick={()=>setCFilter(f)} style={fb(cFilter===f)}>{l}</button>
-              ))}
             </div>
             <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12}}>
               <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoTotal||cargoes.length}</span></span>
@@ -1311,14 +1258,6 @@ const filtV=useMemo(()=>{
         {tab==="notes"&&(
           <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
             <NotesTab/>
-          </div>
-        )}
-        {tab==="cal"&&(
-          <CalendarTab/>
-        )}
-        {tab==="settings"&&(
-          <div style={{padding:"4px 0"}}>
-            <SettingsTab groups={cargoFilterGroups} setGroups={setCargoFilterGroups}/>
           </div>
         )}
       </div>
