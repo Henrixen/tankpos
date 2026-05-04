@@ -95,40 +95,49 @@ function FixingWindow({vessels, fileDate, opFilter, onOpFilter}){
   const avgPct=allAvg!=null?toPct(allAvg):0.5;
 
   return(
-    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,padding:"8px 12px 10px",marginBottom:10}}>
-      <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>⏱ Fixing Window - Open Fleet by Operator</div>
-      {/* Chart area with themed scrollbar */}
-      <div style={{position:"relative",marginBottom:6,maxHeight:220,overflowY:"auto",overflowX:"hidden",scrollbarWidth:"thin",scrollbarColor:C.bd2+" transparent"}}>
-        {rows.map((r,i)=>{
-          const pct=toPct(r.days);
-          return(
-            <div key={r.op} onClick={()=>onOpFilter&&onOpFilter(r.op)} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,cursor:onOpFilter?"pointer":"default",borderRadius:4,padding:"1px 4px 1px 0",background:opFilter===r.op?"rgba(79,195,247,0.08)":"transparent",outline:opFilter===r.op?"1px solid rgba(79,195,247,0.3)":"none"}}>
-              <div style={{minWidth:140,maxWidth:140,fontSize:12,color:opFilter===r.op?C.blue:C.dim,fontWeight:opFilter===r.op?700:400,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"right",paddingRight:4}}>{r.op}</div>
-              <div style={{flex:1,position:"relative",height:18,background:C.bg3,borderRadius:3}}>
-                {/* Filled bar from left up to pct */}
-                <div style={{position:"absolute",left:0,top:0,height:"100%",width:(pct*100)+"%",background:r.col+"66",borderRadius:3,transition:"width 0.4s"}}/>
-                {/* Bright right edge line */}
-                <div style={{position:"absolute",left:"calc("+( pct*100)+"% - 2px)",top:0,height:"100%",width:3,background:r.col,borderRadius:1}}/>
-                {/* Fleet average reference line */}
-                <div style={{position:"absolute",left:(avgPct*100)+"%",top:0,height:"100%",width:1,background:"rgba(79,195,247,0.35)"}}/>
-              </div>
-              <div style={{minWidth:38,textAlign:"right",fontSize:12,fontWeight:700,color:r.col}}>{r.days!=null?(r.days>=0?"+":"")+r.days+"d":"—"}</div>
-              <div style={{minWidth:22,textAlign:"right",fontSize:12,color:C.faint}}>{r.count}v</div>
-            </div>
-          );
-        })}
-        {/* Fleet avg row */}
-        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8,paddingTop:8,borderTop:"1px solid "+C.bd2}}>
-          <div style={{minWidth:140,maxWidth:140,fontSize:12,color:C.tx,fontWeight:700,textAlign:"right",paddingRight:4}}>Fleet avg</div>
-          <div style={{flex:1,position:"relative",height:18,background:C.bg3,borderRadius:3}}>
-            <div style={{position:"absolute",left:0,top:0,height:"100%",width:(avgPct*100)+"%",background:"rgba(79,195,247,0.12)",borderRadius:3}}/>
-            <div style={{position:"absolute",left:"calc("+(avgPct*100)+"% - 1px)",top:0,height:"100%",width:2,background:"rgba(79,195,247,0.7)"}}/>
-          </div>
-          <div style={{minWidth:38,textAlign:"right",fontSize:12,fontWeight:700,color:C.tx}}>{allAvg!=null?(allAvg>=0?"+":"")+allAvg+"d":"—"}</div>
-          <div style={{minWidth:22,textAlign:"right",fontSize:12,color:C.faint}}>{withDays.length}v</div>
-        </div>
+    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,marginBottom:10,overflow:"hidden"}}>
+      <div style={{padding:"6px 12px",background:"rgba(20,30,50,0.92)",borderBottom:"1px solid rgba(58,130,246,0.14)",fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.08em"}}>
+        ⏱ Fixing Window — Open Fleet by Operator
       </div>
-
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+        <thead>
+          <tr style={{background:"rgba(20,30,50,0.92)"}}>
+            <th style={{padding:"5px 10px",textAlign:"left",fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.08em",borderBottom:"1px solid rgba(58,130,246,0.14)",whiteSpace:"nowrap"}}>Operator</th>
+            <th style={{padding:"5px 10px",textAlign:"left",fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.08em",borderBottom:"1px solid rgba(58,130,246,0.14)",width:"45%"}}>Avg window</th>
+            <th style={{padding:"5px 10px",textAlign:"right",fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.08em",borderBottom:"1px solid rgba(58,130,246,0.14)",whiteSpace:"nowrap"}}>Days</th>
+            <th style={{padding:"5px 10px",textAlign:"right",fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.08em",borderBottom:"1px solid rgba(58,130,246,0.14)",whiteSpace:"nowrap"}}>Vessels</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r,i)=>(
+            <tr key={r.op} onClick={()=>onOpFilter&&onOpFilter(r.op)}
+              style={{background:opFilter===r.op?"rgba(88,166,255,0.10)":i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)",cursor:onOpFilter?"pointer":"default",outline:opFilter===r.op?"1px solid rgba(88,166,255,0.2)":"none"}}>
+              <td style={{padding:"4px 10px",color:opFilter===r.op?"#79c0ff":"rgba(180,200,230,0.8)",fontWeight:opFilter===r.op?700:400,whiteSpace:"nowrap",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>{r.op}</td>
+              <td style={{padding:"4px 10px",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
+                <div style={{position:"relative",height:6,background:"rgba(255,255,255,0.06)",borderRadius:3,overflow:"hidden"}}>
+                  <div style={{position:"absolute",left:0,top:0,height:"100%",width:(toPct(r.days)*100)+"%",background:r.col+"88",borderRadius:3,transition:"width 0.3s"}}/>
+                  <div style={{position:"absolute",left:"calc("+(toPct(r.days)*100)+"% - 1px)",top:0,height:"100%",width:2,background:r.col,borderRadius:1}}/>
+                  <div style={{position:"absolute",left:(avgPct*100)+"%",top:0,height:"100%",width:1,background:"rgba(79,195,247,0.3)"}}/>
+                </div>
+              </td>
+              <td style={{padding:"4px 10px",textAlign:"right",fontWeight:700,color:r.col,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>{r.days!=null?(r.days>=0?"+":"")+r.days+"d":"—"}</td>
+              <td style={{padding:"4px 10px",textAlign:"right",color:"rgba(120,160,220,0.5)",fontVariantNumeric:"tabular-nums",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>{r.count}</td>
+            </tr>
+          ))}
+          {/* Fleet avg footer row */}
+          <tr style={{background:"rgba(20,30,50,0.5)",borderTop:"1px solid rgba(58,130,246,0.14)"}}>
+            <td style={{padding:"4px 10px",color:"rgba(120,160,220,0.7)",fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.06em"}}>Fleet avg</td>
+            <td style={{padding:"4px 10px"}}>
+              <div style={{position:"relative",height:6,background:"rgba(255,255,255,0.06)",borderRadius:3,overflow:"hidden"}}>
+                <div style={{position:"absolute",left:0,top:0,height:"100%",width:(avgPct*100)+"%",background:"rgba(79,195,247,0.15)",borderRadius:3}}/>
+                <div style={{position:"absolute",left:"calc("+(avgPct*100)+"% - 1px)",top:0,height:"100%",width:2,background:"rgba(79,195,247,0.6)"}}/>
+              </div>
+            </td>
+            <td style={{padding:"4px 10px",textAlign:"right",fontWeight:700,color:"rgba(180,200,230,0.8)",fontVariantNumeric:"tabular-nums"}}>{allAvg!=null?(allAvg>=0?"+":"")+allAvg+"d":"—"}</td>
+            <td style={{padding:"4px 10px",textAlign:"right",color:"rgba(120,160,220,0.5)",fontVariantNumeric:"tabular-nums"}}>{withDays.length}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -143,64 +152,79 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels}) {
 
   function fmtDate(){ return new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}); }
 
-  // WhatsApp / text format for cargoes
+  // WhatsApp / text format for positions
   function cargoToText(rows){
-    // Title-case helper
-    const tc = s => !s?"":s.toLowerCase().split(" ").map(w=>w?w[0].toUpperCase()+w.slice(1):"").join(" ");
-    // Known all-caps abbreviations for ports/locations
-    const UPPER_ABBR=new Set(["ARA","USG","USGC","UKC","UKG","MED","GIB","SPORE","WAF","MEG","AG","CPP","DPP","LNG","LPG","IMO","FOB","CIF","ETA","STS","FSU","ULSD","HVO","GTL","LCO","UCO","FAME","LSFO","HSFO","MGO","VME","AMS","RTM","LOOP","NOLA","USG","USGC"]);
-    const tcPort = s => !s?"":s.toLowerCase().split(" ").map(w=>{if(!w)return w;const up=w.toUpperCase();if(UPPER_ABBR.has(up))return up;return w[0].toUpperCase()+w.slice(1);}).join(" ");
-    // Format qty: dots → commas for decimals (12.5kt → 12,5kt)
-    const fmtQty = q => { const n=normaliseQty(q)||""; return n.replace(/(\d)\.(\d)/g,"$1,$2"); };
-    // Compact laycan: "02 May" "04 May" → "2-4 May"; strips leading zeros
-    const fmtLaycan = (from, to) => {
-      const stripLeadZero = s => s ? s.replace(/^0(\d)/, "$1") : s;
-      if(!from && !to) return "";
-      if(from && to){
+    // Title case but keep known abbreviations uppercase
+    const UPPER_ABBR=new Set(["ARA","USG","USGC","UKC","UKG","MED","ARA","GIB","SPORE","WAF","MEG","AG","CPP","DPP","LNG","LPG","IMO","FOB","CIF","ETA","STS","FSU","ULSD","HVO","GTL","LCO","UCO","FAME","LSFO","HSFO","MGO","VME"]);
+    const tc = s => !s?"":s.toLowerCase().split(" ").map(w=>{
+      if(!w)return w;
+      const up=w.toUpperCase();
+      if(UPPER_ABBR.has(up))return up;
+      return w[0].toUpperCase()+w.slice(1);
+    }).join(" ");
+    // Title case cargo type (not all caps)
+    const tcCargo = s => !s?"":s.toLowerCase().split(" ").map(w=>w?w[0].toUpperCase()+w.slice(1):"").join(" ");
+    // Format qty: replace . with , for decimals
+    const fmtQty = q => {const n=normaliseQty(q)||"";return n.replace(/(\d)\.(\d)/g,"$1,$2");};
+    // Format laycan: "19 Mar - 21 Mar" → "19-21 Mar", or single date
+    const fmtLaycan = (from,to) => {
+      if(!from&&!to)return "";
+      if(from&&to){
+        // Try to compact same-month range: "19 Mar - 21 Mar" → "19-21 Mar"
         const m1=from.match(/^(\d{1,2})\s+([A-Za-z]{3})/);
         const m2=to.match(/^(\d{1,2})\s+([A-Za-z]{3})/);
-        if(m1 && m2 && m1[2].toLowerCase()===m2[2].toLowerCase()){
-          const d1=parseInt(m1[1]);
-          const d2=parseInt(m2[1]);
-          if(d1===d2) return d1+" "+m1[2];
-          return d1+"-"+d2+" "+m1[2];
-        }
-        if(m1 && m2) return parseInt(m1[1])+" "+m1[2]+" - "+parseInt(m2[1])+" "+m2[2];
-        return (stripLeadZero(from)||"")+" - "+(stripLeadZero(to)||"");
+        if(m1&&m2&&m1[2].toLowerCase()===m2[2].toLowerCase())
+          return m1[1]+"-"+m2[1]+" "+m1[2];
+        return from+" - "+to;
       }
-      const s=from||to;
-      const m=s.match(/^(\d{1,2})\s+([A-Za-z]{3})/);
-      return m ? parseInt(m[1])+" "+m[2] : stripLeadZero(s);
+      return from||to;
     };
-    // Format freight: "440k" → "USD 440k ls", blank → "RNR"
-    const fmtFreightStr = f => {
-      if(!f || !String(f).trim()) return "RNR";
-      const s = String(f).trim();
-      // Already formatted?
-      if(s.toLowerCase().startsWith("usd")) return s;
-      // Numeric value or shorthand like "440k"
-      return "USD "+s+" ls";
-    };
-
     const parts = [];
     for(const c of rows){
-      const charterer = tcPort(c.charterer||"");
-      const qty = fmtQty(c.qty);
-      const cargoType = tc(c.cargo||"");  // Title case, NOT all-caps
-      const load = tcPort(c.load||"");
-      const disch = tcPort(c.disch||"");
-      const laycanStr = fmtLaycan(c.from, c.to);
-      const freightStr = fmtFreightStr(c.freight);
-      const vessel = tcPort(c.vessel||"");
       const st = c.status||"";
-
+      const charterer = tc(c.charterer||"");
+      const qty = fmtQty(c.qty);
+      const cargoType = tcCargo(c.cargo||"");
+      const load = tc(c.load||"");
+      const disch = tc(c.disch||"");
+      const laycanStr = fmtLaycan(c.from,c.to);
+      const freight = c.freight||"";
+      const vessel = tc(c.vessel||"");
       let line = "";
       if((st==="FIXED"||st==="SUBS") && vessel){
         const fixWord = st==="SUBS"?"on subs":"fixed";
-        line = [charterer,fixWord,vessel,qty,cargoType,load,"to",disch,laycanStr,freightStr].filter(Boolean).join(" ");
+        line = [charterer,fixWord,vessel,qty,cargoType,load,"to",disch,laycanStr,freight?"USD "+freight+" ls":""].filter(Boolean).join(" ");
       } else {
-        // Always include all fields even if status blank
-        line = [vessel||charterer,qty,cargoType,load,"to",disch,laycanStr,freightStr].filter(Boolean).join(" ");
+        line = [vessel||charterer,qty,cargoType,load,"to",disch,laycanStr].filter(Boolean).join(" ");
+      }
+      parts.push(line);
+    }
+    return parts.join("\n").trim();
+  }
+
+  // WhatsApp / text format for cargoes
+  function cargoToText(rows){
+    const tc = s => !s?"":s.toLowerCase().split(" ").map(w=>w?w[0].toUpperCase()+w.slice(1):"").join(" ");
+    const fmtQty = q => normaliseQty(q)||"";
+    const parts = [];
+    parts.push("\ud83d\udce6 *Cargoes* \u2014 "+fmtDate());
+    parts.push("");
+    for(const c of rows){
+      const st = c.status||"";
+      const charterer = tc(c.charterer||"");
+      const qty = fmtQty(c.qty);
+      const cargoType = (c.cargo||"").toUpperCase();
+      const load = tc(c.load||"");
+      const disch = tc(c.disch||"");
+      const laycanStr = c.from&&c.to?"from "+c.from+" to "+c.to:c.from?"from "+c.from:c.to?"to "+c.to:"";
+      const freight = c.freight||"";
+      const vessel = tc(c.vessel||"");
+      let line = "";
+      if((st==="FIXED"||st==="SUBS") && vessel){
+        const fixWord = st==="SUBS"?"on subs":"fixed";
+        line = [charterer,fixWord,vessel,qty,cargoType,load,"to",disch,laycanStr,freight?"USD "+freight+" ls":""].filter(Boolean).join(" ");
+      } else {
+        line = [vessel||charterer,qty,cargoType,load,"to",disch,laycanStr].filter(Boolean).join(" ");
       }
       parts.push(line);
     }
@@ -242,19 +266,16 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels}) {
     document.body.removeChild(a); URL.revokeObjectURL(url);
   }
 
-  const allRows = mode==="pos" ? vessels : cargoes;
-  const selC = selCargoes&&selCargoes.size>0 ? selCargoes : null;
-  const selV2 = selVessels&&selVessels.size>0 ? selVessels : null;
-  const activeRows = mode==="cargo"&&selC ? allRows.filter(c=>selC.has(c.id)) : mode==="pos"&&selV2 ? allRows.filter(v=>selV2.has(v.vessel)) : allRows;
-
-  const btnStyle = {fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:5,
-    border:"1px solid rgba(120,160,220,0.35)",
-    background:"rgba(15,25,50,0.85)",color:"#9fc3f5",cursor:"pointer",
-    display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",fontFamily:"inherit",
-    letterSpacing:"0.03em"};
+  const rows = mode==="pos" ? vessels : cargoes;
+  const btnStyle = {fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:5,border:"1px solid "+C.bd,
+    background:C.bg3,color:C.tx,cursor:"pointer",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"};
 
   function copyText(){
+    const selC = selCargoes&&selCargoes.size>0 ? selCargoes : null;
+    const selV2 = selVessels&&selVessels.size>0 ? selVessels : null;
+    const activeRows = mode==="cargo"&&selC ? rows.filter(c=>selC.has(c.id)) : mode==="pos"&&selV2 ? rows.filter(v=>selV2.has(v.vessel)) : rows;
     const txt = mode==="pos" ? posToText(activeRows) : cargoToText(activeRows);
+    // Reliable cross-browser copy
     const ta = document.createElement("textarea");
     ta.value = txt;
     ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;";
@@ -263,21 +284,23 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels}) {
     ta.select();
     try { document.execCommand("copy"); } catch(e){}
     document.body.removeChild(ta);
+    // Also try modern API
     if(navigator.clipboard) navigator.clipboard.writeText(txt).catch(()=>{});
     setCopied(true);
     setTimeout(()=>setCopied(false),3000);
   }
 
-  if(!allRows.length) return null;
+  if(!rows.length) return null;
   return(
     <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-      <button style={{...btnStyle,borderColor:copied?"rgba(46,204,113,0.6)":undefined,color:copied?"#2ecc71":undefined}}
-        onClick={copyText} title="Copy fixtures as text">
-        {copied?"✓ Copied!":(activeRows.length<allRows.length?"📋 Copy ("+activeRows.length+")":"📋 Copy all")}
+      <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Export</span>
+      <button style={{...btnStyle,borderColor:copied?C.green:C.bd,color:copied?C.green:C.tx}}
+        onClick={copyText} title="Copy as WhatsApp-ready text">
+        {copied?"✓ Copied!":(mode==="cargo"&&selCargoes&&selCargoes.size>0?"📋 Copy ("+selCargoes.size+")":mode==="pos"&&selVessels&&selVessels.size>0?"📋 Copy ("+selVessels.size+")":"📋 Copy all")}
       </button>
-      <button style={btnStyle} onClick={()=>exportExcel(activeRows,"pos"===mode?"pos":"cargo")}
-        title="Download selected as CSV">
-        📊 CSV{activeRows.length<allRows.length?" ("+activeRows.length+")":""}
+      <button style={btnStyle} onClick={()=>exportExcel(rows,"pos"===mode?"pos":"cargo")}
+        title="Download as CSV / Excel">
+        📊 Export CSV
       </button>
     </div>
   );
