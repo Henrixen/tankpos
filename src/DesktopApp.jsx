@@ -138,21 +138,18 @@ const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
   { key: "delete", label: "", align: "center", width: 24 },
 ];
 
-const allCargoTicked=filtC.length>0&&filtC.every(c=>selCargoes.has(c.id));
 const cargoColumns = [
-  { key: "select", label: <span style={{fontSize:11,color:allCargoTicked?"#4fc3f7":C.faint,cursor:"pointer",userSelect:"none"}} onClick={e=>{e.stopPropagation();setSelCargoes(allCargoTicked?new Set():new Set(filtC.map(c=>c.id)));}}>
-      {allCargoTicked?"[✓]":"[ ]"}
-    </span>, align: "center", width: 28 },
+  { key: "select", label: "", align: "center", width: 28 },
   { key: "status", label: "Status", align: "center", width: colWidthsC.Status },
   { key: "vessel", label: "Vessel", width: colWidthsC.Vessel },
   { key: "charterer", label: "Charterer", width: colWidthsC.Charterer },
-  { key: "qty", label: "Qty", align: "right", width: colWidthsC.Qty },
+  { key: "qty", label: "Qty", align: "left", width: colWidthsC.Qty },
   { key: "cargo", label: "Cargo", width: colWidthsC.Cargo },
   { key: "load", label: "Load", width: colWidthsC.Load },
   { key: "disch", label: "Disch", width: colWidthsC.Disch },
-  { key: "from", label: "From", align: "center", width: colWidthsC.LaycanStart },
-  { key: "to", label: "To", align: "center", width: colWidthsC.LaycanEnd },
-  { key: "freight", label: "Freight", align: "right", width: colWidthsC.Freight },
+  { key: "from", label: "From", align: "left", width: colWidthsC.LaycanStart },
+  { key: "to", label: "To", align: "left", width: colWidthsC.LaycanEnd },
+  { key: "freight", label: "Freight", align: "left", width: colWidthsC.Freight },
   { key: "comment", label: "Comment", width: colWidthsC.Comment },
   { key: "updated", label: "Updated", align: "center", width: colWidthsC.Updated },
   { key: "delete", label: "", align: "center", width: 26 },
@@ -971,7 +968,10 @@ const filtV=useMemo(()=>{
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
                 : <MatrixTable
-    columns={cargoColumns}
+    columns={(()=>{
+      const allTicked=filtC.length>0&&filtC.every(c=>selCargoes.has(c.id));
+      return cargoColumns.map(col=>col.key==="select"?{...col,label:<span style={{fontSize:11,color:allTicked?"#4fc3f7":C.faint,cursor:"pointer",userSelect:"none"}} onClick={e=>{e.stopPropagation();setSelCargoes(allTicked?new Set():new Set(filtC.map(c=>c.id)));}}>{allTicked?"[✓]":"[ ]"}</span>}:col);
+    })()}
     data={filtC}
     keyField="id"
     renderRow={(f, td) => {
