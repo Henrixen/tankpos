@@ -529,7 +529,7 @@ const filtV=useMemo(()=>{
                 )}
                 {active&&(
                   <div style={{position:"absolute",bottom:0,left:12,right:12,height:2,
-                    background:"linear-gradient(90deg,"+col+"00,"+col+","+col+"00)",
+                    background:`linear-gradient(90deg,${col}00,${col},${col}00)`,
                     borderRadius:"2px 2px 0 0"}}/>
                 )}
               </button>
