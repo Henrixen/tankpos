@@ -420,117 +420,123 @@ const filtV=useMemo(()=>{
           <button onClick={()=>setPendingDel(null)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,padding:"5px 14px",cursor:"pointer",fontSize:12}}>Cancel</button>
         </div>
       )}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 18px",
-        background:"linear-gradient(90deg,rgba(7,15,28,0.98) 0%,rgba(12,23,45,0.98) 100%)",
-        borderBottom:"1px solid rgba(58,130,246,0.14)",position:"sticky",top:0,zIndex:100}}>
-        {/* Logo */}
-        <div style={{display:"flex",alignItems:"baseline",gap:5,flexShrink:0}}>
-          <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",
-            color:"rgba(120,180,255,0.45)"}}>Signal</span>
-          <span style={{fontSize:14,fontWeight:800,color:"#e8f2ff",letterSpacing:"0.04em"}}>Tanker</span>
-          <span style={{fontSize:14,fontWeight:800,color:"#43e97b",letterSpacing:"0.04em"}}>Intelligence</span>
-        </div>
-        <div style={{display:"flex",gap:4,alignItems:"center",marginLeft:"auto",marginRight:12}}>
-          {[70,80,90,100,110,120,130].map(z=>(
-            <button key={z} onClick={()=>document.body.style.zoom=z+"%"}
-              style={{fontSize:9,fontWeight:600,padding:"1px 4px",borderRadius:2,
-                border:"1px solid rgba(58,130,246,0.15)",background:"transparent",
-                color:"rgba(120,160,220,0.35)",cursor:"pointer",fontFamily:"inherit"}}>
-              {z}%
-            </button>
-          ))}
-          <button onClick={onLoadVesselDB} disabled={vesselDBLoaded||vesselDBLoading}
-            title={vesselDBLoaded?"Vessel DB loaded":vesselDBLoading?"Loading vessel DB…":"Load vessel spec DB"}
-            style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:3,
-              border:"1px solid "+(vesselDBLoaded?"rgba(67,233,123,0.4)":"rgba(58,130,246,0.2)"),
-              background:vesselDBLoaded?"rgba(67,233,123,0.08)":"transparent",
-              color:vesselDBLoaded?"#43e97b":vesselDBLoading?"#faa356":"rgba(120,160,220,0.5)",
-              cursor:vesselDBLoaded||vesselDBLoading?"default":"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-            {vesselDBLoaded?"✓ Ship DB":vesselDBLoading?"⟳ Loading…":"Ship DB"}
-          </button>
-        </div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          {tab==="pos"&&vessels.length>0&&(
-            <button onClick={()=>setPendingDel({type:"all",id:"__ALL__",label:"ALL "+vessels.length+" vessels"})}
-              style={{background:"none",border:"1px solid rgba(255,107,107,0.25)",borderRadius:4,
-                padding:"2px 10px",color:"rgba(255,107,107,0.5)",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
-              ✕ Clear
-            </button>
-          )}
-        </div>
-      </div>
-      <div style={{padding:"12px 16px",maxWidth:1900,margin:"0 auto"}}>
-        {/* ── Navigation bar ── */}
-        <div style={{display:"flex",alignItems:"stretch",marginBottom:14,gap:0,
-          background:"rgba(7,15,28,0.85)",border:"1px solid rgba(58,130,246,0.14)",
-          borderRadius:8,overflow:"hidden",backdropFilter:"blur(8px)"}}>
-
-          {/* Tab buttons */}
-          <div style={{display:"flex",alignItems:"stretch",flexShrink:0}}>
-            {[
-              ["pos","Positions",vessels.length,"#58a6ff"],
-              ["cargo","Cargoes",cargoTotal||cargoes.length,"#faa356"],
-              ["fix","Fixing",0,"#c792ea"],
-              ["matrix","Matrix",0,"#43e97b"],
-              ["projects","Projects",0,"#4fc3f7"],
-              ["tce","TCE",0,"#faa356"],
-              ["dash","Dashboard",0,"#43e97b"],
-              ["notes","Notes",0,"#f472b6"],
-              ["cal","Calendar",0,"#4fc3f7"],
-              ["settings","Settings",0,"#94a3b8"],
-            ].map(([id,label,count,col])=>{
-              const active=tab===id;
-              return(
-                <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
-                  style={{position:"relative",display:"flex",flexDirection:"column",
-                    alignItems:"center",justifyContent:"center",gap:1,
-                    padding:mobile?"6px 8px":"7px 14px",
-                    background:active?"rgba(255,255,255,0.04)":"transparent",
-                    border:"none",borderRight:"1px solid rgba(58,130,246,0.08)",
-                    cursor:"pointer",fontFamily:"inherit",transition:"background 0.15s",
-                    minWidth:mobile?44:0,flexShrink:0}}>
-                  {/* Label */}
-                  <span style={{fontSize:mobile?9:11,fontWeight:active?700:500,
-                    color:active?col:"rgba(140,165,210,0.55)",
-                    textTransform:"uppercase",letterSpacing:"0.06em",whiteSpace:"nowrap",
-                    transition:"color 0.15s"}}>
-                    {label}
-                  </span>
-                  {/* Count badge */}
-                  {count>0&&(
-                    <span style={{fontSize:10,fontWeight:700,color:active?col:"rgba(120,160,220,0.4)",
-                      lineHeight:1,transition:"color 0.15s"}}>
-                      {count.toLocaleString()}
-                    </span>
-                  )}
-                  {/* Active underline */}
-                  {active&&(
-                    <div style={{position:"absolute",bottom:0,left:8,right:8,height:2,
-                      background:col,borderRadius:"2px 2px 0 0",
-                      boxShadow:"0 0 6px "+col+"88"}}/>
-                  )}
-                </button>
-              );
-            })}
+      {/* ── APP HEADER — inspired by Market Dashboard ── */}
+      <div style={{
+        background:"linear-gradient(135deg, #070f1c 0%, #0c1a32 50%, #081426 100%)",
+        borderBottom:"1px solid rgba(58,130,246,0.18)",
+        position:"sticky",top:0,zIndex:200,
+      }}>
+        {/* Top bar: brand + utilities */}
+        <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 20px 0",borderBottom:"1px solid rgba(58,130,246,0.08)"}}>
+          {/* Brand */}
+          <div style={{flexShrink:0,display:"flex",flexDirection:"column",gap:1,paddingBottom:10}}>
+            <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",color:"rgba(120,180,255,0.45)"}}>Signal — Tanker Intelligence</div>
+            <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+              <span style={{fontSize:18,fontWeight:800,color:"#e8f2ff",letterSpacing:"0.02em"}}>Market</span>
+              <span style={{fontSize:18,fontWeight:800,color:"#43e97b",letterSpacing:"0.02em"}}>Signal</span>
+              <span style={{fontSize:10,color:"rgba(140,190,255,0.35)",marginLeft:2}}>
+                {new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
+              </span>
+            </div>
           </div>
 
-          {/* Ask AI — fills remaining space */}
+          {/* Divider */}
+          <div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>
+
+          {/* Ask AI — takes most of the space */}
           {!mobile&&(
-            <div style={{flex:1,minWidth:0,borderRight:"1px solid rgba(58,130,246,0.08)",
-              display:"flex",alignItems:"center",
-              background:"linear-gradient(90deg,rgba(20,35,65,0.3),rgba(15,28,55,0.2))"}}>
+            <div style={{flex:1,minWidth:0,position:"relative",paddingBottom:10}}>
               <AskAIStrip vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>
             </div>
           )}
 
-          {/* Intel Vault — fixed right */}
+          {/* Divider */}
+          {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}
+
+          {/* Intel Vault */}
           {!mobile&&(
-            <div style={{flexShrink:0,display:"flex",alignItems:"center",
-              background:"linear-gradient(90deg,rgba(15,28,55,0.2),rgba(20,35,65,0.4))"}}>
+            <div style={{flexShrink:0,paddingBottom:10}}>
               <IntelVaultStrip onVaultUpdate={setIntelItems}/>
             </div>
           )}
+
+          {/* Divider */}
+          <div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>
+
+          {/* Utilities */}
+          <div style={{display:"flex",gap:3,alignItems:"center",flexShrink:0,paddingBottom:10}}>
+            {[70,80,90,100,110,120,130].map(z=>(
+              <button key={z} onClick={()=>document.body.style.zoom=z+"%"}
+                style={{fontSize:9,padding:"1px 4px",borderRadius:2,border:"1px solid rgba(58,130,246,0.12)",
+                  background:"transparent",color:"rgba(100,140,200,0.3)",cursor:"pointer",fontFamily:"inherit"}}>
+                {z}%
+              </button>
+            ))}
+            <button onClick={onLoadVesselDB} disabled={vesselDBLoaded||vesselDBLoading}
+              style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:3,marginLeft:4,
+                border:"1px solid "+(vesselDBLoaded?"rgba(67,233,123,0.4)":"rgba(58,130,246,0.18)"),
+                background:vesselDBLoaded?"rgba(67,233,123,0.08)":"transparent",
+                color:vesselDBLoaded?"#43e97b":vesselDBLoading?"#faa356":"rgba(100,140,200,0.4)",
+                cursor:vesselDBLoaded||vesselDBLoading?"default":"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+              {vesselDBLoaded?"✓ DB":vesselDBLoading?"⟳…":"Ship DB"}
+            </button>
+            {tab==="pos"&&vessels.length>0&&(
+              <button onClick={()=>setPendingDel({type:"all",id:"__ALL__",label:"ALL "+vessels.length+" vessels"})}
+                style={{fontSize:10,padding:"2px 8px",borderRadius:3,border:"1px solid rgba(255,107,107,0.25)",
+                  background:"transparent",color:"rgba(255,107,107,0.4)",cursor:"pointer",fontFamily:"inherit"}}>
+                ✕ Clear
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Tab navigation row */}
+        <div style={{display:"flex",alignItems:"stretch",padding:"0 20px",gap:0,overflowX:"auto"}}>
+          {[
+            ["pos","Positions",vessels.length,"#58a6ff"],
+            ["cargo","Cargoes",cargoTotal||cargoes.length,"#faa356"],
+            ["fix","Fixing",0,"#c792ea"],
+            ["matrix","Matrix",0,"#43e97b"],
+            ["projects","Projects",0,"#4fc3f7"],
+            ["tce","TCE",0,"#faa356"],
+            ["dash","Dashboard",0,"#43e97b"],
+            ["notes","Notes",0,"#f472b6"],
+            ["cal","Calendar",0,"#4fc3f7"],
+            ["settings","Settings",0,"#94a3b8"],
+          ].map(([id,label,count,col])=>{
+            const active=tab===id;
+            return(
+              <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
+                style={{position:"relative",display:"flex",alignItems:"center",gap:6,
+                  padding:"10px 16px",background:"transparent",border:"none",
+                  borderBottom:"2px solid "+(active?col:"transparent"),
+                  cursor:"pointer",fontFamily:"inherit",flexShrink:0,
+                  transition:"border-color 0.15s,color 0.15s",
+                  marginBottom:-1}}>
+                <span style={{fontSize:12,fontWeight:active?700:500,
+                  color:active?col:"rgba(120,155,210,0.5)",
+                  textTransform:"uppercase",letterSpacing:"0.07em",whiteSpace:"nowrap"}}>
+                  {label}
+                </span>
+                {count>0&&(
+                  <span style={{fontSize:10,fontWeight:700,
+                    color:active?col:"rgba(100,140,200,0.35)",
+                    background:active?col+"18":"transparent",
+                    padding:"0 5px",borderRadius:8,lineHeight:"16px",
+                    border:active?"1px solid "+col+"33":"none"}}>
+                    {count.toLocaleString()}
+                  </span>
+                )}
+                {active&&(
+                  <div style={{position:"absolute",bottom:0,left:12,right:12,height:2,
+                    background:"linear-gradient(90deg,"+col+"00,"+col+","+col+"00)",
+                    borderRadius:"2px 2px 0 0"}}/>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
         {/* ── POSITIONS ── */}
         {tab==="pos"&&(
