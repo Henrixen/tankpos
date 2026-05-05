@@ -32,80 +32,20 @@ function applyFmt(cmd){document.execCommand(cmd,false,null);}
 function stripHtml(h){return(h||"").replace(/<[^>]+>/g,"");}
 
 // Toolbar component - stable reference
-function Toolbar({onInsertTable}){
-  const [showTableDlg,setShowTableDlg]=React.useState(false);
-  const [tRows,setTRows]=React.useState(3);
-  const [tCols,setTCols]=React.useState(3);
-
-  const btn=(label,action,title)=>(
-    <button key={action} onMouseDown={e=>{e.preventDefault();applyFmt(action);}} title={title||label} style={{
+function Toolbar(){
+  const btn=(label,action)=>(
+    <button key={action} onMouseDown={e=>{e.preventDefault();applyFmt(action);}} style={{
       background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
       color:"rgba(160,200,255,0.65)",padding:"2px 7px",fontFamily:"inherit",fontSize:11,cursor:"pointer",
       fontWeight:action==="bold"?700:400,fontStyle:action==="italic"?"italic":"normal",
-      textDecoration:action==="underline"?"underline":"none",whiteSpace:"nowrap",
+      textDecoration:action==="underline"?"underline":"none",
     }}>{label}</button>
   );
-
-  function insertTable(){
-    const r=parseInt(tRows)||3,c=parseInt(tCols)||3;
-    let html='<table style="border-collapse:collapse;width:100%;margin:8px 0">';
-    for(let i=0;i<r;i++){
-      html+='<tr>';
-      for(let j=0;j<c;j++){
-        html+=`<td style="border:1px solid rgba(88,166,255,0.25);padding:5px 8px;min-width:60px;color:#e8f2ff">&nbsp;</td>`;
-      }
-      html+='</tr>';
-    }
-    html+='</table><p></p>';
-    document.execCommand('insertHTML',false,html);
-    setShowTableDlg(false);
-    if(onInsertTable) onInsertTable();
-  }
-
   return(
-    <div style={{display:"flex",gap:3,padding:"4px 10px",borderBottom:"1px solid rgba(58,130,246,0.08)",background:"rgba(4,10,22,0.4)",flexWrap:"wrap",alignItems:"center",position:"relative"}}>
-      {btn("B","bold","Bold")}
-      {btn("U","underline","Underline")}
-      {btn("I","italic","Italic")}
-      <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 1px",alignSelf:"stretch"}}/>
-      {btn("• List","insertUnorderedList","Bullet list (Tab=indent, Shift+Tab=outdent)")}
-      {btn("1. List","insertOrderedList","Numbered list (Tab=indent, Shift+Tab=outdent)")}
-      <button onMouseDown={e=>{e.preventDefault();applyFmt("indent");}} title="Indent (Tab)"
-        style={{background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,color:"rgba(160,200,255,0.65)",padding:"2px 7px",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>→ In</button>
-      <button onMouseDown={e=>{e.preventDefault();applyFmt("outdent");}} title="Outdent (Shift+Tab)"
-        style={{background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,color:"rgba(160,200,255,0.65)",padding:"2px 7px",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>← Out</button>
-      <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 1px",alignSelf:"stretch"}}/>
-      {/* Table button */}
-      <button onMouseDown={e=>{e.preventDefault();setShowTableDlg(v=>!v);}} title="Insert table"
-        style={{background:showTableDlg?"rgba(88,166,255,0.15)":"transparent",border:"1px solid rgba(58,130,246,0.2)",borderRadius:3,color:"rgba(160,200,255,0.75)",padding:"2px 8px",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>
-        ⊞ Table
-      </button>
-      {/* Table dialog */}
-      {showTableDlg&&(
-        <div style={{position:"absolute",top:"100%",left:0,zIndex:200,background:"#0c1729",border:"1px solid rgba(88,166,255,0.3)",borderRadius:6,padding:"12px",display:"flex",flexDirection:"column",gap:8,boxShadow:"0 8px 24px rgba(0,0,0,0.5)",marginTop:2}}>
-          <div style={{fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.07em"}}>Insert table</div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <label style={{fontSize:11,color:"rgba(160,200,255,0.6)"}}>Rows
-              <input type="number" value={tRows} min={1} max={20} onChange={e=>setTRows(e.target.value)}
-                style={{width:44,marginLeft:5,background:"rgba(15,25,50,0.9)",border:"1px solid rgba(88,166,255,0.3)",borderRadius:3,color:"#cde",fontFamily:"inherit",fontSize:12,padding:"2px 5px",outline:"none"}}/>
-            </label>
-            <label style={{fontSize:11,color:"rgba(160,200,255,0.6)"}}>Cols
-              <input type="number" value={tCols} min={1} max={10} onChange={e=>setTCols(e.target.value)}
-                style={{width:44,marginLeft:5,background:"rgba(15,25,50,0.9)",border:"1px solid rgba(88,166,255,0.3)",borderRadius:3,color:"#cde",fontFamily:"inherit",fontSize:12,padding:"2px 5px",outline:"none"}}/>
-            </label>
-          </div>
-          <div style={{display:"flex",gap:6}}>
-            <button onMouseDown={e=>{e.preventDefault();insertTable();}}
-              style={{flex:1,background:"rgba(88,166,255,0.2)",border:"1px solid rgba(88,166,255,0.4)",borderRadius:4,color:"#9fc3f5",fontFamily:"inherit",fontSize:12,padding:"4px 0",cursor:"pointer",fontWeight:600}}>
-              Insert
-            </button>
-            <button onMouseDown={e=>{e.preventDefault();setShowTableDlg(false);}}
-              style={{background:"transparent",border:"1px solid rgba(88,166,255,0.15)",borderRadius:4,color:"rgba(120,160,220,0.5)",fontFamily:"inherit",fontSize:12,padding:"4px 8px",cursor:"pointer"}}>
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
+    <div style={{display:"flex",gap:4,padding:"5px 10px",borderBottom:"1px solid rgba(58,130,246,0.08)",background:"rgba(4,10,22,0.4)",flexWrap:"wrap"}}>
+      {btn("B","bold")}{btn("U","underline")}{btn("I","italic")}
+      <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px"}}/>
+      {btn("\u2022 List","insertUnorderedList")}{btn("1. List","insertOrderedList")}
     </div>
   );
 }
@@ -231,12 +171,14 @@ export default function NotesTab(){
 
   async function saveEdit(id,body,editTitle,editTopics,editImages){
     const updated_at=new Date().toISOString();
-    // Silent background save — no React state update to avoid re-render/cursor jump
-    // State is updated only when modal closes (expandedId becomes null) via load()
     await supabase.from("notes").update({
       body,title:editTitle||null,topics:editTopics,
       images:editImages,updated_at,
     }).eq("id",id);
+    // Update in-place — no full reload to prevent grid jump
+    setNotes(prev=>prev.map(n=>n.id===id
+      ?{...n,body,title:editTitle||null,topics:editTopics,images:editImages,updated_at}
+      :n));
   }
 
   async function togglePin(note){
@@ -432,15 +374,13 @@ export default function NotesTab(){
 
     function scheduleSave(){
       clearTimeout(saveTimer.current);
-      saveTimer.current=setTimeout(doSave,8000);
+      saveTimer.current=setTimeout(doSave,2000);
     }
 
     function closeModal(){
       clearTimeout(saveTimer.current);
       doSave();
       setExpandedId(null);
-      // Reload after brief delay to let the save complete
-      setTimeout(()=>load(),500);
     }
 
     // Save on unmount
@@ -497,22 +437,11 @@ export default function NotesTab(){
           </div>
 
           {/* Toolbar */}
-          <Toolbar onInsertTable={()=>bodyRef.current?.focus()}/>
+          <Toolbar/>
 
-          {/* Body — Tab/Shift+Tab for list indent/outdent, Enter+Shift for nested bullet */}
+          {/* Body — innerHTML set once on mount via useEffect, never via prop after that */}
           <div ref={bodyRef} contentEditable suppressContentEditableWarning
             onInput={scheduleSave}
-            onKeyDown={e=>{
-              if(e.key==="Tab"){
-                e.preventDefault();
-                if(e.shiftKey){
-                  document.execCommand("outdent",false,null);
-                } else {
-                  document.execCommand("indent",false,null);
-                }
-                scheduleSave();
-              }
-            }}
             style={{flex:1,overflowY:"auto",padding:"12px 16px",color:"#e8f2ff",
               fontFamily:"inherit",fontSize:13,outline:"none",lineHeight:1.7,caretColor:"#58a6ff"}}/>
 
@@ -554,16 +483,6 @@ export default function NotesTab(){
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:10,height:"100%",minHeight:0}}>
-      <style>{`
-        [contenteditable] table{border-collapse:collapse;width:100%;margin:6px 0}
-        [contenteditable] td,[contenteditable] th{border:1px solid rgba(88,166,255,0.25);padding:5px 8px;min-width:50px;vertical-align:top;color:#e8f2ff}
-        [contenteditable] td:focus,[contenteditable] td:focus-within{outline:1px solid rgba(88,166,255,0.5)}
-        [contenteditable] ol{padding-left:1.4em;margin:4px 0}
-        [contenteditable] ul{padding-left:1.4em;margin:4px 0}
-        [contenteditable] ol ol{list-style-type:lower-alpha}
-        [contenteditable] ol ol ol{list-style-type:lower-roman}
-        [contenteditable] li{margin:2px 0}
-      `}</style>
 
       {/* Lightbox */}
       {lightbox&&<Lightbox src={lightbox} onClose={()=>setLightbox(null)}/>}
@@ -627,16 +546,10 @@ export default function NotesTab(){
             {TOPICS.map(t=>pill(t,selTopics.includes(t),()=>setSelTopics(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t])))}
           </div>
         </div>
-        <Toolbar onInsertTable={()=>editorRef.current?.focus()}/>
+        <Toolbar/>
         <div ref={editorRef} contentEditable suppressContentEditableWarning
           onPaste={handlePaste}
-          onKeyDown={e=>{
-            if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){save();return;}
-            if(e.key==="Tab"){
-              e.preventDefault();
-              document.execCommand(e.shiftKey?"outdent":"indent",false,null);
-            }
-          }}
+          onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))save();}}
           data-placeholder="Write your note... (Ctrl+Enter to save, paste screenshots)"
           style={{minHeight:80,padding:"10px 14px",color:"#e8f2ff",
             fontFamily:"inherit",fontSize:12,outline:"none",lineHeight:1.65,caretColor:"#58a6ff"}}/>
@@ -755,6 +668,26 @@ export default function NotesTab(){
         [contenteditable] li{margin:2px 0;}
         [contenteditable]{caret-color:#58a6ff;}
       `}</style>
+    </div>
+  );
+}
+
+// NotesAlertBanner — exported for Dashboard use
+// Shows pinned/recent notes as alert chips
+export function NotesAlertBanner({notes}){
+  if(!notes||notes.length===0)return null;
+  const pinned=(notes||[]).filter(n=>n.pinned).slice(0,3);
+  if(pinned.length===0)return null;
+  return(
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+      {pinned.map(n=>(
+        <div key={n.id} style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:3,
+          background:"rgba(88,166,255,0.10)",border:"1px solid rgba(88,166,255,0.25)",
+          color:"rgba(160,200,255,0.75)",whiteSpace:"nowrap",maxWidth:200,
+          overflow:"hidden",textOverflow:"ellipsis"}}>
+          📌 {n.title||stripHtml(n.body).slice(0,40)||"Note"}
+        </div>
+      ))}
     </div>
   );
 }
