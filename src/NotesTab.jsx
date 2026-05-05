@@ -33,56 +33,75 @@ function stripHtml(h){return(h||"").replace(/<[^>]+>/g,"");}
 
 // ── Toolbar ──────────────────────────────────────────────────────────────────
 function Toolbar({onInsertTable}){
-  const btn=(label,action)=>(
-    <button key={action+label} onMouseDown={e=>{e.preventDefault();applyFmt(action);}} style={{
+  const b=(label,action,title,extra={})=>(
+    <button key={action+label} onMouseDown={e=>{e.preventDefault();applyFmt(action);}} title={title||label} style={{
       background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
       color:"rgba(160,200,255,0.65)",padding:"2px 7px",fontFamily:"inherit",fontSize:11,cursor:"pointer",
       fontWeight:action==="bold"?700:400,fontStyle:action==="italic"?"italic":"normal",
-      textDecoration:action==="underline"?"underline":"none",
+      textDecoration:action==="underline"?"underline":"none",...extra
     }}>{label}</button>
   );
   return(
-    <div style={{display:"flex",gap:4,padding:"5px 10px",borderBottom:"1px solid rgba(58,130,246,0.08)",
+    <div style={{display:"flex",gap:3,padding:"4px 10px",borderBottom:"1px solid rgba(58,130,246,0.08)",
       background:"rgba(4,10,22,0.4)",flexWrap:"wrap",alignItems:"center"}}>
-      {btn("B","bold")}{btn("U","underline")}{btn("I","italic")}
+      {b("B","bold","Bold")}
+      {b("U","underline","Underline")}
+      {b("I","italic","Italic")}
       <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px",height:14}}/>
-      {btn("\u2022 List","insertUnorderedList")}{btn("1. List","insertOrderedList")}
+      {b("• List","insertUnorderedList","Bullet list — Tab to indent, Shift+Tab to outdent")}
+      {b("1. List","insertOrderedList","Numbered list — Tab to indent, Shift+Tab to outdent")}
+      <button onMouseDown={e=>{e.preventDefault();applyFmt("indent");}} title="Indent (Tab)"
+        style={{background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
+          color:"rgba(160,200,255,0.5)",padding:"2px 6px",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>→</button>
+      <button onMouseDown={e=>{e.preventDefault();applyFmt("outdent");}} title="Outdent (Shift+Tab)"
+        style={{background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
+          color:"rgba(160,200,255,0.5)",padding:"2px 6px",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>←</button>
       <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px",height:14}}/>
-      <button onMouseDown={e=>{e.preventDefault();onInsertTable&&onInsertTable();}} style={{
-        background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
-        color:"rgba(160,200,255,0.65)",padding:"2px 7px",fontFamily:"inherit",fontSize:11,cursor:"pointer",
-      }}>&#x229e; Table</button>
+      <button onMouseDown={e=>{e.preventDefault();onInsertTable&&onInsertTable();}} title="Insert table"
+        style={{background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
+          color:"rgba(160,200,255,0.65)",padding:"2px 7px",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>
+        ⊞ Table
+      </button>
     </div>
   );
 }
 
-// ── Table size picker ─────────────────────────────────────────────────────────
+// ── Table dialog (replaces hover-select which breaks on re-renders) ───────────
 function TablePicker({onPick,onClose}){
-  const [hov,setHov]=useState([0,0]);
-  const MAX=8;
+  const [rows,setRows]=React.useState(3);
+  const [cols,setCols]=React.useState(3);
   return(
     <div style={{position:"fixed",inset:0,zIndex:900,display:"flex",alignItems:"center",justifyContent:"center"}}
       onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#0c1729",border:"1px solid rgba(58,130,246,0.3)",
-        borderRadius:8,padding:16,boxShadow:"0 8px 32px rgba(0,0,0,0.7)"}}>
-        <div style={{fontSize:12,color:"rgba(160,200,255,0.65)",marginBottom:10,textAlign:"center"}}>
-          {hov[0]>0?`${hov[1]} \xd7 ${hov[0]} table`:"Hover to select size"}
+        borderRadius:8,padding:20,boxShadow:"0 8px 32px rgba(0,0,0,0.7)",minWidth:220}}>
+        <div style={{fontSize:12,fontWeight:700,color:"rgba(160,200,255,0.75)",marginBottom:14,textTransform:"uppercase",letterSpacing:"0.07em"}}>Insert Table</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+          <label style={{display:"flex",flexDirection:"column",gap:4,fontSize:11,color:"rgba(120,160,220,0.6)"}}>
+            Rows
+            <input type="number" value={rows} min={1} max={20} onChange={e=>setRows(+e.target.value)}
+              style={{background:"rgba(15,25,50,0.9)",border:"1px solid rgba(88,166,255,0.3)",borderRadius:4,
+                color:"#cde",fontFamily:"inherit",fontSize:13,padding:"4px 8px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
+          </label>
+          <label style={{display:"flex",flexDirection:"column",gap:4,fontSize:11,color:"rgba(120,160,220,0.6)"}}>
+            Columns
+            <input type="number" value={cols} min={1} max={10} onChange={e=>setCols(+e.target.value)}
+              style={{background:"rgba(15,25,50,0.9)",border:"1px solid rgba(88,166,255,0.3)",borderRadius:4,
+                color:"#cde",fontFamily:"inherit",fontSize:13,padding:"4px 8px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
+          </label>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:`repeat(${MAX},22px)`,gap:3}}>
-          {Array.from({length:MAX*MAX},(_,i)=>{
-            const r=Math.floor(i/MAX)+1,c=(i%MAX)+1;
-            const on=r<=hov[0]&&c<=hov[1];
-            return(
-              <div key={i} onMouseEnter={()=>setHov([r,c])}
-                onClick={()=>onPick(hov[0]||1,hov[1]||1)}
-                style={{width:18,height:18,borderRadius:2,cursor:"pointer",
-                  background:on?"rgba(88,166,255,0.3)":"rgba(58,130,246,0.08)",
-                  border:"1px solid "+(on?"rgba(88,166,255,0.5)":"rgba(58,130,246,0.15)")}}/>
-            );
-          })}
-        </div>
-        <div style={{fontSize:11,color:"rgba(110,155,215,0.4)",textAlign:"center",marginTop:8}}>
-          Click to insert
+        <div style={{display:"flex",gap:8}}>
+          <button onMouseDown={e=>{e.preventDefault();onPick(rows||3,cols||3);}}
+            style={{flex:1,background:"rgba(88,166,255,0.18)",border:"1px solid rgba(88,166,255,0.45)",
+              borderRadius:5,color:"#9fc3f5",fontFamily:"inherit",fontWeight:700,fontSize:12,
+              padding:"6px 0",cursor:"pointer"}}>
+            Insert {rows}×{cols}
+          </button>
+          <button onMouseDown={e=>{e.preventDefault();onClose();}}
+            style={{background:"transparent",border:"1px solid rgba(88,166,255,0.18)",borderRadius:5,
+              color:"rgba(120,160,220,0.5)",fontFamily:"inherit",fontSize:12,padding:"6px 12px",cursor:"pointer"}}>
+            ✕
+          </button>
         </div>
       </div>
     </div>
@@ -508,13 +527,14 @@ export default function NotesTab(){
 
   async function saveEdit(id,body,editTitle,editTopics,editImages,editAlertAt){
     const updated_at=new Date().toISOString();
+    // Silent background save — deliberately no setNotes() call here.
+    // setNotes would trigger a re-render of the parent, which unmounts/remounts
+    // the modal's contentEditable and kills the cursor position.
+    // The note list refreshes when the modal closes via closeModal → load().
     await supabase.from("notes").update({
       body,title:editTitle||null,topics:editTopics,
       images:editImages,updated_at,alert_at:editAlertAt||null,
     }).eq("id",id);
-    setNotes(prev=>prev.map(n=>n.id===id
-      ?{...n,body,title:editTitle||null,topics:editTopics,images:editImages,updated_at,alert_at:editAlertAt||null}
-      :n));
   }
 
   async function togglePin(note){
@@ -766,8 +786,8 @@ export default function NotesTab(){
       savedOnce.current=true;
       saveEdit(note.id,b,t.trim()||null,topicsRef.current,imgsRef.current,a||null);
     }
-    function scheduleSave(){clearTimeout(saveTimer.current);saveTimer.current=setTimeout(doSave,2000);}
-    function closeModal(){clearTimeout(saveTimer.current);doSave();setExpandedId(null);}
+    function scheduleSave(){clearTimeout(saveTimer.current);saveTimer.current=setTimeout(doSave,8000);}
+    function closeModal(){clearTimeout(saveTimer.current);doSave();setExpandedId(null);setTimeout(()=>load(),600);}
     React.useEffect(()=>()=>{clearTimeout(saveTimer.current);doSave();},[]);
 
     function modalPaste(e){
@@ -852,6 +872,13 @@ export default function NotesTab(){
           <div ref={bodyRef} contentEditable suppressContentEditableWarning
             onInput={scheduleSave}
             onPaste={modalPaste}
+            onKeyDown={e=>{
+              if(e.key==="Tab"){
+                e.preventDefault();
+                document.execCommand(e.shiftKey?"outdent":"indent",false,null);
+                scheduleSave();
+              }
+            }}
             style={{flex:1,overflowY:"auto",padding:"12px 16px",color:"#e8f2ff",
               fontFamily:"inherit",fontSize:13,outline:"none",lineHeight:1.7,caretColor:"#58a6ff",
               minHeight:120}}/>
@@ -905,6 +932,20 @@ export default function NotesTab(){
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:10,height:"100%",minHeight:0}}>
+      <style>{`
+        [contenteditable] ol{padding-left:1.6em;margin:3px 0}
+        [contenteditable] ul{padding-left:1.6em;margin:3px 0}
+        [contenteditable] li{margin:2px 0;line-height:1.6}
+        [contenteditable] ol ol{list-style-type:lower-alpha}
+        [contenteditable] ol ol ol{list-style-type:lower-roman}
+        [contenteditable] ul ul{list-style-type:circle}
+        [contenteditable] ul ul ul{list-style-type:square}
+        [contenteditable] table{border-collapse:collapse;width:auto;margin:6px 0}
+        [contenteditable] td,[contenteditable] th{border:1px solid rgba(88,166,255,0.28);padding:4px 8px;min-width:54px;vertical-align:top;color:#e8f2ff}
+        .note-preview-html ol,.note-preview-html ul{padding-left:1.3em;margin:2px 0}
+        .note-preview-html table{border-collapse:collapse;font-size:11px}
+        .note-preview-html td,.note-preview-html th{border:1px solid rgba(88,166,255,0.2);padding:2px 5px}
+      `}</style>
       {showTablePicker&&(
         <TablePicker
           onPick={(r,c)=>{
@@ -980,7 +1021,10 @@ export default function NotesTab(){
         <Toolbar onInsertTable={()=>setShowTablePicker(true)}/>
         <div ref={editorRef} contentEditable suppressContentEditableWarning
           onPaste={handlePaste}
-          onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))save();}}
+          onKeyDown={e=>{
+            if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){save();return;}
+            if(e.key==="Tab"){e.preventDefault();document.execCommand(e.shiftKey?"outdent":"indent",false,null);}
+          }}
           data-placeholder="Write your note\u2026 (Ctrl+Enter to save, paste screenshots)"
           style={{minHeight:80,padding:"10px 14px",color:"#e8f2ff",
             fontFamily:"inherit",fontSize:12,outline:"none",lineHeight:1.65,caretColor:"#58a6ff"}}/>
