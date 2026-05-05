@@ -176,4 +176,88 @@ Rules:
 
 // ─── AI Ask ───────────────────────────────────────────────────────────────────
 
+// ─── IntelVaultStrip — compact strip for nav bar ─────────────────────────────
+export function IntelVaultStrip({onVaultUpdate}){
+  const [text,setText]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [status,setStatus]=useState(null);
+  const [intelDate,setIntelDate]=useState(()=>new Date().toISOString().slice(0,10));
+  const [count,setCount]=useState(0);
+  const fRef=useRef(null);
+
+  const TAGS=["RATES","FIXTURE","QUOTE","MARKET","FM","RUMOUR","COUNTERPARTY","EVENT","TC","SALE"];
+  const TAG_COLORS={"RATES":C.amber,"FIXTURE":C.green,"QUOTE":"#38bdf8","MARKET":C.blue,"FM":C.red,"RUMOUR":C.purple,"COUNTERPARTY":"#e879f9","EVENT":"#34d399","TC":"#fb923c","SALE":"#a3e635"};
+
+  useEffect(()=>{loadIntel().then(d=>{setCount(d.length);onVaultUpdate&&onVaultUpdate(d);});},[]);
+
+  async function ingest(){
+    if(!text.trim()){return;}
+    setBusy(true);setStatus({t:"info",m:"Extracting…"});
+    try{
+      const today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-20250514",max_tokens:2000,
+          system:`You are a maritime market intelligence extractor. Today is ${today}. Split the input into logical items. Output as JSON array only, no markdown. Each item: {"tag":"TAG","title":"short title max 6 words","content":"full intel text"}. Tags: RATES,FIXTURE,QUOTE,MARKET,FM,RUMOUR,COUNTERPARTY,EVENT,TC,SALE`,
+          messages:[{role:"user",content:text.trim()}]
+        })
+      });
+      const d=await res.json();
+      const raw=(d.content||[]).map(b=>b.text||"").join("").trim();
+      const clean=raw.replace(/```json|```/g,"").trim();
+      const parsed=JSON.parse(clean);
+      const newItems=[];
+      for(const item of parsed){
+        const lineItem={tag:item.tag||"MARKET",title:item.title||"",extracted:item.content||item.title||"",addedAt:new Date(intelDate).toISOString()};
+        const saved=await saveIntelItem({...lineItem,comment:JSON.stringify({tag:lineItem.tag,title:lineItem.title,content:lineItem.extracted})});
+        newItems.push(saved?{...lineItem,id:saved.id}:lineItem);
+      }
+      setStatus({t:"success",m:"✓ "+newItems.length+" item"+(newItems.length!==1?"s":"")+" stored"});
+      setText("");
+      const updated=await loadIntel();
+      setCount(updated.length);
+      onVaultUpdate&&onVaultUpdate(updated);
+      setTimeout(()=>setStatus(null),3000);
+    }catch(e){setStatus({t:"error",m:e.message});}finally{setBusy(false);}
+  }
+
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:6,padding:"0 10px",height:"100%"}}>
+      <span style={{fontSize:10,fontWeight:700,color:"rgba(250,163,86,0.55)",textTransform:"uppercase",letterSpacing:"0.08em",flexShrink:0,whiteSpace:"nowrap"}}>
+        Intel Vault {count>0&&<span style={{color:"rgba(250,163,86,0.4)",fontWeight:400}}>· {count}</span>}
+      </span>
+      <textarea value={text} onChange={e=>setText(e.target.value)}
+        onKeyDown={e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();ingest();}}}
+        placeholder="Paste rates, fixtures, broker reports, market colour…"
+        rows={1}
+        style={{flex:1,background:"transparent",border:"none",borderBottom:"1px solid rgba(250,163,86,0.18)",
+          color:"rgba(250,195,130,0.7)",fontFamily:"inherit",fontSize:12,padding:"2px 0",outline:"none",
+          resize:"none",lineHeight:1.4,caretColor:"#faa356",minWidth:120,
+          overflow:"hidden",whiteSpace:"nowrap"}}/>
+      <input type="date" value={intelDate} onChange={e=>setIntelDate(e.target.value)}
+        style={{background:"transparent",border:"1px solid rgba(250,163,86,0.18)",borderRadius:3,
+          color:"rgba(180,160,120,0.55)",fontFamily:"inherit",fontSize:10,padding:"1px 4px",outline:"none",
+          colorScheme:"dark",width:90,flexShrink:0}}/>
+      <button onClick={()=>fRef.current&&fRef.current.click()} title="Attach image"
+        style={{background:"none",border:"1px solid rgba(250,163,86,0.18)",borderRadius:3,
+          color:"rgba(250,163,86,0.45)",fontFamily:"inherit",fontSize:11,padding:"2px 6px",cursor:"pointer",flexShrink:0}}>img</button>
+      <input ref={fRef} type="file" accept="image/*" style={{display:"none"}}/>
+      <button onClick={ingest} disabled={busy||!text.trim()}
+        style={{background:"transparent",border:"1px solid rgba(250,163,86,0.35)",borderRadius:3,
+          color:busy?"rgba(250,163,86,0.3)":"rgba(250,163,86,0.8)",fontFamily:"inherit",fontWeight:600,
+          fontSize:10,padding:"2px 10px",cursor:busy||!text.trim()?"default":"pointer",flexShrink:0,
+          textTransform:"uppercase",letterSpacing:"0.06em",whiteSpace:"nowrap"}}>
+        {busy?"…":"Save Intel"}
+      </button>
+      {status&&(
+        <span style={{fontSize:10,color:status.t==="success"?"#43e97b":status.t==="error"?"#ff6b6b":"rgba(120,160,220,0.6)",whiteSpace:"nowrap",flexShrink:0}}>
+          {status.m}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default IntelVault;
