@@ -583,7 +583,7 @@ const filtV=useMemo(()=>{
                     <span style={{flex:1}}/>
                     <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Bunker</span>
                     <RateMatrixBunkerInput/>
-                    <span style={{fontSize:10,color:C.faint}}>$/mt</span>
+                    <span style={{fontSize:10,color:C.faint}}>{"$/mt"}</span>
                   </div>
                   <div style={{padding:"8px 10px",height:424,overflowY:"hidden"}}>
                     <RateMatrix/>
