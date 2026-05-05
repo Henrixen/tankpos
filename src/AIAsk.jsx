@@ -86,6 +86,8 @@ export function AskAIStrip({vessels,cargoes,intelItems}){
   const [answer,setAnswer]=useState("");
   const [busy,setBusy]=useState(false);
   const [showAnswer,setShowAnswer]=useState(false);
+  const inputRef=React.useRef(null);
+  const [answerPos,setAnswerPos]=useState({top:0,left:0,width:400});
 
   function buildContext(){
     const cargoSummary=cargoes.slice(0,30).map(c=>[c.status,c.charterer,c.cargo,c.qty,c.load,c.disch,c.from,c.to,c.freight,c.vessel].filter(Boolean).join("|")).join("\n");
@@ -96,12 +98,17 @@ export function AskAIStrip({vessels,cargoes,intelItems}){
 
   async function ask(){
     const q=question.trim();if(!q||busy)return;
+    // Calculate where to show the answer panel
+    if(inputRef.current){
+      const r=inputRef.current.getBoundingClientRect();
+      setAnswerPos({top:r.bottom+8,left:r.left,width:Math.max(400,r.width+120)});
+    }
     setBusy(true);setAnswer("");setShowAnswer(true);
     try{
       const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
         headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,
-          system:"Maritime freight analyst. Max 3 sentences, facts only. No preamble.\n\n"+buildContext(),
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,
+          system:"Maritime freight analyst. Concise answers: max 5 sentences, facts and numbers. No preamble.\n\n"+buildContext(),
           messages:[{role:"user",content:q}]})});
       const d=await res.json();
       const a=(d.content||[]).map(b=>b.text||"").join("").trim().replace(/\*\*(.*?)\*\*/g,"$1").replace(/\*(.*?)\*/g,"$1");
@@ -110,31 +117,48 @@ export function AskAIStrip({vessels,cargoes,intelItems}){
   }
 
   return(
-    <div style={{display:"flex",alignItems:"center",gap:6,width:"100%",padding:"0 10px",position:"relative"}}>
-      <span style={{fontSize:10,fontWeight:700,color:"rgba(88,166,255,0.45)",textTransform:"uppercase",letterSpacing:"0.08em",flexShrink:0}}>Ask AI</span>
-      <input value={question} onChange={e=>setQuestion(e.target.value)}
-        onKeyDown={e=>{if(e.key==="Enter")ask();if(e.key==="Escape"){setShowAnswer(false);setAnswer("");}}}
-        placeholder="Ask about positions, cargoes, market…"
-        style={{flex:1,background:"transparent",border:"none",borderBottom:"1px solid rgba(58,130,246,0.18)",
-          color:"rgba(180,210,255,0.75)",fontFamily:"inherit",fontSize:12,padding:"2px 0",outline:"none",
-          caretColor:"#58a6ff",minWidth:0}}/>
+    <div style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"0 12px"}}>
+      <span style={{fontSize:10,fontWeight:700,color:"rgba(88,166,255,0.6)",textTransform:"uppercase",
+        letterSpacing:"0.1em",flexShrink:0,whiteSpace:"nowrap"}}>Ask AI</span>
+      <input ref={inputRef} value={question} onChange={e=>setQuestion(e.target.value)}
+        onKeyDown={e=>{
+          if(e.key==="Enter")ask();
+          if(e.key==="Escape"){setShowAnswer(false);setAnswer("");}
+        }}
+        placeholder="Ask about positions, cargoes, market colour…"
+        style={{flex:1,background:"rgba(255,255,255,0.03)",border:"1px solid rgba(58,130,246,0.2)",
+          borderRadius:5,color:"rgba(200,225,255,0.8)",fontFamily:"inherit",fontSize:12,
+          padding:"5px 10px",outline:"none",caretColor:"#58a6ff",minWidth:0}}/>
       <button onClick={ask} disabled={busy||!question.trim()}
-        style={{background:"transparent",border:"1px solid rgba(88,166,255,0.3)",borderRadius:3,
-          color:busy?"rgba(88,166,255,0.3)":"rgba(88,166,255,0.75)",fontFamily:"inherit",fontWeight:600,
-          fontSize:10,padding:"2px 8px",cursor:busy||!question.trim()?"default":"pointer",flexShrink:0,
-          textTransform:"uppercase",letterSpacing:"0.06em"}}>
+        style={{background:busy||!question.trim()?"transparent":"rgba(88,166,255,0.15)",
+          border:"1px solid rgba(88,166,255,"+(busy||!question.trim()?"0.2":"0.5")+")",
+          borderRadius:5,color:busy||!question.trim()?"rgba(88,166,255,0.3)":"#9fc3f5",
+          fontFamily:"inherit",fontWeight:700,fontSize:11,padding:"5px 14px",
+          cursor:busy||!question.trim()?"default":"pointer",flexShrink:0,
+          textTransform:"uppercase",letterSpacing:"0.06em",transition:"all 0.15s"}}>
         {busy?"…":"Ask"}
       </button>
-      {/* Answer dropdown */}
-      {showAnswer&&answer&&(
-        <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:500,marginTop:2,
-          background:"rgba(7,15,32,0.98)",border:"1px solid rgba(58,130,246,0.25)",borderRadius:5,
-          padding:"10px 12px",fontSize:12,color:"rgba(200,220,255,0.85)",lineHeight:1.6,
-          boxShadow:"0 8px 24px rgba(0,0,0,0.6)",whiteSpace:"pre-wrap"}}>
-          {answer}
+      {/* Answer panel — fixed position to escape sticky header overflow clipping */}
+      {showAnswer&&(
+        <div style={{position:"fixed",top:answerPos.top,left:answerPos.left,
+          width:Math.min(answerPos.width,window.innerWidth-answerPos.left-20),
+          zIndex:9999,
+          background:"rgba(6,13,28,0.98)",border:"1px solid rgba(88,166,255,0.3)",
+          borderRadius:8,padding:"14px 16px",boxShadow:"0 12px 40px rgba(0,0,0,0.7)",
+          backdropFilter:"blur(12px)"}}>
+          {busy&&!answer&&(
+            <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",fontStyle:"italic"}}>Thinking…</div>
+          )}
+          {answer&&(
+            <div style={{fontSize:12,color:"rgba(210,230,255,0.9)",lineHeight:1.65,whiteSpace:"pre-wrap",
+              maxHeight:300,overflowY:"auto"}}>{answer}</div>
+          )}
           <button onClick={()=>{setShowAnswer(false);setAnswer("");}}
-            style={{display:"block",marginTop:6,background:"none",border:"none",color:"rgba(120,160,220,0.4)",
-              fontSize:10,cursor:"pointer",fontFamily:"inherit",padding:0}}>✕ close</button>
+            style={{display:"block",marginTop:10,background:"none",border:"none",
+              color:"rgba(120,160,220,0.4)",fontSize:11,cursor:"pointer",
+              fontFamily:"inherit",padding:0,letterSpacing:"0.04em"}}>
+            ✕ close
+          </button>
         </div>
       )}
     </div>
