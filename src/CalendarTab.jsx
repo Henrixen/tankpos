@@ -48,6 +48,59 @@ const MONTHS = ["January","February","March","April","May","June","July","August
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const BLANK = { title:"", date:"", endDate:"", color:COLORS[0], note:"", image:null };
 
+// Custom date input — always shows dd/mm/yyyy regardless of OS locale
+// value: "YYYY-MM-DD", onChange: (yyyymmdd) => void
+function DateInput({ value, onChange, style, placeholder="dd/mm/yyyy" }) {
+  // Display as dd/mm/yyyy
+  const display = value ? value.split("-").reverse().join("/") : "";
+  const [raw, setRaw] = React.useState(display);
+  const [focused, setFocused] = React.useState(false);
+
+  // Keep raw in sync when value changes externally (e.g. openAdd sets form.date)
+  React.useEffect(() => {
+    if (!focused) setRaw(value ? value.split("-").reverse().join("/") : "");
+  }, [value, focused]);
+
+  function handleChange(e) {
+    let v = e.target.value;
+    // Auto-insert slashes
+    v = v.replace(/[^0-9]/g, "");
+    if (v.length > 2) v = v.slice(0,2) + "/" + v.slice(2);
+    if (v.length > 5) v = v.slice(0,5) + "/" + v.slice(5);
+    if (v.length > 10) v = v.slice(0,10);
+    setRaw(v);
+    // Parse complete dates
+    const parts = v.split("/");
+    if (parts.length === 3 && parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+      const [dd, mm, yyyy] = parts.map(Number);
+      if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12 && yyyy >= 2020 && yyyy <= 2100) {
+        const iso = yyyy + "-" + String(mm).padStart(2,"0") + "-" + String(dd).padStart(2,"0");
+        onChange(iso);
+      }
+    } else if (v === "") {
+      onChange("");
+    }
+  }
+
+  function handleBlur() {
+    setFocused(false);
+    // Reset display to formatted value
+    setRaw(value ? value.split("-").reverse().join("/") : "");
+  }
+
+  return (
+    <input
+      value={focused ? raw : display}
+      onChange={handleChange}
+      onFocus={() => { setFocused(true); setRaw(display); }}
+      onBlur={handleBlur}
+      placeholder={placeholder}
+      maxLength={10}
+      style={style}
+    />
+  );
+}
+
 export default function CalendarTab() {
   const [events, setEvents] = useState(loadEvents);
   const today = todayStr();
@@ -241,13 +294,11 @@ export default function CalendarTab() {
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                 <div>
                   <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.07em"}}>Start *</div>
-                  <input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))} style={inp}/>
-                  {form.date&&<div style={{fontSize:9,color:"rgba(120,160,220,0.4)",marginTop:2}}>{fmtShort(form.date)}</div>}
+                  <DateInput value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} style={inp} placeholder="dd/mm/yyyy"/>
                 </div>
                 <div>
                   <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.07em"}}>End</div>
-                  <input type="date" value={form.endDate} onChange={e=>setForm(f=>({...f,endDate:e.target.value}))} style={inp}/>
-                  {form.endDate&&<div style={{fontSize:9,color:"rgba(120,160,220,0.4)",marginTop:2}}>{fmtShort(form.endDate)}</div>}
+                  <DateInput value={form.endDate} onChange={v=>setForm(f=>({...f,endDate:v}))} style={inp} placeholder="dd/mm/yyyy"/>
                 </div>
               </div>
               {/* Notes — bigger */}
