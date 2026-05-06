@@ -143,50 +143,83 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels}) {
 
   function fmtDate(){ return new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}); }
 
-  // Format: Charterer / Vessel / Qty Cargo / Load to Disch / Laycan / Freight|RNR
+  // WhatsApp / text format for positions
   function cargoToText(rows){
-    const UPPER=new Set(["ARA","USG","USGC","UKC","UKG","MED","GIB","SPORE","WAF","MEG","AG","CPP","DPP","LNG","LPG","ULSD","HVO","UCO","FAME","LSFO","HSFO","MGO","ARAG","NOLA","LOOP"]);
-    const tc=s=>!s?"":s.toLowerCase().split(" ").map(w=>{if(!w)return w;const up=w.toUpperCase();if(UPPER.has(up))return up;return w[0].toUpperCase()+w.slice(1);}).join(" ");
-    const tcCargo=s=>!s?"":s.toLowerCase().split(" ").map(w=>w?w[0].toUpperCase()+w.slice(1):"").join(" ");
-    const fmtQty=q=>{const n=normaliseQty(q)||"";return n.replace(/(\d)\.(\d)/g,"$1,$2");};
-    const fmtLaycan=(from,to)=>{
-      const stripZ=s=>s?s.replace(/^0+(\d)/,"$1"):s;
+    // Title case but keep known abbreviations uppercase
+    const UPPER_ABBR=new Set(["ARA","USG","USGC","UKC","UKG","MED","ARA","GIB","SPORE","WAF","MEG","AG","CPP","DPP","LNG","LPG","IMO","FOB","CIF","ETA","STS","FSU","ULSD","HVO","GTL","LCO","UCO","FAME","LSFO","HSFO","MGO","VME"]);
+    const tc = s => !s?"":s.toLowerCase().split(" ").map(w=>{
+      if(!w)return w;
+      const up=w.toUpperCase();
+      if(UPPER_ABBR.has(up))return up;
+      return w[0].toUpperCase()+w.slice(1);
+    }).join(" ");
+    // Title case cargo type (not all caps)
+    const tcCargo = s => !s?"":s.toLowerCase().split(" ").map(w=>w?w[0].toUpperCase()+w.slice(1):"").join(" ");
+    // Format qty: replace . with , for decimals
+    const fmtQty = q => {const n=normaliseQty(q)||"";return n.replace(/(\d)\.(\d)/g,"$1,$2");};
+    // Format laycan: "19 Mar - 21 Mar" → "19-21 Mar", or single date
+    const fmtLaycan = (from,to) => {
       if(!from&&!to)return "";
       if(from&&to){
+        // Try to compact same-month range: "19 Mar - 21 Mar" → "19-21 Mar"
         const m1=from.match(/^(\d{1,2})\s+([A-Za-z]{3})/);
         const m2=to.match(/^(\d{1,2})\s+([A-Za-z]{3})/);
         if(m1&&m2&&m1[2].toLowerCase()===m2[2].toLowerCase())
-          return parseInt(m1[1])+"-"+parseInt(m2[1])+" "+m1[2];
-        if(m1&&m2) return parseInt(m1[1])+" "+m1[2]+" - "+parseInt(m2[1])+" "+m2[2];
-        return stripZ(from)+" - "+stripZ(to);
+          return m1[1]+"-"+m2[1]+" "+m1[2];
+        return from+" - "+to;
       }
-      const s=from||to;
-      const m=s.match(/^(\d{1,2})\s+([A-Za-z]{3})/);
-      return m?parseInt(m[1])+" "+m[2]:stripZ(s);
+      return from||to;
     };
-    const fmtFreight=f=>{
-      const s=String(f||"").trim();
-      if(!s||s.toUpperCase()==="RNR")return "RNR";
-      if(s.toLowerCase().startsWith("usd"))return s;
-      return "USD "+s+" ls";
-    };
-    return rows.map(c=>{
-      const charterer=tc(c.charterer||"")||"CNR";
-      const vessel=tc(c.vessel||"");
-      const qty=fmtQty(c.qty);
-      const cargo=tcCargo(c.cargo||"");
-      const load=tc(c.load||"");
-      const disch=tc(c.disch||"");
-      const laycan=fmtLaycan(c.from,c.to);
-      const freight=fmtFreight(c.freight);
-      const segs=[charterer];
-      if(vessel) segs.push(vessel);
-      if(qty||cargo) segs.push([qty,cargo].filter(Boolean).join(" "));
-      if(load||disch) segs.push(load&&disch?load+" to "+disch:load||disch);
-      if(laycan) segs.push(laycan);
-      segs.push(freight);
-      return segs.join(" / ");
-    }).join("\n");
+    const parts = [];
+    for(const c of rows){
+      const st = c.status||"";
+      const charterer = tc(c.charterer||"");
+      const qty = fmtQty(c.qty);
+      const cargoType = tcCargo(c.cargo||"");
+      const load = tc(c.load||"");
+      const disch = tc(c.disch||"");
+      const laycanStr = fmtLaycan(c.from,c.to);
+      const freight = c.freight||"";
+      const vessel = tc(c.vessel||"");
+      let line = "";
+      if((st==="FIXED"||st==="SUBS") && vessel){
+        const fixWord = st==="SUBS"?"on subs":"fixed";
+        line = [charterer,fixWord,vessel,qty,cargoType,load,"to",disch,laycanStr,freight?"USD "+freight+" ls":""].filter(Boolean).join(" ");
+      } else {
+        line = [vessel||charterer,qty,cargoType,load,"to",disch,laycanStr].filter(Boolean).join(" ");
+      }
+      parts.push(line);
+    }
+    return parts.join("\n").trim();
+  }
+
+  // WhatsApp / text format for cargoes
+  function cargoToText(rows){
+    const tc = s => !s?"":s.toLowerCase().split(" ").map(w=>w?w[0].toUpperCase()+w.slice(1):"").join(" ");
+    const fmtQty = q => normaliseQty(q)||"";
+    const parts = [];
+    parts.push("\ud83d\udce6 *Cargoes* \u2014 "+fmtDate());
+    parts.push("");
+    for(const c of rows){
+      const st = c.status||"";
+      const charterer = tc(c.charterer||"");
+      const qty = fmtQty(c.qty);
+      const cargoType = (c.cargo||"").toUpperCase();
+      const load = tc(c.load||"");
+      const disch = tc(c.disch||"");
+      const laycanStr = c.from&&c.to?"from "+c.from+" to "+c.to:c.from?"from "+c.from:c.to?"to "+c.to:"";
+      const freight = c.freight||"";
+      const vessel = tc(c.vessel||"");
+      let line = "";
+      if((st==="FIXED"||st==="SUBS") && vessel){
+        const fixWord = st==="SUBS"?"on subs":"fixed";
+        line = [charterer,fixWord,vessel,qty,cargoType,load,"to",disch,laycanStr,freight?"USD "+freight+" ls":""].filter(Boolean).join(" ");
+      } else {
+        line = [vessel||charterer,qty,cargoType,load,"to",disch,laycanStr].filter(Boolean).join(" ");
+      }
+      parts.push(line);
+    }
+    return parts.join("\n").trim();
   }
 
   // Excel / CSV export using blob download
@@ -225,10 +258,10 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels}) {
   }
 
   const rows = mode==="pos" ? vessels : cargoes;
-  const btnStyle = {fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,
-    border:"1px solid rgba(120,160,220,0.3)",background:"rgba(15,25,50,0.85)",
-    color:"#9fc3f5",cursor:"pointer",display:"flex",alignItems:"center",gap:4,
-    whiteSpace:"nowrap",fontFamily:"inherit"};
+  const btnStyle = {fontSize:11,fontWeight:600,padding:"3px 11px",borderRadius:4,
+    border:"1px solid rgba(88,166,255,0.28)",background:"rgba(15,28,55,0.85)",
+    color:"rgba(160,200,255,0.75)",cursor:"pointer",display:"flex",alignItems:"center",
+    gap:4,whiteSpace:"nowrap",fontFamily:"inherit",letterSpacing:"0.02em"};
 
   function copyText(){
     const selC = selCargoes&&selCargoes.size>0 ? selCargoes : null;
@@ -252,14 +285,15 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels}) {
 
   if(!rows.length) return null;
   return(
-    <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-      <button style={{...btnStyle,borderColor:copied?"rgba(46,204,113,0.5)":undefined,color:copied?"#2ecc71":"#9fc3f5"}}
-        onClick={copyText} title="Copy fixtures">
-        {copied?"✓ Copied!":(mode==="cargo"&&selCargoes&&selCargoes.size>0?"📋 Copy ("+selCargoes.size+")":mode==="pos"&&selVessels&&selVessels.size>0?"📋 Copy ("+selVessels.size+")":"📋 Copy all")}
+    <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+      <span style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Export</span>
+      <button style={{...btnStyle,borderColor:copied?"rgba(67,233,123,0.45)":undefined,color:copied?"#43e97b":undefined}}
+        onClick={copyText} title="Copy as text">
+        {copied?"✓ Copied!":(mode==="cargo"&&selCargoes&&selCargoes.size>0?"Copy ("+selCargoes.size+")":mode==="pos"&&selVessels&&selVessels.size>0?"Copy ("+selVessels.size+")":"Copy all")}
       </button>
-      <button style={btnStyle} onClick={()=>exportExcel(mode==="cargo"&&selCargoes&&selCargoes.size>0?rows.filter(c=>selCargoes.has(c.id)):rows,"pos"===mode?"pos":"cargo")}
-        title="Export CSV">
-        📊 CSV
+      <button style={btnStyle} onClick={()=>exportExcel(rows,"pos"===mode?"pos":"cargo")}
+        title="Download as CSV">
+        CSV
       </button>
     </div>
   );
