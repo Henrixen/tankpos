@@ -542,6 +542,9 @@ const filtV=useMemo(()=>{
         </div>
       </div>
 
+      {/* ── Tab content ── */}
+      <div style={{padding:"12px 20px",maxWidth:1900,margin:"0 auto"}}>
+
         {/* ── POSITIONS ── */}
         {tab==="pos"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
