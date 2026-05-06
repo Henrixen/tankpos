@@ -39,6 +39,8 @@ const [dwtFilter,setDwtFilter]=useState("");   // "" | "<10" | "10-15" | "15-20"
 const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" | "2010-2015" | "2015-2020" | ">2020"
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
+  const [cLaycanMonthFilter,setCLaycanMonthFilter]=useState("");
+  const [cLaycanYearFilter,setCLaycanYearFilter]=useState("");
   const [mxSearch,setMxSearch]=useState("");
   const [cSortK,setCsortK]=useState("updated");
   const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
@@ -390,8 +392,10 @@ const filtV=useMemo(()=>{
         return String(av).toLowerCase()<String(bv).toLowerCase()?-cSortD:String(av).toLowerCase()>String(bv).toLowerCase()?cSortD:0;
       });
     }
+    if(cLaycanMonthFilter) list=list.filter(c=>((c.from||"")+" "+(c.to||"")).toLowerCase().includes(cLaycanMonthFilter.toLowerCase()));
+    if(cLaycanYearFilter) list=list.filter(c=>{const d=new Date(c.from||c.updated||0);return !isNaN(d)&&String(d.getFullYear())===cLaycanYearFilter;});
     return list;
-  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter]);
+  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cLaycanMonthFilter,cLaycanYearFilter]);
 
   const FILTER_GROUPS=[
     {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"],["HIDE_EMP","Hide Employed"]]},
@@ -957,45 +961,56 @@ const filtV=useMemo(()=>{
         )}
         {/* ── CARGOES ── */}
         {tab==="cargo"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {/* Top row: Parse | Ask AI */}
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {/* Top row: Parse | Filter panel */}
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
               {/* Parse */}
               <div style={{flex:mobile?"1 1 auto":"0 0 65%",display:"flex",flexDirection:"column"}}>
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
               </div>
-              {/* Ask AI */}
-              <div style={{flex:1,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",height:askAiExpanded?600:142,transition:"height 0.3s ease"}}>
-                <div style={{padding:"6px 10px",borderBottom:"1px solid "+C.bd2,background:C.bg,flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{fontSize:12,fontWeight:700,color:C.tx}}>🤖 Ask AI</span>
-                  <button onClick={()=>setAskAiExpanded(!askAiExpanded)} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 8px",fontSize:11,color:C.blue,cursor:"pointer",fontFamily:"inherit"}} title={askAiExpanded?"Collapse":"Expand"}>
-                    {askAiExpanded?"▲":"▼"}
-                  </button>
-                </div>
-                <div style={{flex:1,padding:"10px",overflowY:"auto"}} className="custom-scrollbar">
-                  <RightPanel vessels={vessels} cargoes={cargoes}/>
-                </div>
-              </div>
+              {/* Filter panel */}
+              {(()=>{
+                const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+                const years=[...new Set(cargoes.map(c=>{const d=new Date(c.from||c.updated||0);return isNaN(d)?"":String(d.getFullYear());}).filter(y=>y&&y>"2020"))].sort().reverse();
+                const FR=({label,col,children})=>(
+                  <div style={{display:"flex",alignItems:"flex-start",gap:5,padding:"1px 0 2px",borderBottom:"1px solid "+C.bd2}}>
+                    <div style={{width:58,fontSize:10,fontWeight:700,color:col,textTransform:"uppercase",flexShrink:0,paddingTop:2}}>{label}</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:3,flex:1}}>{children}</div>
+                  </div>
+                );
+                return(
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:3,padding:"5px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
+                      <FR label="Grade" col={C.purple}>
+                        {[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort().slice(0,14).map(g=>(
+                          <button key={g} onClick={()=>setCFilter(g===cFilter?"ALL":g)} style={fb(cFilter===g)}>{g}</button>
+                        ))}
+                        {cFilter!=="ALL"&&!["FIXED","SUBS","FAILED"].includes(cFilter)&&<button onClick={()=>setCFilter("ALL")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
+                      </FR>
+                      <FR label="Month" col="#7dd3fc">
+                        {MONTHS.map(m=>(
+                          <button key={m} onClick={()=>setCLaycanMonthFilter(v=>v===m?"":m)} style={fb(cLaycanMonthFilter===m)}>{m}</button>
+                        ))}
+                        {years.map(y=>(
+                          <button key={y} onClick={()=>setCLaycanYearFilter(v=>v===y?"":y)} style={fb(cLaycanYearFilter===y)}>{y}</button>
+                        ))}
+                        {(cLaycanMonthFilter||cLaycanYearFilter)&&<button onClick={()=>{setCLaycanMonthFilter("");setCLaycanYearFilter("");}} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
+                      </FR>
+                      <FR label="Status" col={C.green}>
+                        {[["ALL","All"],["FIXED","Fixed"],["SUBS","Subs"],["FAILED","Failed"]].map(([f,l])=>(
+                          <button key={f} onClick={()=>setCFilter(f)} style={fb(cFilter===f)}>{l}</button>
+                        ))}
+                      </FR>
+                      <FR label="Period" col="#94a3b8">
+                        {[["","All"],["tw","This wk"],["lw","Last wk"],["ytd","YTD"]].map(([v,l])=>(
+                          <button key={v||"all"} onClick={()=>setCTimeFilter(v)} style={fb(cTimeFilter===v)}>{l}</button>
+                        ))}
+                      </FR>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
-            <style>{`
-              .custom-scrollbar::-webkit-scrollbar {
-                width: 8px;
-              }
-              .custom-scrollbar::-webkit-scrollbar-track {
-                background: transparent;
-              }
-              .custom-scrollbar::-webkit-scrollbar-thumb {
-                background: ${C.bd};
-                border-radius: 4px;
-              }
-              .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                background: ${C.dim};
-              }
-              .custom-scrollbar {
-                scrollbar-width: thin;
-                scrollbar-color: ${C.bd} transparent;
-              }
-            `}</style>
             {/* Search + Export + Filters — wrap on mobile */}
             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
               <div style={{position:"relative",flex:1}}>
@@ -1289,7 +1304,7 @@ const filtV=useMemo(()=>{
                             const b=calc?.ballastNm||0;const l=calc?.ladenNm||0;
                             if(!l)return null;
                             const ets=calcEuEts(b,l,13,15,3,8,2,1,0.25,1,0.25,0,12.5,false);
-                            return ets>0?<span style={{fontSize:12,color:"#fd79a8",fontWeight:600,background:"rgba(253,121,168,0.08)",border:"1px solid rgba(253,121,168,0.25)",borderRadius:3,padding:"1px 5px",whiteSpace:"nowrap"}} title="Indicative EU ETS cost (50% scope, deep-sea)">ETS ~${ets.toLocaleString()}</span>:null;
+                            return ets>0?<span style={{fontSize:12,color:"#fd79a8",fontWeight:600,background:"rgba(253,121,168,0.08)",border:"1px solid rgba(253,121,168,0.25)",borderRadius:3,padding:"1px 5px",whiteSpace:"nowrap"}} title="Indicative EU ETS cost (50% scope, deep-sea)">{"ETS ~$"}{ets.toLocaleString()}</span>:null;
                           })()}
                         </div>
                       </>}
