@@ -48,6 +48,18 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   const [selVessels,setSelVessels]=useState(()=>new Set());
   const [history,setHistory]=useState([]);
   useEffect(()=>{loadHistory().then(setHistory);},[vessels]);
+
+  // When grade or month filter changes, push to DB search so "Load more" fetches correctly
+  useEffect(()=>{
+    const parts=[];
+    if(cGradeFilter) parts.push(cGradeFilter);
+    if(cLaycanMonthFilter) parts.push(cLaycanMonthFilter);
+    if(cLaycanYearFilter) parts.push(cLaycanYearFilter);
+    if(cSearch) parts.push(cSearch);
+    const term=parts.join(" ").trim();
+    clearTimeout(window._csTimer);
+    window._csTimer=setTimeout(()=>onCargoSearch(term),300);
+  },[cGradeFilter,cLaycanMonthFilter,cLaycanYearFilter]);
   const [intelItems,setIntelItems]=useState([]);
   const [pendingDel,setPendingDel]=useState(null);
   const [restoreMsg,setRestoreMsg]=useState("");
@@ -393,9 +405,31 @@ const filtV=useMemo(()=>{
         return String(av).toLowerCase()<String(bv).toLowerCase()?-cSortD:String(av).toLowerCase()>String(bv).toLowerCase()?cSortD:0;
       });
     }
-    if(cGradeFilter) list=list.filter(c=>(c.cargo||"").toLowerCase().includes(cGradeFilter.toLowerCase()));
-    if(cLaycanMonthFilter) list=list.filter(c=>((c.from||"")+" "+(c.to||"")).toLowerCase().includes(cLaycanMonthFilter.toLowerCase()));
+    if(cLaycanMonthFilter) list=list.filter(c=>{
+      const hay=((c.from||"")+" "+(c.to||"")).toLowerCase();
+      // Match month abbreviation as word (Jan not inside "January" substring confusion)
+      return hay.includes(cLaycanMonthFilter.toLowerCase());
+    });
     if(cLaycanYearFilter) list=list.filter(c=>{const d=new Date(c.from||c.updated||0);return !isNaN(d)&&String(d.getFullYear())===cLaycanYearFilter;});
+    // Grade filter — supports both raw grade name and group id (alias-based)
+    if(cGradeFilter){
+      let gradeGroups=[];try{const raw=localStorage.getItem("signal_cargo_filter_groups");gradeGroups=raw?JSON.parse(raw):[];}catch{}
+      const grp=gradeGroups.find(g=>g.id===cGradeFilter);
+      if(grp){
+        // Group match: cargo matches if it contains any of the group's aliases
+        list=list.filter(c=>{
+          const grade=(c.cargo||"").toLowerCase();
+          return grp.aliases.some(a=>grade===a.toLowerCase()||grade.includes(a.toLowerCase()));
+        });
+      } else {
+        // Raw grade: exact match
+        list=list.filter(c=>{
+          const grade=(c.cargo||"").trim().toLowerCase();
+          const target=cGradeFilter.toLowerCase();
+          return grade===target||grade.startsWith(target+" ")||grade.endsWith(" "+target)||grade.includes(" "+target+" ")||grade.includes("+"+target)||grade.includes(target+"+");
+        });
+      }
+    }
     return list;
   },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cLaycanMonthFilter,cLaycanYearFilter,cGradeFilter]);
 
@@ -977,6 +1011,10 @@ const filtV=useMemo(()=>{
               {(()=>{
                 const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
                 const years=[...new Set(cargoes.map(c=>{const d=new Date(c.from||c.updated||0);return isNaN(d)?"":String(d.getFullYear());}).filter(y=>y&&y>"2020"))].sort().reverse();
+                // Load grade groups from Settings (localStorage)
+                let gradeGroups=[];try{const raw=localStorage.getItem("signal_cargo_filter_groups");gradeGroups=raw?JSON.parse(raw):[];}catch{}
+                const showRaw=gradeGroups.length===0;
+                const rawGrades=showRaw?[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort().slice(0,20):[];
                 const FR=({label,col,children})=>(
                   <div style={{display:"flex",alignItems:"flex-start",gap:5,padding:"1px 0 2px",borderBottom:"1px solid "+C.bd2}}>
                     <div style={{width:58,fontSize:10,fontWeight:700,color:col,textTransform:"uppercase",flexShrink:0,paddingTop:2}}>{label}</div>
@@ -987,10 +1025,12 @@ const filtV=useMemo(()=>{
                   <div style={{flex:1}}>
                     <div style={{display:"flex",flexDirection:"column",gap:3,padding:"5px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
                       <FR label="Grade" col={C.purple}>
-                        {[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort().slice(0,16).map(g=>(
-                          <button key={g} onClick={()=>setCGradeFilter(v=>v===g?"":g)} style={fb(cGradeFilter===g)}>{g}</button>
-                        ))}
+                        {showRaw
+                          ?rawGrades.map(g=><button key={g} onClick={()=>setCGradeFilter(v=>v===g?"":g)} style={fb(cGradeFilter===g)}>{g}</button>)
+                          :gradeGroups.map(grp=><button key={grp.id} onClick={()=>setCGradeFilter(v=>v===grp.id?"":grp.id)} style={fb(cGradeFilter===grp.id)} title={grp.aliases.join(", ")}>{grp.label}</button>)
+                        }
                         {cGradeFilter&&<button onClick={()=>setCGradeFilter("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
+                        <button onClick={()=>setTab("settings")} style={{...fb(false),fontSize:9,color:"rgba(120,160,220,0.4)",padding:"1px 5px"}} title="Edit grade groups">⚙</button>
                       </FR>
                       <FR label="Month" col="#7dd3fc">
                         {MONTHS.map(m=>(
@@ -1010,6 +1050,9 @@ const filtV=useMemo(()=>{
                         {[["","All"],["tw","This wk"],["lw","Last wk"],["ytd","YTD"]].map(([v,l])=>(
                           <button key={v||"all"} onClick={()=>setCTimeFilter(v)} style={fb(cTimeFilter===v)}>{l}</button>
                         ))}
+                        {(cGradeFilter||cLaycanMonthFilter||cLaycanYearFilter||cFilter!=="ALL"||cTimeFilter)&&(
+                          <button onClick={()=>{setCGradeFilter("");setCLaycanMonthFilter("");setCLaycanYearFilter("");setCFilter("ALL");setCTimeFilter("");}} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:6,fontSize:10}}>✕ Clear all</button>
+                        )}
                       </FR>
                     </div>
                   </div>
@@ -1019,11 +1062,10 @@ const filtV=useMemo(()=>{
             {/* Search + Export */}
             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
               <div style={{position:"relative",flex:1}}>
-                <input value={cSearch} onChange={e=>{const v=e.target.value;setCSearch(v);clearTimeout(window._csTimer);window._csTimer=setTimeout(()=>onCargoSearch(v),350);}} placeholder="Search cargoes…"
+                <input value={cSearch} onChange={e=>{const v=e.target.value;setCSearch(v);clearTimeout(window._csTimer);window._csTimer=setTimeout(()=>onCargoSearch([cGradeFilter,cLaycanMonthFilter,cLaycanYearFilter,v].filter(Boolean).join(" ")),350);}} placeholder="Search cargoes…"
                   style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
-                {cSearch&&<button onClick={()=>{setCSearch("");clearTimeout(window._csTimer);onCargoSearch("");}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
+                {cSearch&&<button onClick={()=>{setCSearch("");onCargoSearch([cGradeFilter,cLaycanMonthFilter,cLaycanYearFilter].filter(Boolean).join(" "));}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
               </div>
-              {/* Tick all / none */}
               <button onClick={()=>setSelCargoes(filtC.length>0&&filtC.every(c=>selCargoes.has(c.id))?new Set():new Set(filtC.map(c=>c.id)))}
                 style={{...fb(selCargoes.size>0),fontSize:11,padding:"3px 8px",whiteSpace:"nowrap"}}>
                 {filtC.length>0&&filtC.every(c=>selCargoes.has(c.id))?"☑ None":"☐ All"}
@@ -1228,7 +1270,7 @@ const filtV=useMemo(()=>{
   );
 }}
   />}
-              {hasMore&&
+              {hasMore&&!cGradeFilter&&!cLaycanMonthFilter&&!cLaycanYearFilter&&
               <div style={{textAlign:"center",padding:"12px"}}>
                 <button onClick={onLoadMore} style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"4px 16px",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Load more</button>
               </div>}
