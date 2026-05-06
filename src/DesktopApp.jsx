@@ -15,8 +15,6 @@ import IntelVault, { IntelVaultStrip } from "./IntelVault";
 import AISMap from "./AISMap";
 import MatrixTable from "./components/ui/MatrixTable";
 import NotesTab from "./NotesTab";
-import CalendarTab from "./CalendarTab";
-import SettingsTab from "./SettingsTab";
 
 
 
@@ -39,6 +37,7 @@ const [dwtFilter,setDwtFilter]=useState("");   // "" | "<10" | "10-15" | "15-20"
 const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" | "2010-2015" | "2015-2020" | ">2020"
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
+  const [cGradeFilter,setCGradeFilter]=useState("");
   const [cLaycanMonthFilter,setCLaycanMonthFilter]=useState("");
   const [cLaycanYearFilter,setCLaycanYearFilter]=useState("");
   const [mxSearch,setMxSearch]=useState("");
@@ -392,10 +391,13 @@ const filtV=useMemo(()=>{
         return String(av).toLowerCase()<String(bv).toLowerCase()?-cSortD:String(av).toLowerCase()>String(bv).toLowerCase()?cSortD:0;
       });
     }
+    // Grade filter — exact match on cargo field (case-insensitive)
+    if(cGradeFilter) list=list.filter(c=>(c.cargo||"").toLowerCase().includes(cGradeFilter.toLowerCase()));
+    // Laycan month/year filter
     if(cLaycanMonthFilter) list=list.filter(c=>((c.from||"")+" "+(c.to||"")).toLowerCase().includes(cLaycanMonthFilter.toLowerCase()));
     if(cLaycanYearFilter) list=list.filter(c=>{const d=new Date(c.from||c.updated||0);return !isNaN(d)&&String(d.getFullYear())===cLaycanYearFilter;});
     return list;
-  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cLaycanMonthFilter,cLaycanYearFilter]);
+  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cGradeFilter,cLaycanMonthFilter,cLaycanYearFilter]);
 
   const FILTER_GROUPS=[
     {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"],["HIDE_EMP","Hide Employed"]]},
@@ -424,126 +426,69 @@ const filtV=useMemo(()=>{
           <button onClick={()=>setPendingDel(null)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,padding:"5px 14px",cursor:"pointer",fontSize:12}}>Cancel</button>
         </div>
       )}
-      {/* ── APP HEADER — inspired by Market Dashboard ── */}
-      <div style={{
-        background:"linear-gradient(135deg, #070f1c 0%, #0c1a32 50%, #081426 100%)",
-        borderBottom:"1px solid rgba(58,130,246,0.18)",
-        position:"sticky",top:0,zIndex:200,
-      }}>
-        {/* Top bar: brand + utilities */}
-        <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 20px 0",borderBottom:"1px solid rgba(58,130,246,0.08)"}}>
-          {/* Brand */}
-          <div style={{flexShrink:0,display:"flex",flexDirection:"column",gap:1,paddingBottom:10}}>
-            <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",color:"rgba(120,180,255,0.45)"}}>Signal — Tanker Intelligence</div>
-            <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-              <span style={{fontSize:18,fontWeight:800,color:"#e8f2ff",letterSpacing:"0.02em"}}>Market</span>
-              <span style={{fontSize:18,fontWeight:800,color:"#43e97b",letterSpacing:"0.02em"}}>Signal</span>
-              <span style={{fontSize:10,color:"rgba(140,190,255,0.35)",marginLeft:2}}>
-                {new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
-              </span>
-            </div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 18px",background:C.bg2,borderBottom:"1px solid "+C.bd,position:"sticky",top:0,zIndex:100}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,fontFamily:"sans-serif",fontWeight:800,fontSize:17}}>⚓ Tank<span style={{color:C.green}}>Pos</span></div>
+        <div style={{display:"flex",gap:4,alignItems:"center",marginLeft:"auto",marginRight:12}}>
+          {[70,80,90,100,110,120,130].map(z=>(
+            <button key={z} onClick={()=>document.body.style.zoom=z+"%"}
+              style={{fontSize:10,fontWeight:700,padding:"1px 5px",borderRadius:3,border:"1px solid "+C.bd,background:C.bg3,color:C.faint,cursor:"pointer",fontFamily:"inherit"}}>
+              {z}%
+            </button>
+          ))}
+          <button
+            onClick={onLoadVesselDB}
+            disabled={vesselDBLoaded||vesselDBLoading}
+            title={vesselDBLoaded?"Vessel DB loaded — specs auto-enriched on upload":vesselDBLoading?"Loading vessel DB…":"Click to load vessel spec DB (DWT, built, LOA etc.) — only needed when uploading positions"}
+            style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:3,border:"1px solid "+(vesselDBLoaded?C.green:C.bd),background:vesselDBLoaded?"rgba(67,233,123,0.12)":C.bg3,color:vesselDBLoaded?C.green:vesselDBLoading?C.amber:C.faint,cursor:vesselDBLoaded||vesselDBLoading?"default":"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+            {vesselDBLoaded?"✓ Ship DB":vesselDBLoading?"⟳ Loading…":"⚓ Load Ship DB"}
+          </button>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {tab==="pos"&&vessels.length>0&&(<button onClick={()=>setPendingDel({type:"all",id:"__ALL__",label:"ALL "+vessels.length+" vessels"})} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 10px",color:C.dim,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✕ Clear Positions</button>)}
+        </div>
+      </div>
+      <div style={{padding:"12px 16px",maxWidth:1900,margin:"0 auto"}}>
+        {/* Professional tab navigation */}
+        <div style={{display:"flex",alignItems:"center",marginBottom:16,gap:12,flexWrap:"nowrap"}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",flexShrink:0}}>
+            {[
+              ["pos","⚓","Positions",vessels.length,"#58a6ff"],
+              ["cargo","📦","Cargoes",cargoTotal||cargoes.length,"#faa356"],
+              ["fix","🎯","Fixing",0,"#c792ea"],
+              ["matrix","🔗","Matrix",0,"#43e97b"],
+              ["projects","🧮","Projects",0,"#58a6ff"],
+              ["tce","⚡","TCE",0,"#faa356"],
+              ["dash","📊","Dashboard",0,"#43e97b"],
+              ["notes","📝","Notes",0,"#f472b6"]
+            ].map(([id,icon,label,count,col])=>(
+              <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
+                style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+                  minWidth:mobile?80:110,padding:"10px 12px",borderRadius:8,
+                  border:"1px solid "+(tab===id?col:C.bd),
+                  background:tab===id?"linear-gradient(135deg, "+col+"15, "+col+"05)":"transparent",
+                  boxShadow:tab===id?"0 4px 12px "+col+"33":"none",
+                  cursor:"pointer",transition:"all 0.2s",fontFamily:"inherit"}}>
+                <div style={{fontSize:mobile?18:20}}>{icon}</div>
+                <div style={{fontSize:mobile?9:10,fontWeight:700,color:tab===id?col:C.dim,
+                  textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</div>
+                {count>0&&<div style={{fontSize:11,fontWeight:700,color:tab===id?col:C.faint,
+                  background:C.bg3,padding:"1px 6px",borderRadius:8}}>{count}</div>}
+              </button>
+            ))}
           </div>
-
-          {/* Divider */}
-          <div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>
-
-          {/* Ask AI — takes most of the space */}
+          {/* Global Ask AI strip — between tabs and Intel Vault */}
           {!mobile&&(
-            <div style={{flex:1,minWidth:0,position:"relative",paddingBottom:10}}>
+            <div style={{flex:1,minWidth:0,display:"flex",justifyContent:"center"}}>
               <AskAIStrip vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>
             </div>
           )}
-
-          {/* Divider */}
-          {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}
-
-          {/* Intel Vault */}
+          {/* Global Intel Vault strip — always visible */}
           {!mobile&&(
-            <div style={{flexShrink:0,paddingBottom:10}}>
+            <div style={{flexShrink:0}}>
               <IntelVaultStrip onVaultUpdate={setIntelItems}/>
             </div>
           )}
-
-          {/* Divider */}
-          <div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>
-
-          {/* Utilities */}
-          <div style={{display:"flex",gap:3,alignItems:"center",flexShrink:0,paddingBottom:10}}>
-            {[70,80,90,100,110,120,130].map(z=>(
-              <button key={z} onClick={()=>document.body.style.zoom=z+"%"}
-                style={{fontSize:9,padding:"1px 4px",borderRadius:2,border:"1px solid rgba(58,130,246,0.12)",
-                  background:"transparent",color:"rgba(100,140,200,0.3)",cursor:"pointer",fontFamily:"inherit"}}>
-                {z}%
-              </button>
-            ))}
-            <button onClick={onLoadVesselDB} disabled={vesselDBLoaded||vesselDBLoading}
-              style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:3,marginLeft:4,
-                border:"1px solid "+(vesselDBLoaded?"rgba(67,233,123,0.4)":"rgba(58,130,246,0.18)"),
-                background:vesselDBLoaded?"rgba(67,233,123,0.08)":"transparent",
-                color:vesselDBLoaded?"#43e97b":vesselDBLoading?"#faa356":"rgba(100,140,200,0.4)",
-                cursor:vesselDBLoaded||vesselDBLoading?"default":"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-              {vesselDBLoaded?"✓ DB":vesselDBLoading?"⟳…":"Ship DB"}
-            </button>
-            {tab==="pos"&&vessels.length>0&&(
-              <button onClick={()=>setPendingDel({type:"all",id:"__ALL__",label:"ALL "+vessels.length+" vessels"})}
-                style={{fontSize:10,padding:"2px 8px",borderRadius:3,border:"1px solid rgba(255,107,107,0.25)",
-                  background:"transparent",color:"rgba(255,107,107,0.4)",cursor:"pointer",fontFamily:"inherit"}}>
-                ✕ Clear
-              </button>
-            )}
-          </div>
         </div>
-
-        {/* Tab navigation row */}
-        <div style={{display:"flex",alignItems:"stretch",padding:"0 20px",gap:0,overflowX:"auto"}}>
-          {[
-            ["pos","Positions",vessels.length,"#58a6ff"],
-            ["cargo","Cargoes",cargoTotal||cargoes.length,"#faa356"],
-            ["fix","Fixing",0,"#c792ea"],
-            ["matrix","Matrix",0,"#43e97b"],
-            ["projects","Projects",0,"#4fc3f7"],
-            ["tce","TCE",0,"#faa356"],
-            ["dash","Dashboard",0,"#43e97b"],
-            ["notes","Notes",0,"#f472b6"],
-            ["cal","Calendar",0,"#4fc3f7"],
-            ["settings","Settings",0,"#94a3b8"],
-          ].map(([id,label,count,col])=>{
-            const active=tab===id;
-            return(
-              <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
-                style={{position:"relative",display:"flex",alignItems:"center",gap:6,
-                  padding:"10px 16px",background:"transparent",border:"none",
-                  borderBottom:"2px solid "+(active?col:"transparent"),
-                  cursor:"pointer",fontFamily:"inherit",flexShrink:0,
-                  transition:"border-color 0.15s,color 0.15s",
-                  marginBottom:-1}}>
-                <span style={{fontSize:12,fontWeight:active?700:500,
-                  color:active?col:"rgba(120,155,210,0.5)",
-                  textTransform:"uppercase",letterSpacing:"0.07em",whiteSpace:"nowrap"}}>
-                  {label}
-                </span>
-                {count>0&&(
-                  <span style={{fontSize:10,fontWeight:700,
-                    color:active?col:"rgba(100,140,200,0.35)",
-                    background:active?col+"18":"transparent",
-                    padding:"0 5px",borderRadius:8,lineHeight:"16px",
-                    border:active?"1px solid "+col+"33":"none"}}>
-                    {count.toLocaleString()}
-                  </span>
-                )}
-                {active&&(
-                  <div style={{position:"absolute",bottom:0,left:12,right:12,height:2,
-                    background:`linear-gradient(90deg,${col}00,${col},${col}00)`,
-                    borderRadius:"2px 2px 0 0"}}/>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Tab content ── */}
-      <div style={{padding:"12px 20px",maxWidth:1900,margin:"0 auto"}}>
 
         {/* ── POSITIONS ── */}
         {tab==="pos"&&(
@@ -590,7 +535,7 @@ const filtV=useMemo(()=>{
                     <span style={{flex:1}}/>
                     <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Bunker</span>
                     <RateMatrixBunkerInput/>
-                    <span style={{fontSize:10,color:C.faint}}>{"$/mt"}</span>
+                    <span style={{fontSize:10,color:C.faint}}>$/mt</span>
                   </div>
                   <div style={{padding:"8px 10px",height:424,overflowY:"hidden"}}>
                     <RateMatrix/>
@@ -967,17 +912,17 @@ const filtV=useMemo(()=>{
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {/* Top row: Parse | Filter panel */}
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
-              {/* Parse */}
               <div style={{flex:mobile?"1 1 auto":"0 0 65%",display:"flex",flexDirection:"column"}}>
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
               </div>
-              {/* Filter panel */}
               {(()=>{
                 const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
                 const years=[...new Set(cargoes.map(c=>{const d=new Date(c.from||c.updated||0);return isNaN(d)?"":String(d.getFullYear());}).filter(y=>y&&y>"2020"))].sort().reverse();
+                // Grade list from ALL cargoes (not filtC) so filter works on full DB
+                const grades=[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort();
                 const FR=({label,col,children})=>(
                   <div style={{display:"flex",alignItems:"flex-start",gap:5,padding:"1px 0 2px",borderBottom:"1px solid "+C.bd2}}>
-                    <div style={{width:58,fontSize:10,fontWeight:700,color:col,textTransform:"uppercase",flexShrink:0,paddingTop:2}}>{label}</div>
+                    <div style={{width:52,fontSize:10,fontWeight:700,color:col,textTransform:"uppercase",flexShrink:0,paddingTop:2}}>{label}</div>
                     <div style={{display:"flex",flexWrap:"wrap",gap:3,flex:1}}>{children}</div>
                   </div>
                 );
@@ -985,10 +930,10 @@ const filtV=useMemo(()=>{
                   <div style={{flex:1}}>
                     <div style={{display:"flex",flexDirection:"column",gap:3,padding:"5px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
                       <FR label="Grade" col={C.purple}>
-                        {[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort().slice(0,14).map(g=>(
-                          <button key={g} onClick={()=>setCFilter(g===cFilter?"ALL":g)} style={fb(cFilter===g)}>{g}</button>
+                        {grades.slice(0,16).map(g=>(
+                          <button key={g} onClick={()=>setCGradeFilter(v=>v===g?"":g)} style={fb(cGradeFilter===g)}>{g}</button>
                         ))}
-                        {cFilter!=="ALL"&&!["FIXED","SUBS","FAILED"].includes(cFilter)&&<button onClick={()=>setCFilter("ALL")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
+                        {cGradeFilter&&<button onClick={()=>setCGradeFilter("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
                       </FR>
                       <FR label="Month" col="#7dd3fc">
                         {MONTHS.map(m=>(
@@ -1008,34 +953,34 @@ const filtV=useMemo(()=>{
                         {[["","All"],["tw","This wk"],["lw","Last wk"],["ytd","YTD"]].map(([v,l])=>(
                           <button key={v||"all"} onClick={()=>setCTimeFilter(v)} style={fb(cTimeFilter===v)}>{l}</button>
                         ))}
+                        {(cGradeFilter||cLaycanMonthFilter||cLaycanYearFilter||cFilter!=="ALL"||cTimeFilter)&&(
+                          <button onClick={()=>{setCGradeFilter("");setCLaycanMonthFilter("");setCLaycanYearFilter("");setCFilter("ALL");setCTimeFilter("");}} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:6}}>✕ Clear all</button>
+                        )}
                       </FR>
                     </div>
                   </div>
                 );
               })()}
             </div>
-            {/* Search + Export + Filters — wrap on mobile */}
+            {/* Search + Export only — no status/time filter buttons here */}
             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
               <div style={{position:"relative",flex:1}}>
-                <input value={cSearch} onChange={e=>{const v=e.target.value;setCSearch(v);clearTimeout(window._csTimer);window._csTimer=setTimeout(()=>onCargoSearch(v),350);}} placeholder="🔍 Search cargoes…"
+                <input value={cSearch} onChange={e=>{const v=e.target.value;setCSearch(v);clearTimeout(window._csTimer);window._csTimer=setTimeout(()=>onCargoSearch(v),350);}} placeholder="Search cargoes…"
                   style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
                 {cSearch&&<button onClick={()=>{setCSearch("");clearTimeout(window._csTimer);onCargoSearch("");}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
               </div>
+              {/* Tick all / none */}
+              <button onClick={()=>setSelCargoes(filtC.length>0&&filtC.every(c=>selCargoes.has(c.id))?new Set():new Set(filtC.map(c=>c.id)))}
+                style={{...fb(selCargoes.size>0),fontSize:11,padding:"3px 8px",whiteSpace:"nowrap"}}>
+                {filtC.length>0&&filtC.every(c=>selCargoes.has(c.id))?"☑ None":"☐ All"}
+              </button>
               <ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/>
               {selCargoes.size>0&&(
                 <button onClick={()=>setPendingDel({type:"allcargo",id:"__SELCARGO__",label:selCargoes.size+" cargo"+(selCargoes.size!==1?"es":"")})}
-                  style={{fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:5,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                  🗑 Delete ({selCargoes.size})
+                  style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(255,107,107,0.4)",background:"rgba(255,107,107,0.1)",color:"#ff6b6b",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                  Delete ({selCargoes.size})
                 </button>
               )}
-              {[["ALL","All"],["FIXED","Fixed"],["SUBS","On Subs"],["FAILED","Failed"]].map(([f,l])=>(
-                <button key={f} onClick={()=>setCFilter(f)} style={fb(cFilter===f)}>{l}</button>
-              ))}
-              {[["","All time"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([v,label])=>(
-                <button key={v} onClick={()=>setCTimeFilter(v)} style={{...fb(cTimeFilter===v),whiteSpace:"nowrap"}}>{label}</button>
-              ))}
-              <input value={cDateFilter} onChange={e=>setCDateFilter(e.target.value)} placeholder="🔍 Filter…"
-                style={{width:80,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 7px",outline:"none"}}/>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12}}>
               <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoTotal||cargoes.length}</span></span>
@@ -1049,7 +994,10 @@ const filtV=useMemo(()=>{
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
                 : <MatrixTable
-    columns={cargoColumns}
+    columns={(()=>{
+      const allTicked=filtC.length>0&&filtC.every(c=>selCargoes.has(c.id));
+      return cargoColumns.map(col=>col.key==="select"?{...col,label:<span style={{fontSize:11,color:allTicked?"#4fc3f7":C.faint,cursor:"pointer",userSelect:"none"}} onClick={e=>{e.stopPropagation();setSelCargoes(allTicked?new Set():new Set(filtC.map(c=>c.id)));}}>{allTicked?"[✓]":"[ ]"}</span>}:col);
+    })()}
     data={filtC}
     keyField="id"
     renderRow={(f, td) => {
@@ -1307,7 +1255,7 @@ const filtV=useMemo(()=>{
                             const b=calc?.ballastNm||0;const l=calc?.ladenNm||0;
                             if(!l)return null;
                             const ets=calcEuEts(b,l,13,15,3,8,2,1,0.25,1,0.25,0,12.5,false);
-                            return ets>0?<span style={{fontSize:12,color:"#fd79a8",fontWeight:600,background:"rgba(253,121,168,0.08)",border:"1px solid rgba(253,121,168,0.25)",borderRadius:3,padding:"1px 5px",whiteSpace:"nowrap"}} title="Indicative EU ETS cost (50% scope, deep-sea)">{"ETS ~$"}{ets.toLocaleString()}</span>:null;
+                            return ets>0?<span style={{fontSize:12,color:"#fd79a8",fontWeight:600,background:"rgba(253,121,168,0.08)",border:"1px solid rgba(253,121,168,0.25)",borderRadius:3,padding:"1px 5px",whiteSpace:"nowrap"}} title="Indicative EU ETS cost (50% scope, deep-sea)">ETS ~${ets.toLocaleString()}</span>:null;
                           })()}
                         </div>
                       </>}
@@ -1338,8 +1286,6 @@ const filtV=useMemo(()=>{
             <NotesTab/>
           </div>
         )}
-        {tab==="cal"&&<CalendarTab/>}
-        {tab==="settings"&&<SettingsTab/>}
       </div>
     </div>
   );
