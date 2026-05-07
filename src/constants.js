@@ -103,7 +103,7 @@ export const WS_ROUTES = [
 export const FFA_PERIODS = ["Feb/26","Mar/26","Apr/26","Q1/26","Q2/26","AVE/25"];
 
 // ─── Fixing tab ───────────────────────────────────────────────────────────────
-export const SEGMENTS = ["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];
+export const SEGMENTS = ["Sub 10k","City","Inter","J19","Flexi","Handy","MR", "Parcel"];
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 export const SK  = "tankpos-v5";
