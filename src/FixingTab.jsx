@@ -180,14 +180,16 @@ function FixingTab({vessels}){
   }),[jobs,statusFilter,clientFilter,jobSearch]);
 
   const charterersList=useMemo(()=>{
-    const raw=clientFilter==="ALL"?[...new Set(jobs.map(j=>j.charterer||""))]:[ clientFilter];
+    // Use filteredJobs so search + status filter affect which clients appear
+    const source=jobSearch.trim()||statusFilter!=="ALL"?filteredJobs:jobs;
+    const raw=clientFilter==="ALL"?[...new Set(source.map(j=>j.charterer||""))]:[ clientFilter];
     if(clientSort==="name") return raw.sort((a,b)=>a.localeCompare(b));
     return raw.sort((a,b)=>{
       const cntA=jobs.filter(j=>(j.charterer||"")===a&&j.status===clientSort.toUpperCase()).length;
       const cntB=jobs.filter(j=>(j.charterer||"")===b&&j.status===clientSort.toUpperCase()).length;
       return cntB-cntA;
     });
-  },[jobs,clientFilter,clientSort]);
+  },[jobs,filteredJobs,clientFilter,clientSort,jobSearch,statusFilter]);
 
   const inpS=useMemo(()=>({background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"4px 7px",outline:"none",boxSizing:"border-box"}),[]);
   const fb2=useCallback((on,col)=>({fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:4,border:"1px solid "+(on?col||C.blue:C.bd),background:on?(col||C.blue)+"22":"transparent",color:on?col||C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}),[]);
