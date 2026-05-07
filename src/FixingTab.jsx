@@ -394,7 +394,7 @@ function FixingTab({vessels}){
 
           {/* ── LIST VIEW: sortable headers, edit name, matched colors ── */}
           {clientViewMode==="list"&&(
-            <div style={{border:"1px solid rgba(58,130,246,0.18)",borderRadius:7,overflow:"hidden",marginBottom:2}}>
+            <div style={{border:"1px solid rgba(58,130,246,0.18)",borderRadius:7,overflow:"hidden",marginBottom:2,background:"rgba(7,15,28,0.96)"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                 <thead>
                   <tr style={{background:"rgba(14,22,40,0.98)"}}>
@@ -421,7 +421,7 @@ function FixingTab({vessels}){
                     const client=clients.find(c=>c.name===charterer);
                     const isNoteOpen=editingClient===client?.id;
                     const isEditingName=editingClientName===client?.id;
-                    const rowBg=isActive?"rgba(88,166,255,.08)":ri%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
+                    const rowBg=isActive?"rgba(88,166,255,.08)":ri%2===0?"transparent":"rgba(255,255,255,0.02)";
                     return(
                       <React.Fragment key={charterer}>
                         <tr onClick={()=>setClientFilter(f=>f===charterer?"ALL":charterer)}
@@ -620,7 +620,7 @@ function FixingTab({vessels}){
                 });
                 if(!filtered.length)return <div style={{fontSize:11,color:C.faint,fontStyle:"italic"}}>No entries.</div>;
                 return(
-                  <div style={{border:"1px solid rgba(58,130,246,0.18)",borderRadius:6,overflow:"hidden"}}>
+                  <div style={{border:"1px solid rgba(58,130,246,0.18)",borderRadius:6,overflow:"hidden",background:"rgba(7,15,28,0.96)"}}>
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                       <thead>
                         <tr style={{background:"rgba(20,30,50,0.92)"}}>
@@ -631,7 +631,7 @@ function FixingTab({vessels}){
                       </thead>
                       <tbody>
                         {filtered.map((o,ri)=>(
-                          <tr key={o.id} style={{background:ri%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)"}}>
+                          <tr key={o.id} style={{background:ri%2===0?"transparent":"rgba(255,255,255,0.02)"}}>
                             <td style={{padding:"2px 6px",borderBottom:"1px solid rgba(255,255,255,0.035)",whiteSpace:"nowrap",overflow:"hidden",maxWidth:1}}>
                               <input value={o.company||""} onChange={e=>updateOwnerEntry(o.id,"company",e.target.value)}
                                 style={{background:"transparent",border:"none",outline:"none",color:"#79c0ff",fontFamily:"inherit",fontSize:11,width:"100%",minWidth:60}}/>
