@@ -25,6 +25,8 @@ function cycleJobField(jobId, currentField, backwards=false){
 function RichEditor({ jobId, field, title, titleRight, value, onChange, onResizeSave, height=120, placeholder="", color=C.tx }){
   const editorRef = React.useRef(null);
   const wrapRef = React.useRef(null);
+  const [isExpanded, setIsExpanded] = React.useState(false);
+  const collapsedH = 36; // just the header
 
   React.useEffect(()=>{
     const el = editorRef.current;
@@ -35,15 +37,26 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
 
   function exec(cmd){ editorRef.current?.focus(); document.execCommand(cmd,false,null); onChange(editorRef.current?.innerHTML||""); }
   function handleInput(){ onChange(editorRef.current?.innerHTML||""); }
-  function handleKeyDown(e){ if(e.key==="Tab"){ e.preventDefault(); cycleJobField(jobId,field,e.shiftKey); } }
+  function handleKeyDown(e){
+    if(e.key==="Tab"){ e.preventDefault(); cycleJobField(jobId,field,e.shiftKey); }
+  }
 
-  // Auto-expand: set height to scrollHeight of content
-  function autoExpand(){
+  // Toggle: if currently showing normal height, expand to fit content; if expanded, collapse to saved height
+  function toggleExpand(){
     const el = editorRef.current;
-    if (!el) return;
-    const newH = Math.max(80, el.scrollHeight + 40);
-    if (wrapRef.current) wrapRef.current.style.height = newH + "px";
-    onResizeSave?.(newH);
+    const wrap = wrapRef.current;
+    if (!el || !wrap) return;
+    if (isExpanded) {
+      // Collapse back to saved height
+      wrap.style.height = height + "px";
+      setIsExpanded(false);
+    } else {
+      // Expand to fit all content
+      const newH = Math.max(80, el.scrollHeight + 40);
+      wrap.style.height = newH + "px";
+      onResizeSave?.(newH);
+      setIsExpanded(true);
+    }
   }
 
   // Save height on manual resize (drag)
@@ -59,40 +72,40 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
     return ()=>{ clearTimeout(t); ro.disconnect(); };
   }, [jobId, field, onResizeSave]);
 
+  const btnSt = {fontSize:10,padding:"1px 6px",borderRadius:3,border:"1px solid "+C.bd,background:C.bg3,color:C.faint,cursor:"pointer",lineHeight:1.4,fontFamily:"inherit"};
   return (
     <div ref={wrapRef} style={{
       background:C.bg3, border:"1px solid "+C.bd, borderRadius:6,
       minHeight:height, height:height, resize:"vertical", overflow:"auto",
-      boxSizing:"border-box",
-      // Grey diagonal resize handle matching other editors
-      backgroundImage:"none"
+      boxSizing:"border-box"
     }}>
       <style>{`
-        [data-richwrap="${jobId}-${field}"] { resize: vertical; }
-        [data-richwrap="${jobId}-${field}"]::-webkit-resizer {
-          background: transparent;
-          border-bottom: 2px solid rgba(120,160,220,0.3);
-          border-right: 2px solid rgba(120,160,220,0.3);
-        }
+        [data-richwrap="${jobId}-${field}"]::-webkit-resizer{background:transparent;border-bottom:2px solid rgba(120,160,220,0.3);border-right:2px solid rgba(120,160,220,0.3);}
+        [data-job-field="${jobId}-${field}"]:empty:before{content:attr(data-placeholder);color:${C.faint};pointer-events:none;}
+        [data-job-field="${jobId}-${field}"] ul{margin:0;padding-left:16px;}
+        [data-job-field="${jobId}-${field}"] ol{margin:0;padding-left:16px;list-style-type:decimal;}
+        [data-job-field="${jobId}-${field}"] ol ol{list-style-type:lower-alpha;}
+        [data-job-field="${jobId}-${field}"] li{margin:0;padding:0;}
+        [data-job-field="${jobId}-${field}"] p{margin:0;}
       `}</style>
       <div data-richwrap={`${jobId}-${field}`} style={{
         display:"flex", alignItems:"center", justifyContent:"space-between",
-        padding:"5px 8px", borderBottom:"1px solid "+C.bd2,
+        padding:"4px 6px", borderBottom:"1px solid "+C.bd2,
         background:C.bg4, position:"sticky", top:0, zIndex:1
       }}>
         <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700}}>{title}</span>
-        <div style={{display:"flex",alignItems:"center",gap:4}}>
+        <div style={{display:"flex",alignItems:"center",gap:3}}>
           {titleRight}
-          {/* Auto-expand button */}
-          <button type="button" onMouseDown={e=>e.preventDefault()} onClick={autoExpand}
-            title="Expand to fit content"
-            style={{fontSize:10,padding:"1px 6px",borderRadius:3,border:"1px solid "+C.bd,background:C.bg3,color:C.faint,cursor:"pointer",lineHeight:1.4}}>
-            ↕
+          {/* Toggle expand/collapse */}
+          <button type="button" onMouseDown={e=>e.preventDefault()} onClick={toggleExpand}
+            title={isExpanded?"Collapse":"Expand to fit"}
+            style={{...btnSt,color:isExpanded?C.blue:C.faint}}>
+            {isExpanded?"↑":"↕"}
           </button>
           <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>exec("insertUnorderedList")}
-            style={{fontSize:10,padding:"1px 6px",borderRadius:3,border:"1px solid "+C.bd,background:C.bg3,color:C.tx,cursor:"pointer"}}>
-            List
-          </button>
+            title="Bullet list" style={btnSt}>•</button>
+          <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>exec("insertOrderedList")}
+            title="Numbered list" style={btnSt}>1.</button>
         </div>
       </div>
       <div ref={editorRef} contentEditable suppressContentEditableWarning
@@ -105,13 +118,6 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
         }}
         data-placeholder={placeholder}
       />
-      <style>{`
-        [data-job-field="${jobId}-${field}"]:empty:before{content:attr(data-placeholder);color:${C.faint};pointer-events:none;}
-        [data-job-field="${jobId}-${field}"] ul{margin:0;padding-left:16px;}
-        [data-job-field="${jobId}-${field}"] ol{margin:0;padding-left:16px;}
-        [data-job-field="${jobId}-${field}"] li{margin:0;padding:0;}
-        [data-job-field="${jobId}-${field}"] p{margin:0;}
-      `}</style>
     </div>
   );
 }
@@ -135,6 +141,7 @@ function FixingTab({vessels}){
   const [ownerDirSearch,setOwnerDirSearch]=useState("");
   const [ownerSegFilter,setOwnerSegFilter]=useState(null);
   const [ownerTradeFilter,setOwnerTradeFilter]=useState(null);
+  const [clientViewMode,setClientViewMode]=useState("matrix"); // "matrix" | "list"
 
   useEffect(()=>{
     loadFixingJobs().then(setJobs);
@@ -209,42 +216,128 @@ function FixingTab({vessels}){
         </div>
       )}
 
-      {/* Client chips */}
-      <div style={{width:"100%",marginBottom:8,display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-        <button onClick={()=>setClientFilter("ALL")} style={{fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:20,border:"1px solid "+(clientFilter==="ALL"?C.blue:C.bd),background:clientFilter==="ALL"?"rgba(88,166,255,.15)":"transparent",color:clientFilter==="ALL"?C.blue:C.faint,cursor:"pointer",fontFamily:"inherit"}}>ALL</button>
-        {clients.map(client=>{
-          const isActive=clientFilter===client.name;
-          const clientJobs=jobs.filter(j=>j.charterer===client.name);
-          const total=clientJobs.length;
-          const statusCounts=["OPEN","SUBS","FIXED","FAILED"].reduce((a,s)=>{const n=clientJobs.filter(j=>j.status===s).length;if(n)a.push({s,n});return a;},[]);
-          const isExpanded=editingClient===client.id;
-          return(
-            <div key={client.id} style={{display:"flex",flexDirection:"column",background:isActive?"rgba(88,166,255,.12)":C.bg2,border:"1px solid "+(isActive?C.blue:C.bd),borderRadius:12,overflow:"hidden",minWidth:140}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 16px",cursor:"pointer"}} onClick={()=>setClientFilter(f=>f===client.name?"ALL":client.name)}>
-                <span style={{fontSize:13,fontWeight:700,color:isActive?C.blue:C.tx,whiteSpace:"nowrap"}}>{client.name}</span>
-                {statusCounts.map(({s,n})=>(
-                  <span key={s} style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:8,background:JOB_STATUS_COL[s]+"22",color:JOB_STATUS_COL[s]}}>{n}{s}</span>
-                ))}
-                {total>0&&<span style={{fontSize:11,color:C.faint}}>{total}</span>}
-                <span onClick={e=>{e.stopPropagation();setEditingClient(isExpanded?null:client.id);}} style={{fontSize:14,color:C.faint,cursor:"pointer",marginLeft:4,lineHeight:1}}>{isExpanded?"▲":"▼"}</span>
+      {/* Client matrix/list view */}
+      <div style={{width:"100%",marginBottom:8}}>
+        {/* View toggle + Add client */}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <span style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Charterers</span>
+          <div style={{display:"flex",gap:2,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,overflow:"hidden",padding:2}}>
+            <button onClick={()=>setClientViewMode("matrix")}
+              style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3,border:"none",background:clientViewMode==="matrix"?"rgba(88,166,255,.25)":"transparent",color:clientViewMode==="matrix"?C.blue:C.faint,cursor:"pointer",fontFamily:"inherit"}}>
+              ⊞ Matrix
+            </button>
+            <button onClick={()=>setClientViewMode("list")}
+              style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3,border:"none",background:clientViewMode==="list"?"rgba(88,166,255,.25)":"transparent",color:clientViewMode==="list"?C.blue:C.faint,cursor:"pointer",fontFamily:"inherit"}}>
+              ☰ List
+            </button>
+          </div>
+          <button onClick={()=>setClientFilter("ALL")}
+            style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,border:"1px solid "+(clientFilter==="ALL"?C.blue:C.bd),background:clientFilter==="ALL"?"rgba(88,166,255,.15)":"transparent",color:clientFilter==="ALL"?C.blue:C.faint,cursor:"pointer",fontFamily:"inherit"}}>All</button>
+          <button onClick={()=>setShowNewClient(s=>!s)}
+            style={{fontSize:10,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.blue,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>+ Client</button>
+          {showNewClient&&(
+            <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:C.bg2,border:"1px solid "+C.blue+"44",borderRadius:8,padding:16,zIndex:9999,minWidth:260}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.blue,marginBottom:8}}>New Client</div>
+              <input value={newClient.name} onChange={e=>setNewClient(p=>({...p,name:e.target.value}))} placeholder="Name" style={{...inpS,width:"100%",marginBottom:6}}/>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={createClient} style={{flex:1,background:"#1f6feb",border:"none",borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px",cursor:"pointer"}}>Save</button>
+                <button onClick={()=>setShowNewClient(false)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,fontFamily:"inherit",fontSize:12,padding:"5px 10px",cursor:"pointer"}}>✕</button>
               </div>
-              {isExpanded&&(
-                <div style={{padding:"6px 10px",borderTop:"1px solid "+C.bd2}} onClick={e=>e.stopPropagation()}>
-                  <textarea value={client.notes||""} onChange={e=>updateClient(client.id,{notes:e.target.value})} placeholder="Client notes…" style={{...inpS,width:"100%",minHeight:120,resize:"vertical",fontSize:11,boxSizing:"border-box"}}/>
+            </div>
+          )}
+        </div>
+
+        {/* Matrix view */}
+        {clientViewMode==="matrix"&&(
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {clients.map(client=>{
+              const isActive=clientFilter===client.name;
+              const clientJobs=jobs.filter(j=>j.charterer===client.name);
+              const total=clientJobs.length;
+              // Status counts
+              const counts=JOB_STATUS.reduce((a,s)=>{const n=clientJobs.filter(j=>j.status===s).length;if(n)a[s]=n;return a;},{});
+              // Highlight: has OPEN or SUBS
+              const hasActive=counts.OPEN||counts.WORKING||counts.SUBS;
+              const glowCol=counts.SUBS?C.purple:counts.OPEN||counts.WORKING?C.amber:null;
+              const isNoteExpanded=editingClient===client.id;
+              return(
+                <div key={client.id} style={{
+                  display:"flex",flexDirection:"column",
+                  background:isActive?"rgba(88,166,255,.10)":C.bg2,
+                  border:"1px solid "+(isActive?C.blue:glowCol?glowCol+"55":C.bd),
+                  borderRadius:8,overflow:"hidden",minWidth:130,maxWidth:160,
+                  boxShadow:glowCol&&!isActive?"0 0 8px "+glowCol+"33":"none",
+                  transition:"box-shadow 0.2s"
+                }}>
+                  <div style={{padding:"8px 10px",cursor:"pointer"}} onClick={()=>setClientFilter(f=>f===client.name?"ALL":client.name)}>
+                    <div style={{fontSize:12,fontWeight:700,color:isActive?C.blue:C.tx,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginBottom:4}}>{client.name}</div>
+                    <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                      {total===0&&<span style={{fontSize:10,color:C.faint}}>—</span>}
+                      {Object.entries(counts).map(([s,n])=>(
+                        <span key={s} style={{fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:6,background:JOB_STATUS_COL[s]+"22",color:JOB_STATUS_COL[s]}}>{n} {s}</span>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Note toggle */}
+                  <div style={{display:"flex",borderTop:"1px solid "+C.bd2}}>
+                    <button onClick={e=>{e.stopPropagation();setEditingClient(isNoteExpanded?null:client.id);}}
+                      style={{flex:1,background:"none",border:"none",color:C.faint,fontSize:10,padding:"3px 0",cursor:"pointer",fontFamily:"inherit"}}>
+                      {isNoteExpanded?"▲ notes":"▼ notes"}
+                    </button>
+                  </div>
+                  {isNoteExpanded&&(
+                    <div style={{padding:"5px 8px",borderTop:"1px solid "+C.bd2}} onClick={e=>e.stopPropagation()}>
+                      <textarea value={client.notes||""} onChange={e=>updateClient(client.id,{notes:e.target.value})}
+                        placeholder="Client notes…" style={{...inpS,width:"100%",minHeight:80,resize:"vertical",fontSize:11,boxSizing:"border-box"}}/>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
-        <button onClick={()=>setShowNewClient(s=>!s)} style={{fontSize:11,background:C.bg3,border:"1px solid "+C.bd,borderRadius:20,color:C.blue,padding:"4px 10px",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>+ Add</button>
-        {showNewClient&&(
-          <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:C.bg2,border:"1px solid "+C.blue+"44",borderRadius:8,padding:16,zIndex:9999,minWidth:260}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.blue,marginBottom:8}}>New Client</div>
-            <input value={newClient.name} onChange={e=>setNewClient(p=>({...p,name:e.target.value}))} placeholder="Name" style={{...inpS,width:"100%",marginBottom:6}}/>
-            <div style={{display:"flex",gap:6}}>
-              <button onClick={createClient} style={{flex:1,background:"#1f6feb",border:"none",borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px",cursor:"pointer"}}>Save</button>
-              <button onClick={()=>setShowNewClient(false)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,fontFamily:"inherit",fontSize:12,padding:"5px 10px",cursor:"pointer"}}>✕</button>
-            </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* List view */}
+        {clientViewMode==="list"&&(
+          <div style={{border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead>
+                <tr style={{background:"rgba(20,30,50,0.92)"}}>
+                  {["Charterer","Open","Working","Subs","Fixed","Failed",""].map(h=>(
+                    <th key={h} style={{padding:"5px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:"1px solid rgba(58,130,246,0.14)"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {clients.map((client,ri)=>{
+                  const isActive=clientFilter===client.name;
+                  const clientJobs=jobs.filter(j=>j.charterer===client.name);
+                  const counts=JOB_STATUS.reduce((a,s)=>{a[s]=clientJobs.filter(j=>j.status===s).length;return a;},{});
+                  const glowCol=counts.SUBS?C.purple:counts.OPEN||counts.WORKING?C.amber:null;
+                  return(
+                    <tr key={client.id}
+                      onClick={()=>setClientFilter(f=>f===client.name?"ALL":client.name)}
+                      style={{background:isActive?"rgba(88,166,255,.08)":ri%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)",cursor:"pointer",outline:glowCol&&!isActive?"1px inset "+glowCol+"33":"none"}}>
+                      <td style={{padding:"5px 10px",fontWeight:700,color:isActive?C.blue:C.tx,borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
+                        {client.name}
+                        {glowCol&&<span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:glowCol,marginLeft:5,verticalAlign:"middle"}}/>}
+                      </td>
+                      {["OPEN","WORKING","SUBS","FIXED","FAILED"].map(s=>(
+                        <td key={s} style={{padding:"5px 10px",textAlign:"center",color:counts[s]>0?JOB_STATUS_COL[s]:C.faint+"55",fontWeight:counts[s]>0?700:400,borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
+                          {counts[s]>0?counts[s]:"—"}
+                        </td>
+                      ))}
+                      <td style={{padding:"5px 6px",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
+                        <button onClick={e=>{e.stopPropagation();setEditingClient(editingClient===client.id?null:client.id);}}
+                          style={{background:"none",border:"none",color:C.faint,fontSize:11,cursor:"pointer",padding:0}}>
+                          {editingClient===client.id?"▲":"▼"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -390,7 +483,11 @@ function FixingTab({vessels}){
           </div>
           {showOwnerDir&&(
             <div style={{display:"flex",flexDirection:"column",gap:5}}>
-              <input value={ownerDirSearch||""} onChange={e=>setOwnerDirSearch(e.target.value)} placeholder="🔍 Search owners…" style={{...inpS,width:"100%",padding:"3px 7px",fontSize:11}}/>
+              <style>{`
+                .own-sel{background:${C.bg2};color:${C.tx};border:1px solid ${C.bd};border-radius:4px;font-family:inherit;font-size:11px;outline:none;padding:2px 3px;}
+                .own-sel option{background:${C.bg2};color:${C.tx};}
+              `}</style>
+              <input value={ownerDirSearch||""} onChange={e=>setOwnerDirSearch(e.target.value)} placeholder="Search owners…" style={{...inpS,width:"100%",padding:"3px 7px",fontSize:11}}/>
               <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
                 {SEGMENTS.map(s=>(
                   <button key={s} onClick={()=>setOwnerSegFilter(f=>f===s?null:s)}
@@ -403,22 +500,20 @@ function FixingTab({vessels}){
                     style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,border:"1px solid "+(ownerTradeFilter===t?C.amber:C.bd),background:ownerTradeFilter===t?"rgba(255,209,102,.2)":"transparent",color:ownerTradeFilter===t?C.amber:C.faint,cursor:"pointer",fontFamily:"inherit"}}>{t}</button>
                 ))}
               </div>
-              {/* Add row — wider */}
-              <div style={{display:"grid",gridTemplateColumns:"110px 56px 62px 62px auto",gap:3,alignItems:"center"}}>
+              <div style={{display:"grid",gridTemplateColumns:"110px 56px 1fr 1fr auto",gap:3,alignItems:"center"}}>
                 <input value={newOwnerEntry.company} onChange={e=>setNewOwnerEntry(p=>({...p,company:e.target.value}))} placeholder="Company" style={{...inpS,padding:"2px 4px",fontSize:11}}/>
                 <input value={newOwnerEntry.pic} onChange={e=>setNewOwnerEntry(p=>({...p,pic:e.target.value}))} placeholder="PIC" style={{...inpS,padding:"2px 4px",fontSize:11}}/>
-                <select value={newOwnerEntry.segment} onChange={e=>setNewOwnerEntry(p=>({...p,segment:e.target.value}))} style={{...inpS,padding:"2px 3px",fontSize:11,background:C.bg3,appearance:"none"}}>
+                <select value={newOwnerEntry.segment} onChange={e=>setNewOwnerEntry(p=>({...p,segment:e.target.value}))} className="own-sel">
                   <option value="">Seg…</option>
                   {SEGMENTS.map(s=><option key={s} value={s}>{s}</option>)}
                 </select>
-                <select value={newOwnerEntry.trade} onChange={e=>setNewOwnerEntry(p=>({...p,trade:e.target.value}))} style={{...inpS,padding:"2px 3px",fontSize:11,background:C.bg3,appearance:"none"}}>
+                <select value={newOwnerEntry.trade} onChange={e=>setNewOwnerEntry(p=>({...p,trade:e.target.value}))} className="own-sel">
                   <option value="">Trade…</option>
                   {TRADES.map(t=><option key={t} value={t}>{t}</option>)}
                 </select>
-                <button onClick={addOwnerEntry} style={{background:"#1f6feb",border:"none",borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:11,padding:"3px 7px",cursor:"pointer",whiteSpace:"nowrap"}}>+ Add</button>
+                <button onClick={addOwnerEntry} style={{background:"rgba(88,166,255,.18)",border:"1px solid rgba(88,166,255,.4)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:11,padding:"3px 7px",cursor:"pointer",whiteSpace:"nowrap"}}>+ Add</button>
               </div>
               {(()=>{
-                const dSel={...inpS,padding:"1px 3px",background:"transparent",border:"none",borderBottom:"1px solid "+C.bd2+"55",fontSize:11,appearance:"none"};
                 const filtered=owners.filter(o=>{
                   if(ownerSegFilter&&o.segment!==ownerSegFilter)return false;
                   if(ownerTradeFilter&&o.trade!==ownerTradeFilter)return false;
@@ -427,51 +522,48 @@ function FixingTab({vessels}){
                 });
                 if(!filtered.length)return <div style={{fontSize:11,color:C.faint,fontStyle:"italic"}}>No entries.</div>;
                 return(
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,tableLayout:"fixed"}}>
-                    <colgroup>
-                      <col style={{width:"34%"}}/>
-                      <col style={{width:"16%"}}/>
-                      <col style={{width:"20%"}}/>
-                      <col style={{width:"22%"}}/>
-                      <col style={{width:"8%"}}/>
-                    </colgroup>
-                    <thead>
-                      <tr style={{background:C.bg3}}>
-                        {["Company","PIC","Seg","Trade",""].map(h=>(
-                          <th key={h} style={{padding:"3px 4px",textAlign:"left",fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"1px solid "+C.bd2,whiteSpace:"nowrap"}}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map((o,ri)=>(
-                        <tr key={o.id} style={{background:ri%2===0?C.bg:C.bg2}}>
-                          <td style={{padding:"1px 4px",borderBottom:"1px solid "+C.bg3,overflow:"hidden"}}>
-                            <input value={o.company||""} onChange={e=>updateOwnerEntry(o.id,"company",e.target.value)}
-                              style={{...inpS,width:"100%",padding:"1px 3px",background:"transparent",border:"none",borderBottom:"1px solid "+C.bd2+"55",fontSize:11,color:C.purple}}/>
-                          </td>
-                          <td style={{padding:"1px 4px",borderBottom:"1px solid "+C.bg3,overflow:"hidden"}}>
-                            <input value={o.pic||""} onChange={e=>updateOwnerEntry(o.id,"pic",e.target.value)}
-                              style={{...inpS,width:"100%",padding:"1px 3px",background:"transparent",border:"none",borderBottom:"1px solid "+C.bd2+"55",fontSize:11}}/>
-                          </td>
-                          <td style={{padding:"1px 4px",borderBottom:"1px solid "+C.bg3}}>
-                            <select value={o.segment||""} onChange={e=>updateOwnerEntry(o.id,"segment",e.target.value)} style={{...dSel,color:C.blue,width:"100%"}}>
-                              <option value="">—</option>
-                              {SEGMENTS.map(s=><option key={s} value={s}>{s}</option>)}
-                            </select>
-                          </td>
-                          <td style={{padding:"1px 4px",borderBottom:"1px solid "+C.bg3}}>
-                            <select value={o.trade||""} onChange={e=>updateOwnerEntry(o.id,"trade",e.target.value)} style={{...dSel,color:C.amber,width:"100%"}}>
-                              <option value="">—</option>
-                              {TRADES.map(t=><option key={t} value={t}>{t}</option>)}
-                            </select>
-                          </td>
-                          <td style={{padding:"1px 3px",textAlign:"center"}}>
-                            <button onClick={()=>removeOwnerEntry(o.id)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:11,opacity:0.5,padding:0}}>✕</button>
-                          </td>
+                  <div style={{border:"1px solid rgba(58,130,246,0.18)",borderRadius:6,overflow:"hidden"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                      <thead>
+                        <tr style={{background:"rgba(20,30,50,0.92)"}}>
+                          {[["Company","34%"],["PIC","14%"],["Seg","20%"],["Trade","22%"],["","10%"]].map(([h,w])=>(
+                            <th key={h} style={{padding:"4px 6px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.14)",width:w,whiteSpace:"nowrap"}}>{h}</th>
+                          ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {filtered.map((o,ri)=>(
+                          <tr key={o.id} style={{background:ri%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)"}}>
+                            <td style={{padding:"2px 6px",borderBottom:"1px solid rgba(255,255,255,0.035)",whiteSpace:"nowrap",overflow:"hidden",maxWidth:1}}>
+                              <input value={o.company||""} onChange={e=>updateOwnerEntry(o.id,"company",e.target.value)}
+                                style={{background:"transparent",border:"none",outline:"none",color:"#79c0ff",fontFamily:"inherit",fontSize:11,width:"100%",minWidth:60}}/>
+                            </td>
+                            <td style={{padding:"2px 6px",borderBottom:"1px solid rgba(255,255,255,0.035)",whiteSpace:"nowrap",overflow:"hidden",maxWidth:1}}>
+                              <input value={o.pic||""} onChange={e=>updateOwnerEntry(o.id,"pic",e.target.value)}
+                                style={{background:"transparent",border:"none",outline:"none",color:"#43e97b",fontFamily:"inherit",fontSize:11,width:"100%",minWidth:30}}/>
+                            </td>
+                            <td style={{padding:"2px 4px",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
+                              <select value={o.segment||""} onChange={e=>updateOwnerEntry(o.id,"segment",e.target.value)}
+                                className="own-sel" style={{color:"rgba(88,166,255,0.8)",width:"100%"}}>
+                                <option value="">—</option>
+                                {SEGMENTS.map(s=><option key={s} value={s}>{s}</option>)}
+                              </select>
+                            </td>
+                            <td style={{padding:"2px 4px",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
+                              <select value={o.trade||""} onChange={e=>updateOwnerEntry(o.id,"trade",e.target.value)}
+                                className="own-sel" style={{color:"rgba(250,163,86,0.75)",width:"100%"}}>
+                                <option value="">—</option>
+                                {TRADES.map(t=><option key={t} value={t}>{t}</option>)}
+                              </select>
+                            </td>
+                            <td style={{padding:"2px 4px",borderBottom:"1px solid rgba(255,255,255,0.035)",textAlign:"center"}}>
+                              <button onClick={()=>removeOwnerEntry(o.id)} style={{background:"none",border:"none",color:"rgba(255,107,107,0.5)",cursor:"pointer",fontSize:11,padding:0}}>✕</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 );
               })()}
             </div>
