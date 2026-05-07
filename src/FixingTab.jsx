@@ -150,6 +150,7 @@ function FixingTab({vessels}){
   const [jobSearch,setJobSearch]=useState("");
   const [pendingDelJob,setPendingDelJob]=useState(null);
   const [pendingDelOwner,setPendingDelOwner]=useState(null);
+  const [pendingDelClient,setPendingDelClient]=useState(null);
   const [ownerDirSearch,setOwnerDirSearch]=useState("");
   const [ownerSegFilter,setOwnerSegFilter]=useState(null);
   const [ownerTradeFilter,setOwnerTradeFilter]=useState(null);
@@ -214,6 +215,18 @@ function FixingTab({vessels}){
     await saveFixingJob(job); setJobs(prev=>[job,...prev]); setExpandedJob(id);
   }
 
+  async function deleteClientAndJobs(client){
+    // Delete all jobs for this client
+    const clientJobs=jobs.filter(j=>j.charterer===client.name);
+    for(const job of clientJobs){ await deleteFixingJob(job.id); }
+    setJobs(prev=>prev.filter(j=>j.charterer!==client.name));
+    // Delete the client
+    await deleteClient(client.id);
+    setClients(prev=>prev.filter(c=>c.id!==client.id));
+    if(clientFilter===client.name)setClientFilter("ALL");
+    setPendingDelClient(null);
+  }
+
   async function removeJob(id){ setJobs(prev=>prev.filter(j=>j.id!==id)); await deleteFixingJob(id); }
 
   async function createClient(){
@@ -250,7 +263,13 @@ function FixingTab({vessels}){
 
   return(
     <div style={{display:"flex",gap:12,alignItems:"flex-start",flexDirection:"column"}}>
-      {pendingDelJob&&(
+      {pendingDelClient&&(
+        <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:C.bg2,border:"1px solid "+C.red,borderRadius:8,padding:"14px 20px",zIndex:9999,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.6)",fontFamily:"sans-serif",fontSize:12,minWidth:340}}>
+          <span style={{color:C.tx,flex:1}}>Delete <strong style={{color:"#ff6b6b"}}>{pendingDelClient.name}</strong> and all {jobs.filter(j=>j.charterer===pendingDelClient.name).length} cargo(es)?</span>
+          <button onClick={()=>deleteClientAndJobs(pendingDelClient)} style={{background:C.red,border:"none",borderRadius:5,color:"#fff",padding:"5px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>Delete all</button>
+          <button onClick={()=>setPendingDelClient(null)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,padding:"5px 14px",cursor:"pointer",fontSize:12}}>Cancel</button>
+        </div>
+      )}
         <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:C.bg2,border:"1px solid "+C.red,borderRadius:8,padding:"12px 20px",zIndex:9999,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.5)",fontFamily:"sans-serif",fontSize:12,minWidth:300}}>
           <span style={{color:C.tx,flex:1}}>Delete <strong>{pendingDelJob.label}</strong>?</span>
           <button onClick={()=>{removeJob(pendingDelJob.id);setPendingDelJob(null);}} style={{background:C.red,border:"none",borderRadius:5,color:"#fff",padding:"5px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>Delete</button>
@@ -275,23 +294,15 @@ function FixingTab({vessels}){
                 ☰ List
               </button>
             </div>
-            {/* New cargo */}
-            <div style={{display:"flex",gap:0,alignItems:"center",border:"1px solid "+C.blue,borderRadius:5,overflow:"hidden"}}>
-              <select id="new_job_client_sel" defaultValue={clientFilter!=="ALL"?clientFilter:""}
-                style={{background:C.bg3,border:"none",borderRight:"1px solid "+C.bd,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"4px 8px",outline:"none",cursor:"pointer",maxWidth:130}}>
-                <option value="">Client…</option>
-                {clients.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
-              </select>
-              <button onClick={()=>{const sel=document.getElementById("new_job_client_sel");const chosen=sel?.value||(clientFilter!=="ALL"?clientFilter:"");createJob(chosen);if(chosen)setClientFilter(chosen);}}
-                style={{background:"rgba(88,166,255,.15)",border:"none",color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"4px 12px",cursor:"pointer",whiteSpace:"nowrap"}}>+ New Cargo</button>
-            </div>
             {/* + Client */}
             <button onClick={()=>setShowNewClient(s=>!s)}
               style={{fontSize:10,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.blue,padding:"3px 8px",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>+ Client</button>
             {showNewClient&&(
               <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:C.bg2,border:"1px solid "+C.blue+"44",borderRadius:8,padding:16,zIndex:9999,minWidth:260}}>
                 <div style={{fontSize:11,fontWeight:700,color:C.blue,marginBottom:8}}>New Client</div>
-                <input value={newClient.name} onChange={e=>setNewClient(p=>({...p,name:e.target.value}))} placeholder="Name" style={{...inpS,width:"100%",marginBottom:6}}/>
+                <input value={newClient.name} onChange={e=>setNewClient(p=>({...p,name:e.target.value}))} placeholder="Name"
+                  onKeyDown={e=>e.key==="Enter"&&createClient()}
+                  style={{...inpS,width:"100%",marginBottom:6}}/>
                 <div style={{display:"flex",gap:6}}>
                   <button onClick={createClient} style={{flex:1,background:"#1f6feb",border:"none",borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px",cursor:"pointer"}}>Save</button>
                   <button onClick={()=>setShowNewClient(false)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,fontFamily:"inherit",fontSize:12,padding:"5px 10px",cursor:"pointer"}}>✕</button>
@@ -350,12 +361,11 @@ function FixingTab({vessels}){
                 const isEditingName=editingClientName===client?.id;
                 return(
                   <div key={charterer} style={{display:"flex",flexDirection:"column",
-                    background:isActive?"rgba(88,166,255,.10)":C.bg2,
-                    border:"1px solid "+(isActive?C.blue:glowCol?glowCol+"55":C.bd),
+                    background:isActive?"rgba(88,166,255,.12)":"rgba(8,18,38,0.9)",
+                    border:"1px solid "+(isActive?"rgba(88,166,255,0.5)":glowCol?glowCol+"55":"rgba(58,130,246,0.18)"),
                     borderRadius:7,overflow:"visible",
                     boxShadow:glowCol&&!isActive?"0 0 10px "+glowCol+"28":"none",transition:"box-shadow 0.2s"}}>
-                    <div style={{padding:"8px 10px",cursor:"pointer"}} onClick={()=>setClientFilter(f=>f===charterer?"ALL":charterer)}>
-                      {/* Client name — click pencil to edit */}
+                    <div style={{padding:"10px 12px",cursor:"pointer"}} onClick={()=>setClientFilter(f=>f===charterer?"ALL":charterer)}>
                       {isEditingName&&client?(
                         <input autoFocus defaultValue={client.name}
                           onBlur={e=>renameClient(client.id,e.target.value)}
@@ -363,26 +373,32 @@ function FixingTab({vessels}){
                           onClick={e=>e.stopPropagation()}
                           style={{...inpS,width:"100%",fontSize:12,fontWeight:700,marginBottom:4,padding:"2px 6px"}}/>
                       ):(
-                        <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:3}}>
-                          <span style={{fontSize:12,fontWeight:700,color:isActive?C.blue:C.tx,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1}}>{charterer||"—"}</span>
+                        <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:5}}>
+                          <span style={{fontSize:12,fontWeight:700,color:isActive?"#79c0ff":"rgba(200,220,255,0.85)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1}}>{charterer||"—"}</span>
                           {client&&<button onClick={e=>{e.stopPropagation();setEditingClientName(client.id);}}
-                            style={{background:"none",border:"none",color:"rgba(120,160,220,0.25)",fontSize:10,cursor:"pointer",padding:0,flexShrink:0,lineHeight:1}} title="Rename">✎</button>}
+                            style={{background:"none",border:"none",color:"rgba(120,160,220,0.3)",fontSize:10,cursor:"pointer",padding:0,flexShrink:0}} title="Rename">✎</button>}
+                          {client&&<button onClick={e=>{e.stopPropagation();setPendingDelClient(client);}}
+                            style={{background:"none",border:"none",color:"rgba(255,107,107,0.3)",fontSize:10,cursor:"pointer",padding:0,flexShrink:0}} title="Delete client">✕</button>}
                         </div>
                       )}
                       <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
                         {Object.entries(counts).map(([s,n])=>(
-                          <span key={s} style={{fontSize:9,fontWeight:700,padding:"1px 4px",borderRadius:4,background:JOB_STATUS_COL[s]+"22",color:JOB_STATUS_COL[s]}}>{n} {s}</span>
+                          <span key={s} style={{fontSize:9,fontWeight:700,padding:"2px 5px",borderRadius:4,background:JOB_STATUS_COL[s]+"22",color:JOB_STATUS_COL[s]}}>{n} {s}</span>
                         ))}
-                        {Object.keys(counts).length===0&&<span style={{fontSize:9,color:C.faint}}>no jobs</span>}
+                        {Object.keys(counts).length===0&&<span style={{fontSize:9,color:"rgba(120,160,220,0.35)"}}>no jobs</span>}
                       </div>
                     </div>
-                    <div style={{display:"flex",borderTop:"1px solid "+C.bd2}}>
+                    <div style={{display:"flex",borderTop:"1px solid rgba(58,130,246,0.12)"}}>
                       <button onClick={()=>setExpandedJob(isJobOpen?null:charterer)}
-                        style={{flex:1,background:"none",border:"none",borderRight:"1px solid "+C.bd2,color:isJobOpen?"#58a6ff":C.faint,fontSize:9,padding:"3px 0",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
+                        style={{flex:1,background:"none",border:"none",borderRight:"1px solid rgba(58,130,246,0.12)",color:isJobOpen?"#58a6ff":"rgba(120,160,220,0.4)",fontSize:9,padding:"4px 0",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
                         {isJobOpen?"▲ cargo":"▼ cargo"}
                       </button>
+                      <button onClick={e=>{e.stopPropagation();createJob(charterer);setExpandedJob(charterer);}}
+                        style={{flex:1,background:"none",border:"none",borderRight:"1px solid rgba(58,130,246,0.12)",color:"rgba(88,166,255,0.5)",fontSize:9,padding:"4px 0",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
+                        + cargo
+                      </button>
                       <button onClick={e=>{e.stopPropagation();setNotePopout(charterer);}}
-                        style={{flex:1,background:"none",border:"none",color:C.faint,fontSize:9,padding:"3px 0",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
+                        style={{flex:1,background:"none",border:"none",color:"rgba(120,160,220,0.4)",fontSize:9,padding:"4px 0",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
                         ✎ notes
                       </button>
                     </div>
@@ -392,7 +408,7 @@ function FixingTab({vessels}){
             </div>
           )}
 
-          {/* ── LIST VIEW: sortable headers, edit name, matched colors ── */}
+          {/* ── LIST VIEW: sortable headers, matched positions/cargoes style ── */}
           {clientViewMode==="list"&&(
             <div style={{border:"1px solid rgba(58,130,246,0.18)",borderRadius:7,overflow:"hidden",marginBottom:2,background:"rgba(7,15,28,0.96)"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -400,12 +416,11 @@ function FixingTab({vessels}){
                   <tr style={{background:"rgba(14,22,40,0.98)"}}>
                     {[["Charterer","name"],["Open","open"],["Working","working"],["Subs","subs"],["Fixed","fixed"],["Failed","failed"],["",""]].map(([h,sk])=>(
                       <th key={h} onClick={sk?()=>setClientSort(sk):undefined}
-                        style={{padding:"5px 10px",textAlign:"left",fontSize:10,fontWeight:700,
-                          color:clientSort===sk?"#e8f2ff":"rgba(120,160,220,0.55)",
+                        style={{padding:"7px 12px",textAlign:"left",fontSize:10,fontWeight:700,
+                          color:clientSort===sk?"rgba(200,220,255,0.9)":"rgba(120,160,220,0.55)",
                           textTransform:"uppercase",letterSpacing:"0.07em",
                           borderBottom:"1px solid rgba(58,130,246,0.14)",
-                          cursor:sk?"pointer":"default",userSelect:"none",
-                          whiteSpace:"nowrap"}}>
+                          cursor:sk?"pointer":"default",userSelect:"none",whiteSpace:"nowrap"}}>
                         {h}{sk&&clientSort===sk?" ▲":""}
                       </th>
                     ))}
@@ -419,42 +434,49 @@ function FixingTab({vessels}){
                     const isActive=clientFilter===charterer;
                     const isJobOpen=expandedJob===charterer;
                     const client=clients.find(c=>c.name===charterer);
-                    const isNoteOpen=editingClient===client?.id;
                     const isEditingName=editingClientName===client?.id;
-                    const rowBg=isActive?"rgba(88,166,255,.08)":ri%2===0?"transparent":"rgba(255,255,255,0.02)";
+                    const rowBg=isActive?"rgba(88,166,255,.10)":ri%2===0?"transparent":"rgba(255,255,255,0.025)";
                     return(
                       <React.Fragment key={charterer}>
                         <tr onClick={()=>setClientFilter(f=>f===charterer?"ALL":charterer)}
-                          style={{background:rowBg,cursor:"pointer",borderLeft:glowCol&&!isActive?"2px solid "+glowCol+"88":"2px solid transparent"}}>
-                          <td style={{padding:"5px 10px",fontWeight:600,color:isActive?C.blue:C.tx,borderBottom:"1px solid rgba(58,130,246,0.06)"}}>
+                          style={{background:rowBg,cursor:"pointer",
+                            borderLeft:glowCol&&!isActive?"3px solid "+glowCol+"99":"3px solid transparent",
+                            transition:"background 0.1s"}}>
+                          <td style={{padding:"8px 12px",fontWeight:600,color:isActive?"#79c0ff":"rgba(200,220,255,0.8)",borderBottom:"1px solid rgba(58,130,246,0.07)"}}>
                             {isEditingName&&client?(
                               <input autoFocus defaultValue={client.name}
                                 onBlur={e=>renameClient(client.id,e.target.value)}
                                 onKeyDown={e=>{if(e.key==="Enter")renameClient(client.id,e.target.value);if(e.key==="Escape")setEditingClientName(null);}}
                                 onClick={e=>e.stopPropagation()}
-                                style={{...inpS,fontSize:12,fontWeight:700,padding:"1px 6px"}}/>
+                                style={{...inpS,fontSize:12,fontWeight:700,padding:"2px 6px"}}/>
                             ):(
-                              <div style={{display:"flex",alignItems:"center",gap:5}}>
+                              <div style={{display:"flex",alignItems:"center",gap:6}}>
                                 {glowCol&&<span style={{width:6,height:6,borderRadius:"50%",background:glowCol,flexShrink:0,display:"inline-block"}}/>}
-                                {charterer||"—"}
+                                <span style={{flex:1}}>{charterer||"—"}</span>
                                 {client&&<button onClick={e=>{e.stopPropagation();setEditingClientName(client.id);}}
-                                  style={{background:"none",border:"none",color:"rgba(120,160,220,0.25)",fontSize:10,cursor:"pointer",padding:0,lineHeight:1,marginLeft:2}} title="Rename">✎</button>}
+                                  style={{background:"none",border:"none",color:"rgba(120,160,220,0.25)",fontSize:10,cursor:"pointer",padding:0}} title="Rename">✎</button>}
+                                {client&&<button onClick={e=>{e.stopPropagation();setPendingDelClient(client);}}
+                                  style={{background:"none",border:"none",color:"rgba(255,107,107,0.25)",fontSize:10,cursor:"pointer",padding:0}} title="Delete client">✕</button>}
                               </div>
                             )}
                           </td>
                           {["OPEN","WORKING","SUBS","FIXED","FAILED"].map(s=>(
-                            <td key={s} style={{padding:"5px 10px",textAlign:"center",color:counts[s]>0?JOB_STATUS_COL[s]:"rgba(100,130,180,0.18)",fontWeight:counts[s]>0?700:400,borderBottom:"1px solid rgba(58,130,246,0.06)"}}>
+                            <td key={s} style={{padding:"8px 12px",textAlign:"center",color:counts[s]>0?JOB_STATUS_COL[s]:"rgba(100,130,180,0.18)",fontWeight:counts[s]>0?700:400,borderBottom:"1px solid rgba(58,130,246,0.07)"}}>
                               {counts[s]>0?counts[s]:"—"}
                             </td>
                           ))}
-                          <td style={{padding:"5px 8px",borderBottom:"1px solid rgba(58,130,246,0.06)"}}>
-                            <div style={{display:"flex",gap:5}}>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid rgba(58,130,246,0.07)",whiteSpace:"nowrap"}}>
+                            <div style={{display:"flex",gap:6,alignItems:"center"}}>
                               <button onClick={e=>{e.stopPropagation();setExpandedJob(isJobOpen?null:charterer);}}
-                                style={{background:"none",border:"none",color:isJobOpen?"#58a6ff":C.faint,fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit",fontWeight:600,whiteSpace:"nowrap"}}>
+                                style={{background:"none",border:"none",color:isJobOpen?"#58a6ff":"rgba(120,160,220,0.4)",fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit",fontWeight:600}}>
                                 {isJobOpen?"▲":"▼"} cargo
                               </button>
+                              <button onClick={e=>{e.stopPropagation();createJob(charterer);setExpandedJob(charterer);}}
+                                style={{background:"none",border:"none",color:"rgba(88,166,255,0.45)",fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit",fontWeight:600}}>
+                                + cargo
+                              </button>
                               {client&&<button onClick={e=>{e.stopPropagation();setNotePopout(charterer);}}
-                                style={{background:"none",border:"none",color:C.faint,fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                                style={{background:"none",border:"none",color:"rgba(120,160,220,0.3)",fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit"}}>
                                 ✎
                               </button>}
                             </div>
