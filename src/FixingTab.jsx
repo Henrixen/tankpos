@@ -421,7 +421,7 @@ function FixingTab({vessels}){
                     const client=clients.find(c=>c.name===charterer);
                     const isNoteOpen=editingClient===client?.id;
                     const isEditingName=editingClientName===client?.id;
-                    const rowBg=isActive?"rgba(88,166,255,.08)":ri%2===0?"rgba(7,15,28,0.85)":"rgba(14,24,46,0.85)";
+                    const rowBg=isActive?"rgba(88,166,255,.08)":ri%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
                     return(
                       <React.Fragment key={charterer}>
                         <tr onClick={()=>setClientFilter(f=>f===charterer?"ALL":charterer)}
