@@ -21,12 +21,18 @@ function cycleJobField(jobId, currentField, backwards=false){
   focusJobField(jobId, EDIT_FIELDS[nextIdx]);
 }
 
-// RichEditor — each instance resizes INDEPENDENTLY; auto-expand button fits content
+// RichEditor — each instance resizes INDEPENDENTLY; ↕ toggles expand/collapse
 function RichEditor({ jobId, field, title, titleRight, value, onChange, onResizeSave, height=120, placeholder="", color=C.tx }){
   const editorRef = React.useRef(null);
   const wrapRef = React.useRef(null);
   const [isExpanded, setIsExpanded] = React.useState(false);
-  const collapsedH = 36; // just the header
+  const savedHeightRef = React.useRef(height); // track the collapsed height
+  const progResizing = React.useRef(false); // suppress observer during programmatic resize
+
+  React.useEffect(()=>{
+    // Keep savedHeightRef in sync with incoming height prop (from drag saves)
+    if (!isExpanded) savedHeightRef.current = height;
+  }, [height, isExpanded]);
 
   React.useEffect(()=>{
     const el = editorRef.current;
@@ -41,43 +47,52 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
     if(e.key==="Tab"){ e.preventDefault(); cycleJobField(jobId,field,e.shiftKey); }
   }
 
-  // Toggle: if currently showing normal height, expand to fit content; if expanded, collapse to saved height
   function toggleExpand(){
     const el = editorRef.current;
     const wrap = wrapRef.current;
     if (!el || !wrap) return;
+    progResizing.current = true;
     if (isExpanded) {
-      // Collapse back to saved height
-      wrap.style.height = height + "px";
+      const h = savedHeightRef.current || height;
+      wrap.style.height = h + "px";
+      wrap.style.minHeight = h + "px";
       setIsExpanded(false);
     } else {
-      // Expand to fit all content
-      const newH = Math.max(80, el.scrollHeight + 40);
+      savedHeightRef.current = wrap.offsetHeight || height;
+      const newH = Math.max(80, el.scrollHeight + 44);
       wrap.style.height = newH + "px";
-      onResizeSave?.(newH);
+      wrap.style.minHeight = newH + "px";
       setIsExpanded(true);
     }
+    setTimeout(()=>{ progResizing.current = false; }, 300);
   }
 
-  // Save height on manual resize (drag)
+  // Save height on manual drag only (not programmatic)
   React.useEffect(()=>{
     const el = wrapRef.current;
     if (!el || !window.ResizeObserver) return;
     let t = null;
     const ro = new ResizeObserver(()=>{
+      if (progResizing.current) return;
       clearTimeout(t);
-      t = setTimeout(()=>{ const h = el.offsetHeight; if(h) onResizeSave?.(Math.round(h)); }, 200);
+      t = setTimeout(()=>{
+        const h = el.offsetHeight;
+        if (h && !isExpanded) {
+          savedHeightRef.current = h;
+          onResizeSave?.(Math.round(h));
+        }
+      }, 250);
     });
     ro.observe(el);
     return ()=>{ clearTimeout(t); ro.disconnect(); };
-  }, [jobId, field, onResizeSave]);
+  }, [jobId, field, onResizeSave, isExpanded]);
 
   const btnSt = {fontSize:10,padding:"1px 6px",borderRadius:3,border:"1px solid "+C.bd,background:C.bg3,color:C.faint,cursor:"pointer",lineHeight:1.4,fontFamily:"inherit"};
   return (
     <div ref={wrapRef} style={{
       background:C.bg3, border:"1px solid "+C.bd, borderRadius:6,
-      minHeight:height, height:height, resize:"vertical", overflow:"auto",
-      boxSizing:"border-box"
+      height:height, minHeight:height, resize:"vertical", overflow:"auto",
+      boxSizing:"border-box", transition:"none"
     }}>
       <style>{`
         [data-richwrap="${jobId}-${field}"]::-webkit-resizer{background:transparent;border-bottom:2px solid rgba(120,160,220,0.3);border-right:2px solid rgba(120,160,220,0.3);}
@@ -96,16 +111,13 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
         <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700}}>{title}</span>
         <div style={{display:"flex",alignItems:"center",gap:3}}>
           {titleRight}
-          {/* Toggle expand/collapse */}
           <button type="button" onMouseDown={e=>e.preventDefault()} onClick={toggleExpand}
-            title={isExpanded?"Collapse":"Expand to fit"}
-            style={{...btnSt,color:isExpanded?C.blue:C.faint}}>
+            title={isExpanded?"Collapse to saved height":"Expand to fit all content"}
+            style={{...btnSt,color:isExpanded?"#58a6ff":C.faint,fontWeight:isExpanded?700:400}}>
             {isExpanded?"↑":"↕"}
           </button>
-          <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>exec("insertUnorderedList")}
-            title="Bullet list" style={btnSt}>•</button>
-          <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>exec("insertOrderedList")}
-            title="Numbered list" style={btnSt}>1.</button>
+          <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>exec("insertUnorderedList")} title="Bullet list" style={btnSt}>•</button>
+          <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>exec("insertOrderedList")} title="Numbered list" style={btnSt}>1.</button>
         </div>
       </div>
       <div ref={editorRef} contentEditable suppressContentEditableWarning
@@ -141,7 +153,10 @@ function FixingTab({vessels}){
   const [ownerDirSearch,setOwnerDirSearch]=useState("");
   const [ownerSegFilter,setOwnerSegFilter]=useState(null);
   const [ownerTradeFilter,setOwnerTradeFilter]=useState(null);
-  const [clientViewMode,setClientViewMode]=useState("matrix"); // "matrix" | "list"
+  const [clientViewMode,setClientViewMode]=useState("matrix");
+  const [clientSort,setClientSort]=useState("name"); // "name"|"open"|"subs"|"working"|"fixed"
+  const [editingClientName,setEditingClientName]=useState(null); // id of client being renamed
+  const [notePopout,setNotePopout]=useState(null); // charterer name for popout // "matrix" | "list"
 
   useEffect(()=>{
     loadFixingJobs().then(setJobs);
@@ -163,7 +178,15 @@ function FixingTab({vessels}){
     return true;
   }),[jobs,statusFilter,clientFilter,jobSearch]);
 
-  const charterersList=useMemo(()=>clientFilter==="ALL"?[...new Set(jobs.map(j=>j.charterer||""))]:[ clientFilter],[jobs,clientFilter]);
+  const charterersList=useMemo(()=>{
+    const raw=clientFilter==="ALL"?[...new Set(jobs.map(j=>j.charterer||""))]:[ clientFilter];
+    if(clientSort==="name") return raw.sort((a,b)=>a.localeCompare(b));
+    return raw.sort((a,b)=>{
+      const cntA=jobs.filter(j=>(j.charterer||"")===a&&j.status===clientSort.toUpperCase()).length;
+      const cntB=jobs.filter(j=>(j.charterer||"")===b&&j.status===clientSort.toUpperCase()).length;
+      return cntB-cntA;
+    });
+  },[jobs,clientFilter,clientSort]);
 
   const inpS=useMemo(()=>({background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"4px 7px",outline:"none",boxSizing:"border-box"}),[]);
   const fb2=useCallback((on,col)=>({fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:4,border:"1px solid "+(on?col||C.blue:C.bd),background:on?(col||C.blue)+"22":"transparent",color:on?col||C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}),[]);
@@ -201,6 +224,24 @@ function FixingTab({vessels}){
   async function updateClient(id,changes){
     setClients(prev=>prev.map(c=>c.id===id?{...c,...changes}:c));
     const client=clients.find(c=>c.id===id); if(client)await saveClient({...client,...changes});
+  }
+  async function renameClient(id, newName){
+    if(!newName.trim())return;
+    // Also update all jobs with old name
+    const client=clients.find(c=>c.id===id);
+    if(!client)return;
+    const oldName=client.name;
+    setClients(prev=>prev.map(c=>c.id===id?{...c,name:newName.trim()}:c));
+    await saveClient({...client,name:newName.trim()});
+    // Update job charterer references
+    const affected=jobs.filter(j=>j.charterer===oldName);
+    for(const job of affected){
+      const updated={...job,charterer:newName.trim()};
+      setJobs(prev=>prev.map(j=>j.id===job.id?updated:j));
+      await saveFixingJob(updated);
+    }
+    if(clientFilter===oldName) setClientFilter(newName.trim());
+    setEditingClientName(null);
   }
 
   function jobDateToISO(s){ if(!s)return""; const m=String(s).match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/); if(!m)return""; const mons={Jan:"01",Feb:"02",Mar:"03",Apr:"04",May:"05",Jun:"06",Jul:"07",Aug:"08",Sep:"09",Oct:"10",Nov:"11",Dec:"12"}; const dd=String(parseInt(m[1],10)).padStart(2,"0"); const mm=mons[m[2]]||""; const yyyy=m[3]; return mm?`${yyyy}-${mm}-${dd}`:""; }
@@ -273,9 +314,32 @@ function FixingTab({vessels}){
             {jobSearch&&<button onClick={()=>setJobSearch("")} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:11}}>✕</button>}
           </div>
 
-          {/* ── MATRIX VIEW: client cards with status badges ── */}
+          {/* ── MATRIX VIEW: full-width, notes as popout ── */}
           {clientViewMode==="matrix"&&(
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:2}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:6,marginBottom:2,width:"100%",position:"relative"}}>
+              {/* Notes popout overlay */}
+              {notePopout&&(()=>{
+                const charterer=notePopout;
+                const client=clients.find(c=>c.name===charterer);
+                if(!client)return null;
+                return(
+                  <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:800}} onClick={()=>setNotePopout(null)}>
+                    <div onClick={e=>e.stopPropagation()} style={{
+                      position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
+                      background:C.bg2,border:"1px solid rgba(88,166,255,0.35)",borderRadius:10,
+                      padding:16,zIndex:801,width:360,boxShadow:"0 12px 40px rgba(0,0,0,0.7)"
+                    }}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                        <span style={{fontSize:12,fontWeight:700,color:C.blue}}>{charterer} — Notes</span>
+                        <button onClick={()=>setNotePopout(null)} style={{background:"none",border:"none",color:C.faint,fontSize:14,cursor:"pointer",padding:0}}>✕</button>
+                      </div>
+                      <textarea value={client.notes||""} onChange={e=>updateClient(client.id,{notes:e.target.value})}
+                        placeholder="Client notes…" autoFocus
+                        style={{...inpS,width:"100%",minHeight:160,resize:"vertical",fontSize:12,boxSizing:"border-box",lineHeight:1.6}}/>
+                    </div>
+                  </div>
+                );
+              })()}
               {charterersList.map(charterer=>{
                 const allCJobs=jobs.filter(j=>(j.charterer||"")===charterer);
                 const counts=JOB_STATUS.reduce((a,s)=>{const n=allCJobs.filter(j=>j.status===s).length;if(n)a[s]=n;return a;},{});
@@ -283,15 +347,28 @@ function FixingTab({vessels}){
                 const isActive=clientFilter===charterer;
                 const isJobOpen=expandedJob===charterer;
                 const client=clients.find(c=>c.name===charterer);
-                const isNoteOpen=editingClient===client?.id;
+                const isEditingName=editingClientName===client?.id;
                 return(
                   <div key={charterer} style={{display:"flex",flexDirection:"column",
                     background:isActive?"rgba(88,166,255,.10)":C.bg2,
                     border:"1px solid "+(isActive?C.blue:glowCol?glowCol+"55":C.bd),
-                    borderRadius:7,overflow:"hidden",minWidth:128,maxWidth:165,
-                    boxShadow:glowCol&&!isActive?"0 0 8px "+glowCol+"22":"none",transition:"box-shadow 0.2s"}}>
-                    <div style={{padding:"7px 10px",cursor:"pointer"}} onClick={()=>setClientFilter(f=>f===charterer?"ALL":charterer)}>
-                      <div style={{fontSize:12,fontWeight:700,color:isActive?C.blue:C.tx,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginBottom:3}}>{charterer||"—"}</div>
+                    borderRadius:7,overflow:"visible",
+                    boxShadow:glowCol&&!isActive?"0 0 10px "+glowCol+"28":"none",transition:"box-shadow 0.2s"}}>
+                    <div style={{padding:"8px 10px",cursor:"pointer"}} onClick={()=>setClientFilter(f=>f===charterer?"ALL":charterer)}>
+                      {/* Client name — click pencil to edit */}
+                      {isEditingName&&client?(
+                        <input autoFocus defaultValue={client.name}
+                          onBlur={e=>renameClient(client.id,e.target.value)}
+                          onKeyDown={e=>{if(e.key==="Enter")renameClient(client.id,e.target.value);if(e.key==="Escape")setEditingClientName(null);}}
+                          onClick={e=>e.stopPropagation()}
+                          style={{...inpS,width:"100%",fontSize:12,fontWeight:700,marginBottom:4,padding:"2px 6px"}}/>
+                      ):(
+                        <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:3}}>
+                          <span style={{fontSize:12,fontWeight:700,color:isActive?C.blue:C.tx,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1}}>{charterer||"—"}</span>
+                          {client&&<button onClick={e=>{e.stopPropagation();setEditingClientName(client.id);}}
+                            style={{background:"none",border:"none",color:"rgba(120,160,220,0.25)",fontSize:10,cursor:"pointer",padding:0,flexShrink:0,lineHeight:1}} title="Rename">✎</button>}
+                        </div>
+                      )}
                       <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
                         {Object.entries(counts).map(([s,n])=>(
                           <span key={s} style={{fontSize:9,fontWeight:700,padding:"1px 4px",borderRadius:4,background:JOB_STATUS_COL[s]+"22",color:JOB_STATUS_COL[s]}}>{n} {s}</span>
@@ -301,34 +378,36 @@ function FixingTab({vessels}){
                     </div>
                     <div style={{display:"flex",borderTop:"1px solid "+C.bd2}}>
                       <button onClick={()=>setExpandedJob(isJobOpen?null:charterer)}
-                        style={{flex:1,background:"none",border:"none",borderRight:client?"1px solid "+C.bd2:"none",color:isJobOpen?C.blue:C.faint,fontSize:9,padding:"3px 0",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
+                        style={{flex:1,background:"none",border:"none",borderRight:"1px solid "+C.bd2,color:isJobOpen?"#58a6ff":C.faint,fontSize:9,padding:"3px 0",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
                         {isJobOpen?"▲ cargo":"▼ cargo"}
                       </button>
-                      {client&&<button onClick={e=>{e.stopPropagation();setEditingClient(isNoteOpen?null:client.id);}}
-                        style={{flex:1,background:"none",border:"none",color:isNoteOpen?C.amber:C.faint,fontSize:9,padding:"3px 0",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
-                        {isNoteOpen?"▲ notes":"▼ notes"}
-                      </button>}
+                      <button onClick={e=>{e.stopPropagation();setNotePopout(charterer);}}
+                        style={{flex:1,background:"none",border:"none",color:C.faint,fontSize:9,padding:"3px 0",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
+                        ✎ notes
+                      </button>
                     </div>
-                    {isNoteOpen&&client&&(
-                      <div style={{padding:"5px 8px",borderTop:"1px solid "+C.bd2}}>
-                        <textarea value={client.notes||""} onChange={e=>updateClient(client.id,{notes:e.target.value})}
-                          placeholder="Client notes…" style={{...inpS,width:"100%",minHeight:64,resize:"vertical",fontSize:10,boxSizing:"border-box"}}/>
-                      </div>
-                    )}
                   </div>
                 );
               })}
             </div>
           )}
 
-          {/* ── LIST VIEW: table with status counts per charterer ── */}
+          {/* ── LIST VIEW: sortable headers, edit name, matched colors ── */}
           {clientViewMode==="list"&&(
             <div style={{border:"1px solid rgba(58,130,246,0.18)",borderRadius:7,overflow:"hidden",marginBottom:2}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                 <thead>
-                  <tr style={{background:"rgba(20,30,50,0.92)"}}>
-                    {["Charterer","Open","Working","Subs","Fixed","Failed",""].map(h=>(
-                      <th key={h} style={{padding:"5px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:"1px solid rgba(58,130,246,0.14)"}}>{h}</th>
+                  <tr style={{background:"rgba(14,22,40,0.98)"}}>
+                    {[["Charterer","name"],["Open","open"],["Working","working"],["Subs","subs"],["Fixed","fixed"],["Failed","failed"],["",""]].map(([h,sk])=>(
+                      <th key={h} onClick={sk?()=>setClientSort(sk):undefined}
+                        style={{padding:"5px 10px",textAlign:"left",fontSize:10,fontWeight:700,
+                          color:clientSort===sk?"#e8f2ff":"rgba(120,160,220,0.55)",
+                          textTransform:"uppercase",letterSpacing:"0.07em",
+                          borderBottom:"1px solid rgba(58,130,246,0.14)",
+                          cursor:sk?"pointer":"default",userSelect:"none",
+                          whiteSpace:"nowrap"}}>
+                        {h}{sk&&clientSort===sk?" ▲":""}
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -341,40 +420,46 @@ function FixingTab({vessels}){
                     const isJobOpen=expandedJob===charterer;
                     const client=clients.find(c=>c.name===charterer);
                     const isNoteOpen=editingClient===client?.id;
+                    const isEditingName=editingClientName===client?.id;
+                    const rowBg=isActive?"rgba(88,166,255,.08)":ri%2===0?"rgba(7,15,28,0.85)":"rgba(14,24,46,0.85)";
                     return(
                       <React.Fragment key={charterer}>
                         <tr onClick={()=>setClientFilter(f=>f===charterer?"ALL":charterer)}
-                          style={{background:isActive?"rgba(88,166,255,.08)":ri%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)",cursor:"pointer"}}>
-                          <td style={{padding:"5px 10px",fontWeight:700,color:isActive?C.blue:C.tx,borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
-                            {charterer||"—"}
-                            {glowCol&&<span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:glowCol,marginLeft:6,verticalAlign:"middle"}}/>}
+                          style={{background:rowBg,cursor:"pointer",borderLeft:glowCol&&!isActive?"2px solid "+glowCol+"88":"2px solid transparent"}}>
+                          <td style={{padding:"5px 10px",fontWeight:600,color:isActive?C.blue:C.tx,borderBottom:"1px solid rgba(58,130,246,0.06)"}}>
+                            {isEditingName&&client?(
+                              <input autoFocus defaultValue={client.name}
+                                onBlur={e=>renameClient(client.id,e.target.value)}
+                                onKeyDown={e=>{if(e.key==="Enter")renameClient(client.id,e.target.value);if(e.key==="Escape")setEditingClientName(null);}}
+                                onClick={e=>e.stopPropagation()}
+                                style={{...inpS,fontSize:12,fontWeight:700,padding:"1px 6px"}}/>
+                            ):(
+                              <div style={{display:"flex",alignItems:"center",gap:5}}>
+                                {glowCol&&<span style={{width:6,height:6,borderRadius:"50%",background:glowCol,flexShrink:0,display:"inline-block"}}/>}
+                                {charterer||"—"}
+                                {client&&<button onClick={e=>{e.stopPropagation();setEditingClientName(client.id);}}
+                                  style={{background:"none",border:"none",color:"rgba(120,160,220,0.25)",fontSize:10,cursor:"pointer",padding:0,lineHeight:1,marginLeft:2}} title="Rename">✎</button>}
+                              </div>
+                            )}
                           </td>
                           {["OPEN","WORKING","SUBS","FIXED","FAILED"].map(s=>(
-                            <td key={s} style={{padding:"5px 10px",textAlign:"center",color:counts[s]>0?JOB_STATUS_COL[s]:"rgba(100,130,180,0.2)",fontWeight:counts[s]>0?700:400,borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
+                            <td key={s} style={{padding:"5px 10px",textAlign:"center",color:counts[s]>0?JOB_STATUS_COL[s]:"rgba(100,130,180,0.18)",fontWeight:counts[s]>0?700:400,borderBottom:"1px solid rgba(58,130,246,0.06)"}}>
                               {counts[s]>0?counts[s]:"—"}
                             </td>
                           ))}
-                          <td style={{padding:"5px 8px",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
-                            <div style={{display:"flex",gap:4}}>
+                          <td style={{padding:"5px 8px",borderBottom:"1px solid rgba(58,130,246,0.06)"}}>
+                            <div style={{display:"flex",gap:5}}>
                               <button onClick={e=>{e.stopPropagation();setExpandedJob(isJobOpen?null:charterer);}}
-                                style={{background:"none",border:"none",color:isJobOpen?C.blue:C.faint,fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit",fontWeight:600}}>
-                                {isJobOpen?"▲ cargo":"▼ cargo"}
+                                style={{background:"none",border:"none",color:isJobOpen?"#58a6ff":C.faint,fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit",fontWeight:600,whiteSpace:"nowrap"}}>
+                                {isJobOpen?"▲":"▼"} cargo
                               </button>
-                              {client&&<button onClick={e=>{e.stopPropagation();setEditingClient(isNoteOpen?null:client.id);}}
-                                style={{background:"none",border:"none",color:isNoteOpen?C.amber:C.faint,fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit",fontWeight:600}}>
-                                {isNoteOpen?"▲ note":"▼ note"}
+                              {client&&<button onClick={e=>{e.stopPropagation();setNotePopout(charterer);}}
+                                style={{background:"none",border:"none",color:C.faint,fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                                ✎
                               </button>}
                             </div>
                           </td>
                         </tr>
-                        {isNoteOpen&&client&&(
-                          <tr style={{background:"rgba(16,28,52,0.8)"}}>
-                            <td colSpan={7} style={{padding:"6px 12px",borderBottom:"1px solid rgba(58,130,246,0.12)"}}>
-                              <textarea value={client.notes||""} onChange={e=>updateClient(client.id,{notes:e.target.value})}
-                                placeholder="Client notes…" style={{...inpS,width:"100%",minHeight:56,resize:"vertical",fontSize:11,boxSizing:"border-box"}}/>
-                            </td>
-                          </tr>
-                        )}
                       </React.Fragment>
                     );
                   })}
