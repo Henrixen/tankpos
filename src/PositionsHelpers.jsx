@@ -166,10 +166,34 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels}) {
     const fmtFreight=f=>{
       const s=String(f||"").trim();
       if(!s||s.toUpperCase()==="RNR")return "RNR";
-      if(s.toLowerCase().startsWith("usd"))return s;
-      return "USD "+s+" ls";
+      // Already formatted
+      if(/^(USD|EUR)\s/i.test(s))return s;
+      // Detect currency prefix
+      const eurMatch=s.match(/^EUR\s*(.+)/i);
+      const cur=eurMatch?"EUR":"USD";
+      const raw=eurMatch?eurMatch[1]:s;
+      // Detect explicit pmt/PMT/per mt suffix
+      if(/pmt|per\s*mt|per\s*ton/i.test(raw)){
+        const num=raw.replace(/pmt|per\s*mt|per\s*ton/gi,"").trim().replace(/[,\s]/g,"");
+        return cur+" "+num+" pmt";
+      }
+      // Extract numeric value
+      const num=parseFloat(raw.replace(/[^0-9.]/g,""));
+      if(isNaN(num))return cur+" "+raw;
+      // Less than 1000 = per metric ton rate (e.g. 27, 86, 125)
+      if(num<1000){
+        return cur+" "+num+" pmt";
+      }
+      // 1000+ = lump sum — format as k
+      const k=Math.round(num/1000);
+      return cur+" "+k+"k ls";
     };
-    return rows.map(c=>{
+    const sorted=[...rows].sort((a,b)=>{
+      const aHas=!!(a.freight&&String(a.freight).trim()&&String(a.freight).trim().toUpperCase()!=="RNR");
+      const bHas=!!(b.freight&&String(b.freight).trim()&&String(b.freight).trim().toUpperCase()!=="RNR");
+      return aHas===bHas?0:aHas?-1:1;
+    });
+    return sorted.map(c=>{
       const charterer=tc(c.charterer||"")||"CNR";
       const vessel=tc(c.vessel||"");
       const qty=fmtQty(c.qty);
