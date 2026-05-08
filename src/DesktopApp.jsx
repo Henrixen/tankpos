@@ -42,6 +42,23 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   const [cGradeFilter,setCGradeFilter]=useState("");
   const [cLaycanMonthFilter,setCLaycanMonthFilter]=useState("");
   const [cLaycanYearFilter,setCLaycanYearFilter]=useState("");
+  const [cTagFilter,setCTagFilter]=useState("");
+
+  // Week helpers — week = Mon–Sun
+  function getWeekBounds(offset=0){
+    const now=new Date(); now.setHours(0,0,0,0);
+    const dow=(now.getDay()+6)%7; // 0=Mon
+    const mon=new Date(now); mon.setDate(now.getDate()-dow+offset*7);
+    const sun=new Date(mon); sun.setDate(mon.getDate()+6);
+    return [mon,sun];
+  }
+  const [thisWeekMon,thisWeekSun]=getWeekBounds(0);
+  const [lastWeekMon,lastWeekSun]=getWeekBounds(-1);
+  function inRange(dateStr,from,to){
+    if(!dateStr)return false;
+    const d=new Date(dateStr); d.setHours(0,0,0,0);
+    return d>=from&&d<=to;
+  }
   const [mxSearch,setMxSearch]=useState("");
   const [cSortK,setCsortK]=useState("updated");
   const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
@@ -157,18 +174,19 @@ const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
 
 const cargoColumns = [
   { key: "select", label: "", align: "center", width: 28 },
-  { key: "status", label: "Status", align: "center", width: colWidthsC.Status },
-  { key: "vessel", label: "Vessel", width: colWidthsC.Vessel },
-  { key: "charterer", label: "Charterer", width: colWidthsC.Charterer },
-  { key: "qty", label: "Qty", align: "right", width: colWidthsC.Qty },
-  { key: "cargo", label: "Cargo", width: colWidthsC.Cargo },
-  { key: "load", label: "Load", width: colWidthsC.Load },
-  { key: "disch", label: "Disch", width: colWidthsC.Disch },
-  { key: "from", label: "From", align: "center", width: colWidthsC.LaycanStart },
-  { key: "to", label: "To", align: "center", width: colWidthsC.LaycanEnd },
-  { key: "freight", label: "Freight", align: "right", width: colWidthsC.Freight },
-  { key: "comment", label: "Comment", width: colWidthsC.Comment },
-  { key: "updated", label: "Updated", align: "center", width: colWidthsC.Updated },
+  { key: "status", label: "Status", align: "left", width: colWidthsC.Status },
+  { key: "vessel", label: "Vessel", align: "left", width: colWidthsC.Vessel },
+  { key: "charterer", label: "Charterer", align: "left", width: colWidthsC.Charterer },
+  { key: "qty", label: "Qty", align: "left", width: colWidthsC.Qty },
+  { key: "cargo", label: "Cargo", align: "left", width: colWidthsC.Cargo },
+  { key: "load", label: "Load", align: "left", width: colWidthsC.Load },
+  { key: "disch", label: "Disch", align: "left", width: colWidthsC.Disch },
+  { key: "from", label: "From", align: "left", width: colWidthsC.LaycanStart },
+  { key: "to", label: "To", align: "left", width: colWidthsC.LaycanEnd },
+  { key: "freight", label: "Freight", align: "left", width: colWidthsC.Freight },
+  { key: "comment", label: "Comment", align: "left", width: colWidthsC.Comment },
+  { key: "tag", label: "Tag", align: "left", width: 80 },
+  { key: "updated", label: "Updated", align: "left", width: colWidthsC.Updated },
   { key: "delete", label: "", align: "center", width: 26 },
 ];
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
@@ -430,8 +448,9 @@ const filtV=useMemo(()=>{
         });
       }
     }
+    if(cTagFilter) list=list.filter(c=>(c.tag||"").toLowerCase()===cTagFilter.toLowerCase());
     return list;
-  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cLaycanMonthFilter,cLaycanYearFilter,cGradeFilter]);
+  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cLaycanMonthFilter,cLaycanYearFilter,cGradeFilter,cTagFilter]);
 
   const FILTER_GROUPS=[
     {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"],["HIDE_EMP","Hide Employed"]]},
@@ -1077,16 +1096,29 @@ const filtV=useMemo(()=>{
                 </button>
               )}
               {/* Divider */}
-              <div style={{width:1,height:14,background:C.bd2,marginLeft:2}}/>
-              {/* Status counts */}
-              <span style={{fontSize:12,color:C.faint}}>Fixed <span style={{color:C.green,fontWeight:700}}>{cargoes.filter(c=>c.status==="FIXED").length}</span></span>
-              <span style={{fontSize:12,color:C.faint}}>Subs <span style={{color:C.purple,fontWeight:700}}>{cargoes.filter(c=>c.status==="SUBS").length}</span></span>
-              <span style={{fontSize:12,color:C.faint}}>Failed <span style={{color:C.red,fontWeight:700}}>{cargoes.filter(c=>c.status==="FAILED").length}</span></span>
+              <div style={{width:1,height:14,background:C.bd2}}/>
+              {/* Week counts */}
+              <span style={{fontSize:12,color:C.faint}}>This wk <span style={{color:"#4fc3f7",fontWeight:700}}>{cargoes.filter(c=>inRange(c.updated||c.created_at,thisWeekMon,thisWeekSun)).length}</span></span>
+              <span style={{fontSize:12,color:C.faint}}>Last wk <span style={{color:"rgba(120,160,220,0.6)",fontWeight:700}}>{cargoes.filter(c=>inRange(c.updated||c.created_at,lastWeekMon,lastWeekSun)).length}</span></span>
               {/* Counts on right */}
               <span style={{flex:1}}/>
               <span style={{fontSize:12,color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoTotal||cargoes.length}</span></span>
               <span style={{fontSize:12,color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtC.length}</span></span>
             </div>
+            {/* Tag filter row — only show if any cargoes have tags */}
+            {(()=>{
+              const tags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
+              if(!tags.length)return null;
+              return(
+                <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+                  <span style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Tag</span>
+                  {tags.map(t=>(
+                    <button key={t} onClick={()=>setCTagFilter(v=>v===t?"":t)} style={fb(cTagFilter===t)}>{t}</button>
+                  ))}
+                  {cTagFilter&&<button onClick={()=>setCTagFilter("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
+                </div>
+              );
+            })()}
             <div style={tableWrap}>
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
@@ -1246,8 +1278,38 @@ const filtV=useMemo(()=>{
   onUp={() => focusCell(i - 1, "comment")}
 />
 
+      {/* TAG */}
+      {(()=>{
+        const PRESET_TAGS=["Parcel","ex Asia","TA","UKC","Med","AG","WAF","CPP","DPP"];
+        const [showTagPick,setShowTagPick]=React.useState(false);
+        const cur=f.tag||"";
+        return(
+          <td style={{...td2,padding:"2px 4px",position:"relative"}} onClick={e=>e.stopPropagation()}>
+            <button onClick={e=>{e.stopPropagation();setShowTagPick(v=>!v);}}
+              style={{background:cur?"rgba(88,166,255,0.15)":"transparent",border:"1px solid "+(cur?"rgba(88,166,255,0.4)":"rgba(88,166,255,0.12)"),borderRadius:3,color:cur?"#79c0ff":"rgba(120,160,220,0.3)",fontSize:10,fontWeight:cur?700:400,padding:"1px 5px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",maxWidth:76,overflow:"hidden",textOverflow:"ellipsis"}}>
+              {cur||"+ tag"}
+            </button>
+            {showTagPick&&(
+              <div style={{position:"fixed",zIndex:9999,background:"#0c1729",border:"1px solid rgba(88,166,255,0.3)",borderRadius:6,padding:"6px",boxShadow:"0 8px 24px rgba(0,0,0,0.6)",display:"flex",flexDirection:"column",gap:3,minWidth:100}}
+                onClick={e=>e.stopPropagation()}>
+                {cur&&<button onClick={()=>{onUpdateC(f.id,"tag","");setShowTagPick(false);}} style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>✕ clear</button>}
+                {PRESET_TAGS.map(t=>(
+                  <button key={t} onClick={()=>{onUpdateC(f.id,"tag",t);setShowTagPick(false);}}
+                    style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid "+(cur===t?"rgba(88,166,255,0.5)":"rgba(88,166,255,0.15)"),background:cur===t?"rgba(88,166,255,0.2)":"transparent",color:cur===t?"#79c0ff":"rgba(160,200,255,0.65)",cursor:"pointer",fontFamily:"inherit",textAlign:"left",fontWeight:cur===t?700:400}}>
+                    {t}
+                  </button>
+                ))}
+                <input placeholder="Custom…" defaultValue=""
+                  onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){onUpdateC(f.id,"tag",e.target.value.trim());setShowTagPick(false);}}}
+                  style={{fontSize:10,padding:"2px 5px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none",marginTop:2}}/>
+              </div>
+            )}
+          </td>
+        );
+      })()}
+
       {/* UPDATED */}
-      <td style={{ ...tdCtr, color: C.faint }}>
+      <td style={{ ...td2, color: C.faint, textAlign:"left" }}>
         {f.updated ? new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
       </td>
 
