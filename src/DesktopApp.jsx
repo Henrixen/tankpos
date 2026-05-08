@@ -15,10 +15,50 @@ import IntelVault, { IntelVaultStrip } from "./IntelVault";
 import AISMap from "./AISMap";
 import MatrixTable from "./components/ui/MatrixTable";
 import NotesTab from "./NotesTab";
-import CalendarTab from "./CalendarTab";
-import SettingsTab from "./SettingsTab";
 
 
+
+// TagCell — proper component so useState works in renderRow
+const PRESET_TAGS=["Parcel","ex Asia","TA","UKC","Med","AG","WAF","CPP","DPP"];
+function TagCell({cargoId,tag,onUpdateC}){
+  const [open,setOpen]=useState(false);
+  const btnRef=React.useRef(null);
+  const [pos,setPos]=useState({top:0,left:0});
+  function openPick(e){
+    e.stopPropagation();
+    if(btnRef.current){
+      const r=btnRef.current.getBoundingClientRect();
+      setPos({top:r.bottom+4,left:r.left});
+    }
+    setOpen(v=>!v);
+  }
+  const cur=tag||"";
+  return(
+    <td style={{padding:"2px 4px",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)"}} onClick={e=>e.stopPropagation()}>
+      <button ref={btnRef} onClick={openPick}
+        style={{background:cur?"rgba(88,166,255,0.15)":"transparent",border:"1px solid "+(cur?"rgba(88,166,255,0.4)":"rgba(88,166,255,0.12)"),borderRadius:3,color:cur?"#79c0ff":"rgba(120,160,220,0.25)",fontSize:10,fontWeight:cur?700:400,padding:"1px 5px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",maxWidth:76,overflow:"hidden",textOverflow:"ellipsis"}}>
+        {cur||"＋"}
+      </button>
+      {open&&(
+        <>
+          <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
+          <div style={{position:"fixed",top:pos.top,left:pos.left,zIndex:9999,background:"#0c1729",border:"1px solid rgba(88,166,255,0.3)",borderRadius:6,padding:"6px",boxShadow:"0 8px 24px rgba(0,0,0,0.6)",display:"flex",flexDirection:"column",gap:2,minWidth:110}}>
+            {cur&&<button onClick={()=>{onUpdateC(cargoId,"tag","");setOpen(false);}} style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>✕ clear</button>}
+            {PRESET_TAGS.map(t=>(
+              <button key={t} onClick={()=>{onUpdateC(cargoId,"tag",t);setOpen(false);}}
+                style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid "+(cur===t?"rgba(88,166,255,0.5)":"rgba(88,166,255,0.12)"),background:cur===t?"rgba(88,166,255,0.2)":"transparent",color:cur===t?"#79c0ff":"rgba(160,200,255,0.65)",cursor:"pointer",fontFamily:"inherit",textAlign:"left",fontWeight:cur===t?700:400}}>
+                {t}
+              </button>
+            ))}
+            <input placeholder="Custom + Enter" autoFocus
+              onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){onUpdateC(cargoId,"tag",e.target.value.trim());setOpen(false);}if(e.key==="Escape")setOpen(false);}}
+              style={{fontSize:10,padding:"2px 5px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none",marginTop:2}}/>
+          </div>
+        </>
+      )}
+    </td>
+  );
+}
 
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB}){
   const [tab,setTab]=useState("pos");
@@ -44,39 +84,22 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   const [cLaycanYearFilter,setCLaycanYearFilter]=useState("");
   const [cTagFilter,setCTagFilter]=useState("");
 
-  // Week helpers — week = Mon–Sun
   function getWeekBounds(offset=0){
-    const now=new Date(); now.setHours(0,0,0,0);
-    const dow=(now.getDay()+6)%7; // 0=Mon
-    const mon=new Date(now); mon.setDate(now.getDate()-dow+offset*7);
-    const sun=new Date(mon); sun.setDate(mon.getDate()+6);
-    return [mon,sun];
+    const now=new Date();now.setHours(0,0,0,0);
+    const dow=(now.getDay()+6)%7;
+    const mon=new Date(now);mon.setDate(now.getDate()-dow+offset*7);
+    const sun=new Date(mon);sun.setDate(mon.getDate()+6);
+    return[mon,sun];
   }
   const [thisWeekMon,thisWeekSun]=getWeekBounds(0);
   const [lastWeekMon,lastWeekSun]=getWeekBounds(-1);
-  function inRange(dateStr,from,to){
-    if(!dateStr)return false;
-    const d=new Date(dateStr); d.setHours(0,0,0,0);
-    return d>=from&&d<=to;
-  }
+  function inRange(dateStr,from,to){if(!dateStr)return false;const d=new Date(dateStr);d.setHours(0,0,0,0);return d>=from&&d<=to;}
   const [mxSearch,setMxSearch]=useState("");
   const [cSortK,setCsortK]=useState("updated");
   const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
   const [selVessels,setSelVessels]=useState(()=>new Set());
   const [history,setHistory]=useState([]);
   useEffect(()=>{loadHistory().then(setHistory);},[vessels]);
-
-  // When grade or month filter changes, push to DB search so "Load more" fetches correctly
-  useEffect(()=>{
-    const parts=[];
-    if(cGradeFilter) parts.push(cGradeFilter);
-    if(cLaycanMonthFilter) parts.push(cLaycanMonthFilter);
-    if(cLaycanYearFilter) parts.push(cLaycanYearFilter);
-    if(cSearch) parts.push(cSearch);
-    const term=parts.join(" ").trim();
-    clearTimeout(window._csTimer);
-    window._csTimer=setTimeout(()=>onCargoSearch(term),300);
-  },[cGradeFilter,cLaycanMonthFilter,cLaycanYearFilter]);
   const [intelItems,setIntelItems]=useState([]);
   const [pendingDel,setPendingDel]=useState(null);
   const [restoreMsg,setRestoreMsg]=useState("");
@@ -423,34 +446,9 @@ const filtV=useMemo(()=>{
         return String(av).toLowerCase()<String(bv).toLowerCase()?-cSortD:String(av).toLowerCase()>String(bv).toLowerCase()?cSortD:0;
       });
     }
-    if(cLaycanMonthFilter) list=list.filter(c=>{
-      const hay=((c.from||"")+" "+(c.to||"")).toLowerCase();
-      // Match month abbreviation as word (Jan not inside "January" substring confusion)
-      return hay.includes(cLaycanMonthFilter.toLowerCase());
-    });
-    if(cLaycanYearFilter) list=list.filter(c=>{const d=new Date(c.from||c.updated||0);return !isNaN(d)&&String(d.getFullYear())===cLaycanYearFilter;});
-    // Grade filter — supports both raw grade name and group id (alias-based)
-    if(cGradeFilter){
-      let gradeGroups=[];try{const raw=localStorage.getItem("signal_cargo_filter_groups");gradeGroups=raw?JSON.parse(raw):[];}catch{}
-      const grp=gradeGroups.find(g=>g.id===cGradeFilter);
-      if(grp){
-        // Group match: cargo matches if it contains any of the group's aliases
-        list=list.filter(c=>{
-          const grade=(c.cargo||"").toLowerCase();
-          return grp.aliases.some(a=>grade===a.toLowerCase()||grade.includes(a.toLowerCase()));
-        });
-      } else {
-        // Raw grade: exact match
-        list=list.filter(c=>{
-          const grade=(c.cargo||"").trim().toLowerCase();
-          const target=cGradeFilter.toLowerCase();
-          return grade===target||grade.startsWith(target+" ")||grade.endsWith(" "+target)||grade.includes(" "+target+" ")||grade.includes("+"+target)||grade.includes(target+"+");
-        });
-      }
-    }
     if(cTagFilter) list=list.filter(c=>(c.tag||"").toLowerCase()===cTagFilter.toLowerCase());
     return list;
-  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cLaycanMonthFilter,cLaycanYearFilter,cGradeFilter,cTagFilter]);
+  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter]);
 
   const FILTER_GROUPS=[
     {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"],["HIDE_EMP","Hide Employed"]]},
@@ -479,126 +477,69 @@ const filtV=useMemo(()=>{
           <button onClick={()=>setPendingDel(null)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,padding:"5px 14px",cursor:"pointer",fontSize:12}}>Cancel</button>
         </div>
       )}
-      {/* ── APP HEADER — inspired by Market Dashboard ── */}
-      <div style={{
-        background:"linear-gradient(135deg, #070f1c 0%, #0c1a32 50%, #081426 100%)",
-        borderBottom:"1px solid rgba(58,130,246,0.18)",
-        position:"sticky",top:0,zIndex:200,
-      }}>
-        {/* Top bar: brand + utilities */}
-        <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 20px 0",borderBottom:"1px solid rgba(58,130,246,0.08)"}}>
-          {/* Brand */}
-          <div style={{flexShrink:0,display:"flex",flexDirection:"column",gap:1,paddingBottom:10}}>
-            <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",color:"rgba(120,180,255,0.45)"}}>Signal — Tanker Intelligence</div>
-            <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-              <span style={{fontSize:18,fontWeight:800,color:"#e8f2ff",letterSpacing:"0.02em"}}>Market</span>
-              <span style={{fontSize:18,fontWeight:800,color:"#43e97b",letterSpacing:"0.02em"}}>Signal</span>
-              <span style={{fontSize:10,color:"rgba(140,190,255,0.35)",marginLeft:2}}>
-                {new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
-              </span>
-            </div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 18px",background:C.bg2,borderBottom:"1px solid "+C.bd,position:"sticky",top:0,zIndex:100}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,fontFamily:"sans-serif",fontWeight:800,fontSize:17}}>⚓ Tank<span style={{color:C.green}}>Pos</span></div>
+        <div style={{display:"flex",gap:4,alignItems:"center",marginLeft:"auto",marginRight:12}}>
+          {[70,80,90,100,110,120,130].map(z=>(
+            <button key={z} onClick={()=>document.body.style.zoom=z+"%"}
+              style={{fontSize:10,fontWeight:700,padding:"1px 5px",borderRadius:3,border:"1px solid "+C.bd,background:C.bg3,color:C.faint,cursor:"pointer",fontFamily:"inherit"}}>
+              {z}%
+            </button>
+          ))}
+          <button
+            onClick={onLoadVesselDB}
+            disabled={vesselDBLoaded||vesselDBLoading}
+            title={vesselDBLoaded?"Vessel DB loaded — specs auto-enriched on upload":vesselDBLoading?"Loading vessel DB…":"Click to load vessel spec DB (DWT, built, LOA etc.) — only needed when uploading positions"}
+            style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:3,border:"1px solid "+(vesselDBLoaded?C.green:C.bd),background:vesselDBLoaded?"rgba(67,233,123,0.12)":C.bg3,color:vesselDBLoaded?C.green:vesselDBLoading?C.amber:C.faint,cursor:vesselDBLoaded||vesselDBLoading?"default":"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+            {vesselDBLoaded?"✓ Ship DB":vesselDBLoading?"⟳ Loading…":"⚓ Load Ship DB"}
+          </button>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {tab==="pos"&&vessels.length>0&&(<button onClick={()=>setPendingDel({type:"all",id:"__ALL__",label:"ALL "+vessels.length+" vessels"})} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 10px",color:C.dim,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✕ Clear Positions</button>)}
+        </div>
+      </div>
+      <div style={{padding:"12px 16px",maxWidth:1900,margin:"0 auto"}}>
+        {/* Professional tab navigation */}
+        <div style={{display:"flex",alignItems:"center",marginBottom:16,gap:12,flexWrap:"nowrap"}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",flexShrink:0}}>
+            {[
+              ["pos","⚓","Positions",vessels.length,"#58a6ff"],
+              ["cargo","📦","Cargoes",cargoTotal||cargoes.length,"#faa356"],
+              ["fix","🎯","Fixing",0,"#c792ea"],
+              ["matrix","🔗","Matrix",0,"#43e97b"],
+              ["projects","🧮","Projects",0,"#58a6ff"],
+              ["tce","⚡","TCE",0,"#faa356"],
+              ["dash","📊","Dashboard",0,"#43e97b"],
+              ["notes","📝","Notes",0,"#f472b6"]
+            ].map(([id,icon,label,count,col])=>(
+              <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
+                style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+                  minWidth:mobile?80:110,padding:"10px 12px",borderRadius:8,
+                  border:"1px solid "+(tab===id?col:C.bd),
+                  background:tab===id?"linear-gradient(135deg, "+col+"15, "+col+"05)":"transparent",
+                  boxShadow:tab===id?"0 4px 12px "+col+"33":"none",
+                  cursor:"pointer",transition:"all 0.2s",fontFamily:"inherit"}}>
+                <div style={{fontSize:mobile?18:20}}>{icon}</div>
+                <div style={{fontSize:mobile?9:10,fontWeight:700,color:tab===id?col:C.dim,
+                  textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</div>
+                {count>0&&<div style={{fontSize:11,fontWeight:700,color:tab===id?col:C.faint,
+                  background:C.bg3,padding:"1px 6px",borderRadius:8}}>{count}</div>}
+              </button>
+            ))}
           </div>
-
-          {/* Divider */}
-          <div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>
-
-          {/* Ask AI — takes most of the space */}
+          {/* Global Ask AI strip — between tabs and Intel Vault */}
           {!mobile&&(
-            <div style={{flex:1,minWidth:0,position:"relative",paddingBottom:10}}>
+            <div style={{flex:1,minWidth:0,display:"flex",justifyContent:"center"}}>
               <AskAIStrip vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>
             </div>
           )}
-
-          {/* Divider */}
-          {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}
-
-          {/* Intel Vault */}
+          {/* Global Intel Vault strip — always visible */}
           {!mobile&&(
-            <div style={{flexShrink:0,paddingBottom:10}}>
+            <div style={{flexShrink:0}}>
               <IntelVaultStrip onVaultUpdate={setIntelItems}/>
             </div>
           )}
-
-          {/* Divider */}
-          <div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>
-
-          {/* Utilities */}
-          <div style={{display:"flex",gap:3,alignItems:"center",flexShrink:0,paddingBottom:10}}>
-            {[70,80,90,100,110,120,130].map(z=>(
-              <button key={z} onClick={()=>document.body.style.zoom=z+"%"}
-                style={{fontSize:9,padding:"1px 4px",borderRadius:2,border:"1px solid rgba(58,130,246,0.12)",
-                  background:"transparent",color:"rgba(100,140,200,0.3)",cursor:"pointer",fontFamily:"inherit"}}>
-                {z}%
-              </button>
-            ))}
-            <button onClick={onLoadVesselDB} disabled={vesselDBLoaded||vesselDBLoading}
-              style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:3,marginLeft:4,
-                border:"1px solid "+(vesselDBLoaded?"rgba(67,233,123,0.4)":"rgba(58,130,246,0.18)"),
-                background:vesselDBLoaded?"rgba(67,233,123,0.08)":"transparent",
-                color:vesselDBLoaded?"#43e97b":vesselDBLoading?"#faa356":"rgba(100,140,200,0.4)",
-                cursor:vesselDBLoaded||vesselDBLoading?"default":"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-              {vesselDBLoaded?"✓ DB":vesselDBLoading?"⟳…":"Ship DB"}
-            </button>
-            {tab==="pos"&&vessels.length>0&&(
-              <button onClick={()=>setPendingDel({type:"all",id:"__ALL__",label:"ALL "+vessels.length+" vessels"})}
-                style={{fontSize:10,padding:"2px 8px",borderRadius:3,border:"1px solid rgba(255,107,107,0.25)",
-                  background:"transparent",color:"rgba(255,107,107,0.4)",cursor:"pointer",fontFamily:"inherit"}}>
-                ✕ Clear
-              </button>
-            )}
-          </div>
         </div>
-
-        {/* Tab navigation row */}
-        <div style={{display:"flex",alignItems:"stretch",padding:"0 20px",gap:0,overflowX:"auto"}}>
-          {[
-            ["pos","Positions",vessels.length,"#58a6ff"],
-            ["cargo","Cargoes",cargoTotal||cargoes.length,"#faa356"],
-            ["fix","Fixing",0,"#c792ea"],
-            ["matrix","Matrix",0,"#43e97b"],
-            ["projects","Projects",0,"#4fc3f7"],
-            ["tce","TCE",0,"#faa356"],
-            ["dash","Dashboard",0,"#43e97b"],
-            ["notes","Notes",0,"#f472b6"],
-            ["cal","Calendar",0,"#4fc3f7"],
-            ["settings","Settings",0,"#94a3b8"],
-          ].map(([id,label,count,col])=>{
-            const active=tab===id;
-            return(
-              <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
-                style={{position:"relative",display:"flex",alignItems:"center",gap:6,
-                  padding:"10px 16px",background:"transparent",border:"none",
-                  borderBottom:"2px solid "+(active?col:"transparent"),
-                  cursor:"pointer",fontFamily:"inherit",flexShrink:0,
-                  transition:"border-color 0.15s,color 0.15s",
-                  marginBottom:-1}}>
-                <span style={{fontSize:12,fontWeight:active?700:500,
-                  color:active?col:"rgba(120,155,210,0.5)",
-                  textTransform:"uppercase",letterSpacing:"0.07em",whiteSpace:"nowrap"}}>
-                  {label}
-                </span>
-                {count>0&&(
-                  <span style={{fontSize:10,fontWeight:700,
-                    color:active?col:"rgba(100,140,200,0.35)",
-                    background:active?col+"18":"transparent",
-                    padding:"0 5px",borderRadius:8,lineHeight:"16px",
-                    border:active?"1px solid "+col+"33":"none"}}>
-                    {count.toLocaleString()}
-                  </span>
-                )}
-                {active&&(
-                  <div style={{position:"absolute",bottom:0,left:12,right:12,height:2,
-                    background:`linear-gradient(90deg,${col}00,${col},${col}00)`,
-                    borderRadius:"2px 2px 0 0"}}/>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Tab content ── */}
-      <div style={{padding:"12px 20px",maxWidth:1900,margin:"0 auto"}}>
 
         {/* ── POSITIONS ── */}
         {tab==="pos"&&(
@@ -645,7 +586,7 @@ const filtV=useMemo(()=>{
                     <span style={{flex:1}}/>
                     <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Bunker</span>
                     <RateMatrixBunkerInput/>
-                    <span style={{fontSize:10,color:C.faint}}>{"$/mt"}</span>
+                    <span style={{fontSize:10,color:C.faint}}>$/mt</span>
                   </div>
                   <div style={{padding:"8px 10px",height:424,overflowY:"hidden"}}>
                     <RateMatrix/>
@@ -1019,93 +960,32 @@ const filtV=useMemo(()=>{
         )}
         {/* ── CARGOES ── */}
         {tab==="cargo"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {/* Top row: Parse | Filter panel */}
-            <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
-              {/* Parse */}
-              <div style={{flex:mobile?"1 1 auto":"0 0 65%",display:"flex",flexDirection:"column"}}>
-                <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
-              </div>
-              {/* Filter panel */}
-              {(()=>{
-                const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-                const years=[...new Set(cargoes.map(c=>{const d=new Date(c.from||c.updated||0);return isNaN(d)?"":String(d.getFullYear());}).filter(y=>y&&y>"2020"))].sort().reverse();
-                // Load grade groups from Settings (localStorage)
-                let gradeGroups=[];try{const raw=localStorage.getItem("signal_cargo_filter_groups");gradeGroups=raw?JSON.parse(raw):[];}catch{}
-                const showRaw=gradeGroups.length===0;
-                const rawGrades=showRaw?[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort().slice(0,20):[];
-                const FR=({label,col,children})=>(
-                  <div style={{display:"flex",alignItems:"flex-start",gap:5,padding:"1px 0 2px",borderBottom:"1px solid "+C.bd2}}>
-                    <div style={{width:58,fontSize:10,fontWeight:700,color:col,textTransform:"uppercase",flexShrink:0,paddingTop:2}}>{label}</div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:3,flex:1}}>{children}</div>
-                  </div>
-                );
-                return(
-                  <div style={{flex:1}}>
-                    <div style={{display:"flex",flexDirection:"column",gap:3,padding:"5px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
-                      <FR label="Grade" col={C.purple}>
-                        {showRaw
-                          ?rawGrades.map(g=><button key={g} onClick={()=>setCGradeFilter(v=>v===g?"":g)} style={fb(cGradeFilter===g)}>{g}</button>)
-                          :gradeGroups.map(grp=><button key={grp.id} onClick={()=>setCGradeFilter(v=>v===grp.id?"":grp.id)} style={fb(cGradeFilter===grp.id)} title={grp.aliases.join(", ")}>{grp.label}</button>)
-                        }
-                        {cGradeFilter&&<button onClick={()=>setCGradeFilter("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
-                        <button onClick={()=>setTab("settings")} style={{...fb(false),fontSize:9,color:"rgba(120,160,220,0.4)",padding:"1px 5px"}} title="Edit grade groups">⚙</button>
-                      </FR>
-                      <FR label="Month" col="#7dd3fc">
-                        {MONTHS.map(m=>(
-                          <button key={m} onClick={()=>setCLaycanMonthFilter(v=>v===m?"":m)} style={fb(cLaycanMonthFilter===m)}>{m}</button>
-                        ))}
-                        {years.map(y=>(
-                          <button key={y} onClick={()=>setCLaycanYearFilter(v=>v===y?"":y)} style={fb(cLaycanYearFilter===y)}>{y}</button>
-                        ))}
-                        {(cLaycanMonthFilter||cLaycanYearFilter)&&<button onClick={()=>{setCLaycanMonthFilter("");setCLaycanYearFilter("");}} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
-                      </FR>
-                      <FR label="Status" col={C.green}>
-                        {[["ALL","All"],["FIXED","Fixed"],["SUBS","Subs"],["FAILED","Failed"]].map(([f,l])=>(
-                          <button key={f} onClick={()=>setCFilter(f)} style={fb(cFilter===f)}>{l}</button>
-                        ))}
-                      </FR>
-                      <FR label="Period" col="#94a3b8">
-                        {[["","All"],["tw","This wk"],["lw","Last wk"],["ytd","YTD"]].map(([v,l])=>(
-                          <button key={v||"all"} onClick={()=>setCTimeFilter(v)} style={fb(cTimeFilter===v)}>{l}</button>
-                        ))}
-                        {(cGradeFilter||cLaycanMonthFilter||cLaycanYearFilter||cFilter!=="ALL"||cTimeFilter)&&(
-                          <button onClick={()=>{setCGradeFilter("");setCLaycanMonthFilter("");setCLaycanYearFilter("");setCFilter("ALL");setCTimeFilter("");}} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:6,fontSize:10}}>✕ Clear all</button>
-                        )}
-                      </FR>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {/* Parse */}
+            <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
             {/* Search */}
             <div style={{position:"relative"}}>
-              <input value={cSearch} onChange={e=>{const v=e.target.value;setCSearch(v);clearTimeout(window._csTimer);window._csTimer=setTimeout(()=>onCargoSearch([cGradeFilter,cLaycanMonthFilter,cLaycanYearFilter,v].filter(Boolean).join(" ")),350);}} placeholder="Search cargoes…"
+              <input value={cSearch} onChange={e=>{const v=e.target.value;setCSearch(v);clearTimeout(window._csTimer);window._csTimer=setTimeout(()=>onCargoSearch(v),350);}} placeholder="Search cargoes…"
                 style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
-              {cSearch&&<button onClick={()=>{setCSearch("");onCargoSearch([cGradeFilter,cLaycanMonthFilter,cLaycanYearFilter].filter(Boolean).join(" "));}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
+              {cSearch&&<button onClick={()=>{setCSearch("");onCargoSearch("");}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
             </div>
-            {/* Stats + Copy/CSV/Delete — single combined row */}
+            {/* Stats + Copy/CSV/Delete */}
             <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,flexWrap:"wrap"}}>
-              {/* Copy + CSV */}
               <ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/>
-              {/* Delete selected */}
               {selCargoes.size>0&&(
                 <button onClick={()=>setPendingDel({type:"allcargo",id:"__SELCARGO__",label:selCargoes.size+" cargo"+(selCargoes.size!==1?"es":"")})}
                   style={{fontSize:11,fontWeight:600,padding:"2px 9px",borderRadius:4,border:"1px solid rgba(255,107,107,0.4)",background:"rgba(255,107,107,0.1)",color:"#ff6b6b",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                   Delete ({selCargoes.size})
                 </button>
               )}
-              {/* Divider */}
               <div style={{width:1,height:14,background:C.bd2}}/>
-              {/* Week counts */}
               <span style={{fontSize:12,color:C.faint}}>This wk <span style={{color:"#4fc3f7",fontWeight:700}}>{cargoes.filter(c=>inRange(c.updated||c.created_at,thisWeekMon,thisWeekSun)).length}</span></span>
               <span style={{fontSize:12,color:C.faint}}>Last wk <span style={{color:"rgba(120,160,220,0.6)",fontWeight:700}}>{cargoes.filter(c=>inRange(c.updated||c.created_at,lastWeekMon,lastWeekSun)).length}</span></span>
-              {/* Counts on right */}
               <span style={{flex:1}}/>
               <span style={{fontSize:12,color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoTotal||cargoes.length}</span></span>
               <span style={{fontSize:12,color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtC.length}</span></span>
             </div>
-            {/* Tag filter row — only show if any cargoes have tags */}
+            {/* Tag filter bar */}
             {(()=>{
               const tags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
               if(!tags.length)return null;
@@ -1279,34 +1159,7 @@ const filtV=useMemo(()=>{
 />
 
       {/* TAG */}
-      {(()=>{
-        const PRESET_TAGS=["Parcel","ex Asia","TA","UKC","Med","AG","WAF","CPP","DPP"];
-        const [showTagPick,setShowTagPick]=React.useState(false);
-        const cur=f.tag||"";
-        return(
-          <td style={{...td2,padding:"2px 4px",position:"relative"}} onClick={e=>e.stopPropagation()}>
-            <button onClick={e=>{e.stopPropagation();setShowTagPick(v=>!v);}}
-              style={{background:cur?"rgba(88,166,255,0.15)":"transparent",border:"1px solid "+(cur?"rgba(88,166,255,0.4)":"rgba(88,166,255,0.12)"),borderRadius:3,color:cur?"#79c0ff":"rgba(120,160,220,0.3)",fontSize:10,fontWeight:cur?700:400,padding:"1px 5px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",maxWidth:76,overflow:"hidden",textOverflow:"ellipsis"}}>
-              {cur||"+ tag"}
-            </button>
-            {showTagPick&&(
-              <div style={{position:"fixed",zIndex:9999,background:"#0c1729",border:"1px solid rgba(88,166,255,0.3)",borderRadius:6,padding:"6px",boxShadow:"0 8px 24px rgba(0,0,0,0.6)",display:"flex",flexDirection:"column",gap:3,minWidth:100}}
-                onClick={e=>e.stopPropagation()}>
-                {cur&&<button onClick={()=>{onUpdateC(f.id,"tag","");setShowTagPick(false);}} style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>✕ clear</button>}
-                {PRESET_TAGS.map(t=>(
-                  <button key={t} onClick={()=>{onUpdateC(f.id,"tag",t);setShowTagPick(false);}}
-                    style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid "+(cur===t?"rgba(88,166,255,0.5)":"rgba(88,166,255,0.15)"),background:cur===t?"rgba(88,166,255,0.2)":"transparent",color:cur===t?"#79c0ff":"rgba(160,200,255,0.65)",cursor:"pointer",fontFamily:"inherit",textAlign:"left",fontWeight:cur===t?700:400}}>
-                    {t}
-                  </button>
-                ))}
-                <input placeholder="Custom…" defaultValue=""
-                  onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){onUpdateC(f.id,"tag",e.target.value.trim());setShowTagPick(false);}}}
-                  style={{fontSize:10,padding:"2px 5px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none",marginTop:2}}/>
-              </div>
-            )}
-          </td>
-        );
-      })()}
+      <TagCell cargoId={f.id} tag={f.tag} onUpdateC={onUpdateC}/>
 
       {/* UPDATED */}
       <td style={{ ...td2, color: C.faint, textAlign:"left" }}>
@@ -1333,7 +1186,7 @@ const filtV=useMemo(()=>{
   );
 }}
   />}
-              {hasMore&&!cGradeFilter&&!cLaycanMonthFilter&&!cLaycanYearFilter&&
+              {hasMore&&
               <div style={{textAlign:"center",padding:"12px"}}>
                 <button onClick={onLoadMore} style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"4px 16px",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Load more</button>
               </div>}
@@ -1411,7 +1264,7 @@ const filtV=useMemo(()=>{
                             const b=calc?.ballastNm||0;const l=calc?.ladenNm||0;
                             if(!l)return null;
                             const ets=calcEuEts(b,l,13,15,3,8,2,1,0.25,1,0.25,0,12.5,false);
-                            return ets>0?<span style={{fontSize:12,color:"#fd79a8",fontWeight:600,background:"rgba(253,121,168,0.08)",border:"1px solid rgba(253,121,168,0.25)",borderRadius:3,padding:"1px 5px",whiteSpace:"nowrap"}} title="Indicative EU ETS cost (50% scope, deep-sea)">{"ETS ~$"}{ets.toLocaleString()}</span>:null;
+                            return ets>0?<span style={{fontSize:12,color:"#fd79a8",fontWeight:600,background:"rgba(253,121,168,0.08)",border:"1px solid rgba(253,121,168,0.25)",borderRadius:3,padding:"1px 5px",whiteSpace:"nowrap"}} title="Indicative EU ETS cost (50% scope, deep-sea)">ETS ~${ets.toLocaleString()}</span>:null;
                           })()}
                         </div>
                       </>}
@@ -1442,8 +1295,6 @@ const filtV=useMemo(()=>{
             <NotesTab/>
           </div>
         )}
-        {tab==="cal"&&<CalendarTab/>}
-        {tab==="settings"&&<SettingsTab/>}
       </div>
     </div>
   );
