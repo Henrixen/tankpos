@@ -1067,11 +1067,6 @@ const filtV=useMemo(()=>{
             </div>
             {/* Stats + Copy/CSV/Delete — single combined row */}
             <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,flexWrap:"wrap"}}>
-              {/* Tick all */}
-              <button onClick={()=>setSelCargoes(filtC.length>0&&filtC.every(c=>selCargoes.has(c.id))?new Set():new Set(filtC.map(c=>c.id)))}
-                style={{...fb(selCargoes.size>0),fontSize:11,padding:"2px 7px",whiteSpace:"nowrap"}}>
-                {filtC.length>0&&filtC.every(c=>selCargoes.has(c.id))?"☑ None":"☐ All"}
-              </button>
               {/* Copy + CSV */}
               <ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/>
               {/* Delete selected */}
