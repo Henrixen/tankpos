@@ -223,6 +223,7 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels}) {
     document.body.removeChild(a); URL.revokeObjectURL(url);
   }
 
+  const rows = mode==="pos" ? vessels : cargoes;
   const btnStyle = {fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,
     border:"1px solid rgba(120,160,220,0.3)",background:"rgba(15,25,50,0.85)",
     color:"#9fc3f5",cursor:"pointer",display:"flex",alignItems:"center",
