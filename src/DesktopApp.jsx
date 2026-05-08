@@ -1059,32 +1059,38 @@ const filtV=useMemo(()=>{
                 );
               })()}
             </div>
-            {/* Search + Export */}
-            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-              <div style={{position:"relative",flex:1}}>
-                <input value={cSearch} onChange={e=>{const v=e.target.value;setCSearch(v);clearTimeout(window._csTimer);window._csTimer=setTimeout(()=>onCargoSearch([cGradeFilter,cLaycanMonthFilter,cLaycanYearFilter,v].filter(Boolean).join(" ")),350);}} placeholder="Search cargoes…"
-                  style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
-                {cSearch&&<button onClick={()=>{setCSearch("");onCargoSearch([cGradeFilter,cLaycanMonthFilter,cLaycanYearFilter].filter(Boolean).join(" "));}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
-              </div>
+            {/* Search */}
+            <div style={{position:"relative"}}>
+              <input value={cSearch} onChange={e=>{const v=e.target.value;setCSearch(v);clearTimeout(window._csTimer);window._csTimer=setTimeout(()=>onCargoSearch([cGradeFilter,cLaycanMonthFilter,cLaycanYearFilter,v].filter(Boolean).join(" ")),350);}} placeholder="Search cargoes…"
+                style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
+              {cSearch&&<button onClick={()=>{setCSearch("");onCargoSearch([cGradeFilter,cLaycanMonthFilter,cLaycanYearFilter].filter(Boolean).join(" "));}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
+            </div>
+            {/* Stats + Copy/CSV/Delete — single combined row */}
+            <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,flexWrap:"wrap"}}>
+              {/* Tick all */}
               <button onClick={()=>setSelCargoes(filtC.length>0&&filtC.every(c=>selCargoes.has(c.id))?new Set():new Set(filtC.map(c=>c.id)))}
-                style={{...fb(selCargoes.size>0),fontSize:11,padding:"3px 8px",whiteSpace:"nowrap"}}>
+                style={{...fb(selCargoes.size>0),fontSize:11,padding:"2px 7px",whiteSpace:"nowrap"}}>
                 {filtC.length>0&&filtC.every(c=>selCargoes.has(c.id))?"☑ None":"☐ All"}
               </button>
+              {/* Copy + CSV */}
               <ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/>
+              {/* Delete selected */}
               {selCargoes.size>0&&(
                 <button onClick={()=>setPendingDel({type:"allcargo",id:"__SELCARGO__",label:selCargoes.size+" cargo"+(selCargoes.size!==1?"es":"")})}
-                  style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(255,107,107,0.4)",background:"rgba(255,107,107,0.1)",color:"#ff6b6b",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                  style={{fontSize:11,fontWeight:600,padding:"2px 9px",borderRadius:4,border:"1px solid rgba(255,107,107,0.4)",background:"rgba(255,107,107,0.1)",color:"#ff6b6b",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                   Delete ({selCargoes.size})
                 </button>
               )}
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12}}>
-              <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoTotal||cargoes.length}</span></span>
-              <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtC.length}</span></span>
-              <span style={{color:C.faint}}>Fixed <span style={{color:C.green,fontWeight:700}}>{cargoes.filter(c=>c.status==="FIXED").length}</span></span>
-              <span style={{color:C.faint}}>Subs <span style={{color:C.purple,fontWeight:700}}>{cargoes.filter(c=>c.status==="SUBS").length}</span></span>
-              <span style={{color:C.faint}}>Failed <span style={{color:C.red,fontWeight:700}}>{cargoes.filter(c=>c.status==="FAILED").length}</span></span>
+              {/* Divider */}
+              <div style={{width:1,height:14,background:C.bd2,marginLeft:2}}/>
+              {/* Status counts */}
+              <span style={{fontSize:12,color:C.faint}}>Fixed <span style={{color:C.green,fontWeight:700}}>{cargoes.filter(c=>c.status==="FIXED").length}</span></span>
+              <span style={{fontSize:12,color:C.faint}}>Subs <span style={{color:C.purple,fontWeight:700}}>{cargoes.filter(c=>c.status==="SUBS").length}</span></span>
+              <span style={{fontSize:12,color:C.faint}}>Failed <span style={{color:C.red,fontWeight:700}}>{cargoes.filter(c=>c.status==="FAILED").length}</span></span>
+              {/* Counts on right */}
               <span style={{flex:1}}/>
+              <span style={{fontSize:12,color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoTotal||cargoes.length}</span></span>
+              <span style={{fontSize:12,color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtC.length}</span></span>
             </div>
             <div style={tableWrap}>
               {filtC.length===0
@@ -1132,7 +1138,6 @@ const filtV=useMemo(()=>{
       <EC
   value={f.vessel}
   color={C.blue}
-  bold
   placeholder="TBN"
   onSave={v2 => onUpdateC(f.id, "vessel", v2)}
   data-cell={`${i}-cvessel`}
@@ -1145,6 +1150,7 @@ const filtV=useMemo(()=>{
 <EC
   value={toTCase(f.charterer)}
   color={"#79c0ff"}
+  bold
   placeholder=""
   onSave={v2 => onUpdateC(f.id, "charterer", toTCase(v2))}
   data-cell={`${i}-charterer`}
