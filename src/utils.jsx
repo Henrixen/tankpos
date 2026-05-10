@@ -92,7 +92,6 @@ export function enrichV(v, vesselDB) {
     loa:      v.loa      || d.loa      || null,
     beam:     v.beam     || d.beam     || null,
     cbm:      v.cbm      || d.cbm      || null,
-    coating:  v.coating  || d.coating  || null,
     operator: resolvedOp,
     spec: {
       ...v.spec,
@@ -264,7 +263,7 @@ export const normaliseQty = q => {
   return kt+"kt";
 };
 
-export const fmtN = n => { if(!n && n!==0) return ""; const v=Number(String(n).replace(/[,\s]/g,"")); if(isNaN(v)) return String(n); return Math.round(v).toLocaleString("de-DE").replace(/\./g," "); };
+export const fmtN = n => { if(!n && n!==0) return ""; const v=Number(String(n).replace(/,/g,"")); if(isNaN(v)) return String(n); if(v>=1000) return Math.round(v/1000)+"k"; return String(v); };
 export const fmtFreight = s => { if(!s) return s; return String(s).trim().replace(/\s+/g," "); };
 
 export const toTCase = s => {
@@ -304,6 +303,7 @@ export function normaliseCargo(c){
     freight:   c.freight   || "",
     comment:   c.comment   || "",
     updated:   c.updated   || "",
+    tag:       c.tag       || "",
   };
 }
 
