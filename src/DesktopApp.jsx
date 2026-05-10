@@ -1048,19 +1048,6 @@ const filtV=useMemo(()=>{
                     return onAddCargoes(withTag);
                   }}
                   lockedMode="cargo" vesselDB={{}}/>
-                {/* Tag on parse row — directly below Parse & Add */}
-                <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap",padding:"2px 0"}}>
-                  <span style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",flexShrink:0}}>Tag on parse</span>
-                  {getTagList().map(t=>(
-                    <button key={t} onClick={()=>setPendingParseTag(v=>v===t?"":t)}
-                      style={{...fb(pendingParseTag===t),fontSize:10,padding:"1px 7px"}}>{t}</button>
-                  ))}
-                  <input placeholder="Custom…" value={customParseTag} onChange={e=>setCustomParseTag(e.target.value)}
-                    onKeyDown={e=>{if(e.key==="Enter"&&customParseTag.trim()){setPendingParseTag(customParseTag.trim());addCustomTag(customParseTag.trim());setCustomParseTag("");}}}
-                    style={{width:70,background:C.bg3,border:"1px solid "+C.bd,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:10,padding:"2px 5px",outline:"none"}}/>
-                  {pendingParseTag&&<span style={{fontSize:10,color:"#79c0ff",fontWeight:700}}>→ "{pendingParseTag}" ✕</span>}
-                  {pendingParseTag&&<button onClick={()=>setPendingParseTag("")} style={{background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:10,padding:0}}>✕</button>}
-                </div>
               </div>
               {(()=>{
                 const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -1113,7 +1100,27 @@ const filtV=useMemo(()=>{
                       {[["","All"],["tw","This wk"],["lw","Last wk"],["ytd","YTD"]].map(([v,l])=>(
                         <button key={v||"all"} onClick={()=>setCTimeFilter(v)} style={fb(cTimeFilter===v)}>{l}</button>
                       ))}
-                      {(cGradeFilter||cFilter!=="ALL"||cTimeFilter)&&<button onClick={()=>{setCGradeFilter("");setCFilter("ALL");setCTimeFilter("");}} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:4,fontSize:10}}>✕ Clear</button>}
+                      {(cGradeFilter||cFilter!=="ALL"||cTimeFilter||cTagFilter)&&<button onClick={()=>{setCGradeFilter("");setCFilter("ALL");setCTimeFilter("");setCTagFilter("");}} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:4,fontSize:10}}>✕ Clear</button>}
+                    </FR2>
+                    {/* Tag filter row */}
+                    {(()=>{
+                      const usedTags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
+                      if(!usedTags.length)return null;
+                      return(
+                        <FR2 label="Tag" col="#f472b6">
+                          {usedTags.map(t=>(
+                            <button key={t} onClick={()=>setCTagFilter(v=>v===t?"":t)} style={fb(cTagFilter===t)}>{t}</button>
+                          ))}
+                          {cTagFilter&&<button onClick={()=>setCTagFilter("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
+                        </FR2>
+                      );
+                    })()}
+                    {/* Tag on parse row */}
+                    <FR2 label="On parse" col="#94a3b8">
+                      {getTagList().map(t=>(
+                        <button key={t} onClick={()=>setPendingParseTag(v=>v===t?"":t)} style={fb(pendingParseTag===t)}>{t}</button>
+                      ))}
+                      {pendingParseTag&&<button onClick={()=>setPendingParseTag("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕ {pendingParseTag}</button>}
                     </FR2>
                   </div>
                 );
@@ -1141,20 +1148,6 @@ const filtV=useMemo(()=>{
               <span style={{fontSize:12,color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoTotal||cargoes.length}</span></span>
               <span style={{fontSize:12,color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtC.length}</span></span>
             </div>
-            {/* Tag filter bar */}
-            {(()=>{
-              const tags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
-              if(!tags.length)return null;
-              return(
-                <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
-                  <span style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Tag</span>
-                  {tags.map(t=>(
-                    <button key={t} onClick={()=>setCTagFilter(v=>v===t?"":t)} style={fb(cTagFilter===t)}>{t}</button>
-                  ))}
-                  {cTagFilter&&<button onClick={()=>setCTagFilter("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
-                </div>
-              );
-            })()}
             <div style={tableWrap}>
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
