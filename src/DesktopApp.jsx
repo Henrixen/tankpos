@@ -40,7 +40,10 @@ function TagCell({cargoId,tag,onUpdateC}){
     if(btnRef.current){
       const r=btnRef.current.getBoundingClientRect();
       const top=window.innerHeight-r.bottom>200?r.bottom+4:r.top-220;
-      setPos({top,left:r.left});
+      // Right-align popup to button right edge, clamp to viewport
+      const popW=150;
+      const left=Math.min(r.right-popW, window.innerWidth-popW-8);
+      setPos({top,left});
     }
     setOpen(v=>!v);
     setEditMode(null);
