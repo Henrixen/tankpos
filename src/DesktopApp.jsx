@@ -20,20 +20,35 @@ import SettingsTab from "./SettingsTab";
 
 
 
+// TagCell helpers
+const PRESET_TAGS=["AG","CPP","DPP","ex Asia","Med","Parcel","TA","UKC","WAF"];
+function getTagList(){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");return[...new Set([...PRESET_TAGS,...c])].sort();}catch{return PRESET_TAGS.slice();}}
+function addCustomTag(t){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");if(!c.includes(t))localStorage.setItem("signal_custom_tags",JSON.stringify([...c,t]));}catch{}}
+function removeCustomTag(t){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");localStorage.setItem("signal_custom_tags",JSON.stringify(c.filter(x=>x!==t)));}catch{}}
+
 // TagCell — proper component so useState works in renderRow
-const PRESET_TAGS=["Parcel","ex Asia","TA","UKC","Med","AG","WAF","CPP","DPP"];
 function TagCell({cargoId,tag,onUpdateC}){
   const [open,setOpen]=useState(false);
+  const [editMode,setEditMode]=useState(null);
   const btnRef=React.useRef(null);
   const [pos,setPos]=useState({top:0,left:0});
+  const [tagList,setTagList]=useState(getTagList);
+
   function openPick(e){
     e.stopPropagation();
+    setTagList(getTagList());
     if(btnRef.current){
       const r=btnRef.current.getBoundingClientRect();
-      setPos({top:r.bottom+4,left:r.left});
+      const top=window.innerHeight-r.bottom>200?r.bottom+4:r.top-220;
+      setPos({top,left:r.left});
     }
     setOpen(v=>!v);
+    setEditMode(null);
   }
+  function pick(t){onUpdateC(cargoId,"tag",t);setOpen(false);}
+  function addNew(val){const t=val.trim();if(!t)return;addCustomTag(t);onUpdateC(cargoId,"tag",t);setOpen(false);}
+  function delTag(t,e){e.stopPropagation();removeCustomTag(t);setTagList(getTagList());if(tag===t)onUpdateC(cargoId,"tag","");}
+  function renameTag(old,nw){if(!nw.trim()||nw===old)return;removeCustomTag(old);addCustomTag(nw.trim());setTagList(getTagList());if(tag===old)onUpdateC(cargoId,"tag",nw.trim());setEditMode(null);}
   const cur=tag||"";
   return(
     <td style={{padding:"2px 4px",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)"}} onClick={e=>e.stopPropagation()}>
@@ -44,17 +59,32 @@ function TagCell({cargoId,tag,onUpdateC}){
       {open&&(
         <>
           <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
-          <div style={{position:"fixed",top:pos.top,left:pos.left,zIndex:9999,background:"#0c1729",border:"1px solid rgba(88,166,255,0.3)",borderRadius:6,padding:"6px",boxShadow:"0 8px 24px rgba(0,0,0,0.6)",display:"flex",flexDirection:"column",gap:2,minWidth:110}}>
-            {cur&&<button onClick={()=>{onUpdateC(cargoId,"tag","");setOpen(false);}} style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>✕ clear</button>}
-            {PRESET_TAGS.map(t=>(
-              <button key={t} onClick={()=>{onUpdateC(cargoId,"tag",t);setOpen(false);}}
-                style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid "+(cur===t?"rgba(88,166,255,0.5)":"rgba(88,166,255,0.12)"),background:cur===t?"rgba(88,166,255,0.2)":"transparent",color:cur===t?"#79c0ff":"rgba(160,200,255,0.65)",cursor:"pointer",fontFamily:"inherit",textAlign:"left",fontWeight:cur===t?700:400}}>
-                {t}
-              </button>
+          <div style={{position:"fixed",top:pos.top,left:pos.left,zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:6,padding:"6px",boxShadow:"0 8px 28px rgba(0,0,0,0.7)",display:"flex",flexDirection:"column",gap:2,minWidth:140}}>
+            {cur&&<button onClick={()=>{onUpdateC(cargoId,"tag","");setOpen(false);}} style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit",textAlign:"left",marginBottom:2}}>✕ clear tag</button>}
+            {tagList.map(t=>(
+              <div key={t} style={{display:"flex",alignItems:"center",gap:2}}>
+                {editMode===t?(
+                  <input autoFocus defaultValue={t}
+                    onBlur={e=>renameTag(t,e.target.value)}
+                    onKeyDown={e=>{if(e.key==="Enter")renameTag(t,e.target.value);if(e.key==="Escape")setEditMode(null);}}
+                    style={{flex:1,fontSize:10,padding:"2px 5px",borderRadius:3,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none"}}/>
+                ):(
+                  <button onClick={()=>pick(t)}
+                    style={{flex:1,fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid "+(cur===t?"rgba(88,166,255,0.5)":"rgba(88,166,255,0.10)"),background:cur===t?"rgba(88,166,255,0.2)":"transparent",color:cur===t?"#79c0ff":"rgba(160,200,255,0.65)",cursor:"pointer",fontFamily:"inherit",textAlign:"left",fontWeight:cur===t?700:400}}>
+                    {t}
+                  </button>
+                )}
+                {!PRESET_TAGS.includes(t)&&editMode!==t&&(
+                  <>
+                    <button onClick={e=>{e.stopPropagation();setEditMode(t);}} style={{background:"none",border:"none",color:"rgba(120,160,220,0.3)",fontSize:9,cursor:"pointer",padding:"0 2px",lineHeight:1}} title="Rename">✎</button>
+                    <button onClick={e=>delTag(t,e)} style={{background:"none",border:"none",color:"rgba(255,107,107,0.35)",fontSize:9,cursor:"pointer",padding:"0 2px",lineHeight:1}} title="Delete">✕</button>
+                  </>
+                )}
+              </div>
             ))}
-            <input placeholder="Custom + Enter" autoFocus
-              onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){onUpdateC(cargoId,"tag",e.target.value.trim());setOpen(false);}if(e.key==="Escape")setOpen(false);}}
-              style={{fontSize:10,padding:"2px 5px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none",marginTop:2}}/>
+            <input placeholder="New tag + Enter"
+              onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){addNew(e.target.value);e.target.value="";}if(e.key==="Escape")setOpen(false);}}
+              style={{fontSize:10,padding:"3px 5px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none",marginTop:4}}/>
           </div>
         </>
       )}
@@ -85,6 +115,8 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   const [cLaycanMonthFilter,setCLaycanMonthFilter]=useState("");
   const [cLaycanYearFilter,setCLaycanYearFilter]=useState("");
   const [cTagFilter,setCTagFilter]=useState("");
+  const [pendingParseTag,setPendingParseTag]=useState("");
+  const [customParseTag,setCustomParseTag]=useState("");
 
   function getWeekBounds(offset=0){
     const now=new Date();now.setHours(0,0,0,0);
@@ -1008,7 +1040,25 @@ const filtV=useMemo(()=>{
             {/* Parse + filter panel side by side */}
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
               <div style={{flex:mobile?"1 1 auto":"0 0 60%"}}>
-                <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
+                <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels}
+                  onAddCargoes={async(parsed)=>{
+                    const withTag=pendingParseTag?parsed.map(c=>({...c,tag:pendingParseTag})):parsed;
+                    return onAddCargoes(withTag);
+                  }}
+                  lockedMode="cargo" vesselDB={{}}/>
+                {/* Tag to apply on next parse */}
+                <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:5,marginTop:4,flexWrap:"wrap"}}>
+                  <span style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",flexShrink:0}}>Tag on parse</span>
+                  {getTagList().map(t=>(
+                    <button key={t} onClick={()=>setPendingParseTag(v=>v===t?"":t)}
+                      style={{...fb(pendingParseTag===t),fontSize:10,padding:"1px 7px"}}>{t}</button>
+                  ))}
+                  <input placeholder="Custom…" value={customParseTag} onChange={e=>setCustomParseTag(e.target.value)}
+                    onKeyDown={e=>{if(e.key==="Enter"&&customParseTag.trim()){setPendingParseTag(customParseTag.trim());addCustomTag(customParseTag.trim());setCustomParseTag("");}}}
+                    style={{width:80,background:C.bg3,border:"1px solid "+C.bd,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:10,padding:"2px 5px",outline:"none"}}/>
+                  {pendingParseTag&&<span style={{fontSize:10,color:"#79c0ff",fontWeight:700}}>→ "{pendingParseTag}" will be applied</span>}
+                  {pendingParseTag&&<button onClick={()=>setPendingParseTag("")} style={{background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:10,padding:0}}>✕</button>}
+                </div>
               </div>
               {/* Filter panel — loads filter groups from Settings localStorage */}
               {(()=>{
