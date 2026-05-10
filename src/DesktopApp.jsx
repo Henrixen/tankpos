@@ -39,10 +39,9 @@ function TagCell({cargoId,tag,onUpdateC}){
     setTagList(getTagList());
     if(btnRef.current){
       const r=btnRef.current.getBoundingClientRect();
-      const top=window.innerHeight-r.bottom>200?r.bottom+4:r.top-220;
-      // Right-align popup to button right edge, clamp to viewport
+      const top=window.innerHeight-r.bottom>200?r.bottom+2:r.top-220;
       const popW=150;
-      const left=Math.min(r.right-popW, window.innerWidth-popW-8);
+      const left=Math.max(8, Math.min(r.left, window.innerWidth-popW-8));
       setPos({top,left});
     }
     setOpen(v=>!v);
@@ -1042,15 +1041,15 @@ const filtV=useMemo(()=>{
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {/* Parse + filter panel side by side */}
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
-              <div style={{flex:mobile?"1 1 auto":"0 0 60%"}}>
+              <div style={{flex:mobile?"1 1 auto":"0 0 60%",display:"flex",flexDirection:"column",gap:4}}>
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels}
                   onAddCargoes={async(parsed)=>{
                     const withTag=pendingParseTag?parsed.map(c=>({...c,tag:pendingParseTag})):parsed;
                     return onAddCargoes(withTag);
                   }}
                   lockedMode="cargo" vesselDB={{}}/>
-                {/* Tag to apply on next parse */}
-                <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:5,marginTop:4,flexWrap:"wrap"}}>
+                {/* Tag on parse row — directly below Parse & Add */}
+                <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap",padding:"2px 0"}}>
                   <span style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",flexShrink:0}}>Tag on parse</span>
                   {getTagList().map(t=>(
                     <button key={t} onClick={()=>setPendingParseTag(v=>v===t?"":t)}
@@ -1058,12 +1057,11 @@ const filtV=useMemo(()=>{
                   ))}
                   <input placeholder="Custom…" value={customParseTag} onChange={e=>setCustomParseTag(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Enter"&&customParseTag.trim()){setPendingParseTag(customParseTag.trim());addCustomTag(customParseTag.trim());setCustomParseTag("");}}}
-                    style={{width:80,background:C.bg3,border:"1px solid "+C.bd,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:10,padding:"2px 5px",outline:"none"}}/>
-                  {pendingParseTag&&<span style={{fontSize:10,color:"#79c0ff",fontWeight:700}}>→ "{pendingParseTag}" will be applied</span>}
+                    style={{width:70,background:C.bg3,border:"1px solid "+C.bd,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:10,padding:"2px 5px",outline:"none"}}/>
+                  {pendingParseTag&&<span style={{fontSize:10,color:"#79c0ff",fontWeight:700}}>→ "{pendingParseTag}" ✕</span>}
                   {pendingParseTag&&<button onClick={()=>setPendingParseTag("")} style={{background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:10,padding:0}}>✕</button>}
                 </div>
               </div>
-              {/* Filter panel — loads filter groups from Settings localStorage */}
               {(()=>{
                 const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
                 let allGroups=[];
