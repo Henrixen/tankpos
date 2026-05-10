@@ -39,9 +39,10 @@ function TagCell({cargoId,tag,onUpdateC}){
     setTagList(getTagList());
     if(btnRef.current){
       const r=btnRef.current.getBoundingClientRect();
-      const top=window.innerHeight-r.bottom>200?r.bottom+2:r.top-220;
+      const top=window.innerHeight-r.bottom>200?r.bottom+2:r.top-224;
       const popW=150;
-      const left=Math.max(8, Math.min(r.left, window.innerWidth-popW-8));
+      // Clamp left so popup stays inside viewport, prefer left-aligned to button
+      const left=Math.max(4,Math.min(r.left,window.innerWidth-popW-4));
       setPos({top,left});
     }
     setOpen(v=>!v);
@@ -1045,7 +1046,9 @@ const filtV=useMemo(()=>{
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels}
                   onAddCargoes={async(parsed)=>{
                     const withTag=pendingParseTag?parsed.map(c=>({...c,tag:pendingParseTag})):parsed;
-                    return onAddCargoes(withTag);
+                    const result=await onAddCargoes(withTag);
+                    if(pendingParseTag)setPendingParseTag(""); // reset after parse
+                    return result;
                   }}
                   lockedMode="cargo" vesselDB={{}}/>
               </div>
@@ -1115,7 +1118,9 @@ const filtV=useMemo(()=>{
                         </FR2>
                       );
                     })()}
-                    {/* Tag on parse row */}
+                    {/* small divider */}
+                    <div style={{borderTop:"1px solid rgba(88,166,255,0.08)",margin:"1px 0"}}/>
+                    {/* Tag on parse */}
                     <FR2 label="On parse" col="#94a3b8">
                       {getTagList().map(t=>(
                         <button key={t} onClick={()=>setPendingParseTag(v=>v===t?"":t)} style={fb(pendingParseTag===t)}>{t}</button>
@@ -1141,6 +1146,17 @@ const filtV=useMemo(()=>{
                   Delete ({selCargoes.size})
                 </button>
               )}
+              {selCargoes.size>0&&(
+                <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+                  <span style={{fontSize:10,color:"rgba(120,160,220,0.5)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em"}}>Tag {selCargoes.size}</span>
+                  {getTagList().map(t=>(
+                    <button key={t} onClick={()=>{[...selCargoes].forEach(id=>onUpdateC(id,"tag",t));}}
+                      style={{...fb(false),fontSize:10,padding:"1px 6px"}}>{t}</button>
+                  ))}
+                  <button onClick={()=>{[...selCargoes].forEach(id=>onUpdateC(id,"tag",""));}}
+                    style={{...fb(false),fontSize:10,color:C.red,borderColor:C.red+"55",padding:"1px 6px"}}>✕ clear</button>
+                </div>
+              )}
               <div style={{width:1,height:14,background:C.bd2}}/>
               <span style={{fontSize:12,color:C.faint}}>This wk <span style={{color:"#4fc3f7",fontWeight:700}}>{cargoes.filter(c=>inRange(c.updated||c.created_at,thisWeekMon,thisWeekSun)).length}</span></span>
               <span style={{fontSize:12,color:C.faint}}>Last wk <span style={{color:"rgba(120,160,220,0.6)",fontWeight:700}}>{cargoes.filter(c=>inRange(c.updated||c.created_at,lastWeekMon,lastWeekSun)).length}</span></span>
@@ -1155,6 +1171,7 @@ const filtV=useMemo(()=>{
     columns={(()=>{const allTicked=filtC.length>0&&filtC.every(c=>selCargoes.has(c.id));return cargoColumns.map(col=>col.key==="select"?{...col,label:<span style={{fontSize:11,color:allTicked?"#4fc3f7":C.faint,cursor:"pointer",userSelect:"none"}} onClick={e=>{e.stopPropagation();setSelCargoes(allTicked?new Set():new Set(filtC.map(c=>c.id)));}}>{allTicked?"[✓]":"[ ]"}</span>}:col);})()}
     data={filtC}
     keyField="id"
+    getRowStyle={(row,i)=>selCargoes.has(row.id)?"rgba(88,166,255,0.12)":i%2?"rgba(255,255,255,0.02)":"transparent"}
     renderRow={(f, td) => {
   const i = filtC.findIndex(x => x.id === f.id);
   const sc = f.status==="FIXED" ? C.green : f.status==="SUBS" ? C.purple : f.status==="FAILED" ? C.red : C.faint;
