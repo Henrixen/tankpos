@@ -449,8 +449,17 @@ const filtV=useMemo(()=>{
       });
     }
     if(cTagFilter) list=list.filter(c=>(c.tag||"").toLowerCase()===cTagFilter.toLowerCase());
+    if(cGradeFilter){
+      let gradeGroups=[];try{const raw=localStorage.getItem("signal_cargo_filter_groups");gradeGroups=raw?JSON.parse(raw):[];}catch{}
+      const grp=gradeGroups.find(g=>g.id===cGradeFilter);
+      if(grp){
+        list=list.filter(c=>{const grade=(c.cargo||"").toLowerCase();return grp.aliases.some(a=>grade.includes(a.toLowerCase()));});
+      } else {
+        list=list.filter(c=>{const grade=(c.cargo||"").trim().toLowerCase();const t=cGradeFilter.toLowerCase();return grade===t||grade.includes(t);});
+      }
+    }
     return list;
-  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter]);
+  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cTagFilter,cGradeFilter]);
 
   const FILTER_GROUPS=[
     {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"],["HIDE_EMP","Hide Employed"]]},
@@ -993,9 +1002,50 @@ const filtV=useMemo(()=>{
         )}
         {/* ── CARGOES ── */}
         {tab==="cargo"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {/* Parse */}
-            <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {/* Parse + filter panel side by side */}
+            <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
+              <div style={{flex:mobile?"1 1 auto":"0 0 60%"}}>
+                <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={onAddCargoes} lockedMode="cargo" vesselDB={{}}/>
+              </div>
+              {/* Filter panel — loads grade groups from Settings localStorage */}
+              {(()=>{
+                const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+                let gradeGroups=[];
+                try{const raw=localStorage.getItem("signal_cargo_filter_groups");gradeGroups=raw?JSON.parse(raw):[];}catch{}
+                const showRaw=gradeGroups.length===0;
+                const rawGrades=showRaw?[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort().slice(0,20):[];
+                const FR2=({label,col,children})=>(
+                  <div style={{display:"flex",alignItems:"flex-start",gap:5,padding:"2px 0 3px",borderBottom:"1px solid "+C.bd2}}>
+                    <div style={{width:52,fontSize:10,fontWeight:700,color:col,textTransform:"uppercase",flexShrink:0,paddingTop:2}}>{label}</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:3,flex:1}}>{children}</div>
+                  </div>
+                );
+                return(
+                  <div style={{flex:1,display:"flex",flexDirection:"column",gap:3,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
+                    <FR2 label="Grade" col={C.purple}>
+                      {showRaw
+                        ?rawGrades.map(g=><button key={g} onClick={()=>setCGradeFilter(v=>v===g?"":g)} style={fb(cGradeFilter===g)}>{g}</button>)
+                        :gradeGroups.map(grp=><button key={grp.id} onClick={()=>setCGradeFilter(v=>v===grp.id?"":grp.id)} style={fb(cGradeFilter===grp.id)} title={grp.aliases.join(", ")}>{grp.label}</button>)
+                      }
+                      {cGradeFilter&&<button onClick={()=>setCGradeFilter("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
+                      <button onClick={()=>setTab("settings")} style={{...fb(false),fontSize:9,color:"rgba(120,160,220,0.35)",padding:"1px 5px"}} title="Edit grade groups in Settings">⚙</button>
+                    </FR2>
+                    <FR2 label="Status" col={C.green}>
+                      {[["ALL","All"],["FIXED","Fixed"],["SUBS","Subs"],["FAILED","Failed"]].map(([f,l])=>(
+                        <button key={f} onClick={()=>setCFilter(f)} style={fb(cFilter===f)}>{l}</button>
+                      ))}
+                    </FR2>
+                    <FR2 label="Period" col="#94a3b8">
+                      {[["","All"],["tw","This wk"],["lw","Last wk"],["ytd","YTD"]].map(([v,l])=>(
+                        <button key={v||"all"} onClick={()=>setCTimeFilter(v)} style={fb(cTimeFilter===v)}>{l}</button>
+                      ))}
+                      {(cGradeFilter||cFilter!=="ALL"||cTimeFilter)&&<button onClick={()=>{setCGradeFilter("");setCFilter("ALL");setCTimeFilter("");}} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:4,fontSize:10}}>✕ Clear</button>}
+                    </FR2>
+                  </div>
+                );
+              })()}
+            </div>
             {/* Search */}
             <div style={{position:"relative"}}>
               <input value={cSearch} onChange={e=>{const v=e.target.value;setCSearch(v);clearTimeout(window._csTimer);window._csTimer=setTimeout(()=>onCargoSearch(v),350);}} placeholder="Search cargoes…"
