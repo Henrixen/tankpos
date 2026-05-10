@@ -28,6 +28,46 @@ function defaultGroups() {
 }
 function saveGroups(groups) { localStorage.setItem(STORAGE_KEY, JSON.stringify(groups)); }
 
+function CustomTagsEditor(){
+  const [tags,setTags]=useState(()=>{try{return JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");}catch{return[];}});
+  const [editIdx,setEditIdx]=useState(null);
+  const [editVal,setEditVal]=useState("");
+  const [newVal,setNewVal]=useState("");
+  function save(list){setTags(list);localStorage.setItem("signal_custom_tags",JSON.stringify(list));}
+  function del(i){save(tags.filter((_,j)=>j!==i));}
+  function startEdit(i){setEditIdx(i);setEditVal(tags[i]);}
+  function commitEdit(i,val){if(!val.trim())return;const t=[...tags];t[i]=val.trim();save(t);setEditIdx(null);}
+  function add(){if(!newVal.trim()||tags.includes(newVal.trim()))return;save([...tags,newVal.trim()].sort());setNewVal("");}
+  const inp2={background:"rgba(10,18,34,0.95)",border:"1px solid rgba(88,166,255,0.4)",borderRadius:3,color:"#cde",fontFamily:"inherit",fontSize:11,padding:"2px 6px",outline:"none"};
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+        {tags.map((t,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:2,background:"rgba(88,166,255,0.1)",border:"1px solid rgba(88,166,255,0.25)",borderRadius:3,padding:"1px 4px"}}>
+            {editIdx===i?(
+              <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)}
+                onBlur={()=>commitEdit(i,editVal)}
+                onKeyDown={e=>{if(e.key==="Enter")commitEdit(i,editVal);if(e.key==="Escape")setEditIdx(null);}}
+                style={{...inp2,width:80}}/>
+            ):(
+              <span style={{fontSize:11,color:"rgba(160,200,255,0.8)"}}>{t}</span>
+            )}
+            <button onClick={()=>startEdit(i)} style={{background:"none",border:"none",color:"rgba(120,160,220,0.4)",fontSize:10,cursor:"pointer",padding:"0 2px",lineHeight:1}}>✎</button>
+            <button onClick={()=>del(i)} style={{background:"none",border:"none",color:"rgba(255,107,107,0.4)",fontSize:10,cursor:"pointer",padding:"0 2px",lineHeight:1}}>✕</button>
+          </div>
+        ))}
+        {tags.length===0&&<span style={{fontSize:11,color:"rgba(120,160,220,0.3)",fontStyle:"italic"}}>No custom tags yet</span>}
+      </div>
+      <div style={{display:"flex",gap:5}}>
+        <input value={newVal} onChange={e=>setNewVal(e.target.value)} placeholder="New tag…"
+          onKeyDown={e=>e.key==="Enter"&&add()}
+          style={{...inp2,width:120}}/>
+        <button onClick={add} style={{fontSize:11,padding:"2px 10px",borderRadius:3,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(88,166,255,0.15)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>Add</button>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsTab() {
   const [groups, setGroups] = useState(loadGroups);
   useEffect(()=>{ saveGroups(groups); },[groups]);
@@ -159,7 +199,34 @@ export default function SettingsTab() {
         </div>
       </div>
 
-      {/* Reset + preview */}
+      {/* Custom Tags section */}
+      <div>
+        <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>
+          Custom Tags <span style={{fontWeight:400,color:"rgba(120,160,220,0.3)",textTransform:"none"}}>— used in the Tag column and Tag on parse filter</span>
+        </div>
+        <div style={{border:"1px solid rgba(58,130,246,0.18)",borderRadius:7,overflow:"hidden",marginBottom:8}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr>
+              <th style={{...th,width:"40%"}}>Preset tags (read-only)</th>
+              <th style={th}>Custom tags (editable)</th>
+            </tr></thead>
+            <tbody>
+              <tr style={{background:"rgba(10,18,34,0.95)"}}>
+                <td style={{...td,verticalAlign:"top"}}>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                    {["AG","CPP","DPP","ex Asia","Med","Parcel","TA","UKC","WAF"].map(t=>(
+                      <span key={t} style={{fontSize:11,padding:"2px 8px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",background:"rgba(88,166,255,0.08)",color:"rgba(160,200,255,0.6)"}}>{t}</span>
+                    ))}
+                  </div>
+                </td>
+                <td style={td}>
+                  <CustomTagsEditor/>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
       <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",borderTop:"1px solid rgba(58,130,246,0.12)",paddingTop:16}}>
         <button onClick={()=>setGroups(defaultGroups())} style={{...btn(false),padding:"5px 14px",fontSize:12,color:"rgba(248,113,113,0.7)",borderColor:"rgba(248,113,113,0.3)"}}>Reset to defaults</button>
         <span style={{fontSize:10,color:"rgba(120,160,220,0.4)"}}>Preview:</span>
