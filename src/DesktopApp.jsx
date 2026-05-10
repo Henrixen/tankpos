@@ -15,6 +15,8 @@ import IntelVault, { IntelVaultStrip } from "./IntelVault";
 import AISMap from "./AISMap";
 import MatrixTable from "./components/ui/MatrixTable";
 import NotesTab from "./NotesTab";
+import CalendarTab from "./CalendarTab";
+import SettingsTab from "./SettingsTab";
 
 
 
@@ -477,69 +479,100 @@ const filtV=useMemo(()=>{
           <button onClick={()=>setPendingDel(null)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,padding:"5px 14px",cursor:"pointer",fontSize:12}}>Cancel</button>
         </div>
       )}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 18px",background:C.bg2,borderBottom:"1px solid "+C.bd,position:"sticky",top:0,zIndex:100}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,fontFamily:"sans-serif",fontWeight:800,fontSize:17}}>⚓ Tank<span style={{color:C.green}}>Pos</span></div>
-        <div style={{display:"flex",gap:4,alignItems:"center",marginLeft:"auto",marginRight:12}}>
-          {[70,80,90,100,110,120,130].map(z=>(
-            <button key={z} onClick={()=>document.body.style.zoom=z+"%"}
-              style={{fontSize:10,fontWeight:700,padding:"1px 5px",borderRadius:3,border:"1px solid "+C.bd,background:C.bg3,color:C.faint,cursor:"pointer",fontFamily:"inherit"}}>
-              {z}%
-            </button>
-          ))}
-          <button
-            onClick={onLoadVesselDB}
-            disabled={vesselDBLoaded||vesselDBLoading}
-            title={vesselDBLoaded?"Vessel DB loaded — specs auto-enriched on upload":vesselDBLoading?"Loading vessel DB…":"Click to load vessel spec DB (DWT, built, LOA etc.) — only needed when uploading positions"}
-            style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:3,border:"1px solid "+(vesselDBLoaded?C.green:C.bd),background:vesselDBLoaded?"rgba(67,233,123,0.12)":C.bg3,color:vesselDBLoaded?C.green:vesselDBLoading?C.amber:C.faint,cursor:vesselDBLoaded||vesselDBLoading?"default":"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-            {vesselDBLoaded?"✓ Ship DB":vesselDBLoading?"⟳ Loading…":"⚓ Load Ship DB"}
-          </button>
-        </div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          {tab==="pos"&&vessels.length>0&&(<button onClick={()=>setPendingDel({type:"all",id:"__ALL__",label:"ALL "+vessels.length+" vessels"})} style={{background:"none",border:"1px solid "+C.bd,borderRadius:4,padding:"2px 10px",color:C.dim,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✕ Clear Positions</button>)}
-        </div>
-      </div>
-      <div style={{padding:"12px 16px",maxWidth:1900,margin:"0 auto"}}>
-        {/* Professional tab navigation */}
-        <div style={{display:"flex",alignItems:"center",marginBottom:16,gap:12,flexWrap:"nowrap"}}>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap",flexShrink:0}}>
-            {[
-              ["pos","⚓","Positions",vessels.length,"#58a6ff"],
-              ["cargo","📦","Cargoes",cargoTotal||cargoes.length,"#faa356"],
-              ["fix","🎯","Fixing",0,"#c792ea"],
-              ["matrix","🔗","Matrix",0,"#43e97b"],
-              ["projects","🧮","Projects",0,"#58a6ff"],
-              ["tce","⚡","TCE",0,"#faa356"],
-              ["dash","📊","Dashboard",0,"#43e97b"],
-              ["notes","📝","Notes",0,"#f472b6"]
-            ].map(([id,icon,label,count,col])=>(
-              <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
-                style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,
-                  minWidth:mobile?80:110,padding:"10px 12px",borderRadius:8,
-                  border:"1px solid "+(tab===id?col:C.bd),
-                  background:tab===id?"linear-gradient(135deg, "+col+"15, "+col+"05)":"transparent",
-                  boxShadow:tab===id?"0 4px 12px "+col+"33":"none",
-                  cursor:"pointer",transition:"all 0.2s",fontFamily:"inherit"}}>
-                <div style={{fontSize:mobile?18:20}}>{icon}</div>
-                <div style={{fontSize:mobile?9:10,fontWeight:700,color:tab===id?col:C.dim,
-                  textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</div>
-                {count>0&&<div style={{fontSize:11,fontWeight:700,color:tab===id?col:C.faint,
-                  background:C.bg3,padding:"1px 6px",borderRadius:8}}>{count}</div>}
-              </button>
-            ))}
+      {/* ── APP HEADER ── */}
+      <div style={{
+        background:"linear-gradient(135deg, #070f1c 0%, #0c1a32 50%, #081426 100%)",
+        borderBottom:"1px solid rgba(58,130,246,0.18)",
+        position:"sticky",top:0,zIndex:200,
+      }}>
+        {/* Top bar: brand + Ask AI + Intel Vault + utilities */}
+        <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 20px 0",borderBottom:"1px solid rgba(58,130,246,0.08)"}}>
+          <div style={{flexShrink:0,display:"flex",flexDirection:"column",gap:1,paddingBottom:10}}>
+            <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",color:"rgba(120,180,255,0.45)"}}>Signal — Tanker Intelligence</div>
+            <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+              <span style={{fontSize:18,fontWeight:800,color:"#e8f2ff",letterSpacing:"0.02em"}}>Market</span>
+              <span style={{fontSize:18,fontWeight:800,color:"#43e97b",letterSpacing:"0.02em"}}>Signal</span>
+              <span style={{fontSize:10,color:"rgba(140,190,255,0.35)",marginLeft:2}}>
+                {new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
+              </span>
+            </div>
           </div>
-          {/* Global Ask AI strip — between tabs and Intel Vault */}
+          <div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>
           {!mobile&&(
-            <div style={{flex:1,minWidth:0,display:"flex",justifyContent:"center"}}>
+            <div style={{flex:1,minWidth:0,position:"relative",paddingBottom:10}}>
               <AskAIStrip vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>
             </div>
           )}
-          {/* Global Intel Vault strip — always visible */}
+          {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}
           {!mobile&&(
-            <div style={{flexShrink:0}}>
+            <div style={{flexShrink:0,paddingBottom:10}}>
               <IntelVaultStrip onVaultUpdate={setIntelItems}/>
             </div>
           )}
+          <div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>
+          <div style={{display:"flex",gap:3,alignItems:"center",flexShrink:0,paddingBottom:10}}>
+            {[70,80,90,100,110,120,130].map(z=>(
+              <button key={z} onClick={()=>document.body.style.zoom=z+"%"}
+                style={{fontSize:9,padding:"1px 4px",borderRadius:2,border:"1px solid rgba(58,130,246,0.12)",background:"transparent",color:"rgba(100,140,200,0.3)",cursor:"pointer",fontFamily:"inherit"}}>{z}%</button>
+            ))}
+            <button onClick={onLoadVesselDB} disabled={vesselDBLoaded||vesselDBLoading}
+              style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:3,marginLeft:4,
+                border:"1px solid "+(vesselDBLoaded?"rgba(67,233,123,0.4)":"rgba(58,130,246,0.18)"),
+                background:vesselDBLoaded?"rgba(67,233,123,0.08)":"transparent",
+                color:vesselDBLoaded?"#43e97b":vesselDBLoading?"#faa356":"rgba(100,140,200,0.4)",
+                cursor:vesselDBLoaded||vesselDBLoading?"default":"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+              {vesselDBLoaded?"✓ DB":vesselDBLoading?"⟳…":"Ship DB"}
+            </button>
+            {tab==="pos"&&vessels.length>0&&(
+              <button onClick={()=>setPendingDel({type:"all",id:"__ALL__",label:"ALL "+vessels.length+" vessels"})}
+                style={{fontSize:10,padding:"2px 8px",borderRadius:3,border:"1px solid rgba(255,107,107,0.25)",background:"transparent",color:"rgba(255,107,107,0.4)",cursor:"pointer",fontFamily:"inherit"}}>
+                ✕ Clear
+              </button>
+            )}
+          </div>
         </div>
+        {/* Tab navigation row */}
+        <div style={{display:"flex",alignItems:"stretch",padding:"0 20px",gap:0,overflowX:"auto"}}>
+          {[
+            ["pos","Positions",vessels.length,"#58a6ff"],
+            ["cargo","Cargoes",cargoTotal||cargoes.length,"#faa356"],
+            ["fix","Fixing",0,"#c792ea"],
+            ["matrix","Matrix",0,"#43e97b"],
+            ["projects","Projects",0,"#4fc3f7"],
+            ["tce","TCE",0,"#faa356"],
+            ["dash","Dashboard",0,"#43e97b"],
+            ["notes","Notes",0,"#f472b6"],
+            ["cal","Calendar",0,"#4fc3f7"],
+            ["settings","Settings",0,"#94a3b8"],
+          ].map(([id,label,count,col])=>{
+            const active=tab===id;
+            return(
+              <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
+                style={{position:"relative",display:"flex",alignItems:"center",gap:6,
+                  padding:"10px 16px",background:"transparent",border:"none",
+                  borderBottom:"2px solid "+(active?col:"transparent"),
+                  cursor:"pointer",fontFamily:"inherit",flexShrink:0,
+                  transition:"border-color 0.15s,color 0.15s",marginBottom:-1}}>
+                <span style={{fontSize:12,fontWeight:active?700:500,
+                  color:active?col:"rgba(120,155,210,0.5)",
+                  textTransform:"uppercase",letterSpacing:"0.07em",whiteSpace:"nowrap"}}>
+                  {label}
+                </span>
+                {count>0&&(
+                  <span style={{fontSize:10,fontWeight:700,
+                    color:active?col:"rgba(100,140,200,0.35)",
+                    background:active?col+"18":"transparent",
+                    padding:"0 5px",borderRadius:8,lineHeight:"16px",
+                    border:active?"1px solid "+col+"33":"none"}}>
+                    {count.toLocaleString()}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div style={{padding:"12px 20px",maxWidth:1900,margin:"0 auto"}}>
 
         {/* ── POSITIONS ── */}
         {tab==="pos"&&(
@@ -1295,6 +1328,8 @@ const filtV=useMemo(()=>{
             <NotesTab/>
           </div>
         )}
+        {tab==="cal"&&<CalendarTab/>}
+        {tab==="settings"&&<SettingsTab/>}
       </div>
     </div>
   );
