@@ -7,6 +7,7 @@ export default function MatrixTable({
   renderRow,
   keyField = "id",
   onRowClick,
+  getRowStyle,
   selectedKey
 }) {
   const wrap = {
@@ -76,8 +77,9 @@ export default function MatrixTable({
   key={row[keyField] || i}
   onClick={() => onRowClick && onRowClick(row)}
   style={{
-    background:
-      selectedKey && (row[keyField] === selectedKey || row.vessel === selectedKey)
+    background: getRowStyle
+      ? getRowStyle(row, i)
+      : selectedKey && (row[keyField] === selectedKey || row.vessel === selectedKey)
         ? "rgba(88,166,255,0.14)"
         : i % 2
         ? "rgba(255,255,255,0.02)"
