@@ -3,7 +3,6 @@ import { supabase } from "./supabaseclient";
 import { C, OP_COLORS } from "./constants";
 import { stripHtml, classifyRegion, daysBetween } from "./utils";
 import { apiCall, ocrImage } from "./api";
-import { NotesAlertBanner } from "./NotesTab";
 
 const WS_STORE = "ws-data";
 const ROUTES = [
@@ -120,7 +119,13 @@ ${text}`}]
       }
       const snap = {date:today, spot: stampedSpot};
       const prevHistory = (existing.history||[]).filter(h=>h.date!==today);
-      const newHistory = [...prevHistory, snap].slice(-90);
+      const newHistory = [...prevHistory, snap]
+        .sort((a,b)=>{
+          // Parse "DD Mon YY" dates for comparison
+          const pd=s=>{try{return new Date(s.date.replace(/(\d+) (\w+) (\d+)/,"$2 $1 20$3"));}catch{return new Date(0);}}
+          return pd(a)-pd(b);
+        })
+        .slice(-90);
 
        const next = {
         spot: (()=>{
@@ -690,9 +695,6 @@ function Dashboard({vessels, cargoes, history}) {
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14,background:D.bg,borderRadius:10,padding:"16px",fontFamily:"Inter,sans-serif"}}>
-
-      {/* ── Note alerts ── */}
-      <NotesAlertBanner/>
 
       {/* ── Hero banner ── */}
       <div style={{position:"relative",borderRadius:10,overflow:"hidden",background:"#070f1c",border:"1px solid "+D.border2}}>
