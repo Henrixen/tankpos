@@ -44,8 +44,6 @@ function Toolbar({onInsertTable}){
   return(
     <div style={{display:"flex",gap:4,padding:"5px 10px",borderBottom:"1px solid rgba(58,130,246,0.08)",
       background:"rgba(4,10,22,0.4)",flexWrap:"wrap",alignItems:"center"}}>
-      {btn("B","bold")}{btn("U","underline")}{btn("I","italic")}
-      <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px",height:14}}/>
       {btn("\u2022 List","insertUnorderedList")}{btn("1. List","insertOrderedList")}
       <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px",height:14}}/>
       <button onMouseDown={e=>{e.preventDefault();onInsertTable&&onInsertTable();}} style={{
@@ -461,11 +459,20 @@ function Worklist() {
       position:"sticky", top:0, maxHeight:"calc(100vh - 120px)"
     }}>
       <div style={{
-        padding:"7px 12px", background:"rgba(10,20,42,0.99)",
+        padding:"5px 10px", background:"rgba(10,20,42,0.99)",
         borderBottom:"1px solid rgba(58,130,246,0.10)",
-        fontSize:10, fontWeight:700, color:"rgba(120,160,220,0.5)",
-        textTransform:"uppercase", letterSpacing:"0.08em", flexShrink:0
-      }}>Worklist</div>
+        display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0
+      }}>
+        <span style={{fontSize:10, fontWeight:700, color:"rgba(120,160,220,0.5)", textTransform:"uppercase", letterSpacing:"0.08em"}}>Worklist</span>
+        <div style={{display:"flex",gap:3}}>
+          {[["•","insertUnorderedList"],["1.","insertOrderedList"]].map(([l,c])=>(
+            <button key={c} onMouseDown={e=>{e.preventDefault();ref.current?.focus();document.execCommand(c,false,null);}}
+              style={{background:"transparent",border:"1px solid rgba(58,130,246,0.15)",borderRadius:3,color:"rgba(140,180,255,0.5)",padding:"1px 6px",fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
       <div
         ref={ref}
         contentEditable
