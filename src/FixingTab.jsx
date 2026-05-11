@@ -358,52 +358,64 @@ function FixingTab({vessels}){
                 const allCJobs=jobs.filter(j=>(j.charterer||"")===charterer);
                 const counts=JOB_STATUS.reduce((a,s)=>{const n=allCJobs.filter(j=>j.status===s).length;if(n)a[s]=n;return a;},{});
                 const glowCol=counts.SUBS?C.purple:counts.OPEN||counts.WORKING?C.amber:null;
-                const isActive=clientFilter===charterer;
+                const isActive=expandedJob===charterer; // highlight = expanded, not filtered
                 const isJobOpen=expandedJob===charterer;
                 const client=clients.find(c=>c.name===charterer);
                 const isEditingName=editingClientName===client?.id;
+                const [showPencilMenu,setShowPencilMenu]=React.useState(false);
                 return(
                   <div key={charterer} style={{display:"flex",flexDirection:"column",
-                    background:isActive?"rgba(88,166,255,.12)":"rgba(8,18,38,0.9)",
-                    border:"1px solid "+(isActive?"rgba(88,166,255,0.5)":glowCol?glowCol+"55":"rgba(58,130,246,0.18)"),
-                    borderRadius:7,overflow:"visible",
-                    boxShadow:glowCol&&!isActive?"0 0 10px "+glowCol+"28":"none",transition:"box-shadow 0.2s"}}>
-                    <div style={{padding:"10px 12px",cursor:"pointer"}} onClick={()=>setClientFilter(f=>f===charterer?"ALL":charterer)}>
+                    background:isActive?"rgba(88,166,255,.14)":"rgba(8,18,38,0.9)",
+                    border:"1px solid "+(isActive?"rgba(88,166,255,0.55)":glowCol?glowCol+"55":"rgba(58,130,246,0.18)"),
+                    borderRadius:8,overflow:"visible",minWidth:160,
+                    boxShadow:isActive?"0 0 12px rgba(88,166,255,0.18)":glowCol?"0 0 10px "+glowCol+"28":"none",
+                    transition:"box-shadow 0.2s"}}>
+                    {/* Click card header → expand cargoes (no filter) */}
+                    <div style={{padding:"12px 14px",cursor:"pointer"}} onClick={()=>setExpandedJob(isJobOpen?null:charterer)}>
                       {isEditingName&&client?(
                         <input autoFocus defaultValue={client.name}
                           onBlur={e=>renameClient(client.id,e.target.value)}
                           onKeyDown={e=>{if(e.key==="Enter")renameClient(client.id,e.target.value);if(e.key==="Escape")setEditingClientName(null);}}
                           onClick={e=>e.stopPropagation()}
-                          style={{...inpS,width:"100%",fontSize:12,fontWeight:700,marginBottom:4,padding:"2px 6px"}}/>
+                          style={{...inpS,width:"100%",fontSize:13,fontWeight:700,marginBottom:4,padding:"2px 6px"}}/>
                       ):(
-                        <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:5}}>
-                          <span style={{fontSize:12,fontWeight:700,color:isActive?"#79c0ff":"rgba(200,220,255,0.85)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1}}>{charterer||"—"}</span>
-                          {client&&<button onClick={e=>{e.stopPropagation();setEditingClientName(client.id);}}
-                            style={{background:"none",border:"none",color:"rgba(120,160,220,0.3)",fontSize:10,cursor:"pointer",padding:0,flexShrink:0}} title="Rename">✎</button>}
-                          {client&&<button onClick={e=>{e.stopPropagation();setPendingDelClient(client);}}
-                            style={{background:"none",border:"none",color:"rgba(255,107,107,0.3)",fontSize:10,cursor:"pointer",padding:0,flexShrink:0}} title="Delete client">✕</button>}
+                        <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:6}}>
+                          <span style={{fontSize:13,fontWeight:700,color:isActive?"#79c0ff":"rgba(200,220,255,0.9)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1}}>{charterer||"—"}</span>
+                          {/* Pencil with dropdown for rename/delete */}
+                          {client&&(
+                            <div style={{position:"relative",flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                              <button onClick={e=>{e.stopPropagation();setShowPencilMenu(v=>!v);}}
+                                style={{background:"none",border:"none",color:"rgba(120,160,220,0.35)",fontSize:11,cursor:"pointer",padding:"0 2px",lineHeight:1}} title="Edit client">✎</button>
+                              {showPencilMenu&&(
+                                <>
+                                  <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setShowPencilMenu(false)}/>
+                                  <div style={{position:"absolute",right:0,top:"100%",zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.25)",borderRadius:5,padding:4,minWidth:110,boxShadow:"0 6px 20px rgba(0,0,0,0.6)"}}>
+                                    <button onClick={()=>{setEditingClientName(client.id);setShowPencilMenu(false);}}
+                                      style={{display:"block",width:"100%",background:"none",border:"none",color:"rgba(160,200,255,0.7)",fontSize:11,padding:"4px 8px",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>✎ Rename</button>
+                                    <button onClick={()=>{setPendingDelClient(client);setShowPencilMenu(false);}}
+                                      style={{display:"block",width:"100%",background:"none",border:"none",color:"rgba(255,107,107,0.6)",fontSize:11,padding:"4px 8px",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>✕ Delete client</button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
+                          {/* + cargo inline when expanded */}
+                          {isJobOpen&&<button onClick={e=>{e.stopPropagation();createJob(charterer);}}
+                            style={{background:"rgba(88,166,255,0.15)",border:"1px solid rgba(88,166,255,0.3)",borderRadius:3,color:"#79c0ff",fontSize:10,padding:"1px 6px",cursor:"pointer",fontFamily:"inherit",fontWeight:700,lineHeight:1.4}}>+</button>}
                         </div>
                       )}
                       <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
                         {Object.entries(counts).map(([s,n])=>(
-                          <span key={s} style={{fontSize:9,fontWeight:700,padding:"2px 5px",borderRadius:4,background:JOB_STATUS_COL[s]+"22",color:JOB_STATUS_COL[s]}}>{n} {s}</span>
+                          <span key={s} style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4,background:JOB_STATUS_COL[s]+"22",color:JOB_STATUS_COL[s]}}>{n} {s}</span>
                         ))}
-                        {Object.keys(counts).length===0&&<span style={{fontSize:9,color:"rgba(120,160,220,0.35)"}}>no jobs</span>}
+                        {Object.keys(counts).length===0&&<span style={{fontSize:10,color:"rgba(120,160,220,0.3)"}}>no jobs</span>}
                       </div>
                     </div>
-                    <div style={{display:"flex",borderTop:"1px solid rgba(58,130,246,0.12)"}}>
-                      <button onClick={()=>setExpandedJob(isJobOpen?null:charterer)}
-                        style={{flex:1,background:"none",border:"none",borderRight:"1px solid rgba(58,130,246,0.12)",color:isJobOpen?"#58a6ff":"rgba(120,160,220,0.4)",fontSize:9,padding:"4px 0",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
-                        {isJobOpen?"▲ cargo":"▼ cargo"}
-                      </button>
-                      <button onClick={e=>{e.stopPropagation();createJob(charterer);setExpandedJob(charterer);}}
-                        style={{flex:1,background:"none",border:"none",borderRight:"1px solid rgba(58,130,246,0.12)",color:"rgba(88,166,255,0.5)",fontSize:9,padding:"4px 0",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
-                        + cargo
-                      </button>
-                      <button onClick={e=>{e.stopPropagation();setNotePopout(charterer);}}
-                        style={{flex:1,background:"none",border:"none",color:"rgba(120,160,220,0.4)",fontSize:9,padding:"4px 0",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
-                        ✎ notes
-                      </button>
+                    {/* Bottom bar: just expand indicator */}
+                    <div style={{display:"flex",borderTop:"1px solid rgba(58,130,246,0.10)",padding:"3px 14px"}}>
+                      <span style={{fontSize:9,color:isJobOpen?"#58a6ff":"rgba(120,160,220,0.3)",fontFamily:"inherit"}}>
+                        {isJobOpen?"▲ close":"▼ expand"}
+                      </span>
                     </div>
                   </div>
                 );
@@ -508,7 +520,10 @@ function FixingTab({vessels}){
                   <button onClick={()=>setExpandedJob(null)}
                     style={{background:"none",border:"none",color:C.faint,fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit",fontWeight:600}}>▲ close</button>
                 </div>
-                {chartererJobs.map(job=>{
+                <div style={{display:"flex",gap:0,alignItems:"flex-start"}}>
+                  {/* Cargoes */}
+                  <div style={{flex:1,minWidth:0}}>
+                    {chartererJobs.map(job=>{
                   const summary=[job.qty,job.product,job.load&&job.disch?`${job.load} → ${job.disch}`:job.load||job.disch,job.laycan].filter(Boolean).join("  ");
                   const titleText=summary||stripHtml(job.cargo_details||"")||"New cargo";
                   return(
@@ -586,6 +601,21 @@ function FixingTab({vessels}){
                     </div>
                   );
                 })}
+                  </div>
+                  {/* Client notes sidebar */}
+                  {(()=>{
+                    const client=clients.find(c=>c.name===charterer);
+                    if(!client)return null;
+                    return(
+                      <div style={{width:220,flexShrink:0,borderLeft:"1px solid "+C.bd2,display:"flex",flexDirection:"column"}}>
+                        <div style={{padding:"6px 10px",background:"rgba(16,26,48,0.7)",borderBottom:"1px solid "+C.bd2,fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Client notes</div>
+                        <textarea value={client.notes||""} onChange={e=>updateClient(client.id,{notes:e.target.value})}
+                          placeholder="Notes about this client…"
+                          style={{...inpS,flex:1,resize:"none",fontSize:11,background:"rgba(8,16,32,0.5)",border:"none",borderRadius:0,lineHeight:1.6,padding:"8px 10px",minHeight:120,color:C.tx}}/>
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
             );
           })}
