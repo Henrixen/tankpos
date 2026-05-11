@@ -33,75 +33,56 @@ function stripHtml(h){return(h||"").replace(/<[^>]+>/g,"");}
 
 // ── Toolbar ──────────────────────────────────────────────────────────────────
 function Toolbar({onInsertTable}){
-  const b=(label,action,title,extra={})=>(
-    <button key={action+label} onMouseDown={e=>{e.preventDefault();applyFmt(action);}} title={title||label} style={{
+  const btn=(label,action)=>(
+    <button key={action+label} onMouseDown={e=>{e.preventDefault();applyFmt(action);}} style={{
       background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
       color:"rgba(160,200,255,0.65)",padding:"2px 7px",fontFamily:"inherit",fontSize:11,cursor:"pointer",
       fontWeight:action==="bold"?700:400,fontStyle:action==="italic"?"italic":"normal",
-      textDecoration:action==="underline"?"underline":"none",...extra
+      textDecoration:action==="underline"?"underline":"none",
     }}>{label}</button>
   );
   return(
-    <div style={{display:"flex",gap:3,padding:"4px 10px",borderBottom:"1px solid rgba(58,130,246,0.08)",
+    <div style={{display:"flex",gap:4,padding:"5px 10px",borderBottom:"1px solid rgba(58,130,246,0.08)",
       background:"rgba(4,10,22,0.4)",flexWrap:"wrap",alignItems:"center"}}>
-      {b("B","bold","Bold")}
-      {b("U","underline","Underline")}
-      {b("I","italic","Italic")}
+      {btn("B","bold")}{btn("U","underline")}{btn("I","italic")}
       <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px",height:14}}/>
-      {b("• List","insertUnorderedList","Bullet list — Tab to indent, Shift+Tab to outdent")}
-      {b("1. List","insertOrderedList","Numbered list — Tab to indent, Shift+Tab to outdent")}
-      <button onMouseDown={e=>{e.preventDefault();applyFmt("indent");}} title="Indent (Tab)"
-        style={{background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
-          color:"rgba(160,200,255,0.5)",padding:"2px 6px",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>→</button>
-      <button onMouseDown={e=>{e.preventDefault();applyFmt("outdent");}} title="Outdent (Shift+Tab)"
-        style={{background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
-          color:"rgba(160,200,255,0.5)",padding:"2px 6px",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>←</button>
+      {btn("\u2022 List","insertUnorderedList")}{btn("1. List","insertOrderedList")}
       <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px",height:14}}/>
-      <button onMouseDown={e=>{e.preventDefault();onInsertTable&&onInsertTable();}} title="Insert table"
-        style={{background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
-          color:"rgba(160,200,255,0.65)",padding:"2px 7px",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>
-        ⊞ Table
-      </button>
+      <button onMouseDown={e=>{e.preventDefault();onInsertTable&&onInsertTable();}} style={{
+        background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
+        color:"rgba(160,200,255,0.65)",padding:"2px 7px",fontFamily:"inherit",fontSize:11,cursor:"pointer",
+      }}>&#x229e; Table</button>
     </div>
   );
 }
 
-// ── Table dialog (replaces hover-select which breaks on re-renders) ───────────
+// ── Table size picker ─────────────────────────────────────────────────────────
 function TablePicker({onPick,onClose}){
-  const [rows,setRows]=React.useState(3);
-  const [cols,setCols]=React.useState(3);
+  const [hov,setHov]=useState([0,0]);
+  const MAX=8;
   return(
     <div style={{position:"fixed",inset:0,zIndex:900,display:"flex",alignItems:"center",justifyContent:"center"}}
       onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#0c1729",border:"1px solid rgba(58,130,246,0.3)",
-        borderRadius:8,padding:20,boxShadow:"0 8px 32px rgba(0,0,0,0.7)",minWidth:220}}>
-        <div style={{fontSize:12,fontWeight:700,color:"rgba(160,200,255,0.75)",marginBottom:14,textTransform:"uppercase",letterSpacing:"0.07em"}}>Insert Table</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-          <label style={{display:"flex",flexDirection:"column",gap:4,fontSize:11,color:"rgba(120,160,220,0.6)"}}>
-            Rows
-            <input type="number" value={rows} min={1} max={20} onChange={e=>setRows(+e.target.value)}
-              style={{background:"rgba(15,25,50,0.9)",border:"1px solid rgba(88,166,255,0.3)",borderRadius:4,
-                color:"#cde",fontFamily:"inherit",fontSize:13,padding:"4px 8px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
-          </label>
-          <label style={{display:"flex",flexDirection:"column",gap:4,fontSize:11,color:"rgba(120,160,220,0.6)"}}>
-            Columns
-            <input type="number" value={cols} min={1} max={10} onChange={e=>setCols(+e.target.value)}
-              style={{background:"rgba(15,25,50,0.9)",border:"1px solid rgba(88,166,255,0.3)",borderRadius:4,
-                color:"#cde",fontFamily:"inherit",fontSize:13,padding:"4px 8px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
-          </label>
+        borderRadius:8,padding:16,boxShadow:"0 8px 32px rgba(0,0,0,0.7)"}}>
+        <div style={{fontSize:12,color:"rgba(160,200,255,0.65)",marginBottom:10,textAlign:"center"}}>
+          {hov[0]>0?`${hov[1]} \xd7 ${hov[0]} table`:"Hover to select size"}
         </div>
-        <div style={{display:"flex",gap:8}}>
-          <button onMouseDown={e=>{e.preventDefault();onPick(rows||3,cols||3);}}
-            style={{flex:1,background:"rgba(88,166,255,0.18)",border:"1px solid rgba(88,166,255,0.45)",
-              borderRadius:5,color:"#9fc3f5",fontFamily:"inherit",fontWeight:700,fontSize:12,
-              padding:"6px 0",cursor:"pointer"}}>
-            Insert {rows}×{cols}
-          </button>
-          <button onMouseDown={e=>{e.preventDefault();onClose();}}
-            style={{background:"transparent",border:"1px solid rgba(88,166,255,0.18)",borderRadius:5,
-              color:"rgba(120,160,220,0.5)",fontFamily:"inherit",fontSize:12,padding:"6px 12px",cursor:"pointer"}}>
-            ✕
-          </button>
+        <div style={{display:"grid",gridTemplateColumns:`repeat(${MAX},22px)`,gap:3}}>
+          {Array.from({length:MAX*MAX},(_,i)=>{
+            const r=Math.floor(i/MAX)+1,c=(i%MAX)+1;
+            const on=r<=hov[0]&&c<=hov[1];
+            return(
+              <div key={i} onMouseEnter={()=>setHov([r,c])}
+                onClick={()=>onPick(hov[0]||1,hov[1]||1)}
+                style={{width:18,height:18,borderRadius:2,cursor:"pointer",
+                  background:on?"rgba(88,166,255,0.3)":"rgba(58,130,246,0.08)",
+                  border:"1px solid "+(on?"rgba(88,166,255,0.5)":"rgba(58,130,246,0.15)")}}/>
+            );
+          })}
+        </div>
+        <div style={{fontSize:11,color:"rgba(110,155,215,0.4)",textAlign:"center",marginTop:8}}>
+          Click to insert
         </div>
       </div>
     </div>
@@ -429,6 +410,82 @@ function TopicFilterRow({visibleTopics,hiddenTopics,topicFilter,setTopicFilter,p
   );
 }
 
+// ── Worklist (persistent right sidebar) ──────────────────────────────────────
+const WL_KEY = "signal_worklist";
+function Worklist() {
+  const [text, setText] = useState(() => {
+    try { return localStorage.getItem(WL_KEY) || ""; } catch { return ""; }
+  });
+  const ref = useRef(null);
+
+  // Auto-save to localStorage
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try { localStorage.setItem(WL_KEY, ref.current?.innerHTML || ""); } catch {}
+    }, 600);
+    return () => clearTimeout(t);
+  }, [text]);
+
+  // Sync Supabase on blur
+  async function syncDB() {
+    const val = ref.current?.innerHTML || "";
+    try {
+      await supabase.from("dashboard").upsert({ key:"worklist", value:val }, { onConflict:"key" });
+    } catch {}
+  }
+
+  // Load from Supabase on mount (cross-device)
+  useEffect(() => {
+    supabase.from("dashboard").select("value").eq("key","worklist").single()
+      .then(({ data }) => {
+        if (data?.value && ref.current) {
+          ref.current.innerHTML = data.value;
+          try { localStorage.setItem(WL_KEY, data.value); } catch {}
+        }
+      }).catch(() => {});
+  }, []);
+
+  function handleInput() { setText(ref.current?.innerHTML || ""); }
+  function handleKey(e) {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      document.execCommand("insertText", false, "    ");
+    }
+  }
+
+  return (
+    <div style={{
+      width:240, flexShrink:0, display:"flex", flexDirection:"column",
+      border:"1px solid rgba(58,130,246,0.16)", borderRadius:7,
+      background:"rgba(6,13,28,0.97)", overflow:"hidden",
+      position:"sticky", top:0, maxHeight:"calc(100vh - 120px)"
+    }}>
+      <div style={{
+        padding:"7px 12px", background:"rgba(10,20,42,0.99)",
+        borderBottom:"1px solid rgba(58,130,246,0.10)",
+        fontSize:10, fontWeight:700, color:"rgba(120,160,220,0.5)",
+        textTransform:"uppercase", letterSpacing:"0.08em", flexShrink:0
+      }}>Worklist</div>
+      <div
+        ref={ref}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={handleInput}
+        onBlur={syncDB}
+        onKeyDown={handleKey}
+        data-placeholder="Tasks, reminders, to-do…"
+        style={{
+          flex:1, padding:"10px 12px", color:"#e8f2ff",
+          fontFamily:"inherit", fontSize:12, lineHeight:1.7,
+          outline:"none", overflowY:"auto", caretColor:"#58a6ff",
+          whiteSpace:"pre-wrap"
+        }}
+      />
+      <style>{`[data-placeholder]:empty:before{content:attr(data-placeholder);color:rgba(110,155,215,0.3);pointer-events:none;}`}</style>
+    </div>
+  );
+}
+
 export default function NotesTab(){
   const [notes,setNotes]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -527,14 +584,13 @@ export default function NotesTab(){
 
   async function saveEdit(id,body,editTitle,editTopics,editImages,editAlertAt){
     const updated_at=new Date().toISOString();
-    // Silent background save — deliberately no setNotes() call here.
-    // setNotes would trigger a re-render of the parent, which unmounts/remounts
-    // the modal's contentEditable and kills the cursor position.
-    // The note list refreshes when the modal closes via closeModal → load().
     await supabase.from("notes").update({
       body,title:editTitle||null,topics:editTopics,
       images:editImages,updated_at,alert_at:editAlertAt||null,
     }).eq("id",id);
+    setNotes(prev=>prev.map(n=>n.id===id
+      ?{...n,body,title:editTitle||null,topics:editTopics,images:editImages,updated_at,alert_at:editAlertAt||null}
+      :n));
   }
 
   async function togglePin(note){
@@ -786,8 +842,8 @@ export default function NotesTab(){
       savedOnce.current=true;
       saveEdit(note.id,b,t.trim()||null,topicsRef.current,imgsRef.current,a||null);
     }
-    function scheduleSave(){clearTimeout(saveTimer.current);saveTimer.current=setTimeout(doSave,8000);}
-    function closeModal(){clearTimeout(saveTimer.current);doSave();setExpandedId(null);setTimeout(()=>load(),600);}
+    function scheduleSave(){clearTimeout(saveTimer.current);saveTimer.current=setTimeout(doSave,2000);}
+    function closeModal(){clearTimeout(saveTimer.current);doSave();setExpandedId(null);}
     React.useEffect(()=>()=>{clearTimeout(saveTimer.current);doSave();},[]);
 
     function modalPaste(e){
@@ -827,6 +883,9 @@ export default function NotesTab(){
               opacity:note.pinned?1:0.4}}>&#x1F4CC;</button>
             <input ref={titleRef} defaultValue={note.title||""} onChange={scheduleSave}
               placeholder="Title..."
+              onKeyDown={e=>{
+                if(e.key==="Tab"){ e.preventDefault(); bodyRef.current?.focus(); }
+              }}
               style={{flex:1,minWidth:100,background:"transparent",border:"none",color:"#e8f2ff",
                 fontFamily:"inherit",fontSize:14,fontWeight:700,outline:"none"}}/>
             <span style={{fontSize:11,color:"rgba(110,155,215,0.45)",whiteSpace:"nowrap"}}>{fmtTs(note.updated_at||note.created_at)}</span>
@@ -872,13 +931,6 @@ export default function NotesTab(){
           <div ref={bodyRef} contentEditable suppressContentEditableWarning
             onInput={scheduleSave}
             onPaste={modalPaste}
-            onKeyDown={e=>{
-              if(e.key==="Tab"){
-                e.preventDefault();
-                document.execCommand(e.shiftKey?"outdent":"indent",false,null);
-                scheduleSave();
-              }
-            }}
             style={{flex:1,overflowY:"auto",padding:"12px 16px",color:"#e8f2ff",
               fontFamily:"inherit",fontSize:13,outline:"none",lineHeight:1.7,caretColor:"#58a6ff",
               minHeight:120}}/>
@@ -932,20 +984,6 @@ export default function NotesTab(){
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:10,height:"100%",minHeight:0}}>
-      <style>{`
-        [contenteditable] ol{padding-left:1.6em;margin:3px 0}
-        [contenteditable] ul{padding-left:1.6em;margin:3px 0}
-        [contenteditable] li{margin:2px 0;line-height:1.6}
-        [contenteditable] ol ol{list-style-type:lower-alpha}
-        [contenteditable] ol ol ol{list-style-type:lower-roman}
-        [contenteditable] ul ul{list-style-type:circle}
-        [contenteditable] ul ul ul{list-style-type:square}
-        [contenteditable] table{border-collapse:collapse;width:auto;margin:6px 0}
-        [contenteditable] td,[contenteditable] th{border:1px solid rgba(88,166,255,0.28);padding:4px 8px;min-width:54px;vertical-align:top;color:#e8f2ff}
-        .note-preview-html ol,.note-preview-html ul{padding-left:1.3em;margin:2px 0}
-        .note-preview-html table{border-collapse:collapse;font-size:11px}
-        .note-preview-html td,.note-preview-html th{border:1px solid rgba(88,166,255,0.2);padding:2px 5px}
-      `}</style>
       {showTablePicker&&(
         <TablePicker
           onPick={(r,c)=>{
@@ -1021,10 +1059,7 @@ export default function NotesTab(){
         <Toolbar onInsertTable={()=>setShowTablePicker(true)}/>
         <div ref={editorRef} contentEditable suppressContentEditableWarning
           onPaste={handlePaste}
-          onKeyDown={e=>{
-            if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){save();return;}
-            if(e.key==="Tab"){e.preventDefault();document.execCommand(e.shiftKey?"outdent":"indent",false,null);}
-          }}
+          onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))save();}}
           data-placeholder="Write your note\u2026 (Ctrl+Enter to save, paste screenshots)"
           style={{minHeight:80,padding:"10px 14px",color:"#e8f2ff",
             fontFamily:"inherit",fontSize:12,outline:"none",lineHeight:1.65,caretColor:"#58a6ff"}}/>
@@ -1117,29 +1152,35 @@ export default function NotesTab(){
         );
       })()}
 
-      {/* Notes list/grid */}
-      <div style={{flex:1,minHeight:0,overflowY:"auto"}}>
-        {loading&&<div style={{fontSize:12,color:"rgba(110,155,215,0.45)",padding:"20px",textAlign:"center"}}>Loading...</div>}
-        {!loading&&filtered.length===0&&(
-          <div style={{fontSize:12,color:"rgba(110,155,215,0.45)",padding:"20px",textAlign:"center",fontStyle:"italic"}}>
-            {search||topicFilter||dateFilter!=="all"?"No notes match your filter.":"No notes yet. Write one above."}
-          </div>
-        )}
-        {pinned.length>0&&(
-          <div style={{marginBottom:10}}>
-            <div style={{fontSize:10,fontWeight:700,color:"#f5a623",letterSpacing:"0.08em",
-              textTransform:"uppercase",marginBottom:6,padding:"0 2px"}}>
-              &#x1F4CC; Pinned
+      {/* Notes list/grid + Worklist sidebar */}
+      <div style={{flex:1,minHeight:0,display:"flex",gap:12,alignItems:"flex-start"}}>
+        {/* Notes */}
+        <div style={{flex:1,minHeight:0,overflowY:"auto",height:"100%"}}>
+          {loading&&<div style={{fontSize:12,color:"rgba(110,155,215,0.45)",padding:"20px",textAlign:"center"}}>Loading...</div>}
+          {!loading&&filtered.length===0&&(
+            <div style={{fontSize:12,color:"rgba(110,155,215,0.45)",padding:"20px",textAlign:"center",fontStyle:"italic"}}>
+              {search||topicFilter||dateFilter!=="all"?"No notes match your filter.":"No notes yet. Write one above."}
             </div>
-            <NoteList items={pinned}/>
-          </div>
-        )}
-        {unpinned.length>0&&(
-          <div>
-            {pinned.length>0&&<div style={{fontSize:10,fontWeight:700,color:"rgba(110,155,215,0.45)",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:6,padding:"0 2px"}}>Notes</div>}
-            <NoteList items={unpinned}/>
-          </div>
-        )}
+          )}
+          {pinned.length>0&&(
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:10,fontWeight:700,color:"#f5a623",letterSpacing:"0.08em",
+                textTransform:"uppercase",marginBottom:6,padding:"0 2px"}}>
+                &#x1F4CC; Pinned
+              </div>
+              <NoteList items={pinned}/>
+            </div>
+          )}
+          {unpinned.length>0&&(
+            <div>
+              {pinned.length>0&&<div style={{fontSize:10,fontWeight:700,color:"rgba(110,155,215,0.45)",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:6,padding:"0 2px"}}>Notes</div>}
+              <NoteList items={unpinned}/>
+            </div>
+          )}
+        </div>
+
+        {/* Worklist sidebar */}
+        <Worklist/>
       </div>
 
       <style>{`
