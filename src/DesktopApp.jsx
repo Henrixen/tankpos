@@ -534,10 +534,10 @@ const filtV=useMemo(()=>{
         {/* Top bar: brand + Ask AI + Intel Vault + utilities */}
         <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 20px 0",borderBottom:"1px solid rgba(58,130,246,0.08)"}}>
           <div style={{flexShrink:0,display:"flex",flexDirection:"column",gap:1,paddingBottom:10}}>
-            <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",color:"rgba(120,180,255,0.45)"}}>Signal — Tanker Intelligence</div>
+            <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",color:"rgba(120,180,255,0.45)"}}>Tanker Intel Platform</div>
             <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-              <span style={{fontSize:18,fontWeight:800,color:"#e8f2ff",letterSpacing:"0.02em"}}>Market</span>
-              <span style={{fontSize:18,fontWeight:800,color:"#43e97b",letterSpacing:"0.02em"}}>Signal</span>
+              <span style={{fontSize:18,fontWeight:800,color:"#e8f2ff",letterSpacing:"0.02em"}}>Broker</span>
+              <span style={{fontSize:18,fontWeight:800,color:"#43e97b",letterSpacing:"0.02em"}}>Dashboard</span>
               <span style={{fontSize:10,color:"rgba(140,190,255,0.35)",marginLeft:2}}>
                 {new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
               </span>
