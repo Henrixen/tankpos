@@ -119,13 +119,10 @@ ${text}`}]
       }
       const snap = {date:today, spot: stampedSpot};
       const prevHistory = (existing.history||[]).filter(h=>h.date!==today);
-      const newHistory = [...prevHistory, snap]
-        .sort((a,b)=>{
-          // Parse "DD Mon YY" dates for comparison
-          const pd=s=>{try{return new Date(s.date.replace(/(\d+) (\w+) (\d+)/,"$2 $1 20$3"));}catch{return new Date(0);}}
-          return pd(a)-pd(b);
-        })
-        .slice(-90);
+      const newHistory = [...prevHistory, snap].sort((a,b)=>{
+        function pd(s){try{const m=s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{2,4})$/);if(m)return new Date(`${m[2]} ${m[1]} ${m[3].length===2?"20"+m[3]:m[3]}`).getTime();return new Date(s).getTime()||0;}catch{return 0;}}
+        return pd(a.date)-pd(b.date);
+      }).slice(-90);
 
        const next = {
         spot: (()=>{
@@ -172,8 +169,19 @@ ${text}`}]
 
   const sc = status?.t==="success"?C.green:status?.t==="error"?C.red:C.blue;
 
-  // Chart data: last 30 history snapshots for each route
-  const histData = (data?.history||[]).slice(-30);
+  // Chart data: last 30 history snapshots sorted chronologically
+  function parseChartDate(s){
+    if(!s)return 0;
+    try{
+      // "07 May 26" or "07 May 2026"
+      const m=s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{2,4})$/);
+      if(m) return new Date(`${m[2]} ${m[1]} ${m[3].length===2?"20"+m[3]:m[3]}`).getTime();
+      return new Date(s).getTime()||0;
+    }catch{return 0;}
+  }
+  const histData = [...(data?.history||[])]
+    .sort((a,b)=>parseChartDate(a.date)-parseChartDate(b.date))
+    .slice(-30);
   const routeColors = {TC2:C.blue,TC6:C.green,TC14:C.amber,TC23:C.purple,TC178:"#ff9f43"};
 
   const secHead = t=>(<div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>{t}</div>);
