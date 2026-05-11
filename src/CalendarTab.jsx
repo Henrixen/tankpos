@@ -1,45 +1,45 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { C } from "./constants";
+import { supabase } from "./supabaseclient";
 
 const STORAGE_KEY = "signal_calendar_events";
 
 async function loadEventsFromDB() {
   try {
-    const { supabase } = await import("./supabaseclient");
     const { data, error } = await supabase.from("calendar_events").select("*").order("date");
     if (!error && data?.length) {
-      // Map rows to event objects
       return data.map(r => ({
         id: r.id,
         title: r.title,
         date: r.date,
         endDate: r.end_date || "",
-        color: r.category || COLORS[0],
+        color: r.category || "",
         note: r.note || "",
         image: r.image || null,
       }));
     }
-  } catch {}
-  // Fallback localStorage
+  } catch(e) { console.warn("calendar load error", e); }
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; }
 }
+
 async function saveEventsToDB(events) {
   try {
-    const { supabase } = await import("./supabaseclient");
-    // Delete all and reinsert (simple approach for small event sets)
-    await supabase.from("calendar_events").delete().neq("id","__never__");
-    if (events.length) {
-      await supabase.from("calendar_events").insert(events.map(e => ({
+    // Delete all then reinsert
+    await supabase.from("calendar_events").delete().neq("id", "___");
+    if (events.length > 0) {
+      const rows = events.map(e => ({
         id: e.id,
-        title: e.title,
-        date: e.date,
+        title: e.title || "",
+        date: e.date || "",
         end_date: e.endDate || null,
         category: e.color || null,
         note: e.note || null,
         image: e.image || null,
-      })));
+      }));
+      const { error } = await supabase.from("calendar_events").insert(rows);
+      if (error) console.warn("calendar save error", error);
     }
-  } catch {}
+  } catch(e) { console.warn("calendar save error", e); }
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(events)); } catch {}
 }
 
@@ -153,8 +153,9 @@ export default function CalendarTab() {
   const [expanded, setExpanded] = useState(null);
   const imgRef = useRef(null);
 
-  useEffect(() => { loadEventsFromDB().then(ev => { setEvents(ev || []); setLoading(false); }); }, []);
-  useEffect(() => { if (!loading) saveEventsToDB(events); }, [events, loading]);
+  const didLoad = useRef(false);
+  useEffect(() => { loadEventsFromDB().then(ev => { setEvents(ev || []); setLoading(false); didLoad.current=true; }); }, []);
+  useEffect(() => { if (didLoad.current) saveEventsToDB(events); }, [events]);
 
   const inp = { background:"rgba(8,16,32,0.95)", border:"1px solid rgba(58,130,246,0.25)", borderRadius:5, color:"#cde", fontFamily:"inherit", fontSize:14, padding:"6px 10px", outline:"none", width:"100%", boxSizing:"border-box", colorScheme:"dark" };
   const btn = (on) => ({ fontSize:13, fontWeight:600, padding:"3px 10px", borderRadius:4, cursor:"pointer", fontFamily:"inherit", border:"1px solid "+(on?"rgba(88,166,255,0.55)":"rgba(58,130,246,0.18)"), background:on?"rgba(88,166,255,0.16)":"rgba(8,16,32,0.85)", color:on?"#d9ecff":"rgba(140,175,230,0.55)" });
