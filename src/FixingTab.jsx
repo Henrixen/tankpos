@@ -134,6 +134,69 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
   );
 }
 
+function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingClientName,setEditingClientName,renameClient,setPendingDelClient,createJob,inpS,JOB_STATUS_COL}){
+  const [showPencilMenu,setShowPencilMenu]=useState(false);
+  const allCJobs=jobs.filter(j=>(j.charterer||"")===charterer);
+  const counts=JOB_STATUS.reduce((a,s)=>{const n=allCJobs.filter(j=>j.status===s).length;if(n)a[s]=n;return a;},{});
+  const glowCol=counts.SUBS?C.purple:counts.OPEN||counts.WORKING?C.amber:null;
+  const isActive=expandedJob===charterer;
+  const isJobOpen=expandedJob===charterer;
+  const client=clients.find(c=>c.name===charterer);
+  const isEditingName=editingClientName===client?.id;
+  return(
+    <div style={{display:"flex",flexDirection:"column",
+      background:isActive?"rgba(88,166,255,.14)":"rgba(8,18,38,0.9)",
+      border:"1px solid "+(isActive?"rgba(88,166,255,0.55)":glowCol?glowCol+"55":"rgba(58,130,246,0.18)"),
+      borderRadius:8,overflow:"visible",minWidth:160,
+      boxShadow:isActive?"0 0 12px rgba(88,166,255,0.18)":glowCol?"0 0 10px "+glowCol+"28":"none",
+      transition:"box-shadow 0.2s"}}>
+      <div style={{padding:"12px 14px",cursor:"pointer"}} onClick={()=>setExpandedJob(isJobOpen?null:charterer)}>
+        {isEditingName&&client?(
+          <input autoFocus defaultValue={client.name}
+            onBlur={e=>renameClient(client.id,e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter")renameClient(client.id,e.target.value);if(e.key==="Escape")setEditingClientName(null);}}
+            onClick={e=>e.stopPropagation()}
+            style={{...inpS,width:"100%",fontSize:13,fontWeight:700,marginBottom:4,padding:"2px 6px"}}/>
+        ):(
+          <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:6}}>
+            <span style={{fontSize:13,fontWeight:700,color:isActive?"#79c0ff":"rgba(200,220,255,0.9)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1}}>{charterer||"—"}</span>
+            {client&&(
+              <div style={{position:"relative",flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                <button onClick={e=>{e.stopPropagation();setShowPencilMenu(v=>!v);}}
+                  style={{background:"none",border:"none",color:"rgba(120,160,220,0.35)",fontSize:11,cursor:"pointer",padding:"0 2px",lineHeight:1}} title="Edit client">✎</button>
+                {showPencilMenu&&(
+                  <>
+                    <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setShowPencilMenu(false)}/>
+                    <div style={{position:"absolute",right:0,top:"100%",zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.25)",borderRadius:5,padding:4,minWidth:110,boxShadow:"0 6px 20px rgba(0,0,0,0.6)"}}>
+                      <button onClick={()=>{setEditingClientName(client.id);setShowPencilMenu(false);}}
+                        style={{display:"block",width:"100%",background:"none",border:"none",color:"rgba(160,200,255,0.7)",fontSize:11,padding:"4px 8px",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>✎ Rename</button>
+                      <button onClick={()=>{setPendingDelClient(client);setShowPencilMenu(false);}}
+                        style={{display:"block",width:"100%",background:"none",border:"none",color:"rgba(255,107,107,0.6)",fontSize:11,padding:"4px 8px",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>✕ Delete client</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {isJobOpen&&<button onClick={e=>{e.stopPropagation();createJob(charterer);}}
+              style={{background:"rgba(88,166,255,0.15)",border:"1px solid rgba(88,166,255,0.3)",borderRadius:3,color:"#79c0ff",fontSize:10,padding:"1px 6px",cursor:"pointer",fontFamily:"inherit",fontWeight:700,lineHeight:1.4}}>+</button>}
+          </div>
+        )}
+        <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+          {Object.entries(counts).map(([s,n])=>(
+            <span key={s} style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4,background:JOB_STATUS_COL[s]+"22",color:JOB_STATUS_COL[s]}}>{n} {s}</span>
+          ))}
+          {Object.keys(counts).length===0&&<span style={{fontSize:10,color:"rgba(120,160,220,0.3)"}}>no jobs</span>}
+        </div>
+      </div>
+      <div style={{display:"flex",borderTop:"1px solid rgba(58,130,246,0.10)",padding:"3px 14px"}}>
+        <span style={{fontSize:9,color:isJobOpen?"#58a6ff":"rgba(120,160,220,0.3)",fontFamily:"inherit"}}>
+          {isJobOpen?"▲ close":"▼ expand"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function FixingTab({vessels}){
   const mobile=isMobile();
   const [jobs,setJobs]=useState([]);
@@ -354,72 +417,15 @@ function FixingTab({vessels}){
                   </div>
                 );
               })()}
-              {charterersList.map(charterer=>{
-                const allCJobs=jobs.filter(j=>(j.charterer||"")===charterer);
-                const counts=JOB_STATUS.reduce((a,s)=>{const n=allCJobs.filter(j=>j.status===s).length;if(n)a[s]=n;return a;},{});
-                const glowCol=counts.SUBS?C.purple:counts.OPEN||counts.WORKING?C.amber:null;
-                const isActive=expandedJob===charterer; // highlight = expanded, not filtered
-                const isJobOpen=expandedJob===charterer;
-                const client=clients.find(c=>c.name===charterer);
-                const isEditingName=editingClientName===client?.id;
-                const [showPencilMenu,setShowPencilMenu]=React.useState(false);
-                return(
-                  <div key={charterer} style={{display:"flex",flexDirection:"column",
-                    background:isActive?"rgba(88,166,255,.14)":"rgba(8,18,38,0.9)",
-                    border:"1px solid "+(isActive?"rgba(88,166,255,0.55)":glowCol?glowCol+"55":"rgba(58,130,246,0.18)"),
-                    borderRadius:8,overflow:"visible",minWidth:160,
-                    boxShadow:isActive?"0 0 12px rgba(88,166,255,0.18)":glowCol?"0 0 10px "+glowCol+"28":"none",
-                    transition:"box-shadow 0.2s"}}>
-                    {/* Click card header → expand cargoes (no filter) */}
-                    <div style={{padding:"12px 14px",cursor:"pointer"}} onClick={()=>setExpandedJob(isJobOpen?null:charterer)}>
-                      {isEditingName&&client?(
-                        <input autoFocus defaultValue={client.name}
-                          onBlur={e=>renameClient(client.id,e.target.value)}
-                          onKeyDown={e=>{if(e.key==="Enter")renameClient(client.id,e.target.value);if(e.key==="Escape")setEditingClientName(null);}}
-                          onClick={e=>e.stopPropagation()}
-                          style={{...inpS,width:"100%",fontSize:13,fontWeight:700,marginBottom:4,padding:"2px 6px"}}/>
-                      ):(
-                        <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:6}}>
-                          <span style={{fontSize:13,fontWeight:700,color:isActive?"#79c0ff":"rgba(200,220,255,0.9)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1}}>{charterer||"—"}</span>
-                          {/* Pencil with dropdown for rename/delete */}
-                          {client&&(
-                            <div style={{position:"relative",flexShrink:0}} onClick={e=>e.stopPropagation()}>
-                              <button onClick={e=>{e.stopPropagation();setShowPencilMenu(v=>!v);}}
-                                style={{background:"none",border:"none",color:"rgba(120,160,220,0.35)",fontSize:11,cursor:"pointer",padding:"0 2px",lineHeight:1}} title="Edit client">✎</button>
-                              {showPencilMenu&&(
-                                <>
-                                  <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setShowPencilMenu(false)}/>
-                                  <div style={{position:"absolute",right:0,top:"100%",zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.25)",borderRadius:5,padding:4,minWidth:110,boxShadow:"0 6px 20px rgba(0,0,0,0.6)"}}>
-                                    <button onClick={()=>{setEditingClientName(client.id);setShowPencilMenu(false);}}
-                                      style={{display:"block",width:"100%",background:"none",border:"none",color:"rgba(160,200,255,0.7)",fontSize:11,padding:"4px 8px",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>✎ Rename</button>
-                                    <button onClick={()=>{setPendingDelClient(client);setShowPencilMenu(false);}}
-                                      style={{display:"block",width:"100%",background:"none",border:"none",color:"rgba(255,107,107,0.6)",fontSize:11,padding:"4px 8px",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>✕ Delete client</button>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          )}
-                          {/* + cargo inline when expanded */}
-                          {isJobOpen&&<button onClick={e=>{e.stopPropagation();createJob(charterer);}}
-                            style={{background:"rgba(88,166,255,0.15)",border:"1px solid rgba(88,166,255,0.3)",borderRadius:3,color:"#79c0ff",fontSize:10,padding:"1px 6px",cursor:"pointer",fontFamily:"inherit",fontWeight:700,lineHeight:1.4}}>+</button>}
-                        </div>
-                      )}
-                      <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-                        {Object.entries(counts).map(([s,n])=>(
-                          <span key={s} style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4,background:JOB_STATUS_COL[s]+"22",color:JOB_STATUS_COL[s]}}>{n} {s}</span>
-                        ))}
-                        {Object.keys(counts).length===0&&<span style={{fontSize:10,color:"rgba(120,160,220,0.3)"}}>no jobs</span>}
-                      </div>
-                    </div>
-                    {/* Bottom bar: just expand indicator */}
-                    <div style={{display:"flex",borderTop:"1px solid rgba(58,130,246,0.10)",padding:"3px 14px"}}>
-                      <span style={{fontSize:9,color:isJobOpen?"#58a6ff":"rgba(120,160,220,0.3)",fontFamily:"inherit"}}>
-                        {isJobOpen?"▲ close":"▼ expand"}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+              {charterersList.map(charterer=>(
+                <ClientCard key={charterer}
+                  charterer={charterer} jobs={jobs}
+                  expandedJob={expandedJob} setExpandedJob={setExpandedJob}
+                  clients={clients} editingClientName={editingClientName}
+                  setEditingClientName={setEditingClientName} renameClient={renameClient}
+                  setPendingDelClient={setPendingDelClient} createJob={createJob}
+                  inpS={inpS} JOB_STATUS_COL={JOB_STATUS_COL}/>
+              ))}
             </div>
           )}
 
