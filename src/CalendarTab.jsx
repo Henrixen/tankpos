@@ -6,15 +6,39 @@ const STORAGE_KEY = "signal_calendar_events";
 async function loadEventsFromDB() {
   try {
     const { supabase } = await import("./supabaseclient");
-    const { data, error } = await supabase.from("dashboard").select("value").eq("key","calendar-events").single();
-    if (!error && data) return JSON.parse(data.value);
+    const { data, error } = await supabase.from("calendar_events").select("*").order("date");
+    if (!error && data?.length) {
+      // Map rows to event objects
+      return data.map(r => ({
+        id: r.id,
+        title: r.title,
+        date: r.date,
+        endDate: r.end_date || "",
+        color: r.category || COLORS[0],
+        note: r.note || "",
+        image: r.image || null,
+      }));
+    }
   } catch {}
+  // Fallback localStorage
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; }
 }
 async function saveEventsToDB(events) {
   try {
     const { supabase } = await import("./supabaseclient");
-    await supabase.from("dashboard").upsert({key:"calendar-events",value:JSON.stringify(events)},{onConflict:"key"});
+    // Delete all and reinsert (simple approach for small event sets)
+    await supabase.from("calendar_events").delete().neq("id","__never__");
+    if (events.length) {
+      await supabase.from("calendar_events").insert(events.map(e => ({
+        id: e.id,
+        title: e.title,
+        date: e.date,
+        end_date: e.endDate || null,
+        category: e.color || null,
+        note: e.note || null,
+        image: e.image || null,
+      })));
+    }
   } catch {}
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(events)); } catch {}
 }
@@ -118,6 +142,7 @@ function DateInput({ value, onChange, style, placeholder="dd/mm/yyyy" }) {
 export default function CalendarTab() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [confirmDelId, setConfirmDelId] = useState(null);
   const today = todayStr();
   const todayDate = parseLocal(today);
   const [startYear, setStartYear] = useState(todayDate.getFullYear());
@@ -198,8 +223,12 @@ export default function CalendarTab() {
 
   function del(id, ev) {
     if (ev) ev.stopPropagation();
-    setEvents(prev => prev.filter(e => e.id !== id));
-    if (editId === id) { setShowForm(false); setEditId(null); }
+    setConfirmDelId(id);
+  }
+  function confirmDel() {
+    setEvents(prev => prev.filter(e => e.id !== confirmDelId));
+    if (editId === confirmDelId) { setShowForm(false); setEditId(null); }
+    setConfirmDelId(null);
   }
 
   function handleImg(e) {
@@ -218,6 +247,19 @@ export default function CalendarTab() {
 
   return (
     <div style={{display:"flex",gap:16,alignItems:"flex-start"}}>
+      {confirmDelId&&(
+        <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}}
+          onClick={()=>setConfirmDelId(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#0a1628",border:"1px solid rgba(248,113,113,0.4)",borderRadius:8,padding:"20px 24px",minWidth:300,boxShadow:"0 8px 32px rgba(0,0,0,0.7)"}}>
+            <div style={{fontSize:14,fontWeight:600,color:"#e8f2ff",marginBottom:8}}>Delete this event?</div>
+            <div style={{fontSize:12,color:"rgba(160,200,255,0.6)",marginBottom:16}}>{events.find(e=>e.id===confirmDelId)?.title||""}</div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={confirmDel} style={{flex:1,background:"rgba(248,113,113,0.15)",border:"1px solid rgba(248,113,113,0.4)",borderRadius:5,color:"#f87171",fontFamily:"inherit",fontWeight:700,fontSize:13,padding:"7px",cursor:"pointer"}}>Delete</button>
+              <button onClick={()=>setConfirmDelId(null)} style={{flex:1,background:"rgba(10,20,42,0.9)",border:"1px solid rgba(58,130,246,0.2)",borderRadius:5,color:"rgba(140,175,230,0.7)",fontFamily:"inherit",fontSize:13,padding:"7px",cursor:"pointer"}}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── LEFT: 3 months ── */}
       <div style={{flex:1,minWidth:0}}>
