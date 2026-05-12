@@ -24,9 +24,8 @@ async function loadEventsFromDB() {
 
 async function saveEventsToDB(events) {
   try {
-    // Delete all then reinsert
-    await supabase.from("calendar_events").delete().neq("id", "___");
     if (events.length > 0) {
+      // Upsert each event by id
       const rows = events.map(e => ({
         id: e.id,
         title: e.title || "",
@@ -36,8 +35,17 @@ async function saveEventsToDB(events) {
         note: e.note || null,
         image: e.image || null,
       }));
-      const { error } = await supabase.from("calendar_events").insert(rows);
-      if (error) console.warn("calendar save error", error);
+      const { error: upsertErr } = await supabase
+        .from("calendar_events")
+        .upsert(rows, { onConflict: "id" });
+      if (upsertErr) console.warn("calendar upsert error", upsertErr);
+    }
+    // Delete rows not in current events (cleanup)
+    if (events.length === 0) {
+      await supabase.from("calendar_events").delete().neq("id", "___");
+    } else {
+      const ids = events.map(e => e.id);
+      await supabase.from("calendar_events").delete().not("id", "in", `(${ids.map(i=>`"${i}"`).join(",")})`);
     }
   } catch(e) { console.warn("calendar save error", e); }
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(events)); } catch {}
