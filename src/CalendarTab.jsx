@@ -225,6 +225,8 @@ function SmartEndDateInput({ value, startDate, onChange, style }) {
     />
   );
 }
+
+export default function CalendarTab() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [confirmDelId, setConfirmDelId] = useState(null);
