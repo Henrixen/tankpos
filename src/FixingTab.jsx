@@ -615,9 +615,16 @@ function FixingTab({vessels}){
                     return(
                       <div style={{width:220,flexShrink:0,borderLeft:"1px solid "+C.bd2,display:"flex",flexDirection:"column"}}>
                         <div style={{padding:"6px 10px",background:"rgba(16,26,48,0.7)",borderBottom:"1px solid "+C.bd2,fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Client notes</div>
-                        <textarea value={client.notes||""} onChange={e=>updateClient(client.id,{notes:e.target.value})}
+                        <textarea value={client.notes||""} onChange={e=>{
+                          updateClient(client.id,{notes:e.target.value});
+                          // Auto-resize
+                          e.target.style.height="auto";
+                          e.target.style.height=Math.max(120,e.target.scrollHeight)+"px";
+                        }}
+                          onInput={e=>{e.target.style.height="auto";e.target.style.height=Math.max(120,e.target.scrollHeight)+"px";}}
+                          ref={el=>{if(el){el.style.height="auto";el.style.height=Math.max(120,el.scrollHeight)+"px";}}}
                           placeholder="Notes about this client…"
-                          style={{...inpS,flex:1,resize:"none",fontSize:11,background:"rgba(8,16,32,0.5)",border:"none",borderRadius:0,lineHeight:1.6,padding:"8px 10px",minHeight:120,color:C.tx}}/>
+                          style={{...inpS,resize:"none",overflow:"hidden",fontSize:11,background:"rgba(8,16,32,0.5)",border:"none",borderRadius:0,lineHeight:1.6,padding:"8px 10px",minHeight:120,color:C.tx}}/>
                       </div>
                     );
                   })()}
