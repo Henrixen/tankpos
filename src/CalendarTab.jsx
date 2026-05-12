@@ -236,7 +236,8 @@ export default function CalendarTab() {
   const [startMonth, setStartMonth] = useState(todayDate.getMonth());
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
-  const [lightbox, setLightbox] = useState(null); // image URL to show fullscreen
+  const [lightbox, setLightbox] = useState(null);
+  const [expanded, setExpanded] = useState(null);
 
   // Paste screenshot into notes
   function handleNotesPaste(e) {
