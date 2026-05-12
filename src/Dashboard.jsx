@@ -119,10 +119,7 @@ ${text}`}]
       }
       const snap = {date:today, spot: stampedSpot};
       const prevHistory = (existing.history||[]).filter(h=>h.date!==today);
-      const newHistory = [...prevHistory, snap].sort((a,b)=>{
-        function pd(s){try{const m=s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{2,4})$/);if(m)return new Date(`${m[2]} ${m[1]} ${m[3].length===2?"20"+m[3]:m[3]}`).getTime();return new Date(s).getTime()||0;}catch{return 0;}}
-        return pd(a.date)-pd(b.date);
-      }).slice(-90);
+      const newHistory = [...prevHistory, snap].slice(-90);
 
        const next = {
         spot: (()=>{
@@ -169,19 +166,8 @@ ${text}`}]
 
   const sc = status?.t==="success"?C.green:status?.t==="error"?C.red:C.blue;
 
-  // Chart data: last 30 history snapshots sorted chronologically
-  function parseChartDate(s){
-    if(!s)return 0;
-    try{
-      // "07 May 26" or "07 May 2026"
-      const m=s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{2,4})$/);
-      if(m) return new Date(`${m[2]} ${m[1]} ${m[3].length===2?"20"+m[3]:m[3]}`).getTime();
-      return new Date(s).getTime()||0;
-    }catch{return 0;}
-  }
-  const histData = [...(data?.history||[])]
-    .sort((a,b)=>parseChartDate(a.date)-parseChartDate(b.date))
-    .slice(-30);
+  // Chart data: last 30 history snapshots for each route
+  const histData = (data?.history||[]).slice(-30);
   const routeColors = {TC2:C.blue,TC6:C.green,TC14:C.amber,TC23:C.purple,TC178:"#ff9f43"};
 
   const secHead = t=>(<div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>{t}</div>);
@@ -398,10 +384,23 @@ function NewsFeed() {
   const [err, setErr]       = useState(null);
   const [lastFetch, setLastFetch] = useState(null);
 
+  // Load cached news from Supabase immediately on mount
+  useEffect(()=>{
+    supabase.from("dashboard").select("value").eq("key","news-cache").single()
+      .then(({data})=>{
+        if(data?.value){
+          try{
+            const cached=JSON.parse(data.value);
+            if(cached.items?.length){setItems(cached.items);setLastFetch(cached.time||null);}
+          }catch{}
+        }
+      });
+    fetchNews();
+  },[]);
+
   async function fetchNews() {
     setLoading(true); setErr(null);
     try {
-      // Use rss2json.com free API to convert TradeWinds RSS to JSON
       const feeds = [
         "https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.tradewindsnews.com%2Frss%2F",
         "https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.tradewindsnews.com%2Ftankers%2Frss",
@@ -418,18 +417,18 @@ function NewsFeed() {
           })));
         }
       }
-      // Sort by date, deduplicate by link
       const seen=new Set();
       const deduped=all.filter(it=>{if(seen.has(it.link))return false;seen.add(it.link);return true;});
       deduped.sort((a,b)=>new Date(b.pubDate)-new Date(a.pubDate));
-      setItems(deduped.slice(0,20));
-      setLastFetch(new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
+      const fresh=deduped.slice(0,20);
+      const time=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+      setItems(fresh); setLastFetch(time);
+      // Cache in Supabase
+      supabase.from("dashboard").upsert({key:"news-cache",value:JSON.stringify({items:fresh,time})},{onConflict:"key"}).catch(()=>{});
     } catch(e) {
       setErr("News unavailable - " + e.message.slice(0,60));
     } finally { setLoading(false); }
   }
-
-  useEffect(()=>{ fetchNews(); },[]);
 
   const fmtAge = d => {
     if(!d)return"";
