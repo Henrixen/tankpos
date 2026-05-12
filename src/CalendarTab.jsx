@@ -236,7 +236,7 @@ export default function CalendarTab() {
   const [startMonth, setStartMonth] = useState(todayDate.getMonth());
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
-  const [expanded, setExpanded] = useState(null);
+  const [lightbox, setLightbox] = useState(null); // image URL to show fullscreen
 
   // Paste screenshot into notes
   function handleNotesPaste(e) {
@@ -352,6 +352,11 @@ export default function CalendarTab() {
 
   return (
     <div style={{display:"flex",gap:16,alignItems:"flex-start"}}>
+      {lightbox&&(
+        <div onClick={()=>setLightbox(null)} style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"zoom-out"}}>
+          <img src={lightbox} alt="" style={{maxWidth:"90vw",maxHeight:"90vh",borderRadius:6,boxShadow:"0 8px 40px rgba(0,0,0,0.8)"}}/>
+        </div>
+      )}
       {window._calendarSaveError&&(
         <div style={{position:"fixed",top:60,right:20,zIndex:9999,background:"rgba(255,107,107,0.15)",border:"1px solid rgba(255,107,107,0.5)",borderRadius:6,padding:"8px 14px",fontSize:12,color:"#ff6b6b",maxWidth:400}}>
           ⚠ Calendar not saving to Supabase: {window._calendarSaveError}
@@ -422,7 +427,7 @@ export default function CalendarTab() {
                         const isSat=d.getDay()===6, isSun=d.getDay()===0;
                         return(
                           <div key={ds} onClick={()=>cur&&openAdd(ds)}
-                            style={{minHeight:72,padding:"3px 3px 2px",background:isToday?"rgba(88,166,255,0.07)":"transparent",cursor:cur?"pointer":"default",borderLeft:"1px solid rgba(58,130,246,0.05)",position:"relative",zIndex:1}}>
+                            style={{minHeight:90,padding:"3px 3px 2px",background:isToday?"rgba(88,166,255,0.07)":"transparent",cursor:cur?"pointer":"default",borderLeft:"1px solid rgba(58,130,246,0.05)",position:"relative",zIndex:1}}>
                             <div style={{fontSize:12,fontWeight:isToday?700:400,marginBottom:18,display:"flex",justifyContent:"flex-end",paddingRight:2}}>
                               {isToday
                                 ?<span style={{width:17,height:17,background:"#58a6ff",borderRadius:"50%",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:11,fontWeight:700}}>{d.getDate()}</span>
@@ -442,7 +447,7 @@ export default function CalendarTab() {
                         if(colStart<0||colEnd<0||span<1)return null;
                         const isStart=es>=weekStart;
                         const isEnd=ee<=weekEnd;
-                        const top=22+ei*16; // stack bars
+                        const top=24+ei*22; // stack bars with more spacing
                         return(
                           <div key={e.id}
                             onClick={ev=>{ev.stopPropagation();openEdit(e,ev);}}
@@ -452,17 +457,17 @@ export default function CalendarTab() {
                               left:`calc(28px + ${colStart}/7*(100% - 28px) + ${isStart?2:0}px)`,
                               width:`calc(${span}/7*(100% - 28px) - ${(isStart?2:0)+(isEnd?2:0)}px)`,
                               top:top+"px",
-                              height:14,
+                              height:18,
                               background:(e.color||"#58a6ff")+"33",
                               borderTop:"2px solid "+(e.color||"#58a6ff"),
                               borderLeft:isStart?"2px solid "+(e.color||"#58a6ff"):"none",
                               borderRight:isEnd?"2px solid "+(e.color||"#58a6ff"):"none",
                               borderRadius:isStart&&isEnd?3:isStart?"3px 0 0 0":"0 3px 0 0",
-                              padding:"0 4px",
-                              fontSize:11,
+                              padding:"0 5px",
+                              fontSize:12,
                               color:e.color||"#58a6ff",
                               whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
-                              lineHeight:"14px",cursor:"pointer",
+                              lineHeight:"18px",cursor:"pointer",
                               zIndex:2,
                               boxSizing:"border-box",
                             }}>
@@ -480,7 +485,7 @@ export default function CalendarTab() {
       </div>
 
       {/* ── RIGHT: Form + Upcoming ── */}
-      <div style={{width:320,flexShrink:0,display:"flex",flexDirection:"column",gap:12,position:"sticky",top:80}}>
+      <div style={{width:320,flexShrink:0,display:"flex",flexDirection:"column",gap:12}}>
 
         {/* Form */}
         {showForm?(
@@ -522,7 +527,7 @@ export default function CalendarTab() {
                 </button>
                 {(form.images||[]).map((img,idx)=>(
                   <div key={idx} style={{position:"relative",marginTop:6}}>
-                    <img src={img} alt="" style={{width:"100%",borderRadius:4,border:"1px solid "+BOR}}/>
+                    <img src={img} alt="" onClick={()=>setLightbox(img)} style={{width:"100%",borderRadius:4,border:"1px solid "+BOR,cursor:"zoom-in"}}/>
                     <button onClick={()=>setForm(f=>({...f,images:f.images.filter((_,i)=>i!==idx)}))}
                       style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,0.72)",border:"none",borderRadius:"50%",width:18,height:18,color:"#fff",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>
                   </div>
@@ -573,7 +578,7 @@ export default function CalendarTab() {
                     <div style={{fontSize:14,fontWeight:600,color:"rgba(200,220,255,0.85)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:"pointer"}} onClick={ev=>openEdit(e,ev)}>{e.title}</div>
                     <div style={{fontSize:12,color:"rgba(120,160,220,0.45)",marginTop:1}}>{fmtShort(e.date)}{e.endDate&&e.endDate!==e.date?" – "+fmtShort(e.endDate):""}</div>
                     {e.note&&isExp&&<div style={{fontSize:13,color:"rgba(155,185,225,0.55)",marginTop:4,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{e.note}</div>}
-                    {isExp&&(e.images||[]).map((img,idx)=><img key={idx} src={img} alt="" style={{width:"100%",borderRadius:3,marginTop:4,border:"1px solid "+BOR}}/>)}
+                    {isExp&&(e.images||[]).map((img,idx)=><img key={idx} src={img} alt="" onClick={()=>setLightbox(img)} style={{width:"100%",borderRadius:3,marginTop:4,border:"1px solid "+BOR,cursor:"zoom-in",display:"block"}}/>)}
                   </div>
                   <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
                     <span style={{fontSize:13,fontWeight:700,whiteSpace:"nowrap",color:du===0?"#43e97b":du<=7?"#faa356":du<=30?"#58a6ff":"rgba(120,160,220,0.4)"}}>
