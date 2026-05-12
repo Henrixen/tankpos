@@ -253,7 +253,6 @@ function SmartEndDateInput({ value, startDate, onChange, style }) {
   }
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({ ...BLANK, date: today });
-  const [search, setSearch] = useState("");
   const imgRef = useRef(null);
 
   const didLoad = useRef(false);
@@ -437,8 +436,7 @@ function SmartEndDateInput({ value, startDate, onChange, style }) {
                 })}
               </div>
             );
-          });
-          })()}
+          })}
         </div>
       </div>
 
@@ -551,7 +549,8 @@ function SmartEndDateInput({ value, startDate, onChange, style }) {
                 </div>
               </div>
             );
-          })}
+          });
+          })()}
         </div>
       </div>
     </div>
