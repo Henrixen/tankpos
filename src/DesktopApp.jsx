@@ -95,6 +95,46 @@ function TagCell({cargoId,tag,onUpdateC}){
   );
 }
 
+// BunkerHeader — bunker input + refresh button for MGO ARA price
+function BunkerHeader(){
+  const [fetching,setFetching]=useState(false);
+  const [lastPrice,setLastPrice]=useState(null);
+
+  async function fetchMGO(){
+    setFetching(true);
+    try{
+      // Use Bunker Index API via rss2json as proxy, or a reliable public endpoint
+      // Fallback: use a known bunker tracker
+      const res=await fetch("https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.bunkerindex.com%2Frss%2Fprices.php");
+      const json=await res.json();
+      if(json?.items?.length){
+        // Parse ARA VLSFO/MGO from RSS
+        const ara=json.items.find(it=>(it.title||"").toLowerCase().includes("ara")&&(it.title||"").toLowerCase().includes("mgo"));
+        if(ara){
+          const price=parseInt((ara.title||"").replace(/[^0-9]/g,""));
+          if(price>100&&price<5000){
+            setLastPrice(price);
+            if(window._bunkerState){window._bunkerState.val=price;window._bunkerState.listeners.forEach(cb=>cb(price));}
+          }
+        }
+      }
+    }catch(_){}
+    setFetching(false);
+  }
+
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:4}}>
+      <span style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.06em"}}>Bunker</span>
+      <RateMatrixBunkerInput/>
+      <span style={{fontSize:10,color:"rgba(120,160,220,0.4)"}}>$/mt</span>
+      <button onClick={fetchMGO} disabled={fetching} title="Fetch latest MGO ARA price"
+        style={{fontSize:10,padding:"1px 6px",borderRadius:3,border:"1px solid rgba(88,166,255,0.25)",background:"rgba(88,166,255,0.08)",color:fetching?"rgba(120,160,220,0.4)":"rgba(88,166,255,0.7)",cursor:fetching?"default":"pointer",fontFamily:"inherit",flexShrink:0}}>
+        {fetching?"⟳…":"⟳ MGO"}
+      </button>
+    </div>
+  );
+}
+
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB}){
   const [tab,setTab]=useState("pos");
   const [search,setSearch]=useState("");
@@ -660,15 +700,8 @@ const filtV=useMemo(()=>{
               {/* CENTER: Rate Matrix (34%) */}
               {!mobile&&(
                 <div style={{width:"34%",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",alignSelf:"flex-start"}}>
-                  <div style={{padding:"6px 12px",borderBottom:"1px solid "+C.bd2,background:C.bg,display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:12,fontWeight:700,color:C.tx}}>📊 Rate Matrix</span>
-                    <span style={{flex:1}}/>
-                    <span style={{fontSize:11,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Bunker</span>
-                    <RateMatrixBunkerInput/>
-                    <span style={{fontSize:10,color:C.faint}}>$/mt</span>
-                  </div>
-                  <div style={{padding:"8px 10px",height:424,overflowY:"hidden"}}>
-                    <RateMatrix/>
+                  <div style={{padding:"8px 10px",overflowY:"auto",maxHeight:460}}>
+                    <RateMatrix bunkerHeader={<BunkerHeader/>}/>
                   </div>
                 </div>
               )}
