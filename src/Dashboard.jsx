@@ -166,8 +166,18 @@ ${text}`}]
 
   const sc = status?.t==="success"?C.green:status?.t==="error"?C.red:C.blue;
 
-  // Chart data: last 30 history snapshots for each route
-  const histData = (data?.history||[]).slice(-30);
+  // Chart data: last 30 history snapshots sorted chronologically
+  function parseChartDate(s){
+    if(!s)return 0;
+    try{
+      const m=s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{2,4})$/);
+      if(m){const yr=m[3].length===2?"20"+m[3]:m[3];return new Date(`${m[2]} ${m[1]} ${yr}`).getTime();}
+      return new Date(s).getTime()||0;
+    }catch{return 0;}
+  }
+  const histData = [...(data?.history||[])]
+    .sort((a,b)=>parseChartDate(a.date)-parseChartDate(b.date))
+    .slice(-30);
   const routeColors = {TC2:C.blue,TC6:C.green,TC14:C.amber,TC23:C.purple,TC178:"#ff9f43"};
 
   const secHead = t=>(<div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>{t}</div>);
@@ -423,8 +433,8 @@ function NewsFeed() {
       const fresh=deduped.slice(0,20);
       const time=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
       setItems(fresh); setLastFetch(time);
-      // Cache in Supabase
-      supabase.from("dashboard").upsert({key:"news-cache",value:JSON.stringify({items:fresh,time})},{onConflict:"key"}).catch(()=>{});
+      // Cache in Supabase (fire and forget)
+      try{await supabase.from("dashboard").upsert({key:"news-cache",value:JSON.stringify({items:fresh,time})},{onConflict:"key"});}catch(_){}
     } catch(e) {
       setErr("News unavailable - " + e.message.slice(0,60));
     } finally { setLoading(false); }
