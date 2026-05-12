@@ -549,7 +549,7 @@ function SmartEndDateInput({ value, startDate, onChange, style }) {
                 </div>
               </div>
             );
-          });
+            })
           })()}
         </div>
       </div>
