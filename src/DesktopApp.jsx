@@ -99,26 +99,54 @@ function TagCell({cargoId,tag,onUpdateC}){
 function BunkerHeader(){
   const [fetching,setFetching]=useState(false);
   const [lastPrice,setLastPrice]=useState(null);
+  const [fetchErr,setFetchErr]=useState(null);
 
   async function fetchMGO(){
-    setFetching(true);
+    setFetching(true); setFetchErr(null);
     try{
-      // Use Bunker Index API via rss2json as proxy, or a reliable public endpoint
-      // Fallback: use a known bunker tracker
+      // Try Bunker Index via rss2json
       const res=await fetch("https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.bunkerindex.com%2Frss%2Fprices.php");
       const json=await res.json();
       if(json?.items?.length){
-        // Parse ARA VLSFO/MGO from RSS
-        const ara=json.items.find(it=>(it.title||"").toLowerCase().includes("ara")&&(it.title||"").toLowerCase().includes("mgo"));
-        if(ara){
-          const price=parseInt((ara.title||"").replace(/[^0-9]/g,""));
-          if(price>100&&price<5000){
-            setLastPrice(price);
-            if(window._bunkerState){window._bunkerState.val=price;window._bunkerState.listeners.forEach(cb=>cb(price));}
+        // Look for ARA MGO or VLSFO price in title
+        for(const item of json.items){
+          const t=(item.title||"").toLowerCase();
+          if(t.includes("ams")||t.includes("ara")||t.includes("rotterdam")){
+            // Extract number from title like "Rotterdam MGO: 1235"
+            const nums=(item.title||"").match(/\d{3,4}/g);
+            if(nums){
+              const price=parseInt(nums[nums.length-1]);
+              if(price>400&&price<3000){
+                setLastPrice(price);
+                if(window._bunkerState){
+                  window._bunkerState.val=price;
+                  window._bunkerState.listeners.forEach(cb=>cb(price));
+                }
+                setFetching(false);
+                return;
+              }
+            }
+          }
+        }
+        // Try any item with a 4-digit number between 400-3000
+        for(const item of json.items){
+          const nums=(item.title||"").match(/\d{3,4}/g);
+          if(nums){
+            const price=parseInt(nums[0]);
+            if(price>400&&price<3000){
+              setLastPrice(price);
+              if(window._bunkerState){
+                window._bunkerState.val=price;
+                window._bunkerState.listeners.forEach(cb=>cb(price));
+              }
+              setFetching(false);
+              return;
+            }
           }
         }
       }
-    }catch(_){}
+      setFetchErr("No price found in feed");
+    }catch(e){setFetchErr(e.message?.slice(0,40)||"Error");}
     setFetching(false);
   }
 
@@ -131,6 +159,8 @@ function BunkerHeader(){
         style={{fontSize:10,padding:"1px 6px",borderRadius:3,border:"1px solid rgba(88,166,255,0.25)",background:"rgba(88,166,255,0.08)",color:fetching?"rgba(120,160,220,0.4)":"rgba(88,166,255,0.7)",cursor:fetching?"default":"pointer",fontFamily:"inherit",flexShrink:0}}>
         {fetching?"⟳…":"⟳ MGO"}
       </button>
+      {lastPrice&&<span style={{fontSize:10,color:"#43e97b",fontWeight:600}}>{lastPrice}</span>}
+      {fetchErr&&<span style={{fontSize:9,color:"rgba(255,107,107,0.6)"}} title={fetchErr}>⚠</span>}
     </div>
   );
 }
