@@ -25,7 +25,6 @@ async function loadEventsFromDB() {
 async function saveEventsToDB(events) {
   try {
     if (events.length > 0) {
-      // Upsert each event by id
       const rows = events.map(e => ({
         id: e.id,
         title: e.title || "",
@@ -38,14 +37,19 @@ async function saveEventsToDB(events) {
       const { error: upsertErr } = await supabase
         .from("calendar_events")
         .upsert(rows, { onConflict: "id" });
-      if (upsertErr) console.warn("calendar upsert error", upsertErr);
-    }
-    // Delete rows not in current events (cleanup)
-    if (events.length === 0) {
-      await supabase.from("calendar_events").delete().neq("id", "___");
+      if (upsertErr) {
+        console.error("calendar upsert error:", upsertErr);
+        window._calendarSaveError = upsertErr.message;
+      } else {
+        window._calendarSaveError = null;
+        // Clean up deleted events
+        const ids = events.map(e => e.id);
+        await supabase.from("calendar_events").delete().not("id","in",`(${ids.map(i=>JSON.stringify(i)).join(",")})`);
+      }
     } else {
-      const ids = events.map(e => e.id);
-      await supabase.from("calendar_events").delete().not("id", "in", `(${ids.map(i=>`"${i}"`).join(",")})`);
+      // Delete all
+      const { error } = await supabase.from("calendar_events").delete().neq("id","___none___");
+      if (error) console.error("calendar delete error:", error);
     }
   } catch(e) { console.warn("calendar save error", e); }
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(events)); } catch {}
@@ -256,6 +260,11 @@ export default function CalendarTab() {
 
   return (
     <div style={{display:"flex",gap:16,alignItems:"flex-start"}}>
+      {window._calendarSaveError&&(
+        <div style={{position:"fixed",top:60,right:20,zIndex:9999,background:"rgba(255,107,107,0.15)",border:"1px solid rgba(255,107,107,0.5)",borderRadius:6,padding:"8px 14px",fontSize:12,color:"#ff6b6b",maxWidth:400}}>
+          ⚠ Calendar not saving to Supabase: {window._calendarSaveError}
+        </div>
+      )}
       {confirmDelId&&(
         <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}}
           onClick={()=>setConfirmDelId(null)}>
