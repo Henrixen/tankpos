@@ -15,7 +15,7 @@ async function loadEventsFromDB() {
         endDate: r.end_date || "",
         color: r.category || "",
         note: r.note || "",
-        image: r.image || null,
+        images: r.images ? JSON.parse(r.images) : (r.image?[r.image]:[]),
       }));
     }
   } catch(e) { console.warn("calendar load error", e); }
@@ -32,7 +32,7 @@ async function saveEventsToDB(events) {
         end_date: e.endDate || null,
         category: e.color || null,
         note: e.note || null,
-        image: e.image || null,
+        images: JSON.stringify(e.images||[]),
       }));
       const { error: upsertErr } = await supabase
         .from("calendar_events")
@@ -96,7 +96,7 @@ function daysUntil(str) {
 const COLORS = ["#58a6ff","#43e97b","#faa356","#c792ea","#f472b6","#4fc3f7","#fb7185","#a3e635"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const BLANK = { title:"", date:"", endDate:"", color:COLORS[0], note:"", image:null };
+const BLANK = { title:"", date:"", endDate:"", color:COLORS[0], note:"", images:[] };
 
 // Custom date input — always shows dd/mm/yyyy regardless of OS locale
 // value: "YYYY-MM-DD", onChange: (yyyymmdd) => void
@@ -247,7 +247,7 @@ export default function CalendarTab() {
         e.preventDefault();
         const file = item.getAsFile();
         const r = new FileReader();
-        r.onload = () => setForm(f => ({...f, image: r.result}));
+        r.onload = () => setForm(f => ({...f, images:[...(f.images||[]),r.result]}));
         r.readAsDataURL(file);
         return;
       }
@@ -308,14 +308,14 @@ export default function CalendarTab() {
 
   function openAdd(dateStr) {
     setEditId(null);
-    setForm({ ...BLANK, date: dateStr || today });
+    setForm({ ...BLANK, date: dateStr || today, images:[] });
     setShowForm(true);
   }
 
   function openEdit(e, ev) {
     if (ev) ev.stopPropagation();
     setEditId(e.id);
-    setForm({ title:e.title, date:e.date, endDate:e.endDate||"", color:e.color||COLORS[0], note:e.note||"", image:e.image||null });
+    setForm({ title:e.title, date:e.date, endDate:e.endDate||"", color:e.color||COLORS[0], note:e.note||"", images:e.images||[] });
     setShowForm(true);
   }
 
@@ -339,7 +339,7 @@ export default function CalendarTab() {
   function handleImg(e) {
     const file = e.target.files?.[0]; if (!file) return;
     const r = new FileReader();
-    r.onload = () => setForm(f => ({...f, image:r.result}));
+    r.onload = () => setForm(f => ({...f, images:[...(f.images||[]),r.result]}));
     r.readAsDataURL(file);
   }
 
@@ -382,7 +382,7 @@ export default function CalendarTab() {
           <button onClick={nextPeriod} style={{...btn(false),padding:"4px 12px",fontSize:14}}>›</button>
           <button onClick={()=>{setStartMonth(todayDate.getMonth());setStartYear(todayDate.getFullYear());}} style={btn(false)}>Today</button>
           <span style={{flex:1}}/>
-          <button onClick={()=>openAdd(today)} style={{...btn(true),padding:"6px 18px",fontSize:14,fontWeight:700}}>+ Add Event</button>
+
         </div>
 
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -405,31 +405,68 @@ export default function CalendarTab() {
                 {Array.from({length:grid.length/7},(_,wi)=>{
                   const week=grid.slice(wi*7,wi*7+7);
                   const wn=getWeekNumber(week[0].d);
+                  // Collect multi-day events that span this week
+                  const weekStart=toStr(week[0].d), weekEnd=toStr(week[6].d);
+                  // All events touching this week
+                  const weekEvs=events.filter(e=>{
+                    const es=e.date||"", ee=e.endDate||e.date||"";
+                    return es<=weekEnd && ee>=weekStart;
+                  });
                   return(
-                    <div key={wi} style={{display:"grid",gridTemplateColumns:"28px repeat(7,1fr)",borderTop:"1px solid rgba(58,130,246,0.06)"}}>
-                      <div style={{padding:"3px 2px",fontSize:10,color:"rgba(120,160,220,0.2)",textAlign:"center",background:"rgba(10,20,40,0.45)",paddingTop:6}}>{wn}</div>
+                    <div key={wi} style={{display:"grid",gridTemplateColumns:"28px repeat(7,1fr)",borderTop:"1px solid rgba(58,130,246,0.06)",position:"relative"}}>
+                      <div style={{padding:"3px 2px",fontSize:10,color:"rgba(120,160,220,0.2)",textAlign:"center",background:"rgba(10,20,40,0.45)",paddingTop:6,zIndex:1}}>{wn}</div>
+                      {/* Day number cells */}
                       {week.map(({d,cur})=>{
                         const ds=toStr(d);
                         const isToday=ds===today;
-                        const evs=byDate[ds]||[];
                         const isSat=d.getDay()===6, isSun=d.getDay()===0;
                         return(
                           <div key={ds} onClick={()=>cur&&openAdd(ds)}
-                            style={{minHeight:72,padding:"3px 3px 2px",background:isToday?"rgba(88,166,255,0.07)":"transparent",cursor:cur?"pointer":"default",borderLeft:"1px solid rgba(58,130,246,0.05)",position:"relative"}}>
-                            <div style={{fontSize:12,fontWeight:isToday?700:400,marginBottom:2,display:"flex",justifyContent:"flex-end",paddingRight:2}}>
+                            style={{minHeight:72,padding:"3px 3px 2px",background:isToday?"rgba(88,166,255,0.07)":"transparent",cursor:cur?"pointer":"default",borderLeft:"1px solid rgba(58,130,246,0.05)",position:"relative",zIndex:1}}>
+                            <div style={{fontSize:12,fontWeight:isToday?700:400,marginBottom:18,display:"flex",justifyContent:"flex-end",paddingRight:2}}>
                               {isToday
                                 ?<span style={{width:17,height:17,background:"#58a6ff",borderRadius:"50%",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:11,fontWeight:700}}>{d.getDate()}</span>
                                 :<span style={{color:cur?(isSat||isSun?"rgba(120,160,220,0.28)":"rgba(170,200,240,0.5)"):"rgba(90,120,170,0.18)"}}>{d.getDate()}</span>}
                             </div>
-                            {evs.slice(0,3).map(e=>(
-                              <div key={e.id}
-                                onClick={ev=>{ev.stopPropagation();openEdit(e,ev);}}
-                                title={e.title}
-                                style={{fontSize:11,background:(e.color||"#58a6ff")+"22",border:"1px solid "+(e.color||"#58a6ff")+"45",borderRadius:2,padding:"1px 3px",marginBottom:1,color:e.color||"#58a6ff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.5,cursor:"pointer"}}>
-                                {e.title}
-                              </div>
-                            ))}
-                            {evs.length>3&&<div style={{fontSize:10,color:"rgba(120,160,220,0.35)"}}>+{evs.length-3}</div>}
+                          </div>
+                        );
+                      })}
+                      {/* Multi-day event bars overlaid on grid */}
+                      {weekEvs.map((e,ei)=>{
+                        const es=e.date||"", ee=e.endDate||e.date||"";
+                        // Find column span within this week (1-7)
+                        const colStart=Math.max(0,week.findIndex(({d})=>toStr(d)>=es));
+                        const colEndIdx=week.findLastIndex ? week.findLastIndex(({d})=>toStr(d)<=ee) : [...week].reverse().findIndex(({d})=>toStr(d)<=ee);
+                        const colEnd=week.findLastIndex ? week.findLastIndex(({d})=>toStr(d)<=ee) : week.length-1-[...week].reverse().findIndex(({d})=>toStr(d)<=ee);
+                        const span=colEnd-colStart+1;
+                        if(colStart<0||colEnd<0||span<1)return null;
+                        const isStart=es>=weekStart;
+                        const isEnd=ee<=weekEnd;
+                        const top=22+ei*16; // stack bars
+                        return(
+                          <div key={e.id}
+                            onClick={ev=>{ev.stopPropagation();openEdit(e,ev);}}
+                            title={e.title}
+                            style={{
+                              position:"absolute",
+                              left:`calc(28px + ${colStart}/7*(100% - 28px) + ${isStart?2:0}px)`,
+                              width:`calc(${span}/7*(100% - 28px) - ${(isStart?2:0)+(isEnd?2:0)}px)`,
+                              top:top+"px",
+                              height:14,
+                              background:(e.color||"#58a6ff")+"33",
+                              borderTop:"2px solid "+(e.color||"#58a6ff"),
+                              borderLeft:isStart?"2px solid "+(e.color||"#58a6ff"):"none",
+                              borderRight:isEnd?"2px solid "+(e.color||"#58a6ff"):"none",
+                              borderRadius:isStart&&isEnd?3:isStart?"3px 0 0 0":"0 3px 0 0",
+                              padding:"0 4px",
+                              fontSize:11,
+                              color:e.color||"#58a6ff",
+                              whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
+                              lineHeight:"14px",cursor:"pointer",
+                              zIndex:2,
+                              boxSizing:"border-box",
+                            }}>
+                            {isStart?e.title:""}
                           </div>
                         );
                       })}
@@ -473,7 +510,7 @@ export default function CalendarTab() {
                 <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.07em"}}>Notes <span style={{fontWeight:400,textTransform:"none",letterSpacing:0,color:"rgba(120,160,220,0.3)"}}>— paste screenshot with Ctrl+V</span></div>
                 <textarea value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))}
                   onPaste={handleNotesPaste}
-                  style={{...inp,minHeight:130,resize:"vertical",lineHeight:1.65}}
+                  style={{...inp,minHeight:130,resize:"none",overflow:"hidden",lineHeight:1.65,height:"auto"}} onInput={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}}
                   placeholder="Details, contacts, agenda items… paste screenshot here"/>
               </div>
               {/* Image */}
@@ -481,15 +518,15 @@ export default function CalendarTab() {
                 <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.07em"}}>Screenshot</div>
                 <input ref={imgRef} type="file" accept="image/*" onChange={handleImg} style={{display:"none"}}/>
                 <button onClick={()=>imgRef.current?.click()} style={{...btn(false),padding:"5px 14px",fontSize:13}}>
-                  📎 {form.image?"Replace image":"Attach screenshot"}
+                  📎 Add screenshot
                 </button>
-                {form.image&&(
-                  <div style={{position:"relative",marginTop:6}}>
-                    <img src={form.image} alt="" style={{width:"100%",borderRadius:4,border:"1px solid "+BOR}}/>
-                    <button onClick={()=>setForm(f=>({...f,image:null}))}
+                {(form.images||[]).map((img,idx)=>(
+                  <div key={idx} style={{position:"relative",marginTop:6}}>
+                    <img src={img} alt="" style={{width:"100%",borderRadius:4,border:"1px solid "+BOR}}/>
+                    <button onClick={()=>setForm(f=>({...f,images:f.images.filter((_,i)=>i!==idx)}))}
                       style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,0.72)",border:"none",borderRadius:"50%",width:18,height:18,color:"#fff",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>
                   </div>
-                )}
+                ))}
               </div>
               {/* Color */}
               <div>
@@ -509,7 +546,7 @@ export default function CalendarTab() {
             </div>
           </div>
         ):(
-          <button onClick={()=>openAdd(today)} style={{...btn(true),padding:"8px 0",fontSize:14,fontWeight:700,width:"100%"}}>+ New Event</button>
+          <button onClick={()=>openAdd(today)} style={{...btn(true),padding:"8px 0",fontSize:14,fontWeight:700,width:"100%"}}>Add Event</button>
         )}
 
         {/* Search + Upcoming */}
@@ -536,14 +573,14 @@ export default function CalendarTab() {
                     <div style={{fontSize:14,fontWeight:600,color:"rgba(200,220,255,0.85)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:"pointer"}} onClick={ev=>openEdit(e,ev)}>{e.title}</div>
                     <div style={{fontSize:12,color:"rgba(120,160,220,0.45)",marginTop:1}}>{fmtShort(e.date)}{e.endDate&&e.endDate!==e.date?" – "+fmtShort(e.endDate):""}</div>
                     {e.note&&isExp&&<div style={{fontSize:13,color:"rgba(155,185,225,0.55)",marginTop:4,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{e.note}</div>}
-                    {e.image&&isExp&&<img src={e.image} alt="" style={{width:"100%",borderRadius:3,marginTop:6,border:"1px solid "+BOR}}/>}
+                    {isExp&&(e.images||[]).map((img,idx)=><img key={idx} src={img} alt="" style={{width:"100%",borderRadius:3,marginTop:4,border:"1px solid "+BOR}}/>)}
                   </div>
                   <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
                     <span style={{fontSize:13,fontWeight:700,whiteSpace:"nowrap",color:du===0?"#43e97b":du<=7?"#faa356":du<=30?"#58a6ff":"rgba(120,160,220,0.4)"}}>
                       {du===0?"Today":du===1?"Tomorrow":du+"d"}
                     </span>
                     <div style={{display:"flex",gap:3}}>
-                      {(e.note||e.image)&&<button onClick={()=>setExpanded(isExp?null:e.id)} style={{...btn(isExp),padding:"1px 5px",fontSize:11}}>📝</button>}
+                      {(e.note||(e.images&&e.images.length>0))&&<button onClick={()=>setExpanded(isExp?null:e.id)} style={{...btn(isExp),padding:"1px 5px",fontSize:11}}>📝</button>}
                       <button onClick={ev=>openEdit(e,ev)} style={{...btn(false),padding:"1px 5px",fontSize:11}}>✏</button>
                       <button onClick={ev=>del(e.id,ev)} style={{...btn(false),padding:"1px 5px",fontSize:11,color:"#f87171",borderColor:"rgba(248,113,113,0.25)"}}>✕</button>
                     </div>
