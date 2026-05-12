@@ -520,10 +520,10 @@ function SmartEndDateInput({ value, startDate, onChange, style }) {
               {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:4,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"rgba(120,160,220,0.4)",cursor:"pointer",fontSize:11,padding:0}}>✕</button>}
             </div>
           </div>
-          {(()=>{
-            const filtered=upcoming.filter(e=>!search||((e.title||"")+(e.note||"")).toLowerCase().includes(search.toLowerCase()));
-            if(!filtered.length)return<div style={{padding:20,textAlign:"center",color:"rgba(120,160,220,0.3)",fontSize:14}}>{search?"No results":"No upcoming events"}</div>;
-            return filtered.map((e,i)=>{
+          {upcoming.filter(e=>!search||((e.title||"")+(e.note||"")).toLowerCase().includes(search.toLowerCase())).length===0&&(
+            <div style={{padding:20,textAlign:"center",color:"rgba(120,160,220,0.3)",fontSize:14}}>{search?"No results":"No upcoming events"}</div>
+          )}
+          {upcoming.filter(e=>!search||((e.title||"")+(e.note||"")).toLowerCase().includes(search.toLowerCase())).map((e,i)=>{
             const du=daysUntil(e.date);
             const isExp=expanded===e.id;
             return(
@@ -549,8 +549,7 @@ function SmartEndDateInput({ value, startDate, onChange, style }) {
                 </div>
               </div>
             );
-            })
-          })()}
+          })}
         </div>
       </div>
     </div>
