@@ -151,7 +151,80 @@ function DateInput({ value, onChange, style, placeholder="dd/mm/yyyy" }) {
   );
 }
 
-export default function CalendarTab() {
+// SmartEndDateInput — type just "27" to get same month as start, "27/7" for July 27
+function SmartEndDateInput({ value, startDate, onChange, style }) {
+  const [raw, setRaw] = React.useState("");
+  const [focused, setFocused] = React.useState(false);
+  const display = value ? value.split("-").reverse().join("/") : "";
+
+  React.useEffect(() => {
+    if (!focused) setRaw(display);
+  }, [value, focused]);
+
+  function handleChange(e) {
+    let v = e.target.value.replace(/[^0-9/]/g, "");
+    setRaw(v);
+  }
+
+  function handleBlur() {
+    setFocused(false);
+    const v = raw.trim();
+    if (!v) { onChange(""); setRaw(""); return; }
+
+    const ref = startDate ? parseLocal(startDate) : new Date();
+    const refDay = ref.getDate();
+    const refMonth = ref.getMonth() + 1;
+    const refYear = ref.getFullYear();
+
+    let day, month = refMonth, year = refYear;
+
+    // Just a number: "27" → 27th of same month
+    if (/^\d{1,2}$/.test(v)) {
+      day = parseInt(v);
+    }
+    // "27/7" or "27/07" → 27 Jul
+    else if (/^\d{1,2}\/\d{1,2}$/.test(v)) {
+      const [d, m] = v.split("/").map(Number);
+      day = d; month = m;
+    }
+    // "27/07/2026" or "27/7/26" — full date
+    else if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(v)) {
+      const parts = v.split("/").map(Number);
+      day = parts[0]; month = parts[1];
+      year = parts[2] < 100 ? 2000 + parts[2] : parts[2];
+    }
+    // Already formatted dd/mm/yyyy
+    else {
+      // Try to parse as-is using DateInput logic
+      const parts = v.split("/");
+      if (parts.length === 3) {
+        const [dd, mm, yyyy] = parts.map(Number);
+        if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) {
+          day = dd; month = mm; year = yyyy < 100 ? 2000 + yyyy : yyyy;
+        }
+      }
+    }
+
+    if (day && day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      const iso = year + "-" + String(month).padStart(2,"0") + "-" + String(day).padStart(2,"0");
+      onChange(iso);
+      setRaw(String(day).padStart(2,"0") + "/" + String(month).padStart(2,"0") + "/" + year);
+    } else {
+      setRaw(display);
+    }
+  }
+
+  return (
+    <input
+      value={focused ? raw : display}
+      onChange={handleChange}
+      onFocus={() => { setFocused(true); setRaw(""); }}
+      onBlur={handleBlur}
+      placeholder="dd or dd/mm"
+      style={style}
+    />
+  );
+}
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [confirmDelId, setConfirmDelId] = useState(null);
@@ -160,9 +233,27 @@ export default function CalendarTab() {
   const [startYear, setStartYear] = useState(todayDate.getFullYear());
   const [startMonth, setStartMonth] = useState(todayDate.getMonth());
   const [showForm, setShowForm] = useState(false);
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState(null);
+
+  // Paste screenshot into notes
+  function handleNotesPaste(e) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        const r = new FileReader();
+        r.onload = () => setForm(f => ({...f, image: r.result}));
+        r.readAsDataURL(file);
+        return;
+      }
+    }
+  }
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({ ...BLANK, date: today });
-  const [expanded, setExpanded] = useState(null);
+  const [search, setSearch] = useState("");
   const imgRef = useRef(null);
 
   const didLoad = useRef(false);
@@ -346,7 +437,8 @@ export default function CalendarTab() {
                 })}
               </div>
             );
-          })}
+          });
+          })()}
         </div>
       </div>
 
@@ -374,15 +466,15 @@ export default function CalendarTab() {
                 </div>
                 <div>
                   <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.07em"}}>End</div>
-                  <DateInput value={form.endDate} onChange={v=>setForm(f=>({...f,endDate:v}))} style={inp} placeholder="dd/mm/yyyy"/>
+                  <SmartEndDateInput value={form.endDate} startDate={form.date} onChange={v=>setForm(f=>({...f,endDate:v}))} style={inp}/>
                 </div>
               </div>
-              {/* Notes — bigger */}
-              <div>
-                <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.07em"}}>Notes</div>
+                <div>
+                <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.07em"}}>Notes <span style={{fontWeight:400,textTransform:"none",letterSpacing:0,color:"rgba(120,160,220,0.3)"}}>— paste screenshot with Ctrl+V</span></div>
                 <textarea value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))}
+                  onPaste={handleNotesPaste}
                   style={{...inp,minHeight:130,resize:"vertical",lineHeight:1.65}}
-                  placeholder="Details, contacts, agenda items, remarks…"/>
+                  placeholder="Details, contacts, agenda items… paste screenshot here"/>
               </div>
               {/* Image */}
               <div>
@@ -420,11 +512,20 @@ export default function CalendarTab() {
           <button onClick={()=>openAdd(today)} style={{...btn(true),padding:"8px 0",fontSize:14,fontWeight:700,width:"100%"}}>+ New Event</button>
         )}
 
-        {/* Upcoming */}
+        {/* Search + Upcoming */}
         <div style={{border:"1px solid "+BOR,borderRadius:8,overflow:"hidden",background:BG}}>
-          <div style={{padding:"7px 12px",background:HDR,borderBottom:"1px solid "+BOR,fontSize:13,fontWeight:700,color:"rgba(120,160,220,0.6)",textTransform:"uppercase",letterSpacing:"0.08em"}}>Upcoming</div>
-          {upcoming.length===0&&<div style={{padding:20,textAlign:"center",color:"rgba(120,160,220,0.3)",fontSize:14}}>No upcoming events</div>}
-          {upcoming.map((e,i)=>{
+          <div style={{padding:"7px 12px",background:HDR,borderBottom:"1px solid "+BOR,display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:13,fontWeight:700,color:"rgba(120,160,220,0.6)",textTransform:"uppercase",letterSpacing:"0.08em"}}>Upcoming</span>
+            <div style={{flex:1,position:"relative"}}>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search events…"
+                style={{width:"100%",background:"rgba(8,16,40,0.9)",border:"1px solid rgba(58,130,246,0.18)",borderRadius:4,color:"#cde",fontFamily:"inherit",fontSize:12,padding:"2px 22px 2px 7px",outline:"none",boxSizing:"border-box"}}/>
+              {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:4,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"rgba(120,160,220,0.4)",cursor:"pointer",fontSize:11,padding:0}}>✕</button>}
+            </div>
+          </div>
+          {(()=>{
+            const filtered=upcoming.filter(e=>!search||((e.title||"")+(e.note||"")).toLowerCase().includes(search.toLowerCase()));
+            if(!filtered.length)return<div style={{padding:20,textAlign:"center",color:"rgba(120,160,220,0.3)",fontSize:14}}>{search?"No results":"No upcoming events"}</div>;
+            return filtered.map((e,i)=>{
             const du=daysUntil(e.date);
             const isExp=expanded===e.id;
             return(
