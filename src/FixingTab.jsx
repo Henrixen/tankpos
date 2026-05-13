@@ -197,6 +197,83 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
   );
 }
 
+// Multi-select dropdown with checkboxes
+function MultiSelectDropdown({options,selected,onChange,placeholder,color}){
+  const [open,setOpen]=useState(false);
+  const ref=React.useRef(null);
+  const sel=Array.isArray(selected)?selected:(selected?[selected]:[]);
+  React.useEffect(()=>{
+    if(!open)return;
+    function close(e){if(ref.current&&!ref.current.contains(e.target))setOpen(false);}
+    document.addEventListener("mousedown",close);
+    return()=>document.removeEventListener("mousedown",close);
+  },[open]);
+  function toggle(v){onChange(sel.includes(v)?sel.filter(x=>x!==v):[...sel,v]);}
+  return(
+    <div ref={ref} style={{position:"relative",width:"100%"}}>
+      <div onClick={()=>setOpen(v=>!v)} style={{
+        background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:sel.length?color:"rgba(120,160,220,0.35)",
+        fontFamily:"inherit",fontSize:11,padding:"2px 5px",cursor:"pointer",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
+        display:"flex",alignItems:"center",justifyContent:"space-between",gap:3,minHeight:22}}>
+        <span style={{overflow:"hidden",textOverflow:"ellipsis",flex:1}}>{sel.length?sel.join(", "):placeholder}</span>
+        <span style={{fontSize:9,flexShrink:0,color:"rgba(120,160,220,0.4)"}}>▾</span>
+      </div>
+      {open&&(
+        <div style={{position:"absolute",top:"100%",left:0,zIndex:9999,background:C.bg2,border:"1px solid rgba(88,166,255,0.3)",borderRadius:5,padding:"4px 0",minWidth:"100%",boxShadow:"0 6px 20px rgba(0,0,0,0.6)",maxHeight:200,overflowY:"auto"}}>
+          {options.map(o=>(
+            <label key={o} style={{display:"flex",alignItems:"center",gap:6,padding:"3px 8px",cursor:"pointer",color:sel.includes(o)?color:"rgba(180,210,255,0.65)",fontSize:11,userSelect:"none"}}
+              onClick={e=>e.stopPropagation()}>
+              <input type="checkbox" checked={sel.includes(o)} onChange={()=>toggle(o)}
+                style={{accentColor:color||"#58a6ff",cursor:"pointer"}}/>
+              {o}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Owner note popout
+function OwnerNoteButton({ownerId,note,onSave}){
+  const [open,setOpen]=useState(false);
+  const [val,setVal]=useState(note||"");
+  const btnRef=React.useRef(null);
+  const [pos,setPos]=useState({top:0,left:0});
+  function openPopout(e){
+    e.stopPropagation();
+    setVal(note||"");
+    if(btnRef.current){
+      const r=btnRef.current.getBoundingClientRect();
+      setPos({top:r.bottom+4,left:Math.max(4,r.left-160)});
+    }
+    setOpen(v=>!v);
+  }
+  function save(){onSave(val);setOpen(false);}
+  return(
+    <>
+      <button ref={btnRef} onClick={openPopout}
+        style={{background:"none",border:"none",color:note?"rgba(250,200,100,0.7)":"rgba(120,160,220,0.25)",cursor:"pointer",fontSize:11,padding:"0 2px",lineHeight:1}} title="Add note">
+        {note?"✎":"✎"}
+      </button>
+      {open&&(
+        <>
+          <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>{save();}}/>
+          <div style={{position:"fixed",top:pos.top,left:pos.left,zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:6,padding:"8px",boxShadow:"0 8px 24px rgba(0,0,0,0.7)",width:220}} onClick={e=>e.stopPropagation()}>
+            <textarea value={val} onChange={e=>setVal(e.target.value)} autoFocus
+              placeholder="Note about this owner…"
+              style={{width:"100%",background:"rgba(6,12,28,0.9)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:4,color:"#cde",fontFamily:"inherit",fontSize:11,padding:"5px 7px",outline:"none",resize:"vertical",minHeight:70,boxSizing:"border-box",lineHeight:1.5}}/>
+            <div style={{display:"flex",gap:5,marginTop:5}}>
+              <button onClick={save} style={{flex:1,background:"rgba(88,166,255,0.18)",border:"1px solid rgba(88,166,255,0.35)",borderRadius:3,color:"#79c0ff",fontFamily:"inherit",fontSize:11,padding:"3px",cursor:"pointer",fontWeight:600}}>Save</button>
+              <button onClick={()=>setOpen(false)} style={{background:"none",border:"1px solid rgba(120,160,220,0.2)",borderRadius:3,color:"rgba(120,160,220,0.4)",fontFamily:"inherit",fontSize:11,padding:"3px 8px",cursor:"pointer"}}>✕</button>
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 function FixingTab({vessels}){
   const mobile=isMobile();
   const [jobs,setJobs]=useState([]);
@@ -209,7 +286,7 @@ function FixingTab({vessels}){
   const [statusFilter,setStatusFilter]=useState("ALL");
   const [clientFilter,setClientFilter]=useState("ALL");
   const [newClient,setNewClient]=useState({id:"",name:"",coverage:"",notes:""});
-  const [newOwnerEntry,setNewOwnerEntry]=useState({id:"",company:"",segment:"",pic:"",trade:"",comment:""});
+  const [newOwnerEntry,setNewOwnerEntry]=useState({id:"",company:"",segments:[],trades:[],pic:"",comment:""});
   const [jobSearch,setJobSearch]=useState("");
   const [pendingDelJob,setPendingDelJob]=useState(null);
   const [pendingDelOwner,setPendingDelOwner]=useState(null);
@@ -230,7 +307,7 @@ function FixingTab({vessels}){
   },[]);
 
   async function saveOwnerDir(dir){ setOwners(dir); await supabase.from("dashboard").upsert({key:"owner-directory",value:JSON.stringify(dir)},{onConflict:"key"}); }
-  function addOwnerEntry(){ const id="od_"+Date.now()+"_"+Math.random().toString(36).slice(2,5); saveOwnerDir([...owners,{...newOwnerEntry,id}]); setNewOwnerEntry({id:"",company:"",segment:"",pic:"",trade:"",comment:""}); }
+  function addOwnerEntry(){ const id="od_"+Date.now()+"_"+Math.random().toString(36).slice(2,5); saveOwnerDir([...owners,{...newOwnerEntry,id}]); setNewOwnerEntry({id:"",company:"",segments:[],trades:[],pic:"",comment:""}); }
   function updateOwnerEntry(id,field,val){ saveOwnerDir(owners.map(o=>o.id===id?{...o,[field]:val}:o)); }
   function removeOwnerEntry(id){ setPendingDelOwner(id); }
   function confirmRemoveOwnerEntry(){ if(!pendingDelOwner)return; saveOwnerDir(owners.filter(o=>o.id!==pendingDelOwner)); setPendingDelOwner(null); }
@@ -243,16 +320,23 @@ function FixingTab({vessels}){
   }),[jobs,statusFilter,clientFilter,jobSearch]);
 
   const charterersList=useMemo(()=>{
-    // Use filteredJobs so search + status filter affect which clients appear
-    const source=jobSearch.trim()||statusFilter!=="ALL"?filteredJobs:jobs;
-    const raw=clientFilter==="ALL"?[...new Set(source.map(j=>j.charterer||""))]:[ clientFilter];
-    if(clientSort==="name") return raw.sort((a,b)=>a.localeCompare(b));
-    return raw.sort((a,b)=>{
+    // All client names + any job charterers not in clients list
+    const clientNames=clients.map(c=>c.name).filter(Boolean);
+    const jobCharterers=[...new Set(jobs.map(j=>j.charterer||"").filter(Boolean))];
+    const allNames=[...new Set([...clientNames,...jobCharterers])];
+    // Filter by clientFilter if set
+    const source=clientFilter==="ALL"?allNames:[clientFilter];
+    // Filter by search/status — remove names with no matching filtered jobs (only if search/status active)
+    const filtered= (jobSearch.trim()||statusFilter!=="ALL")
+      ? source.filter(name=>filteredJobs.some(j=>(j.charterer||"")===name)||clients.some(c=>c.name===name&&!jobs.some(j=>j.charterer===name)))
+      : source;
+    if(clientSort==="name") return filtered.sort((a,b)=>a.localeCompare(b));
+    return filtered.sort((a,b)=>{
       const cntA=jobs.filter(j=>(j.charterer||"")===a&&j.status===clientSort.toUpperCase()).length;
       const cntB=jobs.filter(j=>(j.charterer||"")===b&&j.status===clientSort.toUpperCase()).length;
       return cntB-cntA;
     });
-  },[jobs,filteredJobs,clientFilter,clientSort,jobSearch,statusFilter]);
+  },[jobs,filteredJobs,clients,clientFilter,clientSort,jobSearch,statusFilter]);
 
   const inpS=useMemo(()=>({background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"4px 7px",outline:"none",boxSizing:"border-box"}),[]);
   const fb2=useCallback((on,col)=>({fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:4,border:"1px solid "+(on?col||C.blue:C.bd),background:on?(col||C.blue)+"22":"transparent",color:on?col||C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}),[]);
@@ -531,7 +615,10 @@ function FixingTab({vessels}){
                   <div style={{flex:1,minWidth:0}}>
                     {chartererJobs.map(job=>{
                   const summary=[job.qty,job.product,job.load&&job.disch?`${job.load} → ${job.disch}`:job.load||job.disch,job.laycan].filter(Boolean).join("  ");
-                  const titleText=summary||stripHtml(job.cargo_details||"")||"New cargo";
+                  // For cargo_details: strip HTML then join lines with " | "
+                  const rawText=stripHtml(job.cargo_details||"").trim();
+                  const cargoTitle=rawText.split(/\n+/).map(s=>s.trim()).filter(Boolean).join(" | ");
+                  const titleText=summary||cargoTitle||"New cargo";
                   return(
                     <div key={job.id} style={{borderTop:"1px solid "+C.bd2,padding:"10px 12px"}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
@@ -579,9 +666,13 @@ function FixingTab({vessels}){
                                   </select>
                                   <button tabIndex={-1}
                                     onClick={()=>{
-                                      const matches=owners.filter(o=>(job.segment?o.segment===job.segment:true)&&(job.trade?o.trade===job.trade:true));
+                                      const matches=owners.filter(o=>{
+                                        const segs=o.segments||(o.segment?[o.segment]:[]);
+                                        const trs=o.trades||(o.trade?[o.trade]:[]);
+                                        return(job.segment?segs.includes(job.segment):true)&&(job.trade?trs.includes(job.trade):true);
+                                      });
                                       if(!matches.length)return;
-                                      const lines=matches.map(o=>`${o.company} /`).join("\n");
+                                      const lines=matches.map(o=>`${o.company} | `).join("\n");
                                       updateJob(job.id,{indications:(job.indications?job.indications+"\n":"")+lines});
                                     }}
                                     style={{fontSize:10,fontWeight:700,height:22,padding:"0 8px",background:"rgba(88,166,255,.15)",border:"1px solid "+C.blue+"44",borderRadius:4,color:C.blue,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
@@ -634,8 +725,8 @@ function FixingTab({vessels}){
           })}
         </div>
 
-        {/* Owner Directory — wider columns */}
-        <div style={{flex:"0 0 340px",width:340,display:"flex",flexDirection:"column",gap:6}}>
+        {/* Owner Directory — wider */}
+        <div style={{flex:"0 0 460px",width:460,display:"flex",flexDirection:"column",gap:6}}>
           {pendingDelOwner&&(
             <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:C.bg2,border:"1px solid "+C.red,borderRadius:8,padding:"12px 20px",zIndex:9999,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.5)",fontFamily:"sans-serif",fontSize:12,minWidth:280}}>
               <span style={{color:C.tx,flex:1}}>Remove <strong>{owners.find(o=>o.id===pendingDelOwner)?.company||"entry"}</strong>?</span>
@@ -666,67 +757,65 @@ function FixingTab({vessels}){
                     style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,border:"1px solid "+(ownerTradeFilter===t?C.amber:C.bd),background:ownerTradeFilter===t?"rgba(255,209,102,.2)":"transparent",color:ownerTradeFilter===t?C.amber:C.faint,cursor:"pointer",fontFamily:"inherit"}}>{t}</button>
                 ))}
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"110px 56px 1fr 1fr auto",gap:3,alignItems:"center"}}>
+              {/* Add row — with multi-select */}
+              <div style={{display:"grid",gridTemplateColumns:"130px 56px 1fr 1fr auto",gap:3,alignItems:"center"}}>
                 <input value={newOwnerEntry.company} onChange={e=>setNewOwnerEntry(p=>({...p,company:e.target.value}))} placeholder="Company" style={{...inpS,padding:"2px 4px",fontSize:11}}/>
                 <input value={newOwnerEntry.pic} onChange={e=>setNewOwnerEntry(p=>({...p,pic:e.target.value}))} placeholder="PIC" style={{...inpS,padding:"2px 4px",fontSize:11}}/>
-                <select value={newOwnerEntry.segment} onChange={e=>setNewOwnerEntry(p=>({...p,segment:e.target.value}))} className="own-sel">
-                  <option value="">Seg…</option>
-                  {SEGMENTS.map(s=><option key={s} value={s}>{s}</option>)}
-                </select>
-                <select value={newOwnerEntry.trade} onChange={e=>setNewOwnerEntry(p=>({...p,trade:e.target.value}))} className="own-sel">
-                  <option value="">Trade…</option>
-                  {TRADES.map(t=><option key={t} value={t}>{t}</option>)}
-                </select>
+                <MultiSelectDropdown options={SEGMENTS} selected={newOwnerEntry.segments||[]} onChange={v=>setNewOwnerEntry(p=>({...p,segments:v}))} placeholder="Seg…" color="rgba(88,166,255,0.8)"/>
+                <MultiSelectDropdown options={TRADES} selected={newOwnerEntry.trades||[]} onChange={v=>setNewOwnerEntry(p=>({...p,trades:v}))} placeholder="Trade…" color="rgba(250,163,86,0.75)"/>
                 <button onClick={addOwnerEntry} style={{background:"rgba(88,166,255,.18)",border:"1px solid rgba(88,166,255,.4)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:11,padding:"3px 7px",cursor:"pointer",whiteSpace:"nowrap"}}>+ Add</button>
               </div>
               {(()=>{
                 const filtered=owners.filter(o=>{
-                  if(ownerSegFilter&&o.segment!==ownerSegFilter)return false;
-                  if(ownerTradeFilter&&o.trade!==ownerTradeFilter)return false;
-                  if(ownerDirSearch){const t=ownerDirSearch.toLowerCase();if(![o.company,o.pic,o.segment,o.trade,o.comment].filter(Boolean).join(" ").toLowerCase().includes(t))return false;}
+                  const segs=o.segments||(o.segment?[o.segment]:[]);
+                  const trs=o.trades||(o.trade?[o.trade]:[]);
+                  if(ownerSegFilter&&!segs.includes(ownerSegFilter))return false;
+                  if(ownerTradeFilter&&!trs.includes(ownerTradeFilter))return false;
+                  if(ownerDirSearch){const t=ownerDirSearch.toLowerCase();if(![o.company,o.pic,...segs,...trs,o.comment].filter(Boolean).join(" ").toLowerCase().includes(t))return false;}
                   return true;
-                });
+                }).sort((a,b)=>(a.company||"").localeCompare(b.company||""));
                 if(!filtered.length)return <div style={{fontSize:11,color:C.faint,fontStyle:"italic"}}>No entries.</div>;
                 return(
                   <div style={{border:"1px solid rgba(58,130,246,0.18)",borderRadius:6,overflow:"hidden",background:"rgba(7,15,28,0.96)"}}>
-                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,tableLayout:"fixed"}}>
                       <thead>
                         <tr style={{background:"rgba(20,30,50,0.92)"}}>
-                          {[["Company","34%"],["PIC","14%"],["Seg","20%"],["Trade","22%"],["","10%"]].map(([h,w])=>(
-                            <th key={h} style={{padding:"4px 6px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.14)",width:w,whiteSpace:"nowrap"}}>{h}</th>
-                          ))}
+                          <th style={{padding:"4px 6px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.14)",width:"28%"}}>Company</th>
+                          <th style={{padding:"4px 6px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.14)",width:"12%"}}>PIC</th>
+                          <th style={{padding:"4px 6px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.14)",width:"25%"}}>Seg</th>
+                          <th style={{padding:"4px 6px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.14)",width:"25%"}}>Trade</th>
+                          <th style={{padding:"4px 4px",borderBottom:"1px solid rgba(58,130,246,0.14)",width:"10%"}}/>
                         </tr>
                       </thead>
                       <tbody>
-                        {filtered.map((o,ri)=>(
-                          <tr key={o.id} style={{background:ri%2===0?"transparent":"rgba(255,255,255,0.02)"}}>
-                            <td style={{padding:"2px 6px",borderBottom:"1px solid rgba(255,255,255,0.035)",whiteSpace:"nowrap",overflow:"hidden",maxWidth:1}}>
-                              <input value={o.company||""} onChange={e=>updateOwnerEntry(o.id,"company",e.target.value)}
-                                style={{background:"transparent",border:"none",outline:"none",color:"#79c0ff",fontFamily:"inherit",fontSize:11,width:"100%",minWidth:60}}/>
-                            </td>
-                            <td style={{padding:"2px 6px",borderBottom:"1px solid rgba(255,255,255,0.035)",whiteSpace:"nowrap",overflow:"hidden",maxWidth:1}}>
-                              <input value={o.pic||""} onChange={e=>updateOwnerEntry(o.id,"pic",e.target.value)}
-                                style={{background:"transparent",border:"none",outline:"none",color:"#43e97b",fontFamily:"inherit",fontSize:11,width:"100%",minWidth:30}}/>
-                            </td>
-                            <td style={{padding:"2px 4px",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
-                              <select value={o.segment||""} onChange={e=>updateOwnerEntry(o.id,"segment",e.target.value)}
-                                className="own-sel" style={{color:"rgba(88,166,255,0.8)",width:"100%"}}>
-                                <option value="">—</option>
-                                {SEGMENTS.map(s=><option key={s} value={s}>{s}</option>)}
-                              </select>
-                            </td>
-                            <td style={{padding:"2px 4px",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
-                              <select value={o.trade||""} onChange={e=>updateOwnerEntry(o.id,"trade",e.target.value)}
-                                className="own-sel" style={{color:"rgba(250,163,86,0.75)",width:"100%"}}>
-                                <option value="">—</option>
-                                {TRADES.map(t=><option key={t} value={t}>{t}</option>)}
-                              </select>
-                            </td>
-                            <td style={{padding:"2px 4px",borderBottom:"1px solid rgba(255,255,255,0.035)",textAlign:"center"}}>
-                              <button onClick={()=>removeOwnerEntry(o.id)} style={{background:"none",border:"none",color:"rgba(255,107,107,0.5)",cursor:"pointer",fontSize:11,padding:0}}>✕</button>
-                            </td>
-                          </tr>
-                        ))}
+                        {filtered.map((o,ri)=>{
+                          const segs=o.segments||(o.segment?[o.segment]:[]);
+                          const trs=o.trades||(o.trade?[o.trade]:[]);
+                          return(
+                            <tr key={o.id} style={{background:ri%2===0?"transparent":"rgba(255,255,255,0.02)"}}>
+                              <td style={{padding:"2px 4px",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
+                                <div style={{display:"flex",alignItems:"center",gap:2}}>
+                                  <OwnerNoteButton ownerId={o.id} note={o.comment||""} onSave={v=>updateOwnerEntry(o.id,"comment",v)}/>
+                                  <input value={o.company||""} onChange={e=>updateOwnerEntry(o.id,"company",e.target.value)}
+                                    style={{background:"transparent",border:"none",outline:"none",color:"#79c0ff",fontFamily:"inherit",fontSize:11,width:"100%",minWidth:40}}/>
+                                </div>
+                              </td>
+                              <td style={{padding:"2px 4px",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
+                                <input value={o.pic||""} onChange={e=>updateOwnerEntry(o.id,"pic",e.target.value)}
+                                  style={{background:"transparent",border:"none",outline:"none",color:"#43e97b",fontFamily:"inherit",fontSize:11,width:"100%"}}/>
+                              </td>
+                              <td style={{padding:"1px 3px",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
+                                <MultiSelectDropdown options={SEGMENTS} selected={segs} onChange={v=>updateOwnerEntry(o.id,"segments",v)} placeholder="—" color="rgba(88,166,255,0.8)"/>
+                              </td>
+                              <td style={{padding:"1px 3px",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
+                                <MultiSelectDropdown options={TRADES} selected={trs} onChange={v=>updateOwnerEntry(o.id,"trades",v)} placeholder="—" color="rgba(250,163,86,0.75)"/>
+                              </td>
+                              <td style={{padding:"2px 4px",borderBottom:"1px solid rgba(255,255,255,0.035)",textAlign:"center"}}>
+                                <button onClick={()=>removeOwnerEntry(o.id)} style={{background:"none",border:"none",color:"rgba(255,107,107,0.5)",cursor:"pointer",fontSize:11,padding:0}}>✕</button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
