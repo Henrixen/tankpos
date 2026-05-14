@@ -842,9 +842,7 @@ const filtV=useMemo(()=>{
                 <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,flexWrap:"wrap"}}>
                   <ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/>
                   {selVessels.size>0&&(
-                    <button 
-                      onClick={()=>setTab("reports")}
-                      style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                    <button onClick={()=>setTab("reports")} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                       📋 To Report ({selVessels.size})
                     </button>
                   )}
@@ -1215,9 +1213,7 @@ const filtV=useMemo(()=>{
             <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,flexWrap:"wrap"}}>
               <ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/>
               {selCargoes.size>0&&(
-                <button 
-                  onClick={()=>setTab("reports")}
-                  style={{fontSize:11,fontWeight:600,padding:"2px 9px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                <button onClick={()=>setTab("reports")} style={{fontSize:11,fontWeight:600,padding:"2px 9px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                   📋 To Report ({selCargoes.size})
                 </button>
               )}
@@ -1544,16 +1540,8 @@ const filtV=useMemo(()=>{
         )}
         {tab==="cal"&&<CalendarTab/>}
         {tab==="settings"&&<SettingsTab/>}
-        {tab==="reports"&&(
-          <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
-            <ReportsTab selectedVessels={Array.from(selVessels)} selectedCargoes={Array.from(selCargoes)}/>
-          </div>
-        )}
-        {tab==="map"&&(
-          <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
-            <FreightMapTab/>
-          </div>
-        )}
+        {tab==="reports"&&<ReportsTab selectedVessels={Array.from(selVessels)} selectedCargoes={Array.from(selCargoes)}/>}
+        {tab==="map"&&<FreightMapTab/>}
       </div>
     </div>
   );
