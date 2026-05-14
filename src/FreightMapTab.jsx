@@ -1,814 +1,601 @@
 import React, { useState, useEffect, useRef } from "react";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
-import { toTCase, fmtDateShort } from "./utils";
 
-const REPORT_TYPES = ["Intermediate", "Asia to Europe", "Transatlantic", "TimeCharter"];
+// Major ports with coordinates for visualization
+const MAJOR_PORTS = {
+  // Europe
+  ara: { lat: 51.95, lng: 4.13, label: "ARA" },
+  thames: { lat: 51.45, lng: 0.70, label: "Thames" },
+  mongstad: { lat: 60.82, lng: 5.03, label: "Mongstad" },
+  gothenburg: { lat: 57.70, lng: 11.97, label: "Gothenburg" },
+  porvoo: { lat: 60.28, lng: 25.66, label: "Porvoo" },
+  klaipeda: { lat: 55.71, lng: 21.13, label: "Klaipeda" },
+  lehavre: { lat: 49.49, lng: 0.11, label: "Le Havre" },
+  bordeaux: { lat: 44.84, lng: -0.57, label: "Bordeaux" },
+  
+  // Mediterranean
+  wmed: { lat: 43.30, lng: 5.37, label: "W.Med" },
+  cmed: { lat: 40.85, lng: 14.27, label: "C.Med" },
+  emed: { lat: 37.98, lng: 23.73, label: "E.Med" },
+  bsea: { lat: 44.48, lng: 33.55, label: "B.Sea" },
+  redsea: { lat: 20.00, lng: 38.00, label: "Red Sea" },
+  
+  // Americas
+  usg: { lat: 29.76, lng: -95.37, label: "US Gulf" },
+  caribs: { lat: 10.66, lng: -61.52, label: "Caribs" },
+  
+  // Africa
+  wci: { lat: 5.00, lng: -4.00, label: "WCI" },
+  
+  // Asia
+  singapore: { lat: 1.35, lng: 103.82, label: "Singapore" },
+  china: { lat: 31.23, lng: 121.47, label: "China" },
+  fareast: { lat: 35.68, lng: 139.69, label: "Far East" },
+};
 
-function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
-  const [reportType, setReportType] = useState("Intermediate");
-  const [commentary, setCommentary] = useState("");
-  const [rateGrid, setRateGrid] = useState({});
-  const [tceEarnings, setTceEarnings] = useState({});
-  const [fixtures, setFixtures] = useState([]);
-  const [quotes, setQuotes] = useState([]);
-  const [reportDate, setReportDate] = useState(new Date().toISOString().split("T")[0]);
-  const [savedReports, setSavedReports] = useState([]);
-  const [loadingReport, setLoadingReport] = useState(null);
-  const reportRef = useRef(null);
+// Default routes configuration
+const DEFAULT_ROUTES = [
+  { id: "ara-us", from: "ara", to: "usg", label: "ARA → US", region: "Transatlantic" },
+  { id: "us-ara", from: "usg", to: "ara", label: "US → ARA", region: "Transatlantic" },
+  { id: "ara-thames", from: "ara", to: "thames", label: "ARA → Thames", region: "Intermediate" },
+  { id: "mongstad-ara", from: "mongstad", to: "ara", label: "Mongstad → ARA", region: "Intermediate" },
+  { id: "ara-gothenburg", from: "ara", to: "gothenburg", label: "ARA → Gothenburg", region: "Intermediate" },
+  { id: "gothenburg-ara", from: "gothenburg", to: "ara", label: "Gothenburg → ARA", region: "Intermediate" },
+  { id: "klaipeda-ara", from: "klaipeda", to: "ara", label: "Klaipeda → ARA", region: "Intermediate" },
+  { id: "ara-porvoo", from: "ara", to: "porvoo", label: "ARA → Porvoo", region: "Intermediate" },
+  { id: "lehavre-ara", from: "lehavre", to: "ara", label: "Le Havre → ARA", region: "Intermediate" },
+  { id: "bordeaux-ara", from: "bordeaux", to: "ara", label: "Bordeaux → ARA", region: "Intermediate" },
+  { id: "ara-wmed", from: "ara", to: "wmed", label: "ARA → W.Med", region: "Med" },
+  { id: "ara-cmed", from: "ara", to: "cmed", label: "ARA → C.Med", region: "Med" },
+  { id: "ara-emed", from: "ara", to: "emed", label: "ARA → E.Med", region: "Med" },
+  { id: "bsea-ara", from: "bsea", to: "ara", label: "Black Sea → ARA", region: "Med" },
+  { id: "cmed-wmed", from: "cmed", to: "wmed", label: "C.Med → W.Med", region: "Med" },
+  { id: "bsea-emed", from: "bsea", to: "emed", label: "Black Sea → E.Med", region: "Med" },
+  { id: "ara-redsea", from: "ara", to: "redsea", label: "ARA → Red Sea", region: "Long Haul" },
+  { id: "ara-wci", from: "ara", to: "wci", label: "ARA → WCI", region: "Long Haul" },
+  { id: "ara-fareast", from: "ara", to: "fareast", label: "ARA → Far East", region: "Long Haul" },
+  { id: "singapore-ara", from: "singapore", to: "ara", label: "Singapore → ARA", region: "Long Haul" },
+  { id: "china-ara", from: "china", to: "ara", label: "China → ARA", region: "Long Haul" },
+  { id: "ara-caribs", from: "ara", to: "caribs", label: "ARA → Caribs", region: "Transatlantic" },
+  { id: "wci-ara", from: "wci", to: "ara", label: "WCI → ARA", region: "Long Haul" },
+];
 
-  // Load saved reports
+function FreightMapTab() {
+  const [routes] = useState(DEFAULT_ROUTES);
+  const [selectedRoute, setSelectedRoute] = useState(null);
+  const [rateHistory, setRateHistory] = useState([]);
+  const [newRate, setNewRate] = useState("");
+  const [filterRegion, setFilterRegion] = useState("All");
+  const mapRef = useRef(null);
+
+  const regions = ["All", "Intermediate", "Transatlantic", "Med", "Long Haul"];
+
   useEffect(() => {
-    loadReports();
+    loadRateHistory();
   }, []);
 
-  const loadReports = async () => {
+  const loadRateHistory = async () => {
     try {
       const { data, error } = await supabase
-        .from("reports")
+        .from("freight_rates")
         .select("*")
         .order("created_at", { ascending: false });
       
       if (error) throw error;
-      setSavedReports(data || []);
+      setRateHistory(data || []);
     } catch (err) {
-      console.error("Error loading reports:", err);
+      console.error("Error loading rate history:", err);
     }
   };
 
-  // Initialize rate grid structure based on report type
-  useEffect(() => {
-    let defaultGrid = {};
-    if (reportType === "Intermediate") {
-      defaultGrid = {
-        "5kt": { "ARA-Thames": "", "ARA-Dublin": "", "Mongstad-ARA": "" },
-        "10kt": { "ARA-Thames": "", "ARA-Dublin": "", "Mongstad-ARA": "" },
-        "18kt": { "ARA-Thames": "", "ARA-Dublin": "", "Mongstad-ARA": "" },
-      };
-    } else if (reportType === "Asia to Europe") {
-      defaultGrid = {
-        "25kt": { "Singapore-ARA": "", "China-ARA": "" },
-        "35kt": { "Singapore-ARA": "", "China-ARA": "" },
-        "45kt": { "Singapore-ARA": "", "China-ARA": "" },
-      };
-    } else if (reportType === "Transatlantic") {
-      defaultGrid = {
-        "30kt": { "ARA-USG": "", "USG-ARA": "" },
-        "37kt": { "ARA-USG": "", "USG-ARA": "" },
-      };
-    } else if (reportType === "TimeCharter") {
-      defaultGrid = {
-        "12m": { "10k": "", "15k": "", "20k": "" },
-        "24m": { "10k": "", "15k": "", "20k": "" },
-      };
-    }
-    setRateGrid(defaultGrid);
-  }, [reportType]);
+  const addRate = async () => {
+    if (!selectedRoute || !newRate) return;
 
-  const handleRateChange = (size, route, value) => {
-    setRateGrid(prev => ({
-      ...prev,
-      [size]: { ...prev[size], [route]: value }
-    }));
-  };
-
-  const handleTCEChange = (segment, value) => {
-    setTceEarnings(prev => ({ ...prev, [segment]: value }));
-  };
-
-  const addFixture = () => {
-    setFixtures([...fixtures, { vessel: "", charterer: "", route: "", qty: "", rate: "", date: "" }]);
-  };
-
-  const updateFixture = (index, field, value) => {
-    const updated = [...fixtures];
-    updated[index][field] = value;
-    setFixtures(updated);
-  };
-
-  const removeFixture = (index) => {
-    setFixtures(fixtures.filter((_, i) => i !== index));
-  };
-
-  const addQuote = () => {
-    setQuotes([...quotes, { route: "", size: "", rate: "", basis: "" }]);
-  };
-
-  const updateQuote = (index, field, value) => {
-    const updated = [...quotes];
-    updated[index][field] = value;
-    setQuotes(updated);
-  };
-
-  const removeQuote = (index) => {
-    setQuotes(quotes.filter((_, i) => i !== index));
-  };
-
-  const saveReport = async () => {
     try {
-      const reportData = {
-        report_type: reportType,
-        report_date: reportDate,
-        commentary,
-        rate_grid: rateGrid,
-        tce_earnings: tceEarnings,
-        fixtures,
-        quotes,
-        selected_vessels: selectedVessels,
-        selected_cargoes: selectedCargoes,
-      };
-
-      const { error } = await supabase.from("reports").insert([reportData]);
+      const { error } = await supabase.from("freight_rates").insert([{
+        route_id: selectedRoute.id,
+        route_label: selectedRoute.label,
+        rate: newRate,
+        region: selectedRoute.region
+      }]);
       
       if (error) throw error;
       
-      alert("Report saved successfully");
-      loadReports();
+      setNewRate("");
+      loadRateHistory();
     } catch (err) {
-      console.error("Error saving report:", err);
-      alert("Error saving report");
+      console.error("Error adding rate:", err);
     }
   };
 
-  const loadReport = async (reportId) => {
-    setLoadingReport(reportId);
+  const deleteRate = async (id) => {
     try {
-      const { data, error } = await supabase
-        .from("reports")
-        .select("*")
-        .eq("id", reportId)
-        .single();
-      
+      const { error } = await supabase.from("freight_rates").delete().eq("id", id);
       if (error) throw error;
-      
-      setReportType(data.report_type);
-      setReportDate(data.report_date);
-      setCommentary(data.commentary || "");
-      setRateGrid(data.rate_grid || {});
-      setTceEarnings(data.tce_earnings || {});
-      setFixtures(data.fixtures || []);
-      setQuotes(data.quotes || []);
+      loadRateHistory();
     } catch (err) {
-      console.error("Error loading report:", err);
-    } finally {
-      setLoadingReport(null);
+      console.error("Error deleting rate:", err);
     }
   };
 
-  const exportReport = () => {
-    if (reportRef.current) {
-      window.print();
-    }
+  const filteredRoutes = filterRegion === "All" 
+    ? routes 
+    : routes.filter(r => r.region === filterRegion);
+
+  const getLatestRate = (routeId) => {
+    const rates = rateHistory.filter(r => r.route_id === routeId);
+    return rates.length > 0 ? rates[0] : null;
   };
 
-  const copyToClipboard = async () => {
-    if (reportRef.current) {
-      try {
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-        const reportEl = reportRef.current;
-        
-        canvas.width = reportEl.offsetWidth;
-        canvas.height = reportEl.offsetHeight;
-        
-        // This is a simplified version - for production use html2canvas library
-        alert("Screenshot copied to clipboard (requires html2canvas library for full implementation)");
-      } catch (err) {
-        console.error("Error copying to clipboard:", err);
-      }
-    }
+  const getMarketStrength = (routeId) => {
+    const rates = rateHistory.filter(r => r.route_id === routeId).slice(0, 5);
+    if (rates.length < 2) return "neutral";
+    
+    const latest = parseFloat(rates[0].rate) || 0;
+    const avg = rates.slice(1).reduce((sum, r) => sum + (parseFloat(r.rate) || 0), 0) / (rates.length - 1);
+    
+    const change = ((latest - avg) / avg) * 100;
+    if (change > 5) return "strong";
+    if (change < -5) return "weak";
+    return "neutral";
   };
+
+  const strengthColors = {
+    strong: "#3fb950",
+    neutral: "#f5a623",
+    weak: "#ff6b6b"
+  };
+
+  // Mercator projection
+  const project = (lat, lng) => {
+    const x = ((lng + 180) / 360) * 1400;
+    const y = ((90 - lat) / 180) * 700;
+    return [x, y];
+  };
+
+  // Create curved path between two points
+  const getCurvePath = (from, to) => {
+    const [x1, y1] = project(MAJOR_PORTS[from].lat, MAJOR_PORTS[from].lng);
+    const [x2, y2] = project(MAJOR_PORTS[to].lat, MAJOR_PORTS[to].lng);
+    
+    const midX = (x1 + x2) / 2;
+    const midY = (y1 + y2) / 2;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    // Control point for bezier curve
+    const offset = Math.min(dist * 0.2, 100);
+    const angle = Math.atan2(dy, dx) - Math.PI / 2;
+    const cx = midX + offset * Math.cos(angle);
+    const cy = midY + offset * Math.sin(angle);
+    
+    return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
+  };
+
+  // Get arrow position at end of path
+  const getArrowPosition = (from, to) => {
+    const [x2, y2] = project(MAJOR_PORTS[to].lat, MAJOR_PORTS[to].lng);
+    const [x1, y1] = project(MAJOR_PORTS[from].lat, MAJOR_PORTS[from].lng);
+    const angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
+    return { x: x2, y: y2, angle };
+  };
+
+  const ratesByRegion = rateHistory.reduce((acc, rate) => {
+    if (!acc[rate.region]) acc[rate.region] = [];
+    acc[rate.region].push(rate);
+    return acc;
+  }, {});
 
   return (
-    <div style={{ display: "flex", height: "100%", gap: 12 }}>
-      {/* LEFT SIDEBAR - Saved Reports */}
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 12, overflow: "hidden" }}>
+      {/* HEADER */}
       <div style={{ 
-        width: 240, 
         background: C.bg2, 
         border: "1px solid " + C.bd, 
         borderRadius: 8, 
         padding: 12,
-        overflowY: "auto"
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 12
       }}>
-        <div style={{ 
-          fontSize: 11, 
-          fontWeight: 700, 
-          color: C.faint, 
-          textTransform: "uppercase", 
-          letterSpacing: "0.08em",
-          marginBottom: 12 
-        }}>
-          📋 Saved Reports
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: C.blue }}>🌍 Global Freight Map</span>
+          
+          <select
+            value={filterRegion}
+            onChange={e => setFilterRegion(e.target.value)}
+            style={{
+              background: C.bg3,
+              border: "1px solid " + C.bd,
+              borderRadius: 6,
+              color: C.tx,
+              fontSize: 12,
+              padding: "6px 10px",
+              outline: "none",
+              cursor: "pointer"
+            }}
+          >
+            {regions.map(r => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
         </div>
-        
-        <button
-          onClick={() => {
-            setCommentary("");
-            setFixtures([]);
-            setQuotes([]);
-            setTceEarnings({});
-          }}
-          style={{
-            width: "100%",
-            background: C.blue,
-            border: "none",
-            borderRadius: 6,
-            color: C.bg,
-            fontSize: 12,
-            fontWeight: 700,
-            padding: "8px 12px",
-            cursor: "pointer",
-            marginBottom: 12
-          }}
-        >
-          + New Report
-        </button>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {savedReports.map(r => (
-            <div
-              key={r.id}
-              onClick={() => loadReport(r.id)}
-              style={{
-                background: loadingReport === r.id ? C.bg3 : C.bg,
-                border: "1px solid " + C.bd,
-                borderRadius: 6,
-                padding: "8px 10px",
-                cursor: "pointer",
-                transition: "all 0.15s"
-              }}
-            >
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 2 }}>
-                {r.report_type}
-              </div>
-              <div style={{ fontSize: 11, color: C.dim }}>
-                {new Date(r.report_date).toLocaleDateString("en-GB")}
-              </div>
-              <div style={{ fontSize: 10, color: C.faint, marginTop: 2 }}>
-                {new Date(r.created_at).toLocaleDateString("en-GB")}
-              </div>
-            </div>
-          ))}
+        <div style={{ fontSize: 11, color: C.dim }}>
+          Click on route to add rate · {rateHistory.length} rates tracked
         </div>
       </div>
 
-      {/* MAIN CONTENT */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12, overflowY: "auto" }}>
-        {/* HEADER */}
+      <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
+        {/* MAP */}
         <div style={{ 
-          background: C.bg2, 
-          border: "1px solid " + C.bd, 
-          borderRadius: 8, 
-          padding: 12,
+          flex: 2,
+          background: C.bg,
+          border: "1px solid " + C.bd,
+          borderRadius: 8,
+          padding: 0,
+          position: "relative",
+          overflow: "hidden"
+        }}>
+          <svg
+            ref={mapRef}
+            viewBox="0 0 1400 700"
+            style={{ 
+              width: "100%", 
+              height: "100%",
+              background: "linear-gradient(180deg, #0a1628 0%, #162540 100%)"
+            }}
+          >
+            {/* World map simplified outline */}
+            <g opacity="0.15" stroke="#58a6ff" strokeWidth="1.5" fill="none">
+              {/* Continents outline approximation */}
+              <path d="M 150,150 L 200,140 L 280,120 L 360,130 L 400,140 L 440,135 L 480,145 L 500,155 L 520,150 L 540,160 L 560,155 L 580,165 L 600,160 L 620,170" />
+              <path d="M 800,240 L 820,235 L 850,245 L 880,240 L 910,250 L 930,245" />
+              <path d="M 200,280 L 250,270 L 300,285 L 350,280 L 400,290 L 430,285" />
+              <path d="M 220,450 L 270,440 L 320,455 L 360,450 L 400,460" />
+              <ellipse cx="1150" cy="280" rx="120" ry="90" />
+            </g>
+
+            {/* Dot grid background */}
+            <g opacity="0.08" fill="#58a6ff">
+              {Array.from({ length: 70 }).map((_, i) => 
+                Array.from({ length: 140 }).map((_, j) => (
+                  <circle key={`${i}-${j}`} cx={j * 10} cy={i * 10} r="0.5" />
+                ))
+              )}
+            </g>
+
+            {/* Routes */}
+            {filteredRoutes.map(route => {
+              const latestRate = getLatestRate(route.id);
+              const strength = getMarketStrength(route.id);
+              const isSelected = selectedRoute?.id === route.id;
+              const path = getCurvePath(route.from, route.to);
+              const arrowPos = getArrowPosition(route.from, route.to);
+
+              return (
+                <g key={route.id} onClick={() => setSelectedRoute(route)} style={{ cursor: "pointer" }}>
+                  {/* Route line */}
+                  <path
+                    d={path}
+                    stroke={isSelected ? "#58a6ff" : strengthColors[strength]}
+                    strokeWidth={isSelected ? 3 : 2}
+                    fill="none"
+                    opacity={isSelected ? 1 : 0.7}
+                    strokeDasharray={isSelected ? "none" : "5,5"}
+                    style={{ transition: "all 0.2s" }}
+                  />
+                  
+                  {/* Arrow */}
+                  <g transform={`translate(${arrowPos.x}, ${arrowPos.y}) rotate(${arrowPos.angle})`}>
+                    <path
+                      d="M 0,0 L -8,-5 L -8,5 Z"
+                      fill={isSelected ? "#58a6ff" : strengthColors[strength]}
+                      opacity={isSelected ? 1 : 0.7}
+                    />
+                  </g>
+                  
+                  {/* Rate badge */}
+                  {latestRate && (
+                    <g>
+                      {(() => {
+                        const [mx, my] = project(
+                          (MAJOR_PORTS[route.from].lat + MAJOR_PORTS[route.to].lat) / 2,
+                          (MAJOR_PORTS[route.from].lng + MAJOR_PORTS[route.to].lng) / 2
+                        );
+                        return (
+                          <>
+                            <rect
+                              x={mx - 30}
+                              y={my - 12}
+                              width="60"
+                              height="24"
+                              fill={C.bg2}
+                              stroke={strengthColors[strength]}
+                              strokeWidth="1"
+                              rx="4"
+                              opacity="0.95"
+                            />
+                            <text
+                              x={mx}
+                              y={my + 5}
+                              textAnchor="middle"
+                              fill={strengthColors[strength]}
+                              fontSize="11"
+                              fontWeight="700"
+                            >
+                              {latestRate.rate}
+                            </text>
+                          </>
+                        );
+                      })()}
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+
+            {/* Ports */}
+            {Object.entries(MAJOR_PORTS).map(([key, port]) => {
+              const [x, y] = project(port.lat, port.lng);
+              return (
+                <g key={key}>
+                  <circle cx={x} cy={y} r="4" fill="#58a6ff" opacity="0.8" />
+                  <circle cx={x} cy={y} r="2" fill="#fff" />
+                  <text
+                    x={x}
+                    y={y - 8}
+                    textAnchor="middle"
+                    fill="#a0c8ff"
+                    fontSize="9"
+                    fontWeight="600"
+                  >
+                    {port.label}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+
+          {/* Legend */}
+          <div style={{
+            position: "absolute",
+            bottom: 12,
+            left: 12,
+            background: "rgba(12, 23, 41, 0.92)",
+            border: "1px solid " + C.bd,
+            borderRadius: 6,
+            padding: 10,
+            backdropFilter: "blur(8px)"
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.dim, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Market Strength
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {[["strong", "Strong (+5%)"], ["neutral", "Neutral"], ["weak", "Weak (-5%)"]].map(([k, label]) => (
+                <div key={k} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 16, height: 3, background: strengthColors[k] }} />
+                  <span style={{ fontSize: 10, color: C.dim }}>{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* RATE PANEL */}
+        <div style={{ 
+          width: 320,
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
+          flexDirection: "column",
           gap: 12
         }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <label style={{ fontSize: 12, color: C.dim }}>Report Type:</label>
-            <select
-              value={reportType}
-              onChange={e => setReportType(e.target.value)}
-              style={{
-                background: C.bg3,
-                border: "1px solid " + C.bd,
-                borderRadius: 6,
-                color: C.tx,
-                fontSize: 12,
-                padding: "6px 10px",
-                outline: "none",
-                cursor: "pointer"
-              }}
-            >
-              {REPORT_TYPES.map(t => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-
-            <label style={{ fontSize: 12, color: C.dim, marginLeft: 12 }}>Date:</label>
-            <input
-              type="date"
-              value={reportDate}
-              onChange={e => setReportDate(e.target.value)}
-              style={{
-                background: C.bg3,
-                border: "1px solid " + C.bd,
-                borderRadius: 6,
-                color: C.tx,
-                fontSize: 12,
-                padding: "6px 10px",
-                outline: "none"
-              }}
-            />
-          </div>
-
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={saveReport}
-              style={{
-                background: C.green,
-                border: "none",
-                borderRadius: 6,
-                color: C.bg,
-                fontSize: 12,
-                fontWeight: 700,
-                padding: "6px 14px",
-                cursor: "pointer"
-              }}
-            >
-              💾 Save
-            </button>
-            <button
-              onClick={exportReport}
-              style={{
-                background: C.purple,
-                border: "none",
-                borderRadius: 6,
-                color: "#fff",
-                fontSize: 12,
-                fontWeight: 700,
-                padding: "6px 14px",
-                cursor: "pointer"
-              }}
-            >
-              🖨️ Print
-            </button>
-            <button
-              onClick={copyToClipboard}
-              style={{
-                background: C.amber,
-                border: "none",
-                borderRadius: 6,
-                color: C.bg,
-                fontSize: 12,
-                fontWeight: 700,
-                padding: "6px 14px",
-                cursor: "pointer"
-              }}
-            >
-              📸 Copy
-            </button>
-          </div>
-        </div>
-
-        {/* REPORT CONTENT */}
-        <div
-          ref={reportRef}
-          style={{
-            background: "#fff",
-            border: "1px solid " + C.bd,
-            borderRadius: 8,
-            padding: 24,
-            color: "#000"
-          }}
-        >
-          {/* REPORT HEADER */}
-          <div style={{ borderBottom: "2px solid #1a4d7a", paddingBottom: 12, marginBottom: 20 }}>
-            <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1a4d7a", margin: 0 }}>
-              {reportType} Market Report
-            </h1>
-            <div style={{ fontSize: 14, color: "#666", marginTop: 6 }}>
-              {new Date(reportDate).toLocaleDateString("en-GB", { 
-                weekday: "long", 
-                year: "numeric", 
-                month: "long", 
-                day: "numeric" 
-              })}
-            </div>
-          </div>
-
-          {/* FREIGHT RATES */}
-          <div style={{ marginBottom: 24 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1a4d7a", marginBottom: 12 }}>
-              Freight Rates
-            </h2>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "#e8f4fd" }}>
-                  <th style={{ 
-                    border: "1px solid #c0d8eb", 
-                    padding: "8px 10px", 
-                    textAlign: "left",
-                    fontWeight: 700,
-                    color: "#1a4d7a"
-                  }}>
-                    Size
-                  </th>
-                  {Object.keys(rateGrid).length > 0 && 
-                    Object.keys(Object.values(rateGrid)[0] || {}).map(route => (
-                      <th key={route} style={{ 
-                        border: "1px solid #c0d8eb", 
-                        padding: "8px 10px", 
-                        textAlign: "center",
-                        fontWeight: 700,
-                        color: "#1a4d7a"
-                      }}>
-                        {route}
-                      </th>
-                    ))
-                  }
-                </tr>
-              </thead>
-              <tbody>
-                {Object.keys(rateGrid).map((size, i) => (
-                  <tr key={size} style={{ background: i % 2 === 0 ? "#fff" : "#f8fbfe" }}>
-                    <td style={{ 
-                      border: "1px solid #c0d8eb", 
-                      padding: "8px 10px",
-                      fontWeight: 700,
-                      color: "#333"
-                    }}>
-                      {size}
-                    </td>
-                    {Object.keys(rateGrid[size]).map(route => (
-                      <td key={route} style={{ 
-                        border: "1px solid #c0d8eb", 
-                        padding: "4px 8px",
-                        textAlign: "center"
-                      }}>
-                        <input
-                          type="text"
-                          value={rateGrid[size][route]}
-                          onChange={e => handleRateChange(size, route, e.target.value)}
-                          placeholder="WS"
-                          style={{
-                            width: "100%",
-                            border: "1px solid #d0e0f0",
-                            borderRadius: 4,
-                            padding: "4px 6px",
-                            fontSize: 13,
-                            textAlign: "center",
-                            outline: "none"
-                          }}
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* TCE EARNINGS */}
-          {reportType !== "TimeCharter" && (
-            <div style={{ marginBottom: 24 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1a4d7a", marginBottom: 12 }}>
-                Indicative TCE Earnings ($/day)
-              </h2>
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                {["10k", "15k", "20k"].map(seg => (
-                  <div key={seg} style={{ flex: "1 1 120px" }}>
-                    <label style={{ 
-                      display: "block", 
-                      fontSize: 12, 
-                      color: "#666", 
-                      marginBottom: 4,
-                      fontWeight: 600
-                    }}>
-                      {seg}
-                    </label>
-                    <input
-                      type="text"
-                      value={tceEarnings[seg] || ""}
-                      onChange={e => handleTCEChange(seg, e.target.value)}
-                      placeholder="$"
-                      style={{
-                        width: "100%",
-                        border: "1px solid #d0e0f0",
-                        borderRadius: 4,
-                        padding: "6px 8px",
-                        fontSize: 13,
-                        outline: "none"
-                      }}
-                    />
-                  </div>
-                ))}
+          {/* Selected Route */}
+          {selectedRoute ? (
+            <div style={{
+              background: C.bg2,
+              border: "1px solid " + C.bd,
+              borderRadius: 8,
+              padding: 12
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 8 }}>
+                {selectedRoute.label}
               </div>
+              
+              <div style={{ fontSize: 11, color: C.dim, marginBottom: 12 }}>
+                {selectedRoute.region}
+              </div>
+
+              <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+                <input
+                  type="text"
+                  value={newRate}
+                  onChange={e => setNewRate(e.target.value)}
+                  placeholder="Rate (WS)"
+                  style={{
+                    flex: 1,
+                    background: C.bg3,
+                    border: "1px solid " + C.bd,
+                    borderRadius: 6,
+                    color: C.tx,
+                    fontSize: 12,
+                    padding: "6px 10px",
+                    outline: "none"
+                  }}
+                  onKeyDown={e => e.key === "Enter" && addRate()}
+                />
+                <button
+                  onClick={addRate}
+                  style={{
+                    background: C.green,
+                    border: "none",
+                    borderRadius: 6,
+                    color: "#fff",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: "6px 12px",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap"
+                  }}
+                >
+                  Add
+                </button>
+              </div>
+
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.dim, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Recent Rates
+              </div>
+              <div style={{ 
+                maxHeight: 200, 
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: 4
+              }}>
+                {rateHistory
+                  .filter(r => r.route_id === selectedRoute.id)
+                  .slice(0, 10)
+                  .map(rate => {
+                    const strength = getMarketStrength(rate.route_id);
+                    return (
+                      <div
+                        key={rate.id}
+                        style={{
+                          background: C.bg3,
+                          border: "1px solid " + C.bd,
+                          borderRadius: 4,
+                          padding: "6px 8px",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center"
+                        }}
+                      >
+                        <div>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: strengthColors[strength] }}>
+                            {rate.rate}
+                          </span>
+                          <span style={{ fontSize: 10, color: C.dim, marginLeft: 8 }}>
+                            {new Date(rate.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => deleteRate(rate.id)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: C.red,
+                            cursor: "pointer",
+                            fontSize: 11,
+                            opacity: 0.7
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          ) : (
+            <div style={{
+              background: C.bg2,
+              border: "1px solid " + C.bd,
+              borderRadius: 8,
+              padding: 20,
+              textAlign: "center",
+              color: C.dim
+            }}>
+              <div style={{ fontSize: 24, marginBottom: 8 }}>🗺️</div>
+              <div style={{ fontSize: 12 }}>Click a route to add rates</div>
             </div>
           )}
-
-          {/* MARKET COMMENTARY */}
-          <div style={{ marginBottom: 24 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1a4d7a", marginBottom: 12 }}>
-              Market Commentary
-            </h2>
-            <textarea
-              value={commentary}
-              onChange={e => setCommentary(e.target.value)}
-              placeholder="Enter market analysis, trends, and outlook..."
-              style={{
-                width: "100%",
-                minHeight: 120,
-                border: "1px solid #d0e0f0",
-                borderRadius: 6,
-                padding: 12,
-                fontSize: 13,
-                lineHeight: 1.6,
-                outline: "none",
-                resize: "vertical",
-                fontFamily: "inherit"
-              }}
-            />
-          </div>
-
-          {/* FIXTURES */}
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1a4d7a", margin: 0 }}>
-                Recent Fixtures
-              </h2>
-              <button
-                onClick={addFixture}
-                style={{
-                  background: "#1a4d7a",
-                  border: "none",
-                  borderRadius: 4,
-                  color: "#fff",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  padding: "4px 10px",
-                  cursor: "pointer"
-                }}
-              >
-                + Add
-              </button>
-            </div>
-            
-            {fixtures.length > 0 ? (
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                <thead>
-                  <tr style={{ background: "#e8f4fd" }}>
-                    <th style={{ border: "1px solid #c0d8eb", padding: "6px 8px", fontWeight: 700, color: "#1a4d7a" }}>Vessel</th>
-                    <th style={{ border: "1px solid #c0d8eb", padding: "6px 8px", fontWeight: 700, color: "#1a4d7a" }}>Charterer</th>
-                    <th style={{ border: "1px solid #c0d8eb", padding: "6px 8px", fontWeight: 700, color: "#1a4d7a" }}>Route</th>
-                    <th style={{ border: "1px solid #c0d8eb", padding: "6px 8px", fontWeight: 700, color: "#1a4d7a" }}>Qty</th>
-                    <th style={{ border: "1px solid #c0d8eb", padding: "6px 8px", fontWeight: 700, color: "#1a4d7a" }}>Rate</th>
-                    <th style={{ border: "1px solid #c0d8eb", padding: "6px 8px", fontWeight: 700, color: "#1a4d7a" }}>Date</th>
-                    <th style={{ border: "1px solid #c0d8eb", padding: "6px 8px", width: 32 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {fixtures.map((fix, i) => (
-                    <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#f8fbfe" }}>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input
-                          type="text"
-                          value={fix.vessel}
-                          onChange={e => updateFixture(i, "vessel", e.target.value)}
-                          style={{ 
-                            width: "100%", 
-                            border: "none", 
-                            outline: "none", 
-                            fontSize: 12,
-                            background: "transparent"
-                          }}
-                        />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input
-                          type="text"
-                          value={fix.charterer}
-                          onChange={e => updateFixture(i, "charterer", e.target.value)}
-                          style={{ 
-                            width: "100%", 
-                            border: "none", 
-                            outline: "none", 
-                            fontSize: 12,
-                            background: "transparent"
-                          }}
-                        />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input
-                          type="text"
-                          value={fix.route}
-                          onChange={e => updateFixture(i, "route", e.target.value)}
-                          style={{ 
-                            width: "100%", 
-                            border: "none", 
-                            outline: "none", 
-                            fontSize: 12,
-                            background: "transparent"
-                          }}
-                        />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input
-                          type="text"
-                          value={fix.qty}
-                          onChange={e => updateFixture(i, "qty", e.target.value)}
-                          style={{ 
-                            width: "100%", 
-                            border: "none", 
-                            outline: "none", 
-                            fontSize: 12,
-                            background: "transparent"
-                          }}
-                        />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input
-                          type="text"
-                          value={fix.rate}
-                          onChange={e => updateFixture(i, "rate", e.target.value)}
-                          style={{ 
-                            width: "100%", 
-                            border: "none", 
-                            outline: "none", 
-                            fontSize: 12,
-                            background: "transparent"
-                          }}
-                        />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input
-                          type="text"
-                          value={fix.date}
-                          onChange={e => updateFixture(i, "date", e.target.value)}
-                          style={{ 
-                            width: "100%", 
-                            border: "none", 
-                            outline: "none", 
-                            fontSize: 12,
-                            background: "transparent"
-                          }}
-                        />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "2px", textAlign: "center" }}>
-                        <button
-                          onClick={() => removeFixture(i)}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: "#e74c3c",
-                            cursor: "pointer",
-                            fontSize: 14,
-                            fontWeight: 700
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div style={{ 
-                padding: 20, 
-                textAlign: "center", 
-                color: "#999", 
-                border: "1px dashed #d0e0f0",
-                borderRadius: 6
-              }}>
-                No fixtures added yet
-              </div>
-            )}
-          </div>
-
-          {/* QUOTES */}
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1a4d7a", margin: 0 }}>
-                Market Quotes
-              </h2>
-              <button
-                onClick={addQuote}
-                style={{
-                  background: "#1a4d7a",
-                  border: "none",
-                  borderRadius: 4,
-                  color: "#fff",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  padding: "4px 10px",
-                  cursor: "pointer"
-                }}
-              >
-                + Add
-              </button>
-            </div>
-            
-            {quotes.length > 0 ? (
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                <thead>
-                  <tr style={{ background: "#e8f4fd" }}>
-                    <th style={{ border: "1px solid #c0d8eb", padding: "6px 8px", fontWeight: 700, color: "#1a4d7a" }}>Route</th>
-                    <th style={{ border: "1px solid #c0d8eb", padding: "6px 8px", fontWeight: 700, color: "#1a4d7a" }}>Size</th>
-                    <th style={{ border: "1px solid #c0d8eb", padding: "6px 8px", fontWeight: 700, color: "#1a4d7a" }}>Rate</th>
-                    <th style={{ border: "1px solid #c0d8eb", padding: "6px 8px", fontWeight: 700, color: "#1a4d7a" }}>Basis</th>
-                    <th style={{ border: "1px solid #c0d8eb", padding: "6px 8px", width: 32 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {quotes.map((q, i) => (
-                    <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#f8fbfe" }}>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input
-                          type="text"
-                          value={q.route}
-                          onChange={e => updateQuote(i, "route", e.target.value)}
-                          style={{ 
-                            width: "100%", 
-                            border: "none", 
-                            outline: "none", 
-                            fontSize: 12,
-                            background: "transparent"
-                          }}
-                        />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input
-                          type="text"
-                          value={q.size}
-                          onChange={e => updateQuote(i, "size", e.target.value)}
-                          style={{ 
-                            width: "100%", 
-                            border: "none", 
-                            outline: "none", 
-                            fontSize: 12,
-                            background: "transparent"
-                          }}
-                        />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input
-                          type="text"
-                          value={q.rate}
-                          onChange={e => updateQuote(i, "rate", e.target.value)}
-                          style={{ 
-                            width: "100%", 
-                            border: "none", 
-                            outline: "none", 
-                            fontSize: 12,
-                            background: "transparent"
-                          }}
-                        />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input
-                          type="text"
-                          value={q.basis}
-                          onChange={e => updateQuote(i, "basis", e.target.value)}
-                          placeholder="ex-tank, FBG..."
-                          style={{ 
-                            width: "100%", 
-                            border: "none", 
-                            outline: "none", 
-                            fontSize: 12,
-                            background: "transparent"
-                          }}
-                        />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "2px", textAlign: "center" }}>
-                        <button
-                          onClick={() => removeQuote(i)}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            color: "#e74c3c",
-                            cursor: "pointer",
-                            fontSize: 14,
-                            fontWeight: 700
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div style={{ 
-                padding: 20, 
-                textAlign: "center", 
-                color: "#999", 
-                border: "1px dashed #d0e0f0",
-                borderRadius: 6
-              }}>
-                No quotes added yet
-              </div>
-            )}
-          </div>
-
-          {/* FOOTER */}
-          <div style={{ 
-            borderTop: "1px solid #c0d8eb", 
-            paddingTop: 12, 
-            marginTop: 24,
-            fontSize: 11,
-            color: "#999",
-            textAlign: "center"
-          }}>
-            This report is for indicative purposes only. Rates and information subject to change.
-          </div>
         </div>
+      </div>
+
+      {/* RATE HISTORY */}
+      <div style={{ 
+        background: C.bg2,
+        border: "1px solid " + C.bd,
+        borderRadius: 8,
+        padding: 12,
+        maxHeight: 250,
+        overflowY: "auto"
+      }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 12 }}>
+          📊 Rate History by Region
+        </div>
+
+        {Object.keys(ratesByRegion).length === 0 ? (
+          <div style={{ padding: 20, textAlign: "center", color: C.faint, fontSize: 12 }}>
+            No rates recorded yet
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {Object.entries(ratesByRegion).map(([region, rates]) => (
+              <div key={region}>
+                <div style={{ 
+                  fontSize: 11, 
+                  fontWeight: 700, 
+                  color: C.amber, 
+                  marginBottom: 8,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em"
+                }}>
+                  {region}
+                </div>
+                
+                <div style={{ 
+                  display: "grid", 
+                  gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+                  gap: 8
+                }}>
+                  {rates.slice(0, 20).map(rate => {
+                    const strength = getMarketStrength(rate.route_id);
+                    return (
+                      <div
+                        key={rate.id}
+                        style={{
+                          background: C.bg3,
+                          border: "1px solid " + strengthColors[strength] + "44",
+                          borderRadius: 6,
+                          padding: "8px 10px"
+                        }}
+                      >
+                        <div style={{ 
+                          fontSize: 10, 
+                          color: C.dim, 
+                          marginBottom: 4,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis"
+                        }}>
+                          {rate.route_label}
+                        </div>
+                        <div style={{ 
+                          fontSize: 13, 
+                          fontWeight: 700, 
+                          color: strengthColors[strength],
+                          marginBottom: 2
+                        }}>
+                          {rate.rate}
+                        </div>
+                        <div style={{ fontSize: 9, color: C.faint }}>
+                          {new Date(rate.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-export default ReportsTab;
+export default FreightMapTab;
