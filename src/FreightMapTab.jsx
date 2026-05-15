@@ -1,29 +1,102 @@
 import React, { useState, useEffect } from "react";
+import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
+import L from "leaflet";
 
-const DEFAULT_ROUTES = [
-  { id: "ara-us", from: "ARA", to: "US Gulf", label: "ARA → US", region: "Transatlantic", fromCoords: [51.95, 4.13], toCoords: [29.76, -95.37] },
-  { id: "us-ara", from: "US Gulf", to: "ARA", label: "US → ARA", region: "Transatlantic", fromCoords: [29.76, -95.37], toCoords: [51.95, 4.13] },
-  { id: "ara-thames", from: "ARA", to: "Thames", label: "ARA → Thames", region: "Intermediate", fromCoords: [51.95, 4.13], toCoords: [51.45, 0.70] },
-  { id: "mongstad-ara", from: "Mongstad", to: "ARA", label: "Mongstad → ARA", region: "Intermediate", fromCoords: [60.82, 5.03], toCoords: [51.95, 4.13] },
-  { id: "ara-gothenburg", from: "ARA", to: "Gothenburg", label: "ARA → Gothenburg", region: "Intermediate", fromCoords: [51.95, 4.13], toCoords: [57.70, 11.97] },
-  { id: "ara-wmed", from: "ARA", to: "W.Med", label: "ARA → W.Med", region: "Med", fromCoords: [51.95, 4.13], toCoords: [43.30, 5.37] },
-  { id: "ara-emed", from: "ARA", to: "E.Med", label: "ARA → E.Med", region: "Med", fromCoords: [51.95, 4.13], toCoords: [37.98, 23.73] },
-  { id: "ara-fareast", from: "ARA", to: "Far East", label: "ARA → Far East", region: "Long Haul", fromCoords: [51.95, 4.13], toCoords: [35.68, 139.69] },
-  { id: "singapore-ara", from: "Singapore", to: "ARA", label: "Singapore → ARA", region: "Long Haul", fromCoords: [1.35, 103.82], toCoords: [51.95, 4.13] },
-  { id: "china-ara", from: "China", to: "ARA", label: "China → ARA", region: "Long Haul", fromCoords: [31.23, 121.47], toCoords: [51.95, 4.13] },
+// Fix Leaflet default icon issue
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
+  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+});
+
+// Route definitions with coordinates
+const ROUTES = [
+  { id: "ara-usg", name: "ARA → US Gulf", region: "Transatlantic", from: "ARA", to: "US Gulf", coords: [[51.95, 4.13], [29.76, -95.37]], color: "#f5a623" },
+  { id: "usg-ara", name: "US Gulf → ARA", region: "Transatlantic", from: "US Gulf", to: "ARA", coords: [[29.76, -95.37], [51.95, 4.13]], color: "#f5a623" },
+  { id: "ara-thames", name: "ARA → Thames", region: "Intermediate", from: "ARA", to: "Thames", coords: [[51.95, 4.13], [51.45, 0.70]], color: "#58a6ff" },
+  { id: "mongstad-ara", name: "Mongstad → ARA", region: "Intermediate", from: "Mongstad", to: "ARA", coords: [[60.82, 5.03], [51.95, 4.13]], color: "#58a6ff" },
+  { id: "ara-gothenburg", name: "ARA → Gothenburg", region: "Intermediate", from: "ARA", to: "Gothenburg", coords: [[51.95, 4.13], [57.70, 11.97]], color: "#58a6ff" },
+  { id: "ara-wmed", name: "ARA → W.Med", region: "Med", from: "ARA", to: "W.Med", coords: [[51.95, 4.13], [43.30, 5.37]], color: "#3fb950" },
+  { id: "ara-emed", name: "ARA → E.Med", region: "Med", from: "ARA", to: "E.Med", coords: [[51.95, 4.13], [37.98, 23.73]], color: "#3fb950" },
+  { id: "bsea-ara", name: "Black Sea → ARA", region: "Med", from: "Black Sea", to: "ARA", coords: [[44.48, 33.55], [51.95, 4.13]], color: "#3fb950" },
+  { id: "ara-fareast", name: "ARA → Far East", region: "Long Haul", from: "ARA", to: "Far East", coords: [[51.95, 4.13], [35.68, 139.69]], color: "#ff6b6b" },
+  { id: "singapore-ara", name: "Singapore → ARA", region: "Long Haul", from: "Singapore", to: "ARA", coords: [[1.35, 103.82], [51.95, 4.13]], color: "#ff6b6b" },
+  { id: "china-ara", name: "China → ARA", region: "Long Haul", from: "China", to: "ARA", coords: [[31.23, 121.47], [51.95, 4.13]], color: "#ff6b6b" },
 ];
 
+function RouteLines({ routes, onRouteClick, latestRates }) {
+  return (
+    <>
+      {routes.map(route => {
+        const latestRate = latestRates[route.id];
+        return (
+          <Polyline
+            key={route.id}
+            positions={route.coords}
+            pathOptions={{
+              color: route.color,
+              weight: latestRate ? 4 : 2,
+              opacity: 0.8,
+              dashArray: "10, 10"
+            }}
+            eventHandlers={{
+              click: () => onRouteClick(route)
+            }}
+          >
+            <Popup>
+              <div style={{ minWidth: 200 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 4 }}>{route.name}</div>
+                <div style={{ fontSize: 11, color: C.dim, marginBottom: 8 }}>{route.region}</div>
+                {latestRate ? (
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: route.color }}>{latestRate.rate} {latestRate.unit}</div>
+                    <div style={{ fontSize: 10, color: C.faint, marginTop: 2 }}>
+                      {new Date(latestRate.entry_date).toLocaleDateString("en-GB")}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 11, color: C.faint, fontStyle: "italic" }}>No rate added yet</div>
+                )}
+                <button
+                  onClick={() => onRouteClick(route)}
+                  style={{
+                    marginTop: 8,
+                    width: "100%",
+                    background: "linear-gradient(135deg, #3fb950 0%, #2ecc71 100%)",
+                    border: "none",
+                    borderRadius: 4,
+                    color: "#fff",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: "6px 10px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Add/Update Rate
+                </button>
+              </div>
+            </Popup>
+          </Polyline>
+        );
+      })}
+    </>
+  );
+}
+
 function FreightMapTab() {
-  const [routes] = useState(DEFAULT_ROUTES);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [rateHistory, setRateHistory] = useState([]);
+  const [latestRates, setLatestRates] = useState({});
   const [newRate, setNewRate] = useState("");
+  const [unit, setUnit] = useState("WS");
+  const [comment, setComment] = useState("");
   const [filterRegion, setFilterRegion] = useState("All");
 
   const regions = ["All", "Intermediate", "Transatlantic", "Med", "Long Haul"];
-  const strengthColors = { strong: "#3fb950", neutral: "#f5a623", weak: "#ff6b6b" };
 
   useEffect(() => {
     loadRateHistory();
@@ -31,9 +104,23 @@ function FreightMapTab() {
 
   const loadRateHistory = async () => {
     try {
-      const { data, error } = await supabase.from("freight_rates").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("freight_route_rates")
+        .select("*")
+        .order("created_at", { ascending: false });
+
       if (error) throw error;
+
       setRateHistory(data || []);
+
+      // Get latest rate for each route
+      const latest = {};
+      (data || []).forEach(rate => {
+        if (!latest[rate.route_id]) {
+          latest[rate.route_id] = rate;
+        }
+      });
+      setLatestRates(latest);
     } catch (err) {
       console.error("Error loading rate history:", err);
     }
@@ -41,24 +128,35 @@ function FreightMapTab() {
 
   const addRate = async () => {
     if (!selectedRoute || !newRate) return;
+
     try {
-      const { error } = await supabase.from("freight_rates").insert([{
+      const { error } = await supabase.from("freight_route_rates").insert([{
         route_id: selectedRoute.id,
-        route_label: selectedRoute.label,
-        rate: newRate,
-        region: selectedRoute.region
+        route_name: selectedRoute.name,
+        region: selectedRoute.region,
+        from_port: selectedRoute.from,
+        to_port: selectedRoute.to,
+        rate: parseFloat(newRate),
+        unit: unit,
+        comment: comment || null,
+        entry_date: new Date().toISOString().split("T")[0]
       }]);
+
       if (error) throw error;
+
       setNewRate("");
+      setComment("");
+      setSelectedRoute(null);
       loadRateHistory();
     } catch (err) {
       console.error("Error adding rate:", err);
+      alert("Error adding rate");
     }
   };
 
   const deleteRate = async (id) => {
     try {
-      const { error } = await supabase.from("freight_rates").delete().eq("id", id);
+      const { error } = await supabase.from("freight_route_rates").delete().eq("id", id);
       if (error) throw error;
       loadRateHistory();
     } catch (err) {
@@ -66,161 +164,130 @@ function FreightMapTab() {
     }
   };
 
-  const filteredRoutes = filterRegion === "All" ? routes : routes.filter(r => r.region === filterRegion);
-
-  const getLatestRate = (routeId) => {
-    const rates = rateHistory.filter(r => r.route_id === routeId);
-    return rates.length > 0 ? rates[0] : null;
-  };
-
-  const getMarketStrength = (routeId) => {
-    const rates = rateHistory.filter(r => r.route_id === routeId).slice(0, 5);
-    if (rates.length < 2) return "neutral";
-    const latest = parseFloat(rates[0].rate) || 0;
-    const avg = rates.slice(1).reduce((sum, r) => sum + (parseFloat(r.rate) || 0), 0) / (rates.length - 1);
-    const change = ((latest - avg) / avg) * 100;
-    if (change > 5) return "strong";
-    if (change < -5) return "weak";
-    return "neutral";
-  };
-
-  const ratesByRegion = rateHistory.reduce((acc, rate) => {
-    if (!acc[rate.region]) acc[rate.region] = [];
-    acc[rate.region].push(rate);
-    return acc;
-  }, {});
+  const filteredRoutes = filterRegion === "All" ? ROUTES : ROUTES.filter(r => r.region === filterRegion);
+  const filteredHistory = filterRegion === "All" ? rateHistory : rateHistory.filter(r => r.region === filterRegion);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 12, overflow: "hidden", background: C.bg, padding: 12 }}>
-      {/* HEADER */}
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 12, background: C.bg, padding: 12 }}>
+      {/* Header */}
       <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: C.blue }}>🌍 Global Freight Routes</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: C.blue }}>🌍 Global Freight Map</span>
           <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 12, padding: "6px 10px", outline: "none", cursor: "pointer" }}>
             {regions.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
-        <span style={{ fontSize: 11, color: C.faint }}>{rateHistory.length} rates tracked</span>
+        <span style={{ fontSize: 11, color: C.faint }}>Click any route to add rates · {rateHistory.length} rates tracked</span>
       </div>
 
-      <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
-        {/* ROUTES LIST - Replacing map with clear route cards */}
-        <div style={{ flex: 1, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16, overflowY: "auto" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, marginBottom: 12 }}>Shipping Routes</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
-            {filteredRoutes.map(route => {
-              const latestRate = getLatestRate(route.id);
-              const strength = latestRate ? getMarketStrength(route.id) : "neutral";
-              const isSelected = selectedRoute?.id === route.id;
+      {/* Map */}
+      <div style={{ flex: 1, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden", position: "relative", minHeight: 400 }}>
+        <MapContainer
+          center={[35, 15]}
+          zoom={3}
+          style={{ height: "100%", width: "100%", background: "#0a1628" }}
+          scrollWheelZoom={true}
+        >
+          <TileLayer
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          />
+          <RouteLines routes={filteredRoutes} onRouteClick={setSelectedRoute} latestRates={latestRates} />
+        </MapContainer>
+      </div>
 
-              return (
-                <div
-                  key={route.id}
-                  onClick={() => setSelectedRoute(route)}
-                  style={{
-                    background: isSelected ? "linear-gradient(135deg, rgba(102,126,234,0.15) 0%, rgba(118,75,162,0.15) 100%)" : C.bg3,
-                    border: "1px solid " + (isSelected ? C.blue : C.bd),
-                    borderRadius: 8,
-                    padding: 12,
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                    position: "relative"
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 8 }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 4 }}>{route.label}</div>
-                      <div style={{ fontSize: 10, color: C.dim, textTransform: "uppercase", letterSpacing: "0.05em" }}>{route.region}</div>
-                    </div>
-                    {latestRate && (
-                      <div style={{ background: strengthColors[strength] + "22", border: "1px solid " + strengthColors[strength], borderRadius: 4, padding: "4px 8px" }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: strengthColors[strength] }}>{latestRate.rate}</div>
-                        <div style={{ fontSize: 8, color: C.dim, textAlign: "center" }}>WS</div>
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 11, color: C.dim, display: "flex", alignItems: "center", gap: 4 }}>
-                    <span>{route.from}</span>
-                    <span style={{ color: strengthColors[strength] }}>→</span>
-                    <span>{route.to}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+      {/* Rate Editor Modal */}
+      {selectedRoute && (
+        <>
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 9998, backdropFilter: "blur(2px)" }} onClick={() => setSelectedRoute(null)} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 9999, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 12, width: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.8)", padding: 20 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.blue, marginBottom: 4 }}>{selectedRoute.name}</div>
+            <div style={{ fontSize: 12, color: C.dim, marginBottom: 16 }}>{selectedRoute.region}</div>
 
-        {/* RATE PANEL */}
-        <div style={{ width: 340, display: "flex", flexDirection: "column", gap: 12 }}>
-          {selectedRoute ? (
-            <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.blue, marginBottom: 6 }}>{selectedRoute.label}</div>
-              <div style={{ fontSize: 11, color: C.dim, marginBottom: 12 }}>{selectedRoute.region}</div>
-              
-              <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: "block", fontSize: 11, color: C.dim, marginBottom: 4, fontWeight: 600 }}>Rate</label>
+              <div style={{ display: "flex", gap: 8 }}>
                 <input
-                  type="text"
+                  type="number"
                   value={newRate}
                   onChange={e => setNewRate(e.target.value)}
-                  placeholder="Rate (WS)"
+                  placeholder="150"
                   style={{ flex: 1, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 13, padding: "8px 12px", outline: "none" }}
-                  onKeyDown={e => e.key === "Enter" && addRate()}
                 />
-                <button onClick={addRate} style={{ background: "linear-gradient(135deg, #3fb950 0%, #2ecc71 100%)", border: "none", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 700, padding: "8px 16px", cursor: "pointer", boxShadow: "0 2px 8px rgba(63,185,80,0.3)" }}>Add Rate</button>
-              </div>
-
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.dim, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Rate History</div>
-              <div style={{ maxHeight: 300, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
-                {rateHistory.filter(r => r.route_id === selectedRoute.id).slice(0, 15).map(rate => {
-                  const strength = getMarketStrength(rate.route_id);
-                  return (
-                    <div key={rate.id} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div>
-                        <span style={{ fontSize: 15, fontWeight: 700, color: strengthColors[strength] }}>{rate.rate}</span>
-                        <span style={{ fontSize: 9, color: C.dim, marginLeft: 6 }}>WS</span>
-                        <div style={{ fontSize: 10, color: C.faint, marginTop: 2 }}>{new Date(rate.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</div>
-                      </div>
-                      <button onClick={() => deleteRate(rate.id)} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 13, opacity: 0.7, padding: 4 }}>✕</button>
-                    </div>
-                  );
-                })}
+                <select value={unit} onChange={e => setUnit(e.target.value)} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 13, padding: "8px 12px", outline: "none", cursor: "pointer" }}>
+                  <option value="WS">WS</option>
+                  <option value="USD LS">USD LS</option>
+                  <option value="USD PMT">USD PMT</option>
+                </select>
               </div>
             </div>
-          ) : (
-            <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 24, textAlign: "center", color: C.dim }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>📍</div>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Select a Route</div>
-              <div style={{ fontSize: 11, color: C.faint }}>Click any route card to add rates and view history</div>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* RATE HISTORY BY REGION */}
-      <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16, maxHeight: 280, overflowY: "auto" }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 12 }}>📊 Recent Activity by Region</div>
-        {Object.keys(ratesByRegion).length === 0 ? (
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 11, color: C.dim, marginBottom: 4, fontWeight: 600 }}>Comment (optional)</label>
+              <input
+                type="text"
+                value={comment}
+                onChange={e => setComment(e.target.value)}
+                placeholder="Market notes..."
+                style={{ width: "100%", background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 12, padding: "8px 12px", outline: "none" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setSelectedRoute(null)} style={{ background: "transparent", border: "1px solid " + C.bd, borderRadius: 6, color: C.dim, fontSize: 12, fontWeight: 600, padding: "8px 16px", cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button onClick={addRate} style={{ background: "linear-gradient(135deg, #3fb950 0%, #2ecc71 100%)", border: "none", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 700, padding: "8px 16px", cursor: "pointer", boxShadow: "0 2px 8px rgba(63,185,80,0.3)" }}>
+                Save Rate
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Rate History Table */}
+      <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16, maxHeight: 300, overflowY: "auto" }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 12 }}>📊 Rate History</div>
+        {filteredHistory.length === 0 ? (
           <div style={{ padding: 20, textAlign: "center", color: C.faint, fontSize: 12 }}>No rates recorded yet</div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {Object.entries(ratesByRegion).map(([region, rates]) => (
-              <div key={region}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>{region}</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 8 }}>
-                  {rates.slice(0, 12).map(rate => {
-                    const strength = getMarketStrength(rate.route_id);
-                    return (
-                      <div key={rate.id} style={{ background: C.bg3, border: "1px solid " + strengthColors[strength] + "44", borderRadius: 6, padding: "10px 12px" }}>
-                        <div style={{ fontSize: 10, color: C.dim, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{rate.route_label}</div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: strengthColors[strength], marginBottom: 2 }}>{rate.rate}</div>
-                        <div style={{ fontSize: 9, color: C.faint }}>{new Date(rate.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
+          <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 4px" }}>
+            <thead>
+              <tr style={{ fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                <th style={{ textAlign: "left", padding: "6px 8px", fontWeight: 700 }}>Route</th>
+                <th style={{ textAlign: "left", padding: "6px 8px", fontWeight: 700 }}>Region</th>
+                <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 700 }}>Rate</th>
+                <th style={{ textAlign: "left", padding: "6px 8px", fontWeight: 700 }}>Comment</th>
+                <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 700 }}>Date</th>
+                <th style={{ textAlign: "center", padding: "6px 8px", width: 40 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredHistory.map((rate, i) => {
+                const route = ROUTES.find(r => r.id === rate.route_id);
+                return (
+                  <tr key={rate.id} style={{ background: i % 2 === 0 ? C.bg3 : C.bg }}>
+                    <td style={{ padding: "10px 8px", fontSize: 12, color: C.tx }}>{rate.route_name}</td>
+                    <td style={{ padding: "10px 8px", fontSize: 11, color: C.dim }}>{rate.region}</td>
+                    <td style={{ padding: "10px 8px", fontSize: 13, fontWeight: 700, color: route?.color || C.blue, textAlign: "center" }}>
+                      {rate.rate} {rate.unit}
+                    </td>
+                    <td style={{ padding: "10px 8px", fontSize: 11, color: C.dim, fontStyle: rate.comment ? "normal" : "italic" }}>
+                      {rate.comment || "—"}
+                    </td>
+                    <td style={{ padding: "10px 8px", fontSize: 11, color: C.faint, textAlign: "center" }}>
+                      {new Date(rate.entry_date).toLocaleDateString("en-GB")}
+                    </td>
+                    <td style={{ padding: "10px 8px", textAlign: "center" }}>
+                      <button onClick={() => deleteRate(rate.id)} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 13, opacity: 0.7 }}>
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         )}
       </div>
     </div>
