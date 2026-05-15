@@ -2,27 +2,26 @@ import React, { useState, useEffect, useRef } from "react";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
 
-// Major ports with accurate coordinates
 const MAJOR_PORTS = {
-  ara: { lat: 51.95, lng: 4.13, label: "ARA" },
-  thames: { lat: 51.45, lng: 0.70, label: "Thames" },
-  mongstad: { lat: 60.82, lng: 5.03, label: "Mongstad" },
-  gothenburg: { lat: 57.70, lng: 11.97, label: "Gothenburg" },
-  porvoo: { lat: 60.28, lng: 25.66, label: "Porvoo" },
-  klaipeda: { lat: 55.71, lng: 21.13, label: "Klaipeda" },
-  lehavre: { lat: 49.49, lng: 0.11, label: "Le Havre" },
-  bordeaux: { lat: 44.84, lng: -0.57, label: "Bordeaux" },
-  wmed: { lat: 43.30, lng: 5.37, label: "W.Med" },
-  cmed: { lat: 40.85, lng: 14.27, label: "C.Med" },
-  emed: { lat: 37.98, lng: 23.73, label: "E.Med" },
-  bsea: { lat: 44.48, lng: 33.55, label: "B.Sea" },
-  redsea: { lat: 20.00, lng: 38.00, label: "Red Sea" },
-  usg: { lat: 29.76, lng: -95.37, label: "US Gulf" },
-  caribs: { lat: 10.66, lng: -61.52, label: "Caribs" },
-  wci: { lat: 5.00, lng: -4.00, label: "WCI" },
-  singapore: { lat: 1.35, lng: 103.82, label: "Singapore" },
-  china: { lat: 31.23, lng: 121.47, label: "China" },
-  fareast: { lat: 35.68, lng: 139.69, label: "Far East" },
+  ara: { lat: 51.95, lng: 4.13, label: "ARA", x: 51, y: 25 },
+  thames: { lat: 51.45, lng: 0.70, label: "Thames", x: 50, y: 26 },
+  mongstad: { lat: 60.82, lng: 5.03, label: "Mongstad", x: 51, y: 18 },
+  gothenburg: { lat: 57.70, lng: 11.97, label: "Gothenburg", x: 53, y: 20 },
+  porvoo: { lat: 60.28, lng: 25.66, label: "Porvoo", x: 57, y: 18 },
+  klaipeda: { lat: 55.71, lng: 21.13, label: "Klaipeda", x: 56, y: 21 },
+  lehavre: { lat: 49.49, lng: 0.11, label: "Le Havre", x: 50, y: 28 },
+  bordeaux: { lat: 44.84, lng: -0.57, label: "Bordeaux", x: 49.5, y: 31 },
+  wmed: { lat: 43.30, lng: 5.37, label: "W.Med", x: 51.5, y: 32 },
+  cmed: { lat: 40.85, lng: 14.27, label: "C.Med", x: 54, y: 35 },
+  emed: { lat: 37.98, lng: 23.73, label: "E.Med", x: 57, y: 36 },
+  bsea: { lat: 44.48, lng: 33.55, label: "B.Sea", x: 59, y: 31 },
+  redsea: { lat: 20.00, lng: 38.00, label: "Red Sea", x: 60, y: 48 },
+  usg: { lat: 29.76, lng: -95.37, label: "US Gulf", x: 20, y: 40 },
+  caribs: { lat: 10.66, lng: -61.52, label: "Caribs", x: 27, y: 50 },
+  wci: { lat: 5.00, lng: -4.00, label: "WCI", x: 48, y: 54 },
+  singapore: { lat: 1.35, lng: 103.82, label: "Singapore", x: 78, y: 55 },
+  china: { lat: 31.23, lng: 121.47, label: "China", x: 82, y: 40 },
+  fareast: { lat: 35.68, lng: 139.69, label: "Far East", x: 85, y: 37 },
 };
 
 const DEFAULT_ROUTES = [
@@ -57,14 +56,14 @@ function FreightMapTab() {
   const [rateHistory, setRateHistory] = useState([]);
   const [newRate, setNewRate] = useState("");
   const [filterRegion, setFilterRegion] = useState("All");
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const mapRef = useRef(null);
-  const svgRef = useRef(null);
+  const mapContainerRef = useRef(null);
 
   const regions = ["All", "Intermediate", "Transatlantic", "Med", "Long Haul"];
+  const strengthColors = { strong: "#3fb950", neutral: "#f5a623", weak: "#ff6b6b" };
 
   useEffect(() => {
     loadRateHistory();
@@ -125,61 +124,32 @@ function FreightMapTab() {
     return "neutral";
   };
 
-  const strengthColors = {
-    strong: "#3fb950",
-    neutral: "#f5a623",
-    weak: "#ff6b6b"
-  };
-
-  const project = (lat, lng) => {
-    const x = ((lng + 180) / 360) * 2000 * zoom + pan.x;
-    const y = ((90 - lat) / 180) * 1000 * zoom + pan.y;
-    return [x, y];
-  };
-
-  const getCurvePath = (from, to) => {
-    const [x1, y1] = project(MAJOR_PORTS[from].lat, MAJOR_PORTS[from].lng);
-    const [x2, y2] = project(MAJOR_PORTS[to].lat, MAJOR_PORTS[to].lng);
-    const midX = (x1 + x2) / 2;
-    const midY = (y1 + y2) / 2;
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const offset = Math.min(dist * 0.15, 80);
-    const angle = Math.atan2(dy, dx) - Math.PI / 2;
-    const cx = midX + offset * Math.cos(angle);
-    const cy = midY + offset * Math.sin(angle);
-    return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
-  };
-
-  const getArrowPosition = (from, to) => {
-    const [x2, y2] = project(MAJOR_PORTS[to].lat, MAJOR_PORTS[to].lng);
-    const [x1, y1] = project(MAJOR_PORTS[from].lat, MAJOR_PORTS[from].lng);
-    const angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
-    return { x: x2, y: y2, angle };
-  };
-
   const handleWheel = (e) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom(z => Math.max(0.5, Math.min(4, z * delta)));
+    setScale(s => Math.max(0.5, Math.min(3, s * delta)));
   };
 
   const handleMouseDown = (e) => {
     if (e.button === 0) {
       setIsDragging(true);
-      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+      setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
     }
   };
 
   const handleMouseMove = (e) => {
     if (isDragging) {
-      setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+      setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
     }
   };
 
   const handleMouseUp = () => {
     setIsDragging(false);
+  };
+
+  const handleRouteClick = (route, e) => {
+    e.stopPropagation();
+    setSelectedRoute(route);
   };
 
   const ratesByRegion = rateHistory.reduce((acc, rate) => {
@@ -189,8 +159,9 @@ function FreightMapTab() {
   }, {});
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 12, overflow: "hidden" }}>
-      <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 12, overflow: "hidden", background: C.bg }}>
+      {/* HEADER */}
+      <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: C.blue }}>🌍 Global Freight Map</span>
           <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 12, padding: "6px 10px", outline: "none", cursor: "pointer" }}>
@@ -198,93 +169,142 @@ function FreightMapTab() {
           </select>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span style={{ fontSize: 11, color: C.dim }}>Zoom: {zoom.toFixed(1)}x</span>
-          <button onClick={() => setZoom(z => Math.min(z + 0.3, 4))} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontSize: 11, padding: "4px 10px", cursor: "pointer" }}>+</button>
-          <button onClick={() => setZoom(z => Math.max(z - 0.3, 0.5))} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontSize: 11, padding: "4px 10px", cursor: "pointer" }}>−</button>
-          <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontSize: 11, padding: "4px 10px", cursor: "pointer" }}>Reset</button>
-          <span style={{ fontSize: 11, color: C.faint, marginLeft: 8 }}>Click route to add rate · {rateHistory.length} tracked</span>
+          <span style={{ fontSize: 11, color: C.dim }}>Zoom: {scale.toFixed(1)}x</span>
+          <button onClick={() => setScale(s => Math.min(s + 0.3, 3))} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontSize: 14, fontWeight: 700, padding: "4px 10px", cursor: "pointer", lineHeight: 1 }}>+</button>
+          <button onClick={() => setScale(s => Math.max(s - 0.3, 0.5))} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontSize: 14, fontWeight: 700, padding: "4px 10px", cursor: "pointer", lineHeight: 1 }}>−</button>
+          <button onClick={() => { setScale(1); setPosition({ x: 0, y: 0 }); }} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontSize: 11, padding: "4px 10px", cursor: "pointer" }}>Reset</button>
+          <span style={{ fontSize: 11, color: C.faint, marginLeft: 8 }}>{rateHistory.length} rates tracked</span>
         </div>
       </div>
 
       <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
-        <div ref={mapRef} style={{ flex: 2, background: "linear-gradient(180deg, #0a1628 0%, #0d1b2e 50%, #162540 100%)", border: "1px solid " + C.bd, borderRadius: 8, position: "relative", overflow: "hidden", cursor: isDragging ? "grabbing" : "grab" }} onWheel={handleWheel} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
-          <svg ref={svgRef} viewBox="0 0 2000 1000" style={{ width: "100%", height: "100%", display: "block" }}>
-            <defs>
-              <filter id="glow">
-                <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-                <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-              </filter>
-            </defs>
+        {/* MAP */}
+        <div 
+          ref={mapContainerRef}
+          style={{ 
+            flex: 2, 
+            background: "linear-gradient(180deg, #0a1628 0%, #0d1b2e 50%, #162540 100%)", 
+            border: "1px solid " + C.bd, 
+            borderRadius: 8, 
+            position: "relative", 
+            overflow: "hidden",
+            cursor: isDragging ? "grabbing" : "grab"
+          }}
+          onWheel={handleWheel}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
+          <div style={{
+            position: "absolute",
+            width: "100%",
+            height: "100%",
+            transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+            transformOrigin: "center center",
+            transition: isDragging ? "none" : "transform 0.1s ease-out"
+          }}>
+            {/* World Map Background */}
+            <svg viewBox="0 0 100 60" style={{ width: "100%", height: "100%", position: "absolute" }}>
+              <defs>
+                <filter id="glow">
+                  <feGaussianBlur stdDeviation="0.5" result="coloredBlur"/>
+                  <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+              </defs>
+              
+              {/* Simplified world continents */}
+              <g opacity="0.15" stroke="#58a6ff" strokeWidth="0.3" fill="none">
+                <path d="M 10,15 L 15,12 L 20,14 L 25,13 L 28,16 L 26,22 L 23,26 L 20,28 L 17,27 L 14,24 L 11,20 Z" />
+                <path d="M 22,32 L 25,30 L 28,31 L 30,34 L 29,38 L 27,41 L 24,42 L 22,40 L 21,36 Z" />
+                <path d="M 45,12 L 50,11 L 56,13 L 60,15 L 58,19 L 55,20 L 51,19 L 47,17 Z" />
+                <path d="M 47,24 L 52,23 L 56,25 L 59,29 L 58,34 L 55,38 L 51,40 L 47,39 L 44,35 L 45,30 Z" />
+                <path d="M 60,11 L 70,10 L 78,12 L 83,15 L 85,20 L 83,24 L 78,25 L 70,23 L 63,20 L 60,16 Z" />
+                <path d="M 72,43 L 77,42 L 82,44 L 85,47 L 84,51 L 81,53 L 76,52 L 72,49 Z" />
+              </g>
 
-            {/* World Map - Simplified continents */}
-            <g opacity="0.12" stroke="#58a6ff" strokeWidth="1" fill="none">
-              {/* North America */}
-              <path d="M 200,200 L 250,180 L 310,190 L 350,170 L 400,185 L 430,200 L 410,260 L 380,310 L 350,340 L 320,360 L 290,350 L 270,320 L 240,290 L 210,250 Z" />
-              {/* South America */}
-              <path d="M 360,420 L 390,400 L 420,410 L 440,440 L 450,490 L 440,550 L 420,590 L 390,610 L 370,600 L 350,570 L 340,520 L 345,470 Z" />
-              {/* Europe */}
-              <path d="M 900,200 L 950,190 L 1000,200 L 1040,220 L 1070,240 L 1050,280 L 1020,290 L 980,285 L 950,270 L 920,250 Z" />
-              {/* Africa */}
-              <path d="M 950,350 L 1000,340 L 1050,360 L 1080,400 L 1090,460 L 1080,520 L 1050,580 L 1010,620 L 970,640 L 930,630 L 900,590 L 880,540 L 885,480 L 900,420 L 920,380 Z" />
-              {/* Asia */}
-              <path d="M 1100,180 L 1200,170 L 1300,190 L 1400,180 L 1480,200 L 1540,230 L 1580,270 L 1600,310 L 1590,360 L 1560,380 L 1500,370 L 1420,360 L 1350,340 L 1280,320 L 1200,300 L 1140,270 L 1100,230 Z" />
-              {/* Australia */}
-              <path d="M 1500,650 L 1560,640 L 1620,655 L 1660,680 L 1680,720 L 1670,760 L 1640,780 L 1590,785 L 1540,775 L 1500,750 L 1480,710 L 1485,680 Z" />
-            </g>
+              {/* Routes */}
+              {filteredRoutes.map(route => {
+                const from = MAJOR_PORTS[route.from];
+                const to = MAJOR_PORTS[route.to];
+                if (!from || !to) return null;
 
-            {/* Dot grid */}
-            <g opacity="0.05" fill="#58a6ff">
-              {Array.from({ length: 100 }).map((_, i) => 
-                Array.from({ length: 200 }).map((_, j) => (
-                  <circle key={`${i}-${j}`} cx={j * 10} cy={i * 10} r="0.5" />
-                ))
-              )}
-            </g>
+                const latestRate = getLatestRate(route.id);
+                const strength = getMarketStrength(route.id);
+                const isSelected = selectedRoute?.id === route.id;
+                const color = isSelected ? "#58a6ff" : strengthColors[strength];
 
-            {/* Routes */}
-            {filteredRoutes.map(route => {
-              const latestRate = getLatestRate(route.id);
-              const strength = getMarketStrength(route.id);
-              const isSelected = selectedRoute?.id === route.id;
-              const path = getCurvePath(route.from, route.to);
-              const arrowPos = getArrowPosition(route.from, route.to);
+                const midX = (from.x + to.x) / 2;
+                const midY = (from.y + to.y) / 2;
 
-              return (
-                <g key={route.id} onClick={() => setSelectedRoute(route)} style={{ cursor: "pointer" }}>
-                  <path d={path} stroke={isSelected ? "#58a6ff" : strengthColors[strength]} strokeWidth={isSelected ? 3 : 2} fill="none" opacity={isSelected ? 1 : 0.75} strokeDasharray="5,5" filter={isSelected ? "url(#glow)" : ""} />
-                  <g transform={`translate(${arrowPos.x}, ${arrowPos.y}) rotate(${arrowPos.angle})`}>
-                    <path d="M 0,0 L -10,-6 L -10,6 Z" fill={isSelected ? "#58a6ff" : strengthColors[strength]} opacity={isSelected ? 1 : 0.75} />
-                  </g>
-                  {latestRate && (() => {
-                    const [mx, my] = project((MAJOR_PORTS[route.from].lat + MAJOR_PORTS[route.to].lat) / 2, (MAJOR_PORTS[route.from].lng + MAJOR_PORTS[route.to].lng) / 2);
-                    return (
+                return (
+                  <g key={route.id} onClick={(e) => handleRouteClick(route, e)} style={{ cursor: "pointer" }}>
+                    <line
+                      x1={from.x}
+                      y1={from.y}
+                      x2={to.x}
+                      y2={to.y}
+                      stroke={color}
+                      strokeWidth={isSelected ? 0.4 : 0.25}
+                      strokeDasharray="0.8,0.8"
+                      opacity={isSelected ? 1 : 0.7}
+                      filter={isSelected ? "url(#glow)" : ""}
+                    />
+                    <polygon
+                      points={`${to.x},${to.y} ${to.x-0.6},${to.y-0.4} ${to.x-0.6},${to.y+0.4}`}
+                      fill={color}
+                      opacity={isSelected ? 1 : 0.7}
+                    />
+                    {latestRate && (
                       <g>
-                        <rect x={mx - 30} y={my - 12} width="60" height="24" fill="rgba(12, 23, 41, 0.95)" stroke={strengthColors[strength]} strokeWidth="1.5" rx="4" />
-                        <text x={mx} y={my + 5} textAnchor="middle" fill={strengthColors[strength]} fontSize="11" fontWeight="700">{latestRate.rate}</text>
+                        <rect
+                          x={midX - 2.5}
+                          y={midY - 0.8}
+                          width="5"
+                          height="1.6"
+                          fill="rgba(12, 23, 41, 0.95)"
+                          stroke={color}
+                          strokeWidth="0.08"
+                          rx="0.2"
+                        />
+                        <text
+                          x={midX}
+                          y={midY + 0.5}
+                          textAnchor="middle"
+                          fill={color}
+                          fontSize="0.8"
+                          fontWeight="700"
+                        >
+                          {latestRate.rate}
+                        </text>
                       </g>
-                    );
-                  })()}
-                </g>
-              );
-            })}
+                    )}
+                  </g>
+                );
+              })}
 
-            {/* Ports */}
-            {Object.entries(MAJOR_PORTS).map(([key, port]) => {
-              const [x, y] = project(port.lat, port.lng);
-              return (
+              {/* Ports */}
+              {Object.entries(MAJOR_PORTS).map(([key, port]) => (
                 <g key={key}>
-                  <circle cx={x} cy={y} r="5" fill="#58a6ff" opacity="0.3" />
-                  <circle cx={x} cy={y} r="3" fill="#58a6ff" />
-                  <circle cx={x} cy={y} r="1.5" fill="#fff" />
-                  <text x={x} y={y - 10} textAnchor="middle" fill="#a0c8ff" fontSize="10" fontWeight="600">{port.label}</text>
+                  <circle cx={port.x} cy={port.y} r="0.4" fill="#58a6ff" opacity="0.3" />
+                  <circle cx={port.x} cy={port.y} r="0.25" fill="#58a6ff" />
+                  <circle cx={port.x} cy={port.y} r="0.12" fill="#fff" />
+                  <text
+                    x={port.x}
+                    y={port.y - 0.7}
+                    textAnchor="middle"
+                    fill="#a0c8ff"
+                    fontSize="0.65"
+                    fontWeight="600"
+                  >
+                    {port.label}
+                  </text>
                 </g>
-              );
-            })}
-          </svg>
+              ))}
+            </svg>
+          </div>
 
+          {/* Legend */}
           <div style={{ position: "absolute", bottom: 12, left: 12, background: "rgba(12, 23, 41, 0.92)", border: "1px solid " + C.bd, borderRadius: 6, padding: 10, backdropFilter: "blur(8px)" }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.dim, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Market Strength</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -296,16 +316,29 @@ function FreightMapTab() {
               ))}
             </div>
           </div>
+
+          {/* Instructions */}
+          <div style={{ position: "absolute", top: 12, left: 12, background: "rgba(12, 23, 41, 0.85)", border: "1px solid " + C.bd, borderRadius: 6, padding: "6px 10px", fontSize: 10, color: C.dim }}>
+            Scroll to zoom · Drag to pan · Click route to add rate
+          </div>
         </div>
 
+        {/* RATE PANEL */}
         <div style={{ width: 320, display: "flex", flexDirection: "column", gap: 12 }}>
           {selectedRoute ? (
             <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 8 }}>{selectedRoute.label}</div>
               <div style={{ fontSize: 11, color: C.dim, marginBottom: 12 }}>{selectedRoute.region}</div>
               <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-                <input type="text" value={newRate} onChange={e => setNewRate(e.target.value)} placeholder="Rate (WS)" style={{ flex: 1, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 12, padding: "6px 10px", outline: "none" }} onKeyDown={e => e.key === "Enter" && addRate()} />
-                <button onClick={addRate} style={{ background: C.green, border: "none", borderRadius: 6, color: "#fff", fontSize: 11, fontWeight: 700, padding: "6px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>Add</button>
+                <input
+                  type="text"
+                  value={newRate}
+                  onChange={e => setNewRate(e.target.value)}
+                  placeholder="Rate (WS)"
+                  style={{ flex: 1, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 12, padding: "6px 10px", outline: "none" }}
+                  onKeyDown={e => e.key === "Enter" && addRate()}
+                />
+                <button onClick={addRate} style={{ background: "linear-gradient(135deg, #3fb950 0%, #2ecc71 100%)", border: "none", borderRadius: 6, color: "#fff", fontSize: 11, fontWeight: 700, padding: "6px 12px", cursor: "pointer", boxShadow: "0 2px 8px rgba(63,185,80,0.3)" }}>Add</button>
               </div>
               <div style={{ fontSize: 10, fontWeight: 700, color: C.dim, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Recent Rates</div>
               <div style={{ maxHeight: 200, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
@@ -325,14 +358,15 @@ function FreightMapTab() {
             </div>
           ) : (
             <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 20, textAlign: "center", color: C.dim }}>
-              <div style={{ fontSize: 24, marginBottom: 8 }}>🗺️</div>
-              <div style={{ fontSize: 12 }}>Click a route to add rates</div>
-              <div style={{ fontSize: 10, color: C.faint, marginTop: 4 }}>Scroll to zoom · Drag to pan</div>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>🗺️</div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Click a route to add rates</div>
+              <div style={{ fontSize: 10, color: C.faint }}>Scroll to zoom · Drag to pan</div>
             </div>
           )}
         </div>
       </div>
 
+      {/* RATE HISTORY */}
       <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 12, maxHeight: 250, overflowY: "auto" }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 12 }}>📊 Rate History by Region</div>
         {Object.keys(ratesByRegion).length === 0 ? (
