@@ -19,6 +19,8 @@ import CalendarTab from "./CalendarTab";
 import SettingsTab from "./SettingsTab";
 import ReportsTab from "./ReportsTab";
 import FreightMapTab from "./FreightMapTab";
+import VesselPopout from "./VesselPopout";
+import { getCustomTags } from "./vesselMetadataHelpers";
 
 
 
@@ -174,6 +176,9 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [sortK,setSortK]=useState("fileDate");
   const [sortD,setSortD]=useState(-1);
   const [sel,setSel]=useState(null);
+  const [showVesselPopout,setShowVesselPopout]=useState(false);
+  const [popoutVessel,setPopoutVessel]=useState(null);
+  const [contextMenu,setContextMenu]=useState(null);
   const [opFilter,setOpFilter]=useState(null);
   const [updFilter,setUpdFilter]=useState(""); // "" | "today" | "week"
   const [bucketFilters,setBucketFilters]=useState(new Set()); // set of active bucket keys
@@ -288,7 +293,29 @@ const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
   const tableStyle={width:mobile?"max-content":"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12,tableLayout:"fixed",fontFamily:"sans-serif"};
   const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
   const posColumns = [
-  { key: "select", label: "", align: "center", width: 28 },
+  { 
+    key: "select", 
+    label: (
+      <div 
+        onClick={() => {
+          if (selVessels.size === filtV.length && filtV.length > 0) {
+            setSelVessels(new Set());
+          } else {
+            setSelVessels(new Set(filtV.map(v => v.vessel)));
+          }
+        }}
+        style={{ cursor: "pointer", userSelect: "none" }}
+        title="Click to toggle all"
+      >
+        <div style={{ fontSize: 11, color: selVessels.size > 0 && selVessels.size === filtV.length ? "#4fc3f7" : C.faint }}>
+          {selVessels.size > 0 && selVessels.size === filtV.length ? "[✓]" : "[ ]"}
+        </div>
+        <div style={{ fontSize: 8, color: C.faint, marginTop: 2 }}>All</div>
+      </div>
+    ), 
+    align: "center", 
+    width: 32 
+  },
   { key: "operator", label: "Operator", width: colWidthsV.Operator },
   { key: "vessel", label: "Vessel", width: colWidthsV.Vessel },
   { key: "built", label: "Built", align: "right", width: colWidthsV.Built },
@@ -878,6 +905,14 @@ const filtV=useMemo(()=>{
     setSel(sel === row.vessel ? null : row.vessel);
     setSelectedAISVessels([row.vessel]);
   }}
+  onRowContextMenu={(row, e) => {
+    e.preventDefault();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      vessel: row
+    });
+  }}
   renderRow={(v, td, i) => {
   const isSel = sel === v.vessel;
   const ppt = isOpenPPT(v.date);
@@ -915,18 +950,43 @@ const filtV=useMemo(()=>{
 />
 
       {/* VESSEL */}
-      <EC
-  value={toTCase(v.vessel)}
-  color={ppt ? "#a8e6a3" : "#79c0ff"}
-  bold={true}
-  placeholder="Vessel"
-  onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)}
-  data-cell={`${i}-vessel`}
-  onTab={() => focusCell(i, "date")}
-  onShiftTab={() => focusCell(i, "operator")}
-  onDown={() => focusCell(i+1, "vessel")}
-  onUp={() => focusCell(i-1, "vessel")}
-/>
+      <td style={{ ...tdTxt, padding: "6px 10px", verticalAlign: "top" }}>
+        <EC
+          value={toTCase(v.vessel)}
+          color={ppt ? "#a8e6a3" : "#79c0ff"}
+          bold={true}
+          placeholder="Vessel"
+          onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)}
+          data-cell={`${i}-vessel`}
+          onTab={() => focusCell(i, "date")}
+          onShiftTab={() => focusCell(i, "operator")}
+          onDown={() => focusCell(i+1, "vessel")}
+          onUp={() => focusCell(i-1, "vessel")}
+        />
+        {/* Tag Badges */}
+        {v.tags && v.tags.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 3 }}>
+            {v.tags.map(tag => (
+              <span
+                key={tag}
+                style={{
+                  background: "rgba(88,166,255,0.15)",
+                  border: "1px solid rgba(88,166,255,0.4)",
+                  borderRadius: 3,
+                  color: "#79c0ff",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  padding: "1px 4px",
+                  whiteSpace: "nowrap"
+                }}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </td>
+
 
       <td style={{ ...tdNum, color: C.dim }}>{v.built || ""}</td>
       <td style={{ ...tdNum, color: C.dim }}>{fmtN(v.dwt)}</td>
@@ -1543,6 +1603,92 @@ const filtV=useMemo(()=>{
         {tab==="reports"&&<ReportsTab selectedVessels={Array.from(selVessels)} selectedCargoes={Array.from(selCargoes)}/>}
         {tab==="map"&&<FreightMapTab/>}
       </div>
+
+      {/* Vessel Popout */}
+      {showVesselPopout && popoutVessel && (
+        <VesselPopout
+          vessel={popoutVessel}
+          onClose={() => {
+            setShowVesselPopout(false);
+            setPopoutVessel(null);
+          }}
+          onUpdate={() => {
+            // Refresh vessels list to show updated tags
+            if (onRefresh) onRefresh();
+          }}
+        />
+      )}
+
+      {/* Context Menu for Right-Click */}
+      {contextMenu && (
+        <div
+          style={{
+            position: "fixed",
+            top: contextMenu.y,
+            left: contextMenu.x,
+            background: C.bg2,
+            border: "1px solid " + C.bd,
+            borderRadius: 6,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+            zIndex: 10000,
+            minWidth: 180
+          }}
+          onMouseLeave={() => setContextMenu(null)}
+        >
+          <div
+            onClick={() => {
+              setPopoutVessel(contextMenu.vessel);
+              setShowVesselPopout(true);
+              setContextMenu(null);
+            }}
+            style={{
+              padding: "10px 14px",
+              fontSize: 13,
+              color: C.tx,
+              cursor: "pointer",
+              borderBottom: "1px solid " + C.bd
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = C.bg3}
+            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >
+            📋 View Details & Notes
+          </div>
+          <div
+            onClick={() => {
+              // Quick copy vessel name
+              navigator.clipboard.writeText(contextMenu.vessel.vessel);
+              setContextMenu(null);
+            }}
+            style={{
+              padding: "10px 14px",
+              fontSize: 13,
+              color: C.tx,
+              cursor: "pointer"
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = C.bg3}
+            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >
+            📝 Copy Vessel Name
+          </div>
+        </div>
+      )}
+
+      {/* Vessel Popout Modal */}
+      {showVesselPopout && popoutVessel && (
+        <VesselPopout
+          vessel={popoutVessel}
+          onClose={() => {
+            setShowVesselPopout(false);
+            setPopoutVessel(null);
+          }}
+          onUpdate={(updatedVessel) => {
+            // Refresh will happen automatically via Supabase realtime
+            // or trigger a manual refresh here if needed
+            setShowVesselPopout(false);
+            setPopoutVessel(null);
+          }}
+        />
+      )}
     </div>
   );
 }
