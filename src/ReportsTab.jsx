@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
-import { toTCase, fmtDateShort } from "./utils";
 
 const REPORT_TYPES = ["Intermediate", "Asia to Europe", "Transatlantic", "TimeCharter"];
 
@@ -48,9 +47,9 @@ function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
     let defaultGrid = {};
     if (type === "Intermediate") {
       defaultGrid = {
-        "5kt": { "ARA-Thames": "", "ARA-Dublin": "", "Mongstad-ARA": "" },
-        "10kt": { "ARA-Thames": "", "ARA-Dublin": "", "Mongstad-ARA": "" },
-        "18kt": { "ARA-Thames": "", "ARA-Dublin": "", "Mongstad-ARA": "" },
+        "5kt": { "ARA-Dublin": "", "ARA-Thames": "", "Mongstad-ARA": "" },
+        "10kt": { "ARA-Dublin": "", "ARA-Thames": "", "Mongstad-ARA": "" },
+        "18kt": { "ARA-Dublin": "", "ARA-Thames": "", "Mongstad-ARA": "" },
       };
     } else if (type === "Asia to Europe") {
       defaultGrid = {
@@ -73,10 +72,7 @@ function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
   };
 
   const handleRateChange = (size, route, value) => {
-    setRateGrid(prev => ({
-      ...prev,
-      [size]: { ...prev[size], [route]: value }
-    }));
+    setRateGrid(prev => ({ ...prev, [size]: { ...prev[size], [route]: value } }));
   };
 
   const handleTCEChange = (segment, value) => {
@@ -157,6 +153,16 @@ function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
     if (reportRef.current) window.print();
   };
 
+  const copyReport = async () => {
+    try {
+      const reportText = reportRef.current.innerText;
+      await navigator.clipboard.writeText(reportText);
+      alert("Report copied to clipboard");
+    } catch (err) {
+      console.error("Copy failed:", err);
+    }
+  };
+
   if (showTypeSelector) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", background: C.bg }}>
@@ -174,7 +180,7 @@ function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
                 key={type}
                 onClick={() => selectReportType(type)}
                 style={{
-                  background: C.bg3,
+                  background: "linear-gradient(135deg, rgba(102,126,234,0.1) 0%, rgba(118,75,162,0.1) 100%)",
                   border: "1px solid " + C.bd,
                   borderRadius: 8,
                   padding: "20px 16px",
@@ -182,28 +188,21 @@ function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
                   transition: "all 0.2s",
                   textAlign: "center"
                 }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = C.blue}
-                onMouseLeave={e => e.currentTarget.style.borderColor = C.bd}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = "linear-gradient(135deg, rgba(102,126,234,0.2) 0%, rgba(118,75,162,0.2) 100%)";
+                  e.currentTarget.style.borderColor = C.blue;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = "linear-gradient(135deg, rgba(102,126,234,0.1) 0%, rgba(118,75,162,0.1) 100%)";
+                  e.currentTarget.style.borderColor = C.bd;
+                }}
               >
                 <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 4 }}>{type}</div>
                 <div style={{ fontSize: 11, color: C.dim }}>Create {type.toLowerCase()} report</div>
               </button>
             ))}
           </div>
-          <button
-            onClick={() => setShowTypeSelector(false)}
-            style={{
-              width: "100%",
-              marginTop: 16,
-              background: "transparent",
-              border: "1px solid " + C.bd,
-              borderRadius: 6,
-              color: C.dim,
-              fontSize: 12,
-              padding: "8px",
-              cursor: "pointer"
-            }}
-          >
+          <button onClick={() => setShowTypeSelector(false)} style={{ width: "100%", marginTop: 16, background: "transparent", border: "1px solid " + C.bd, borderRadius: 6, color: C.dim, fontSize: 12, padding: "8px", cursor: "pointer" }}>
             Cancel
           </button>
         </div>
@@ -218,7 +217,7 @@ function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
           <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
             📋 Saved Reports
           </div>
-          <button onClick={() => setShowTypeSelector(true)} style={{ width: "100%", background: C.blue, border: "none", borderRadius: 6, color: C.bg, fontSize: 12, fontWeight: 700, padding: "8px 12px", cursor: "pointer", marginBottom: 12 }}>
+          <button onClick={() => setShowTypeSelector(true)} style={{ width: "100%", background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", border: "none", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 700, padding: "8px 12px", cursor: "pointer", marginBottom: 12, boxShadow: "0 2px 8px rgba(102,126,234,0.3)" }}>
             + New Report
           </button>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -248,7 +247,7 @@ function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
         <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
           📋 Saved Reports
         </div>
-        <button onClick={() => { setReportType(""); setCommentary(""); setFixtures([]); setQuotes([]); setTceEarnings({}); }} style={{ width: "100%", background: C.blue, border: "none", borderRadius: 6, color: C.bg, fontSize: 12, fontWeight: 700, padding: "8px 12px", cursor: "pointer", marginBottom: 12 }}>
+        <button onClick={() => { setReportType(""); setCommentary(""); setFixtures([]); setQuotes([]); setTceEarnings({}); }} style={{ width: "100%", background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", border: "none", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 700, padding: "8px 12px", cursor: "pointer", marginBottom: 12, boxShadow: "0 2px 8px rgba(102,126,234,0.3)" }}>
           + New Report
         </button>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -269,8 +268,9 @@ function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
             <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 12, padding: "6px 10px", outline: "none" }} />
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={saveReport} style={{ background: C.green, border: "none", borderRadius: 6, color: "#fff", fontSize: 11, fontWeight: 700, padding: "6px 14px", cursor: "pointer" }}>💾 Save</button>
-            <button onClick={exportReport} style={{ background: C.purple, border: "none", borderRadius: 6, color: "#fff", fontSize: 11, fontWeight: 700, padding: "6px 14px", cursor: "pointer" }}>🖨️ Print</button>
+            <button onClick={saveReport} style={{ background: "linear-gradient(135deg, #3fb950 0%, #2ecc71 100%)", border: "none", borderRadius: 6, color: "#fff", fontSize: 11, fontWeight: 700, padding: "6px 14px", cursor: "pointer", boxShadow: "0 2px 8px rgba(63,185,80,0.3)" }}>Save Report</button>
+            <button onClick={exportReport} style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", border: "none", borderRadius: 6, color: "#fff", fontSize: 11, fontWeight: 700, padding: "6px 14px", cursor: "pointer", boxShadow: "0 2px 8px rgba(102,126,234,0.3)" }}>Print</button>
+            <button onClick={copyReport} style={{ background: "linear-gradient(135deg, #f5a623 0%, #f39c12 100%)", border: "none", borderRadius: 6, color: "#fff", fontSize: 11, fontWeight: 700, padding: "6px 14px", cursor: "pointer", boxShadow: "0 2px 8px rgba(245,166,35,0.3)" }}>Copy</button>
           </div>
         </div>
 
@@ -282,6 +282,7 @@ function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
             </div>
           </div>
 
+          {/* Rest of report content - keeping the table structure but with cleaner styling */}
           <div style={{ marginBottom: 24 }}>
             <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1a4d7a", marginBottom: 12 }}>Freight Rates</h2>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -348,27 +349,13 @@ function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
                 <tbody>
                   {fixtures.map((fix, i) => (
                     <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#f8fbfe" }}>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input type="text" value={fix.vessel} onChange={e => updateFixture(i, "vessel", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input type="text" value={fix.charterer} onChange={e => updateFixture(i, "charterer", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input type="text" value={fix.route} onChange={e => updateFixture(i, "route", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input type="text" value={fix.qty} onChange={e => updateFixture(i, "qty", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input type="text" value={fix.rate} onChange={e => updateFixture(i, "rate", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input type="text" value={fix.date} onChange={e => updateFixture(i, "date", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "2px", textAlign: "center" }}>
-                        <button onClick={() => removeFixture(i)} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>✕</button>
-                      </td>
+                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}><input type="text" value={fix.vessel} onChange={e => updateFixture(i, "vessel", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} /></td>
+                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}><input type="text" value={fix.charterer} onChange={e => updateFixture(i, "charterer", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} /></td>
+                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}><input type="text" value={fix.route} onChange={e => updateFixture(i, "route", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} /></td>
+                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}><input type="text" value={fix.qty} onChange={e => updateFixture(i, "qty", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} /></td>
+                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}><input type="text" value={fix.rate} onChange={e => updateFixture(i, "rate", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} /></td>
+                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}><input type="text" value={fix.date} onChange={e => updateFixture(i, "date", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} /></td>
+                      <td style={{ border: "1px solid #c0d8eb", padding: "2px", textAlign: "center" }}><button onClick={() => removeFixture(i)} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>✕</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -397,21 +384,11 @@ function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
                 <tbody>
                   {quotes.map((q, i) => (
                     <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#f8fbfe" }}>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input type="text" value={q.route} onChange={e => updateQuote(i, "route", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input type="text" value={q.size} onChange={e => updateQuote(i, "size", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input type="text" value={q.rate} onChange={e => updateQuote(i, "rate", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}>
-                        <input type="text" value={q.basis} onChange={e => updateQuote(i, "basis", e.target.value)} placeholder="ex-tank, FBG..." style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} />
-                      </td>
-                      <td style={{ border: "1px solid #c0d8eb", padding: "2px", textAlign: "center" }}>
-                        <button onClick={() => removeQuote(i)} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>✕</button>
-                      </td>
+                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}><input type="text" value={q.route} onChange={e => updateQuote(i, "route", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} /></td>
+                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}><input type="text" value={q.size} onChange={e => updateQuote(i, "size", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} /></td>
+                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}><input type="text" value={q.rate} onChange={e => updateQuote(i, "rate", e.target.value)} style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} /></td>
+                      <td style={{ border: "1px solid #c0d8eb", padding: "4px 6px" }}><input type="text" value={q.basis} onChange={e => updateQuote(i, "basis", e.target.value)} placeholder="ex-tank, FBG..." style={{ width: "100%", border: "none", outline: "none", fontSize: 12, background: "transparent" }} /></td>
+                      <td style={{ border: "1px solid #c0d8eb", padding: "2px", textAlign: "center" }}><button onClick={() => removeQuote(i)} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>✕</button></td>
                     </tr>
                   ))}
                 </tbody>
