@@ -1,91 +1,25 @@
 import React, { useState, useEffect } from "react";
-import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
+import { MapContainer, TileLayer, Polyline, Popup } from "react-leaflet";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
-import L from "leaflet";
 
-// Fix Leaflet default icon issue
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-});
+// Import Leaflet CSS in the component
+import "leaflet/dist/leaflet.css";
 
-// Route definitions with coordinates
+// Route definitions
 const ROUTES = [
-  { id: "ara-usg", name: "ARA → US Gulf", region: "Transatlantic", from: "ARA", to: "US Gulf", coords: [[51.95, 4.13], [29.76, -95.37]], color: "#f5a623" },
-  { id: "usg-ara", name: "US Gulf → ARA", region: "Transatlantic", from: "US Gulf", to: "ARA", coords: [[29.76, -95.37], [51.95, 4.13]], color: "#f5a623" },
-  { id: "ara-thames", name: "ARA → Thames", region: "Intermediate", from: "ARA", to: "Thames", coords: [[51.95, 4.13], [51.45, 0.70]], color: "#58a6ff" },
-  { id: "mongstad-ara", name: "Mongstad → ARA", region: "Intermediate", from: "Mongstad", to: "ARA", coords: [[60.82, 5.03], [51.95, 4.13]], color: "#58a6ff" },
-  { id: "ara-gothenburg", name: "ARA → Gothenburg", region: "Intermediate", from: "ARA", to: "Gothenburg", coords: [[51.95, 4.13], [57.70, 11.97]], color: "#58a6ff" },
-  { id: "ara-wmed", name: "ARA → W.Med", region: "Med", from: "ARA", to: "W.Med", coords: [[51.95, 4.13], [43.30, 5.37]], color: "#3fb950" },
-  { id: "ara-emed", name: "ARA → E.Med", region: "Med", from: "ARA", to: "E.Med", coords: [[51.95, 4.13], [37.98, 23.73]], color: "#3fb950" },
-  { id: "bsea-ara", name: "Black Sea → ARA", region: "Med", from: "Black Sea", to: "ARA", coords: [[44.48, 33.55], [51.95, 4.13]], color: "#3fb950" },
-  { id: "ara-fareast", name: "ARA → Far East", region: "Long Haul", from: "ARA", to: "Far East", coords: [[51.95, 4.13], [35.68, 139.69]], color: "#ff6b6b" },
-  { id: "singapore-ara", name: "Singapore → ARA", region: "Long Haul", from: "Singapore", to: "ARA", coords: [[1.35, 103.82], [51.95, 4.13]], color: "#ff6b6b" },
-  { id: "china-ara", name: "China → ARA", region: "Long Haul", from: "China", to: "ARA", coords: [[31.23, 121.47], [51.95, 4.13]], color: "#ff6b6b" },
+  { id: "ara-usg", name: "ARA → US Gulf", region: "Transatlantic", coords: [[51.95, 4.13], [29.76, -95.37]], color: "#f5a623" },
+  { id: "usg-ara", name: "US Gulf → ARA", region: "Transatlantic", coords: [[29.76, -95.37], [51.95, 4.13]], color: "#f5a623" },
+  { id: "ara-thames", name: "ARA → Thames", region: "Intermediate", coords: [[51.95, 4.13], [51.45, 0.70]], color: "#58a6ff" },
+  { id: "mongstad-ara", name: "Mongstad → ARA", region: "Intermediate", coords: [[60.82, 5.03], [51.95, 4.13]], color: "#58a6ff" },
+  { id: "ara-gothenburg", name: "ARA → Gothenburg", region: "Intermediate", coords: [[51.95, 4.13], [57.70, 11.97]], color: "#58a6ff" },
+  { id: "ara-wmed", name: "ARA → W.Med", region: "Med", coords: [[51.95, 4.13], [43.30, 5.37]], color: "#3fb950" },
+  { id: "ara-emed", name: "ARA → E.Med", region: "Med", coords: [[51.95, 4.13], [37.98, 23.73]], color: "#3fb950" },
+  { id: "bsea-ara", name: "Black Sea → ARA", region: "Med", coords: [[44.48, 33.55], [51.95, 4.13]], color: "#3fb950" },
+  { id: "ara-fareast", name: "ARA → Far East", region: "Long Haul", coords: [[51.95, 4.13], [35.68, 139.69]], color: "#ff6b6b" },
+  { id: "singapore-ara", name: "Singapore → ARA", region: "Long Haul", coords: [[1.35, 103.82], [51.95, 4.13]], color: "#ff6b6b" },
+  { id: "china-ara", name: "China → ARA", region: "Long Haul", coords: [[31.23, 121.47], [51.95, 4.13]], color: "#ff6b6b" },
 ];
-
-function RouteLines({ routes, onRouteClick, latestRates }) {
-  return (
-    <>
-      {routes.map(route => {
-        const latestRate = latestRates[route.id];
-        return (
-          <Polyline
-            key={route.id}
-            positions={route.coords}
-            pathOptions={{
-              color: route.color,
-              weight: latestRate ? 4 : 2,
-              opacity: 0.8,
-              dashArray: "10, 10"
-            }}
-            eventHandlers={{
-              click: () => onRouteClick(route)
-            }}
-          >
-            <Popup>
-              <div style={{ minWidth: 200 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 4 }}>{route.name}</div>
-                <div style={{ fontSize: 11, color: C.dim, marginBottom: 8 }}>{route.region}</div>
-                {latestRate ? (
-                  <div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: route.color }}>{latestRate.rate} {latestRate.unit}</div>
-                    <div style={{ fontSize: 10, color: C.faint, marginTop: 2 }}>
-                      {new Date(latestRate.entry_date).toLocaleDateString("en-GB")}
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 11, color: C.faint, fontStyle: "italic" }}>No rate added yet</div>
-                )}
-                <button
-                  onClick={() => onRouteClick(route)}
-                  style={{
-                    marginTop: 8,
-                    width: "100%",
-                    background: "linear-gradient(135deg, #3fb950 0%, #2ecc71 100%)",
-                    border: "none",
-                    borderRadius: 4,
-                    color: "#fff",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    padding: "6px 10px",
-                    cursor: "pointer"
-                  }}
-                >
-                  Add/Update Rate
-                </button>
-              </div>
-            </Popup>
-          </Polyline>
-        );
-      })}
-    </>
-  );
-}
 
 function FreightMapTab() {
   const [selectedRoute, setSelectedRoute] = useState(null);
@@ -95,11 +29,14 @@ function FreightMapTab() {
   const [unit, setUnit] = useState("WS");
   const [comment, setComment] = useState("");
   const [filterRegion, setFilterRegion] = useState("All");
+  const [mapKey, setMapKey] = useState(0);
 
   const regions = ["All", "Intermediate", "Transatlantic", "Med", "Long Haul"];
 
   useEffect(() => {
     loadRateHistory();
+    // Force map to render after mount
+    setTimeout(() => setMapKey(1), 100);
   }, []);
 
   const loadRateHistory = async () => {
@@ -113,7 +50,6 @@ function FreightMapTab() {
 
       setRateHistory(data || []);
 
-      // Get latest rate for each route
       const latest = {};
       (data || []).forEach(rate => {
         if (!latest[rate.route_id]) {
@@ -134,8 +70,8 @@ function FreightMapTab() {
         route_id: selectedRoute.id,
         route_name: selectedRoute.name,
         region: selectedRoute.region,
-        from_port: selectedRoute.from,
-        to_port: selectedRoute.to,
+        from_port: selectedRoute.name.split(" → ")[0],
+        to_port: selectedRoute.name.split(" → ")[1],
         rate: parseFloat(newRate),
         unit: unit,
         comment: comment || null,
@@ -150,11 +86,12 @@ function FreightMapTab() {
       loadRateHistory();
     } catch (err) {
       console.error("Error adding rate:", err);
-      alert("Error adding rate");
+      alert("Error adding rate: " + err.message);
     }
   };
 
   const deleteRate = async (id) => {
+    if (!confirm("Delete this rate?")) return;
     try {
       const { error } = await supabase.from("freight_route_rates").delete().eq("id", id);
       if (error) throw error;
@@ -181,18 +118,74 @@ function FreightMapTab() {
       </div>
 
       {/* Map */}
-      <div style={{ flex: 1, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden", position: "relative", minHeight: 400 }}>
+      <div style={{ flex: 1, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden", position: "relative", minHeight: 450 }}>
         <MapContainer
+          key={mapKey}
           center={[35, 15]}
           zoom={3}
           style={{ height: "100%", width: "100%", background: "#0a1628" }}
           scrollWheelZoom={true}
         >
           <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            attribution='&copy; OpenStreetMap'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <RouteLines routes={filteredRoutes} onRouteClick={setSelectedRoute} latestRates={latestRates} />
+          
+          {filteredRoutes.map(route => {
+            const latestRate = latestRates[route.id];
+            return (
+              <Polyline
+                key={route.id}
+                positions={route.coords}
+                pathOptions={{
+                  color: route.color,
+                  weight: latestRate ? 4 : 2,
+                  opacity: 0.8,
+                  dashArray: "10, 10"
+                }}
+                eventHandlers={{
+                  click: () => setSelectedRoute(route)
+                }}
+              >
+                <Popup>
+                  <div style={{ minWidth: 180, color: "#000" }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{route.name}</div>
+                    <div style={{ fontSize: 11, color: "#666", marginBottom: 8 }}>{route.region}</div>
+                    {latestRate ? (
+                      <div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: route.color }}>{latestRate.rate} {latestRate.unit}</div>
+                        <div style={{ fontSize: 10, color: "#999", marginTop: 2 }}>
+                          {new Date(latestRate.entry_date).toLocaleDateString("en-GB")}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 11, color: "#999", fontStyle: "italic" }}>No rate yet</div>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedRoute(route);
+                      }}
+                      style={{
+                        marginTop: 8,
+                        width: "100%",
+                        background: "#3fb950",
+                        border: "none",
+                        borderRadius: 4,
+                        color: "#fff",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        padding: "6px 10px",
+                        cursor: "pointer"
+                      }}
+                    >
+                      Add Rate
+                    </button>
+                  </div>
+                </Popup>
+              </Polyline>
+            );
+          })}
         </MapContainer>
       </div>
 
@@ -209,6 +202,7 @@ function FreightMapTab() {
               <div style={{ display: "flex", gap: 8 }}>
                 <input
                   type="number"
+                  step="0.01"
                   value={newRate}
                   onChange={e => setNewRate(e.target.value)}
                   placeholder="150"
@@ -249,7 +243,7 @@ function FreightMapTab() {
       <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16, maxHeight: 300, overflowY: "auto" }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 12 }}>📊 Rate History</div>
         {filteredHistory.length === 0 ? (
-          <div style={{ padding: 20, textAlign: "center", color: C.faint, fontSize: 12 }}>No rates recorded yet</div>
+          <div style={{ padding: 20, textAlign: "center", color: C.faint, fontSize: 12 }}>No rates recorded yet. Click a route on the map to add your first rate!</div>
         ) : (
           <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 4px" }}>
             <thead>
