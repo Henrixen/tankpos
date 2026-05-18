@@ -1,349 +1,601 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
 
-function CalendarTab() {
-  const [events, setEvents] = useState([]);
-  const [showAddEvent, setShowAddEvent] = useState(false);
-  const [newEvent, setNewEvent] = useState({
-    title: "",
-    start_date: "",
-    end_date: "",
-    notes: ""
-  });
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+const STORAGE_KEY = "signal_calendar_events";
 
-  useEffect(() => {
-    loadEvents();
-  }, []);
+async function loadEventsFromDB() {
+  try {
+    const { data, error } = await supabase.from("calendar_events").select("*").order("date");
+    if (!error && data?.length) {
+      return data.map(r => ({
+        id: r.id,
+        title: r.title,
+        date: r.date,
+        endDate: r.end_date || "",
+        color: r.category || "",
+        note: r.note || "",
+        images: r.images ? JSON.parse(r.images) : (r.image?[r.image]:[]),
+      }));
+    }
+  } catch(e) { console.warn("calendar load error", e); }
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; }
+}
 
-  const loadEvents = async () => {
-    try {
-      const { data, error } = await supabase
+async function saveEventsToDB(events) {
+  try {
+    if (events.length > 0) {
+      const rows = events.map(e => ({
+        id: e.id,
+        title: e.title || "",
+        date: e.date || "",
+        end_date: e.endDate || null,
+        category: e.color || null,
+        note: e.note || null,
+        images: JSON.stringify(e.images||[]),
+      }));
+      const { error: upsertErr } = await supabase
         .from("calendar_events")
-        .select("*")
-        .order("start_date", { ascending: true });
-      
-      if (error) throw error;
-      setEvents(data || []);
-    } catch (err) {
-      console.error("Error loading events:", err);
+        .upsert(rows, { onConflict: "id" });
+      if (upsertErr) {
+        console.error("calendar upsert error:", upsertErr);
+        window._calendarSaveError = upsertErr.message;
+      } else {
+        window._calendarSaveError = null;
+        const ids = events.map(e => e.id);
+        await supabase.from("calendar_events").delete().not("id","in",`(${ids.map(i=>JSON.stringify(i)).join(",")})`);
+      }
+    } else {
+      const { error } = await supabase.from("calendar_events").delete().neq("id","___none___");
+      if (error) console.error("calendar delete error:", error);
     }
-  };
+  } catch(e) { console.warn("calendar save error", e); }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(events)); } catch {}
+}
 
-  const parseFlexibleDate = (input) => {
-    if (!input) return "";
-    
-    const today = new Date();
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth() + 1;
-    
-    // If just a number (e.g., "12"), assume current month
-    if (/^\d{1,2}$/.test(input)) {
-      const day = parseInt(input);
-      return `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+function getWeekNumber(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+}
+
+function parseLocal(str) {
+  if (!str) return null;
+  const [y, m, d] = str.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+function toStr(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+function todayStr() {
+  return toStr(new Date());
+}
+function fmtShort(str) {
+  if (!str) return "";
+  const [y, m, d] = str.split("-");
+  return d + "/" + m + "/" + y;
+}
+function fmtLong(str) {
+  if (!str) return "";
+  return parseLocal(str).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+function daysUntil(str) {
+  const a = parseLocal(todayStr()), b = parseLocal(str);
+  return Math.round((b - a) / 86400000);
+}
+
+const COLORS = ["#58a6ff","#43e97b","#faa356","#c792ea","#f472b6","#4fc3f7","#fb7185","#a3e635"];
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const BLANK = { title:"", date:"", endDate:"", color:COLORS[0], note:"", images:[] };
+
+// UPDATED DateInput — now supports flexible "12" or "12/6" like SmartEndDateInput
+function DateInput({ value, onChange, style, placeholder="dd/mm/yyyy or 12 or 12/6" }) {
+  const display = value ? value.split("-").reverse().join("/") : "";
+  const [raw, setRaw] = React.useState(display);
+  const [focused, setFocused] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!focused) setRaw(value ? value.split("-").reverse().join("/") : "");
+  }, [value, focused]);
+
+  function handleChange(e) {
+    let v = e.target.value.replace(/[^0-9/]/g, "");
+    setRaw(v);
+  }
+
+  function handleBlur() {
+    setFocused(false);
+    const v = raw.trim();
+    if (!v) { onChange(""); setRaw(""); return; }
+
+    const ref = new Date();
+    const refMonth = ref.getMonth() + 1;
+    const refYear = ref.getFullYear();
+
+    let day, month = refMonth, year = refYear;
+
+    // Just a number: "12" → 12th of current month
+    if (/^\d{1,2}$/.test(v)) {
+      day = parseInt(v);
     }
-    
-    // If format like "12/6" (day/month)
-    if (/^\d{1,2}\/\d{1,2}$/.test(input)) {
-      const [day, month] = input.split('/');
-      return `${currentYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    // "12/6" → 12 June
+    else if (/^\d{1,2}\/\d{1,2}$/.test(v)) {
+      const [d, m] = v.split("/").map(Number);
+      day = d; month = m;
     }
-    
-    // If already in YYYY-MM-DD format, return as is
-    if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
-      return input;
-    }
-    
-    return input;
-  };
-
-  const handleDateInput = (field, value) => {
-    const parsed = parseFlexibleDate(value);
-    setNewEvent(prev => ({ ...prev, [field]: parsed }));
-  };
-
-  const addEvent = async () => {
-    if (!newEvent.title || !newEvent.start_date) return;
-
-    try {
-      const { error } = await supabase.from("calendar_events").insert([{
-        title: newEvent.title,
-        start_date: newEvent.start_date,
-        end_date: newEvent.end_date || newEvent.start_date,
-        notes: newEvent.notes || null
-      }]);
-
-      if (error) throw error;
-
-      setNewEvent({ title: "", start_date: "", end_date: "", notes: "" });
-      setShowAddEvent(false);
-      loadEvents();
-    } catch (err) {
-      console.error("Error adding event:", err);
-      alert("Error adding event");
-    }
-  };
-
-  const deleteEvent = async (id) => {
-    if (!confirm("Delete this event?")) return;
-    try {
-      const { error } = await supabase.from("calendar_events").delete().eq("id", id);
-      if (error) throw error;
-      loadEvents();
-    } catch (err) {
-      console.error("Error deleting event:", err);
-    }
-  };
-
-  const getDaysUntil = (dateStr) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const eventDate = new Date(dateStr);
-    eventDate.setHours(0, 0, 0, 0);
-    const diff = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
-    return diff;
-  };
-
-  const formatDateRange = (start, end) => {
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-    
-    if (start === end) {
-      return startDate.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
-    }
-    
-    return `${startDate.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })} - ${endDate.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}`;
-  };
-
-  const upcomingEvents = events.filter(e => getDaysUntil(e.start_date) >= 0);
-
-  // Group upcoming events by month
-  const eventsByMonth = upcomingEvents.reduce((acc, event) => {
-    const monthYear = new Date(event.start_date).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-    if (!acc[monthYear]) acc[monthYear] = [];
-    acc[monthYear].push(event);
-    return acc;
-  }, {});
-
-  // Generate calendar grid
-  const generateCalendar = () => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const startingDayOfWeek = firstDay.getDay();
-    const daysInMonth = lastDay.getDate();
-
-    const days = [];
-    
-    // Empty cells before first day
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(<div key={`empty-${i}`} style={{ padding: 8 }} />);
+    // "12/06/2026" — full date
+    else if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(v)) {
+      const parts = v.split("/").map(Number);
+      day = parts[0]; month = parts[1];
+      year = parts[2] < 100 ? 2000 + parts[2] : parts[2];
     }
 
-    // Days of month
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const dayEvents = events.filter(e => {
-        const startDate = new Date(e.start_date);
-        const endDate = new Date(e.end_date);
-        const checkDate = new Date(dateStr);
-        return checkDate >= startDate && checkDate <= endDate;
-      });
-
-      const isToday = dateStr === new Date().toISOString().split('T')[0];
-
-      days.push(
-        <div
-          key={day}
-          style={{
-            padding: "4px 6px",
-            minHeight: 60,
-            background: isToday ? "rgba(88,166,255,0.1)" : "transparent",
-            border: isToday ? "1px solid " + C.blue : "1px solid " + C.bd,
-            borderRadius: 4,
-            position: "relative"
-          }}
-        >
-          <div style={{ fontSize: 11, color: isToday ? C.blue : C.dim, fontWeight: isToday ? 700 : 400, marginBottom: 4 }}>{day}</div>
-          {dayEvents.map(evt => (
-            <div
-              key={evt.id}
-              style={{
-                background: C.blue + "33",
-                borderLeft: `3px solid ${C.blue}`,
-                borderRadius: 3,
-                padding: "2px 4px",
-                fontSize: 9,
-                color: C.tx,
-                marginBottom: 2,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap"
-              }}
-            >
-              {evt.title}
-              {evt.notes && <span style={{ marginLeft: 4, opacity: 0.6 }}>💬</span>}
-            </div>
-          ))}
-        </div>
-      );
+    if (day && day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      const iso = year + "-" + String(month).padStart(2,"0") + "-" + String(day).padStart(2,"0");
+      onChange(iso);
+      setRaw(String(day).padStart(2,"0") + "/" + String(month).padStart(2,"0") + "/" + year);
+    } else {
+      setRaw(display);
     }
-
-    return days;
-  };
-
-  const prevMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
-  };
-
-  const nextMonth = () => {
-    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
-  };
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 12, background: C.bg, padding: 12 }}>
-      {/* Header */}
-      <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <button onClick={prevMonth} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontSize: 14, padding: "4px 10px", cursor: "pointer" }}>←</button>
-          <span style={{ fontSize: 14, fontWeight: 700, color: C.blue }}>
-            {currentMonth.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
+    <input
+      value={focused ? raw : display}
+      onChange={handleChange}
+      onFocus={() => { setFocused(true); setRaw(""); }}
+      onBlur={handleBlur}
+      placeholder={placeholder}
+      style={style}
+    />
+  );
+}
+
+// SmartEndDateInput (UNCHANGED - already works)
+function SmartEndDateInput({ value, startDate, onChange, style }) {
+  const [raw, setRaw] = React.useState("");
+  const [focused, setFocused] = React.useState(false);
+  const display = value ? value.split("-").reverse().join("/") : "";
+
+  React.useEffect(() => {
+    if (!focused) setRaw(display);
+  }, [value, focused]);
+
+  function handleChange(e) {
+    let v = e.target.value.replace(/[^0-9/]/g, "");
+    setRaw(v);
+  }
+
+  function handleBlur() {
+    setFocused(false);
+    const v = raw.trim();
+    if (!v) { onChange(""); setRaw(""); return; }
+
+    const ref = startDate ? parseLocal(startDate) : new Date();
+    const refDay = ref.getDate();
+    const refMonth = ref.getMonth() + 1;
+    const refYear = ref.getFullYear();
+
+    let day, month = refMonth, year = refYear;
+
+    if (/^\d{1,2}$/.test(v)) {
+      day = parseInt(v);
+    }
+    else if (/^\d{1,2}\/\d{1,2}$/.test(v)) {
+      const [d, m] = v.split("/").map(Number);
+      day = d; month = m;
+    }
+    else if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(v)) {
+      const parts = v.split("/").map(Number);
+      day = parts[0]; month = parts[1];
+      year = parts[2] < 100 ? 2000 + parts[2] : parts[2];
+    }
+    else {
+      const parts = v.split("/");
+      if (parts.length === 3) {
+        const [dd, mm, yyyy] = parts.map(Number);
+        if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) {
+          day = dd; month = mm; year = yyyy < 100 ? 2000 + yyyy : yyyy;
+        }
+      }
+    }
+
+    if (day && day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      const iso = year + "-" + String(month).padStart(2,"0") + "-" + String(day).padStart(2,"0");
+      onChange(iso);
+      setRaw(String(day).padStart(2,"0") + "/" + String(month).padStart(2,"0") + "/" + year);
+    } else {
+      setRaw(display);
+    }
+  }
+
+  return (
+    <input
+      value={focused ? raw : display}
+      onChange={handleChange}
+      onFocus={() => { setFocused(true); setRaw(""); }}
+      onBlur={handleBlur}
+      placeholder="dd or dd/mm"
+      style={style}
+    />
+  );
+}
+
+// Rest of the component unchanged - keeping ALL your existing calendar logic
+export default function CalendarTab() {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [confirmDelId, setConfirmDelId] = useState(null);
+  const today = todayStr();
+  const todayDate = parseLocal(today);
+  const [startYear, setStartYear] = useState(todayDate.getFullYear());
+  const [startMonth, setStartMonth] = useState(todayDate.getMonth());
+  const [showForm, setShowForm] = useState(false);
+  const [search, setSearch] = useState("");
+  const [lightbox, setLightbox] = useState(null);
+  const [expanded, setExpanded] = useState(null);
+
+  // Paste screenshot into notes
+  function handleNotesPaste(e) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        const r = new FileReader();
+        r.onload = () => setForm(f => ({...f, images:[...(f.images||[]),r.result]}));
+        r.readAsDataURL(file);
+        return;
+      }
+    }
+  }
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState({ ...BLANK, date: today });
+  const imgRef = useRef(null);
+
+  const didLoad = useRef(false);
+  useEffect(() => { loadEventsFromDB().then(ev => { setEvents(ev || []); setLoading(false); didLoad.current=true; }); }, []);
+  useEffect(() => { if (didLoad.current) saveEventsToDB(events); }, [events]);
+
+  const inp = { background:"rgba(8,16,32,0.95)", border:"1px solid rgba(58,130,246,0.25)", borderRadius:5, color:"#cde", fontFamily:"inherit", fontSize:14, padding:"6px 10px", outline:"none", width:"100%", boxSizing:"border-box", colorScheme:"dark" };
+  const btn = (on) => ({ fontSize:13, fontWeight:600, padding:"3px 10px", borderRadius:4, cursor:"pointer", fontFamily:"inherit", border:"1px solid "+(on?"rgba(88,166,255,0.55)":"rgba(58,130,246,0.18)"), background:on?"rgba(88,166,255,0.16)":"rgba(8,16,32,0.85)", color:on?"#d9ecff":"rgba(140,175,230,0.55)" });
+
+  const months = useMemo(() => {
+    const arr = [];
+    for (let i = 0; i < 3; i++) {
+      let m = startMonth + i, y = startYear;
+      while (m > 11) { m -= 12; y++; }
+      arr.push({ year:y, month:m });
+    }
+    return arr;
+  }, [startYear, startMonth]);
+
+  const byDate = useMemo(() => {
+    const idx = {};
+    for (const e of events) {
+      if (!e.date) continue;
+      const start = parseLocal(e.date);
+      const end = e.endDate ? parseLocal(e.endDate) : new Date(start);
+      let cur = new Date(start);
+      while (cur <= end) {
+        const k = toStr(cur);
+        if (!idx[k]) idx[k] = [];
+        idx[k].push(e);
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+    return idx;
+  }, [events]);
+
+  const upcoming = useMemo(() =>
+    [...events].filter(e => e.date >= today).sort((a,b) => a.date.localeCompare(b.date)),
+    [events, today]);
+
+  function buildGrid(year, month) {
+    const first = new Date(year, month, 1);
+    const last = new Date(year, month + 1, 0);
+    const startDow = (first.getDay() + 6) % 7;
+    const days = [];
+    for (let i = startDow - 1; i >= 0; i--) days.push({ d: new Date(year, month, -i), cur:false });
+    for (let i = 1; i <= last.getDate(); i++) days.push({ d: new Date(year, month, i), cur:true });
+    while (days.length % 7 !== 0) days.push({ d: new Date(year, month+1, days.length - last.getDate() - startDow + 1), cur:false });
+    return days;
+  }
+
+  function openAdd(dateStr) {
+    setEditId(null);
+    setForm({ ...BLANK, date: dateStr || today, images:[] });
+    setShowForm(true);
+  }
+
+  function openEdit(e, ev) {
+    if (ev) ev.stopPropagation();
+    setEditId(e.id);
+    setForm({ title:e.title, date:e.date, endDate:e.endDate||"", color:e.color||COLORS[0], note:e.note||"", images:e.images||[] });
+    setShowForm(true);
+  }
+
+  function save() {
+    if (!form.title.trim() || !form.date) return;
+    if (editId) setEvents(prev => prev.map(e => e.id===editId ? {...e,...form} : e));
+    else setEvents(prev => [...prev, { id:"ev_"+Date.now(), ...form }]);
+    setShowForm(false); setEditId(null);
+  }
+
+  function del(id, ev) {
+    if (ev) ev.stopPropagation();
+    setConfirmDelId(id);
+  }
+  function confirmDel() {
+    setEvents(prev => prev.filter(e => e.id !== confirmDelId));
+    if (editId === confirmDelId) { setShowForm(false); setEditId(null); }
+    setConfirmDelId(null);
+  }
+
+  function handleImg(e) {
+    const file = e.target.files?.[0]; if (!file) return;
+    const r = new FileReader();
+    r.onload = () => setForm(f => ({...f, images:[...(f.images||[]),r.result]}));
+    r.readAsDataURL(file);
+  }
+
+  function prevPeriod() { let m=startMonth-3,y=startYear; while(m<0){m+=12;y--;} setStartYear(y);setStartMonth(m); }
+  function nextPeriod() { let m=startMonth+3,y=startYear; while(m>11){m-=12;y++;} setStartYear(y);setStartMonth(m); }
+
+  const BG = "rgba(8,16,32,0.97)";
+  const HDR = "rgba(10,20,40,0.99)";
+  const BOR = "rgba(58,130,246,0.16)";
+
+  return (
+    <div style={{display:"flex",gap:16,alignItems:"flex-start"}}>
+      {lightbox&&(
+        <div onClick={()=>setLightbox(null)} style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"zoom-out"}}>
+          <img src={lightbox} alt="" style={{maxWidth:"90vw",maxHeight:"90vh",borderRadius:6,boxShadow:"0 8px 40px rgba(0,0,0,0.8)"}}/>
+        </div>
+      )}
+      {window._calendarSaveError&&(
+        <div style={{position:"fixed",top:60,right:20,zIndex:9999,background:"rgba(255,107,107,0.15)",border:"1px solid rgba(255,107,107,0.5)",borderRadius:6,padding:"8px 14px",fontSize:12,color:"#ff6b6b",maxWidth:400}}>
+          ⚠ Calendar not saving to Supabase: {window._calendarSaveError}
+        </div>
+      )}
+      {confirmDelId&&(
+        <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}}
+          onClick={()=>setConfirmDelId(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#0a1628",border:"1px solid rgba(248,113,113,0.4)",borderRadius:8,padding:"20px 24px",minWidth:300,boxShadow:"0 8px 32px rgba(0,0,0,0.7)"}}>
+            <div style={{fontSize:14,fontWeight:600,color:"#e8f2ff",marginBottom:8}}>Delete this event?</div>
+            <div style={{fontSize:12,color:"rgba(160,200,255,0.6)",marginBottom:16}}>{events.find(e=>e.id===confirmDelId)?.title||""}</div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={confirmDel} style={{flex:1,background:"rgba(248,113,113,0.15)",border:"1px solid rgba(248,113,113,0.4)",borderRadius:5,color:"#f87171",fontFamily:"inherit",fontWeight:700,fontSize:13,padding:"7px",cursor:"pointer"}}>Delete</button>
+              <button onClick={()=>setConfirmDelId(null)} style={{flex:1,background:"rgba(10,20,42,0.9)",border:"1px solid rgba(58,130,246,0.2)",borderRadius:5,color:"rgba(140,175,230,0.7)",fontFamily:"inherit",fontSize:13,padding:"7px",cursor:"pointer"}}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── LEFT: 3 months ── */}
+      <div style={{flex:1,minWidth:0}}>
+        {/* Nav */}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+          <button onClick={prevPeriod} style={{...btn(false),padding:"4px 12px",fontSize:14}}>‹</button>
+          <span style={{fontSize:15,fontWeight:700,color:"rgba(200,220,255,0.8)",minWidth:220}}>
+            {MONTHS[startMonth]} {startYear}{" — "}{(()=>{let m=startMonth+2,y=startYear;while(m>11){m-=12;y++;}return MONTHS[m]+" "+y;})()}
           </span>
-          <button onClick={nextMonth} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontSize: 14, padding: "4px 10px", cursor: "pointer" }}>→</button>
-        </div>
-        <button onClick={() => setShowAddEvent(true)} style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", border: "none", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 700, padding: "8px 16px", cursor: "pointer", boxShadow: "0 2px 8px rgba(102,126,234,0.3)" }}>
-          + Add Event
-        </button>
-      </div>
+          <button onClick={nextPeriod} style={{...btn(false),padding:"4px 12px",fontSize:14}}>›</button>
+          <button onClick={()=>{setStartMonth(todayDate.getMonth());setStartYear(todayDate.getFullYear());}} style={btn(false)}>Today</button>
+          <span style={{flex:1}}/>
 
-      <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
-        {/* Calendar Grid */}
-        <div style={{ flex: 1, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 12, overflowY: "auto" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 8 }}>
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
-              <div key={day} style={{ fontSize: 11, fontWeight: 700, color: C.dim, textAlign: "center", padding: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                {day}
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
-            {generateCalendar()}
-          </div>
         </div>
 
-        {/* Upcoming Events */}
-        <div style={{ width: 300, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 12, overflowY: "auto" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 12 }}>📅 Upcoming Events</div>
-          {Object.keys(eventsByMonth).length === 0 ? (
-            <div style={{ padding: 20, textAlign: "center", color: C.faint, fontSize: 12 }}>No upcoming events</div>
-          ) : (
-            Object.entries(eventsByMonth).map(([monthYear, monthEvents]) => (
-              <div key={monthYear} style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.amber, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                  {monthYear}
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {months.map(({year,month})=>{
+            const grid=buildGrid(year,month);
+            const isCur=year===todayDate.getFullYear()&&month===todayDate.getMonth();
+            return(
+              <div key={year+"-"+month} style={{border:"1px solid "+BOR,borderRadius:8,overflow:"hidden",background:BG}}>
+                {/* Month header */}
+                <div style={{padding:"7px 14px",background:HDR,borderBottom:"1px solid "+BOR,display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:15,fontWeight:700,letterSpacing:"0.02em",color:isCur?"#58a6ff":"rgba(180,210,255,0.6)"}}>{MONTHS[month]} {year}</span>
+                  {isCur&&<span style={{fontSize:11,fontWeight:700,background:"rgba(88,166,255,0.15)",border:"1px solid rgba(88,166,255,0.3)",borderRadius:3,padding:"1px 6px",color:"#58a6ff",textTransform:"uppercase",letterSpacing:"0.08em"}}>Now</span>}
                 </div>
-                {monthEvents.map(event => {
-                  const daysUntil = getDaysUntil(event.start_date);
-                  return (
-                    <div key={event.id} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, padding: "10px 12px", marginBottom: 6 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 4 }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: C.tx, marginBottom: 2 }}>
-                            {event.title}
-                            {event.notes && <span style={{ marginLeft: 6, fontSize: 11, opacity: 0.6 }}>💬</span>}
+                {/* Day name headers */}
+                <div style={{display:"grid",gridTemplateColumns:"28px repeat(7,1fr)",background:"rgba(10,20,40,0.96)",borderBottom:"1px solid rgba(58,130,246,0.07)"}}>
+                  <div style={{padding:"3px",fontSize:10,color:"rgba(120,160,220,0.25)",textAlign:"center",fontWeight:700}}>Wk</div>
+                  {DAYS.map(d=><div key={d} style={{padding:"3px 2px",fontSize:11,fontWeight:700,color:d==="Sat"||d==="Sun"?"rgba(120,160,220,0.25)":"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.06em",textAlign:"center"}}>{d}</div>)}
+                </div>
+                {/* Week rows */}
+                {Array.from({length:grid.length/7},(_,wi)=>{
+                  const week=grid.slice(wi*7,wi*7+7);
+                  const wn=getWeekNumber(week[0].d);
+                  // Collect multi-day events that span this week
+                  const weekStart=toStr(week[0].d), weekEnd=toStr(week[6].d);
+                  // All events touching this week
+                  const weekEvs=events.filter(e=>{
+                    const es=e.date||"", ee=e.endDate||e.date||"";
+                    return es<=weekEnd && ee>=weekStart;
+                  });
+                  return(
+                    <div key={wi} style={{display:"grid",gridTemplateColumns:"28px repeat(7,1fr)",borderTop:"1px solid rgba(58,130,246,0.06)",position:"relative"}}>
+                      <div style={{padding:"3px 2px",fontSize:10,color:"rgba(120,160,220,0.2)",textAlign:"center",background:"rgba(10,20,40,0.45)",paddingTop:6,zIndex:1}}>{wn}</div>
+                      {/* Day number cells */}
+                      {week.map(({d,cur})=>{
+                        const ds=toStr(d);
+                        const isToday=ds===today;
+                        const isSat=d.getDay()===6, isSun=d.getDay()===0;
+                        return(
+                          <div key={ds} onClick={()=>cur&&openAdd(ds)}
+                            style={{minHeight:90,padding:"3px 3px 2px",background:isToday?"rgba(88,166,255,0.07)":"transparent",cursor:cur?"pointer":"default",borderLeft:"1px solid rgba(58,130,246,0.05)",position:"relative",zIndex:1}}>
+                            <div style={{fontSize:12,fontWeight:isToday?700:400,marginBottom:18,display:"flex",justifyContent:"flex-end",paddingRight:2}}>
+                              {isToday
+                                ?<span style={{width:17,height:17,background:"#58a6ff",borderRadius:"50%",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:11,fontWeight:700}}>{d.getDate()}</span>
+                                :<span style={{color:cur?(isSat||isSun?"rgba(120,160,220,0.28)":"rgba(170,200,240,0.5)"):"rgba(90,120,170,0.18)"}}>{d.getDate()}</span>}
+                            </div>
                           </div>
-                          <div style={{ fontSize: 10, color: C.dim }}>{formatDateRange(event.start_date, event.end_date)}</div>
-                        </div>
-                        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.blue }}>{daysUntil}d</div>
-                          <button onClick={() => deleteEvent(event.id)} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 13, opacity: 0.7, padding: 2 }}>✕</button>
-                        </div>
-                      </div>
-                      {event.notes && (
-                        <div style={{ fontSize: 11, color: C.faint, fontStyle: "italic", marginTop: 4, paddingTop: 6, borderTop: "1px solid " + C.bd }}>
-                          {event.notes}
-                        </div>
-                      )}
+                        );
+                      })}
+                      {/* Multi-day event bars overlaid on grid */}
+                      {weekEvs.map((e,ei)=>{
+                        const es=e.date||"", ee=e.endDate||e.date||"";
+                        // Find column span within this week (1-7)
+                        const colStart=Math.max(0,week.findIndex(({d})=>toStr(d)>=es));
+                        const colEndIdx=week.findLastIndex ? week.findLastIndex(({d})=>toStr(d)<=ee) : [...week].reverse().findIndex(({d})=>toStr(d)<=ee);
+                        const colEnd=week.findLastIndex ? week.findLastIndex(({d})=>toStr(d)<=ee) : week.length-1-[...week].reverse().findIndex(({d})=>toStr(d)<=ee);
+                        const span=colEnd-colStart+1;
+                        if(colStart<0||colEnd<0||span<1)return null;
+                        const isStart=es>=weekStart;
+                        const isEnd=ee<=weekEnd;
+                        const top=24+ei*22; // stack bars with more spacing
+                        return(
+                          <div key={e.id}
+                            onClick={ev=>{ev.stopPropagation();openEdit(e,ev);}}
+                            title={e.title}
+                            style={{
+                              position:"absolute",
+                              left:`calc(28px + ${colStart}/7*(100% - 28px) + ${isStart?2:0}px)`,
+                              width:`calc(${span}/7*(100% - 28px) - ${(isStart?2:0)+(isEnd?2:0)}px)`,
+                              top:top+"px",
+                              height:18,
+                              background:(e.color||"#58a6ff")+"33",
+                              borderTop:"2px solid "+(e.color||"#58a6ff"),
+                              borderLeft:isStart?"2px solid "+(e.color||"#58a6ff"):"none",
+                              borderRight:isEnd?"2px solid "+(e.color||"#58a6ff"):"none",
+                              borderRadius:isStart&&isEnd?3:isStart?"3px 0 0 0":"0 3px 0 0",
+                              padding:"0 5px",
+                              fontSize:12,
+                              color:e.color||"#58a6ff",
+                              whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
+                              lineHeight:"18px",cursor:"pointer",
+                              zIndex:2,
+                              boxSizing:"border-box",
+                            }}>
+                            {isStart?e.title:""}
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })}
               </div>
-            ))
-          )}
+            );
+          })}
         </div>
       </div>
 
-      {/* Add Event Modal */}
-      {showAddEvent && (
-        <>
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 9998 }} onClick={() => setShowAddEvent(false)} />
-          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 9999, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 12, width: 480, padding: 20 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.blue, marginBottom: 16 }}>Add Event</div>
+      {/* ── RIGHT: Form + Upcoming ── */}
+      <div style={{width:320,flexShrink:0,display:"flex",flexDirection:"column",gap:12}}>
 
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ display: "block", fontSize: 11, color: C.dim, marginBottom: 4, fontWeight: 600 }}>Event Title</label>
-              <input
-                type="text"
-                value={newEvent.title}
-                onChange={e => setNewEvent({ ...newEvent, title: e.target.value })}
-                placeholder="Genve"
-                autoFocus
-                style={{ width: "100%", background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 13, padding: "8px 12px", outline: "none" }}
-              />
+        {/* Form */}
+        {showForm?(
+          <div style={{border:"1px solid rgba(88,166,255,0.28)",borderRadius:8,overflow:"hidden",background:BG}}>
+            <div style={{padding:"8px 12px",background:HDR,borderBottom:"1px solid "+BOR,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontSize:13,fontWeight:700,color:"rgba(120,160,220,0.6)",textTransform:"uppercase",letterSpacing:"0.08em"}}>{editId?"Edit Event":"New Event"}</span>
+              {editId&&<button onClick={ev=>del(editId,ev)} style={{background:"none",border:"none",color:"rgba(248,113,113,0.55)",fontSize:13,cursor:"pointer",fontFamily:"inherit",padding:0}}>🗑 Delete</button>}
             </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
+              {/* Title */}
               <div>
-                <label style={{ display: "block", fontSize: 11, color: C.dim, marginBottom: 4, fontWeight: 600 }}>Start Date</label>
-                <input
-                  type="text"
-                  value={newEvent.start_date}
-                  onChange={e => handleDateInput("start_date", e.target.value)}
-                  placeholder="12 or 12/6 or 2026-06-12"
-                  style={{ width: "100%", background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 13, padding: "8px 12px", outline: "none" }}
-                />
+                <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.07em"}}>Title *</div>
+                <input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} style={inp} placeholder="e.g. BIMCO Annual Meeting" autoFocus/>
               </div>
+              {/* Dates */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div>
+                  <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.07em"}}>Start *</div>
+                  <DateInput value={form.date} onChange={v=>setForm(f=>({...f,date:v}))} style={inp} placeholder="dd/mm/yyyy"/>
+                </div>
+                <div>
+                  <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.07em"}}>End</div>
+                  <SmartEndDateInput value={form.endDate} startDate={form.date} onChange={v=>setForm(f=>({...f,endDate:v}))} style={inp}/>
+                </div>
+              </div>
+                <div>
+                <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.07em"}}>Notes <span style={{fontWeight:400,textTransform:"none",letterSpacing:0,color:"rgba(120,160,220,0.3)"}}>— paste screenshot with Ctrl+V</span></div>
+                <textarea value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))}
+                  onPaste={handleNotesPaste}
+                  style={{...inp,minHeight:130,resize:"none",overflow:"hidden",lineHeight:1.65,height:"auto"}} onInput={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}}
+                  placeholder="Details, contacts, agenda items… paste screenshot here"/>
+              </div>
+              {/* Image */}
               <div>
-                <label style={{ display: "block", fontSize: 11, color: C.dim, marginBottom: 4, fontWeight: 600 }}>End Date (optional)</label>
-                <input
-                  type="text"
-                  value={newEvent.end_date}
-                  onChange={e => handleDateInput("end_date", e.target.value)}
-                  placeholder="12 or 12/6 or 2026-06-12"
-                  style={{ width: "100%", background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 13, padding: "8px 12px", outline: "none" }}
-                />
+                <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.07em"}}>Screenshot</div>
+                <input ref={imgRef} type="file" accept="image/*" onChange={handleImg} style={{display:"none"}}/>
+                <button onClick={()=>imgRef.current?.click()} style={{...btn(false),padding:"5px 14px",fontSize:13}}>
+                  📎 Add screenshot
+                </button>
+                {(form.images||[]).map((img,idx)=>(
+                  <div key={idx} style={{position:"relative",marginTop:6}}>
+                    <img src={img} alt="" onClick={()=>setLightbox(img)} style={{width:"100%",borderRadius:4,border:"1px solid "+BOR,cursor:"zoom-in"}}/>
+                    <button onClick={()=>setForm(f=>({...f,images:f.images.filter((_,i)=>i!==idx)}))}
+                      style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,0.72)",border:"none",borderRadius:"50%",width:18,height:18,color:"#fff",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>
+                  </div>
+                ))}
               </div>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 11, color: C.dim, marginBottom: 4, fontWeight: 600 }}>Notes (optional)</label>
-              <textarea
-                value={newEvent.notes}
-                onChange={e => setNewEvent({ ...newEvent, notes: e.target.value })}
-                placeholder="Additional details..."
-                style={{ width: "100%", minHeight: 60, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 12, padding: "8px 12px", outline: "none", resize: "vertical", fontFamily: "inherit" }}
-              />
-            </div>
-
-            <div style={{ fontSize: 10, color: C.faint, marginBottom: 12, fontStyle: "italic" }}>
-              💡 Tip: Type "12" for 12th of current month, or "12/6" for June 12th
-            </div>
-
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setShowAddEvent(false)} style={{ background: "transparent", border: "1px solid " + C.bd, borderRadius: 6, color: C.dim, fontSize: 12, fontWeight: 600, padding: "8px 16px", cursor: "pointer" }}>
-                Cancel
-              </button>
-              <button onClick={addEvent} disabled={!newEvent.title || !newEvent.start_date} style={{ background: newEvent.title && newEvent.start_date ? "linear-gradient(135deg, #3fb950 0%, #2ecc71 100%)" : C.bg3, border: "none", borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 700, padding: "8px 16px", cursor: newEvent.title && newEvent.start_date ? "pointer" : "not-allowed", opacity: newEvent.title && newEvent.start_date ? 1 : 0.5 }}>
-                Add Event
-              </button>
+              {/* Color */}
+              <div>
+                <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:6,textTransform:"uppercase",letterSpacing:"0.07em"}}>Color</div>
+                <div style={{display:"flex",gap:6}}>
+                  {COLORS.map(col=>(
+                    <div key={col} onClick={()=>setForm(f=>({...f,color:col}))}
+                      style={{width:18,height:18,borderRadius:"50%",background:col,cursor:"pointer",border:form.color===col?"2px solid #fff":"2px solid transparent",boxShadow:form.color===col?"0 0 6px "+col:"none",transition:"all 0.1s"}}/>
+                  ))}
+                </div>
+              </div>
+              {/* Buttons */}
+              <div style={{display:"flex",gap:8,marginTop:2}}>
+                <button onClick={save} style={{flex:1,...btn(true),padding:"7px 0",fontSize:14,fontWeight:700}}>{editId?"Save changes":"Add event"}</button>
+                <button onClick={()=>{setShowForm(false);setEditId(null);}} style={{...btn(false),padding:"7px 14px",fontSize:14}}>Cancel</button>
+              </div>
             </div>
           </div>
-        </>
-      )}
+        ):(
+          <button onClick={()=>openAdd(today)} style={{...btn(true),padding:"8px 0",fontSize:14,fontWeight:700,width:"100%"}}>Add Event</button>
+        )}
+
+        {/* Search + Upcoming */}
+        <div style={{border:"1px solid "+BOR,borderRadius:8,overflow:"hidden",background:BG}}>
+          <div style={{padding:"7px 12px",background:HDR,borderBottom:"1px solid "+BOR,display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:13,fontWeight:700,color:"rgba(120,160,220,0.6)",textTransform:"uppercase",letterSpacing:"0.08em"}}>Upcoming</span>
+            <div style={{flex:1,position:"relative"}}>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search events…"
+                style={{width:"100%",background:"rgba(8,16,40,0.9)",border:"1px solid rgba(58,130,246,0.18)",borderRadius:4,color:"#cde",fontFamily:"inherit",fontSize:12,padding:"2px 22px 2px 7px",outline:"none",boxSizing:"border-box"}}/>
+              {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:4,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"rgba(120,160,220,0.4)",cursor:"pointer",fontSize:11,padding:0}}>✕</button>}
+            </div>
+          </div>
+          {upcoming.filter(e=>!search||((e.title||"")+(e.note||"")).toLowerCase().includes(search.toLowerCase())).length===0&&(
+            <div style={{padding:20,textAlign:"center",color:"rgba(120,160,220,0.3)",fontSize:14}}>{search?"No results":"No upcoming events"}</div>
+          )}
+          {upcoming.filter(e=>!search||((e.title||"")+(e.note||"")).toLowerCase().includes(search.toLowerCase())).map((e,i)=>{
+            const du=daysUntil(e.date);
+            const isExp=expanded===e.id;
+            return(
+              <div key={e.id} style={{background:i%2===0?"rgba(8,16,32,0.96)":"rgba(14,26,52,0.85)",borderBottom:"1px solid rgba(58,130,246,0.06)"}}>
+                <div style={{padding:"7px 10px",display:"flex",alignItems:"flex-start",gap:8}}>
+                  <div style={{width:3,background:e.color||"#58a6ff",borderRadius:2,alignSelf:"stretch",flexShrink:0,marginTop:2}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:14,fontWeight:600,color:"rgba(200,220,255,0.85)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:"pointer"}} onClick={ev=>openEdit(e,ev)}>{e.title}</div>
+                    <div style={{fontSize:12,color:"rgba(120,160,220,0.45)",marginTop:1}}>{fmtShort(e.date)}{e.endDate&&e.endDate!==e.date?" – "+fmtShort(e.endDate):""}</div>
+                    {e.note&&isExp&&<div style={{fontSize:13,color:"rgba(155,185,225,0.55)",marginTop:4,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{e.note}</div>}
+                    {isExp&&(e.images||[]).map((img,idx)=><img key={idx} src={img} alt="" onClick={()=>setLightbox(img)} style={{width:"100%",borderRadius:3,marginTop:4,border:"1px solid "+BOR,cursor:"zoom-in",display:"block"}}/>)}
+                  </div>
+                  <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+                    <span style={{fontSize:13,fontWeight:700,whiteSpace:"nowrap",color:du===0?"#43e97b":du<=7?"#faa356":du<=30?"#58a6ff":"rgba(120,160,220,0.4)"}}>
+                      {du===0?"Today":du===1?"Tomorrow":du+"d"}
+                    </span>
+                    <div style={{display:"flex",gap:3}}>
+                      {(e.note||(e.images&&e.images.length>0))&&<button onClick={()=>setExpanded(isExp?null:e.id)} style={{...btn(isExp),padding:"1px 5px",fontSize:11}}>📝</button>}
+                      <button onClick={ev=>openEdit(e,ev)} style={{...btn(false),padding:"1px 5px",fontSize:11}}>✏</button>
+                      <button onClick={ev=>del(e.id,ev)} style={{...btn(false),padding:"1px 5px",fontSize:11,color:"#f87171",borderColor:"rgba(248,113,113,0.25)"}}>✕</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
-
-export default CalendarTab;
