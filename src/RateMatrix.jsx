@@ -75,9 +75,9 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
     const raw=matrixRef.current[ck]?.rate||"";
     const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));
     el.value=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;
-    el.style.background=raw?c+"33":"transparent";
+    el.style.background="transparent";
     el.style.color=raw?"#fff":C.faint;
-    el.style.fontWeight=raw?"700":"400";
+    el.style.fontWeight="400";
   },[extRev,ck]);
   const vRaw=matrixRef.current[ck]?.rate||"";
   const vNum=parseFloat(vRaw.replace(/[^0-9.\-]/g,""));
@@ -86,7 +86,7 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
     <input ref={inputRef} data-ck={ck}
       defaultValue={v}
       onFocus={e=>{e.target.style.outline="1px solid rgba(88,166,255,.5)";e.target.style.background="rgba(88,166,255,.07)";const raw=matrixRef.current[ck]?.rate||"";e.target.value=raw;e.target.select();}}
-      onBlur={e=>{e.target.style.outline="none";const raw=e.target.value.trim();const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));const display=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;e.target.value=display;e.target.style.background=raw?c+"33":"transparent";e.target.style.color=raw?"#fff":C.faint;e.target.style.fontWeight=raw?"700":"400";onSave(ck,raw);}}
+      onBlur={e=>{e.target.style.outline="none";const raw=e.target.value.trim();const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));const display=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;e.target.value=display;e.target.style.background="transparent";e.target.style.color=raw?"#fff":C.faint;e.target.style.fontWeight="400";onSave(ck,raw);}}
       onKeyDown={e=>{
         if(e.key==="Tab"||e.key==="Enter"){
           e.preventDefault();
