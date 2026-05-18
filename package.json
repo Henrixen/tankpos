@@ -16,7 +16,8 @@
   "@supabase/supabase-js": "^2.39.0",
   "leaflet": "^1.9.4",
   "react-leaflet": "^4.2.1",
-  "recharts": "^2.10.3"
+  "recharts": "^2.10.3",
+  "mapbox-gl": "^3.1.2"
 },
   "devDependencies": {
     "vite": "^5.0.0",
