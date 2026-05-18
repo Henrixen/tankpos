@@ -6,31 +6,49 @@ import { supabase } from "./supabaseclient";
 
 mapboxgl.accessToken = "pk.eyJ1IjoiaGhlbnJpa3NlbiIsImEiOiJjbXBhcWMyczMwMDVnMnNzaHd6emI4ampuIn0.u98OZhtN61S6IK23gV6ZYg";
 
+// Sea routes with proper maritime waypoints
 const ROUTES = [
-  // INTERMEDIATE (NWE - show at high zoom only)
-  { id: "ara-thames", name: "ARA → Thames", region: "Intermediate", coords: [[4.13, 51.95], [0.70, 51.45]], color: "#58a6ff", minZoom: 5 },
-  { id: "mongstad-ara", name: "Mongstad → ARA", region: "Intermediate", coords: [[5.03, 60.82], [4.13, 51.95]], color: "#58a6ff", minZoom: 5 },
-  { id: "ara-gothenburg", name: "ARA → Gothenburg", region: "Intermediate", coords: [[4.13, 51.95], [11.97, 57.70]], color: "#58a6ff", minZoom: 5 },
-  { id: "gothenburg-ara", name: "Gothenburg → ARA", region: "Intermediate", coords: [[11.97, 57.70], [4.13, 51.95]], color: "#58a6ff", minZoom: 5 },
-  { id: "klaipeda-ara", name: "Klaipeda → ARA", region: "Intermediate", coords: [[21.13, 55.71], [4.13, 51.95]], color: "#58a6ff", minZoom: 5 },
-  { id: "ara-porvoo", name: "ARA → Porvoo", region: "Intermediate", coords: [[4.13, 51.95], [25.66, 60.28]], color: "#58a6ff", minZoom: 5 },
-  { id: "ara-dublin", name: "ARA → Dublin", region: "Intermediate", coords: [[4.13, 51.95], [-6.27, 53.35]], color: "#58a6ff", minZoom: 5 },
-  { id: "tees-ara", name: "Tees → ARA", region: "Intermediate", coords: [[-1.21, 54.57], [4.13, 51.95]], color: "#58a6ff", minZoom: 5 },
+  // INTERMEDIATE (NWE - show at high zoom)
+  { id: "ara-thames", name: "ARA → Thames", region: "Intermediate", 
+    coords: [[4.13, 51.95], [3.5, 51.7], [1.5, 51.5], [0.70, 51.45]], color: "#58a6ff", minZoom: 5 },
+  { id: "mongstad-ara", name: "Mongstad → ARA", region: "Intermediate", 
+    coords: [[5.03, 60.82], [4.5, 58], [4, 54], [4.13, 51.95]], color: "#58a6ff", minZoom: 5 },
+  { id: "ara-gothenburg", name: "ARA → Gothenburg", region: "Intermediate", 
+    coords: [[4.13, 51.95], [6, 54], [9, 56], [11.97, 57.70]], color: "#58a6ff", minZoom: 5 },
+  { id: "gothenburg-ara", name: "Gothenburg → ARA", region: "Intermediate", 
+    coords: [[11.97, 57.70], [9, 56], [6, 54], [4.13, 51.95]], color: "#58a6ff", minZoom: 5 },
+  { id: "klaipeda-ara", name: "Klaipeda → ARA", region: "Intermediate", 
+    coords: [[21.13, 55.71], [18, 55.5], [12, 56], [8, 56], [6, 54], [4.13, 51.95]], color: "#58a6ff", minZoom: 5 },
+  { id: "ara-porvoo", name: "ARA → Porvoo", region: "Intermediate", 
+    coords: [[4.13, 51.95], [6, 54], [10, 56], [18, 58], [25.66, 60.28]], color: "#58a6ff", minZoom: 5 },
+  { id: "ara-dublin", name: "ARA → Dublin", region: "Intermediate", 
+    coords: [[4.13, 51.95], [2, 52], [-2, 52.5], [-6.27, 53.35]], color: "#58a6ff", minZoom: 5 },
+  { id: "tees-ara", name: "Tees → ARA", region: "Intermediate", 
+    coords: [[-1.21, 54.57], [1, 53], [3, 52], [4.13, 51.95]], color: "#58a6ff", minZoom: 5 },
   
-  // TRANSATLANTIC (show at medium zoom)
-  { id: "ara-usg", name: "ARA → USG", region: "Transatlantic", coords: [[4.13, 51.95], [-95.37, 29.76]], color: "#f5a623", minZoom: 3 },
-  { id: "usg-ara", name: "USG → ARA", region: "Transatlantic", coords: [[-95.37, 29.76], [4.13, 51.95]], color: "#f5a623", minZoom: 3 },
+  // TRANSATLANTIC (show at medium zoom) - Around UK/Spain, across Atlantic
+  { id: "ara-usg", name: "ARA → USG", region: "Transatlantic", 
+    coords: [[4.13, 51.95], [-5, 50], [-15, 48], [-30, 45], [-50, 40], [-70, 35], [-90, 30], [-95.37, 29.76]], color: "#f5a623", minZoom: 3 },
+  { id: "usg-ara", name: "USG → ARA", region: "Transatlantic", 
+    coords: [[-95.37, 29.76], [-85, 32], [-65, 38], [-40, 43], [-20, 47], [-5, 49], [4.13, 51.95]], color: "#f5a623", minZoom: 3 },
   
-  // MED (show at medium zoom)
-  { id: "ara-wmed", name: "ARA → W.Med", region: "Med", coords: [[4.13, 51.95], [5.37, 43.30]], color: "#3fb950", minZoom: 4 },
-  { id: "ara-cmed", name: "ARA → C.Med", region: "Med", coords: [[4.13, 51.95], [14.27, 40.85]], color: "#3fb950", minZoom: 4 },
-  { id: "ara-emed", name: "ARA → E.Med", region: "Med", coords: [[4.13, 51.95], [23.73, 37.98]], color: "#3fb950", minZoom: 4 },
-  { id: "bsea-ara", name: "Black Sea → ARA", region: "Med", coords: [[33.55, 44.48], [4.13, 51.95]], color: "#3fb950", minZoom: 4 },
+  // MED (show at medium zoom) - Through Channel, around Spain/France
+  { id: "ara-wmed", name: "ARA → W.Med", region: "Med", 
+    coords: [[4.13, 51.95], [0, 50], [-5, 48], [-8, 44], [-5, 42], [2, 42], [5.37, 43.30]], color: "#3fb950", minZoom: 4 },
+  { id: "ara-cmed", name: "ARA → C.Med", region: "Med", 
+    coords: [[4.13, 51.95], [0, 50], [-5, 48], [-3, 43], [3, 41], [8, 40], [14.27, 40.85]], color: "#3fb950", minZoom: 4 },
+  { id: "ara-emed", name: "ARA → E.Med", region: "Med", 
+    coords: [[4.13, 51.95], [0, 50], [-5, 48], [-3, 43], [5, 40], [12, 38], [20, 37], [23.73, 37.98]], color: "#3fb950", minZoom: 4 },
+  { id: "bsea-ara", name: "Black Sea → ARA", region: "Med", 
+    coords: [[33.55, 44.48], [28, 41], [24, 39], [18, 38], [12, 40], [5, 42], [0, 46], [2, 49], [4.13, 51.95]], color: "#3fb950", minZoom: 4 },
   
-  // LONG HAUL (show at all zooms)
-  { id: "ara-fareast", name: "ARA → Far East", region: "Long Haul", coords: [[4.13, 51.95], [139.69, 35.68]], color: "#ff6b6b", minZoom: 2 },
-  { id: "singapore-ara", name: "Singapore → ARA", region: "Long Haul", coords: [[103.82, 1.35], [4.13, 51.95]], color: "#ff6b6b", minZoom: 2 },
-  { id: "china-ara", name: "China → ARA", region: "Long Haul", coords: [[121.47, 31.23], [4.13, 51.95]], color: "#ff6b6b", minZoom: 2 },
+  // LONG HAUL (show at all zooms) - Through Suez/Malacca
+  { id: "ara-fareast", name: "ARA → Far East", region: "Long Haul", 
+    coords: [[4.13, 51.95], [-5, 48], [-8, 40], [0, 36], [15, 33], [32, 30], [50, 25], [70, 20], [90, 10], [105, 5], [120, 15], [130, 25], [139.69, 35.68]], color: "#ff6b6b", minZoom: 2 },
+  { id: "singapore-ara", name: "Singapore → ARA", region: "Long Haul", 
+    coords: [[103.82, 1.35], [95, 5], [75, 12], [60, 18], [45, 20], [30, 25], [15, 32], [0, 38], [-5, 45], [0, 49], [4.13, 51.95]], color: "#ff6b6b", minZoom: 2 },
+  { id: "china-ara", name: "China → ARA", region: "Long Haul", 
+    coords: [[121.47, 31.23], [110, 20], [100, 8], [85, 10], [70, 15], [50, 20], [35, 25], [20, 30], [5, 38], [0, 46], [4.13, 51.95]], color: "#ff6b6b", minZoom: 2 },
 ];
 
 function FreightMapTab() {
@@ -45,6 +63,8 @@ function FreightMapTab() {
   const [unit, setUnit] = useState("WS");
   const [comment, setComment] = useState("");
   const [filterRegion, setFilterRegion] = useState("All");
+  const [editingRate, setEditingRate] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
   const regions = ["All", "Intermediate", "Transatlantic", "Med", "Long Haul"];
 
@@ -57,7 +77,7 @@ function FreightMapTab() {
       center: [15, 35],
       zoom: 2.5,
       projection: "mercator",
-      renderWorldCopies: false // PREVENT REPEATING MAPS
+      renderWorldCopies: false
     });
 
     map.current.on("load", () => {
@@ -148,33 +168,11 @@ function FreightMapTab() {
     });
   };
 
-  const createCurvedLine = (start, end) => {
-    const steps = 100;
-    const coordinates = [];
-    
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const lng = start[0] + (end[0] - start[0]) * t;
-      const lat = start[1] + (end[1] - start[1]) * t;
-      
-      // Add curve (higher arc for longer distances)
-      const distance = Math.abs(end[0] - start[0]) + Math.abs(end[1] - start[1]);
-      const arcHeight = distance * 0.15;
-      const curve = Math.sin(t * Math.PI) * arcHeight;
-      
-      coordinates.push([lng, lat + curve]);
-    }
-    
-    return coordinates;
-  };
-
   const updateRoutes = () => {
     if (!map.current || !map.current.getSource("routes")) return;
 
     const zoom = map.current.getZoom();
     let filteredRoutes = filterRegion === "All" ? ROUTES : ROUTES.filter(r => r.region === filterRegion);
-    
-    // Filter by zoom level
     filteredRoutes = filteredRoutes.filter(r => zoom >= r.minZoom);
 
     const features = filteredRoutes.map(route => {
@@ -183,7 +181,7 @@ function FreightMapTab() {
         type: "Feature",
         geometry: {
           type: "LineString",
-          coordinates: createCurvedLine(route.coords[0], route.coords[1])
+          coordinates: route.coords
         },
         properties: {
           id: route.id,
@@ -207,10 +205,8 @@ function FreightMapTab() {
     filteredRoutes.forEach(route => {
       const latestRate = latestRates[route.id];
       if (latestRate) {
-        const midpoint = [
-          (route.coords[0][0] + route.coords[1][0]) / 2,
-          (route.coords[0][1] + route.coords[1][1]) / 2 + (Math.abs(route.coords[1][0] - route.coords[0][0]) * 0.08)
-        ];
+        const midIdx = Math.floor(route.coords.length / 2);
+        const midpoint = route.coords[midIdx];
 
         const el = document.createElement("div");
         el.className = "route-label";
@@ -225,9 +221,14 @@ function FreightMapTab() {
           cursor: pointer;
           font-family: 'Inter', sans-serif;
         `;
+        
+        const formattedRate = latestRate.unit === "WS" 
+          ? `WS ${latestRate.rate}`
+          : `USD ${parseFloat(latestRate.rate).toLocaleString('en-US').replace(/,/g, ' ')}`;
+        
         el.innerHTML = `
           <div style="font-size: 9px; opacity: 0.8; margin-bottom: 2px;">${route.name}</div>
-          <div style="font-size: 14px; font-weight: 700;">${latestRate.rate} ${latestRate.unit}</div>
+          <div style="font-size: 14px; font-weight: 700;">${formattedRate}</div>
         `;
         el.onclick = () => setSelectedRoute(route);
 
@@ -236,6 +237,15 @@ function FreightMapTab() {
           .addTo(map.current);
       }
     });
+  };
+
+  const formatRateInput = (value, unit) => {
+    if (unit === "WS") {
+      return `WS ${value}`;
+    } else {
+      const num = parseFloat(value);
+      return `USD ${num.toLocaleString('en-US').replace(/,/g, ' ')}`;
+    }
   };
 
   const addRate = async () => {
@@ -266,11 +276,26 @@ function FreightMapTab() {
     }
   };
 
+  const updateRate = async (id, newRateValue, newComment) => {
+    try {
+      const { error } = await supabase
+        .from("freight_route_rates")
+        .update({ rate: parseFloat(newRateValue), comment: newComment || null })
+        .eq("id", id);
+
+      if (error) throw error;
+      setEditingRate(null);
+      loadRateHistory();
+    } catch (err) {
+      console.error("Error updating rate:", err);
+    }
+  };
+
   const deleteRate = async (id) => {
-    if (!confirm("Delete this rate?")) return;
     try {
       const { error } = await supabase.from("freight_route_rates").delete().eq("id", id);
       if (error) throw error;
+      setShowDeleteConfirm(null);
       loadRateHistory();
     } catch (err) {
       console.error("Error deleting rate:", err);
@@ -293,6 +318,7 @@ function FreightMapTab() {
 
       <div ref={mapContainer} style={{ flex: 1, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden", minHeight: 600 }} />
 
+      {/* Add/Edit Rate Modal */}
       {selectedRoute && (
         <>
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 9998, backdropFilter: "blur(2px)" }} onClick={() => setSelectedRoute(null)} />
@@ -308,7 +334,7 @@ function FreightMapTab() {
                   step="0.01"
                   value={newRate}
                   onChange={e => setNewRate(e.target.value)}
-                  placeholder="150"
+                  placeholder="150 or 550000"
                   autoFocus
                   style={{ flex: 1, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 13, padding: "8px 12px", outline: "none" }}
                   onKeyDown={e => e.key === "Enter" && addRate()}
@@ -319,6 +345,7 @@ function FreightMapTab() {
                   <option value="USD PMT">USD PMT</option>
                 </select>
               </div>
+              {newRate && <div style={{ fontSize: 10, color: C.faint, marginTop: 4 }}>Will display as: {formatRateInput(newRate, unit)}</div>}
             </div>
 
             <div style={{ marginBottom: 16 }}>
@@ -345,6 +372,26 @@ function FreightMapTab() {
         </>
       )}
 
+      {/* Delete Confirm Dialog */}
+      {showDeleteConfirm && (
+        <>
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 9998 }} onClick={() => setShowDeleteConfirm(null)} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 9999, background: C.bg2, border: "1px solid rgba(248,113,113,0.4)", borderRadius: 12, width: 400, padding: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.tx, marginBottom: 8 }}>Delete this rate?</div>
+            <div style={{ fontSize: 12, color: C.dim, marginBottom: 16 }}>This action cannot be undone.</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setShowDeleteConfirm(null)} style={{ flex: 1, background: "transparent", border: "1px solid " + C.bd, borderRadius: 6, color: C.dim, fontSize: 12, fontWeight: 600, padding: "8px", cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button onClick={() => deleteRate(showDeleteConfirm)} style={{ flex: 1, background: "rgba(248,113,113,0.15)", border: "1px solid rgba(248,113,113,0.4)", borderRadius: 6, color: "#f87171", fontSize: 12, fontWeight: 700, padding: "8px", cursor: "pointer" }}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Rate History Table */}
       <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16, maxHeight: 250, overflowY: "auto" }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 12 }}>📊 Rate History</div>
         {filteredHistory.length === 0 ? (
@@ -368,12 +415,27 @@ function FreightMapTab() {
             <tbody>
               {filteredHistory.map((rate, i) => {
                 const route = ROUTES.find(r => r.id === rate.route_id);
+                const isEditing = editingRate === rate.id;
+                const formattedRate = rate.unit === "WS" 
+                  ? `WS ${rate.rate}`
+                  : `USD ${parseFloat(rate.rate).toLocaleString('en-US').replace(/,/g, ' ')}`;
+
                 return (
                   <tr key={rate.id} style={{ background: i % 2 === 0 ? C.bg3 : C.bg }}>
                     <td style={{ padding: "10px 8px", fontSize: 12, color: C.tx, fontWeight: 600 }}>{rate.route_name}</td>
                     <td style={{ padding: "10px 8px", fontSize: 11, color: C.dim }}>{rate.region}</td>
                     <td style={{ padding: "10px 8px", fontSize: 14, fontWeight: 700, color: route?.color || C.blue, textAlign: "center" }}>
-                      {rate.rate} <span style={{ fontSize: 10, fontWeight: 400 }}>{rate.unit}</span>
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          defaultValue={rate.rate}
+                          onBlur={e => updateRate(rate.id, e.target.value, rate.comment)}
+                          autoFocus
+                          style={{ width: 80, background: C.bg, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontSize: 12, padding: "4px 6px", textAlign: "center" }}
+                        />
+                      ) : (
+                        <span onDoubleClick={() => setEditingRate(rate.id)} style={{ cursor: "pointer" }}>{formattedRate}</span>
+                      )}
                     </td>
                     <td style={{ padding: "10px 8px", fontSize: 11, color: C.dim, fontStyle: rate.comment ? "normal" : "italic", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {rate.comment || "—"}
@@ -382,7 +444,7 @@ function FreightMapTab() {
                       {new Date(rate.entry_date).toLocaleDateString("en-GB")}
                     </td>
                     <td style={{ padding: "10px 8px", textAlign: "center" }}>
-                      <button onClick={() => deleteRate(rate.id)} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 14, opacity: 0.7, padding: 4 }}>
+                      <button onClick={() => setShowDeleteConfirm(rate.id)} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 14, opacity: 0.7, padding: 4 }}>
                         ✕
                       </button>
                     </td>
