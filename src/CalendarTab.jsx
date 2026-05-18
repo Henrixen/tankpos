@@ -146,7 +146,7 @@ function DateInput({ value, onChange, style, placeholder="dd/mm/yyyy or 12 or 12
     <input
       value={focused ? raw : display}
       onChange={handleChange}
-      onFocus={() => { setFocused(true); setRaw(""); }}
+      onFocus={(e) => { setFocused(true); setRaw(display); e.target.select(); }}
       onBlur={handleBlur}
       placeholder={placeholder}
       style={style}
@@ -216,7 +216,7 @@ function SmartEndDateInput({ value, startDate, onChange, style }) {
     <input
       value={focused ? raw : display}
       onChange={handleChange}
-      onFocus={() => { setFocused(true); setRaw(""); }}
+      onFocus={(e) => { setFocused(true); setRaw(display); e.target.select(); }}
       onBlur={handleBlur}
       placeholder="dd or dd/mm"
       style={style}
@@ -459,9 +459,7 @@ export default function CalendarTab() {
                               top:top+"px",
                               height:18,
                               background:(e.color||"#58a6ff")+"33",
-                              borderTop:"2px solid "+(e.color||"#58a6ff"),
-                              borderLeft:isStart?"2px solid "+(e.color||"#58a6ff"):"none",
-                              borderRight:isEnd?"2px solid "+(e.color||"#58a6ff"):"none",
+                              borderLeft:isStart?"3px solid "+(e.color||"#58a6ff"):"none",
                               borderRadius:isStart&&isEnd?3:isStart?"3px 0 0 0":"0 3px 0 0",
                               padding:"0 5px",
                               fontSize:12,
