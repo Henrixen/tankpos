@@ -256,7 +256,7 @@ function RateMatrix({onBunkerChange, bunkerHeader}){
   // RCell is defined outside this component (see above)
 
   return(
-    <div style={{display:"flex",flexDirection:"column",gap:9}}>
+    <div style={{display:"flex",flexDirection:"column",gap:9,flex:1,overflowY:"auto"}}>
       {editComment&&(
         <div style={{display:"flex",gap:4,alignItems:"center",background:C.bg3,border:"1px solid "+C.blue,borderRadius:4,padding:"3px 6px"}}>
           <span style={{fontSize:12,color:C.faint}}>Comment for {editComment}:</span>
