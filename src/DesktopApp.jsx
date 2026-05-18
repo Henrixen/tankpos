@@ -761,7 +761,7 @@ const filtV=useMemo(()=>{
               {/* CENTER: Rate Matrix (34%) */}
               {!mobile&&(
                 <div style={{width:"34%",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column",alignSelf:"flex-start"}}>
-                  <div style={{padding:"8px 10px",overflowY:"auto",maxHeight:460}}>
+                  <div style={{padding:"8px 10px",overflowY:"auto",height:460,display:"flex",flexDirection:"column"}}>
                     <RateMatrix bunkerHeader={<BunkerHeader/>}/>
                   </div>
                 </div>
