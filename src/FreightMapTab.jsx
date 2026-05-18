@@ -4,31 +4,40 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
 
-// Set Mapbox access token
 mapboxgl.accessToken = "pk.eyJ1IjoiaGhlbnJpa3NlbiIsImEiOiJjbXBhcWMyczMwMDVnMnNzaHd6emI4ampuIn0.u98OZhtN61S6IK23gV6ZYg";
 
 const ROUTES = [
-  { id: "ara-usg", name: "ARA → US Gulf", region: "Transatlantic", coords: [[4.13, 51.95], [-95.37, 29.76]], color: "#f5a623" },
-  { id: "usg-ara", name: "US Gulf → ARA", region: "Transatlantic", coords: [[-95.37, 29.76], [4.13, 51.95]], color: "#f5a623" },
-  { id: "ara-thames", name: "ARA → Thames", region: "Intermediate", coords: [[4.13, 51.95], [0.70, 51.45]], color: "#58a6ff" },
-  { id: "mongstad-ara", name: "Mongstad → ARA", region: "Intermediate", coords: [[5.03, 60.82], [4.13, 51.95]], color: "#58a6ff" },
-  { id: "ara-gothenburg", name: "ARA → Gothenburg", region: "Intermediate", coords: [[4.13, 51.95], [11.97, 57.70]], color: "#58a6ff" },
-  { id: "gothenburg-ara", name: "Gothenburg → ARA", region: "Intermediate", coords: [[11.97, 57.70], [4.13, 51.95]], color: "#58a6ff" },
-  { id: "klaipeda-ara", name: "Klaipeda → ARA", region: "Intermediate", coords: [[21.13, 55.71], [4.13, 51.95]], color: "#58a6ff" },
-  { id: "ara-porvoo", name: "ARA → Porvoo", region: "Intermediate", coords: [[4.13, 51.95], [25.66, 60.28]], color: "#58a6ff" },
-  { id: "ara-wmed", name: "ARA → W.Med", region: "Med", coords: [[4.13, 51.95], [5.37, 43.30]], color: "#3fb950" },
-  { id: "ara-cmed", name: "ARA → C.Med", region: "Med", coords: [[4.13, 51.95], [14.27, 40.85]], color: "#3fb950" },
-  { id: "ara-emed", name: "ARA → E.Med", region: "Med", coords: [[4.13, 51.95], [23.73, 37.98]], color: "#3fb950" },
-  { id: "bsea-ara", name: "Black Sea → ARA", region: "Med", coords: [[33.55, 44.48], [4.13, 51.95]], color: "#3fb950" },
-  { id: "ara-fareast", name: "ARA → Far East", region: "Long Haul", coords: [[4.13, 51.95], [139.69, 35.68]], color: "#ff6b6b" },
-  { id: "singapore-ara", name: "Singapore → ARA", region: "Long Haul", coords: [[103.82, 1.35], [4.13, 51.95]], color: "#ff6b6b" },
-  { id: "china-ara", name: "China → ARA", region: "Long Haul", coords: [[121.47, 31.23], [4.13, 51.95]], color: "#ff6b6b" },
+  // INTERMEDIATE (NWE - show at high zoom only)
+  { id: "ara-thames", name: "ARA → Thames", region: "Intermediate", coords: [[4.13, 51.95], [0.70, 51.45]], color: "#58a6ff", minZoom: 5 },
+  { id: "mongstad-ara", name: "Mongstad → ARA", region: "Intermediate", coords: [[5.03, 60.82], [4.13, 51.95]], color: "#58a6ff", minZoom: 5 },
+  { id: "ara-gothenburg", name: "ARA → Gothenburg", region: "Intermediate", coords: [[4.13, 51.95], [11.97, 57.70]], color: "#58a6ff", minZoom: 5 },
+  { id: "gothenburg-ara", name: "Gothenburg → ARA", region: "Intermediate", coords: [[11.97, 57.70], [4.13, 51.95]], color: "#58a6ff", minZoom: 5 },
+  { id: "klaipeda-ara", name: "Klaipeda → ARA", region: "Intermediate", coords: [[21.13, 55.71], [4.13, 51.95]], color: "#58a6ff", minZoom: 5 },
+  { id: "ara-porvoo", name: "ARA → Porvoo", region: "Intermediate", coords: [[4.13, 51.95], [25.66, 60.28]], color: "#58a6ff", minZoom: 5 },
+  { id: "ara-dublin", name: "ARA → Dublin", region: "Intermediate", coords: [[4.13, 51.95], [-6.27, 53.35]], color: "#58a6ff", minZoom: 5 },
+  { id: "tees-ara", name: "Tees → ARA", region: "Intermediate", coords: [[-1.21, 54.57], [4.13, 51.95]], color: "#58a6ff", minZoom: 5 },
+  
+  // TRANSATLANTIC (show at medium zoom)
+  { id: "ara-usg", name: "ARA → USG", region: "Transatlantic", coords: [[4.13, 51.95], [-95.37, 29.76]], color: "#f5a623", minZoom: 3 },
+  { id: "usg-ara", name: "USG → ARA", region: "Transatlantic", coords: [[-95.37, 29.76], [4.13, 51.95]], color: "#f5a623", minZoom: 3 },
+  
+  // MED (show at medium zoom)
+  { id: "ara-wmed", name: "ARA → W.Med", region: "Med", coords: [[4.13, 51.95], [5.37, 43.30]], color: "#3fb950", minZoom: 4 },
+  { id: "ara-cmed", name: "ARA → C.Med", region: "Med", coords: [[4.13, 51.95], [14.27, 40.85]], color: "#3fb950", minZoom: 4 },
+  { id: "ara-emed", name: "ARA → E.Med", region: "Med", coords: [[4.13, 51.95], [23.73, 37.98]], color: "#3fb950", minZoom: 4 },
+  { id: "bsea-ara", name: "Black Sea → ARA", region: "Med", coords: [[33.55, 44.48], [4.13, 51.95]], color: "#3fb950", minZoom: 4 },
+  
+  // LONG HAUL (show at all zooms)
+  { id: "ara-fareast", name: "ARA → Far East", region: "Long Haul", coords: [[4.13, 51.95], [139.69, 35.68]], color: "#ff6b6b", minZoom: 2 },
+  { id: "singapore-ara", name: "Singapore → ARA", region: "Long Haul", coords: [[103.82, 1.35], [4.13, 51.95]], color: "#ff6b6b", minZoom: 2 },
+  { id: "china-ara", name: "China → ARA", region: "Long Haul", coords: [[121.47, 31.23], [4.13, 51.95]], color: "#ff6b6b", minZoom: 2 },
 ];
 
 function FreightMapTab() {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [currentZoom, setCurrentZoom] = useState(2.5);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [rateHistory, setRateHistory] = useState([]);
   const [latestRates, setLatestRates] = useState({});
@@ -40,19 +49,24 @@ function FreightMapTab() {
   const regions = ["All", "Intermediate", "Transatlantic", "Med", "Long Haul"];
 
   useEffect(() => {
-    if (map.current) return; // Initialize map only once
+    if (map.current) return;
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: "mapbox://styles/mapbox/dark-v11",
       center: [15, 35],
       zoom: 2.5,
-      projection: "mercator"
+      projection: "mercator",
+      renderWorldCopies: false // PREVENT REPEATING MAPS
     });
 
     map.current.on("load", () => {
       setMapLoaded(true);
       addRoutesToMap();
+    });
+
+    map.current.on("zoom", () => {
+      setCurrentZoom(map.current.getZoom());
     });
 
     return () => {
@@ -68,7 +82,7 @@ function FreightMapTab() {
     if (mapLoaded) {
       updateRoutes();
     }
-  }, [latestRates, filterRegion, mapLoaded]);
+  }, [latestRates, filterRegion, currentZoom, mapLoaded]);
 
   const loadRateHistory = async () => {
     try {
@@ -96,7 +110,6 @@ function FreightMapTab() {
   const addRoutesToMap = () => {
     if (!map.current) return;
 
-    // Add source for all routes
     map.current.addSource("routes", {
       type: "geojson",
       data: {
@@ -105,7 +118,6 @@ function FreightMapTab() {
       }
     });
 
-    // Add line layer
     map.current.addLayer({
       id: "route-lines",
       type: "line",
@@ -114,17 +126,19 @@ function FreightMapTab() {
         "line-color": ["get", "color"],
         "line-width": ["get", "width"],
         "line-opacity": 0.8
+      },
+      layout: {
+        "line-join": "round",
+        "line-cap": "round"
       }
     });
 
-    // Add click handler
     map.current.on("click", "route-lines", (e) => {
       const routeId = e.features[0].properties.id;
       const route = ROUTES.find(r => r.id === routeId);
       if (route) setSelectedRoute(route);
     });
 
-    // Change cursor on hover
     map.current.on("mouseenter", "route-lines", () => {
       map.current.getCanvas().style.cursor = "pointer";
     });
@@ -134,10 +148,34 @@ function FreightMapTab() {
     });
   };
 
+  const createCurvedLine = (start, end) => {
+    const steps = 100;
+    const coordinates = [];
+    
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const lng = start[0] + (end[0] - start[0]) * t;
+      const lat = start[1] + (end[1] - start[1]) * t;
+      
+      // Add curve (higher arc for longer distances)
+      const distance = Math.abs(end[0] - start[0]) + Math.abs(end[1] - start[1]);
+      const arcHeight = distance * 0.15;
+      const curve = Math.sin(t * Math.PI) * arcHeight;
+      
+      coordinates.push([lng, lat + curve]);
+    }
+    
+    return coordinates;
+  };
+
   const updateRoutes = () => {
     if (!map.current || !map.current.getSource("routes")) return;
 
-    const filteredRoutes = filterRegion === "All" ? ROUTES : ROUTES.filter(r => r.region === filterRegion);
+    const zoom = map.current.getZoom();
+    let filteredRoutes = filterRegion === "All" ? ROUTES : ROUTES.filter(r => r.region === filterRegion);
+    
+    // Filter by zoom level
+    filteredRoutes = filteredRoutes.filter(r => zoom >= r.minZoom);
 
     const features = filteredRoutes.map(route => {
       const latestRate = latestRates[route.id];
@@ -145,7 +183,7 @@ function FreightMapTab() {
         type: "Feature",
         geometry: {
           type: "LineString",
-          coordinates: route.coords
+          coordinates: createCurvedLine(route.coords[0], route.coords[1])
         },
         properties: {
           id: route.id,
@@ -163,31 +201,34 @@ function FreightMapTab() {
       features: features
     });
 
-    // Add markers for rates
-    document.querySelectorAll(".rate-marker").forEach(el => el.remove());
+    // Add labels
+    document.querySelectorAll(".route-label").forEach(el => el.remove());
 
     filteredRoutes.forEach(route => {
       const latestRate = latestRates[route.id];
       if (latestRate) {
         const midpoint = [
           (route.coords[0][0] + route.coords[1][0]) / 2,
-          (route.coords[0][1] + route.coords[1][1]) / 2
+          (route.coords[0][1] + route.coords[1][1]) / 2 + (Math.abs(route.coords[1][0] - route.coords[0][0]) * 0.08)
         ];
 
         const el = document.createElement("div");
-        el.className = "rate-marker";
+        el.className = "route-label";
         el.style.cssText = `
           background: rgba(10, 22, 40, 0.95);
           border: 2px solid ${route.color};
           border-radius: 6px;
-          padding: 4px 8px;
-          font-size: 12px;
-          font-weight: 700;
+          padding: 6px 10px;
+          font-size: 11px;
           color: ${route.color};
           white-space: nowrap;
           cursor: pointer;
+          font-family: 'Inter', sans-serif;
         `;
-        el.textContent = `${latestRate.rate} ${latestRate.unit}`;
+        el.innerHTML = `
+          <div style="font-size: 9px; opacity: 0.8; margin-bottom: 2px;">${route.name}</div>
+          <div style="font-size: 14px; font-weight: 700;">${latestRate.rate} ${latestRate.unit}</div>
+        `;
         el.onclick = () => setSelectedRoute(route);
 
         new mapboxgl.Marker({ element: el, anchor: "center" })
@@ -240,21 +281,18 @@ function FreightMapTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 12, background: C.bg, padding: 12 }}>
-      {/* Header */}
       <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <span style={{ fontSize: 14, fontWeight: 700, color: C.blue }}>🌍 Global Freight Map</span>
           <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 12, padding: "6px 10px", outline: "none", cursor: "pointer" }}>
             {regions.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
+          <span style={{ fontSize: 10, color: C.faint }}>Zoom: {currentZoom.toFixed(1)}x · {rateHistory.length} rates</span>
         </div>
-        <span style={{ fontSize: 11, color: C.faint }}>Click any route to add rates · {rateHistory.length} rates tracked</span>
       </div>
 
-      {/* Map */}
-      <div ref={mapContainer} style={{ flex: 1, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden", minHeight: 450 }} />
+      <div ref={mapContainer} style={{ flex: 1, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden", minHeight: 600 }} />
 
-      {/* Rate Editor Modal */}
       {selectedRoute && (
         <>
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 9998, backdropFilter: "blur(2px)" }} onClick={() => setSelectedRoute(null)} />
@@ -307,8 +345,7 @@ function FreightMapTab() {
         </>
       )}
 
-      {/* Rate History Table */}
-      <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16, maxHeight: 280, overflowY: "auto" }}>
+      <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 16, maxHeight: 250, overflowY: "auto" }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: C.blue, marginBottom: 12 }}>📊 Rate History</div>
         {filteredHistory.length === 0 ? (
           <div style={{ padding: 30, textAlign: "center", color: C.faint, fontSize: 12 }}>
