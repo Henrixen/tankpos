@@ -544,15 +544,25 @@ export default function CalendarTab() {
                 <div
                   contentEditable
                   suppressContentEditableWarning
-                  onInput={e => setForm(f => ({...f, note: e.currentTarget.innerHTML}))}
+                  ref={el => {
+                    if (el && form.note && !el.innerHTML) {
+                      el.innerHTML = form.note;
+                    }
+                  }}
+                  onInput={e => {
+                    if (e && e.target) {
+                      const html = e.target.innerHTML || "";
+                      setForm(f => ({...f, note: html}));
+                    }
+                  }}
                   onPaste={handleNotesPaste}
-                  dangerouslySetInnerHTML={{__html: form.note || ""}}
                   style={{
                     ...inp,
                     minHeight:390,
                     overflowY:"visible",
                     lineHeight:1.65,
-                    padding:12
+                    padding:12,
+                    whiteSpace:"pre-wrap"
                   }}
                   data-placeholder="Details, contacts, agenda items… paste screenshot here"
                 />
@@ -627,7 +637,7 @@ export default function CalendarTab() {
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:14,fontWeight:600,color:"rgba(200,220,255,0.85)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:"pointer"}} onClick={ev=>openEdit(e,ev)}>{e.title}</div>
                     <div style={{fontSize:12,color:"rgba(120,160,220,0.45)",marginTop:1}}>{fmtShort(e.date)}{e.endDate&&e.endDate!==e.date?" – "+fmtShort(e.endDate):""}</div>
-                    {e.note&&isExp&&<div style={{fontSize:13,color:"rgba(155,185,225,0.55)",marginTop:4,lineHeight:1.55}} dangerouslySetInnerHTML={{__html: e.note}}/>}
+                    {e.note&&isExp&&<div style={{fontSize:13,color:"rgba(155,185,225,0.55)",marginTop:4,lineHeight:1.55,whiteSpace:"pre-wrap"}} dangerouslySetInnerHTML={{__html: e.note}}/>}
                     {isExp&&(e.images||[]).map((img,idx)=><img key={idx} src={img} alt="" onClick={()=>setLightbox(img)} style={{width:"100%",borderRadius:3,marginTop:4,border:"1px solid "+BOR,cursor:"zoom-in",display:"block"}}/>)}
                   </div>
                   <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
