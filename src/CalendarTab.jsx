@@ -511,10 +511,62 @@ export default function CalendarTab() {
               </div>
                 <div>
                 <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.07em"}}>Notes <span style={{fontWeight:400,textTransform:"none",letterSpacing:0,color:"rgba(120,160,220,0.3)"}}>— paste screenshot with Ctrl+V</span></div>
-                <textarea value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))}
+                
+                {/* Rich Text Formatting Toolbar */}
+                <div style={{display:"flex",gap:4,marginBottom:6,padding:"4px 6px",background:"rgba(8,16,40,0.5)",borderRadius:4,border:"1px solid rgba(58,130,246,0.15)"}}>
+                  <button 
+                    onMouseDown={e => { e.preventDefault(); document.execCommand('bold'); }} 
+                    style={{background:"transparent",border:"1px solid rgba(58,130,246,0.2)",borderRadius:3,color:"rgba(200,220,255,0.7)",fontSize:12,fontWeight:700,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit"}}
+                    title="Bold">
+                    <strong>B</strong>
+                  </button>
+                  <button 
+                    onMouseDown={e => { e.preventDefault(); document.execCommand('italic'); }} 
+                    style={{background:"transparent",border:"1px solid rgba(58,130,246,0.2)",borderRadius:3,color:"rgba(200,220,255,0.7)",fontSize:12,fontStyle:"italic",padding:"2px 8px",cursor:"pointer",fontFamily:"inherit"}}
+                    title="Italic">
+                    <em>I</em>
+                  </button>
+                  <button 
+                    onMouseDown={e => { e.preventDefault(); document.execCommand('underline'); }} 
+                    style={{background:"transparent",border:"1px solid rgba(58,130,246,0.2)",borderRadius:3,color:"rgba(200,220,255,0.7)",fontSize:12,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}}
+                    title="Underline">
+                    U
+                  </button>
+                  <button 
+                    onMouseDown={e => { e.preventDefault(); document.execCommand('insertUnorderedList'); }} 
+                    style={{background:"transparent",border:"1px solid rgba(58,130,246,0.2)",borderRadius:3,color:"rgba(200,220,255,0.7)",fontSize:12,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit"}}
+                    title="Bullet list">
+                    • List
+                  </button>
+                </div>
+                
+                {/* Rich Text Editor - grows with content, no scroll */}
+                <div
+                  contentEditable
+                  suppressContentEditableWarning
+                  onInput={e => setForm(f => ({...f, note: e.currentTarget.innerHTML}))}
                   onPaste={handleNotesPaste}
-                  style={{...inp,minHeight:130,resize:"none",overflow:"hidden",lineHeight:1.65,height:"auto"}} onInput={e=>{e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}}
-                  placeholder="Details, contacts, agenda items… paste screenshot here"/>
+                  dangerouslySetInnerHTML={{__html: form.note || ""}}
+                  style={{
+                    ...inp,
+                    minHeight:390,
+                    overflowY:"visible",
+                    lineHeight:1.65,
+                    padding:12
+                  }}
+                  data-placeholder="Details, contacts, agenda items… paste screenshot here"
+                />
+                
+                <style>{`
+                  [contenteditable][data-placeholder]:empty:before {
+                    content: attr(data-placeholder);
+                    color: rgba(120,160,220,0.3);
+                    font-style: italic;
+                  }
+                  [contenteditable] {
+                    outline: none;
+                  }
+                `}</style>
               </div>
               {/* Image */}
               <div>
@@ -575,7 +627,7 @@ export default function CalendarTab() {
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:14,fontWeight:600,color:"rgba(200,220,255,0.85)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:"pointer"}} onClick={ev=>openEdit(e,ev)}>{e.title}</div>
                     <div style={{fontSize:12,color:"rgba(120,160,220,0.45)",marginTop:1}}>{fmtShort(e.date)}{e.endDate&&e.endDate!==e.date?" – "+fmtShort(e.endDate):""}</div>
-                    {e.note&&isExp&&<div style={{fontSize:13,color:"rgba(155,185,225,0.55)",marginTop:4,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{e.note}</div>}
+                    {e.note&&isExp&&<div style={{fontSize:13,color:"rgba(155,185,225,0.55)",marginTop:4,lineHeight:1.55}} dangerouslySetInnerHTML={{__html: e.note}}/>}
                     {isExp&&(e.images||[]).map((img,idx)=><img key={idx} src={img} alt="" onClick={()=>setLightbox(img)} style={{width:"100%",borderRadius:3,marginTop:4,border:"1px solid "+BOR,cursor:"zoom-in",display:"block"}}/>)}
                   </div>
                   <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
