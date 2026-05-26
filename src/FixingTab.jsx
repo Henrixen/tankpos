@@ -54,13 +54,13 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
     const wrap = wrapRef.current;
     if (!el || !wrap) return;
     wrap.style.resize = "none";
-    const newH = Math.max(height, el.scrollHeight + 44);
+    const newH = Math.max(height, el.scrollHeight + 60);
     setDisplayHeight(newH);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function calcExpandedH(){
-    return Math.max(80, (editorRef.current?.scrollHeight || 150) + 44);
+    return Math.max(80, (editorRef.current?.scrollHeight || 150) + 60);
   }
 
   function toggleExpand(){
@@ -71,6 +71,11 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
       const newH = calcExpandedH();
       setDisplayHeight(newH);
       setIsExpanded(true);
+      // Re-measure after paint in case content wasn't fully laid out
+      setTimeout(()=>{
+        const remeasured = calcExpandedH();
+        if (remeasured > newH) setDisplayHeight(remeasured);
+      }, 50);
       if (onToggleExpand) onToggleExpand(true, savedHeightRef.current, newH);
     } else {
       // collapsing
@@ -101,7 +106,7 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
   function handleInput(){
     onChange(editorRef.current?.innerHTML||"");
     if (alwaysExpanded && editorRef.current) {
-      setDisplayHeight(h => Math.max(h, editorRef.current.scrollHeight + 44));
+      setDisplayHeight(h => Math.max(h, editorRef.current.scrollHeight + 60));
     }
   }
 
@@ -289,7 +294,7 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
     <div ref={wrapRef} data-richwrap={`${jobId}-${field}`} style={{
       background:C.bg3, border:"1px solid "+C.bd, borderRadius:6,
       height:displayHeight, minHeight:displayHeight,
-      resize:alwaysExpanded?"none":"vertical", overflow:"auto",
+      resize:alwaysExpanded?"none":"vertical", overflow:isExpanded||alwaysExpanded?"hidden":"auto",
       boxSizing:"border-box", transition:"none"
     }}>
       <style>{`
