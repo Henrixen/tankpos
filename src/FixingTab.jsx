@@ -24,16 +24,31 @@ function cycleJobField(jobId, currentField, backwards=false){
 // RichEditor — supports synchronized expand via expandedRef/onToggleExpand props
 // expandedRef: shared React.ref({expanded:bool, savedH:number}) for sync groups
 // onToggleExpand: callback(newExpanded) called when this editor's ↕ is clicked
-function RichEditor({ jobId, field, title, titleRight, value, onChange, onResizeSave, height=120, placeholder="", color=C.tx, expandedRef=null, onToggleExpand=null }){
+function RichEditor({ jobId, field, title, titleRight, value, onChange, onResizeSave, height=120, placeholder="", color=C.tx, expandedRef=null, onToggleExpand=null, alwaysExpanded=false }){
   const editorRef = React.useRef(null);
   const wrapRef = React.useRef(null);
-  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [isExpanded, setIsExpanded] = React.useState(alwaysExpanded);
   const savedHeightRef = React.useRef(height);
   const progResizing = React.useRef(false);
 
   React.useEffect(()=>{
     if (!isExpanded) savedHeightRef.current = height;
   }, [height, isExpanded]);
+
+  // Auto-expand on mount for alwaysExpanded editors
+  React.useEffect(()=>{
+    if (!alwaysExpanded) return;
+    const wrap = wrapRef.current;
+    const el = editorRef.current;
+    if (!wrap || !el) return;
+    progResizing.current = true;
+    const newH = Math.max(height, el.scrollHeight + 44);
+    wrap.style.height = newH + "px";
+    wrap.style.minHeight = newH + "px";
+    wrap.style.resize = "none";
+    setTimeout(()=>{ progResizing.current = false; }, 300);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   React.useEffect(()=>{
     const el = editorRef.current;
@@ -65,6 +80,7 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
   React.useImperativeHandle && void 0; // not using imperative handle; parent drives via prop callback pattern
 
   function toggleExpand(){
+    if (alwaysExpanded) return; // always-expanded editors don't collapse
     const wrap = wrapRef.current;
     if (!wrap) return;
     const nextExpanded = !isExpanded;
@@ -92,7 +108,33 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
   }, [expandedRef?.current?.seq]);
 
   function exec(cmd){ editorRef.current?.focus(); document.execCommand(cmd,false,null); onChange(editorRef.current?.innerHTML||""); }
-  function handleInput(){ onChange(editorRef.current?.innerHTML||""); }
+  function handleInput(){
+    onChange(editorRef.current?.innerHTML||"");
+    // alwaysExpanded: grow wrap to fit content
+    if (alwaysExpanded && wrapRef.current && editorRef.current) {
+      const newH = Math.max(height, editorRef.current.scrollHeight + 44);
+      wrapRef.current.style.height = newH + "px";
+      wrapRef.current.style.minHeight = newH + "px";
+    }
+  }
+
+  // Insert a 3×3 table
+  function insertTable(rows=3, cols=3){
+    const el = editorRef.current;
+    if (!el) return;
+    el.focus();
+    let html = '<table><thead><tr>';
+    for(let c=0;c<cols;c++) html+=`<th contenteditable="true"></th>`;
+    html+='</tr></thead><tbody>';
+    for(let r=0;r<rows-1;r++){
+      html+='<tr>';
+      for(let c=0;c<cols;c++) html+=`<td contenteditable="true"></td>`;
+      html+='</tr>';
+    }
+    html+='</tbody></table><p></p>';
+    document.execCommand("insertHTML", false, html);
+    onChange(el.innerHTML||"");
+  }
 
   // Insert image from file
   function insertImage(file){
@@ -248,13 +290,16 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
         <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700}}>{title}</span>
         <div style={{display:"flex",alignItems:"center",gap:3}}>
           {titleRight}
-          <button type="button" onMouseDown={e=>e.preventDefault()} onClick={toggleExpand}
-            title={isExpanded?"Collapse to saved height":"Expand to fit all content"}
-            style={{...btnSt,color:isExpanded?"#58a6ff":C.faint,fontWeight:isExpanded?700:400}}>
-            {isExpanded?"↑":"↕"}
-          </button>
+          {!alwaysExpanded&&(
+            <button type="button" onMouseDown={e=>e.preventDefault()} onClick={toggleExpand}
+              title={isExpanded?"Collapse to saved height":"Expand to fit all content"}
+              style={{...btnSt,color:isExpanded?"#58a6ff":C.faint,fontWeight:isExpanded?700:400}}>
+              {isExpanded?"↑":"↕"}
+            </button>
+          )}
           <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>exec("insertUnorderedList")} title="Bullet list" style={btnSt}>•</button>
           <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>exec("insertOrderedList")} title="Numbered list" style={btnSt}>1.</button>
+          <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>insertTable(3,3)} title="Insert table (3×3)" style={btnSt}>⊞</button>
           <label title="Insert image" style={{...btnSt,display:"inline-flex",alignItems:"center",cursor:"pointer",margin:0}}>
             🖼
             <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{ if(e.target.files?.[0]) insertImage(e.target.files[0]); e.target.value=""; }}/>
@@ -765,6 +810,7 @@ function FixingTab({vessels}){
                       </div>
       {/* 3 editors — sync height AND expand/collapse together */}
                       {(()=>{
+                        const client=clients.find(c=>c.name===charterer);
                         const syncH=Math.max(
                           job.ui_heights?.cargo_details||150,
                           job.ui_heights?.notes||150,
@@ -776,38 +822,26 @@ function FixingTab({vessels}){
                           updateJobHeight(job.id,"notes",newH);
                           updateJobHeight(job.id,"indications",newH);
                         }
-                        // Shared expand state for the 3 top editors
-                        // We use a per-job ref stored on the component via a closure trick
-                        // expandSync is a plain object mutated in place; we use a React.useRef at job level
-                        // Since we're inside a map, we use a stable key via job.id
                         return(
                       <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                        <div style={{display:"flex",gap:8}} data-syncgroup={job.id}>
-                          <div style={{flex:"0 0 18%",minWidth:120}}>
+                        <div style={{display:"flex",gap:8,alignItems:"flex-start"}} data-syncgroup={job.id}>
+                          <div style={{flex:"0 0 14%",minWidth:110}}>
                             <RichEditor jobId={job.id} field="cargo_details" title="Cargo"
                               value={job.cargo_details||""} placeholder="Cargo details…"
                               height={syncH}
                               onChange={val=>updateJob(job.id,{cargo_details:val})}
                               onResizeSave={onResizeSync}
                               onToggleExpand={(expanded,savedH)=>{
-                                // sync the other two editors in this group
                                 const group=document.querySelectorAll(`[data-syncgroup="${job.id}"] [data-richwrap]`);
                                 group.forEach(wrapDiv=>{
                                   const fld=wrapDiv.getAttribute("data-richwrap")?.split("-").slice(1).join("-");
                                   if(fld==="cargo_details")return;
-                                  if(expanded){
-                                    const inner=wrapDiv.querySelector("[contenteditable]");
-                                    const newH=Math.max(80,(inner?.scrollHeight||150)+44);
-                                    wrapDiv.style.height=newH+"px";
-                                    wrapDiv.style.minHeight=newH+"px";
-                                  } else {
-                                    wrapDiv.style.height=(savedH||150)+"px";
-                                    wrapDiv.style.minHeight=(savedH||150)+"px";
-                                  }
+                                  if(expanded){const inner=wrapDiv.querySelector("[contenteditable]");const newH=Math.max(80,(inner?.scrollHeight||150)+44);wrapDiv.style.height=newH+"px";wrapDiv.style.minHeight=newH+"px";}
+                                  else{wrapDiv.style.height=(savedH||150)+"px";wrapDiv.style.minHeight=(savedH||150)+"px";}
                                 });
                               }}/>
                           </div>
-                          <div style={{flex:"0 0 28%",minWidth:0}}>
+                          <div style={{flex:"0 0 22%",minWidth:0}}>
                             <RichEditor jobId={job.id} field="notes" title="Notes & Guidance"
                               value={job.notes||""} placeholder="Notes & guidance…"
                               height={syncH}
@@ -867,6 +901,20 @@ function FixingTab({vessels}){
                                 });
                               }}/>
                           </div>
+                          {/* Client notes — always expanded, same row */}
+                          {client&&(
+                            <div style={{flex:"0 0 180px",minWidth:160}}>
+                              <RichEditor
+                                jobId={"client-"+client.id} field="clientnotes"
+                                title="Client Notes"
+                                value={client.notes||""}
+                                placeholder="Client notes…"
+                                height={syncH}
+                                alwaysExpanded={true}
+                                onChange={val=>updateClient(client.id,{notes:val})}
+                                onResizeSave={h=>updateClient(client.id,{notes_height:h})}/>
+                            </div>
+                          )}
                         </div>
                         {/* Subs/Fixed + status counts on right */}
                         <div style={{borderTop:"1px solid "+C.bd2,paddingTop:8}}>
@@ -891,25 +939,6 @@ function FixingTab({vessels}){
                     </div>
                   );
                 })}
-                  </div>
-                  {/* Client notes sidebar */}
-                  {(()=>{
-                    const client=clients.find(c=>c.name===charterer);
-                    if(!client)return null;
-                    const clientH=client.notes_height||150;
-                    return(
-                      <div style={{width:220,flexShrink:0,borderLeft:"1px solid "+C.bd2,display:"flex",flexDirection:"column"}}>
-                        <RichEditor
-                          jobId={"client-"+client.id} field="clientnotes"
-                          title="Client Notes"
-                          value={client.notes||""}
-                          placeholder="Client notes…"
-                          height={clientH}
-                          onChange={val=>updateClient(client.id,{notes:val})}
-                          onResizeSave={h=>updateClient(client.id,{notes_height:h})}/>
-                      </div>
-                    );
-                  })()}
                 </div>
               </div>
             );
