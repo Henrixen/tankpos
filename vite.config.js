@@ -5,22 +5,13 @@ export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
     force: true,
-    include: ['react', 'react-dom'],
   },
   build: {
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // React + ReactDOM MUST stay in the same chunk — splitting them causes
-          // "Cannot access 'X' before initialization" crashes
-          if (
-            id.includes('/react/') ||
-            id.includes('/react-dom/') ||
-            id.includes('/scheduler/') ||
-            id.includes('react-is')
-          ) {
-            return 'react-vendor';
-          }
+          // Do NOT split React — let it bundle naturally to avoid
+          // "Cannot access 'X' before initialization" circular ref crashes
           if (id.includes('node_modules')) {
             if (id.includes('supabase') || id.includes('postgrest')) {
               return 'supabase-vendor';
@@ -28,6 +19,7 @@ export default defineConfig({
             if (id.includes('leaflet') || id.includes('mapbox') || id.includes('maplibre')) {
               return 'map-vendor';
             }
+            // Everything else (including react) goes into one vendor chunk
             return 'vendor';
           }
         }
