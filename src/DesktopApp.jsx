@@ -170,22 +170,25 @@ function BunkerHeader(){
 }
 
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB}){
-  // ── Guest / PIN logic ────────────────────────────────────────────────────
-  const GUEST_PIN = "1234"; // ← change this
-  const GUEST_TABS = ["pos","cargo"]; // tabs accessible to guest
+  // ── PIN config ───────────────────────────────────────────────────────────
+  const MASTER_PIN = "4524"; // ← your PIN
+  const GUEST_PIN  = "0250"; // ← colleague's PIN
+  const GUEST_TABS = ["pos","cargo"];
   const isGuestUrl = new URLSearchParams(window.location.search).has("guest");
-  const [guestUnlocked, setGuestUnlocked] = React.useState(()=>{
-    // Remember unlock for this session only
-    return isGuestUrl ? sessionStorage.getItem("signal_guest_ok")==="1" : false;
-  });
+  const sessionKey = isGuestUrl ? "signal_guest_ok" : "signal_master_ok";
+
+  const [unlocked, setUnlocked] = React.useState(()=>
+    sessionStorage.getItem(sessionKey)==="1"
+  );
   const [pinInput, setPinInput] = React.useState("");
   const [pinError, setPinError] = React.useState(false);
-  const guestMode = isGuestUrl; // URL drives guest mode; unlocked = past PIN screen
+  const guestMode = isGuestUrl;
 
   function submitPin(p){
-    if(p===GUEST_PIN){
-      sessionStorage.setItem("signal_guest_ok","1");
-      setGuestUnlocked(true);
+    const correct = guestMode ? GUEST_PIN : MASTER_PIN;
+    if(p===correct){
+      sessionStorage.setItem(sessionKey,"1");
+      setUnlocked(true);
       setPinError(false);
     } else {
       setPinError(true);
@@ -194,13 +197,34 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     }
   }
 
-  // ── Show PIN screen if guest URL and not yet unlocked ────────────────────
-  if(guestMode && !guestUnlocked){
+  // ── PIN screen (shown to both owner and guest until unlocked) ────────────
+  // Keyboard handler for PIN entry — must be outside conditional (rules of hooks)
+  React.useEffect(()=>{
+    if(unlocked) return;
+    function onKey(e){
+      if(e.key>="0"&&e.key<="9"){
+        setPinInput(p=>{
+          const next=p+e.key;
+          if(next.length===4) setTimeout(()=>submitPin(next),0);
+          return next.length<=4?next:p;
+        });
+      } else if(e.key==="Backspace"){
+        setPinInput(p=>p.slice(0,-1));
+      }
+    }
+    window.addEventListener("keydown",onKey);
+    return()=>window.removeEventListener("keydown",onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[unlocked]);
+
+  if(!unlocked){
     return(
       <div style={{minHeight:"100vh",background:"#060e1c",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,system-ui,sans-serif"}}>
         <div style={{background:"rgba(10,20,42,0.95)",border:"1px solid rgba(58,130,246,0.25)",borderRadius:14,padding:"44px 48px",textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.6)",minWidth:300}}>
           <div style={{fontSize:22,fontWeight:700,color:"#79c0ff",letterSpacing:"0.04em",marginBottom:6}}>SIGNAL</div>
-          <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:32,letterSpacing:"0.08em",textTransform:"uppercase"}}>Enter access code</div>
+          <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:32,letterSpacing:"0.08em",textTransform:"uppercase"}}>
+            {guestMode?"Guest access":"Enter PIN"}
+          </div>
           <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:24}}>
             {[0,1,2,3].map(i=>(
               <div key={i} style={{
@@ -217,7 +241,6 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
               </div>
             ))}
           </div>
-          {/* Number pad */}
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,maxWidth:200,margin:"0 auto"}}>
             {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=>(
               <button key={i} disabled={d===""}
