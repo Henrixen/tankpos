@@ -171,25 +171,26 @@ function BunkerHeader(){
 
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB}){
   // ── PIN config ───────────────────────────────────────────────────────────
-  const MASTER_PIN = "4524"; // ← your PIN
-  const GUEST_PIN  = "0250"; // ← colleague's PIN
+  const MASTER_PIN = "4524"; // ← your PIN → full access
+  const GUEST_PIN  = "0250"; // ← colleague's PIN → positions + cargoes only
   const GUEST_TABS = ["pos","cargo"];
-  const isGuestUrl = new URLSearchParams(window.location.search).has("guest");
-  const sessionKey = isGuestUrl ? "signal_guest_ok" : "signal_master_ok";
 
-  const [unlocked, setUnlocked] = React.useState(()=>
-    sessionStorage.getItem(sessionKey)==="1"
-  );
+  const [unlocked, setUnlocked] = React.useState(false); // always ask on load
   const [pinInput, setPinInput] = React.useState("");
   const [pinError, setPinError] = React.useState(false);
-  const guestMode = isGuestUrl;
+  const [guestMode, setGuestMode] = React.useState(false);
+
+  // No sessionStorage — PIN required on every load/refresh/new tab
 
   function submitPin(p){
-    const correct = guestMode ? GUEST_PIN : MASTER_PIN;
-    if(p===correct){
-      sessionStorage.setItem(sessionKey,"1");
+    if(p===MASTER_PIN){
+      setGuestMode(false);
       setUnlocked(true);
-      setPinError(false);
+      setPinInput("");
+    } else if(p===GUEST_PIN){
+      setGuestMode(true);
+      setUnlocked(true);
+      setPinInput("");
     } else {
       setPinError(true);
       setPinInput("");
@@ -197,8 +198,6 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     }
   }
 
-  // ── PIN screen (shown to both owner and guest until unlocked) ────────────
-  // Keyboard handler for PIN entry — must be outside conditional (rules of hooks)
   React.useEffect(()=>{
     if(unlocked) return;
     function onKey(e){
@@ -216,58 +215,6 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     return()=>window.removeEventListener("keydown",onKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[unlocked]);
-
-  if(!unlocked){
-    return(
-      <div style={{minHeight:"100vh",background:"#060e1c",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,system-ui,sans-serif"}}>
-        <div style={{background:"rgba(10,20,42,0.95)",border:"1px solid rgba(58,130,246,0.25)",borderRadius:14,padding:"44px 48px",textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.6)",minWidth:300}}>
-          <div style={{fontSize:22,fontWeight:700,color:"#79c0ff",letterSpacing:"0.04em",marginBottom:6}}>SIGNAL</div>
-          <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:32,letterSpacing:"0.08em",textTransform:"uppercase"}}>
-            {guestMode?"Guest access":"Enter PIN"}
-          </div>
-          <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:24}}>
-            {[0,1,2,3].map(i=>(
-              <div key={i} style={{
-                width:44,height:54,borderRadius:8,
-                background:pinInput.length>i?"rgba(88,166,255,0.18)":"rgba(8,18,38,0.8)",
-                border:"1px solid "+(pinError?"rgba(255,107,107,0.6)":pinInput.length>i?"rgba(88,166,255,0.5)":"rgba(58,130,246,0.2)"),
-                display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:24,color:"#79c0ff",
-                transition:"all 0.15s",
-                transform:pinError?"translateX(4px)":"none",
-                boxShadow:pinInput.length>i?"0 0 12px rgba(88,166,255,0.2)":"none"
-              }}>
-                {pinInput.length>i?"●":""}
-              </div>
-            ))}
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,maxWidth:200,margin:"0 auto"}}>
-            {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=>(
-              <button key={i} disabled={d===""}
-                onClick={()=>{
-                  if(d==="⌫"){ setPinInput(p=>p.slice(0,-1)); return; }
-                  if(d===""||typeof d!=="number") return;
-                  const next=pinInput+String(d);
-                  setPinInput(next);
-                  if(next.length===4) submitPin(next);
-                }}
-                style={{
-                  height:48,borderRadius:8,border:"1px solid rgba(58,130,246,0.18)",
-                  background:d===""?"transparent":"rgba(14,28,58,0.8)",
-                  color:d===""?"transparent":"rgba(160,200,255,0.85)",
-                  fontSize:18,fontWeight:600,cursor:d===""?"default":"pointer",
-                  fontFamily:"inherit",transition:"background 0.1s",
-                  visibility:d===""?"hidden":"visible"
-                }}>
-                {d}
-              </button>
-            ))}
-          </div>
-          {pinError&&<div style={{marginTop:16,fontSize:11,color:"rgba(255,107,107,0.8)",letterSpacing:"0.06em"}}>Incorrect code</div>}
-        </div>
-      </div>
-    );
-  }
   // ────────────────────────────────────────────────────────────────────────
   const [tab,setTab]=useState(()=>guestMode?"pos":"pos");
   const [search,setSearch]=useState("");
@@ -703,7 +650,55 @@ const filtV=useMemo(()=>{
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"Inter,sans-serif"}}>
-      {/* ── Delete confirmation ── */}
+      {/* ── PIN overlay — rendered on top, app loads underneath ── */}
+      {!unlocked&&(
+        <div style={{position:"fixed",inset:0,zIndex:99999,background:"#060e1c",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,system-ui,sans-serif"}}>
+          <div style={{background:"rgba(10,20,42,0.95)",border:"1px solid rgba(58,130,246,0.25)",borderRadius:14,padding:"44px 48px",textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.6)",minWidth:300}}>
+            <div style={{fontSize:22,fontWeight:700,color:"#79c0ff",letterSpacing:"0.04em",marginBottom:6}}>SIGNAL</div>
+            <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:32,letterSpacing:"0.08em",textTransform:"uppercase"}}>
+              {guestMode?"Guest access":"Enter PIN"}
+            </div>
+            <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:24}}>
+              {[0,1,2,3].map(i=>(
+                <div key={i} style={{
+                  width:44,height:54,borderRadius:8,
+                  background:pinInput.length>i?"rgba(88,166,255,0.18)":"rgba(8,18,38,0.8)",
+                  border:"1px solid "+(pinError?"rgba(255,107,107,0.6)":pinInput.length>i?"rgba(88,166,255,0.5)":"rgba(58,130,246,0.2)"),
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:24,color:"#79c0ff",transition:"all 0.15s",
+                  transform:pinError?"translateX(4px)":"none",
+                  boxShadow:pinInput.length>i?"0 0 12px rgba(88,166,255,0.2)":"none"
+                }}>
+                  {pinInput.length>i?"●":""}
+                </div>
+              ))}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,maxWidth:200,margin:"0 auto"}}>
+              {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=>(
+                <button key={i} disabled={d===""}
+                  onClick={()=>{
+                    if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}
+                    if(d===""||typeof d!=="number")return;
+                    const next=pinInput+String(d);
+                    setPinInput(next);
+                    if(next.length===4) submitPin(next);
+                  }}
+                  style={{
+                    height:48,borderRadius:8,border:"1px solid rgba(58,130,246,0.18)",
+                    background:d===""?"transparent":"rgba(14,28,58,0.8)",
+                    color:d===""?"transparent":"rgba(160,200,255,0.85)",
+                    fontSize:18,fontWeight:600,cursor:d===""?"default":"pointer",
+                    fontFamily:"inherit",transition:"background 0.1s",
+                    visibility:d===""?"hidden":"visible"
+                  }}>
+                  {d}
+                </button>
+              ))}
+            </div>
+            {pinError&&<div style={{marginTop:16,fontSize:11,color:"rgba(255,107,107,0.8)",letterSpacing:"0.06em"}}>Incorrect code</div>}
+          </div>
+        </div>
+      )}
       {pendingDel&&(
         <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",
           background:C.bg2,border:"1px solid "+C.red,borderRadius:8,padding:"12px 20px",
