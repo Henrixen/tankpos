@@ -843,7 +843,7 @@ function FixingTab({vessels}){
           )}
           {charterersList.map(charterer=>{
             const chartererJobs=filteredJobs.filter(j=>(j.charterer||"")===charterer);
-            if(!chartererJobs.length||expandedJob!==charterer)return null;
+            if(expandedJob!==charterer)return null;
             return(
               <div key={charterer} style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",marginBottom:6}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"rgba(16,26,48,0.8)",borderBottom:"1px solid "+C.bd2}}>
@@ -855,6 +855,9 @@ function FixingTab({vessels}){
                   <button onClick={()=>setExpandedJob(null)}
                     style={{background:"none",border:"none",color:C.faint,fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit",fontWeight:600}}>▲ close</button>
                 </div>
+                {chartererJobs.length===0&&(
+                  <div style={{padding:"32px",textAlign:"center",color:C.faint,fontSize:12}}>No cargoes yet — click <strong style={{color:"#79c0ff"}}>+ cargo</strong> to add one.</div>
+                )}
                 <div style={{display:"flex",gap:0,alignItems:"flex-start"}}>
                   {/* Cargoes */}
                   <div style={{flex:1,minWidth:0}}>
