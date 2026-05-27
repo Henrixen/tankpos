@@ -11,10 +11,17 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          // React + ReactDOM MUST stay in the same chunk — splitting them causes
+          // "Cannot access 'X' before initialization" crashes
+          if (
+            id.includes('/react/') ||
+            id.includes('/react-dom/') ||
+            id.includes('/scheduler/') ||
+            id.includes('react-is')
+          ) {
+            return 'react-vendor';
+          }
           if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
-              return 'react-vendor';
-            }
             if (id.includes('supabase') || id.includes('postgrest')) {
               return 'supabase-vendor';
             }
