@@ -21,6 +21,7 @@ export default function TankPos(){
   const [cargoTotal,setCargoTotal]=useState(0);
   const [hasMore,setHasMore]=useState(false);
   const searchTimer=useRef(null);
+  const refreshTimer=useRef(null); // debounced re-fetch after edits
   const [mobile,setMobile]=useState(()=>isMobile());
   const [fileDate, setFileDate] = useState(() => new Date().toISOString().slice(0,10));
 
@@ -258,6 +259,11 @@ export default function TankPos(){
     .ilike("vessel_name", name);
 
   if (error) console.error("updateV error:", error);
+  else {
+    // Re-fetch after edit — debounced so rapid Tab-through doesn't hammer DB
+    clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(()=>fetchPositions(), 800);
+  }
 }, []);
 
   // Universal cargo updater — optimistic local update + Supabase write
@@ -271,7 +277,11 @@ export default function TankPos(){
     setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:displayValue}:c));
     const dbValue=(field==="from"||field==="to")?toISODate(value):value;
     const{error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id);
-    if(error)console.error(error);
+    if(error) console.error(error);
+    else {
+      clearTimeout(refreshTimer.current);
+      refreshTimer.current = setTimeout(()=>fetchCargoes(), 800);
+    }
   },[]);
 
   const addVessels = useCallback(async (parsed) => {
@@ -345,7 +355,11 @@ export default function TankPos(){
   .from("positions")
   .upsert(rows, { onConflict: 'vessel_name' });
     if (error) console.error("positions insert error:", error);
-    else console.log("positions saved ok:", rows.length, "rows");
+    else {
+      console.log("positions saved ok:", rows.length, "rows");
+      // Re-fetch so the table reflects what's now in DB (parse complete)
+      fetchPositions();
+    }
     
     return r;
   }, [vesselDB, saveV, saveSnapshot]);
@@ -384,7 +398,8 @@ export default function TankPos(){
       const rows=stamped.map(c=>({...c,from:toISODate(c.from),to:toISODate(c.to)}));
       console.log("upserting cargo ids:", rows.map(r=>r.id));
       const{error}=await supabase.from("cargoes").upsert(rows,{onConflict:"id"});
-      if(error)console.error("cargo upsert error:",error);
+      if(error) console.error("cargo upsert error:",error);
+      else fetchCargoes(); // refresh after parse
     }
     setVessels(prev=>{const next=prev.map(v=>{const fix=stamped.find(f=>f.vessel&&f.vessel.toLowerCase()===v.vessel.toLowerCase());if(fix&&fix.status==="FIXED"){return{...v,openPort:"EMPLOYED"};}return v;});saveV(next);return next;});
     return added;
