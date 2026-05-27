@@ -3,7 +3,7 @@ import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
 import EC from "./EC";
 import ParsePanel from "./ParsePanel";
-import RightPanel, { AskAIStrip } from "./AIAsk";
+import { AskAIStrip } from "./AIAsk";
 import { RateMatrix, RateMatrixBunkerInput } from "./RateMatrix";
 import FixingTab from "./FixingTab";
 import ProjectsTab from "./ProjectsTab";
@@ -20,7 +20,6 @@ import SettingsTab from "./SettingsTab";
 import ReportsTab from "./ReportsTab";
 import FreightMapTab from "./FreightMapTab";
 import VesselPopout from "./VesselPopout";
-import { getCustomTags } from "./vesselMetadataHelpers";
 
 
 
