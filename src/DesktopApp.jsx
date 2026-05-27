@@ -170,7 +170,83 @@ function BunkerHeader(){
 }
 
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB}){
-  const [tab,setTab]=useState("pos");
+  // ── Guest / PIN logic ────────────────────────────────────────────────────
+  const GUEST_PIN = "1234"; // ← change this
+  const GUEST_TABS = ["pos","cargo"]; // tabs accessible to guest
+  const isGuestUrl = new URLSearchParams(window.location.search).has("guest");
+  const [guestUnlocked, setGuestUnlocked] = React.useState(()=>{
+    // Remember unlock for this session only
+    return isGuestUrl ? sessionStorage.getItem("signal_guest_ok")==="1" : false;
+  });
+  const [pinInput, setPinInput] = React.useState("");
+  const [pinError, setPinError] = React.useState(false);
+  const guestMode = isGuestUrl; // URL drives guest mode; unlocked = past PIN screen
+
+  function submitPin(p){
+    if(p===GUEST_PIN){
+      sessionStorage.setItem("signal_guest_ok","1");
+      setGuestUnlocked(true);
+      setPinError(false);
+    } else {
+      setPinError(true);
+      setPinInput("");
+      setTimeout(()=>setPinError(false),1200);
+    }
+  }
+
+  // ── Show PIN screen if guest URL and not yet unlocked ────────────────────
+  if(guestMode && !guestUnlocked){
+    return(
+      <div style={{minHeight:"100vh",background:"#060e1c",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,system-ui,sans-serif"}}>
+        <div style={{background:"rgba(10,20,42,0.95)",border:"1px solid rgba(58,130,246,0.25)",borderRadius:14,padding:"44px 48px",textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.6)",minWidth:300}}>
+          <div style={{fontSize:22,fontWeight:700,color:"#79c0ff",letterSpacing:"0.04em",marginBottom:6}}>SIGNAL</div>
+          <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:32,letterSpacing:"0.08em",textTransform:"uppercase"}}>Enter access code</div>
+          <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:24}}>
+            {[0,1,2,3].map(i=>(
+              <div key={i} style={{
+                width:44,height:54,borderRadius:8,
+                background:pinInput.length>i?"rgba(88,166,255,0.18)":"rgba(8,18,38,0.8)",
+                border:"1px solid "+(pinError?"rgba(255,107,107,0.6)":pinInput.length>i?"rgba(88,166,255,0.5)":"rgba(58,130,246,0.2)"),
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:24,color:"#79c0ff",
+                transition:"all 0.15s",
+                transform:pinError?"translateX(4px)":"none",
+                boxShadow:pinInput.length>i?"0 0 12px rgba(88,166,255,0.2)":"none"
+              }}>
+                {pinInput.length>i?"●":""}
+              </div>
+            ))}
+          </div>
+          {/* Number pad */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,maxWidth:200,margin:"0 auto"}}>
+            {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=>(
+              <button key={i} disabled={d===""}
+                onClick={()=>{
+                  if(d==="⌫"){ setPinInput(p=>p.slice(0,-1)); return; }
+                  if(d===""||typeof d!=="number") return;
+                  const next=pinInput+String(d);
+                  setPinInput(next);
+                  if(next.length===4) submitPin(next);
+                }}
+                style={{
+                  height:48,borderRadius:8,border:"1px solid rgba(58,130,246,0.18)",
+                  background:d===""?"transparent":"rgba(14,28,58,0.8)",
+                  color:d===""?"transparent":"rgba(160,200,255,0.85)",
+                  fontSize:18,fontWeight:600,cursor:d===""?"default":"pointer",
+                  fontFamily:"inherit",transition:"background 0.1s",
+                  visibility:d===""?"hidden":"visible"
+                }}>
+                {d}
+              </button>
+            ))}
+          </div>
+          {pinError&&<div style={{marginTop:16,fontSize:11,color:"rgba(255,107,107,0.8)",letterSpacing:"0.06em"}}>Incorrect code</div>}
+        </div>
+      </div>
+    );
+  }
+  // ────────────────────────────────────────────────────────────────────────
+  const [tab,setTab]=useState(()=>guestMode?"pos":"pos");
   const [search,setSearch]=useState("");
   const [filters,setFilters]=useState(new Set());
   const [sortK,setSortK]=useState("fileDate");
@@ -640,6 +716,13 @@ const filtV=useMemo(()=>{
               <span style={{fontSize:10,color:"rgba(140,190,255,0.35)",marginLeft:2}}>
                 {new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
               </span>
+              {guestMode&&(
+                <span style={{fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:4,
+                  background:"rgba(250,163,86,0.12)",border:"1px solid rgba(250,163,86,0.3)",
+                  color:"rgba(250,163,86,0.8)",letterSpacing:"0.1em",textTransform:"uppercase",marginLeft:4}}>
+                  Guest
+                </span>
+              )}
             </div>
           </div>
           <div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>
@@ -691,7 +774,7 @@ const filtV=useMemo(()=>{
             ["map","Freight Map",0,"#10b981"],
             ["cal","Calendar",0,"#4fc3f7"],
             ["settings","Settings",0,"#94a3b8"],
-          ].map(([id,label,count,col])=>{
+          ].filter(([id])=>!guestMode||GUEST_TABS.includes(id)).map(([id,label,count,col])=>{
             const active=tab===id;
             return(
               <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
