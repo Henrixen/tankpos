@@ -60,7 +60,14 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
   }, []);
 
   function calcExpandedH(){
-    return Math.max(80, (editorRef.current?.scrollHeight || 150) + 60);
+    const el = editorRef.current;
+    if (!el) return 200;
+    // Temporarily remove minHeight to get true content scrollHeight
+    const prev = el.style.minHeight;
+    el.style.minHeight = "0";
+    const h = Math.max(120, el.scrollHeight + 60);
+    el.style.minHeight = prev;
+    return h;
   }
 
   function toggleExpand(){
@@ -293,9 +300,9 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
   return (
     <div ref={wrapRef} data-richwrap={`${jobId}-${field}`} style={{
       background:C.bg3, border:"1px solid "+C.bd, borderRadius:6,
-      height:alwaysExpanded?"100%":fillHeight&&!isExpanded?"100%":displayHeight,
+      height:alwaysExpanded?"100%":isExpanded?displayHeight:fillHeight?"100%":displayHeight,
       minHeight:alwaysExpanded?displayHeight:displayHeight,
-      resize:alwaysExpanded||fillHeight?"none":"vertical", overflow:isExpanded||alwaysExpanded?"hidden":"auto",
+      resize:alwaysExpanded||fillHeight?"none":"vertical", overflow:isExpanded||alwaysExpanded?"hidden":fillHeight?"auto":"auto",
       boxSizing:"border-box", transition:"none"
     }}>
       <style>{`
@@ -337,7 +344,7 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
         data-job-field={`${jobId}-${field}`}
         onInput={handleInput} onKeyDown={handleKeyDown} onPaste={handlePaste} onMouseDown={handleColResizeMouseDown}
         style={{
-          padding:"8px 10px", minHeight:Math.max(50,displayHeight-36),
+          padding:"8px 10px", minHeight:isExpanded?0:Math.max(50,displayHeight-36),
           color, fontFamily:"Inter,system-ui,-apple-system,Segoe UI,sans-serif",
           fontSize:12, lineHeight:1.6, outline:"none", whiteSpace:"pre-wrap"
         }}
