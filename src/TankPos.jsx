@@ -129,19 +129,19 @@ export default function TankPos(){
     "7. MR (>40)":"MR",
   };
   
-  // Fetch with offline fallback
-  const { data, source } = await fetchWithCache('positions', async () => {
-    const { data, error } = await supabase.from("positions_latest").select("*").limit(10000);
-    if (error) throw error;
-    return data;
-  });
-  
-  if (!data) {
-    console.error('No positions data available (offline + no cache)');
-    return;
-  }
-  
-  console.log(`📍 Loaded ${data.length} positions from ${source}`);
+  // Fetch positions directly — skip localStorage cache for large datasets (quota guard)
+  const { data: posData, error: posError } = await supabase
+    .from("positions_latest").select("*").limit(10000);
+  if (posError) { console.error('positions fetch error:', posError); return; }
+  const data = posData;
+  // Try to cache but silently skip if storage is full
+  try {
+    const serialized = JSON.stringify(data);
+    if (serialized.length < 3_000_000) { // only cache if < ~3MB
+      localStorage.setItem('tankpos_positions_v1', serialized);
+    }
+  } catch(e) { /* quota exceeded — fine, data is in memory */ }
+  console.log(`📍 Loaded ${data.length} positions from network`);
   
   const mn=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   setVessels((data||[]).map(r=>{
