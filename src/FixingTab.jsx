@@ -331,10 +331,6 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
           <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>exec("insertUnorderedList")} title="Bullet list" style={btnSt}>•</button>
           <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>exec("insertOrderedList")} title="Numbered list" style={btnSt}>1.</button>
           <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>insertTable(3,3)} title="Insert table (3×3)" style={btnSt}>⊞</button>
-          <label title="Insert image" style={{...btnSt,display:"inline-flex",alignItems:"center",cursor:"pointer",margin:0}}>
-            🖼
-            <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{ if(e.target.files?.[0]) insertImage(e.target.files[0]); e.target.value=""; }}/>
-          </label>
         </div>
       </div>
       <div ref={editorRef} contentEditable suppressContentEditableWarning
