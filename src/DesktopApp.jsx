@@ -654,7 +654,9 @@ const filtV=useMemo(()=>{
       {!unlocked&&(
         <div style={{position:"fixed",inset:0,zIndex:99999,background:"#060e1c",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,system-ui,sans-serif"}}>
           <div style={{background:"rgba(10,20,42,0.95)",border:"1px solid rgba(58,130,246,0.25)",borderRadius:14,padding:"44px 48px",textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.6)",minWidth:300}}>
-            <div style={{fontSize:22,fontWeight:700,color:"#79c0ff",letterSpacing:"0.04em",marginBottom:6}}>SIGNAL</div>
+            <div style={{fontSize:20,fontWeight:800,color:"#e8f2ff",letterSpacing:"0.02em",marginBottom:6}}>
+              <span>Broker </span><span style={{color:"#43e97b"}}>Dashboard</span>
+            </div>
             <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:32,letterSpacing:"0.08em",textTransform:"uppercase"}}>
               {guestMode?"Guest access":"Enter PIN"}
             </div>
