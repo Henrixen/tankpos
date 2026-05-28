@@ -25,6 +25,18 @@ export default function TankPos(){
   const searchTimer=useRef(null);
   const refreshTimer=useRef(null); // debounced re-fetch after edits
   const [mobile,setMobile]=useState(()=>isMobile());
+  // Manual layout override — stored in localStorage so it persists
+  const [layoutOverride,setLayoutOverride]=useState(()=>{
+    const stored=localStorage.getItem("signal_layout");
+    return stored||null; // null=auto, "mobile"=force mobile, "desktop"=force desktop
+  });
+  const effectiveMobile = layoutOverride==="mobile" ? true : layoutOverride==="desktop" ? false : mobile;
+
+  function toggleLayout(){
+    const next = effectiveMobile ? "desktop" : "mobile";
+    setLayoutOverride(next);
+    localStorage.setItem("signal_layout",next);
+  }
   const [fileDate, setFileDate] = useState(() => new Date().toISOString().slice(0,10));
 
   async function loadVesselDB(){
@@ -456,7 +468,7 @@ export default function TankPos(){
     }
   },[]);
 
-  const props={vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
+  const props={vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB,mobile:effectiveMobile,onToggleLayout:toggleLayout,layoutOverride};
   return (
     <>
       <React.Suspense fallback={null}>
