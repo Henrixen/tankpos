@@ -459,9 +459,8 @@ export default function TankPos(){
   const props={vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
   return (
     <>
-      <OfflineIndicator cacheKey="positions" />
       <React.Suspense fallback={null}>
-        <DesktopApp {...props}/>
+        <DesktopApp {...props} offlineIndicator={<OfflineIndicator cacheKey="positions"/>}/>
       </React.Suspense>
     </>
   );
