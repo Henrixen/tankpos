@@ -179,15 +179,14 @@ function BunkerHeader(){
 function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
   const [open,setOpen]=React.useState(false);
   const btnRef=React.useRef(null);
-  const [pos,setPos]=React.useState({top:0,right:0});
+  const [pos,setPos]=React.useState({top:0,right:8});
 
   function handleOpen(){
     if(!open&&btnRef.current){
       const r=btnRef.current.getBoundingClientRect();
-      // Anchor to button bottom, ensure it doesn't go off left edge
-      const menuW=220;
-      const right=Math.max(8,window.innerWidth-(r.right));
-      setPos({top:r.bottom+4,right});
+      // Right-align menu to button right edge, clamped 8px from screen edge
+      const distFromRight=window.innerWidth-r.right;
+      setPos({top:r.bottom+6, right:Math.max(8,distFromRight)});
     }
     setOpen(v=>!v);
   }
@@ -195,16 +194,16 @@ function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
   return(
     <div style={{position:"relative"}}>
       <button ref={btnRef} onClick={handleOpen}
-        style={{fontSize:14,padding:"4px 8px",borderRadius:5,border:"1px solid rgba(58,130,246,0.2)",
+        style={{fontSize:14,padding:"4px 10px",borderRadius:5,border:"1px solid rgba(58,130,246,0.2)",
           background:open?"rgba(58,130,246,0.12)":"transparent",
           color:"rgba(120,180,255,0.6)",cursor:"pointer",lineHeight:1,
-          minHeight:mobile?36:undefined,minWidth:mobile?36:undefined}}>⚙</button>
+          minHeight:mobile?36:28,minWidth:mobile?36:28}}>⚙</button>
       {open&&(
         <>
           <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
           <div style={{
             position:"fixed",top:pos.top,right:pos.right,
-            zIndex:9999,minWidth:220,maxWidth:"90vw",
+            zIndex:9999,width:230,maxWidth:"calc(100vw - 16px)",
             background:"#0a1628",border:"1px solid rgba(88,166,255,0.25)",
             borderRadius:10,padding:"12px 16px",
             boxShadow:"0 12px 40px rgba(0,0,0,0.7)",
@@ -409,17 +408,13 @@ const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
   const tableWrap={
     border:"1px solid "+C.bd,
     borderRadius:8,
-    overflowX:"auto",
-    overflowY:"visible",
-    flex:1,
+    overflow:"auto",
+    WebkitOverflowScrolling:"touch",
     width:"100%",
     display:"block",
     background:C.bg2,
     boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)",
-    WebkitOverflowScrolling:"touch",
-    // minWidth:0 intentionally removed — causes flex containers to clip scroll
   };
-  // Always max-content so the table drives the scroll width
   const tableStyle={width:"max-content",minWidth:mobile?700:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:mobile?11:12,tableLayout:"fixed",fontFamily:"sans-serif"};
   const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
 const cargoColumns = [
@@ -870,12 +865,12 @@ const filtV=useMemo(()=>{
           display:"flex",alignItems:"stretch",
           padding:mobile?"0 8px":"0 20px",
           gap:0,
-          overflowX:mobile?"scroll":"visible",
+          overflowX:mobile?"auto":"visible",
           overflowY:"visible",
           WebkitOverflowScrolling:"touch",
           scrollbarWidth:"none",
           msOverflowStyle:"none",
-          position:"relative",
+          touchAction:mobile?"pan-x":"auto",
         }}>
           {[
             ["pos","Positions",vessels.length,"#58a6ff"],
@@ -1097,7 +1092,7 @@ const filtV=useMemo(()=>{
                 </div>
 
                 {/* Vessel Table */}
-                <div style={{display:"flex",gap:10,alignItems:"flex-start",overflowX:"auto",WebkitOverflowScrolling:"touch",width:"100%"}}>
+                <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
                   <div style={{...tableWrap,minWidth:mobile?700:undefined}}>
                     <MatrixTable
   columns={posColumns}
@@ -1502,7 +1497,7 @@ const filtV=useMemo(()=>{
               <span style={{fontSize:12,color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoTotal||cargoes.length}</span></span>
               <span style={{fontSize:12,color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtC.length}</span></span>
             </div>
-            <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",width:"100%"}}>
+            <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
             <div style={{...tableWrap,minWidth:mobile?700:undefined}}>
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
