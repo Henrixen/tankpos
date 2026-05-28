@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react";
 import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
-import EC from "./EC";
-import ParsePanel from "./ParsePanel";
 import { loadHistory } from "./supabaseHelpers";
-import MatrixTable from "./components/ui/MatrixTable";
-import VesselPopout from "./VesselPopout";
 
-// All heavy components lazy-loaded to prevent circular dependency crashes
+// Every component lazy-loaded to fully break circular dependency chains
+const EC             = React.lazy(()=>import("./EC"));
+const ParsePanel     = React.lazy(()=>import("./ParsePanel"));
 const AskAIStrip     = React.lazy(()=>import("./AIAsk").then(m=>({default:m.AskAIStrip})));
 const RateMatrix     = React.lazy(()=>import("./RateMatrix").then(m=>({default:m.RateMatrix})));
 const RateMatrixBunkerInput = React.lazy(()=>import("./RateMatrix").then(m=>({default:m.RateMatrixBunkerInput})));
@@ -21,11 +19,13 @@ const ExportPanel    = React.lazy(()=>import("./PositionsHelpers").then(m=>({def
 const IntelVault     = React.lazy(()=>import("./IntelVault"));
 const IntelVaultStrip = React.lazy(()=>import("./IntelVault").then(m=>({default:m.IntelVaultStrip})));
 const AISMap         = React.lazy(()=>import("./AISMap"));
+const MatrixTable    = React.lazy(()=>import("./components/ui/MatrixTable"));
 const NotesTab       = React.lazy(()=>import("./NotesTab"));
 const CalendarTab    = React.lazy(()=>import("./CalendarTab"));
 const SettingsTab    = React.lazy(()=>import("./SettingsTab"));
 const ReportsTab     = React.lazy(()=>import("./ReportsTab"));
 const FreightMapTab  = React.lazy(()=>import("./FreightMapTab"));
+const VesselPopout   = React.lazy(()=>import("./VesselPopout"));
 
 const TabFallback = ()=>null;
 
