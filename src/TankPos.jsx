@@ -5,9 +5,11 @@ import { isMobile } from "./constants";
 import { enrichV, normaliseCargo, mergeVessels, toISODate } from "./utils";
 import { saveV, saveSnapshot, loadHistory } from "./supabaseHelpers";
 import { v4 as uuidv4 } from 'uuid';
-import DesktopApp from "./DesktopApp";
 import { fetchWithCache } from "./offlineCache";
 import OfflineIndicator from "./OfflineIndicator";
+
+// Lazy-load DesktopApp to break the TankPos→DesktopApp→...→TankPos circular dep
+const DesktopApp = React.lazy(()=>import("./DesktopApp"));
 
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
@@ -458,7 +460,9 @@ export default function TankPos(){
   return (
     <>
       <OfflineIndicator cacheKey="positions" />
-      <DesktopApp {...props}/>
+      <React.Suspense fallback={null}>
+        <DesktopApp {...props}/>
+      </React.Suspense>
     </>
   );
 }
