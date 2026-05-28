@@ -670,8 +670,8 @@ function FixingTab({vessels}){
       )}
 
       {/* ── MAIN LAYOUT ── */}
-      <div style={{display:"flex",gap:12,alignItems:"flex-start",width:"100%"}}>
-        <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{display:"flex",gap:12,alignItems:"flex-start",width:"100%",flexDirection:mobile?"column":"row"}}>
+        <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:8,width:mobile?"100%":undefined}}>
 
           {/* Toolbar row */}
           <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
@@ -1005,7 +1005,7 @@ function FixingTab({vessels}){
         </div>
 
         {/* Owner Directory — wider */}
-        <div style={{flex:"0 0 460px",width:460,display:"flex",flexDirection:"column",gap:6}}>
+        {!mobile&&<div style={{flex:"0 0 460px",width:460,display:"flex",flexDirection:"column",gap:6}}>
           {pendingDelOwner&&(
             <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:C.bg2,border:"1px solid "+C.red,borderRadius:8,padding:"12px 20px",zIndex:9999,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.5)",fontFamily:"sans-serif",fontSize:12,minWidth:280}}>
               <span style={{color:C.tx,flex:1}}>Remove <strong>{owners.find(o=>o.id===pendingDelOwner)?.company||"entry"}</strong>?</span>
@@ -1102,7 +1102,7 @@ function FixingTab({vessels}){
               })()}
             </div>
           )}
-        </div>
+        </div>}
       </div>
     </div>
   );
