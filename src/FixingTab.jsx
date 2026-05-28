@@ -354,7 +354,7 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
   );
 }
 
-function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingClientName,setEditingClientName,renameClient,setPendingDelClient,createJob,inpS,JOB_STATUS_COL}){
+function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingClientName,setEditingClientName,renameClient,setPendingDelClient,createJob,inpS,JOB_STATUS_COL,mobile=false}){
   const [showPencilMenu,setShowPencilMenu]=useState(false);
   const allCJobs=jobs.filter(j=>(j.charterer||"")===charterer);
   const total=allCJobs.length;
@@ -381,17 +381,17 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
       {/* Top accent bar */}
       <div style={{height:3,borderRadius:"9px 9px 0 0",background:isActive?"rgba(88,166,255,0.7)":activeDot?accentCol:"rgba(58,130,246,0.12)",transition:"background 0.2s"}}/>
 
-      <div style={{padding:"11px 13px 10px",flex:1,display:"flex",flexDirection:"column",gap:0}}>
+      <div style={{padding:mobile?"7px 8px 6px":"11px 13px 10px",flex:1,display:"flex",flexDirection:"column",gap:0}}>
         {isEditingName&&client?(
           <input autoFocus defaultValue={client.name}
             onBlur={e=>renameClient(client.id,e.target.value)}
             onKeyDown={e=>{if(e.key==="Enter")renameClient(client.id,e.target.value);if(e.key==="Escape")setEditingClientName(null);}}
             onClick={e=>e.stopPropagation()}
-            style={{...inpS,width:"100%",fontSize:13,fontWeight:700,padding:"2px 6px"}}/>
+            style={{...inpS,width:"100%",fontSize:mobile?11:13,fontWeight:700,padding:"2px 6px"}}/>
         ):(
-          <div style={{display:"flex",alignItems:"flex-start",gap:3,minHeight:34}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:3,minHeight:mobile?24:34}}>
             <span style={{
-              fontSize:12,fontWeight:700,lineHeight:1.25,
+              fontSize:mobile?10:12,fontWeight:700,lineHeight:1.25,
               color:isActive?"#a8d4ff":"rgba(200,225,255,0.88)",
               flex:1,wordBreak:"break-word",letterSpacing:"0.01em"
             }}>{charterer||"—"}</span>
@@ -416,9 +416,9 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
         )}
 
         {/* Bottom row: cargo count + status dots */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:"auto",paddingTop:8}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:"auto",paddingTop:mobile?4:8}}>
           <span style={{
-            fontSize:10,fontWeight:600,
+            fontSize:mobile?9:10,fontWeight:600,
             color:isActive?"rgba(140,190,255,0.7)":"rgba(100,140,200,0.45)",
             letterSpacing:"0.04em"
           }}>{total} cargo{total!==1?"es":""}</span>
@@ -719,7 +719,7 @@ function FixingTab({vessels}){
 
           {/* ── MATRIX VIEW: full-width, notes as popout ── */}
           {clientViewMode==="matrix"&&(
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:6,marginBottom:2,width:"100%",position:"relative"}}>
+            <div style={{display:"grid",gridTemplateColumns:mobile?"repeat(2,1fr)":"repeat(auto-fit,minmax(160px,1fr))",gap:mobile?4:6,marginBottom:2,width:"100%",position:"relative"}}>
               {/* Notes popout overlay */}
               {notePopout&&(()=>{
                 const charterer=notePopout;
@@ -750,7 +750,7 @@ function FixingTab({vessels}){
                   clients={clients} editingClientName={editingClientName}
                   setEditingClientName={setEditingClientName} renameClient={renameClient}
                   setPendingDelClient={setPendingDelClient} createJob={createJob}
-                  inpS={inpS} JOB_STATUS_COL={JOB_STATUS_COL}/>
+                  inpS={inpS} JOB_STATUS_COL={JOB_STATUS_COL} mobile={mobile}/>
               ))}
             </div>
           )}
@@ -849,16 +849,16 @@ function FixingTab({vessels}){
                 <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"rgba(16,26,48,0.8)",borderBottom:"1px solid "+C.bd2}}>
                   {/* + cargo button top-left */}
                   <button onClick={e=>{e.stopPropagation();createJob(charterer);}}
-                    style={{background:"rgba(88,166,255,0.15)",border:"1px solid rgba(88,166,255,0.3)",borderRadius:4,color:"#79c0ff",fontSize:12,padding:"2px 10px",cursor:"pointer",fontFamily:"inherit",fontWeight:700,flexShrink:0}}>+ cargo</button>
-                  <span style={{fontWeight:700,fontSize:13,color:C.blue,flex:1}}>{charterer||"—"}</span>
-                  <span style={{fontSize:11,color:C.faint}}>{chartererJobs.length} cargo{chartererJobs.length!==1?"es":""}</span>
+                    style={{background:"rgba(88,166,255,0.15)",border:"1px solid rgba(88,166,255,0.3)",borderRadius:4,color:"#79c0ff",fontSize:mobile?11:12,padding:"2px 10px",cursor:"pointer",fontFamily:"inherit",fontWeight:700,flexShrink:0}}>+ cargo</button>
+                  <span style={{fontWeight:700,fontSize:mobile?11:13,color:C.blue,flex:1}}>{charterer||"—"}</span>
+                  <span style={{fontSize:10,color:C.faint}}>{chartererJobs.length} cargo{chartererJobs.length!==1?"es":""}</span>
                   <button onClick={()=>setExpandedJob(null)}
                     style={{background:"none",border:"none",color:C.faint,fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit",fontWeight:600}}>▲ close</button>
                 </div>
                 {chartererJobs.length===0&&(
                   <div style={{padding:"32px",textAlign:"center",color:C.faint,fontSize:12}}>No cargoes yet — click <strong style={{color:"#79c0ff"}}>+ cargo</strong> to add one.</div>
                 )}
-                <div style={{display:"flex",gap:0,alignItems:"flex-start"}}>
+                <div style={{display:"flex",gap:0,alignItems:"flex-start",overflowX:mobile?"auto":"visible",WebkitOverflowScrolling:"touch"}}>
                   {/* Cargoes */}
                   <div style={{flex:1,minWidth:0}}>
                     {chartererJobs.map(job=>{
