@@ -338,13 +338,15 @@ const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
   const tableWrap={
     border:"1px solid "+C.bd,
     borderRadius:8,
-    overflow:"auto",
+    overflowX:"auto",
+    overflowY:"auto",
     flex:1,
     minWidth:0,
     background:C.bg2,
-    boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)"
+    boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)",
+    WebkitOverflowScrolling:"touch",
   };
-  const tableStyle={width:mobile?"max-content":"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12,tableLayout:"fixed",fontFamily:"sans-serif"};
+  const tableStyle={width:mobile?"max-content":"100%",minWidth:mobile?700:undefined,borderCollapse:"separate",borderSpacing:0,fontSize:mobile?11:12,tableLayout:"fixed",fontFamily:"sans-serif"};
   const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
 const cargoColumns = [
   { key: "select", label: "", align: "center", width: 28 },
@@ -785,36 +787,56 @@ const filtV=useMemo(()=>{
             </div>
           )}
           {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}          <div style={{display:"flex",gap:3,alignItems:"center",flexShrink:0,paddingBottom:10}}>
-            {!mobile&&[70,80,90,100,110,120,130].map(z=>(
-              <button key={z} onClick={()=>document.body.style.zoom=z+"%"}
-                style={{fontSize:9,padding:"1px 4px",borderRadius:2,border:"1px solid rgba(58,130,246,0.12)",background:"transparent",color:"rgba(100,140,200,0.3)",cursor:"pointer",fontFamily:"inherit"}}>{z}%</button>
-            ))}
-            {onToggleLayout&&(
-              <button onClick={onToggleLayout}
-                title={mobile?"Switch to desktop layout":"Switch to mobile layout"}
-                style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:3,marginLeft:4,
-                  border:"1px solid rgba(58,130,246,0.25)",
-                  background:"rgba(58,130,246,0.08)",
-                  color:"rgba(120,180,255,0.7)",
-                  cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                {mobile?"🖥 Desktop":"📱 Mobile"}
-                {layoutOverride&&<span style={{fontSize:8,opacity:0.5,marginLeft:3}}>forced</span>}
-              </button>
-            )}
-            <button onClick={onLoadVesselDB} disabled={vesselDBLoaded||vesselDBLoading}
-              style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:3,marginLeft:4,
-                border:"1px solid "+(vesselDBLoaded?"rgba(67,233,123,0.4)":"rgba(58,130,246,0.18)"),
-                background:vesselDBLoaded?"rgba(67,233,123,0.08)":"transparent",
-                color:vesselDBLoaded?"#43e97b":vesselDBLoading?"#faa356":"rgba(100,140,200,0.4)",
-                cursor:vesselDBLoaded||vesselDBLoading?"default":"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-              {vesselDBLoaded?"✓ DB":vesselDBLoading?"⟳…":"Ship DB"}
-            </button>
-            {tab==="pos"&&vessels.length>0&&(
-              <button onClick={()=>setPendingDel({type:"all",id:"__ALL__",label:"ALL "+vessels.length+" vessels"})}
-                style={{fontSize:10,padding:"2px 8px",borderRadius:3,border:"1px solid rgba(255,107,107,0.25)",background:"transparent",color:"rgba(255,107,107,0.4)",cursor:"pointer",fontFamily:"inherit"}}>
-                ✕ Clear
-              </button>
-            )}
+            {/* ⚙ Settings dropdown */}
+            {(()=>{
+              const [open,setOpen]=React.useState(false);
+              return(
+                <div style={{position:"relative"}}>
+                  <button onClick={()=>setOpen(v=>!v)}
+                    style={{fontSize:13,padding:"4px 8px",borderRadius:5,border:"1px solid rgba(58,130,246,0.2)",
+                      background:open?"rgba(58,130,246,0.12)":"transparent",
+                      color:"rgba(120,180,255,0.6)",cursor:"pointer",lineHeight:1}}>⚙</button>
+                  {open&&(
+                    <>
+                      <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
+                      <div style={{position:"absolute",right:0,top:"100%",marginTop:4,zIndex:9999,
+                        background:"#0a1628",border:"1px solid rgba(88,166,255,0.2)",
+                        borderRadius:8,padding:"10px 14px",minWidth:200,
+                        boxShadow:"0 8px 32px rgba(0,0,0,0.5)",display:"flex",flexDirection:"column",gap:10}}>
+                        {/* Layout toggle */}
+                        {onToggleLayout&&(
+                          <div>
+                            <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:5}}>Layout</div>
+                            <button onClick={()=>{onToggleLayout();setOpen(false);}}
+                              style={{fontSize:11,fontWeight:600,padding:"5px 12px",borderRadius:5,width:"100%",
+                                border:"1px solid rgba(58,130,246,0.3)",background:"rgba(58,130,246,0.1)",
+                                color:"rgba(140,190,255,0.8)",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+                              {mobile?"🖥  Switch to Desktop":"📱  Switch to Mobile"}
+                              {layoutOverride&&<span style={{fontSize:9,opacity:0.5,marginLeft:6}}>override active</span>}
+                            </button>
+                          </div>
+                        )}
+                        {/* Font size */}
+                        <div>
+                          <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:5}}>Font size</div>
+                          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                            {[80,90,100,110,120].map(z=>(
+                              <button key={z} onClick={()=>document.body.style.zoom=z+"%"}
+                                style={{fontSize:11,padding:"3px 8px",borderRadius:4,
+                                  border:"1px solid rgba(58,130,246,0.2)",
+                                  background:"rgba(14,28,58,0.8)",
+                                  color:"rgba(140,190,255,0.7)",cursor:"pointer",fontFamily:"inherit"}}>
+                                {z}%
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
         {/* Tab navigation row */}
@@ -822,10 +844,12 @@ const filtV=useMemo(()=>{
           display:"flex",alignItems:"stretch",
           padding:mobile?"0 8px":"0 20px",
           gap:0,
-          overflowX:"auto",
+          overflowX:mobile?"scroll":"visible",
+          overflowY:"visible",
           WebkitOverflowScrolling:"touch",
           scrollbarWidth:"none",
           msOverflowStyle:"none",
+          position:"relative",
         }}>
           {[
             ["pos","Positions",vessels.length,"#58a6ff"],
@@ -872,7 +896,7 @@ const filtV=useMemo(()=>{
           })}
         </div>
       </div>
-      <div style={{padding:"12px 20px",maxWidth:1900,margin:"0 auto"}}>
+      <div style={{padding:mobile?"8px 8px":"12px 20px",maxWidth:1900,margin:"0 auto"}}>
 
         {/* ── POSITIONS ── */}
         {tab==="pos"&&(
@@ -1650,7 +1674,7 @@ const filtV=useMemo(()=>{
 
         {/* ── FIXING ── */}
         {tab==="fix"&&(
-          <div style={{overflowX:mobile?"hidden":"visible"}}>
+          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
             <Suspense fallback={<TabFallback/>}><FixingTab vessels={vessels}/></Suspense>
           </div>
         )}
