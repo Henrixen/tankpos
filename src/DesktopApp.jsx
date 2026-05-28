@@ -176,7 +176,7 @@ function BunkerHeader(){
   );
 }
 
-function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB}){
+function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator}){
   // ── PIN config ───────────────────────────────────────────────────────────
   const MASTER_PIN = "4524"; // ← your PIN → full access
   const GUEST_PIN  = "0250"; // ← colleague's PIN → positions + cargoes only
@@ -735,7 +735,7 @@ const filtV=useMemo(()=>{
         position:"sticky",top:0,zIndex:200,
       }}>
         {/* Top bar: brand + Ask AI + Intel Vault + utilities */}
-        <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 20px 0",borderBottom:"1px solid rgba(58,130,246,0.08)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 20px 0"}}>
           <div style={{flexShrink:0,display:"flex",flexDirection:"column",gap:1,paddingBottom:10}}>
             <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",color:"rgba(120,180,255,0.45)"}}>Tanker Intel Platform</div>
             <div style={{display:"flex",alignItems:"baseline",gap:6}}>
@@ -752,16 +752,27 @@ const filtV=useMemo(()=>{
                 </span>
               )}
             </div>
+            {/* Inline sync status — replaces the floating OfflineIndicator bar */}
+            {offlineIndicator&&(
+              <div style={{fontSize:9,color:"rgba(100,140,200,0.4)",marginTop:2,letterSpacing:"0.04em"}}>
+                {offlineIndicator}
+              </div>
+            )}
           </div>
           <div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>
+          {/* ASK AI — 50% of remaining space */}
           {!mobile&&(
             <div style={{flex:1,minWidth:0,position:"relative",paddingBottom:10}}>
               <Suspense fallback={null}><AskAIStrip vessels={vessels} cargoes={cargoes} intelItems={intelItems}/></Suspense>
             </div>
           )}
           {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}
+          {/* INTEL VAULT — 50% of remaining space, expands on focus */}
           {!mobile&&(
-            <div style={{flexShrink:0,paddingBottom:10}}>
+            <div style={{flex:1,minWidth:0,paddingBottom:10}}
+              onFocusCapture={e=>{e.currentTarget.style.flex="2";e.currentTarget.style.zIndex="10";}}
+              onBlurCapture={e=>{e.currentTarget.style.flex="1";e.currentTarget.style.zIndex="";}}
+            >
               <Suspense fallback={null}><IntelVaultStrip onVaultUpdate={setIntelItems}/></Suspense>
             </div>
           )}
