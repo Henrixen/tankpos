@@ -176,7 +176,7 @@ function BunkerHeader(){
   );
 }
 
-function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator}){
+function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
   // ── PIN config ───────────────────────────────────────────────────────────
   const MASTER_PIN = "4524"; // ← your PIN → full access
   const GUEST_PIN  = "0250"; // ← colleague's PIN → positions + cargoes only
@@ -304,7 +304,8 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
   const [selectedAISVessels,setSelectedAISVessels]=useState([]);
 
-  const mobile=isMobile();
+  // Use mobile state from TankPos (reactive, with manual override)
+  const mobile = mobileProp !== undefined ? mobileProp : isMobile();
   
   // Dashboard / bunker-matrix theme styles
   const th2={
@@ -658,6 +659,13 @@ const filtV=useMemo(()=>{
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"Inter,sans-serif"}}>
+      {/* Mobile globals */}
+      {mobile&&<style>{`
+        * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+        input, textarea, select { font-size: 16px !important; }
+        ::-webkit-scrollbar { display: none; }
+        body { overflow-x: hidden; }
+      `}</style>}
       {/* ── PIN overlay — rendered on top, app loads underneath ── */}
       {!unlocked&&(
         <div style={{position:"fixed",inset:0,zIndex:99999,background:"#060e1c",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,system-ui,sans-serif"}}>
@@ -735,15 +743,15 @@ const filtV=useMemo(()=>{
         position:"sticky",top:0,zIndex:200,
       }}>
         {/* Top bar: brand + Ask AI + Intel Vault + utilities */}
-        <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 20px 0"}}>
-          <div style={{flexShrink:0,display:"flex",flexDirection:"column",gap:1,paddingBottom:10}}>
-            <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",color:"rgba(120,180,255,0.45)"}}>Tanker Intel Platform</div>
-            <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-              <span style={{fontSize:18,fontWeight:800,color:"#e8f2ff",letterSpacing:"0.02em"}}>Broker</span>
-              <span style={{fontSize:18,fontWeight:800,color:"#43e97b",letterSpacing:"0.02em"}}>Dashboard</span>
-              <span style={{fontSize:10,color:"rgba(140,190,255,0.35)",marginLeft:2}}>
+        <div style={{display:"flex",alignItems:"center",gap:mobile?6:12,padding:mobile?"8px 12px 0":"10px 20px 0"}}>
+          <div style={{flexShrink:0,display:"flex",flexDirection:"column",gap:1,paddingBottom:mobile?8:10}}>
+            {!mobile&&<div style={{fontSize:9,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",color:"rgba(120,180,255,0.45)"}}>Tanker Intel Platform</div>}
+            <div style={{display:"flex",alignItems:"baseline",gap:mobile?4:6}}>
+              <span style={{fontSize:mobile?14:18,fontWeight:800,color:"#e8f2ff",letterSpacing:"0.02em"}}>Broker</span>
+              <span style={{fontSize:mobile?14:18,fontWeight:800,color:"#43e97b",letterSpacing:"0.02em"}}>Dashboard</span>
+              {!mobile&&<span style={{fontSize:10,color:"rgba(140,190,255,0.35)",marginLeft:2}}>
                 {new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
-              </span>
+              </span>}
               {guestMode&&(
                 <span style={{fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:4,
                   background:"rgba(250,163,86,0.12)",border:"1px solid rgba(250,163,86,0.3)",
@@ -752,22 +760,22 @@ const filtV=useMemo(()=>{
                 </span>
               )}
             </div>
-            {/* Inline sync status — replaces the floating OfflineIndicator bar */}
-            {offlineIndicator&&(
+            {/* Inline sync status */}
+            {offlineIndicator&&!mobile&&(
               <div style={{fontSize:9,color:"rgba(100,140,200,0.4)",marginTop:2,letterSpacing:"0.04em"}}>
                 {offlineIndicator}
               </div>
             )}
           </div>
-          <div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>
-          {/* ASK AI — 50% of remaining space */}
+          {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}
+          {/* ASK AI — hidden on mobile (too small) */}
           {!mobile&&(
             <div style={{flex:1,minWidth:0,position:"relative",paddingBottom:10}}>
               <Suspense fallback={null}><AskAIStrip vessels={vessels} cargoes={cargoes} intelItems={intelItems}/></Suspense>
             </div>
           )}
           {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}
-          {/* INTEL VAULT — 50% of remaining space, expands on focus */}
+          {/* INTEL VAULT — hidden on mobile */}
           {!mobile&&(
             <div style={{flex:1,minWidth:0,paddingBottom:10}}
               onFocusCapture={e=>{e.currentTarget.style.flex="2";e.currentTarget.style.zIndex="10";}}
@@ -776,12 +784,23 @@ const filtV=useMemo(()=>{
               <Suspense fallback={null}><IntelVaultStrip onVaultUpdate={setIntelItems}/></Suspense>
             </div>
           )}
-          <div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>
-          <div style={{display:"flex",gap:3,alignItems:"center",flexShrink:0,paddingBottom:10}}>
-            {[70,80,90,100,110,120,130].map(z=>(
+          {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}          <div style={{display:"flex",gap:3,alignItems:"center",flexShrink:0,paddingBottom:10}}>
+            {!mobile&&[70,80,90,100,110,120,130].map(z=>(
               <button key={z} onClick={()=>document.body.style.zoom=z+"%"}
                 style={{fontSize:9,padding:"1px 4px",borderRadius:2,border:"1px solid rgba(58,130,246,0.12)",background:"transparent",color:"rgba(100,140,200,0.3)",cursor:"pointer",fontFamily:"inherit"}}>{z}%</button>
             ))}
+            {onToggleLayout&&(
+              <button onClick={onToggleLayout}
+                title={mobile?"Switch to desktop layout":"Switch to mobile layout"}
+                style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:3,marginLeft:4,
+                  border:"1px solid rgba(58,130,246,0.25)",
+                  background:"rgba(58,130,246,0.08)",
+                  color:"rgba(120,180,255,0.7)",
+                  cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                {mobile?"🖥 Desktop":"📱 Mobile"}
+                {layoutOverride&&<span style={{fontSize:8,opacity:0.5,marginLeft:3}}>forced</span>}
+              </button>
+            )}
             <button onClick={onLoadVesselDB} disabled={vesselDBLoaded||vesselDBLoading}
               style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:3,marginLeft:4,
                 border:"1px solid "+(vesselDBLoaded?"rgba(67,233,123,0.4)":"rgba(58,130,246,0.18)"),
@@ -799,7 +818,15 @@ const filtV=useMemo(()=>{
           </div>
         </div>
         {/* Tab navigation row */}
-        <div style={{display:"flex",alignItems:"stretch",padding:"0 20px",gap:0,overflowX:"visible"}}>
+        <div style={{
+          display:"flex",alignItems:"stretch",
+          padding:mobile?"0 8px":"0 20px",
+          gap:0,
+          overflowX:"auto",
+          WebkitOverflowScrolling:"touch",
+          scrollbarWidth:"none",
+          msOverflowStyle:"none",
+        }}>
           {[
             ["pos","Positions",vessels.length,"#58a6ff"],
             ["cargo","Cargoes",cargoTotal||cargoes.length,"#faa356"],
@@ -818,11 +845,15 @@ const filtV=useMemo(()=>{
             return(
               <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
                 style={{position:"relative",display:"flex",alignItems:"center",gap:6,
-                  padding:"10px 16px",background:"transparent",border:"none",
+                  padding:mobile?"12px 12px":"10px 16px",
+                  background:"transparent",border:"none",
                   borderBottom:"2px solid "+(active?col:"transparent"),
                   cursor:"pointer",fontFamily:"inherit",flexShrink:0,
-                  transition:"border-color 0.15s,color 0.15s",marginBottom:-1}}>
-                <span style={{fontSize:12,fontWeight:active?700:500,
+                  transition:"border-color 0.15s,color 0.15s",marginBottom:-1,
+                  minHeight:mobile?44:undefined,
+                  WebkitTapHighlightColor:"transparent",
+                }}>
+                <span style={{fontSize:mobile?13:12,fontWeight:active?700:500,
                   color:active?col:"rgba(120,155,210,0.5)",
                   textTransform:"uppercase",letterSpacing:"0.07em",whiteSpace:"nowrap"}}>
                   {label}
