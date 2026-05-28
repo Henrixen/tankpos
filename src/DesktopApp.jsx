@@ -176,6 +176,77 @@ function BunkerHeader(){
   );
 }
 
+function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
+  const [open,setOpen]=React.useState(false);
+  const btnRef=React.useRef(null);
+  const [pos,setPos]=React.useState({top:0,right:0});
+
+  function handleOpen(){
+    if(!open&&btnRef.current){
+      const r=btnRef.current.getBoundingClientRect();
+      // Anchor to button bottom, ensure it doesn't go off left edge
+      const menuW=220;
+      const right=Math.max(8,window.innerWidth-(r.right));
+      setPos({top:r.bottom+4,right});
+    }
+    setOpen(v=>!v);
+  }
+
+  return(
+    <div style={{position:"relative"}}>
+      <button ref={btnRef} onClick={handleOpen}
+        style={{fontSize:14,padding:"4px 8px",borderRadius:5,border:"1px solid rgba(58,130,246,0.2)",
+          background:open?"rgba(58,130,246,0.12)":"transparent",
+          color:"rgba(120,180,255,0.6)",cursor:"pointer",lineHeight:1,
+          minHeight:mobile?36:undefined,minWidth:mobile?36:undefined}}>⚙</button>
+      {open&&(
+        <>
+          <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
+          <div style={{
+            position:"fixed",top:pos.top,right:pos.right,
+            zIndex:9999,minWidth:220,maxWidth:"90vw",
+            background:"#0a1628",border:"1px solid rgba(88,166,255,0.25)",
+            borderRadius:10,padding:"12px 16px",
+            boxShadow:"0 12px 40px rgba(0,0,0,0.7)",
+            display:"flex",flexDirection:"column",gap:12
+          }}>
+            {/* Layout toggle */}
+            {onToggleLayout&&(
+              <div>
+                <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Layout</div>
+                <button onClick={()=>{onToggleLayout();setOpen(false);}}
+                  style={{fontSize:12,fontWeight:600,padding:"7px 12px",borderRadius:6,width:"100%",
+                    border:"1px solid rgba(58,130,246,0.3)",background:"rgba(58,130,246,0.1)",
+                    color:"rgba(140,190,255,0.85)",cursor:"pointer",fontFamily:"inherit",textAlign:"left",
+                    minHeight:36}}>
+                  {mobile?"🖥  Switch to Desktop":"📱  Switch to Mobile"}
+                  {layoutOverride&&<span style={{fontSize:9,opacity:0.5,marginLeft:8}}>override active</span>}
+                </button>
+              </div>
+            )}
+            {/* Font size */}
+            <div>
+              <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Font size</div>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                {[80,90,100,110,120].map(z=>(
+                  <button key={z} onClick={()=>{document.body.style.zoom=z+"%";}}
+                    style={{fontSize:12,padding:"5px 10px",borderRadius:5,
+                      border:"1px solid rgba(58,130,246,0.2)",
+                      background:"rgba(14,28,58,0.8)",
+                      color:"rgba(140,190,255,0.8)",cursor:"pointer",fontFamily:"inherit",
+                      minHeight:34}}>
+                    {z}%
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
   // ── PIN config ───────────────────────────────────────────────────────────
   const MASTER_PIN = "4524"; // ← your PIN → full access
@@ -339,14 +410,17 @@ const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
     border:"1px solid "+C.bd,
     borderRadius:8,
     overflowX:"auto",
-    overflowY:"auto",
+    overflowY:"visible",
     flex:1,
-    minWidth:0,
+    width:"100%",
+    display:"block",
     background:C.bg2,
     boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)",
     WebkitOverflowScrolling:"touch",
+    // minWidth:0 intentionally removed — causes flex containers to clip scroll
   };
-  const tableStyle={width:mobile?"max-content":"100%",minWidth:mobile?700:undefined,borderCollapse:"separate",borderSpacing:0,fontSize:mobile?11:12,tableLayout:"fixed",fontFamily:"sans-serif"};
+  // Always max-content so the table drives the scroll width
+  const tableStyle={width:"max-content",minWidth:mobile?700:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:mobile?11:12,tableLayout:"fixed",fontFamily:"sans-serif"};
   const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
 const cargoColumns = [
   { key: "select", label: "", align: "center", width: 28 },
@@ -788,55 +862,7 @@ const filtV=useMemo(()=>{
           )}
           {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}          <div style={{display:"flex",gap:3,alignItems:"center",flexShrink:0,paddingBottom:10}}>
             {/* ⚙ Settings dropdown */}
-            {(()=>{
-              const [open,setOpen]=React.useState(false);
-              return(
-                <div style={{position:"relative"}}>
-                  <button onClick={()=>setOpen(v=>!v)}
-                    style={{fontSize:13,padding:"4px 8px",borderRadius:5,border:"1px solid rgba(58,130,246,0.2)",
-                      background:open?"rgba(58,130,246,0.12)":"transparent",
-                      color:"rgba(120,180,255,0.6)",cursor:"pointer",lineHeight:1}}>⚙</button>
-                  {open&&(
-                    <>
-                      <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
-                      <div style={{position:"absolute",right:0,top:"100%",marginTop:4,zIndex:9999,
-                        background:"#0a1628",border:"1px solid rgba(88,166,255,0.2)",
-                        borderRadius:8,padding:"10px 14px",minWidth:200,
-                        boxShadow:"0 8px 32px rgba(0,0,0,0.5)",display:"flex",flexDirection:"column",gap:10}}>
-                        {/* Layout toggle */}
-                        {onToggleLayout&&(
-                          <div>
-                            <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:5}}>Layout</div>
-                            <button onClick={()=>{onToggleLayout();setOpen(false);}}
-                              style={{fontSize:11,fontWeight:600,padding:"5px 12px",borderRadius:5,width:"100%",
-                                border:"1px solid rgba(58,130,246,0.3)",background:"rgba(58,130,246,0.1)",
-                                color:"rgba(140,190,255,0.8)",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
-                              {mobile?"🖥  Switch to Desktop":"📱  Switch to Mobile"}
-                              {layoutOverride&&<span style={{fontSize:9,opacity:0.5,marginLeft:6}}>override active</span>}
-                            </button>
-                          </div>
-                        )}
-                        {/* Font size */}
-                        <div>
-                          <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:5}}>Font size</div>
-                          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                            {[80,90,100,110,120].map(z=>(
-                              <button key={z} onClick={()=>document.body.style.zoom=z+"%"}
-                                style={{fontSize:11,padding:"3px 8px",borderRadius:4,
-                                  border:"1px solid rgba(58,130,246,0.2)",
-                                  background:"rgba(14,28,58,0.8)",
-                                  color:"rgba(140,190,255,0.7)",cursor:"pointer",fontFamily:"inherit"}}>
-                                {z}%
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })()}
+            <SettingsMenu mobile={mobile} onToggleLayout={onToggleLayout} layoutOverride={layoutOverride}/>
           </div>
         </div>
         {/* Tab navigation row */}
@@ -1071,8 +1097,8 @@ const filtV=useMemo(()=>{
                 </div>
 
                 {/* Vessel Table */}
-                <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-                  <div style={tableWrap}>
+                <div style={{display:"flex",gap:10,alignItems:"flex-start",overflowX:"auto",WebkitOverflowScrolling:"touch",width:"100%"}}>
+                  <div style={{...tableWrap,minWidth:mobile?700:undefined}}>
                     <MatrixTable
   columns={posColumns}
   data={filtV.slice(0, posPage * POS_PAGE_SIZE)}
@@ -1476,7 +1502,8 @@ const filtV=useMemo(()=>{
               <span style={{fontSize:12,color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoTotal||cargoes.length}</span></span>
               <span style={{fontSize:12,color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtC.length}</span></span>
             </div>
-            <div style={tableWrap}>
+            <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",width:"100%"}}>
+            <div style={{...tableWrap,minWidth:mobile?700:undefined}}>
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
                 : <MatrixTable
@@ -1669,6 +1696,7 @@ const filtV=useMemo(()=>{
                 <button onClick={onLoadMore} style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"4px 16px",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Load more</button>
               </div>}
             </div>
+            </div>{/* end cargo scroll wrapper */}
           </div>
         )}
 
