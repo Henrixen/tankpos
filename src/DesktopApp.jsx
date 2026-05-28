@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react";
 import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
 import EC from "./EC";
@@ -6,20 +6,25 @@ import ParsePanel from "./ParsePanel";
 import { AskAIStrip } from "./AIAsk";
 import { RateMatrix, RateMatrixBunkerInput } from "./RateMatrix";
 import FixingTab from "./FixingTab";
-import ProjectsTab from "./ProjectsTab";
-import { TCECalculator } from "./TCECalculator";
-import Dashboard from "./Dashboard";
 import { loadHistory } from "./supabaseHelpers";
 import { OpeningBreakdown, FixingWindow, ExportPanel } from "./PositionsHelpers";
 import IntelVault, { IntelVaultStrip } from "./IntelVault";
 import AISMap from "./AISMap";
 import MatrixTable from "./components/ui/MatrixTable";
-import NotesTab from "./NotesTab";
-import CalendarTab from "./CalendarTab";
-import SettingsTab from "./SettingsTab";
-import ReportsTab from "./ReportsTab";
-import FreightMapTab from "./FreightMapTab";
 import VesselPopout from "./VesselPopout";
+
+// Heavy tab components — lazy loaded so they don't participate in initial
+// module evaluation, breaking the circular dependency chain
+const ProjectsTab   = React.lazy(()=>import("./ProjectsTab"));
+const TCECalculator = React.lazy(()=>import("./TCECalculator").then(m=>({default:m.TCECalculator})));
+const Dashboard     = React.lazy(()=>import("./Dashboard"));
+const NotesTab      = React.lazy(()=>import("./NotesTab"));
+const CalendarTab   = React.lazy(()=>import("./CalendarTab"));
+const SettingsTab   = React.lazy(()=>import("./SettingsTab"));
+const ReportsTab    = React.lazy(()=>import("./ReportsTab"));
+const FreightMapTab = React.lazy(()=>import("./FreightMapTab"));
+
+const TabFallback = ()=>null; // silent fallback while lazy chunk loads
 
 
 
@@ -1607,7 +1612,7 @@ const filtV=useMemo(()=>{
         {/* ── PROJECTS ── */}
         {tab==="projects"&&(
           <div style={{overflowX:mobile?"hidden":"visible"}}>
-            <ProjectsTab/>
+            <Suspense fallback={<TabFallback/>}><ProjectsTab/></Suspense>
           </div>
         )}
 
@@ -1687,21 +1692,21 @@ const filtV=useMemo(()=>{
             <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>
               ⚡ TCE Calculator — enter voyage variables to compute TCE or required freight
             </div>
-            <TCECalculator/>
+            <Suspense fallback={<TabFallback/>}><TCECalculator/></Suspense>
           </div>
         )}
         {tab==="dash"&&(
-          <Dashboard vessels={vessels} cargoes={cargoes} history={history||[]}/>
+          <Suspense fallback={<TabFallback/>}><Dashboard vessels={vessels} cargoes={cargoes} history={history||[]}/></Suspense>
         )}
         {tab==="notes"&&(
           <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
-            <NotesTab/>
+            <Suspense fallback={<TabFallback/>}><NotesTab/></Suspense>
           </div>
         )}
-        {tab==="cal"&&<CalendarTab/>}
-        {tab==="settings"&&<SettingsTab/>}
-        {tab==="reports"&&<ReportsTab selectedVessels={Array.from(selVessels)} selectedCargoes={Array.from(selCargoes)}/>}
-        {tab==="map"&&<FreightMapTab/>}
+        {tab==="cal"&&<Suspense fallback={<TabFallback/>}><CalendarTab/></Suspense>}
+        {tab==="settings"&&<Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>}
+        {tab==="reports"&&<Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={Array.from(selVessels)} selectedCargoes={Array.from(selCargoes)}/></Suspense>}
+        {tab==="map"&&<Suspense fallback={<TabFallback/>}><FreightMapTab/></Suspense>}
       </div>
 
       {/* Vessel Popout */}
