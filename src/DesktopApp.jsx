@@ -345,45 +345,6 @@ const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
   };
   const tableStyle={width:mobile?"max-content":"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12,tableLayout:"fixed",fontFamily:"sans-serif"};
   const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
-  const posColumns = [
-  { 
-    key: "select", 
-    label: (
-      <div 
-        onClick={() => {
-          if (selVessels.size === filtV.length && filtV.length > 0) {
-            setSelVessels(new Set());
-          } else {
-            setSelVessels(new Set(filtV.map(v => v.vessel)));
-          }
-        }}
-        style={{ cursor: "pointer", userSelect: "none" }}
-        title="Click to toggle all"
-      >
-        <div style={{ fontSize: 11, color: selVessels.size > 0 && selVessels.size === filtV.length ? "#4fc3f7" : C.faint }}>
-          {selVessels.size > 0 && selVessels.size === filtV.length ? "[✓]" : "[ ]"}
-        </div>
-        <div style={{ fontSize: 8, color: C.faint, marginTop: 2 }}>All</div>
-      </div>
-    ), 
-    align: "center", 
-    width: 32 
-  },
-  { key: "operator", label: "Operator", width: colWidthsV.Operator },
-  { key: "vessel", label: "Vessel", width: colWidthsV.Vessel },
-  { key: "built", label: "Built", align: "right", width: colWidthsV.Built },
-  { key: "dwt", label: "DWT", align: "right", width: colWidthsV.DWT },
-  { key: "coating", label: "Coating", width: colWidthsV.Coating },
-  { key: "loa", label: "LOA", align: "right", width: colWidthsV.LOA },
-  { key: "beam", label: "Beam", align: "right", width: colWidthsV.Beam },
-  { key: "cbm", label: "CBM", align: "right", width: colWidthsV.CBM },
-  { key: "date", label: "Date", align: "center", width: colWidthsV.Date },
-  { key: "openPort", label: "Open Port", width: colWidthsV.OpenPort },
-  { key: "comment", label: "Comment", width: colWidthsV.Comment },
-  { key: "updatedAt", label: "Updated", align: "center", width: colWidthsV.FileDate },
-  { key: "delete", label: "", align: "center", width: 24 },
-];
-
 const cargoColumns = [
   { key: "select", label: "", align: "center", width: 28 },
   { key: "status", label: "Status", align: "left", width: colWidthsC.Status },
@@ -587,6 +548,46 @@ const filtV=useMemo(()=>{
   dwtFilter,
   builtFilter
 ]);
+
+  const posColumns = [
+  { 
+    key: "select", 
+    label: (
+      <div 
+        onClick={() => {
+          if (selVessels.size === filtV.length && filtV.length > 0) {
+            setSelVessels(new Set());
+          } else {
+            setSelVessels(new Set(filtV.map(v => v.vessel)));
+          }
+        }}
+        style={{ cursor: "pointer", userSelect: "none" }}
+        title="Click to toggle all"
+      >
+        <div style={{ fontSize: 11, color: selVessels.size > 0 && selVessels.size === filtV.length ? "#4fc3f7" : C.faint }}>
+          {selVessels.size > 0 && selVessels.size === filtV.length ? "[✓]" : "[ ]"}
+        </div>
+        <div style={{ fontSize: 8, color: C.faint, marginTop: 2 }}>All</div>
+      </div>
+    ), 
+    align: "center", 
+    width: 32 
+  },
+  { key: "operator", label: "Operator", width: colWidthsV.Operator },
+  { key: "vessel", label: "Vessel", width: colWidthsV.Vessel },
+  { key: "built", label: "Built", align: "right", width: colWidthsV.Built },
+  { key: "dwt", label: "DWT", align: "right", width: colWidthsV.DWT },
+  { key: "coating", label: "Coating", width: colWidthsV.Coating },
+  { key: "loa", label: "LOA", align: "right", width: colWidthsV.LOA },
+  { key: "beam", label: "Beam", align: "right", width: colWidthsV.Beam },
+  { key: "cbm", label: "CBM", align: "right", width: colWidthsV.CBM },
+  { key: "date", label: "Date", align: "center", width: colWidthsV.Date },
+  { key: "openPort", label: "Open Port", width: colWidthsV.OpenPort },
+  { key: "comment", label: "Comment", width: colWidthsV.Comment },
+  { key: "updatedAt", label: "Updated", align: "center", width: colWidthsV.FileDate },
+  { key: "delete", label: "", align: "center", width: 24 },
+];
+
   // Reset page when filters change
   useEffect(()=>{setPosPage(1);},[vessels,filters,search,sortK,opFilter,bucketFilters,updFilter,posFileDaysBack,superRegionFilter]);
 
