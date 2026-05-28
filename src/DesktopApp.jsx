@@ -3,28 +3,31 @@ import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
 import EC from "./EC";
 import ParsePanel from "./ParsePanel";
-import { AskAIStrip } from "./AIAsk";
-import { RateMatrix, RateMatrixBunkerInput } from "./RateMatrix";
-import FixingTab from "./FixingTab";
 import { loadHistory } from "./supabaseHelpers";
-import { OpeningBreakdown, FixingWindow, ExportPanel } from "./PositionsHelpers";
-import IntelVault, { IntelVaultStrip } from "./IntelVault";
-import AISMap from "./AISMap";
 import MatrixTable from "./components/ui/MatrixTable";
 import VesselPopout from "./VesselPopout";
 
-// Heavy tab components — lazy loaded so they don't participate in initial
-// module evaluation, breaking the circular dependency chain
-const ProjectsTab   = React.lazy(()=>import("./ProjectsTab"));
-const TCECalculator = React.lazy(()=>import("./TCECalculator").then(m=>({default:m.TCECalculator})));
-const Dashboard     = React.lazy(()=>import("./Dashboard"));
-const NotesTab      = React.lazy(()=>import("./NotesTab"));
-const CalendarTab   = React.lazy(()=>import("./CalendarTab"));
-const SettingsTab   = React.lazy(()=>import("./SettingsTab"));
-const ReportsTab    = React.lazy(()=>import("./ReportsTab"));
-const FreightMapTab = React.lazy(()=>import("./FreightMapTab"));
+// All heavy components lazy-loaded to prevent circular dependency crashes
+const AskAIStrip     = React.lazy(()=>import("./AIAsk").then(m=>({default:m.AskAIStrip})));
+const RateMatrix     = React.lazy(()=>import("./RateMatrix").then(m=>({default:m.RateMatrix})));
+const RateMatrixBunkerInput = React.lazy(()=>import("./RateMatrix").then(m=>({default:m.RateMatrixBunkerInput})));
+const FixingTab      = React.lazy(()=>import("./FixingTab"));
+const ProjectsTab    = React.lazy(()=>import("./ProjectsTab"));
+const TCECalculator  = React.lazy(()=>import("./TCECalculator").then(m=>({default:m.TCECalculator})));
+const Dashboard      = React.lazy(()=>import("./Dashboard"));
+const OpeningBreakdown = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.OpeningBreakdown})));
+const FixingWindow   = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.FixingWindow})));
+const ExportPanel    = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.ExportPanel})));
+const IntelVault     = React.lazy(()=>import("./IntelVault"));
+const IntelVaultStrip = React.lazy(()=>import("./IntelVault").then(m=>({default:m.IntelVaultStrip})));
+const AISMap         = React.lazy(()=>import("./AISMap"));
+const NotesTab       = React.lazy(()=>import("./NotesTab"));
+const CalendarTab    = React.lazy(()=>import("./CalendarTab"));
+const SettingsTab    = React.lazy(()=>import("./SettingsTab"));
+const ReportsTab     = React.lazy(()=>import("./ReportsTab"));
+const FreightMapTab  = React.lazy(()=>import("./FreightMapTab"));
 
-const TabFallback = ()=>null; // silent fallback while lazy chunk loads
+const TabFallback = ()=>null;
 
 
 
@@ -161,7 +164,7 @@ function BunkerHeader(){
   return(
     <div style={{display:"flex",alignItems:"center",gap:4}}>
       <span style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.06em"}}>Bunker</span>
-      <RateMatrixBunkerInput/>
+      <Suspense fallback={null}><RateMatrixBunkerInput/></Suspense>
       <span style={{fontSize:10,color:"rgba(120,160,220,0.4)"}}>$/mt</span>
       <button onClick={fetchMGO} disabled={fetching} title="Fetch latest MGO ARA price"
         style={{fontSize:10,padding:"1px 6px",borderRadius:3,border:"1px solid rgba(88,166,255,0.25)",background:"rgba(88,166,255,0.08)",color:fetching?"rgba(120,160,220,0.4)":"rgba(88,166,255,0.7)",cursor:fetching?"default":"pointer",fontFamily:"inherit",flexShrink:0}}>
@@ -752,13 +755,13 @@ const filtV=useMemo(()=>{
           <div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>
           {!mobile&&(
             <div style={{flex:1,minWidth:0,position:"relative",paddingBottom:10}}>
-              <AskAIStrip vessels={vessels} cargoes={cargoes} intelItems={intelItems}/>
+              <Suspense fallback={null}><AskAIStrip vessels={vessels} cargoes={cargoes} intelItems={intelItems}/></Suspense>
             </div>
           )}
           {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}
           {!mobile&&(
             <div style={{flexShrink:0,paddingBottom:10}}>
-              <IntelVaultStrip onVaultUpdate={setIntelItems}/>
+              <Suspense fallback={null}><IntelVaultStrip onVaultUpdate={setIntelItems}/></Suspense>
             </div>
           )}
           <div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>
@@ -857,11 +860,11 @@ const filtV=useMemo(()=>{
   </div>
 
   <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-    <FixingWindow
+    <Suspense fallback={null}><FixingWindow
       vessels={vessels14d}
       opFilter={opFilter}
       onOpFilter={op => setOpFilter(o => o === op ? null : op)}
-    />
+    /></Suspense>
   </div>
 </div>
  
@@ -869,7 +872,7 @@ const filtV=useMemo(()=>{
               {!mobile&&(
                 <div style={{width:"34%",height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
                   <div style={{padding:"8px 10px",flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-                    <RateMatrix bunkerHeader={<BunkerHeader/>}/>
+                    <Suspense fallback={null}><RateMatrix bunkerHeader={<Suspense fallback={null}><BunkerHeader/></Suspense>}/></Suspense>
                   </div>
                 </div>
               )}
@@ -877,7 +880,7 @@ const filtV=useMemo(()=>{
               {/* RIGHT: AIS Map (34%) - matches Rate Matrix height */}
 {!mobile&&(
   <div style={{width:"34%",height:460}}>
-    <AISMap selectedVessels={selectedAISVessels} vessels={vessels}/>
+    <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels}/></Suspense>
   </div>
 )}
  </div>
@@ -889,13 +892,13 @@ const filtV=useMemo(()=>{
   {/* LEFT: PPT Timeline (32%) */}
   {!mobile&&(
     <div style={{width:"32%",height:260}}>
-      <OpeningBreakdown
+      <Suspense fallback={null}><OpeningBreakdown
         vessels={vessels14d.filter(v=>vesselsTodayUpdated.has(v.vessel))}
         filteredVessels={filtV.filter(v=>vesselsTodayUpdated.has(v.vessel))}
         bucketFilters={bucketFilters}
         onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
         fillHeight={false}
-      />
+      /></Suspense>
     </div>
   )}
 
@@ -974,7 +977,7 @@ const filtV=useMemo(()=>{
 
                 {/* MOVED: Fleet count + Export + Search to same row */}
                 <div style={{display:"flex",alignItems:"center",gap:12,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,flexWrap:"wrap"}}>
-                  <ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/>
+                  <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {selVessels.size>0&&(
                     <button onClick={()=>setTab("reports")} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                       📋 To Report ({selVessels.size})
@@ -1376,7 +1379,7 @@ const filtV=useMemo(()=>{
             </div>
             {/* Stats + Copy/CSV/Delete */}
             <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,flexWrap:"wrap"}}>
-              <ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/>
+              <Suspense fallback={null}><ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/></Suspense>
               {selCargoes.size>0&&(
                 <button onClick={()=>setTab("reports")} style={{fontSize:11,fontWeight:600,padding:"2px 9px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                   📋 To Report ({selCargoes.size})
@@ -1605,7 +1608,7 @@ const filtV=useMemo(()=>{
         {/* ── FIXING ── */}
         {tab==="fix"&&(
           <div style={{overflowX:mobile?"hidden":"visible"}}>
-            <FixingTab vessels={vessels}/>
+            <Suspense fallback={<TabFallback/>}><FixingTab vessels={vessels}/></Suspense>
           </div>
         )}
 
