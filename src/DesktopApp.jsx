@@ -178,58 +178,70 @@ function BunkerHeader(){
 
 function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
   const [open,setOpen]=React.useState(false);
+  const [menuPos,setMenuPos]=React.useState({top:60,right:8});
   const btnRef=React.useRef(null);
 
-  function getPos(){
-    if(!btnRef.current) return {top:60,right:8};
-    const r=btnRef.current.getBoundingClientRect();
-    return {top:r.bottom+6, right:Math.max(6, window.innerWidth-r.right)};
+  function handleTap(e){
+    e.preventDefault();
+    e.stopPropagation();
+    if(btnRef.current){
+      const r=btnRef.current.getBoundingClientRect();
+      setMenuPos({top:r.bottom+6, right:Math.max(6,window.innerWidth-r.right)});
+    }
+    setOpen(v=>!v);
   }
 
   return(
-    <div style={{position:"relative"}}>
+    <>
       <button ref={btnRef}
-        onClick={e=>{e.stopPropagation();setOpen(v=>!v);}}
-        style={{fontSize:14,padding:"4px 10px",borderRadius:5,border:"1px solid rgba(58,130,246,0.2)",
-          background:open?"rgba(58,130,246,0.12)":"transparent",
-          color:"rgba(120,180,255,0.7)",cursor:"pointer",lineHeight:1,
-          minHeight:mobile?40:28,minWidth:mobile?40:28,
+        onPointerUp={handleTap}
+        style={{
+          fontSize:16,lineHeight:1,cursor:"pointer",
+          padding:mobile?"8px 10px":"4px 8px",
+          borderRadius:6,
+          border:"1px solid rgba(58,130,246,0.25)",
+          background:"transparent",
+          color:"rgba(140,190,255,0.7)",
+          flexShrink:0,
           WebkitTapHighlightColor:"transparent",
           touchAction:"manipulation",
-          position:"relative",zIndex:201}}>⚙</button>
-      {open&&(()=>{const pos=getPos();return(
+          userSelect:"none",
+        }}>⚙</button>
+      {open&&(
         <>
-          <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
+          <div style={{position:"fixed",inset:0,zIndex:9990}} onPointerUp={()=>setOpen(false)}/>
           <div style={{
-            position:"fixed",top:pos.top,right:pos.right,
+            position:"fixed",top:menuPos.top,right:menuPos.right,
             zIndex:9999,width:230,maxWidth:"calc(100vw - 16px)",
             background:"#0a1628",border:"1px solid rgba(88,166,255,0.25)",
-            borderRadius:10,padding:"12px 16px",
-            boxShadow:"0 12px 40px rgba(0,0,0,0.7)",
-            display:"flex",flexDirection:"column",gap:12
+            borderRadius:10,padding:"14px 16px",
+            boxShadow:"0 12px 40px rgba(0,0,0,0.8)",
+            display:"flex",flexDirection:"column",gap:14,
           }}>
             {onToggleLayout&&(
               <div>
-                <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Layout</div>
-                <button onClick={()=>{onToggleLayout();setOpen(false);}}
-                  style={{fontSize:12,fontWeight:600,padding:"8px 12px",borderRadius:6,width:"100%",
+                <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:7}}>Layout</div>
+                <button
+                  onPointerUp={e=>{e.stopPropagation();onToggleLayout();setOpen(false);}}
+                  style={{fontSize:13,fontWeight:600,padding:"10px 12px",borderRadius:7,width:"100%",
                     border:"1px solid rgba(58,130,246,0.3)",background:"rgba(58,130,246,0.1)",
-                    color:"rgba(140,190,255,0.85)",cursor:"pointer",fontFamily:"inherit",textAlign:"left",
-                    minHeight:40,WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}>
+                    color:"rgba(160,200,255,0.9)",cursor:"pointer",fontFamily:"inherit",textAlign:"left",
+                    WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}>
                   {mobile?"🖥  Switch to Desktop":"📱  Switch to Mobile"}
-                  {layoutOverride&&<span style={{fontSize:9,opacity:0.5,marginLeft:8}}>override active</span>}
+                  {layoutOverride&&<span style={{fontSize:9,opacity:0.45,marginLeft:8}}>override</span>}
                 </button>
               </div>
             )}
             <div>
-              <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Font size</div>
-              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:7}}>Font size</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {[80,90,100,110,120].map(z=>(
-                  <button key={z} onClick={()=>document.body.style.zoom=z+"%"}
-                    style={{fontSize:12,padding:"5px 10px",borderRadius:5,
+                  <button key={z}
+                    onPointerUp={e=>{e.stopPropagation();document.body.style.zoom=z+"%";}}
+                    style={{fontSize:13,padding:"6px 10px",borderRadius:6,
                       border:"1px solid rgba(58,130,246,0.2)",background:"rgba(14,28,58,0.8)",
-                      color:"rgba(140,190,255,0.8)",cursor:"pointer",fontFamily:"inherit",minHeight:34,
-                      WebkitTapHighlightColor:"transparent"}}>
+                      color:"rgba(160,200,255,0.8)",cursor:"pointer",fontFamily:"inherit",
+                      WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}>
                     {z}%
                   </button>
                 ))}
@@ -237,8 +249,8 @@ function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
             </div>
           </div>
         </>
-      );})()}
-    </div>
+      )}
+    </>
   );
 }
 
