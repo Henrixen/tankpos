@@ -26,7 +26,12 @@ export default function TankPos(){
   const refreshTimer=useRef(null); // debounced re-fetch after edits
   const [mobile,setMobile]=useState(()=>isMobile());
   // Manual layout override — stored in localStorage so it persists
+  // URL param ?reset_layout=1 clears the override (escape hatch if stuck)
   const [layoutOverride,setLayoutOverride]=useState(()=>{
+    if(new URLSearchParams(window.location.search).has("reset_layout")){
+      localStorage.removeItem("signal_layout");
+      return null;
+    }
     const stored=localStorage.getItem("signal_layout");
     return stored||null; // null=auto, "mobile"=force mobile, "desktop"=force desktop
   });
