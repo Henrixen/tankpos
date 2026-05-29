@@ -719,7 +719,7 @@ function FixingTab({vessels}){
 
           {/* ── MATRIX VIEW: full-width, notes as popout ── */}
           {clientViewMode==="matrix"&&(
-            <div style={{display:"grid",gridTemplateColumns:mobile?"repeat(2,1fr)":"repeat(auto-fit,minmax(160px,1fr))",gap:mobile?4:6,marginBottom:2,width:"100%",position:"relative"}}>
+            <div style={{display:"grid",gridTemplateColumns:mobile?"repeat(3,1fr)":"repeat(auto-fit,minmax(160px,1fr))",gap:mobile?4:6,marginBottom:2,width:"100%",position:"relative"}}>
               {/* Notes popout overlay */}
               {notePopout&&(()=>{
                 const charterer=notePopout;
