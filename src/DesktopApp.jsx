@@ -347,12 +347,15 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   const [pendingDel,setPendingDel]=useState(null);
   const [restoreMsg,setRestoreMsg]=useState("");
   const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
-  const [colWidthsV,setColWidthsV]=useState(mobile?{
+  // Use mobile state from TankPos (reactive, with manual override) — must be before colWidths
+  const mobile = mobileProp !== undefined ? mobileProp : isMobile();
+
+  const [colWidthsV,setColWidthsV]=useState(()=>mobile?{
   Operator:130,Vessel:110,Built:50,DWT:55,Coating:65,LOA:50,Beam:46,CBM:60,Date:62,OpenPort:110,Comment:160,FileDate:76,Spec:55
   }:{
   Operator:190,Vessel:155,Built:60,DWT:72,Coating:78,LOA:62,Beam:56,CBM:78,Date:74,OpenPort:150,Comment:220,FileDate:96,Spec:72
   });
-  const [colWidthsC,setColWidthsC]=useState(mobile?{
+  const [colWidthsC,setColWidthsC]=useState(()=>mobile?{
   Status:55,Vessel:110,Charterer:110,Cargo:75,Qty:56,Load:90,Disch:90,LaycanStart:68,LaycanEnd:68,Freight:76,Comment:130,Updated:76
   }:{
   Status:68,Vessel:150,Charterer:150,Cargo:95,Qty:68,Load:120,Disch:120,LaycanStart:82,LaycanEnd:82,Freight:96,Comment:180,Updated:96
@@ -360,9 +363,6 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   const [askAiExpanded,setAskAiExpanded]=useState(false);
   const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
   const [selectedAISVessels,setSelectedAISVessels]=useState([]);
-
-  // Use mobile state from TankPos (reactive, with manual override)
-  const mobile = mobileProp !== undefined ? mobileProp : isMobile();
   
   // Dashboard / bunker-matrix theme styles
   const th2={
