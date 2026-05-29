@@ -179,32 +179,25 @@ function BunkerHeader(){
 function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
   const [open,setOpen]=React.useState(false);
   const btnRef=React.useRef(null);
-  const [pos,setPos]=React.useState({top:0,right:8});
 
-  function handleOpen(){
-    if(!open&&btnRef.current){
-      const r=btnRef.current.getBoundingClientRect();
-      // Position: align RIGHT edge of menu to RIGHT edge of button
-      // right = distance from button's right edge to viewport right = window.innerWidth - r.right
-      // But clamp so menu stays within viewport (menu width = 230)
-      const menuW=230;
-      const spaceOnRight=window.innerWidth-r.left;
-      const spaceOnLeft=r.right;
-      // If there's more space on the left, open leftward (right-aligned to button)
-      const distFromRight=window.innerWidth-r.right;
-      setPos({top:r.bottom+6, right:Math.max(6,distFromRight)});
-    }
-    setOpen(v=>!v);
+  function getPos(){
+    if(!btnRef.current) return {top:60,right:8};
+    const r=btnRef.current.getBoundingClientRect();
+    return {top:r.bottom+6, right:Math.max(6, window.innerWidth-r.right)};
   }
 
   return(
     <div style={{position:"relative"}}>
-      <button ref={btnRef} onClick={handleOpen}
+      <button ref={btnRef}
+        onClick={e=>{e.stopPropagation();setOpen(v=>!v);}}
         style={{fontSize:14,padding:"4px 10px",borderRadius:5,border:"1px solid rgba(58,130,246,0.2)",
           background:open?"rgba(58,130,246,0.12)":"transparent",
-          color:"rgba(120,180,255,0.6)",cursor:"pointer",lineHeight:1,
-          minHeight:mobile?36:28,minWidth:mobile?36:28}}>⚙</button>
-      {open&&(
+          color:"rgba(120,180,255,0.7)",cursor:"pointer",lineHeight:1,
+          minHeight:mobile?40:28,minWidth:mobile?40:28,
+          WebkitTapHighlightColor:"transparent",
+          touchAction:"manipulation",
+          position:"relative",zIndex:201}}>⚙</button>
+      {open&&(()=>{const pos=getPos();return(
         <>
           <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
           <div style={{
@@ -215,31 +208,28 @@ function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
             boxShadow:"0 12px 40px rgba(0,0,0,0.7)",
             display:"flex",flexDirection:"column",gap:12
           }}>
-            {/* Layout toggle */}
             {onToggleLayout&&(
               <div>
                 <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Layout</div>
                 <button onClick={()=>{onToggleLayout();setOpen(false);}}
-                  style={{fontSize:12,fontWeight:600,padding:"7px 12px",borderRadius:6,width:"100%",
+                  style={{fontSize:12,fontWeight:600,padding:"8px 12px",borderRadius:6,width:"100%",
                     border:"1px solid rgba(58,130,246,0.3)",background:"rgba(58,130,246,0.1)",
                     color:"rgba(140,190,255,0.85)",cursor:"pointer",fontFamily:"inherit",textAlign:"left",
-                    minHeight:36}}>
+                    minHeight:40,WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}>
                   {mobile?"🖥  Switch to Desktop":"📱  Switch to Mobile"}
                   {layoutOverride&&<span style={{fontSize:9,opacity:0.5,marginLeft:8}}>override active</span>}
                 </button>
               </div>
             )}
-            {/* Font size */}
             <div>
               <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Font size</div>
               <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                 {[80,90,100,110,120].map(z=>(
-                  <button key={z} onClick={()=>{document.body.style.zoom=z+"%";}}
+                  <button key={z} onClick={()=>document.body.style.zoom=z+"%"}
                     style={{fontSize:12,padding:"5px 10px",borderRadius:5,
-                      border:"1px solid rgba(58,130,246,0.2)",
-                      background:"rgba(14,28,58,0.8)",
-                      color:"rgba(140,190,255,0.8)",cursor:"pointer",fontFamily:"inherit",
-                      minHeight:34}}>
+                      border:"1px solid rgba(58,130,246,0.2)",background:"rgba(14,28,58,0.8)",
+                      color:"rgba(140,190,255,0.8)",cursor:"pointer",fontFamily:"inherit",minHeight:34,
+                      WebkitTapHighlightColor:"transparent"}}>
                     {z}%
                   </button>
                 ))}
@@ -247,7 +237,7 @@ function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
             </div>
           </div>
         </>
-      )}
+      );})()}
     </div>
   );
 }
@@ -719,9 +709,9 @@ const filtV=useMemo(()=>{
     <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"Inter,sans-serif",fontSize:mobile?11:13}}>
       {/* Mobile globals */}
       {mobile&&<style>{`
-        * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+        * { -webkit-tap-highlight-color: transparent; }
         ::-webkit-scrollbar { display: none; }
-        body { overflow-x: hidden; }
+        html { overflow-x: hidden; }
       `}</style>}
       {/* ── PIN overlay — rendered on top, app loads underneath ── */}
       {!unlocked&&(
