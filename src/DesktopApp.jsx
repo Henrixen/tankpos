@@ -184,9 +184,15 @@ function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
   function handleOpen(){
     if(!open&&btnRef.current){
       const r=btnRef.current.getBoundingClientRect();
-      // Right-align menu to button right edge, clamped 8px from screen edge
+      // Position: align RIGHT edge of menu to RIGHT edge of button
+      // right = distance from button's right edge to viewport right = window.innerWidth - r.right
+      // But clamp so menu stays within viewport (menu width = 230)
+      const menuW=230;
+      const spaceOnRight=window.innerWidth-r.left;
+      const spaceOnLeft=r.right;
+      // If there's more space on the left, open leftward (right-aligned to button)
       const distFromRight=window.innerWidth-r.right;
-      setPos({top:r.bottom+6, right:Math.max(8,distFromRight)});
+      setPos({top:r.bottom+6, right:Math.max(6,distFromRight)});
     }
     setOpen(v=>!v);
   }
@@ -341,35 +347,16 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   const [pendingDel,setPendingDel]=useState(null);
   const [restoreMsg,setRestoreMsg]=useState("");
   const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
-  const [colWidthsV,setColWidthsV]=useState({
-  Operator:190,
-  Vessel:155,
-  Built:60,
-  DWT:72,
-  Coating:78,
-  LOA:62,
-  Beam:56,
-  CBM:78,
-  Date:74,
-  OpenPort:150,
-  Comment:220,
-  FileDate:96,
-  Spec:72
-});
-  const [colWidthsC,setColWidthsC]=useState({
-  Status:68,
-  Vessel:150,
-  Charterer:150,
-  Cargo:95,
-  Qty:68,
-  Load:120,
-  Disch:120,
-  LaycanStart:82,
-  LaycanEnd:82,
-  Freight:96,
-  Comment:180,
-  Updated:96
-});
+  const [colWidthsV,setColWidthsV]=useState(mobile?{
+  Operator:130,Vessel:110,Built:50,DWT:55,Coating:65,LOA:50,Beam:46,CBM:60,Date:62,OpenPort:110,Comment:160,FileDate:76,Spec:55
+  }:{
+  Operator:190,Vessel:155,Built:60,DWT:72,Coating:78,LOA:62,Beam:56,CBM:78,Date:74,OpenPort:150,Comment:220,FileDate:96,Spec:72
+  });
+  const [colWidthsC,setColWidthsC]=useState(mobile?{
+  Status:55,Vessel:110,Charterer:110,Cargo:75,Qty:56,Load:90,Disch:90,LaycanStart:68,LaycanEnd:68,Freight:76,Comment:130,Updated:76
+  }:{
+  Status:68,Vessel:150,Charterer:150,Cargo:95,Qty:68,Load:120,Disch:120,LaycanStart:82,LaycanEnd:82,Freight:96,Comment:180,Updated:96
+  });
   const [askAiExpanded,setAskAiExpanded]=useState(false);
   const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
   const [selectedAISVessels,setSelectedAISVessels]=useState([]);
@@ -415,7 +402,7 @@ const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
     background:C.bg2,
     boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)",
   };
-  const tableStyle={width:"max-content",minWidth:mobile?700:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:mobile?11:12,tableLayout:"fixed",fontFamily:"sans-serif"};
+  const tableStyle={width:"max-content",minWidth:mobile?600:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:mobile?10:11,tableLayout:"fixed",fontFamily:"sans-serif"};
   const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
 const cargoColumns = [
   { key: "select", label: "", align: "center", width: 28 },
@@ -729,11 +716,10 @@ const filtV=useMemo(()=>{
   ];
 
   return(
-    <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"Inter,sans-serif"}}>
+    <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"Inter,sans-serif",fontSize:mobile?11:13}}>
       {/* Mobile globals */}
       {mobile&&<style>{`
         * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-        input, textarea, select { font-size: 16px !important; }
         ::-webkit-scrollbar { display: none; }
         body { overflow-x: hidden; }
       `}</style>}
