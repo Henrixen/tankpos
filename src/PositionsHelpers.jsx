@@ -24,10 +24,10 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
   const nodateOpen=displayVessels.filter(v=>v.openPort&&v.openPort!=="EMPLOYED"&&!v.date);
 
   const buckets=[
-    {label:"Open today/tomorrow",sublabel:"PPT",vessels:ppt,col:"#f78166"},
-    {label:"2-4 days",sublabel:"2-4d",vessels:d24,col:C.amber},
-    {label:"4-8 days",sublabel:"4-8d",vessels:d48,col:C.blue},
-    {label:">8 days",sublabel:">8d",vessels:d48plus,col:"#2ecc71"},
+    {label:"Open today/tomorrow",sublabel:"PPT",vessels:ppt,col:"#2ecc71"},
+    {label:"2-4 days",sublabel:"2-4d",vessels:d24,col:"#f5a623"},
+    {label:"4-8 days",sublabel:"4-8d",vessels:d48,col:"#e8603c"},
+    {label:">8 days",sublabel:">8d",vessels:d48plus,col:"#e74c3c"},
   ];
   const maxCount=Math.max(1,...buckets.map(b=>b.vessels.length));
   const totalCount = buckets.reduce((sum, b) => sum + b.vessels.length, 0) || 1;
@@ -45,8 +45,8 @@ const barH = Math.max(pct * 100, b.vessels.length > 0 ? 4 : 0);
               style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",cursor:b.vessels.length>0?"pointer":"default",borderRadius:6,padding:"2px 2px 0 2px",outline:bucketFilters.has(b.sublabel)?"2px solid "+b.col:"2px solid transparent",transition:"outline 0.15s"}}
               title={b.vessels.length>0?b.vessels.map(v=>v.vessel).join(", "):b.sublabel}>
               <div style={{fontSize:13,fontWeight:800,color:b.vessels.length>0?b.col:"transparent",marginBottom:3,minHeight:18}}>{b.vessels.length>0?b.vessels.length:""}</div>
-              <div style={{width:"100%",background:C.bg3,borderRadius:4,flex:1,display:"flex",alignItems:"flex-end",overflow:"hidden",minHeight:120,height:"100%"}}>
-                <div style={{width:"100%",height:b.vessels.length>0?Math.max(barH,8)+"%":"4%",background:b.col+(b.vessels.length>0?"cc":"22"),borderRadius:4,transition:"height 0.3s"}}/>
+              <div style={{width:"100%",background:"rgba(255,255,255,0.06)",borderRadius:4,flex:1,display:"flex",alignItems:"flex-end",overflow:"hidden",minHeight:120,height:"100%"}}>
+                <div style={{width:"100%",height:b.vessels.length>0?Math.max(barH,8)+"%":"4%",background:b.vessels.length>0?b.col:"rgba(255,255,255,0.08)",borderRadius:4,transition:"height 0.3s",boxShadow:b.vessels.length>0?"0 0 8px "+b.col+"88":"none"}}/>
               </div>
               <div style={{fontSize:12,color:b.vessels.length>0?b.col:C.faint,fontWeight:700,textAlign:"center",marginTop:7,lineHeight:1.2}}>{b.sublabel}</div>
               <div style={{fontSize:10,color:C.faint,textAlign:"center",marginTop:3,lineHeight:1.3,maxWidth:"100%",wordBreak:"break-word"}}>{b.label}</div>
@@ -94,9 +94,21 @@ function FixingWindow({vessels, fileDate, opFilter, onOpFilter}){
   const toPct=d=>Math.max(0,Math.min(1,(d-minDays)/range));
   const avgPct=allAvg!=null?toPct(allAvg):0.5;
 
+  // Avg excluding vessels with fixing window > 60 days
+  const filteredForAvg = withDays.filter(v => v.days !== null && v.days <= 60);
+  const avgExcl60 = filteredForAvg.length ? Math.round(filteredForAvg.reduce((a,b)=>a+b.days,0)/filteredForAvg.length) : null;
+
   return(
     <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,padding:"8px 12px 10px",marginBottom:10}}>
-      <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>⏱ Fixing Window - Open Fleet by Operator</div>
+      <div style={{display:"flex",alignItems:"center",marginBottom:10}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",flex:1}}>⏱ Fixing Window - Open Fleet by Operator</div>
+        {avgExcl60!=null&&(
+          <div style={{fontSize:11,color:"rgba(160,200,255,0.5)",fontWeight:600}}>
+            Avg <span style={{color:"#58a6ff",fontWeight:700}}>{avgExcl60>=0?"+":""}{avgExcl60}d</span>
+            <span style={{fontSize:9,color:"rgba(120,160,200,0.35)",marginLeft:4}}>excl. &gt;60d</span>
+          </div>
+        )}
+      </div>
       {/* Chart area with themed scrollbar */}
       <div style={{position:"relative",marginBottom:6,maxHeight:220,overflowY:"auto",overflowX:"hidden",scrollbarWidth:"thin",scrollbarColor:C.bd2+" transparent"}}>
         {rows.map((r,i)=>{
@@ -106,9 +118,9 @@ function FixingWindow({vessels, fileDate, opFilter, onOpFilter}){
               <div style={{minWidth:140,maxWidth:140,fontSize:12,color:opFilter===r.op?C.blue:C.dim,fontWeight:opFilter===r.op?700:400,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"right",paddingRight:4}}>{r.op}</div>
               <div style={{flex:1,position:"relative",height:18,background:C.bg3,borderRadius:3}}>
                 {/* Filled bar from left up to pct */}
-                <div style={{position:"absolute",left:0,top:0,height:"100%",width:(pct*100)+"%",background:r.col+"66",borderRadius:3,transition:"width 0.4s"}}/>
+                <div style={{position:"absolute",left:0,top:0,height:"100%",width:(pct*100)+"%",background:r.col+"44",borderRadius:3,transition:"width 0.4s"}}/>
                 {/* Bright right edge line */}
-                <div style={{position:"absolute",left:"calc("+( pct*100)+"% - 2px)",top:0,height:"100%",width:3,background:r.col,borderRadius:1}}/>
+                <div style={{position:"absolute",left:"calc("+( pct*100)+"% - 2px)",top:0,height:"100%",width:3,background:r.col,borderRadius:1,boxShadow:"0 0 6px "+r.col}}/>
                 {/* Fleet average reference line */}
                 <div style={{position:"absolute",left:(avgPct*100)+"%",top:0,height:"100%",width:1,background:"rgba(79,195,247,0.35)"}}/>
               </div>
