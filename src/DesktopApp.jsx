@@ -986,12 +986,16 @@ const filtV=useMemo(()=>{
         </div>
       ):null;
     })()}
-    {/* CSS overrides to improve FixingWindow bar colours */}
+    {/* CSS overrides: vivid opaque bar colours for FixingWindow */}
     <style>{`
-      .fixing-bar-ppt,[data-bucket="PPT"],.bucket-ppt { background: rgba(99,236,163,0.85) !important; }
-      .fixing-bar-2d,[data-bucket="2-4d"],.bucket-2d { background: rgba(250,184,74,0.85) !important; }
-      .fixing-bar-4d,[data-bucket="4-8d"],.bucket-4d { background: rgba(246,133,92,0.85) !important; }
-      .fixing-bar-8d,[data-bucket=">8d"],.bucket-8d  { background: rgba(235,87,87,0.85) !important; }
+      /* Kill transparency on all bars inside the fixing window container */
+      div[class*="fix"] div[style*="height"][style*="background"],
+      div[class*="Fix"] div[style*="height"][style*="background"],
+      div[class*="window"] div[style*="height"][style*="background"],
+      div[class*="Window"] div[style*="height"][style*="background"] {
+        filter: saturate(2) brightness(1.3) !important;
+        opacity: 1 !important;
+      }
     `}</style>
     <Suspense fallback={null}><FixingWindow
       vessels={filtV}
