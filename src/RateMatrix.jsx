@@ -112,6 +112,13 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
 }
 function RateMatrix({onBunkerChange, bunkerHeader}){
   const [rev,forceUpdate]=useState(0);
+  const [lastSaved,setLastSaved]=useState(()=>localStorage.getItem("signal_matrix_lastsaved")||null);
+
+  function markSaved(){
+    const now=new Date().toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
+    setLastSaved(now);
+    localStorage.setItem("signal_matrix_lastsaved",now);
+  }
   const matrixRef=useRef(defaultRateMatrix());
   const loadedRef=useRef(false);
 
@@ -146,7 +153,7 @@ function RateMatrix({onBunkerChange, bunkerHeader}){
   function saveMatrixBunker(val){
     matrixRef.current.__matrixBunker=val;
     if(window._bunkerState){window._bunkerState.val=val;window._bunkerState.listeners.forEach(cb=>cb(val));}
-    if(loadedRef.current)saveRates(matrixRef.current);
+    if(loadedRef.current){saveRates(matrixRef.current);markSaved();}
   }
 
   // Re-calc all EU route TCEs when bunker price changes
@@ -170,13 +177,13 @@ function RateMatrix({onBunkerChange, bunkerHeader}){
         },30);
       }
     });
-    if(loadedRef.current)saveRates(matrixRef.current);
+    if(loadedRef.current){saveRates(matrixRef.current);markSaved();}
   },[matrixBunker]);
 
   function saveRoutes(euR,rateR){
     matrixRef.current.__euRoutes=euR;
     matrixRef.current.__rateRoutes=rateR;
-    if(loadedRef.current)saveRates(matrixRef.current);
+    if(loadedRef.current){saveRates(matrixRef.current);markSaved();}
   }
   function updateEuRoute(i,field,val){
     const next=euRoutes.map((r,idx)=>idx===i?{...r,[field]:val}:r);
@@ -241,13 +248,13 @@ function RateMatrix({onBunkerChange, bunkerHeader}){
         }
       }
     }
-    if(loadedRef.current){saveRates(matrixRef.current);forceUpdate(n=>n+1);}
+    if(loadedRef.current){saveRates(matrixRef.current);markSaved();forceUpdate(n=>n+1);}
   }
   function onComment(key){setEditComment(key);}
   function updComment(key,val){
     const prev=matrixRef.current[key]||{};
     matrixRef.current={...matrixRef.current,[key]:{...prev,comment:val}};
-    if(loadedRef.current)saveRates(matrixRef.current);
+    if(loadedRef.current){saveRates(matrixRef.current);markSaved();}
   }
 
   const thS={padding:"4px 5px",fontSize:12,fontWeight:700,color:C.faint,background:C.bg,textAlign:"center",whiteSpace:"nowrap",borderBottom:"1px solid "+C.bd2};
@@ -279,7 +286,7 @@ function RateMatrix({onBunkerChange, bunkerHeader}){
             <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
             <th style={{...thS,width:"15%"}}>Rate ($ lsum)</th>
             <th style={{...thS,width:"15%",color:C.green}}>TCE $/day</th>
-            <th style={{...thS,width:"40%"}}>Comment</th>
+            <th style={{...thS,width:"40%"}}><span>Comment</span>{lastSaved&&<span style={{fontWeight:400,fontSize:9,color:"rgba(120,160,200,0.35)",marginLeft:8}}>Updated {lastSaved}</span>}</th>
           </tr></thead>
           <tbody>
             {euRoutes.map((rt,i)=>(
