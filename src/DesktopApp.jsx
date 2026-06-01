@@ -143,9 +143,14 @@ function BunkerHeader(){
   async function fetchMGO(){
     setFetching(true); setFetchErr(null);
     try{
-      // Try Bunker Index via rss2json
-      const res=await fetch("https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.bunkerindex.com%2Frss%2Fprices.php");
-      const json=await res.json();
+      // Fetch via allorigins proxy to avoid CORS
+      const url=encodeURIComponent("https://www.bunkerindex.com/rss/prices.php");
+      const res=await fetch(`https://api.allorigins.win/get?url=${url}`);
+      const data=await res.json();
+      const xml=data.contents||"";
+      // Parse titles from RSS XML
+      const titles=[...xml.matchAll(/<title><!\[CDATA\[([^\]]+)\]\]><\/title>/g)].map(m=>m[1]);
+      const json={items:titles.map(t=>({title:t}))};
       if(json?.items?.length){
         // Look for ARA MGO or VLSFO price in title
         for(const item of json.items){
@@ -515,8 +520,17 @@ const filtV=useMemo(()=>{
       if(filters.has("SUBS") && v.openPort!=="EMPLOYED") return false;
 
       const reg=classifyRegion(v.openPort);
-      for(const r of ["WCUK","ECUK","CANAL","BISCAY","BALTIC","SKAW","MED"]){
-        if(filters.has(r) && reg!==r) return false;
+      // Hardcoded overrides for ports that classifyRegion gets wrong
+      const port=(v.openPort||"").toUpperCase();
+      const asiaports=["SINGAPORE","MALAYSIA","THAILAND","VIETNAM","CHINA","JAPAN","KOREA","INDIA","PAKISTAN","INDONESIA","PHILIPPINES","TAIWAN","HONGKONG","HONG KONG","FUJAIRAH","UAE","BAHRAIN","KUWAIT","SAUDI","JEDDAH","YANBU","JUBAIL","OMAN","MUSCAT"];
+      const isAsia=asiaports.some(p=>port.includes(p));
+      const hasRegionFilter=["WCUK","ECUK","CANAL","BISCAY","BALTIC","SKAW","MED"].some(r=>filters.has(r));
+      if(hasRegionFilter){
+        if(isAsia) return false; // Asian ports never match European region filters
+        if(!reg) return false;
+        for(const r of ["WCUK","ECUK","CANAL","BISCAY","BALTIC","SKAW","MED"]){
+          if(filters.has(r) && reg!==r) return false;
+        }
       }
       return true;
     });
@@ -958,7 +972,27 @@ const filtV=useMemo(()=>{
     />
   </div>
 
-  <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+  <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position:"relative" }}>
+    {/* Avg fixing window — computed from filtV, excluding >60d */}
+    {(()=>{
+      const vals=filtV
+        .map(v=>daysBetween(v.date))
+        .filter(d=>d!==null&&d>=0&&d<=60);
+      const avg=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):null;
+      return avg!==null?(
+        <div style={{position:"absolute",top:4,right:6,zIndex:10,fontSize:10,color:"rgba(160,200,255,0.55)",fontWeight:600,pointerEvents:"none"}}>
+          Avg <span style={{color:"#58a6ff",fontWeight:700}}>{avg}d</span>
+          <span style={{color:"rgba(120,160,200,0.4)",marginLeft:4,fontSize:9}}>({vals.length} vessels)</span>
+        </div>
+      ):null;
+    })()}
+    {/* CSS overrides to improve FixingWindow bar colours */}
+    <style>{`
+      .fixing-bar-ppt,[data-bucket="PPT"],.bucket-ppt { background: rgba(99,236,163,0.85) !important; }
+      .fixing-bar-2d,[data-bucket="2-4d"],.bucket-2d { background: rgba(250,184,74,0.85) !important; }
+      .fixing-bar-4d,[data-bucket="4-8d"],.bucket-4d { background: rgba(246,133,92,0.85) !important; }
+      .fixing-bar-8d,[data-bucket=">8d"],.bucket-8d  { background: rgba(235,87,87,0.85) !important; }
+    `}</style>
     <Suspense fallback={null}><FixingWindow
       vessels={filtV}
       opFilter={opFilter}
@@ -1029,19 +1063,19 @@ const filtV=useMemo(()=>{
                     {/* UNIFIED FILTER PANEL */}
 {(()=>{
   const FR=({label,col,children})=>(
-    <div style={{display:"flex",flexDirection:"column",gap:3,paddingBottom:5}}>
-      <div style={{fontSize:9,fontWeight:700,color:col,textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</div>
+    <div style={{marginBottom:6}}>
+      <div style={{fontSize:9,fontWeight:700,color:col,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:4}}>{label}</div>
       <div style={{display:"flex",flexWrap:"wrap",gap:3}}>{children}</div>
     </div>
   );
   return(
-    <div style={{display:"flex",flexDirection:"column",gap:2,padding:"7px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1,overflowY:"auto"}}>
+    <div style={{display:"flex",flexDirection:"column",gap:0,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1,overflowY:"auto",minHeight:0}}>
       <FR label="Status" col={C.amber}>
-        {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Hide Emp"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>))}
+        {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>))}
         {filters.size>0&&<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
       </FR>
       <FR label="Updated" col={C.blue}>
-        {[["","All"],["today","Today"],["week","This wk"],["7d","7 days"],["14d","14 days"],["30d","30 days"]].map(([v,l])=>(<button key={v||"all"} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&(v!==""||updFilter===""))}>{l}</button>))}
+        {[["","All"],["today","Today"],["week","This week"],["7d","7 days"],["14d","14 days"],["30d","30 days"]].map(([v,l])=>(<button key={v||"all"} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&(v!==""||updFilter===""))}>{l}</button>))}
       </FR>
       <FR label="Region" col="#7dd3fc">
         {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>))}
@@ -1468,7 +1502,7 @@ const filtV=useMemo(()=>{
                       );
                     })}
                     <FR2 label="Period" col="#94a3b8">
-                      {[["","All"],["tw","This wk"],["lw","Last wk"],["ytd","YTD"]].map(([v,l])=>(
+                      {[["","All"],["tw","This week"],["lw","Last wk"],["ytd","YTD"]].map(([v,l])=>(
                         <button key={v||"all"} onClick={()=>setCTimeFilter(v)} style={fb(cTimeFilter===v)}>{l}</button>
                       ))}
                       {(cGradeFilter||cFilter!=="ALL"||cTimeFilter||cTagFilter)&&<button onClick={()=>{setCGradeFilter("");setCFilter("ALL");setCTimeFilter("");setCTagFilter("");}} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:4,fontSize:10}}>✕ Clear</button>}
