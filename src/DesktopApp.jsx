@@ -107,10 +107,38 @@ function TagCell({cargoId,tag,onUpdateC}){
 }
 
 // BunkerHeader — bunker input + refresh button for MGO ARA price
+// Pre-initialize bunker state from localStorage so RateMatrixBunkerInput gets it on mount
+if(!window._bunkerState){
+  const stored=localStorage.getItem("signal_bunker_price");
+  const p=stored?parseInt(stored):1100;
+  window._bunkerState={val:p>0?p:1100,listeners:[]};
+}
+
 function BunkerHeader(){
   const [fetching,setFetching]=useState(false);
   const [lastPrice,setLastPrice]=useState(null);
   const [fetchErr,setFetchErr]=useState(null);
+
+  // Load persisted bunker price on mount and push into RateMatrix state
+  React.useEffect(()=>{
+    const stored=localStorage.getItem("signal_bunker_price");
+    if(stored){
+      const p=parseInt(stored);
+      if(p>0){
+        if(!window._bunkerState) window._bunkerState={val:p,listeners:[]};
+        window._bunkerState.val=p;
+        window._bunkerState.listeners.forEach(cb=>cb(p));
+      }
+    }
+  },[]);
+
+  function pushPrice(price){
+    setLastPrice(price);
+    localStorage.setItem("signal_bunker_price",String(price));
+    if(!window._bunkerState) window._bunkerState={val:price,listeners:[]};
+    window._bunkerState.val=price;
+    window._bunkerState.listeners.forEach(cb=>cb(price));
+  }
 
   async function fetchMGO(){
     setFetching(true); setFetchErr(null);
@@ -128,11 +156,7 @@ function BunkerHeader(){
             if(nums){
               const price=parseInt(nums[nums.length-1]);
               if(price>400&&price<3000){
-                setLastPrice(price);
-                if(window._bunkerState){
-                  window._bunkerState.val=price;
-                  window._bunkerState.listeners.forEach(cb=>cb(price));
-                }
+                pushPrice(price);
                 setFetching(false);
                 return;
               }
@@ -145,11 +169,7 @@ function BunkerHeader(){
           if(nums){
             const price=parseInt(nums[0]);
             if(price>400&&price<3000){
-              setLastPrice(price);
-              if(window._bunkerState){
-                window._bunkerState.val=price;
-                window._bunkerState.listeners.forEach(cb=>cb(price));
-              }
+              pushPrice(price);
               setFetching(false);
               return;
             }
@@ -570,6 +590,9 @@ const filtV=useMemo(()=>{
       if(isNaN(d)) return true;
       if(updFilter==="today") return d>=todayStart;
       if(updFilter==="week") return d>=weekStart;
+      if(updFilter==="7d"){const x=new Date();x.setDate(x.getDate()-7);return d>=x;}
+      if(updFilter==="14d"){const x=new Date();x.setDate(x.getDate()-14);return d>=x;}
+      if(updFilter==="30d"){const x=new Date();x.setDate(x.getDate()-30);return d>=x;}
       return true;
     });
   }
@@ -937,7 +960,7 @@ const filtV=useMemo(()=>{
 
   <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
     <Suspense fallback={null}><FixingWindow
-      vessels={vessels14d}
+      vessels={filtV}
       opFilter={opFilter}
       onOpFilter={op => setOpFilter(o => o === op ? null : op)}
     /></Suspense>
@@ -1006,19 +1029,19 @@ const filtV=useMemo(()=>{
                     {/* UNIFIED FILTER PANEL */}
 {(()=>{
   const FR=({label,col,children})=>(
-    <div style={{display:"flex",alignItems:"center",gap:6,borderBottom:"1px solid "+C.bd2,paddingBottom:3}}>
-      <div style={{width:54,fontSize:10,fontWeight:700,color:col,textTransform:"uppercase",flexShrink:0}}>{label}</div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:3,flex:1}}>{children}</div>
+    <div style={{display:"flex",flexDirection:"column",gap:3,paddingBottom:5}}>
+      <div style={{fontSize:9,fontWeight:700,color:col,textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:3}}>{children}</div>
     </div>
   );
   return(
-    <div style={{display:"flex",flexDirection:"column",justifyContent:"space-between",padding:"7px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1}}>
+    <div style={{display:"flex",flexDirection:"column",gap:2,padding:"7px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1,overflowY:"auto"}}>
       <FR label="Status" col={C.amber}>
         {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Hide Emp"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>))}
         {filters.size>0&&<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
       </FR>
       <FR label="Updated" col={C.blue}>
-        {[["","All"],["today","Today"],["week","This wk"]].map(([v,l])=>(<button key={v||"all"} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&(v!==""||updFilter===""))}>{l}</button>))}
+        {[["","All"],["today","Today"],["week","This wk"],["7d","7 days"],["14d","14 days"],["30d","30 days"]].map(([v,l])=>(<button key={v||"all"} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&(v!==""||updFilter===""))}>{l}</button>))}
       </FR>
       <FR label="Region" col="#7dd3fc">
         {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>))}
