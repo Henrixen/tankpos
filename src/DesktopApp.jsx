@@ -408,19 +408,19 @@ const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
   const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
 const cargoColumns = [
   { key: "select", label: "", align: "center", width: 28 },
-  { key: "status", label: "Status", align: "left", width: colWidthsC.Status },
-  { key: "vessel", label: "Vessel", align: "left", width: colWidthsC.Vessel },
-  { key: "charterer", label: "Charterer", align: "left", width: colWidthsC.Charterer },
-  { key: "qty", label: "Qty", align: "left", width: colWidthsC.Qty },
-  { key: "cargo", label: "Cargo", align: "left", width: colWidthsC.Cargo },
-  { key: "load", label: "Load", align: "left", width: colWidthsC.Load },
-  { key: "disch", label: "Disch", align: "left", width: colWidthsC.Disch },
-  { key: "from", label: "From", align: "left", width: colWidthsC.LaycanStart },
-  { key: "to", label: "To", align: "left", width: colWidthsC.LaycanEnd },
-  { key: "freight", label: "Freight", align: "left", width: colWidthsC.Freight },
-  { key: "comment", label: "Comment", align: "left", width: colWidthsC.Comment },
-  { key: "tag", label: "Tag", align: "left", width: 80 },
-  { key: "updated", label: "Updated", align: "left", width: colWidthsC.Updated },
+  { key:"status",    sortKey:"Status",    label:"Status",    align:"left", width:colWidthsC.Status },
+  { key:"vessel",    sortKey:"Vessel",    label:"Vessel",    align:"left", width:colWidthsC.Vessel },
+  { key:"charterer", sortKey:"Charterer", label:"Charterer", align:"left", width:colWidthsC.Charterer },
+  { key:"qty",       sortKey:"Qty",       label:"Qty",             align:"left", width:colWidthsC.Qty },
+  { key:"cargo",     sortKey:"Cargo",     label:"Cargo",       align:"left", width:colWidthsC.Cargo },
+  { key:"load",      sortKey:"Load",      label:"Load",          align:"left", width:colWidthsC.Load },
+  { key:"disch",     sortKey:"Disch",     label:"Disch",       align:"left", width:colWidthsC.Disch },
+  { key:"from",      sortKey:"LaycanStart",label:"From", align:"left", width:colWidthsC.LaycanStart },
+  { key:"to",        sortKey:"LaycanEnd",  label:"To",   align:"left", width:colWidthsC.LaycanEnd },
+  { key:"freight",   sortKey:"Freight",   label:"Freight",  align:"left", width:colWidthsC.Freight },
+  { key:"comment",   sortKey:"Comment",   label:"Comment",  align:"left", width:colWidthsC.Comment },
+  { key:"tag",       sortKey:"tag",       label:"Tag",            align:"left", width:80 },
+  { key:"updated",   sortKey:"Updated",   label:"Updated", align:"left", width:colWidthsC.Updated },
   { key: "delete", label: "", align: "center", width: 26 },
 ];
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
@@ -634,18 +634,18 @@ const filtV=useMemo(()=>{
     align: "center", 
     width: 32 
   },
-  { key: "operator", label: "Operator", width: colWidthsV.Operator },
-  { key: "vessel", label: "Vessel", width: colWidthsV.Vessel },
-  { key: "built", label: "Built", align: "right", width: colWidthsV.Built },
-  { key: "dwt", label: "DWT", align: "right", width: colWidthsV.DWT },
-  { key: "coating", label: "Coating", width: colWidthsV.Coating },
-  { key: "loa", label: "LOA", align: "right", width: colWidthsV.LOA },
-  { key: "beam", label: "Beam", align: "right", width: colWidthsV.Beam },
-  { key: "cbm", label: "CBM", align: "right", width: colWidthsV.CBM },
-  { key: "date", label: "Date", align: "center", width: colWidthsV.Date },
-  { key: "openPort", label: "Open Port", width: colWidthsV.OpenPort },
-  { key: "comment", label: "Comment", width: colWidthsV.Comment },
-  { key: "updatedAt", label: "Updated", align: "center", width: colWidthsV.FileDate },
+  { key: "operator",  sortKey:"operator",  label: "Operator",  width: colWidthsV.Operator },
+  { key: "vessel",    sortKey:"vessel",    label: "Vessel",    width: colWidthsV.Vessel },
+  { key: "built",     sortKey:"built",     label: "Built",     align:"right", width: colWidthsV.Built },
+  { key: "dwt",       sortKey:"dwt",       label: "DWT",           align:"right", width: colWidthsV.DWT },
+  { key: "coating",   sortKey:"coating",   label: "Coating", width: colWidthsV.Coating },
+  { key: "loa",       sortKey:"loa",       label: "LOA",           align:"right", width: colWidthsV.LOA },
+  { key: "beam",      sortKey:"beam",      label: "Beam",        align:"right", width: colWidthsV.Beam },
+  { key: "cbm",       sortKey:"cbm",       label: "CBM",           align:"right", width: colWidthsV.CBM },
+  { key: "date",      sortKey:"date",      label: "Date",        align:"center", width: colWidthsV.Date },
+  { key: "openPort",  sortKey:"openPort",  label: "Open Port", width: colWidthsV.OpenPort },
+  { key: "comment",   sortKey:"comment",   label: "Comment",  width: colWidthsV.Comment },
+  { key: "updatedAt", sortKey:"fileDate",  label: "Updated", align:"center", width: colWidthsV.FileDate },
   { key: "delete", label: "", align: "center", width: 24 },
 ];
 
@@ -1063,6 +1063,25 @@ const filtV=useMemo(()=>{
                   <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtV.length}</span></span>
                   <span style={{color:C.faint}}>Selected <span style={{color:"#4fc3f7",fontWeight:700}}>{selVessels.size}</span></span>
                   
+                  {/* Sort dropdown */}
+                  <div style={{display:"flex",alignItems:"center",gap:4,marginLeft:"auto"}}>
+                    <span style={{fontSize:11,color:C.faint,whiteSpace:"nowrap"}}>Sort</span>
+                    <select value={sortK} onChange={e=>srt(e.target.value)}
+                      style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit"}}>
+                      <option value="operator">Operator</option>
+                      <option value="vessel">Vessel</option>
+                      <option value="built">Built</option>
+                      <option value="dwt">DWT</option>
+                      <option value="coating">Coating</option>
+                      <option value="date">Date</option>
+                      <option value="openPort">Open Port</option>
+                      <option value="fileDate">Updated</option>
+                    </select>
+                    <button onClick={()=>setSortD(d=>d*-1)}
+                      style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",minWidth:28}}>
+                      {sortD>0?"▲":"▼"}
+                    </button>
+                  </div>
                   {/* MOVED SEARCH FIELD HERE */}
                   <div style={{position:"relative",marginLeft:"auto",minWidth:300}}>
                     <input
@@ -1080,7 +1099,17 @@ const filtV=useMemo(()=>{
                 </div>
 
                 {/* Vessel Table */}
-                <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+                <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}
+                  onClick={e=>{
+                    const th=e.target.closest("th");
+                    if(!th) return;
+                    // Find th index in header row, map to posColumns sortKey
+                    const row=th.parentElement;
+                    if(!row) return;
+                    const idx=Array.from(row.children).indexOf(th);
+                    const col=posColumns[idx];
+                    if(col?.sortKey) srt(col.sortKey);
+                  }}>
                   <div style={{...tableWrap,minWidth:mobile?700:undefined}}>
                     <MatrixTable
   columns={posColumns}
@@ -1484,8 +1513,37 @@ const filtV=useMemo(()=>{
               <span style={{flex:1}}/>
               <span style={{fontSize:12,color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoTotal||cargoes.length}</span></span>
               <span style={{fontSize:12,color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtC.length}</span></span>
+              {/* Sort dropdown */}
+              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                <span style={{fontSize:11,color:C.faint,whiteSpace:"nowrap"}}>Sort</span>
+                <select value={cSortK} onChange={e=>{setCsortK(e.target.value);setCsortD(-1);}}
+                  style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit"}}>
+                  <option value="Updated">Updated</option>
+                  <option value="Status">Status</option>
+                  <option value="Vessel">Vessel</option>
+                  <option value="Charterer">Charterer</option>
+                  <option value="Cargo">Cargo</option>
+                  <option value="Load">Load</option>
+                  <option value="Disch">Disch</option>
+                  <option value="LaycanStart">From</option>
+                  <option value="Freight">Freight</option>
+                </select>
+                <button onClick={()=>setCsortD(d=>d*-1)}
+                  style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",minWidth:28}}>
+                  {cSortD>0?"▲":"▼"}
+                </button>
+              </div>
             </div>
-            <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+            <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}
+              onClick={e=>{
+                const th=e.target.closest("th");
+                if(!th) return;
+                const row=th.parentElement;
+                if(!row) return;
+                const idx=Array.from(row.children).indexOf(th);
+                const col=cargoColumns[idx];
+                if(col?.sortKey){const d=cSortK===col.sortKey?cSortD*-1:-1;setCsortK(col.sortKey);setCsortD(d);}
+              }}>
             <div style={{...tableWrap,minWidth:mobile?700:undefined}}>
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
