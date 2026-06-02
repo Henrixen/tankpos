@@ -959,7 +959,8 @@ const filtV=useMemo(()=>{
     display: "flex",
     flexDirection: "column",
     gap: 10,
-    overflow: "hidden"
+    overflow: "hidden",
+    minHeight: 0
   }}
 >
   <div style={{ flex: "0 0 auto" }}>
@@ -1067,22 +1068,23 @@ const filtV=useMemo(()=>{
                     {/* UNIFIED FILTER PANEL */}
 {(()=>{
   const FR=({label,col,children})=>(
-    <div style={{marginBottom:6}}>
-      <div style={{fontSize:9,fontWeight:700,color:col,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:4}}>{label}</div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:3}}>{children}</div>
+    <div style={{marginBottom:8}}>
+      <div style={{fontSize:9,fontWeight:700,color:col,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:4,paddingLeft:2}}>{label}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:1}}>{children}</div>
     </div>
   );
+  const fbV=active=>({...fb(active),display:"block",width:"100%",textAlign:"left",padding:"4px 8px",fontSize:11});
   return(
     <div style={{display:"flex",flexDirection:"column",gap:0,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1,overflowY:"auto",minHeight:0}}>
       <FR label="Status" col={C.amber}>
-        {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>))}
+        {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fbV(filters.has(f))}>{l}</button>))}
         {filters.size>0&&<button onClick={()=>setFilters(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
       </FR>
       <FR label="Updated" col={C.blue}>
-        {[["","All"],["today","Today"],["week","This week"],["7d","7 days"],["14d","14 days"],["30d","30 days"]].map(([v,l])=>(<button key={v||"all"} onClick={()=>setUpdFilter(v)} style={fb(updFilter===v&&(v!==""||updFilter===""))}>{l}</button>))}
+        {[["","All"],["today","Today"],["week","This week"],["7d","7 days"],["14d","14 days"],["30d","30 days"]].map(([v,l])=>(<button key={v||"all"} onClick={()=>setUpdFilter(v)} style={fbV(updFilter===v&&(v!==""||updFilter===""))}>{l}</button>))}
       </FR>
       <FR label="Region" col="#7dd3fc">
-        {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fb(filters.has(f))}>{l}</button>))}
+        {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(<button key={f} onClick={()=>toggleFilter(f)} style={fbV(filters.has(f))}>{l}</button>))}
       </FR>
       <FR label="S.Region" col={C.purple}>
         {superRegionOptions.filter(r=>r!=="ALL").map(r=>{
@@ -1090,20 +1092,20 @@ const filtV=useMemo(()=>{
             if(e.ctrlKey||e.metaKey){setSuperRegionFilter(prev=>{const n=new Set(prev);n.has(r)?n.delete(r):n.add(r);return n;});}
             else{setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));}
           };
-          return <button key={r} onClick={toggle} style={fb(superRegionFilter.has(r))}>{r}</button>;
+          return <button key={r} onClick={toggle} style={fbV(superRegionFilter.has(r))}>{r}</button>;
         })}
         {superRegionFilter.size>0&&<button onClick={()=>setSuperRegionFilter(new Set())} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
       </FR>
       <FR label="Segment" col={C.green}>
-        {(()=>{const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];return[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort((a,b)=>(ORDER.indexOf(a)===-1?99:ORDER.indexOf(a))-(ORDER.indexOf(b)===-1?99:ORDER.indexOf(b))).map(s=>(<button key={s} onClick={e=>{if(e.ctrlKey||e.metaKey){setSegmentFilter(prev=>{const n=new Set(prev);n.has(s)?n.delete(s):n.add(s);return n;});}else{setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));}setPosPage(1);}} style={fb(segmentFilter.has(s))}>{s}</button>));})()}
+        {(()=>{const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];return[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort((a,b)=>(ORDER.indexOf(a)===-1?99:ORDER.indexOf(a))-(ORDER.indexOf(b)===-1?99:ORDER.indexOf(b))).map(s=>(<button key={s} onClick={e=>{if(e.ctrlKey||e.metaKey){setSegmentFilter(prev=>{const n=new Set(prev);n.has(s)?n.delete(s):n.add(s);return n;});}else{setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));}setPosPage(1);}} style={fbV(segmentFilter.has(s))}>{s}</button>));})()}
         {segmentFilter.size>0&&<button onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
       </FR>
       <FR label="DWT" col="#f59e0b">
-        {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<button key={v} onClick={()=>{setDwtFilter(dwtFilter===v?"":v);setPosPage(1);}} style={fb(dwtFilter===v)}>{l}</button>))}
+        {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<button key={v} onClick={()=>{setDwtFilter(dwtFilter===v?"":v);setPosPage(1);}} style={fbV(dwtFilter===v)}>{l}</button>))}
         {dwtFilter&&<button onClick={()=>{setDwtFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
       </FR>
       <FR label="Built" col="#94a3b8">
-        {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<button key={v} onClick={()=>{setBuiltFilter(builtFilter===v?"":v);setPosPage(1);}} style={fb(builtFilter===v)}>{l}</button>))}
+        {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<button key={v} onClick={()=>{setBuiltFilter(builtFilter===v?"":v);setPosPage(1);}} style={fbV(builtFilter===v)}>{l}</button>))}
         {builtFilter&&<button onClick={()=>{setBuiltFilter("");setPosPage(1);}} style={{...fb(false),color:C.red,borderColor:C.red+"55"}}>✕</button>}
       </FR>
     </div>
@@ -1128,7 +1130,7 @@ const filtV=useMemo(()=>{
                   <div style={{display:"flex",alignItems:"center",gap:4,marginLeft:"auto"}}>
                     <span style={{fontSize:11,color:C.faint,whiteSpace:"nowrap"}}>Sort</span>
                     <select value={sortK} onChange={e=>srt(e.target.value)}
-                      style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit"}}>
+                      style={{fontSize:11,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",colorScheme:"dark"}}>
                       <option value="operator">Operator</option>
                       <option value="vessel">Vessel</option>
                       <option value="built">Built</option>
@@ -1578,7 +1580,7 @@ const filtV=useMemo(()=>{
               <div style={{display:"flex",alignItems:"center",gap:4}}>
                 <span style={{fontSize:11,color:C.faint,whiteSpace:"nowrap"}}>Sort</span>
                 <select value={cSortK} onChange={e=>{setCsortK(e.target.value);setCsortD(-1);}}
-                  style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit"}}>
+                  style={{fontSize:11,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",colorScheme:"dark"}}>
                   <option value="Updated">Updated</option>
                   <option value="Status">Status</option>
                   <option value="Vessel">Vessel</option>
