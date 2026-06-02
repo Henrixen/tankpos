@@ -110,6 +110,34 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
         padding:"3px 3px",textAlign:"center",boxSizing:"border-box",minWidth:0}}/>
   );
 }
+// CommentCell: free text (accepts text and numbers), shows per-row datestamp
+function CommentCell({ck,matrixRef,onSave,rev:extRev=0}){
+  const inputRef=useRef(null);
+  useEffect(()=>{
+    const el=inputRef.current;
+    if(!el||document.activeElement===el)return;
+    const val=matrixRef.current[ck]?.rate||"";
+    el.value=val;
+    el.style.color=val?"rgba(200,220,255,0.75)":C.faint;
+  },[extRev,ck]);
+  const val=matrixRef.current[ck]?.rate||"";
+  const ts=matrixRef.current[ck]?.ts||"";
+  return(
+    <div style={{display:"flex",alignItems:"center",width:"100%"}}>
+      <input ref={inputRef} data-ck={ck}
+        defaultValue={val}
+        placeholder="Comment..."
+        onFocus={e=>{e.target.style.outline="1px solid rgba(88,166,255,.4)";e.target.style.background="rgba(88,166,255,.06)";e.target.value=matrixRef.current[ck]?.rate||"";}}
+        onBlur={e=>{e.target.style.outline="none";e.target.style.background="transparent";const v=e.target.value.trim();e.target.style.color=v?"rgba(200,220,255,0.75)":C.faint;onSave(ck,v);}}
+        onKeyDown={e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape"){e.target.value=matrixRef.current[ck]?.rate||"";e.target.blur();}}}
+        style={{flex:1,background:"transparent",border:"none",outline:"none",
+          color:val?"rgba(200,220,255,0.75)":C.faint,fontFamily:"inherit",fontSize:11,
+          padding:"3px 4px",minWidth:0,width:"100%"}}/>
+      {ts&&<span style={{fontSize:9,color:"rgba(100,140,180,0.4)",whiteSpace:"nowrap",paddingRight:4,flexShrink:0}}>{ts}</span>}
+    </div>
+  );
+}
+
 function RateMatrix({onBunkerChange, bunkerHeader}){
   const [rev,forceUpdate]=useState(0);
   const [lastSaved,setLastSaved]=useState(()=>localStorage.getItem("signal_matrix_lastsaved")||null);
@@ -224,7 +252,8 @@ function RateMatrix({onBunkerChange, bunkerHeader}){
 
   function onSave(key,val){
     const prev=matrixRef.current[key]||{};
-    matrixRef.current={...matrixRef.current,[key]:{...prev,rate:val}};
+    const ts=key.endsWith("-comment")?new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short"}):(prev.ts||"");
+    matrixRef.current={...matrixRef.current,[key]:{...prev,rate:val,ts}};
     // Auto-calc TCE for EU routes when rate is entered
     if(key.endsWith("-rate")){
       const rtId=key.slice(0,-5);
@@ -296,7 +325,7 @@ function RateMatrix({onBunkerChange, bunkerHeader}){
                 </td>
                 <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-rate"} col={REGION_COLORS.Europe} rev={rev}/></td>
                 <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-tce"} col={C.green} rev={rev}/></td>
-                <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-comment"} col={C.faint} rev={rev}/></td>
+                <td style={{...tdR,padding:0}}><CommentCell matrixRef={matrixRef} onSave={onSave} ck={rt.id+"-comment"} rev={rev}/></td>
               </tr>
             ))}
           </tbody>
@@ -326,7 +355,7 @@ function RateMatrix({onBunkerChange, bunkerHeader}){
                       <RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-"+sz} col={REGION_COLORS[rg.region]} rev={rev}/>
                     </td>
                   ))}
-                  <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-comment"} col={C.faint} rev={rev}/></td>
+                  <td style={{...tdR,padding:0}}><CommentCell matrixRef={matrixRef} onSave={onSave} ck={rt.id+"-comment"} rev={rev}/></td>
                 </tr>
               ))}
             </tbody>
