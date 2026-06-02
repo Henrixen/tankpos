@@ -126,14 +126,14 @@ function CommentCell({ck,matrixRef,onSave,rev:extRev=0}){
     <div style={{display:"flex",alignItems:"center",width:"100%"}}>
       <input ref={inputRef} data-ck={ck}
         defaultValue={val}
-        placeholder="Comment..."
+        
         onFocus={e=>{e.target.style.outline="1px solid rgba(88,166,255,.4)";e.target.style.background="rgba(88,166,255,.06)";e.target.value=matrixRef.current[ck]?.rate||"";}}
         onBlur={e=>{e.target.style.outline="none";e.target.style.background="transparent";const v=e.target.value.trim();e.target.style.color=v?"rgba(200,220,255,0.75)":C.faint;onSave(ck,v);}}
         onKeyDown={e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape"){e.target.value=matrixRef.current[ck]?.rate||"";e.target.blur();}}}
         style={{flex:1,background:"transparent",border:"none",outline:"none",
           color:val?"rgba(200,220,255,0.75)":C.faint,fontFamily:"inherit",fontSize:11,
           padding:"3px 4px",minWidth:0,width:"100%"}}/>
-      {ts&&<span style={{fontSize:9,color:"rgba(100,140,180,0.4)",whiteSpace:"nowrap",paddingRight:4,flexShrink:0}}>{ts}</span>}
+      {ts&&<span style={{fontSize:9,color:"rgba(140,185,240,0.65)",whiteSpace:"nowrap",paddingRight:4,flexShrink:0,fontStyle:"italic"}}>{ts}</span>}
     </div>
   );
 }
@@ -315,7 +315,7 @@ function RateMatrix({onBunkerChange, bunkerHeader}){
             <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
             <th style={{...thS,width:"15%"}}>Rate ($ lsum)</th>
             <th style={{...thS,width:"15%",color:C.green}}>TCE $/day</th>
-            <th style={{...thS,width:"40%"}}><span>Comment</span>{lastSaved&&<span style={{fontWeight:400,fontSize:9,color:"rgba(120,160,200,0.35)",marginLeft:8}}>Updated {lastSaved}</span>}</th>
+            <th style={{...thS,width:"40%"}}><span>Comment</span></th>
           </tr></thead>
           <tbody>
             {euRoutes.map((rt,i)=>(
