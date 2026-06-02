@@ -278,11 +278,7 @@ export default function TankPos(){
     .ilike("vessel_name", name);
 
   if (error) console.error("updateV error:", error);
-  else {
-    // Re-fetch after edit — debounced so rapid Tab-through doesn't hammer DB
-    clearTimeout(refreshTimer.current);
-    refreshTimer.current = setTimeout(()=>fetchPositions(), 800);
-  }
+  // No re-fetch — local state already updated optimistically, re-fetch reshuffles table
 }, []);
 
   // Universal cargo updater — optimistic local update + Supabase write
@@ -297,10 +293,7 @@ export default function TankPos(){
     const dbValue=(field==="from"||field==="to")?toISODate(value):value;
     const{error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id);
     if(error) console.error(error);
-    else {
-      clearTimeout(refreshTimer.current);
-      refreshTimer.current = setTimeout(()=>fetchCargoes(), 800);
-    }
+    // No re-fetch — local state already updated above, re-fetch reshuffles the table
   },[]);
 
   const addVessels = useCallback(async (parsed) => {
