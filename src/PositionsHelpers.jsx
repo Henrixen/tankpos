@@ -219,7 +219,8 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels}) {
       if(qty||cargo) segs.push([qty,cargo].filter(Boolean).join(" "));
       if(load||disch) segs.push(load&&disch?load+" to "+disch:load||disch);
       if(laycan) segs.push(laycan);
-      segs.push(freight);
+      // Only include freight if it has an actual value (not RNR, not empty)
+      if(freight && freight.toUpperCase() !== "RNR") segs.push(freight);
       return segs.join(" / ");
     }).join("\n");
   }
@@ -290,9 +291,22 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels}) {
         onClick={copyText} title="Copy fixtures">
         {copied?"✓ Copied!":(mode==="cargo"&&selCargoes&&selCargoes.size>0?"Copy ("+selCargoes.size+")":mode==="pos"&&selVessels&&selVessels.size>0?"Copy ("+selVessels.size+")":"Copy all")}
       </button>
-      <button style={btnStyle} onClick={()=>exportExcel(mode==="cargo"&&selCargoes&&selCargoes.size>0?rows.filter(c=>selCargoes.has(c.id)):rows,"pos"===mode?"pos":"cargo")}
-        title="Export CSV">
-        CSV
+      <button style={btnStyle}
+        onClick={()=>{
+          const activeRows=mode==="cargo"&&selCargoes&&selCargoes.size>0?rows.filter(c=>selCargoes.has(c.id)):rows;
+          // Build CSV string same as exportExcel but copy instead of download
+          let csvRows;
+          if(mode==="pos"){
+            csvRows=[["Vessel","Operator","Built","DWT","LOA","Beam","CBM","Open Date","Open Port","Comment","Fuel","Ice Class"],...activeRows.map(v=>[v.vessel||"",v.operator||"",v.built||"",v.dwt||"",v.loa||"",v.beam||"",v.cbm||"",v.date||"",v.openPort||"",v.comment||"",v.spec?.fuel||"",v.spec?.iceClass||""])];
+          } else {
+            csvRows=[["Vessel","Charterer","Cargo","Qty","Load Port","Disch Port","Laycan","Freight","Status"],...activeRows.map(c=>[c.vessel||"",c.charterer||"",c.cargo||"",c.qty||"",c.load||"",c.disch||"",c.from&&c.to?c.from+" - "+c.to:c.from||c.to||"",c.freight||"",c.status||""])];
+          }
+          const csv=csvRows.map(row=>row.map(cell=>{const s=String(cell).replace(/"/g,'""');return s.includes(",")||s.includes("\n")||s.includes('"')?`"${s}"`:s;}).join(",")).join("\n");
+          if(navigator.clipboard) navigator.clipboard.writeText(csv).catch(()=>{});
+          else{const ta=document.createElement("textarea");ta.value=csv;ta.style.cssText="position:fixed;opacity:0;";document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);}
+        }}
+        title="Copy as CSV (paste to Excel)">
+        Copy CSV
       </button>
     </div>
   );
