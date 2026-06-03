@@ -1454,9 +1454,23 @@ const filtV=useMemo(()=>{
         {/* ── CARGOES ── */}
         {tab==="cargo"&&(
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {/* Parse + filter panel side by side */}
+            {/* Parse + filter panel + graph */}
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
-              <div style={{flex:mobile?"1 1 auto":"0 0 60%",display:"flex",flexDirection:"column",gap:4}}>
+              {/* Left: OnParse tag selector + ParsePanel */}
+              <div style={{flex:mobile?"1 1 auto":"0 0 36%",display:"flex",flexDirection:"column",gap:4}}>
+                {/* ON PARSE tag selector — above Parse & Add */}
+                {(()=>{
+                  const usedTags=getTagList();
+                  return(
+                    <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:5,padding:"5px 8px",display:"flex",alignItems:"center",flexWrap:"wrap",gap:4}}>
+                      <span style={{fontSize:9,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.1em",marginRight:2}}>Tag on parse</span>
+                      {usedTags.map(t=>(
+                        <button key={t} onClick={()=>setPendingParseTag(v=>v===t?"":t)} style={fb(pendingParseTag===t)}>{t}</button>
+                      ))}
+                      {pendingParseTag&&<button onClick={()=>setPendingParseTag("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕ {pendingParseTag}</button>}
+                    </div>
+                  );
+                })()}
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels}
                   onAddCargoes={async(parsed)=>{
                     const withTag=pendingParseTag?parsed.map(c=>({...c,tag:pendingParseTag})):parsed;
@@ -1466,81 +1480,107 @@ const filtV=useMemo(()=>{
                   }}
                   lockedMode="cargo" vesselDB={{}}/>
               </div>
+              {/* Centre: Grade | Period | Tag filter grid — same height as parse section */}
               {(()=>{
-                const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
                 let allGroups=[];
                 try{const raw=localStorage.getItem("signal_cargo_filter_groups");allGroups=raw?JSON.parse(raw):[];}catch{}
-                // Grade groups (default category)
                 const gradeGroups=allGroups.filter(g=>(g.category||"grade")==="grade");
                 const showRaw=gradeGroups.length===0;
                 const rawGrades=showRaw?[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort().slice(0,20):[];
-                const FR2=({label,col,children})=>(
-                  <div style={{display:"flex",alignItems:"flex-start",gap:5,padding:"2px 0 3px",borderBottom:"1px solid "+C.bd2}}>
-                    <div style={{width:52,fontSize:10,fontWeight:700,color:col,textTransform:"uppercase",flexShrink:0,paddingTop:2}}>{label}</div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:3,flex:1}}>{children}</div>
+                const usedTags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
+                const COL=({label,col,children})=>(
+                  <div style={{display:"flex",flexDirection:"column",gap:0,minWidth:0,flex:1}}>
+                    <div style={{fontSize:9,fontWeight:700,color:col,textTransform:"uppercase",letterSpacing:"0.1em",padding:"0 0 4px 0",borderBottom:"1px solid "+C.bd2,marginBottom:4,whiteSpace:"nowrap"}}>{label}</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:1}}>{children}</div>
                   </div>
                 );
-                // Build filter rows for each category that has groups
-                const catRows=[
-                  {id:"grade",label:"Grade",col:C.purple},
-                  {id:"load",label:"Load",col:"#7dd3fc"},
-                  {id:"disch",label:"Disch",col:"#7dd3fc"},
-                  {id:"charterer",label:"Charterer",col:"#faa356"},
-                  {id:"laycan",label:"Laycan",col:"#94a3b8"},
-                  {id:"tag",label:"Tag",col:"#f472b6"},
-                ];
+                const B=({active,onClick,children,red})=>(
+                  <button onClick={onClick} style={{...fb(active),display:"block",width:"100%",textAlign:"left",padding:"3px 7px",fontSize:11,whiteSpace:"nowrap",color:red?C.red:undefined,borderColor:red?C.red+"55":undefined}}>{children}</button>
+                );
                 return(
-                  <div style={{flex:1,display:"flex",flexDirection:"column",gap:3,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6}}>
-                    {/* Grade row — always shown */}
-                    <FR2 label="Grade" col={C.purple}>
-                      {showRaw
-                        ?rawGrades.map(g=><button key={g} onClick={()=>setCGradeFilter(v=>v===g?"":g)} style={fb(cGradeFilter===g)}>{g}</button>)
-                        :gradeGroups.map(grp=><button key={grp.id} onClick={()=>setCGradeFilter(v=>v===grp.id?"":grp.id)} style={fb(cGradeFilter===grp.id)} title={grp.aliases.join(", ")}>{grp.label}</button>)
-                      }
-                      {cGradeFilter&&<button onClick={()=>setCGradeFilter("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
-                      <button onClick={()=>setTab("settings")} style={{...fb(false),fontSize:9,color:"rgba(120,160,220,0.35)",padding:"1px 5px"}} title="Edit groups in Settings">⚙</button>
-                    </FR2>
-                    {/* Dynamic rows for other categories */}
-                    {catRows.filter(cr=>cr.id!=="grade").map(cr=>{
-                      const catGroups=allGroups.filter(g=>g.category===cr.id);
-                      if(!catGroups.length)return null;
-                      return(
-                        <FR2 key={cr.id} label={cr.label} col={cr.col}>
-                          {catGroups.map(grp=>(
-                            <button key={grp.id} onClick={()=>setCGradeFilter(v=>v===grp.id?"":grp.id)} style={fb(cGradeFilter===grp.id)} title={grp.aliases.join(", ")}>{grp.label}</button>
-                          ))}
-                          {cGradeFilter&&catGroups.some(g=>g.id===cGradeFilter)&&<button onClick={()=>setCGradeFilter("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
-                        </FR2>
-                      );
-                    })}
-                    <FR2 label="Period" col="#94a3b8">
-                      {[["","All"],["tw","This week"],["lw","Last wk"],["ytd","YTD"]].map(([v,l])=>(
-                        <button key={v||"all"} onClick={()=>setCTimeFilter(v)} style={fb(cTimeFilter===v)}>{l}</button>
+                  <div style={{flex:"0 0 auto",width:mobile?"100%":220,display:"flex",flexDirection:"column",gap:0}}>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,padding:"8px 8px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,overflowY:"auto",maxHeight:240,boxSizing:"border-box"}}>
+                      {/* Grade column */}
+                      <COL label="Grade" col={C.purple}>
+                        {showRaw
+                          ?rawGrades.map(g=><B key={g} active={cGradeFilter===g} onClick={()=>setCGradeFilter(v=>v===g?"":g)}>{g}</B>)
+                          :gradeGroups.map(grp=><B key={grp.id} active={cGradeFilter===grp.id} onClick={()=>setCGradeFilter(v=>v===grp.id?"":grp.id)}>{grp.label}</B>)
+                        }
+                        {cGradeFilter&&gradeGroups.some(g=>g.id===cGradeFilter)&&<B active={false} red onClick={()=>setCGradeFilter("")}>✕ Clear</B>}
+                      </COL>
+                      {/* Period column */}
+                      <COL label="Period" col="#94a3b8">
+                        {[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([v,l])=>(
+                          <B key={v||"all"} active={cTimeFilter===v} onClick={()=>setCTimeFilter(v)}>{l}</B>
+                        ))}
+                        {(cGradeFilter||cFilter!=="ALL"||cTimeFilter||cTagFilter)&&<B active={false} red onClick={()=>{setCGradeFilter("");setCFilter("ALL");setCTimeFilter("");setCTagFilter("");}}>✕ Clear all</B>}
+                      </COL>
+                      {/* Tag column */}
+                      <COL label="Tag" col="#f472b6">
+                        {usedTags.map(t=>(
+                          <B key={t} active={cTagFilter===t} onClick={()=>setCTagFilter(v=>v===t?"":t)}>{t}</B>
+                        ))}
+                        {cTagFilter&&<B active={false} red onClick={()=>setCTagFilter("")}>✕ Clear</B>}
+                      </COL>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Right: Cargo count by month — line graph */}
+              {!mobile&&(()=>{
+                const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+                const now=new Date();
+                // Build last 12 months
+                const months=[];
+                for(let i=11;i>=0;i--){
+                  const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+                  months.push({label:MONTHS[d.getMonth()]+(i===0||d.getMonth()===0?" '"+String(d.getFullYear()).slice(2):""),month:d.getMonth(),year:d.getFullYear()});
+                }
+                const counts=months.map(m=>({
+                  ...m,
+                  count:cargoes.filter(c=>{
+                    const d=c.updated?new Date(c.updated):c.from?new Date(c.from):null;
+                    return d&&!isNaN(d)&&d.getMonth()===m.month&&d.getFullYear()===m.year;
+                  }).length
+                }));
+                const maxC=Math.max(1,...counts.map(m=>m.count));
+                const W=counts.length;
+                const H=100;
+                const PAD={t:16,r:8,b:28,l:28};
+                const iW=280-PAD.l-PAD.r;
+                const iH=H-PAD.t-PAD.b;
+                const pts=counts.map((m,i)=>({
+                  x:PAD.l+i*(iW/(W-1)),
+                  y:PAD.t+iH-(m.count/maxC)*iH,
+                  ...m
+                }));
+                const pathD=pts.map((p,i)=>(i===0?"M":"L")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
+                const areaD=pathD+" L"+pts[pts.length-1].x.toFixed(1)+","+(PAD.t+iH)+" L"+pts[0].x.toFixed(1)+","+(PAD.t+iH)+" Z";
+                return(
+                  <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"8px 10px",display:"flex",flexDirection:"column",gap:4,minWidth:0,boxSizing:"border-box"}}>
+                    <div style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em"}}>Cargoes by month</div>
+                    <svg viewBox={"0 0 280 "+H} style={{width:"100%",height:H,overflow:"visible"}}>
+                      {/* Y-axis ticks */}
+                      {[0,0.5,1].map(f=>(
+                        <g key={f}>
+                          <line x1={PAD.l} y1={PAD.t+iH*(1-f)} x2={PAD.l+iW} y2={PAD.t+iH*(1-f)} stroke="rgba(88,130,200,0.12)" strokeWidth="1"/>
+                          <text x={PAD.l-4} y={PAD.t+iH*(1-f)+4} textAnchor="end" fontSize="8" fill="rgba(120,160,200,0.4)">{Math.round(maxC*f)}</text>
+                        </g>
                       ))}
-                      {(cGradeFilter||cFilter!=="ALL"||cTimeFilter||cTagFilter)&&<button onClick={()=>{setCGradeFilter("");setCFilter("ALL");setCTimeFilter("");setCTagFilter("");}} style={{...fb(false),color:C.red,borderColor:C.red+"55",marginLeft:4,fontSize:10}}>✕ Clear</button>}
-                    </FR2>
-                    {/* Tag filter row */}
-                    {(()=>{
-                      const usedTags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
-                      if(!usedTags.length)return null;
-                      return(
-                        <FR2 label="Tag" col="#f472b6">
-                          {usedTags.map(t=>(
-                            <button key={t} onClick={()=>setCTagFilter(v=>v===t?"":t)} style={fb(cTagFilter===t)}>{t}</button>
-                          ))}
-                          {cTagFilter&&<button onClick={()=>setCTagFilter("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕</button>}
-                        </FR2>
-                      );
-                    })()}
-                    {/* small divider */}
-                    <div style={{borderTop:"1px solid rgba(88,166,255,0.08)",margin:"1px 0"}}/>
-                    {/* Tag on parse */}
-                    <FR2 label="On parse" col="#94a3b8">
-                      {getTagList().map(t=>(
-                        <button key={t} onClick={()=>setPendingParseTag(v=>v===t?"":t)} style={fb(pendingParseTag===t)}>{t}</button>
+                      {/* Area fill */}
+                      <path d={areaD} fill="rgba(88,166,255,0.08)"/>
+                      {/* Line */}
+                      <path d={pathD} fill="none" stroke="#58a6ff" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>
+                      {/* Dots + labels */}
+                      {pts.map((p,i)=>(
+                        <g key={i}>
+                          {p.count>0&&<circle cx={p.x} cy={p.y} r="2.5" fill="#58a6ff"/>}
+                          {p.count>0&&<text x={p.x} y={p.y-6} textAnchor="middle" fontSize="8" fill="rgba(160,200,255,0.6)" fontWeight="600">{p.count}</text>}
+                          <text x={p.x} y={PAD.t+iH+12} textAnchor="middle" fontSize="8" fill="rgba(100,140,180,0.5)">{p.label}</text>
+                        </g>
                       ))}
-                      {pendingParseTag&&<button onClick={()=>setPendingParseTag("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕ {pendingParseTag}</button>}
-                    </FR2>
+                    </svg>
                   </div>
                 );
               })()}
