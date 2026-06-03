@@ -407,8 +407,22 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
     const sun=new Date(mon);sun.setDate(mon.getDate()+6);
     return[mon,sun];
   }
-  const [thisWeekMon,thisWeekSun]=getWeekBounds(0);
-  const [lastWeekMon,lastWeekSun]=getWeekBounds(-1);
+  const [thisWeekMon,thisWeekSun]=useMemo(()=>getWeekBounds(0),[]);
+  const [lastWeekMon,lastWeekSun]=useMemo(()=>getWeekBounds(-1),[]);
+  // Accurate week counts from DB (not just the first 200 loaded)
+  const [weekCounts,setWeekCounts]=useState({thisWk:0,lastWk:0});
+  useEffect(()=>{
+    async function fetchWeekCounts(){
+      const fmt=d=>d.toISOString().slice(0,10);
+      const[{count:tw},{count:lw}]=await Promise.all([
+        supabase.from("cargoes").select("*",{count:"exact",head:true}).gte("updated",fmt(thisWeekMon)).lte("updated",fmt(thisWeekSun)+"T23:59:59"),
+        supabase.from("cargoes").select("*",{count:"exact",head:true}).gte("updated",fmt(lastWeekMon)).lte("updated",fmt(lastWeekSun)+"T23:59:59"),
+      ]);
+      setWeekCounts({thisWk:tw||0,lastWk:lw||0});
+    }
+    fetchWeekCounts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
   function inRange(dateStr,from,to){if(!dateStr)return false;const d=new Date(dateStr);d.setHours(0,0,0,0);return d>=from&&d<=to;}
   const [mxSearch,setMxSearch]=useState("");
   const [cSortK,setCsortK]=useState("updated");
@@ -1685,7 +1699,33 @@ const filtV=useMemo(()=>{
             </div>
             {/* Stats + Copy/CSV/Delete */}
             <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,flexWrap:"wrap"}}>
-              <Suspense fallback={null}><ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes} allFilteredCargoes={filtC}/></Suspense>
+              <Suspense fallback={null}><ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes} allFilteredCargoes={filtC}
+                onExportAll={async()=>{
+                  // Fetch ALL matching cargoes from DB with current search
+                  const term=cSearch.trim();
+                  let query=supabase.from("cargoes").select("*").order("updated",{ascending:false});
+                  if(term) query=query.or(`charterer.ilike.%${term}%,vessel.ilike.%${term}%,load.ilike.%${term}%,disch.ilike.%${term}%,cargo.ilike.%${term}%`);
+                  // Fetch in batches to get all
+                  let all=[];let from=0;const BATCH=1000;
+                  while(true){
+                    const{data,error}=await query.range(from,from+BATCH-1);
+                    if(error||!data)break;
+                    all=[...all,...data.map(normaliseCargo)];
+                    if(data.length<BATCH)break;
+                    from+=BATCH;
+                  }
+                  // Apply in-memory filters
+                  let list=all;
+                  if(cTagFilter)list=list.filter(c=>(c.tag||"").toLowerCase()===cTagFilter.toLowerCase());
+                  if(cGradeFilter){
+                    let allGroups=[];try{const raw=localStorage.getItem("signal_cargo_filter_groups");allGroups=raw?JSON.parse(raw):[];}catch{}
+                    const grp=allGroups.find(g=>g.id===cGradeFilter);
+                    if(grp){const fm={grade:"cargo",load:"load",disch:"disch",charterer:"charterer",tag:"tag"};const f=fm[grp.category||"grade"]||"cargo";list=list.filter(c=>grp.aliases.some(a=>(c[f]||"").toLowerCase().includes(a.toLowerCase())));}
+                    else list=list.filter(c=>(c.cargo||"").toLowerCase().includes(cGradeFilter.toLowerCase()));
+                  }
+                  return list;
+                }}
+              /></Suspense>
               {selCargoes.size>0&&(
                 <button onClick={()=>setTab("reports")} style={{fontSize:11,fontWeight:600,padding:"2px 9px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                   📋 To Report ({selCargoes.size})
@@ -1709,8 +1749,8 @@ const filtV=useMemo(()=>{
                 </div>
               )}
               <div style={{width:1,height:14,background:C.bd2}}/>
-              <span style={{fontSize:12,color:C.faint}}>This wk <span style={{color:"#4fc3f7",fontWeight:700}}>{cargoes.filter(c=>inRange(c.updated||c.created_at,thisWeekMon,thisWeekSun)).length}</span></span>
-              <span style={{fontSize:12,color:C.faint}}>Last wk <span style={{color:"rgba(120,160,220,0.6)",fontWeight:700}}>{cargoes.filter(c=>inRange(c.updated||c.created_at,lastWeekMon,lastWeekSun)).length}</span></span>
+              <span style={{fontSize:12,color:C.faint}}>This wk <span style={{color:"#4fc3f7",fontWeight:700}}>{weekCounts.thisWk}</span></span>
+              <span style={{fontSize:12,color:C.faint}}>Last wk <span style={{color:"rgba(120,160,220,0.6)",fontWeight:700}}>{weekCounts.lastWk}</span></span>
               <span style={{flex:1}}/>
               <span style={{fontSize:12,color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoTotal||cargoes.length}</span></span>
               <span style={{fontSize:12,color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtC.length}</span></span>
