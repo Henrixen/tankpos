@@ -148,11 +148,12 @@ function FixingWindow({vessels, fileDate, opFilter, onOpFilter}){
 
 // ─── Export Panel ─────────────────────────────────────────────────────────────
 
-function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels, allFilteredCargoes}) {
+function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels, allFilteredCargoes, onExportAll}) {
   // mode = "pos" | "cargo"
   const [copied, setCopied] = useState(false);
   const [csvCopied, setCsvCopied] = useState(false);
   const [exportCopied, setExportCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [selRows, setSelRows] = useState(null);
 
   function fmtDate(){ return new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}); }
@@ -311,17 +312,20 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels, allFiltere
         title="Copy as CSV (paste to Excel)">
         {csvCopied?"✓ CSV Copied!":"Copy CSV"}
       </button>
-      {mode==="cargo"&&allFilteredCargoes&&allFilteredCargoes.length>0&&(
-        <button style={{...btnStyle,borderColor:exportCopied?"rgba(67,233,123,0.5)":undefined,color:exportCopied?"#43e97b":"#9fc3f5"}}
-          onClick={()=>{
-            const csvRows=[["Vessel","Charterer","Cargo","Qty","Load","Disch","From","To","Freight","Status","Tag","Updated"],...allFilteredCargoes.map(c=>[c.vessel||"",c.charterer||"",c.cargo||"",c.qty||"",c.load||"",c.disch||"",c.from||"",c.to||"",c.freight||"",c.status||"",c.tag||"",c.updated||""])];
+            {mode==="cargo"&&(onExportAll||allFilteredCargoes)&&(
+        <button style={{...btnStyle,borderColor:exportCopied?"rgba(67,233,123,0.5)":undefined,color:exportCopied?"#43e97b":exporting?"rgba(250,184,74,0.8)":"#9fc3f5"}}
+          onClick={async()=>{
+            setExporting(true);
+            let exportRows=allFilteredCargoes||cargoes;
+            if(onExportAll){try{exportRows=await onExportAll();}catch(e){console.error(e);}}
+            const csvRows=[["Vessel","Charterer","Cargo","Qty","Load","Disch","From","To","Freight","Status","Tag","Updated"],...exportRows.map(c=>[c.vessel||"",c.charterer||"",c.cargo||"",c.qty||"",c.load||"",c.disch||"",c.from||"",c.to||"",c.freight||"",c.status||"",c.tag||"",c.updated||""])];
             const csv=csvRows.map(row=>row.map(cell=>{const s=String(cell).replace(/"/g,'""');return s.includes(",")||s.includes("\n")||s.includes('"')?`"${s}"`:s;}).join(",")).join("\n");
             if(navigator.clipboard) navigator.clipboard.writeText(csv).catch(()=>{});
             else{const ta=document.createElement("textarea");ta.value=csv;ta.style.cssText="position:fixed;opacity:0;";document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);}
-            setExportCopied(true);setTimeout(()=>setExportCopied(false),2500);
+            setExporting(false);setExportCopied(true);setTimeout(()=>setExportCopied(false),2500);
           }}
-          title={"Export all "+allFilteredCargoes.length+" matching cargoes"}>
-          {exportCopied?"✓ Copied!":"Export all ("+allFilteredCargoes.length+")"}
+          title="Export all matching cargoes from database">
+          {exporting?"⟳ Fetching…":exportCopied?"✓ Copied!":"Export all"}
         </button>
       )}
     </div>
