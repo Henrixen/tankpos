@@ -205,11 +205,19 @@ export default function TankPos(){
   }));
 }
   async function loadMoreCargoes(){
-    const{data,error}=await supabase.from("cargoes").select("*")
-      .range(cargoes.length,cargoes.length+199).order("updated",{ascending:false});
-    if(error){console.error(error);return;}
-    if(data.length<200) setHasMore(false);
-    setCargoes(prev=>[...prev,...data.map(normaliseCargo)]);
+    // Load ALL remaining cargoes, not just 200 at a time
+    let allData=[];
+    let from=cargoes.length;
+    const BATCH=1000;
+    while(true){
+      const{data,error}=await supabase.from("cargoes").select("*")
+        .range(from,from+BATCH-1).order("updated",{ascending:false});
+      if(error){console.error(error);break;}
+      allData=[...allData,...data];
+      if(data.length<BATCH){setHasMore(false);break;}
+      from+=BATCH;
+    }
+    if(allData.length>0) setCargoes(prev=>[...prev,...allData.map(normaliseCargo)]);
   }
 
   const renameV=useCallback((oldName,newName)=>{
