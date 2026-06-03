@@ -1457,7 +1457,7 @@ const filtV=useMemo(()=>{
             {/* Parse + filter panel + graph */}
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
               {/* Left: OnParse tag selector + ParsePanel */}
-              <div style={{flex:mobile?"1 1 auto":"0 0 36%",display:"flex",flexDirection:"column",gap:4}}>
+              <div style={{flex:mobile?"1 1 auto":"0 0 50%",display:"flex",flexDirection:"column",gap:4}}>
                 {/* ON PARSE tag selector — above Parse & Add */}
                 {(()=>{
                   const usedTags=getTagList();
@@ -1495,10 +1495,10 @@ const filtV=useMemo(()=>{
                   </div>
                 );
                 const B=({active,onClick,children,red})=>(
-                  <button onClick={onClick} style={{...fb(active),display:"block",width:"100%",textAlign:"left",padding:"3px 7px",fontSize:11,whiteSpace:"nowrap",color:red?C.red:undefined,borderColor:red?C.red+"55":undefined}}>{children}</button>
+                  <button onClick={onClick} style={{...fb(active),display:"block",width:"100%",textAlign:"left",padding:"3px 7px",fontSize:11,whiteSpace:"nowrap",color:red?C.red:active?"#d9ecff":"#9fc3f5",borderColor:red?C.red+"55":undefined}}>{children}</button>
                 );
                 return(
-                  <div style={{flex:"0 0 auto",width:mobile?"100%":220,display:"flex",flexDirection:"column",gap:0}}>
+                  <div style={{flex:"0 0 auto",width:mobile?"100%":"25%",display:"flex",flexDirection:"column",gap:0}}>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,padding:"8px 8px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,overflowY:"auto",maxHeight:240,boxSizing:"border-box"}}>
                       {/* Grade column */}
                       <COL label="Grade" col={C.purple}>
@@ -1527,59 +1527,94 @@ const filtV=useMemo(()=>{
                 );
               })()}
 
-              {/* Right: Cargo count by month — line graph */}
+              {/* Right: Cargo count by month — animated line graph */}
               {!mobile&&(()=>{
                 const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
                 const now=new Date();
-                // Build last 12 months
+                // Determine actual date range from cargo data
+                const allDates=cargoes.map(c=>c.updated?new Date(c.updated):c.from?new Date(c.from):null).filter(d=>d&&!isNaN(d));
+                const minDate=allDates.length?new Date(Math.min(...allDates)):new Date(now.getFullYear(),now.getMonth()-11,1);
+                const startYear=minDate.getFullYear();
+                const startMonth=minDate.getMonth();
+                // Build monthly buckets from start to now
                 const months=[];
-                for(let i=11;i>=0;i--){
-                  const d=new Date(now.getFullYear(),now.getMonth()-i,1);
-                  months.push({label:MONTHS[d.getMonth()]+(i===0||d.getMonth()===0?" '"+String(d.getFullYear()).slice(2):""),month:d.getMonth(),year:d.getFullYear()});
+                let y=startYear,m=startMonth;
+                while(y<now.getFullYear()||(y===now.getFullYear()&&m<=now.getMonth())){
+                  months.push({month:m,year:y});
+                  m++;if(m>11){m=0;y++;}
                 }
-                const counts=months.map(m=>({
-                  ...m,
+                const counts=months.map(bkt=>({
+                  ...bkt,
                   count:cargoes.filter(c=>{
                     const d=c.updated?new Date(c.updated):c.from?new Date(c.from):null;
-                    return d&&!isNaN(d)&&d.getMonth()===m.month&&d.getFullYear()===m.year;
+                    return d&&!isNaN(d)&&d.getMonth()===bkt.month&&d.getFullYear()===bkt.year;
                   }).length
                 }));
                 const maxC=Math.max(1,...counts.map(m=>m.count));
-                const W=counts.length;
-                const H=100;
-                const PAD={t:16,r:8,b:28,l:28};
-                const iW=280-PAD.l-PAD.r;
-                const iH=H-PAD.t-PAD.b;
-                const pts=counts.map((m,i)=>({
-                  x:PAD.l+i*(iW/(W-1)),
-                  y:PAD.t+iH-(m.count/maxC)*iH,
-                  ...m
+                const W=Math.max(counts.length,2);
+                const SVG_W=500;const SVG_H=130;
+                const PAD={t:18,r:10,b:32,l:32};
+                const iW=SVG_W-PAD.l-PAD.r;
+                const iH=SVG_H-PAD.t-PAD.b;
+                const pts=counts.map((bkt,i)=>({
+                  x:PAD.l+(W<=1?0:i*(iW/(W-1))),
+                  y:PAD.t+iH-(bkt.count/maxC)*iH,
+                  ...bkt
                 }));
                 const pathD=pts.map((p,i)=>(i===0?"M":"L")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
-                const areaD=pathD+" L"+pts[pts.length-1].x.toFixed(1)+","+(PAD.t+iH)+" L"+pts[0].x.toFixed(1)+","+(PAD.t+iH)+" Z";
+                const areaD=pts.length?pathD+" L"+pts[pts.length-1].x.toFixed(1)+","+(PAD.t+iH)+" L"+pts[0].x.toFixed(1)+","+(PAD.t+iH)+" Z":"";
+                const lineLen=pts.length>1?pts.reduce((acc,p,i)=>{if(i===0)return 0;const prev=pts[i-1];return acc+Math.hypot(p.x-prev.x,p.y-prev.y);},0):0;
+                // Show labels: year changes + every Nth month to avoid clutter
+                const step=Math.max(1,Math.floor(W/12));
                 return(
-                  <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"8px 10px",display:"flex",flexDirection:"column",gap:4,minWidth:0,boxSizing:"border-box"}}>
-                    <div style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em"}}>Cargoes by month</div>
-                    <svg viewBox={"0 0 280 "+H} style={{width:"100%",height:H,overflow:"visible"}}>
-                      {/* Y-axis ticks */}
-                      {[0,0.5,1].map(f=>(
+                  <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"10px 12px",display:"flex",flexDirection:"column",gap:6,minWidth:0,boxSizing:"border-box",minHeight:160}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em"}}>Cargoes by month</div>
+                      <div style={{fontSize:10,color:"rgba(88,166,255,0.6)",fontWeight:600}}>{cargoes.length.toLocaleString()} total</div>
+                    </div>
+                    <svg viewBox={"0 0 "+SVG_W+" "+SVG_H} style={{width:"100%",flex:1,overflow:"visible"}}>
+                      <defs>
+                        <linearGradient id="cgGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.25"/>
+                          <stop offset="100%" stopColor="#58a6ff" stopOpacity="0.02"/>
+                        </linearGradient>
+                        {lineLen>0&&<style>{`
+                          @keyframes drawLine{from{stroke-dashoffset:${lineLen.toFixed(0)}}to{stroke-dashoffset:0}}
+                          .cgLine{stroke-dasharray:${lineLen.toFixed(0)};stroke-dashoffset:${lineLen.toFixed(0)};animation:drawLine 1.4s ease-out forwards;}
+                        `}</style>}
+                      </defs>
+                      {/* Grid lines */}
+                      {[0,0.25,0.5,0.75,1].map(f=>(
                         <g key={f}>
-                          <line x1={PAD.l} y1={PAD.t+iH*(1-f)} x2={PAD.l+iW} y2={PAD.t+iH*(1-f)} stroke="rgba(88,130,200,0.12)" strokeWidth="1"/>
-                          <text x={PAD.l-4} y={PAD.t+iH*(1-f)+4} textAnchor="end" fontSize="8" fill="rgba(120,160,200,0.4)">{Math.round(maxC*f)}</text>
+                          <line x1={PAD.l} y1={PAD.t+iH*(1-f)} x2={PAD.l+iW} y2={PAD.t+iH*(1-f)} stroke="rgba(88,130,200,0.1)" strokeWidth="1" strokeDasharray={f===0?"none":"3,3"}/>
+                          <text x={PAD.l-4} y={PAD.t+iH*(1-f)+4} textAnchor="end" fontSize="9" fill="rgba(120,160,200,0.4)">{Math.round(maxC*f)}</text>
                         </g>
                       ))}
-                      {/* Area fill */}
-                      <path d={areaD} fill="rgba(88,166,255,0.08)"/>
-                      {/* Line */}
-                      <path d={pathD} fill="none" stroke="#58a6ff" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>
-                      {/* Dots + labels */}
-                      {pts.map((p,i)=>(
-                        <g key={i}>
-                          {p.count>0&&<circle cx={p.x} cy={p.y} r="2.5" fill="#58a6ff"/>}
-                          {p.count>0&&<text x={p.x} y={p.y-6} textAnchor="middle" fontSize="8" fill="rgba(160,200,255,0.6)" fontWeight="600">{p.count}</text>}
-                          <text x={p.x} y={PAD.t+iH+12} textAnchor="middle" fontSize="8" fill="rgba(100,140,180,0.5)">{p.label}</text>
-                        </g>
-                      ))}
+                      {/* Area */}
+                      {areaD&&<path d={areaD} fill="url(#cgGrad)"/>}
+                      {/* Animated line */}
+                      {pathD&&<path d={pathD} fill="none" stroke="#58a6ff" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" className="cgLine"/>}
+                      {/* Dots + value labels + x-axis labels */}
+                      {pts.map((p,i)=>{
+                        const showLabel=i===0||i===pts.length-1||p.month===0||i%step===0;
+                        const yearChanged=i>0&&p.year!==pts[i-1].year;
+                        return(
+                          <g key={i}>
+                            {p.count>0&&<circle cx={p.x} cy={p.y} r="3" fill="#58a6ff" stroke="#0c1729" strokeWidth="1.5"/>}
+                            {p.count>0&&i===pts.reduce((mx,pp,ii)=>pp.count>pts[mx].count?ii:mx,0)&&(
+                              <text x={p.x} y={p.y-8} textAnchor="middle" fontSize="9" fill="rgba(160,200,255,0.8)" fontWeight="700">{p.count}</text>
+                            )}
+                            {showLabel&&(
+                              <text x={p.x} y={PAD.t+iH+14} textAnchor="middle" fontSize={yearChanged||p.month===0?"9":"8"}
+                                fill={yearChanged||p.month===0?"rgba(160,200,255,0.6)":"rgba(100,140,180,0.45)"}
+                                fontWeight={yearChanged||p.month===0?"700":"400"}>
+                                {p.month===0||yearChanged?MONTHS[p.month]+" '"+String(p.year).slice(2):MONTHS[p.month]}
+                              </text>
+                            )}
+                            {yearChanged&&<line x1={p.x} y1={PAD.t} x2={p.x} y2={PAD.t+iH} stroke="rgba(88,166,255,0.15)" strokeWidth="1" strokeDasharray="4,3"/>}
+                          </g>
+                        );
+                      })}
                     </svg>
                   </div>
                 );
