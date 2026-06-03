@@ -36,66 +36,112 @@ const PRESET_TAGS=["AG","CPP","DPP","ex Asia","Med","Parcel","TA","UKC","WAF"];
 function getTagList(){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");return[...new Set([...PRESET_TAGS,...c])].sort();}catch{return PRESET_TAGS.slice();}}
 function addCustomTag(t){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");if(!c.includes(t))localStorage.setItem("signal_custom_tags",JSON.stringify([...c,t]));}catch{}}
 function removeCustomTag(t){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");localStorage.setItem("signal_custom_tags",JSON.stringify(c.filter(x=>x!==t)));}catch{}}
+function getTagColors(){try{return JSON.parse(localStorage.getItem("signal_tag_colors")||"{}");} catch{return {};}}
+function setTagColor(t,col){try{const c=getTagColors();c[t]=col;localStorage.setItem("signal_tag_colors",JSON.stringify(c));}catch{}}
+function getTagColor(t){const c=getTagColors();return c[t]||null;}
 
 // TagCell — proper component so useState works in renderRow
+const TAG_PALETTE=["#ef4444","#f97316","#eab308","#22c55e","#14b8a6","#3b82f6","#8b5cf6","#ec4899","#f43f5e","#06b6d4"];
 function TagCell({cargoId,tag,onUpdateC}){
   const [open,setOpen]=useState(false);
   const [editMode,setEditMode]=useState(null);
+  const [colorPick,setColorPick]=useState(null); // tag name being color-edited
   const btnRef=React.useRef(null);
   const [pos,setPos]=useState({top:0,left:0});
   const [tagList,setTagList]=useState(getTagList);
+  const [tagColors,setTagColors]=useState(getTagColors);
 
   function openPick(e){
     e.stopPropagation();
     setTagList(getTagList());
+    setTagColors(getTagColors());
     if(btnRef.current){
       const r=btnRef.current.getBoundingClientRect();
-      const top=window.innerHeight-r.bottom>200?r.bottom+2:r.top-224;
-      const popW=150;
-      // Clamp left so popup stays inside viewport, prefer left-aligned to button
-      const left=Math.max(4,Math.min(r.left,window.innerWidth-popW-4));
+      const popW=170; const popH=260;
+      // Open right of button unless not enough space
+      let left=r.right+4;
+      if(left+popW>window.innerWidth-8) left=r.left-popW-4;
+      left=Math.max(4,left);
+      // Open below button unless not enough space
+      let top=r.bottom+2;
+      if(top+popH>window.innerHeight-8) top=Math.max(4,r.top-popH);
       setPos({top,left});
     }
     setOpen(v=>!v);
-    setEditMode(null);
+    setEditMode(null); setColorPick(null);
   }
   function pick(t){onUpdateC(cargoId,"tag",t);setOpen(false);}
-  function addNew(val){const t=val.trim();if(!t)return;addCustomTag(t);onUpdateC(cargoId,"tag",t);setOpen(false);}
+  function addNew(val){const t=val.trim();if(!t)return;addCustomTag(t);onUpdateC(cargoId,"tag",t);setTagList(getTagList());setOpen(false);}
   function delTag(t,e){e.stopPropagation();removeCustomTag(t);setTagList(getTagList());if(tag===t)onUpdateC(cargoId,"tag","");}
-  function renameTag(old,nw){if(!nw.trim()||nw===old)return;removeCustomTag(old);addCustomTag(nw.trim());setTagList(getTagList());if(tag===old)onUpdateC(cargoId,"tag",nw.trim());setEditMode(null);}
+  function renameTag(o,nw){if(!nw.trim()||nw===o)return;removeCustomTag(o);addCustomTag(nw.trim());setTagList(getTagList());if(tag===o)onUpdateC(cargoId,"tag",nw.trim());setEditMode(null);}
   const cur=tag||"";
+  const curCol=cur?getTagColor(cur):null;
   return(
     <td style={{padding:"2px 4px",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)"}} onClick={e=>e.stopPropagation()}>
       <button ref={btnRef} onClick={openPick}
-        style={{background:cur?"rgba(88,166,255,0.15)":"transparent",border:"1px solid "+(cur?"rgba(88,166,255,0.4)":"rgba(88,166,255,0.12)"),borderRadius:3,color:cur?"#79c0ff":"rgba(120,160,220,0.25)",fontSize:10,fontWeight:cur?700:400,padding:"1px 5px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",maxWidth:76,overflow:"hidden",textOverflow:"ellipsis"}}>
+        style={{background:curCol?curCol+"22":cur?"rgba(88,166,255,0.15)":"transparent",
+          border:"1px solid "+(curCol||( cur?"rgba(88,166,255,0.4)":"rgba(88,166,255,0.12)")),
+          borderRadius:3,color:curCol||( cur?"#79c0ff":"rgba(120,160,220,0.25)"),
+          fontSize:10,fontWeight:cur?700:400,padding:"1px 5px",cursor:"pointer",
+          fontFamily:"inherit",whiteSpace:"nowrap",maxWidth:76,overflow:"hidden",textOverflow:"ellipsis"}}>
         {cur||"＋"}
       </button>
       {open&&(
         <>
           <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
-          <div style={{position:"fixed",top:pos.top,left:pos.left,zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:6,padding:"6px",boxShadow:"0 8px 28px rgba(0,0,0,0.7)",display:"flex",flexDirection:"column",gap:2,minWidth:140}}>
-            {cur&&<button onClick={()=>{onUpdateC(cargoId,"tag","");setOpen(false);}} style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit",textAlign:"left",marginBottom:2}}>✕ clear tag</button>}
-            {tagList.map(t=>(
-              <div key={t} style={{display:"flex",alignItems:"center",gap:2}}>
-                {editMode===t?(
-                  <input autoFocus defaultValue={t}
-                    onBlur={e=>renameTag(t,e.target.value)}
-                    onKeyDown={e=>{if(e.key==="Enter")renameTag(t,e.target.value);if(e.key==="Escape")setEditMode(null);}}
-                    style={{flex:1,fontSize:10,padding:"2px 5px",borderRadius:3,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none"}}/>
-                ):(
-                  <button onClick={()=>pick(t)}
-                    style={{flex:1,fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid "+(cur===t?"rgba(88,166,255,0.5)":"rgba(88,166,255,0.10)"),background:cur===t?"rgba(88,166,255,0.2)":"transparent",color:cur===t?"#79c0ff":"rgba(160,200,255,0.65)",cursor:"pointer",fontFamily:"inherit",textAlign:"left",fontWeight:cur===t?700:400}}>
-                    {t}
-                  </button>
-                )}
-                {!PRESET_TAGS.includes(t)&&editMode!==t&&(
-                  <>
-                    <button onClick={e=>{e.stopPropagation();setEditMode(t);}} style={{background:"none",border:"none",color:"rgba(120,160,220,0.3)",fontSize:9,cursor:"pointer",padding:"0 2px",lineHeight:1}} title="Rename">✎</button>
-                    <button onClick={e=>delTag(t,e)} style={{background:"none",border:"none",color:"rgba(255,107,107,0.35)",fontSize:9,cursor:"pointer",padding:"0 2px",lineHeight:1}} title="Delete">✕</button>
-                  </>
-                )}
-              </div>
-            ))}
+          <div style={{position:"fixed",top:pos.top,left:pos.left,zIndex:9999,background:"#0a1628",
+            border:"1px solid rgba(88,166,255,0.3)",borderRadius:7,padding:"7px",
+            boxShadow:"0 8px 28px rgba(0,0,0,0.7)",display:"flex",flexDirection:"column",gap:2,minWidth:160}}>
+            {cur&&<button onClick={()=>{onUpdateC(cargoId,"tag","");setOpen(false);}}
+              style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",
+                background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",
+                fontFamily:"inherit",textAlign:"left",marginBottom:2}}>✕ clear tag</button>}
+            {tagList.map(t=>{
+              const tCol=tagColors[t]||null;
+              return(
+                <div key={t} style={{display:"flex",alignItems:"center",gap:2}}>
+                  {editMode===t?(
+                    <input autoFocus defaultValue={t}
+                      onBlur={e=>renameTag(t,e.target.value)}
+                      onKeyDown={e=>{if(e.key==="Enter")renameTag(t,e.target.value);if(e.key==="Escape")setEditMode(null);}}
+                      style={{flex:1,fontSize:10,padding:"2px 5px",borderRadius:3,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none"}}/>
+                  ):(
+                    <button onClick={()=>pick(t)}
+                      style={{flex:1,fontSize:10,padding:"2px 6px",borderRadius:3,
+                        border:"1px solid "+(cur===t?(tCol||"rgba(88,166,255,0.5)"):(tCol?tCol+"55":"rgba(88,166,255,0.10)")),
+                        background:cur===t?(tCol?tCol+"33":"rgba(88,166,255,0.2)"):"transparent",
+                        color:cur===t?(tCol||"#79c0ff"):(tCol||"rgba(160,200,255,0.65)"),
+                        cursor:"pointer",fontFamily:"inherit",textAlign:"left",fontWeight:cur===t?700:400}}>
+                      {tCol&&<span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:tCol,marginRight:4,verticalAlign:"middle"}}/>}
+                      {t}
+                    </button>
+                  )}
+                  {/* Color picker dot */}
+                  <button onClick={e=>{e.stopPropagation();setColorPick(colorPick===t?null:t);setEditMode(null);}}
+                    title="Set colour"
+                    style={{background:tCol||"rgba(88,166,255,0.15)",border:"1px solid rgba(88,166,255,0.2)",
+                      borderRadius:"50%",width:12,height:12,cursor:"pointer",padding:0,flexShrink:0}}/>
+                  {!PRESET_TAGS.includes(t)&&editMode!==t&&colorPick!==t&&(
+                    <>
+                      <button onClick={e=>{e.stopPropagation();setEditMode(t);setColorPick(null);}} style={{background:"none",border:"none",color:"rgba(120,160,220,0.3)",fontSize:9,cursor:"pointer",padding:"0 2px",lineHeight:1}} title="Rename">✎</button>
+                      <button onClick={e=>delTag(t,e)} style={{background:"none",border:"none",color:"rgba(255,107,107,0.35)",fontSize:9,cursor:"pointer",padding:"0 2px",lineHeight:1}} title="Delete">✕</button>
+                    </>
+                  )}
+                  {colorPick===t&&(
+                    <div style={{position:"absolute",left:"100%",top:0,zIndex:10001,background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:6,padding:"6px",display:"flex",flexWrap:"wrap",gap:4,width:116,boxShadow:"0 4px 16px rgba(0,0,0,0.6)"}}>
+                      {TAG_PALETTE.map(col=>(
+                        <button key={col} onClick={e=>{e.stopPropagation();setTagColor(t,col);setTagColors(getTagColors());setColorPick(null);}}
+                          style={{width:20,height:20,borderRadius:"50%",background:col,border:tCol===col?"2px solid white":"2px solid transparent",cursor:"pointer",padding:0}}/>
+                      ))}
+                      <button onClick={e=>{e.stopPropagation();const c=getTagColors();delete c[t];localStorage.setItem("signal_tag_colors",JSON.stringify(c));setTagColors(getTagColors());setColorPick(null);}}
+                        style={{fontSize:9,padding:"1px 4px",borderRadius:3,border:"1px solid rgba(255,107,107,0.4)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit",width:"100%"}}>
+                        reset
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             <input placeholder="New tag + Enter"
               onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){addNew(e.target.value);e.target.value="";}if(e.key==="Escape")setOpen(false);}}
               style={{fontSize:10,padding:"3px 5px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none",marginTop:4}}/>
@@ -1532,7 +1578,9 @@ const filtV=useMemo(()=>{
                 const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
                 const now=new Date();
                 // Use updated date (entry date) for all cargoes
-                const allDates=cargoes.map(c=>{
+                // Graph uses filtC to respond to search/tag filters, with year filter
+                const graphCargoes=filtC;
+                const allDates=graphCargoes.map(c=>{
                   const d=c.updated?new Date(c.updated):null;
                   return d&&!isNaN(d.getTime())?d:null;
                 }).filter(Boolean);
@@ -1546,14 +1594,14 @@ const filtV=useMemo(()=>{
                 }
                 const counts=months.map(bkt=>({
                   ...bkt,
-                  count:cargoes.filter(c=>{
+                  count:graphCargoes.filter(c=>{
                     const d=c.updated?new Date(c.updated):null;
                     return d&&!isNaN(d.getTime())&&d.getMonth()===bkt.month&&d.getFullYear()===bkt.year;
                   }).length
                 }));
                 const W=Math.max(counts.length,2);
                 const maxC=Math.max(1,...counts.map(b=>b.count));
-                const SVG_W=520; const SVG_H=160;
+                const SVG_W=520; const SVG_H=200;
                 const PAD={t:20,r:12,b:38,l:36};
                 const iW=SVG_W-PAD.l-PAD.r;
                 const iH=SVG_H-PAD.t-PAD.b;
@@ -1575,7 +1623,7 @@ const filtV=useMemo(()=>{
                   <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"10px 12px 8px",display:"flex",flexDirection:"column",gap:4,minWidth:0,boxSizing:"border-box"}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
                       <div style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em"}}>Cargoes entered by month</div>
-                      <div style={{fontSize:11,color:"rgba(88,166,255,0.7)",fontWeight:700}}>{cargoes.length.toLocaleString()} total</div>
+                      <div style={{fontSize:11,color:"rgba(88,166,255,0.7)",fontWeight:700}}>{filtC.length.toLocaleString()}{filtC.length<cargoes.length?" filtered":""}  ({cargoes.length.toLocaleString()} total)</div>
                     </div>
                     <svg viewBox={"0 0 "+SVG_W+" "+SVG_H} style={{width:"100%",flex:1,minHeight:0,overflow:"visible"}}>
                       <defs>
@@ -1637,7 +1685,7 @@ const filtV=useMemo(()=>{
             </div>
             {/* Stats + Copy/CSV/Delete */}
             <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,flexWrap:"wrap"}}>
-              <Suspense fallback={null}><ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes}/></Suspense>
+              <Suspense fallback={null}><ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes} allFilteredCargoes={filtC}/></Suspense>
               {selCargoes.size>0&&(
                 <button onClick={()=>setTab("reports")} style={{fontSize:11,fontWeight:600,padding:"2px 9px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                   📋 To Report ({selCargoes.size})
