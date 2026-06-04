@@ -299,6 +299,7 @@ function MiniBar({label,value,max,color=C.blue}){
 function TagPicker({value=[],onChange,compact=false}){
   const [tags,setTags]=useState(getTagList);
   const [newTag,setNewTag]=useState("");
+  const [open,setOpen]=useState(false);
   const active=new Set(value||[]);
   const btn=(on,col=C.amber)=>({
     fontSize:compact?10:11,
@@ -328,6 +329,43 @@ function TagPicker({value=[],onChange,compact=false}){
     if(!active.has(t)) onChange([...(value||[]),t]);
   }
 
+  // Compact mode is used inside table rows:
+  // show only selected tags + plus button. Click plus to choose more.
+  if(compact){
+    return (
+      <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center",position:"relative"}}>
+        {(value||[]).map(t=>(
+          <button key={t} style={btn(true,tagColor(t))} onClick={()=>toggle(t)} title="Click to remove tag">
+            {t} ×
+          </button>
+        ))}
+        <button style={btn(false,C.blue)} onClick={e=>{e.stopPropagation();setOpen(o=>!o);}} title="Add tag">＋</button>
+        {open&&(
+          <>
+            <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
+            <div style={{position:"absolute",top:24,left:0,zIndex:9999,minWidth:210,maxWidth:360,background:"#0a1628",border:"1px solid "+C.bd,borderRadius:8,padding:8,boxShadow:"0 10px 30px rgba(0,0,0,.6)",display:"flex",gap:5,flexWrap:"wrap"}}>
+              {tags.map(t=>(
+                <button key={t} style={btn(active.has(t),tagColor(t))} onClick={e=>{e.stopPropagation();toggle(t);}}>
+                  {t}
+                </button>
+              ))}
+              <input
+                value={newTag}
+                onChange={e=>setNewTag(e.target.value)}
+                onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();add();} if(e.key==="Escape")setOpen(false);}}
+                placeholder="+ tag"
+                style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:10,padding:"2px 6px",outline:"none",width:70}}
+              />
+              <button style={btn(false,C.blue)} onClick={add}>Add</button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // Full mode is used in manual entry / parse selection:
+  // show all tags so you can preselect tags before saving/parsing.
   return (
     <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
       {tags.map(t=>(
@@ -349,10 +387,10 @@ function TagPicker({value=[],onChange,compact=false}){
           borderRadius:5,
           color:C.tx,
           fontFamily:"inherit",
-          fontSize:compact?10:11,
-          padding:compact?"2px 6px":"4px 7px",
+          fontSize:11,
+          padding:"4px 7px",
           outline:"none",
-          width:compact?62:80
+          width:80
         }}
       />
       <button style={btn(false,C.blue)} onClick={add}>Add</button>
