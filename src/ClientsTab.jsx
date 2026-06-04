@@ -56,35 +56,50 @@ function StarRating({value,onChange}){
   );
 }
 
-// Multi-select checkbox for lead broker
+// BrokerCell — pill style matching TypeCell
+const BROKER_COLS={"Henriksen":"#f59e0b","Løken":"#c792ea","Henriksen & Løken":"#58a6ff","Løken & Henriksen":"#34d399"};
 function BrokerCell({value, onChange}){
-  const [open,setOpen]=useState(false);
-  const ref=useRef(null);
+  const [editing,setEditing]=useState(false);
   const selected=value||"";
+  const col=BROKER_COLS[selected]||null;
   return(
-    <td style={TD} onClick={e=>e.stopPropagation()}>
+    <td style={{...TD,padding:"0 6px"}} onClick={e=>e.stopPropagation()}>
       <div style={{position:"relative"}}>
-        <button onClick={()=>setOpen(v=>!v)}
-          style={{...INP,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",
-            padding:"6px 10px",color:selected?"rgba(160,200,255,0.85)":"rgba(100,140,180,0.35)"}}>
-          <span>{selected||"—"}</span>
-          <span style={{fontSize:9,color:"rgba(88,166,255,0.35)",flexShrink:0,marginLeft:4}}>▼</span>
-        </button>
-        {open&&(
+        <div onClick={()=>setEditing(v=>!v)}
+          style={{display:"flex",alignItems:"center",padding:"4px 4px",cursor:"pointer",minHeight:32}}>
+          {selected
+            ?<span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:10,whiteSpace:"nowrap",
+                background:(col||"#888")+"22",border:"1px solid "+(col||"#888")+"55",color:col||"rgba(160,200,255,0.8)"}}>
+                {selected}
+              </span>
+            :<span style={{fontSize:10,color:"rgba(100,140,180,0.3)"}}>—</span>
+          }
+        </div>
+        {editing&&(
           <>
-            <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
-            <div style={{position:"absolute",left:0,top:"100%",zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:6,padding:"4px",minWidth:180,boxShadow:"0 6px 20px rgba(0,0,0,0.7)"}}>
-              {BROKERS.filter(b=>b).map(b=>(
-                <button key={b} onClick={()=>{onChange(b);setOpen(false);}}
-                  style={{display:"block",width:"100%",textAlign:"left",fontSize:11,padding:"5px 10px",background:selected===b?"rgba(88,166,255,0.15)":"transparent",
-                    border:"none",color:selected===b?"#79c0ff":"rgba(160,200,255,0.7)",cursor:"pointer",fontFamily:"inherit",borderRadius:3}}>
-                  {b}
-                </button>
-              ))}
-              {selected&&<button onClick={()=>{onChange("");setOpen(false);}}
-                style={{display:"block",width:"100%",textAlign:"left",fontSize:10,padding:"4px 10px",background:"transparent",border:"none",color:"rgba(255,107,107,0.5)",cursor:"pointer",fontFamily:"inherit",borderRadius:3}}>
-                ✕ Clear
-              </button>}
+            <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={e=>{e.stopPropagation();setEditing(false);}}/>
+            <div style={{position:"absolute",left:0,top:"100%",zIndex:9999,background:"#0a1628",
+              border:"1px solid rgba(88,166,255,0.3)",borderRadius:6,padding:"6px",
+              boxShadow:"0 6px 20px rgba(0,0,0,0.7)",display:"flex",flexDirection:"column",gap:3,minWidth:170}}>
+              {BROKERS.filter(b=>b).map(b=>{
+                const bc=BROKER_COLS[b]||"#888";
+                const active=selected===b;
+                return(
+                  <button key={b} onClick={e=>{e.stopPropagation();onChange(b);setEditing(false);}}
+                    style={{display:"flex",alignItems:"center",gap:7,fontSize:11,padding:"5px 10px",
+                      background:active?bc+"22":"transparent",
+                      border:"1px solid "+(active?bc+"55":"rgba(88,166,255,0.1)"),
+                      color:active?bc:"rgba(160,200,255,0.6)",
+                      borderRadius:5,cursor:"pointer",fontFamily:"inherit",textAlign:"left",whiteSpace:"nowrap"}}>
+                    <span style={{width:10,height:10,borderRadius:"50%",background:active?bc:"transparent",
+                      border:"2px solid "+(active?bc:"rgba(88,166,255,0.3)"),display:"inline-block",flexShrink:0}}/>
+                    {b}
+                  </button>
+                );
+              })}
+              {selected&&<button onClick={e=>{e.stopPropagation();onChange("");setEditing(false);}}
+                style={{fontSize:10,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(255,107,107,0.3)",
+                  background:"transparent",color:"rgba(255,107,107,0.5)",cursor:"pointer",fontFamily:"inherit"}}>✕ Clear</button>}
             </div>
           </>
         )}
@@ -148,7 +163,7 @@ function TypeCell({value, onChange}){
   );
 }
 
-function InlineCell({value,onChange,placeholder="",isDate=false}){
+function InlineCell({value,onChange,placeholder="",isDate=false,isCompany=false}){
   const [editing,setEditing]=useState(false);
   const [val,setVal]=useState(value||"");
   const ref=useRef(null);
@@ -158,31 +173,30 @@ function InlineCell({value,onChange,placeholder="",isDate=false}){
     const v=isDate?parseDate(val):val;
     if(v!==(value||"")) onChange(v);
   }
+  const displayStyle=isCompany
+    ?{...INP,color:val?"rgba(230,240,255,1)":"rgba(100,140,180,0.3)",fontWeight:700,cursor:"text",minHeight:32,lineHeight:"20px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}
+    :{...INP,color:val?"rgba(220,235,255,0.92)":"rgba(100,140,180,0.3)",cursor:"text",minHeight:32,lineHeight:"20px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"};
   return(
     <td style={TD} onClick={()=>{setEditing(true);setTimeout(()=>ref.current?.focus(),10);}}>
       {editing
         ?<input ref={ref} value={val} onChange={e=>setVal(e.target.value)} placeholder={placeholder}
             onBlur={save} onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape"){setVal(value||"");setEditing(false);}}}
-            autoFocus style={INP}/>
-        :<div style={{...INP,color:val?"rgba(220,235,255,0.92)":"rgba(100,140,180,0.3)",cursor:"text",minHeight:32,lineHeight:"20px"}}>
-          {val||placeholder}
-        </div>
+            autoFocus style={{...INP,fontWeight:isCompany?700:400}}/>
+        :<div style={displayStyle}>{val||placeholder}</div>
       }
     </td>
   );
 }
 
-// Comment + images in one line, expands on click
-function CommentImageCell({rowId, comment, images, onUpdateComment, onUpdateImages}){
-  const [expanded,setExpanded]=useState(false);
-  const [editingComment,setEditingComment]=useState(false);
+// Comment cell — collapsed 1 line, click ▼ to expand full row editor
+function CommentImageCell({rowId, comment, images, onUpdateComment, onUpdateImages, expanded, onToggle}){
   const [commentVal,setCommentVal]=useState(comment||"");
   const [lightbox,setLightbox]=useState(null);
   const [delConfirm,setDelConfirm]=useState(null);
   const inputRef=useRef(null);
   useEffect(()=>setCommentVal(comment||""),[comment]);
 
-  function saveComment(){ setEditingComment(false); if(commentVal!==(comment||"")) onUpdateComment(commentVal); }
+  function saveComment(){ if(commentVal!==(comment||"")) onUpdateComment(commentVal); }
 
   function handlePaste(e){
     const img=Array.from(e.clipboardData?.items||[]).find(i=>i.type.startsWith("image/"));
@@ -193,107 +207,106 @@ function CommentImageCell({rowId, comment, images, onUpdateComment, onUpdateImag
     reader.readAsDataURL(img.getAsFile());
   }
 
-  function deleteImage(i){
-    setDelConfirm(i);
-  }
-  function confirmDeleteImage(i){
-    onUpdateImages(images.filter((_,idx)=>idx!==i));
-    setDelConfirm(null);
-  }
-
-  const hasContent = comment || images.length>0;
+  const hasContent=comment||images.length>0;
 
   return(
     <>
-      {/* Collapsed: single line */}
-      <td style={{...TD,cursor:"pointer",width:"100%"}} onClick={()=>setExpanded(v=>!v)}>
-        <div style={{display:"flex",alignItems:"center",padding:"5px 10px",minHeight:32,width:"100%",boxSizing:"border-box"}}>
-          <span style={{fontSize:11,color:hasContent?"rgba(180,210,255,0.7)":"rgba(100,140,180,0.3)",
-            overflow:"hidden",textOverflow:"ellipsis",flex:1,whiteSpace:"nowrap"}}>
-            {comment||"Add comment…"}
-          </span>
+      {/* Always-visible collapsed cell */}
+      <td style={{...TD,padding:0}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",alignItems:"center",minHeight:32,height:"100%"}}>
+          <div style={{flex:1,padding:"6px 10px",fontSize:11,
+            color:hasContent?"rgba(180,210,255,0.75)":"rgba(100,140,180,0.3)",
+            whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",cursor:"default"}}>
+            {comment||"—"}
+          </div>
           {images.length>0&&(
-            <div style={{display:"flex",gap:2,flexShrink:0,marginLeft:6}}>
-              {images.slice(0,3).map((src,i)=>(
-                <img key={i} src={src} style={{width:22,height:22,objectFit:"cover",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)"}}/>
+            <div style={{display:"flex",gap:2,padding:"0 4px",flexShrink:0}}>
+              {images.slice(0,2).map((src,i)=>(
+                <img key={i} src={src} style={{width:20,height:20,objectFit:"cover",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)"}}/>
               ))}
-              {images.length>3&&<span style={{fontSize:9,color:"rgba(120,160,200,0.5)",paddingLeft:2}}>+{images.length-3}</span>}
+              {images.length>2&&<span style={{fontSize:9,color:"rgba(120,160,200,0.5)"}}>+{images.length-2}</span>}
             </div>
           )}
-          <span style={{fontSize:9,color:"rgba(88,166,255,0.3)",flexShrink:0,marginLeft:8}}>{expanded?"▲":"▼"}</span>
+          <button onClick={e=>{e.stopPropagation();onToggle();}}
+            style={{background:"none",border:"none",color:"rgba(88,166,255,0.35)",cursor:"pointer",
+              padding:"0 8px",fontSize:10,lineHeight:"32px",flexShrink:0,alignSelf:"stretch"}}>
+            {expanded?"▲":"▼"}
+          </button>
         </div>
       </td>
-      {/* Expanded row — spans full width */}
-      {expanded&&(
-        <tr style={{background:"rgba(14,28,58,0.85)"}}>
-          <td colSpan={99} style={{padding:"10px 14px",borderBottom:"1px solid rgba(58,130,246,0.15)"}}>
-            <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
-              {/* Comment text area */}
-              <div style={{flex:1}} onClick={e=>{e.stopPropagation();setEditingComment(true);setTimeout(()=>inputRef.current?.focus(),10);}}>
-                {editingComment
-                  ?<textarea ref={inputRef} value={commentVal} onChange={e=>setCommentVal(e.target.value)}
-                      onBlur={saveComment} onPaste={handlePaste}
-                      style={{width:"100%",background:"rgba(8,16,32,0.8)",border:"1px solid rgba(88,166,255,0.25)",
-                        borderRadius:5,color:"rgba(200,220,255,0.9)",fontFamily:"inherit",fontSize:12,
-                        padding:"7px 10px",resize:"none",outline:"none",height:70,boxSizing:"border-box"}}/>
-                  :<div style={{background:"rgba(8,16,32,0.4)",borderRadius:5,border:"1px solid rgba(58,130,246,0.12)",
-                      padding:"7px 10px",fontSize:12,color:commentVal?"rgba(200,220,255,0.85)":"rgba(100,140,180,0.3)",
-                      cursor:"text",minHeight:50,whiteSpace:"pre-wrap"}}>
-                    {commentVal||"Click to add comment… (Ctrl+V to paste image)"}
-                  </div>
-                }
-              </div>
-              {/* Images */}
-              {images.length>0&&(
-                <div style={{display:"flex",gap:6,flexWrap:"wrap",flexShrink:0,maxWidth:200}}>
-                  {images.map((src,i)=>(
-                    <div key={i} style={{position:"relative"}}>
-                      <img src={src} onClick={()=>setLightbox(src)}
-                        style={{width:52,height:52,objectFit:"cover",borderRadius:5,cursor:"zoom-in",
-                          border:"1px solid rgba(88,166,255,0.2)"}}/>
-                      <button onClick={e=>{e.stopPropagation();setDelConfirm(i);}}
-                        style={{position:"absolute",top:-5,right:-5,width:16,height:16,borderRadius:"50%",
-                          background:"rgba(255,107,107,0.6)",border:"none",color:"white",fontSize:9,
-                          cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>
-                    </div>
-                  ))}
-                  <label style={{width:52,height:52,border:"1px dashed rgba(88,166,255,0.25)",borderRadius:5,
-                    display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",
-                    color:"rgba(88,166,255,0.3)",fontSize:20}}>
-                    +<input type="file" accept="image/*" style={{display:"none"}}
-                      onChange={e=>{if(e.target.files?.[0]){const r=new FileReader();r.onload=ev=>onUpdateImages([...images,ev.target.result]);r.readAsDataURL(e.target.files[0]);e.target.value="";}}}/>
-                  </label>
+    </>
+  );
+}
+
+// Expanded detail row for comment+images — rendered as a separate <tr> in the table
+function CommentExpandedRow({colSpan, comment, images, onUpdateComment, onUpdateImages}){
+  const [commentVal,setCommentVal]=useState(comment||"");
+  const [lightbox,setLightbox]=useState(null);
+  const [delConfirm,setDelConfirm]=useState(null);
+  const inputRef=useRef(null);
+  useEffect(()=>setCommentVal(comment||""),[comment]);
+
+  function saveComment(){ if(commentVal!==(comment||"")) onUpdateComment(commentVal); }
+
+  function handlePaste(e){
+    const img=Array.from(e.clipboardData?.items||[]).find(i=>i.type.startsWith("image/"));
+    if(!img) return;
+    e.preventDefault();
+    const reader=new FileReader();
+    reader.onload=ev=>onUpdateImages([...images, ev.target.result]);
+    reader.readAsDataURL(img.getAsFile());
+  }
+
+  return(
+    <>
+      <tr style={{background:"rgba(10,20,45,0.95)"}}>
+        <td colSpan={colSpan} style={{padding:"10px 16px",borderBottom:"1px solid rgba(58,130,246,0.12)"}}>
+          <div style={{display:"flex",gap:14,alignItems:"flex-start"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <textarea ref={inputRef} value={commentVal}
+                onChange={e=>setCommentVal(e.target.value)}
+                onBlur={saveComment} onPaste={handlePaste}
+                placeholder="Add comment… (Ctrl+V to paste image)"
+                style={{width:"100%",background:"rgba(8,16,32,0.7)",border:"1px solid rgba(88,166,255,0.2)",
+                  borderRadius:5,color:"rgba(200,220,255,0.9)",fontFamily:"Inter,sans-serif",fontSize:12,
+                  padding:"8px 10px",resize:"none",outline:"none",height:60,boxSizing:"border-box",
+                  lineHeight:1.5}}/>
+            </div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",flexShrink:0,alignItems:"center"}}>
+              {images.map((src,i)=>(
+                <div key={i} style={{position:"relative"}}>
+                  <img src={src} onClick={()=>setLightbox(src)}
+                    style={{width:52,height:52,objectFit:"cover",borderRadius:5,cursor:"zoom-in",
+                      border:"1px solid rgba(88,166,255,0.2)"}}/>
+                  <button onClick={e=>{e.stopPropagation();setDelConfirm(i);}}
+                    style={{position:"absolute",top:-5,right:-5,width:15,height:15,borderRadius:"50%",
+                      background:"rgba(255,107,107,0.7)",border:"none",color:"white",fontSize:8,
+                      cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>
                 </div>
-              )}
-              {images.length===0&&(
-                <label style={{width:52,height:52,border:"1px dashed rgba(88,166,255,0.2)",borderRadius:5,flexShrink:0,
-                  display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",
-                  color:"rgba(88,166,255,0.25)",fontSize:20,title:"Add image"}}>
-                  🖼<input type="file" accept="image/*" style={{display:"none"}}
-                    onChange={e=>{if(e.target.files?.[0]){const r=new FileReader();r.onload=ev=>onUpdateImages([ev.target.result]);r.readAsDataURL(e.target.files[0]);e.target.value="";}}}/>
-                </label>
-              )}
+              ))}
+              <label style={{width:44,height:44,border:"1px dashed rgba(88,166,255,0.2)",borderRadius:5,
+                display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",
+                color:"rgba(88,166,255,0.3)",fontSize:18,flexShrink:0}}>
+                +<input type="file" accept="image/*" style={{display:"none"}}
+                  onChange={e=>{if(e.target.files?.[0]){const r=new FileReader();r.onload=ev=>onUpdateImages([...images,ev.target.result]);r.readAsDataURL(e.target.files[0]);e.target.value="";}}}/>
+              </label>
             </div>
-          </td>
-        </tr>
-      )}
-      {delConfirm!==null&&(
-        <tr style={{background:"rgba(20,10,10,0.9)"}}>
-          <td colSpan={99} style={{padding:"8px 14px",borderBottom:"1px solid rgba(255,107,107,0.2)"}}>
-            <div style={{display:"flex",alignItems:"center",gap:12,fontSize:12}}>
+          </div>
+          {delConfirm!==null&&(
+            <div style={{display:"flex",alignItems:"center",gap:10,marginTop:8,fontSize:12}}>
               <span style={{color:"rgba(255,180,180,0.8)"}}>Delete this image?</span>
-              <button onClick={e=>{e.stopPropagation();confirmDeleteImage(delConfirm);}}
-                style={{fontSize:11,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(255,107,107,0.4)",
-                  background:"rgba(255,107,107,0.12)",color:"#f87171",cursor:"pointer",fontFamily:"inherit"}}>Delete</button>
-              <button onClick={e=>{e.stopPropagation();setDelConfirm(null);}}
-                style={{fontSize:11,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",
-                  background:"rgba(58,130,246,0.1)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
+              <button onClick={()=>{onUpdateImages(images.filter((_,idx)=>idx!==delConfirm));setDelConfirm(null);}}
+                style={{fontSize:11,padding:"2px 10px",borderRadius:4,border:"1px solid rgba(255,107,107,0.4)",
+                  background:"rgba(255,107,107,0.1)",color:"#f87171",cursor:"pointer",fontFamily:"inherit"}}>Delete</button>
+              <button onClick={()=>setDelConfirm(null)}
+                style={{fontSize:11,padding:"2px 10px",borderRadius:4,border:"1px solid rgba(58,130,246,0.2)",
+                  background:"rgba(58,130,246,0.08)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
             </div>
-          </td>
-        </tr>
-      )}
+          )}
+        </td>
+      </tr>
       {lightbox&&(
-        <tr><td colSpan={0} style={{padding:0,border:"none"}}>
+        <tr><td colSpan={colSpan} style={{padding:0,border:"none"}}>
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center"}}
             onClick={()=>setLightbox(null)}>
             <img src={lightbox} style={{maxWidth:"90vw",maxHeight:"90vh",borderRadius:8,boxShadow:"0 8px 40px rgba(0,0,0,0.8)"}}/>
@@ -466,15 +479,9 @@ export default function ClientsTab(){
             <table style={{width:"100%",borderCollapse:"collapse",minWidth:900}}>
               <thead>
                 <tr>
-                  <th style={{...TH_BASE,width:160}}>Company</th>
-                  <th style={{...TH_BASE,width:110}}>Type</th>
-                  <th style={{...TH_BASE,width:150}}>PIC</th>
-                  <th style={{...TH_BASE,width:160}}>Lead Broker</th>
-                  <th style={{...TH_BASE,width:90}}>Rating</th>
-                  <th style={{...TH_BASE,width:100}}>Last Contact</th>
-                  <th style={{...TH_BASE,width:170}}>Email</th>
-                  <th style={{...TH_BASE}}>Comment</th>
-                  <th style={{...TH_BASE,width:32}}></th>
+                  {[["COMPANY",145],["TYPE",100],["PIC",145],["LEAD BROKER",155],["RATING",86],["LAST CONTACT",98],["EMAIL",155],["COMMENT",null],["",30]].map(([h,w])=>(
+                    <th key={h} style={{...TH_BASE,width:w||undefined,minWidth:w||100}}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -483,9 +490,8 @@ export default function ClientsTab(){
                   return(
                     <React.Fragment key={c.id}>
                       <tr style={{background:i%2===0?ROW_EVEN:ROW_ODD}}>
-                        {/* Company — white bold */}
-                        <td style={TD}>
-                          <InlineCell value={c.company} placeholder="Company name" onChange={v=>onUpdate(c.id,"company",v)}/>
+                        <td style={{...TD,minWidth:130,maxWidth:145,overflow:"hidden"}}>
+                          <InlineCell value={c.company} placeholder="Company name" onChange={v=>onUpdate(c.id,"company",v)} isCompany/>
                         </td>
                         <TypeCell value={c.client_type} onChange={v=>onUpdate(c.id,"client_type",v)}/>
                         <InlineCell value={c.pic} placeholder="Contact name(s)" onChange={v=>onUpdate(c.id,"pic",v)}/>
@@ -497,13 +503,23 @@ export default function ClientsTab(){
                           rowId={c.id}
                           comment={c.comment}
                           images={imgs}
+                          expanded={expandedRow===c.id}
+                          onToggle={()=>setExpandedRow(p=>p===c.id?null:c.id)}
                           onUpdateComment={v=>onUpdate(c.id,"comment",v)}
-                          onUpdateImages={imgs=>saveImages(c.id,imgs)}/>
+                          onUpdateImages={ri=>saveImages(c.id,ri)}/>
                         <td style={{...TD,textAlign:"center",padding:"0 4px"}}>
                           <button onClick={()=>setPendingDel(c.id)}
                             style={{background:"none",border:"none",color:"rgba(255,107,107,0.3)",fontSize:13,cursor:"pointer",padding:"4px",lineHeight:1}}>✕</button>
                         </td>
                       </tr>
+                      {expandedRow===c.id&&(
+                        <CommentExpandedRow
+                          colSpan={9}
+                          comment={c.comment}
+                          images={imgs}
+                          onUpdateComment={v=>onUpdate(c.id,"comment",v)}
+                          onUpdateImages={ri=>saveImages(c.id,ri)}/>
+                      )}
                     </React.Fragment>
                   );
                 })}
