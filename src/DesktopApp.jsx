@@ -10,6 +10,7 @@ const AskAIStrip     = React.lazy(()=>import("./AIAsk").then(m=>({default:m.AskA
 const RateMatrix     = React.lazy(()=>import("./RateMatrix").then(m=>({default:m.RateMatrix})));
 const RateMatrixBunkerInput = React.lazy(()=>import("./RateMatrix").then(m=>({default:m.RateMatrixBunkerInput})));
 const FixingTab      = React.lazy(()=>import("./FixingTab"));
+const TimeCharterTab = React.lazy(()=>import("./TimeCharterTab"));
 const ProjectsTab    = React.lazy(()=>import("./ProjectsTab"));
 const TCECalculator  = React.lazy(()=>import("./TCECalculator").then(m=>({default:m.TCECalculator})));
 const Dashboard      = React.lazy(()=>import("./Dashboard"));
@@ -1019,6 +1020,7 @@ const filtV=useMemo(()=>{
             ["pos","Positions",vessels.length,"#58a6ff"],
             ["cargo","Cargoes",cargoTotal||cargoes.length,"#faa356"],
             ["fix","Fixing",0,"#c792ea"],
+            ["tcv","⏱️","TC Vessels"],
             ["clients","Clients",0,"#a8e6a3"],
             ["matrix","Matrix",0,"#43e97b"],
             ["projects","Projects",0,"#4fc3f7"],
@@ -2032,6 +2034,15 @@ const filtV=useMemo(()=>{
             <Suspense fallback={<TabFallback/>}><FixingTab vessels={vessels}/></Suspense>
           </div>
         )}
+
+        {/* ── TIME CHARTER ── */}
+{tab==="tcv"&&(
+  <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+    <Suspense fallback={<TabFallback/>}>
+      <TimeCharterTab/>
+    </Suspense>
+  </div>
+)}
 
         {/* ── PROJECTS ── */}
         {tab==="projects"&&(
