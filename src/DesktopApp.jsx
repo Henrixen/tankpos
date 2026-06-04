@@ -365,7 +365,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   // ── PIN config ───────────────────────────────────────────────────────────
   const MASTER_PIN = "4524"; // ← your PIN → full access
   const GUEST_PIN  = "0250"; // ← colleague's PIN → positions + cargoes only
-  const GUEST_TABS = ["pos","cargo"];
+  const GUEST_TABS = ["pos","cargo","clients"];
 
   const [unlocked, setUnlocked] = React.useState(false); // always ask on load
   const [pinInput, setPinInput] = React.useState("");
