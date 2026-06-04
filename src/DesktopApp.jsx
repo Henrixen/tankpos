@@ -465,19 +465,23 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   // Fetch monthly cargo counts from DB for graph — full dataset, not just loaded 200
   useEffect(()=>{
     async function fetchMonthly(){
-      // Get all updated dates in one query (just the date field, lightweight)
-      const{data,error}=await supabase.from("cargoes").select("updated").order("updated",{ascending:true});
+      // Fetch all dates — try updated first, fall back to updated_at
+      const{data,error}=await supabase.from("cargoes").select("updated,updated_at").order("updated",{ascending:true});
       if(error||!data)return;
-      // Bucket by year+month
       const map={};
       data.forEach(r=>{
-        const d=r.updated?new Date(r.updated):null;
-        if(!d||isNaN(d.getTime()))return;
-        const key=d.getFullYear()+"-"+d.getMonth();
+        // Use whichever date field is populated
+        const raw=r.updated||r.updated_at||null;
+        if(!raw) return;
+        const d=new Date(raw);
+        if(isNaN(d.getTime())) return;
+        const key=d.getFullYear()+"-"+String(d.getMonth()).padStart(2,"0");
         map[key]=(map[key]||0)+1;
       });
-      const buckets=Object.entries(map).map(([k,count])=>{const[y,m]=k.split("-");return{year:parseInt(y),month:parseInt(m),count};}).sort((a,b)=>a.year-b.year||a.month-b.month);
-      setGraphMonthlyData(buckets);
+      const buckets=Object.entries(map)
+        .sort(([a],[b])=>a.localeCompare(b))
+        .map(([k,count])=>{const[y,m]=k.split("-");return{year:parseInt(y),month:parseInt(m),count};});
+      if(buckets.length>0) setGraphMonthlyData(buckets);
     }
     fetchMonthly();
   // eslint-disable-next-line react-hooks/exhaustive-deps
