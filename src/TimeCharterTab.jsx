@@ -574,7 +574,24 @@ export default function TimeCharterTab(){
                     <td key={c} style={td}>
                       <input
                         value={r[c]||""}
-                        onChange={e=>update(r.id,c,e.target.value)}
+                        onChange={e=>{
+  const val = e.target.value;
+
+  if(c==="vessel_name" && !val.trim()){
+    setRows(rs=>rs.map(x=>x.id===r.id ? {
+      ...x,
+      vessel_name:"",
+      dwt:"",
+      built:"",
+      coating:"",
+      vessel_spec:"",
+      commercial_operator:""
+    } : x));
+    return;
+  }
+
+  update(r.id,c,val);
+}}
                         style={{...inp,border:"none",background:"transparent",padding:"3px 2px",color:c==="rate"?C.amber:C.tx}}
                       />
                     </td>
