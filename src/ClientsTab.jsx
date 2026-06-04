@@ -57,7 +57,7 @@ function StarRating({value,onChange}){
 }
 
 // BrokerCell — pill style matching TypeCell
-const BROKER_COLS={"Henriksen":"#f59e0b","Løken":"#c792ea","Henriksen & Løken":"#58a6ff","Løken & Henriksen":"#34d399"};
+const BROKER_COLS={"Henriksen":"#58a6ff","Løken":"#c792ea","Henriksen & Løken":"#58a6ff","Løken & Henriksen":"#c792ea"};
 function BrokerCell({value, onChange}){
   const [editing,setEditing]=useState(false);
   const selected=value||"";
