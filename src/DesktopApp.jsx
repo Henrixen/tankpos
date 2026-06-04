@@ -1020,7 +1020,7 @@ const filtV=useMemo(()=>{
             ["pos","Positions",vessels.length,"#58a6ff"],
             ["cargo","Cargoes",cargoTotal||cargoes.length,"#faa356"],
             ["fix","Fixing",0,"#c792ea"],
-            ["tcv","⏱️","TC Vessels"],
+            ["tcv","Time Charter",0,"#fb923c"],
             ["clients","Clients",0,"#a8e6a3"],
             ["matrix","Matrix",0,"#43e97b"],
             ["projects","Projects",0,"#4fc3f7"],
