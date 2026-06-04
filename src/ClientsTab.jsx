@@ -329,6 +329,7 @@ export default function ClientsTab(){
   const [sortK,setSortK]=useState("company");
   const [sortD,setSortD]=useState(1);
   const [pendingDel,setPendingDel]=useState(null);
+  const [expandedRow,setExpandedRow]=useState(null);
   const saveTimer=useRef({});
 
   useEffect(()=>{
