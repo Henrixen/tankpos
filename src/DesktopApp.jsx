@@ -218,6 +218,70 @@ function BunkerHeader(){
   );
 }
 
+function TagManager(){
+  const [tags,setTags]=React.useState(getTagList);
+  const [colors,setColors]=React.useState(getTagColors);
+  const [editTag,setEditTag]=React.useState(null);
+  const [colorPick,setColorPick]=React.useState(null);
+  function refresh(){setTags(getTagList());setColors(getTagColors());}
+  const isPreset=t=>PRESET_TAGS.includes(t);
+  return(
+    <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:8,padding:"14px 16px"}}>
+      <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>Tag Management</div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {tags.map(t=>{
+          const tCol=colors[t]||null;
+          return(
+            <div key={t} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",background:C.bg2,borderRadius:6,border:"1px solid "+C.bd2}}>
+              <div style={{position:"relative"}}>
+                <button onClick={()=>setColorPick(colorPick===t?null:t)}
+                  style={{width:16,height:16,borderRadius:"50%",background:tCol||"rgba(88,166,255,0.2)",border:"2px solid "+(tCol||"rgba(88,166,255,0.3)"),cursor:"pointer",padding:0,flexShrink:0}} title="Set colour"/>
+                {colorPick===t&&(
+                  <>
+                    <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setColorPick(null)}/>
+                    <div style={{position:"absolute",left:22,top:0,zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:7,padding:"8px",display:"flex",flexWrap:"wrap",gap:5,width:136,boxShadow:"0 4px 20px rgba(0,0,0,0.7)"}}>
+                      {TAG_PALETTE.map(col=>(
+                        <button key={col} onClick={()=>{setTagColor(t,col);setColorPick(null);refresh();}}
+                          style={{width:22,height:22,borderRadius:"50%",background:col,border:tCol===col?"2.5px solid white":"2px solid transparent",cursor:"pointer",padding:0}}/>
+                      ))}
+                      {tCol&&<button onClick={()=>{const c=getTagColors();delete c[t];localStorage.setItem("signal_tag_colors",JSON.stringify(c));setColorPick(null);refresh();}}
+                        style={{fontSize:9,padding:"2px 6px",borderRadius:4,border:"1px solid rgba(255,107,107,0.4)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit",width:"100%"}}>reset colour</button>}
+                    </div>
+                  </>
+                )}
+              </div>
+              {editTag===t?(
+                <input autoFocus defaultValue={t}
+                  style={{flex:1,fontSize:12,padding:"2px 6px",borderRadius:4,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none"}}
+                  onBlur={e=>{if(e.target.value.trim()&&e.target.value!==t){removeCustomTag(t);addCustomTag(e.target.value.trim());}setEditTag(null);refresh();}}
+                  onKeyDown={e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape")setEditTag(null);}}/>
+              ):(
+                <span style={{flex:1,fontSize:12,color:tCol||"rgba(160,200,255,0.7)",fontWeight:600}} onClick={()=>!isPreset(t)&&setEditTag(t)}>
+                  {tCol&&<span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:tCol,marginRight:6,verticalAlign:"middle"}}/>}
+                  {t}{isPreset(t)&&<span style={{fontSize:9,color:C.faint,marginLeft:6}}>preset</span>}
+                </span>
+              )}
+              {!isPreset(t)&&editTag!==t&&(
+                <>
+                  <button onClick={()=>setEditTag(t)} style={{background:"none",border:"none",color:"rgba(120,160,220,0.4)",fontSize:11,cursor:"pointer",padding:"0 4px"}} title="Rename">✎</button>
+                  <button onClick={()=>{removeCustomTag(t);refresh();}} style={{background:"none",border:"none",color:"rgba(255,107,107,0.4)",fontSize:11,cursor:"pointer",padding:"0 4px"}} title="Delete">✕</button>
+                </>
+              )}
+            </div>
+          );
+        })}
+        <div style={{display:"flex",gap:6,marginTop:4}}>
+          <input placeholder="Add new tag…" id="newTagInput"
+            style={{flex:1,fontSize:12,padding:"5px 8px",borderRadius:5,border:"1px solid rgba(88,166,255,0.2)",background:"rgba(8,16,32,0.8)",color:"#cde",fontFamily:"inherit",outline:"none"}}
+            onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){addCustomTag(e.target.value.trim());e.target.value="";refresh();}}}/>
+          <button onClick={()=>{const i=document.getElementById("newTagInput");if(i&&i.value.trim()){addCustomTag(i.value.trim());i.value="";refresh();}}}
+            style={{fontSize:12,padding:"5px 12px",borderRadius:5,border:"1px solid rgba(88,166,255,0.3)",background:"rgba(88,166,255,0.1)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"}}>+ Add</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
   const [open,setOpen]=React.useState(false);
   const [menuPos,setMenuPos]=React.useState({top:60,right:8});
@@ -2066,76 +2130,7 @@ const filtV=useMemo(()=>{
         {tab==="cal"&&<Suspense fallback={<TabFallback/>}><CalendarTab/></Suspense>}
         {tab==="settings"&&(
           <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px"}}>
-            {/* Tag Manager */}
-            {(()=>{
-              const [tags,setTags]=React.useState(getTagList);
-              const [colors,setColors]=React.useState(getTagColors);
-              const [editTag,setEditTag]=React.useState(null);
-              const [colorPick,setColorPick]=React.useState(null);
-              function refresh(){setTags(getTagList());setColors(getTagColors());}
-              return(
-                <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:8,padding:"14px 16px"}}>
-                  <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>Tag Management</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                    {tags.map(t=>{
-                      const tCol=colors[t]||null;
-                      const isPreset=PRESET_TAGS.includes(t);
-                      return(
-                        <div key={t} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",background:C.bg2,borderRadius:6,border:"1px solid "+C.bd2}}>
-                          {/* Colour dot — click to pick */}
-                          <div style={{position:"relative"}}>
-                            <button onClick={()=>setColorPick(colorPick===t?null:t)}
-                              style={{width:16,height:16,borderRadius:"50%",background:tCol||"rgba(88,166,255,0.2)",
-                                border:"2px solid "+(tCol||"rgba(88,166,255,0.3)"),cursor:"pointer",padding:0,flexShrink:0}}
-                              title="Set colour"/>
-                            {colorPick===t&&(
-                              <>
-                                <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setColorPick(null)}/>
-                                <div style={{position:"absolute",left:22,top:0,zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:7,padding:"8px",display:"flex",flexWrap:"wrap",gap:5,width:136,boxShadow:"0 4px 20px rgba(0,0,0,0.7)"}}>
-                                  {TAG_PALETTE.map(col=>(
-                                    <button key={col} onClick={()=>{setTagColor(t,col);setColorPick(null);refresh();}}
-                                      style={{width:22,height:22,borderRadius:"50%",background:col,border:tCol===col?"2.5px solid white":"2px solid transparent",cursor:"pointer",padding:0}}/>
-                                  ))}
-                                  {tCol&&<button onClick={()=>{const c=getTagColors();delete c[t];localStorage.setItem("signal_tag_colors",JSON.stringify(c));setColorPick(null);refresh();}}
-                                    style={{fontSize:9,padding:"2px 6px",borderRadius:4,border:"1px solid rgba(255,107,107,0.4)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit",width:"100%"}}>reset colour</button>}
-                                </div>
-                              </>
-                            )}
-                          </div>
-                          {/* Tag name — click to edit if custom */}
-                          {editTag===t?(
-                            <input autoFocus defaultValue={t}
-                              style={{flex:1,fontSize:12,padding:"2px 6px",borderRadius:4,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none"}}
-                              onBlur={e=>{if(e.target.value.trim()&&e.target.value!==t){removeCustomTag(t);addCustomTag(e.target.value.trim());}setEditTag(null);refresh();}}
-                              onKeyDown={e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape")setEditTag(null);}}/>
-                          ):(
-                            <span style={{flex:1,fontSize:12,color:tCol||"rgba(160,200,255,0.7)",fontWeight:600}}
-                              onClick={()=>!isPreset&&setEditTag(t)}>
-                              {tCol&&<span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:tCol,marginRight:6,verticalAlign:"middle"}}/>}
-                              {t}{isPreset&&<span style={{fontSize:9,color:C.faint,marginLeft:6}}>preset</span>}
-                            </span>
-                          )}
-                          {!isPreset&&editTag!==t&&(
-                            <>
-                              <button onClick={()=>setEditTag(t)} style={{background:"none",border:"none",color:"rgba(120,160,220,0.4)",fontSize:11,cursor:"pointer",padding:"0 4px"}} title="Rename">✎</button>
-                              <button onClick={()=>{removeCustomTag(t);refresh();}} style={{background:"none",border:"none",color:"rgba(255,107,107,0.4)",fontSize:11,cursor:"pointer",padding:"0 4px"}} title="Delete">✕</button>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {/* Add new tag */}
-                    <div style={{display:"flex",gap:6,marginTop:4}}>
-                      <input placeholder="Add new tag…" id="newTagInput"
-                        style={{flex:1,fontSize:12,padding:"5px 8px",borderRadius:5,border:"1px solid rgba(88,166,255,0.2)",background:"rgba(8,16,32,0.8)",color:"#cde",fontFamily:"inherit",outline:"none"}}
-                        onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){addCustomTag(e.target.value.trim());e.target.value="";refresh();}}}/>
-                      <button onClick={()=>{const i=document.getElementById("newTagInput");if(i&&i.value.trim()){addCustomTag(i.value.trim());i.value="";refresh();}}}
-                        style={{fontSize:12,padding:"5px 12px",borderRadius:5,border:"1px solid rgba(88,166,255,0.3)",background:"rgba(88,166,255,0.1)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"}}>+ Add</button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+            <TagManager/>
             {/* Original settings component */}
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
           </div>
