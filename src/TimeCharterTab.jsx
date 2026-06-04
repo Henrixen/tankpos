@@ -98,6 +98,48 @@ function monthKey(d){
   return dt.toLocaleDateString("en-GB",{month:"short",year:"2-digit"});
 }
 
+function cleanVal(v){
+  const s=String(v ?? "").trim();
+  if(!s || s.toLowerCase()==="nan" || s.toLowerCase()==="null" || s.toLowerCase()==="undefined") return "";
+  return s;
+}
+
+function toISODateOrNull(v){
+  const s=String(v ?? "").trim();
+  if(!s || s.toLowerCase()==="null" || s.toLowerCase()==="undefined") return null;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m=s.match(/^(\d{1,2})[\/. -](\d{1,2})[\/. -](\d{2,4})$/);
+  if(m){
+    const dd=m[1].padStart(2,"0");
+    const mm=m[2].padStart(2,"0");
+    const yyyy=m[3].length===2 ? "20"+m[3] : m[3];
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  const d=new Date(s);
+  if(!isNaN(d)) return d.toISOString().slice(0,10);
+  return null;
+}
+
+function prepareForSave(row){
+  const clean={...row};
+  clean.delivered=toISODateOrNull(clean.delivered);
+  clean.entry_date=toISODateOrNull(clean.entry_date) || new Date().toISOString().slice(0,10);
+  if(!Array.isArray(clean.tags)) clean.tags=[];
+  return clean;
+}
+
+function clearVesselDetails(row){
+  return {
+    ...row,
+    vessel_name:"",
+    dwt:"",
+    built:"",
+    coating:"",
+    vessel_spec:"",
+    commercial_operator:""
+  };
+}
+
 function normName(s){
   return String(s||"").toLowerCase().replace(/[._-]/g," ").replace(/\s+/g," ").trim();
 }
@@ -147,19 +189,20 @@ function enrichWithVesselDB(row, vesselDB){
   if(!spec) return row;
 
   const specParts = [
-    spec.loa ? `LOA ${spec.loa}` : "",
-    spec.beam ? `Beam ${spec.beam}` : "",
-    spec.cbm ? `${spec.cbm} cbm` : "",
-    spec.ice_class ? `Ice ${spec.ice_class}` : "",
-    spec.fuel ? `Fuel ${spec.fuel}` : "",
+    cleanVal(spec.loa) ? `LOA ${cleanVal(spec.loa)}` : "",
+    cleanVal(spec.beam) ? `Beam ${cleanVal(spec.beam)}` : "",
+    cleanVal(spec.cbm) ? `${cleanVal(spec.cbm)} cbm` : "",
+    cleanVal(spec.ice_class) ? `Ice ${cleanVal(spec.ice_class)}` : "",
+    cleanVal(spec.fuel) ? `Fuel ${cleanVal(spec.fuel)}` : "",
   ].filter(Boolean).join(" · ");
 
   return {
     ...row,
-    dwt: row.dwt || spec.dwt || "",
-    built: row.built || spec.built || spec.build_year || "",
-    coating: row.coating || spec.coating || spec.coated || spec.tank_coating || "",
-    commercial_operator: row.commercial_operator || spec.operator || "",
+    dwt: row.dwt || cleanVal(spec.dwt),
+    built: row.built || cleanVal(spec.built) || cleanVal(spec.build_year),
+    // Coating is manual only because some vessel_db rows have a default/generic MarineLine value.
+    coating: row.coating || "",
+    commercial_operator: row.commercial_operator || cleanVal(spec.operator),
     vessel_spec: row.vessel_spec || specParts || "",
   };
 }
@@ -178,9 +221,8 @@ async function loadTCVessels(){
 }
 
 async function saveTCVessel(row){
-  const clean={...row, updated_at:new Date().toISOString()};
+  const clean={...prepareForSave(row), updated_at:new Date().toISOString()};
   if(!clean.id) clean.id="tc_"+Date.now()+"_"+Math.random().toString(36).slice(2,7);
-  if(!Array.isArray(clean.tags)) clean.tags=[];
   const {data,error}=await supabase
     .from("time_charter_vessels")
     .upsert(clean,{onConflict:"id"})
@@ -367,7 +409,11 @@ export default function TimeCharterTab(){
     const old=rows.find(r=>r.id===id);
     if(!old) return;
     let next={...old,[k]:v};
-    if(k==="vessel_name") next=enrichWithVesselDB(next, vesselDB);
+
+    if(k==="vessel_name"){
+      next = !String(v||"").trim() ? clearVesselDetails(next) : enrichWithVesselDB(next, vesselDB);
+    }
+
     setRows(rs=>rs.map(r=>r.id===id?next:r));
     try{ await saveTCVessel(next); }
     catch(e){ setStatus({t:"error",m:e.message}); }
@@ -507,10 +553,14 @@ export default function TimeCharterTab(){
                 value={draft[k]||""}
                 onChange={e=>{
                   const val=e.target.value;
+                  if(k==="vessel_name" && !val.trim()){
+                    setDraft(d=>clearVesselDetails(d));
+                    return;
+                  }
                   setDraft(d=>({...d,[k]:val}));
                 }}
                 onBlur={e=>{
-                  if(k==="vessel_name") enrichDraftByName(e.target.value);
+                  if(k==="vessel_name" && e.target.value.trim()) enrichDraftByName(e.target.value);
                 }}
                 placeholder={label(k)}
               />
@@ -574,24 +624,7 @@ export default function TimeCharterTab(){
                     <td key={c} style={td}>
                       <input
                         value={r[c]||""}
-                        onChange={e=>{
-  const val = e.target.value;
-
-  if(c==="vessel_name" && !val.trim()){
-    setRows(rs=>rs.map(x=>x.id===r.id ? {
-      ...x,
-      vessel_name:"",
-      dwt:"",
-      built:"",
-      coating:"",
-      vessel_spec:"",
-      commercial_operator:""
-    } : x));
-    return;
-  }
-
-  update(r.id,c,val);
-}}
+                        onChange={e=>update(r.id,c,e.target.value)}
                         style={{...inp,border:"none",background:"transparent",padding:"3px 2px",color:c==="rate"?C.amber:C.tx}}
                       />
                     </td>
