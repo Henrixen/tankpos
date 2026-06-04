@@ -26,6 +26,7 @@ const SettingsTab    = React.lazy(()=>import("./SettingsTab"));
 const ReportsTab     = React.lazy(()=>import("./ReportsTab"));
 const FreightMapTab  = React.lazy(()=>import("./FreightMapTab"));
 const VesselPopout   = React.lazy(()=>import("./VesselPopout"));
+const ClientsTab     = React.lazy(()=>import("./ClientsTab"));
 
 const TabFallback = ()=>null;
 
@@ -954,6 +955,7 @@ const filtV=useMemo(()=>{
             ["pos","Positions",vessels.length,"#58a6ff"],
             ["cargo","Cargoes",cargoTotal||cargoes.length,"#faa356"],
             ["fix","Fixing",0,"#c792ea"],
+            ["clients","Clients",0,"#a8e6a3"],
             ["matrix","Matrix",0,"#43e97b"],
             ["projects","Projects",0,"#4fc3f7"],
             ["tce","TCE",0,"#faa356"],
@@ -1958,6 +1960,9 @@ const filtV=useMemo(()=>{
         )}
 
         {/* ── FIXING ── */}
+        {tab==="clients"&&(
+          <Suspense fallback={<TabFallback/>}><ClientsTab/></Suspense>
+        )}
         {tab==="fix"&&(
           <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
             <Suspense fallback={<TabFallback/>}><FixingTab vessels={vessels}/></Suspense>
