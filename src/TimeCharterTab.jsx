@@ -5,15 +5,30 @@ import { apiCall, ocrImage } from "./api";
 import { loadImg } from "./utils";
 
 const TAGS = ["UKC","MED","ASIA","J19","INTER","C18","MR","CPP","CHEM","BIO","RUMOUR","DONE"];
-const COLS = ["vessel_name","owner","commercial_operator","tc_charterer","rate","period","done_date","tags","comment"];
-const blank = () => ({ vessel_name:"", owner:"", commercial_operator:"", tc_charterer:"", rate:"", period:"", done_date:new Date().toISOString().slice(0,10), comment:"", tags:[] });
+const COLS = ["vessel_name","dwt","age","coating","vessel_spec","owner","commercial_operator","tc_charterer","rate","period","delivered","entry_date","tags","comment"];
+const blank = () => ({
+  vessel_name:"",
+  dwt:"",
+  age:"",
+  coating:"",
+  vessel_spec:"",
+  owner:"",
+  commercial_operator:"",
+  tc_charterer:"",
+  rate:"",
+  period:"",
+  delivered:"",
+  entry_date:new Date().toISOString().slice(0,10),
+  comment:"",
+  tags:[]
+});
 const usd = n => n ? "$" + Number(String(n).replace(/[^0-9.\-]/g,"")).toLocaleString("en-US") + "/d" : "";
 
 function parseRate(v){ const n=parseFloat(String(v||"").replace(/[^0-9.\-]/g,"")); return isNaN(n)?null:n; }
 function monthKey(d){ if(!d)return "Unknown"; const dt=new Date(d); if(isNaN(dt))return "Unknown"; return dt.toLocaleDateString("en-GB",{month:"short",year:"2-digit"}); }
 
 async function loadTCVessels(){
-  const {data,error}=await supabase.from("time_charter_vessels").select("*").order("done_date",{ascending:false}).order("created_at",{ascending:false});
+  const {data,error}=await supabase.from("time_charter_vessels").select("*").order("entry_date",{ascending:false}).order("created_at",{ascending:false});
   if(error){console.error("loadTCVessels",error);return [];} return data||[];
 }
 async function saveTCVessel(row){
@@ -30,14 +45,19 @@ async function parseTC(text,img){
   const raw=await apiCall(
     "Maritime time charter fixture parser. Output ONLY raw JSON array, no markdown, no explanation.",
     [{role:"user",content:`Parse time charter vessel entries into JSON array.
-Fields exactly: {vessel_name, owner, commercial_operator, tc_charterer, rate, period, done_date, comment, tags}
+Fields exactly: {vessel_name, dwt, age, coating, vessel_spec, owner, commercial_operator, tc_charterer, rate, period, delivered, entry_date, comment, tags}
 Rules:
 - vessel_name: ship name, uppercase if clear.
 - tc_charterer: company that has/takes vessel on time charter.
 - commercial_operator: current commercial operator/manager if mentioned.
 - rate: daily hire, preserve as USD/day string or number. Examples: 18500, "$18,500 pd", "USD 18k pd" -> "18500".
+- dwt: deadweight / size if mentioned, e.g. "18500", "18.5k", "19k dwt".
+- age: vessel age or built year if mentioned. Preserve exact value, e.g. "2010", "15 yrs".
+- coating: coating if mentioned, e.g. "MarineLine", "Epoxy", "Stainless".
+- vessel_spec: other vessel specs such as IMO, cbm, ice class, pumps, segregations, eco, IMO II/III.
 - period: e.g. "6 months", "1 year", "3+3 months", "30-45 days".
-- done_date: date fixture was done. Use YYYY-MM-DD if possible. If only month/year, use first day of month. If unknown, null.
+- delivered: delivery date / when vessel is delivered into TC. Use YYYY-MM-DD if possible. If only month/year, use first day of month. If unknown, null.
+- entry_date: date the information was entered/received. Use today if unknown.
 - tags: choose relevant uppercase tags from UKC, MED, ASIA, J19, INTER, C18, MR, CPP, CHEM, BIO, RUMOUR, DONE.
 - comment: all extra details, options, redelivery, broker notes, uncertainty.
 - Only include rows where a TC fixture/TC candidate is present.
@@ -61,7 +81,7 @@ export default function TimeCharterTab(){
   const [rows,setRows]=useState([]); const [draft,setDraft]=useState(blank());
   const [text,setText]=useState(""); const [img,setImg]=useState(null); const fRef=useRef(null);
   const [busy,setBusy]=useState(false); const [status,setStatus]=useState(null);
-  const [search,setSearch]=useState(""); const [tag,setTag]=useState("ALL"); const [sort,setSort]=useState("done_date");
+  const [search,setSearch]=useState(""); const [tag,setTag]=useState("ALL"); const [sort,setSort]=useState("entry_date");
   useEffect(()=>{loadTCVessels().then(setRows);},[]);
   function onPaste(e){ for(const it of Array.from(e.clipboardData?.items||[])){ if(it.type.startsWith("image/")){ e.preventDefault(); loadImg(it.getAsFile(),setImg); return; } } }
   async function addManual(){ try{ const saved=await saveTCVessel({...draft,tags:draft.tags||[]}); setRows(r=>[saved,...r.filter(x=>x.id!==saved.id)]); setDraft(blank()); }catch(e){setStatus({t:"error",m:e.message});} }
@@ -77,14 +97,14 @@ export default function TimeCharterTab(){
     let out=rows.filter(r=>{
       if(tag!=="ALL" && !(r.tags||[]).includes(tag)) return false;
       if(!q)return true;
-      return [r.vessel_name,r.owner,r.commercial_operator,r.tc_charterer,r.rate,r.period,r.comment,(r.tags||[]).join(" ")].join(" ").toLowerCase().includes(q);
+      return [r.vessel_name,r.owner,r.commercial_operator,r.tc_charterer,r.rate,r.period,r.delivered,r.entry_date,r.dwt,r.age,r.coating,r.vessel_spec,r.comment,(r.tags||[]).join(" ")].join(" ").toLowerCase().includes(q);
     });
     return [...out].sort((a,b)=>String(b[sort]||"").localeCompare(String(a[sort]||"")));
   },[rows,search,tag,sort]);
   const stats=useMemo(()=>{
     const rates=filtered.map(r=>parseRate(r.rate)).filter(n=>n!=null);
     const byChar={}; const byMonth={}; const byTag={};
-    filtered.forEach(r=>{ const c=r.tc_charterer||"Unknown"; byChar[c]=(byChar[c]||0)+1; byMonth[monthKey(r.done_date)]=(byMonth[monthKey(r.done_date)]||0)+1; (r.tags||[]).forEach(t=>byTag[t]=(byTag[t]||0)+1); });
+    filtered.forEach(r=>{ const c=r.tc_charterer||"Unknown"; byChar[c]=(byChar[c]||0)+1; byMonth[monthKey(r.entry_date)]=(byMonth[monthKey(r.entry_date)]||0)+1; (r.tags||[]).forEach(t=>byTag[t]=(byTag[t]||0)+1); });
     return {count:filtered.length,avg:rates.length?Math.round(rates.reduce((a,b)=>a+b,0)/rates.length):null,maxChar:Math.max(1,...Object.values(byChar)), byChar:Object.entries(byChar).sort((a,b)=>b[1]-a[1]).slice(0,6), byMonth:Object.entries(byMonth).slice(0,8), byTag:Object.entries(byTag).sort((a,b)=>b[1]-a[1]).slice(0,8)};
   },[filtered]);
   const inp={background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 8px",outline:"none",width:"100%"};
@@ -101,7 +121,7 @@ export default function TimeCharterTab(){
       </div>
       <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:12}}>
         <div style={{fontSize:12,fontWeight:800,color:C.tx,marginBottom:8}}>➕ Manual TC entry</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>{COLS.filter(c=>c!=="tags"&&c!=="comment").map(k=><input key={k} style={inp} value={draft[k]||""} onChange={e=>setDraft(d=>({...d,[k]:e.target.value}))} placeholder={k.replaceAll("_"," ")} />)}</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>{COLS.filter(c=>c!=="tags"&&c!=="comment").map(k=><input key={k} style={inp} value={draft[k]||""} onChange={e=>setDraft(d=>({...d,[k]:e.target.value}))} placeholder={k.replaceAll("_"," ").replace("delivered","Delivered").replace("entry date","Date")} />)}</div>
         <textarea style={{...inp,minHeight:50,marginTop:7}} value={draft.comment||""} onChange={e=>setDraft(d=>({...d,comment:e.target.value}))} placeholder="Comment" />
         <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:7}}>{TAGS.map(t=><button key={t} style={btn((draft.tags||[]).includes(t),C.amber)} onClick={()=>setDraft(d=>{const s=new Set(d.tags||[]);s.has(t)?s.delete(t):s.add(t);return {...d,tags:[...s]};})}>{t}</button>)}</div>
         <button style={{...btn(true,C.green),marginTop:9}} onClick={addManual}>Save manual entry</button>
@@ -114,7 +134,7 @@ export default function TimeCharterTab(){
     </div>
     <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
       <div style={{display:"flex",gap:8,padding:10,borderBottom:"1px solid "+C.bd2,alignItems:"center",flexWrap:"wrap"}}><input style={{...inp,width:230}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search vessel, owner, TC, rate…"/><button style={btn(tag==="ALL")} onClick={()=>setTag("ALL")}>ALL</button>{TAGS.map(t=><button key={t} style={btn(tag===t,C.amber)} onClick={()=>setTag(tag===t?"ALL":t)}>{t}</button>)}</div>
-      <div style={{overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",minWidth:1180}}><thead><tr>{COLS.map(c=><th key={c} style={th} onClick={()=>setSort(c)}>{c.replaceAll("_"," ")}</th>)}<th style={th}></th></tr></thead><tbody>{filtered.map((r,i)=><tr key={r.id} style={{background:i%2?C.bg2:C.bg}}>{COLS.map(c=>c==="tags"?<td key={c} style={td}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{(r.tags||[]).map(t=><span key={t} style={{fontSize:10,color:C.amber,border:"1px solid "+C.amber+"55",background:C.amber+"18",borderRadius:4,padding:"1px 5px"}}>{t}</span>)}</div></td>:<td key={c} style={td}><input value={r[c]||""} onChange={e=>update(r.id,c,e.target.value)} style={{...inp,border:"none",background:"transparent",padding:"3px 2px",color:c==="rate"?C.amber:C.tx}} /></td>)}<td style={td}><button onClick={async()=>{await deleteTCVessel(r.id);setRows(rs=>rs.filter(x=>x.id!==r.id));}} style={{background:"none",border:"none",color:C.red,cursor:"pointer"}}>✕</button></td></tr>)}</tbody></table></div>
+      <div style={{overflow:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",minWidth:1180}}><thead><tr>{COLS.map(c=><th key={c} style={th} onClick={()=>setSort(c)}>{c.replaceAll("_"," ").replace("delivered","Delivered").replace("entry date","Date")}</th>)}<th style={th}></th></tr></thead><tbody>{filtered.map((r,i)=><tr key={r.id} style={{background:i%2?C.bg2:C.bg}}>{COLS.map(c=>c==="tags"?<td key={c} style={td}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{(r.tags||[]).map(t=><span key={t} style={{fontSize:10,color:C.amber,border:"1px solid "+C.amber+"55",background:C.amber+"18",borderRadius:4,padding:"1px 5px"}}>{t}</span>)}</div></td>:<td key={c} style={td}><input value={r[c]||""} onChange={e=>update(r.id,c,e.target.value)} style={{...inp,border:"none",background:"transparent",padding:"3px 2px",color:c==="rate"?C.amber:C.tx}} /></td>)}<td style={td}><button onClick={async()=>{await deleteTCVessel(r.id);setRows(rs=>rs.filter(x=>x.id!==r.id));}} style={{background:"none",border:"none",color:C.red,cursor:"pointer"}}>✕</button></td></tr>)}</tbody></table></div>
     </div>
   </div>;
 }
