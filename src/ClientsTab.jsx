@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 // UPDATE client_directory SET lead_broker = 'Henriksen' WHERE lead_broker = 'Haakon';
 // UPDATE client_directory SET lead_broker = 'Henriksen & Løken' WHERE lead_broker = 'Both';
 
-const BROKERS = ["", "Henriksen", "Løken", "Henriksen & Løken"];
+const BROKERS = ["", "Henriksen", "Løken", "Henriksen & Løken", "Løken & Henriksen"];
 const CLIENT_TYPES = ["Charterer", "Owner"];
 const ROW_EVEN = "rgba(7,15,28,0.96)";
 const ROW_ODD  = "rgba(22,37,64,0.82)";
@@ -65,8 +65,10 @@ function BrokerCell({value, onChange}){
     <td style={TD} onClick={e=>e.stopPropagation()}>
       <div style={{position:"relative"}}>
         <button onClick={()=>setOpen(v=>!v)}
-          style={{...INP,cursor:"pointer",textAlign:"left",padding:"6px 10px",color:selected?"rgba(160,200,255,0.85)":"rgba(100,140,180,0.35)"}}>
-          {selected||"—"}
+          style={{...INP,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",
+            padding:"6px 10px",color:selected?"rgba(160,200,255,0.85)":"rgba(100,140,180,0.35)"}}>
+          <span>{selected||"—"}</span>
+          <span style={{fontSize:9,color:"rgba(88,166,255,0.35)",flexShrink:0,marginLeft:4}}>▼</span>
         </button>
         {open&&(
           <>
@@ -91,23 +93,56 @@ function BrokerCell({value, onChange}){
   );
 }
 
-// Checkbox multi-select for client type
+// Type pill buttons — show only active, themed
 function TypeCell({value, onChange}){
   const types = Array.isArray(value) ? value : (value ? [value] : []);
+  const [editing,setEditing]=useState(false);
   function toggle(t){
     const next = types.includes(t) ? types.filter(x=>x!==t) : [...types,t];
     onChange(next);
   }
+  const TYPE_COLS={"Charterer":"#58a6ff","Owner":"#a8e6a3"};
   return(
-    <td style={{...TD,padding:"0 8px"}} onClick={e=>e.stopPropagation()}>
-      <div style={{display:"flex",gap:6,alignItems:"center"}}>
-        {CLIENT_TYPES.map(t=>(
-          <label key={t} style={{display:"flex",alignItems:"center",gap:3,cursor:"pointer",fontSize:11}}>
-            <input type="checkbox" checked={types.includes(t)} onChange={()=>toggle(t)}
-              style={{width:12,height:12,accentColor:"#58a6ff",cursor:"pointer"}}/>
-            <span style={{color:types.includes(t)?"rgba(160,200,255,0.8)":"rgba(100,140,180,0.4)"}}>{t}</span>
-          </label>
-        ))}
+    <td style={{...TD,padding:"0 6px"}} onClick={e=>{e.stopPropagation();setEditing(v=>!v);}}>
+      <div style={{position:"relative"}}>
+        <div style={{display:"flex",gap:3,padding:"4px 4px",flexWrap:"wrap",cursor:"pointer",minHeight:32,alignItems:"center"}}>
+          {types.length===0
+            ?<span style={{fontSize:10,color:"rgba(100,140,180,0.3)"}}>—</span>
+            :types.map(t=>(
+              <span key={t} style={{fontSize:10,fontWeight:600,padding:"1px 7px",borderRadius:10,
+                background:(TYPE_COLS[t]||"#888")+"22",
+                border:"1px solid "+(TYPE_COLS[t]||"#888")+"55",
+                color:TYPE_COLS[t]||"rgba(160,200,255,0.8)"}}>
+                {t}
+              </span>
+            ))
+          }
+        </div>
+        {editing&&(
+          <>
+            <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={e=>{e.stopPropagation();setEditing(false);}}/>
+            <div style={{position:"absolute",left:0,top:"100%",zIndex:9999,background:"#0a1628",
+              border:"1px solid rgba(88,166,255,0.3)",borderRadius:6,padding:"6px",
+              boxShadow:"0 6px 20px rgba(0,0,0,0.7)",display:"flex",flexDirection:"column",gap:3,minWidth:120}}>
+              {CLIENT_TYPES.map(t=>{
+                const active=types.includes(t);
+                const col=TYPE_COLS[t]||"#888";
+                return(
+                  <button key={t} onClick={e=>{e.stopPropagation();toggle(t);}}
+                    style={{display:"flex",alignItems:"center",gap:7,fontSize:11,padding:"5px 10px",
+                      background:active?col+"22":"transparent",
+                      border:"1px solid "+(active?col+"55":"rgba(88,166,255,0.1)"),
+                      color:active?col:"rgba(160,200,255,0.6)",
+                      borderRadius:5,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+                    <span style={{width:12,height:12,borderRadius:3,border:"2px solid "+(active?col:"rgba(88,166,255,0.3)"),
+                      background:active?col:"transparent",display:"inline-block",flexShrink:0}}/>
+                    {t}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
     </td>
   );
@@ -171,21 +206,21 @@ function CommentImageCell({rowId, comment, images, onUpdateComment, onUpdateImag
   return(
     <>
       {/* Collapsed: single line */}
-      <td style={{...TD,cursor:"pointer",maxWidth:280}} onClick={()=>setExpanded(v=>!v)}>
-        <div style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",minHeight:32}}>
+      <td style={{...TD,cursor:"pointer",width:"100%"}} onClick={()=>setExpanded(v=>!v)}>
+        <div style={{display:"flex",alignItems:"center",padding:"5px 10px",minHeight:32,width:"100%",boxSizing:"border-box"}}>
           <span style={{fontSize:11,color:hasContent?"rgba(180,210,255,0.7)":"rgba(100,140,180,0.3)",
-            whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1,maxWidth:200}}>
-            {comment||(images.length>0?"":"")||"Add comment…"}
+            overflow:"hidden",textOverflow:"ellipsis",flex:1,whiteSpace:"nowrap"}}>
+            {comment||"Add comment…"}
           </span>
           {images.length>0&&(
-            <div style={{display:"flex",gap:2,flexShrink:0}}>
+            <div style={{display:"flex",gap:2,flexShrink:0,marginLeft:6}}>
               {images.slice(0,3).map((src,i)=>(
                 <img key={i} src={src} style={{width:22,height:22,objectFit:"cover",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)"}}/>
               ))}
               {images.length>3&&<span style={{fontSize:9,color:"rgba(120,160,200,0.5)",paddingLeft:2}}>+{images.length-3}</span>}
             </div>
           )}
-          <span style={{fontSize:9,color:"rgba(88,166,255,0.3)",flexShrink:0}}>{expanded?"▲":"▼"}</span>
+          <span style={{fontSize:9,color:"rgba(88,166,255,0.3)",flexShrink:0,marginLeft:8}}>{expanded?"▲":"▼"}</span>
         </div>
       </td>
       {/* Expanded row — spans full width */}
@@ -216,19 +251,10 @@ function CommentImageCell({rowId, comment, images, onUpdateComment, onUpdateImag
                       <img src={src} onClick={()=>setLightbox(src)}
                         style={{width:52,height:52,objectFit:"cover",borderRadius:5,cursor:"zoom-in",
                           border:"1px solid rgba(88,166,255,0.2)"}}/>
-                      {delConfirm===i
-                        ?<div style={{position:"absolute",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.8)",borderRadius:5,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
-                          <span style={{fontSize:8,color:"white"}}>Delete?</span>
-                          <div style={{display:"flex",gap:3}}>
-                            <button onClick={e=>{e.stopPropagation();confirmDeleteImage(i);}} style={{fontSize:9,padding:"1px 5px",borderRadius:3,border:"none",background:"rgba(255,107,107,0.7)",color:"white",cursor:"pointer"}}>Yes</button>
-                            <button onClick={e=>{e.stopPropagation();setDelConfirm(null);}} style={{fontSize:9,padding:"1px 5px",borderRadius:3,border:"none",background:"rgba(88,130,200,0.5)",color:"white",cursor:"pointer"}}>No</button>
-                          </div>
-                        </div>
-                        :<button onClick={e=>{e.stopPropagation();deleteImage(i);}}
-                          style={{position:"absolute",top:-5,right:-5,width:16,height:16,borderRadius:"50%",
-                            background:"rgba(255,107,107,0.7)",border:"none",color:"white",fontSize:9,
-                            cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>
-                      }
+                      <button onClick={e=>{e.stopPropagation();setDelConfirm(i);}}
+                        style={{position:"absolute",top:-5,right:-5,width:16,height:16,borderRadius:"50%",
+                          background:"rgba(255,107,107,0.6)",border:"none",color:"white",fontSize:9,
+                          cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>
                     </div>
                   ))}
                   <label style={{width:52,height:52,border:"1px dashed rgba(88,166,255,0.25)",borderRadius:5,
@@ -247,6 +273,21 @@ function CommentImageCell({rowId, comment, images, onUpdateComment, onUpdateImag
                     onChange={e=>{if(e.target.files?.[0]){const r=new FileReader();r.onload=ev=>onUpdateImages([ev.target.result]);r.readAsDataURL(e.target.files[0]);e.target.value="";}}}/>
                 </label>
               )}
+            </div>
+          </td>
+        </tr>
+      )}
+      {delConfirm!==null&&(
+        <tr style={{background:"rgba(20,10,10,0.9)"}}>
+          <td colSpan={99} style={{padding:"8px 14px",borderBottom:"1px solid rgba(255,107,107,0.2)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,fontSize:12}}>
+              <span style={{color:"rgba(255,180,180,0.8)"}}>Delete this image?</span>
+              <button onClick={e=>{e.stopPropagation();confirmDeleteImage(delConfirm);}}
+                style={{fontSize:11,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(255,107,107,0.4)",
+                  background:"rgba(255,107,107,0.12)",color:"#f87171",cursor:"pointer",fontFamily:"inherit"}}>Delete</button>
+              <button onClick={e=>{e.stopPropagation();setDelConfirm(null);}}
+                style={{fontSize:11,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(58,130,246,0.25)",
+                  background:"rgba(58,130,246,0.1)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
             </div>
           </td>
         </tr>
