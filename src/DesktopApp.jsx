@@ -28,6 +28,7 @@ const ReportsTab     = React.lazy(()=>import("./ReportsTab"));
 const FreightMapTab  = React.lazy(()=>import("./FreightMapTab"));
 const VesselPopout   = React.lazy(()=>import("./VesselPopout"));
 const ClientsTab     = React.lazy(()=>import("./ClientsTab"));
+const VesselUploader = React.lazy(()=>import("./VesselUploader"));
 
 const TabFallback = ()=>null;
 
@@ -1035,6 +1036,7 @@ const filtV=useMemo(()=>{
             ["map","Freight Map",0,"#10b981"],
             ["cal","Calendar",0,"#4fc3f7"],
             ["settings","Settings",0,"#94a3b8"],
+            ["vessels","Fleet DB",0,"#38bdf8"],
           ].filter(([id])=>!guestMode||GUEST_TABS.includes(id)).map(([id,label,count,col])=>{
             const active=tab===id;
             return(
@@ -2143,6 +2145,9 @@ const filtV=useMemo(()=>{
           </div>
         )}
         {tab==="cal"&&<Suspense fallback={<TabFallback/>}><CalendarTab/></Suspense>}
+        {tab==="vessels"&&(
+          <Suspense fallback={<TabFallback/>}><VesselUploader/></Suspense>
+        )}
         {tab==="settings"&&(
           <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px"}}>
             <TagManager/>
