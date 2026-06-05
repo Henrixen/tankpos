@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } fr
 import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
 import { loadHistory } from "./supabaseHelpers";
+import { getUsageCache, fetchUsageTotals } from "./aiUsage";
 
 // Every component lazy-loaded to fully break circular dependency chains
 const EC             = React.lazy(()=>import("./EC"));
@@ -279,6 +280,69 @@ function TagManager(){
           <button onClick={()=>{const i=document.getElementById("newTagInput");if(i&&i.value.trim()){addCustomTag(i.value.trim());i.value="";refresh();}}}
             style={{fontSize:12,padding:"5px 12px",borderRadius:5,border:"1px solid rgba(88,166,255,0.3)",background:"rgba(88,166,255,0.1)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"}}>+ Add</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// AI Credit tracker — shows estimated remaining balance
+const STARTING_BALANCE_KEY = "signal_ai_starting_balance";
+function AICreditWidget(){
+  const [usage,setUsage]=React.useState(getUsageCache);
+  const [starting,setStarting]=React.useState(()=>{
+    const s=localStorage.getItem(STARTING_BALANCE_KEY);
+    return s?parseFloat(s):9.38; // default to current known balance
+  });
+  const [editing,setEditing]=React.useState(false);
+  const [editVal,setEditVal]=React.useState("");
+
+  // Refresh from Supabase every 60s
+  React.useEffect(()=>{
+    fetchUsageTotals().then(t=>setUsage(t));
+    const interval=setInterval(()=>fetchUsageTotals().then(t=>setUsage(t)),60000);
+    return()=>clearInterval(interval);
+  },[]);
+
+  const remaining=Math.max(0,starting-usage.total);
+  const pct=starting>0?Math.min(100,remaining/starting*100):100;
+  const barCol=pct>50?"#43e97b":pct>20?"#faa356":"#ef4444";
+
+  function saveBalance(v){
+    const n=parseFloat(v);
+    if(!isNaN(n)&&n>=0){
+      setStarting(n);
+      localStorage.setItem(STARTING_BALANCE_KEY,String(n));
+    }
+    setEditing(false);
+  }
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:2,padding:"4px 10px",
+      background:"rgba(8,16,32,0.6)",border:"1px solid rgba(58,130,246,0.15)",
+      borderRadius:7,minWidth:150,cursor:"pointer"}}
+      title="Click balance to update starting amount">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+        <span style={{fontSize:9,fontWeight:700,color:"rgba(120,160,220,0.45)",textTransform:"uppercase",letterSpacing:"0.08em"}}>API Credits</span>
+        {editing?(
+          <input autoFocus defaultValue={starting.toFixed(2)}
+            onBlur={e=>saveBalance(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter")saveBalance(e.target.value);if(e.key==="Escape")setEditing(false);}}
+            style={{width:60,fontSize:11,background:"rgba(8,16,32,0.9)",border:"1px solid rgba(88,166,255,0.4)",
+              borderRadius:3,color:"#cde",padding:"1px 5px",fontFamily:"inherit",outline:"none",textAlign:"right"}}/>
+        ):(
+          <span style={{fontSize:11,fontWeight:700,color:barCol,cursor:"pointer"}}
+            onClick={()=>{setEditVal(starting.toFixed(2));setEditing(true);}}>
+            ${remaining.toFixed(2)} left
+          </span>
+        )}
+      </div>
+      {/* Progress bar */}
+      <div style={{height:3,background:"rgba(255,255,255,0.08)",borderRadius:2}}>
+        <div style={{height:"100%",borderRadius:2,background:barCol,width:pct+"%",transition:"width 0.5s"}}/>
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"rgba(100,140,180,0.4)"}}>
+        <span>Today ${usage.today.toFixed(3)}</span>
+        <span>Month ${usage.month.toFixed(3)}</span>
       </div>
     </div>
   );
@@ -1004,7 +1068,8 @@ const filtV=useMemo(()=>{
               <Suspense fallback={null}><IntelVaultStrip onVaultUpdate={setIntelItems}/></Suspense>
             </div>
           )}
-          {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}          <div style={{display:"flex",gap:3,alignItems:"center",flexShrink:0,paddingBottom:10}}>
+          {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}          <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0,paddingBottom:10}}>
+            {!mobile&&<AICreditWidget/>}
             {/* ⚙ Settings dropdown */}
             <SettingsMenu mobile={mobile} onToggleLayout={onToggleLayout} layoutOverride={layoutOverride}/>
           </div>
