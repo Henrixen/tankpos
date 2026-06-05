@@ -348,6 +348,126 @@ function AICreditWidget(){
   );
 }
 
+function AddVesselModal({onSave,onClose}){
+  const vals=useRef({});
+  const fields=[
+    {k:"vessel",label:"Vessel name",req:true},
+    {k:"openPort",label:"Open port",req:true},
+    {k:"date",label:"Open date (e.g. 15 Jun 2026)",req:false},
+    {k:"operator",label:"Operator",req:false},
+    {k:"dwt",label:"DWT",req:false,type:"number"},
+    {k:"coating",label:"Coating (Epoxy / MarineLine / Stainless…)",req:false},
+    {k:"comment",label:"Comment",req:false},
+  ];
+  async function save(){
+    const v=vals.current;
+    if(!v.vessel?.trim()||!v.openPort?.trim()){alert("Vessel name and open port are required.");return;}
+    await onSave({vessel:v.vessel.trim(),openPort:v.openPort.trim(),date:v.date||null,operator:v.operator||null,dwt:v.dwt?parseInt(v.dwt):null,coating:v.coating||null,comment:v.comment||null});
+    onClose();
+  }
+  const INP={width:"100%",background:"rgba(8,16,32,0.8)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:5,color:"rgba(200,220,255,0.9)",fontFamily:"Inter,sans-serif",fontSize:12,padding:"7px 10px",outline:"none",boxSizing:"border-box"};
+  return(
+    <>
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:9998}} onClick={onClose}/>
+      <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:10,padding:"20px 24px",width:420,maxWidth:"95vw",boxShadow:"0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Inter,sans-serif"}}>
+        <div style={{fontSize:14,fontWeight:700,color:"#79c0ff",marginBottom:16}}>+ Add Vessel</div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {fields.map(({k,label,req,type})=>(
+            <div key={k}>
+              <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>{label}{req&&<span style={{color:"#ef4444",marginLeft:3}}>*</span>}</div>
+              <input type={type||"text"} onChange={e=>vals.current[k]=e.target.value} style={INP}/>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{fontSize:12,padding:"6px 16px",borderRadius:5,border:"1px solid rgba(58,130,246,0.2)",background:"transparent",color:"rgba(120,160,220,0.6)",cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
+          <button onClick={save} style={{fontSize:12,fontWeight:700,padding:"6px 18px",borderRadius:5,border:"1px solid rgba(67,233,123,0.4)",background:"rgba(67,233,123,0.1)",color:"#43e97b",cursor:"pointer",fontFamily:"inherit"}}>Save Vessel</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function AddCargoModal({onSave,onClose}){
+  const vals=useRef({});
+  const fields=[
+    {k:"charterer",label:"Charterer",req:true},
+    {k:"cargo",label:"Cargo / grade",req:true},
+    {k:"qty",label:"Quantity (e.g. 15kt)",req:false},
+    {k:"load",label:"Load port",req:false},
+    {k:"disch",label:"Discharge port",req:false},
+    {k:"from",label:"Laycan from (dd Mon yyyy)",req:false},
+    {k:"to",label:"Laycan to (dd Mon yyyy)",req:false},
+    {k:"freight",label:"Freight (e.g. USD 450k ls)",req:false},
+    {k:"vessel",label:"Vessel (if fixed)",req:false},
+    {k:"status",label:"Status (FIXED / SUBS / OPEN)",req:false},
+    {k:"comment",label:"Comment",req:false},
+  ];
+  async function save(){
+    const v=vals.current;
+    if(!v.charterer?.trim()||!v.cargo?.trim()){alert("Charterer and cargo are required.");return;}
+    await onSave({charterer:v.charterer.trim(),cargo:v.cargo.trim(),qty:v.qty||null,load:v.load||null,disch:v.disch||null,from:v.from||null,to:v.to||null,freight:v.freight||null,vessel:v.vessel||null,status:v.status?.toUpperCase()||null,comment:v.comment||null});
+    onClose();
+  }
+  const INP={width:"100%",background:"rgba(8,16,32,0.8)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:5,color:"rgba(200,220,255,0.9)",fontFamily:"Inter,sans-serif",fontSize:12,padding:"7px 10px",outline:"none",boxSizing:"border-box"};
+  return(
+    <>
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:9998}} onClick={onClose}/>
+      <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:10,padding:"20px 24px",width:420,maxWidth:"95vw",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Inter,sans-serif"}}>
+        <div style={{fontSize:14,fontWeight:700,color:"#faa356",marginBottom:16}}>+ Add Cargo</div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {fields.map(({k,label,req})=>(
+            <div key={k}>
+              <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>{label}{req&&<span style={{color:"#ef4444",marginLeft:3}}>*</span>}</div>
+              <input onChange={e=>vals.current[k]=e.target.value} style={INP}/>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{fontSize:12,padding:"6px 16px",borderRadius:5,border:"1px solid rgba(58,130,246,0.2)",background:"transparent",color:"rgba(120,160,220,0.6)",cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
+          <button onClick={save} style={{fontSize:12,fontWeight:700,padding:"6px 18px",borderRadius:5,border:"1px solid rgba(250,163,86,0.4)",background:"rgba(250,163,86,0.1)",color:"#faa356",cursor:"pointer",fontFamily:"inherit"}}>Save Cargo</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function CopyPositionsButton({filtV,posPage,POS_PAGE_SIZE,fmtDateShort}){
+  const [copied,setCopied]=React.useState(false);
+  function copyPositions(){
+    const rows=filtV.slice(0,posPage*POS_PAGE_SIZE);
+    const byOp={};
+    rows.forEach(v=>{
+      const op=v.operator||"Unknown";
+      if(!byOp[op]) byOp[op]=[];
+      byOp[op].push(v);
+    });
+    const lines=["|| Positions ||",""];
+    Object.entries(byOp).sort(([a],[b])=>a.localeCompare(b)).forEach(([op,vs])=>{
+      lines.push("*"+op+"*");
+      vs.forEach(v=>{
+        const parts=[v.vessel,v.openPort,fmtDateShort(v.date)];
+        if(v.comment) parts.push(v.comment);
+        lines.push(parts.filter(Boolean).join(" – "));
+      });
+      lines.push("");
+    });
+    const text=lines.join("\n").trim();
+    if(navigator.clipboard) navigator.clipboard.writeText(text).catch(()=>{});
+    else{const ta=document.createElement("textarea");ta.value=text;ta.style.cssText="position:fixed;opacity:0";document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);}
+    setCopied(true);setTimeout(()=>setCopied(false),2500);
+  }
+  return(
+    <button onClick={copyPositions}
+      style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
+        border:copied?"1px solid rgba(67,233,123,0.5)":"1px solid rgba(58,130,246,0.25)",
+        background:copied?"rgba(67,233,123,0.1)":"rgba(58,130,246,0.08)",
+        color:copied?"#43e97b":"#79c0ff"}}>
+      {copied?"✓ Copied!":"Copy positions"}
+    </button>
+  );
+}
+
 function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
   const [open,setOpen]=React.useState(false);
   const [menuPos,setMenuPos]=React.useState({top:60,right:8});
@@ -1330,43 +1450,7 @@ const filtV=useMemo(()=>{
                 <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,flexWrap:"wrap"}}>
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
-                  {(()=>{
-                    const [copied,setCopied]=React.useState(false);
-                    function copyPositions(){
-                      // Group by operator, format as the standard UKC/positions report
-                      const rows=filtV.slice(0,posPage*POS_PAGE_SIZE);
-                      const byOp={};
-                      rows.forEach(v=>{
-                        const op=v.operator||"Unknown";
-                        if(!byOp[op]) byOp[op]=[];
-                        byOp[op].push(v);
-                      });
-                      const title=selVessels.size>0?"|| Selected positions ||":"|| Positions ||";
-                      const lines=[title,""];
-                      Object.entries(byOp).sort(([a],[b])=>a.localeCompare(b)).forEach(([op,vs])=>{
-                        lines.push("*"+op+"*");
-                        vs.forEach(v=>{
-                          const parts=[v.vessel,v.openPort,fmtDateShort(v.date)];
-                          if(v.comment) parts.push(v.comment);
-                          lines.push(parts.filter(Boolean).join(" – "));
-                        });
-                        lines.push("");
-                      });
-                      const text=lines.join("\n").trim();
-                      if(navigator.clipboard) navigator.clipboard.writeText(text).catch(()=>{});
-                      else{const ta=document.createElement("textarea");ta.value=text;ta.style.cssText="position:fixed;opacity:0";document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);}
-                      setCopied(true);setTimeout(()=>setCopied(false),2500);
-                    }
-                    return(
-                      <button onClick={copyPositions}
-                        style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
-                          border:copied?"1px solid rgba(67,233,123,0.5)":"1px solid rgba(58,130,246,0.25)",
-                          background:copied?"rgba(67,233,123,0.1)":"rgba(58,130,246,0.08)",
-                          color:copied?"#43e97b":"#79c0ff"}}>
-                        {copied?"✓ Copied!":"Copy positions"}
-                      </button>
-                    );
-                  })()}
+                  <CopyPositionsButton filtV={filtV} posPage={posPage} POS_PAGE_SIZE={POS_PAGE_SIZE} fmtDateShort={fmtDateShort}/>
                   {/* Manual add vessel */}
                   <button onClick={()=>setShowAddVessel(true)}
                     style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
@@ -2371,105 +2455,10 @@ const filtV=useMemo(()=>{
       )}
 
       {/* ── Add Vessel Modal ── */}
-      {showAddVessel&&(()=>{
-        const fields=[
-          {k:"vessel_name",label:"Vessel name",req:true},
-          {k:"port_name",label:"Open port",req:true},
-          {k:"open_date",label:"Open date (dd Mon yyyy)",req:false},
-          {k:"operator",label:"Operator",req:false},
-          {k:"dwt",label:"DWT",req:false,type:"number"},
-          {k:"coating",label:"Coating (Epoxy/MarineLine/Stainless…)",req:false},
-          {k:"details",label:"Comment",req:false},
-        ];
-        const vals=React.useRef({});
-        async function saveVessel(){
-          const v=vals.current;
-          if(!v.vessel_name?.trim()||!v.port_name?.trim()){alert("Vessel name and open port are required.");return;}
-          const row={vessel_name:v.vessel_name.trim(),port_name:v.port_name.trim(),open_date:v.open_date||null,operator:v.operator||null,dwt:v.dwt?parseInt(v.dwt):null,coating:v.coating||null,details:v.details||null,updated_at:new Date().toISOString()};
-          await onAddV({vessel:row.vessel_name,openPort:row.port_name,date:row.open_date,operator:row.operator,dwt:row.dwt,coating:row.coating,comment:row.details});
-          setShowAddVessel(false);
-        }
-        return(
-          <>
-            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:9998}} onClick={()=>setShowAddVessel(false)}/>
-            <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:9999,
-              background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:10,padding:"20px 24px",
-              width:420,maxWidth:"95vw",boxShadow:"0 12px 40px rgba(0,0,0,0.7)",fontFamily:"inherit"}}>
-              <div style={{fontSize:14,fontWeight:700,color:"#79c0ff",marginBottom:16}}>+ Add Vessel</div>
-              <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                {fields.map(({k,label,req,type})=>(
-                  <div key={k}>
-                    <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>
-                      {label}{req&&<span style={{color:"#ef4444",marginLeft:3}}>*</span>}
-                    </div>
-                    <input type={type||"text"} onChange={e=>vals.current[k]=e.target.value}
-                      style={{width:"100%",background:"rgba(8,16,32,0.8)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:5,
-                        color:"rgba(200,220,255,0.9)",fontFamily:"inherit",fontSize:12,padding:"7px 10px",outline:"none",boxSizing:"border-box"}}/>
-                  </div>
-                ))}
-              </div>
-              <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
-                <button onClick={()=>setShowAddVessel(false)}
-                  style={{fontSize:12,padding:"6px 16px",borderRadius:5,border:"1px solid rgba(58,130,246,0.2)",background:"transparent",color:"rgba(120,160,220,0.6)",cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
-                <button onClick={saveVessel}
-                  style={{fontSize:12,fontWeight:700,padding:"6px 18px",borderRadius:5,border:"1px solid rgba(67,233,123,0.4)",background:"rgba(67,233,123,0.1)",color:"#43e97b",cursor:"pointer",fontFamily:"inherit"}}>Save Vessel</button>
-              </div>
-            </div>
-          </>
-        );
-      })()}
+      {showAddVessel&&<AddVesselModal onSave={onAddV} onClose={()=>setShowAddVessel(false)}/>}
 
       {/* ── Add Cargo Modal ── */}
-      {showAddCargo&&(()=>{
-        const fields=[
-          {k:"charterer",label:"Charterer",req:true},
-          {k:"cargo",label:"Cargo (grade)",req:true},
-          {k:"qty",label:"Quantity (e.g. 15kt)",req:false},
-          {k:"load",label:"Load port",req:false},
-          {k:"disch",label:"Discharge port",req:false},
-          {k:"from",label:"Laycan from (dd Mon yyyy)",req:false},
-          {k:"to",label:"Laycan to (dd Mon yyyy)",req:false},
-          {k:"freight",label:"Freight (e.g. USD 450k ls)",req:false},
-          {k:"vessel",label:"Vessel (if fixed)",req:false},
-          {k:"status",label:"Status (FIXED/SUBS/OPEN)",req:false},
-          {k:"comment",label:"Comment",req:false},
-        ];
-        const vals=React.useRef({});
-        async function saveCargo(){
-          const v=vals.current;
-          if(!v.charterer?.trim()||!v.cargo?.trim()){alert("Charterer and cargo are required.");return;}
-          await onAddC({charterer:v.charterer?.trim(),cargo:v.cargo?.trim(),qty:v.qty||null,load:v.load||null,disch:v.disch||null,from:v.from||null,to:v.to||null,freight:v.freight||null,vessel:v.vessel||null,status:v.status?.toUpperCase()||null,comment:v.comment||null});
-          setShowAddCargo(false);
-        }
-        return(
-          <>
-            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:9998}} onClick={()=>setShowAddCargo(false)}/>
-            <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:9999,
-              background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:10,padding:"20px 24px",
-              width:420,maxWidth:"95vw",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 12px 40px rgba(0,0,0,0.7)",fontFamily:"inherit"}}>
-              <div style={{fontSize:14,fontWeight:700,color:"#faa356",marginBottom:16}}>+ Add Cargo</div>
-              <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                {fields.map(({k,label,req})=>(
-                  <div key={k}>
-                    <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>
-                      {label}{req&&<span style={{color:"#ef4444",marginLeft:3}}>*</span>}
-                    </div>
-                    <input onChange={e=>vals.current[k]=e.target.value}
-                      style={{width:"100%",background:"rgba(8,16,32,0.8)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:5,
-                        color:"rgba(200,220,255,0.9)",fontFamily:"inherit",fontSize:12,padding:"7px 10px",outline:"none",boxSizing:"border-box"}}/>
-                  </div>
-                ))}
-              </div>
-              <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
-                <button onClick={()=>setShowAddCargo(false)}
-                  style={{fontSize:12,padding:"6px 16px",borderRadius:5,border:"1px solid rgba(58,130,246,0.2)",background:"transparent",color:"rgba(120,160,220,0.6)",cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
-                <button onClick={saveCargo}
-                  style={{fontSize:12,fontWeight:700,padding:"6px 18px",borderRadius:5,border:"1px solid rgba(250,163,86,0.4)",background:"rgba(250,163,86,0.1)",color:"#faa356",cursor:"pointer",fontFamily:"inherit"}}>Save Cargo</button>
-              </div>
-            </div>
-          </>
-        );
-      })()}
+      {showAddCargo&&<AddCargoModal onSave={onAddC} onClose={()=>setShowAddCargo(false)}/>}
 
     </div>
   );
