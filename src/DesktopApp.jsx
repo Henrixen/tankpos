@@ -362,38 +362,32 @@ function AddVesselInlineRow({onSave,onClose}){
     await onSave({vessel:vals.vessel.trim().toUpperCase(),openPort:vals.openPort.trim().toUpperCase(),date:vals.date||today,operator:vals.operator||null,dwt:vals.dwt?parseInt(vals.dwt):null,coating:vals.coating||null,comment:vals.comment||null});
     onClose();
   }
-  const cell={background:"rgba(14,28,58,0.8)",border:"none",borderBottom:"2px solid rgba(67,233,123,0.4)",padding:"2px 4px"};
+  const TC={borderBottom:"2px solid rgba(67,233,123,0.35)",padding:"2px 3px",background:"rgba(10,24,52,0.9)"};
   return(
-    <div style={{display:"flex",alignItems:"center",gap:0,background:"rgba(22,45,88,0.7)",borderRadius:6,border:"1px solid rgba(67,233,123,0.3)",marginBottom:4,padding:"2px 0"}}>
-      <div style={{...cell,width:32,textAlign:"center",flexShrink:0}}>
-        <span style={{fontSize:11,color:"#43e97b",fontWeight:700}}>+</span>
-      </div>
-      {[
-        {k:"operator",ph:"Operator",w:140},
-        {k:"vessel",ph:"Vessel name *",w:140,ref:firstRef},
-        {k:"dwt",ph:"DWT",w:65},
-        {k:"coating",ph:"Coating",w:80},
-        {k:"date",ph:"Open date",w:100},
-        {k:"openPort",ph:"Open port *",w:130},
-        {k:"comment",ph:"Comment",w:null},
-      ].map(({k,ph,w,ref:r})=>(
-        <div key={k} style={{...cell,flex:w?`0 0 ${w}px`:1,minWidth:0}}>
-          <input ref={r} value={vals[k]} onChange={e=>upd(k,e.target.value)} placeholder={ph}
-            onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}}
-            style={INP_INLINE}/>
-        </div>
-      ))}
-      <div style={{...cell,flexShrink:0,display:"flex",gap:4,padding:"2px 6px"}}>
-        <button onClick={save} style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:3,border:"1px solid rgba(67,233,123,0.5)",background:"rgba(67,233,123,0.12)",color:"#43e97b",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Save</button>
-        <button onClick={onClose} style={{fontSize:10,padding:"3px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit"}}>✕</button>
-      </div>
-    </div>
+    <table style={{width:"100%",borderCollapse:"collapse",background:"rgba(22,45,88,0.5)",borderTop:"2px solid rgba(67,233,123,0.4)"}}>
+      <tbody>
+        <tr>
+          <td style={{...TC,width:32,textAlign:"center"}}><span style={{color:"#43e97b",fontSize:12,fontWeight:700}}>+</span></td>
+          <td style={{...TC,width:140}}><input ref={firstRef} value={vals.operator} onChange={e=>upd("operator",e.target.value)} placeholder="Operator" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:140}}><input value={vals.vessel} onChange={e=>upd("vessel",e.target.value)} placeholder="Vessel *" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={{...INP_INLINE,color:"#79c0ff",fontWeight:700}}/></td>
+          <td style={{...TC,width:55}}><input value={vals.dwt} onChange={e=>upd("dwt",e.target.value)} placeholder="DWT" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:80}}><input value={vals.coating} onChange={e=>upd("coating",e.target.value)} placeholder="Coating" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:96}}><input value={vals.date} onChange={e=>upd("date",e.target.value)} onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={{...INP_INLINE,color:"#a8e6a3"}}/></td>
+          <td style={{...TC,width:140}}><input value={vals.openPort} onChange={e=>upd("openPort",e.target.value)} placeholder="Open port *" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={{...INP_INLINE,color:"#79c0ff"}}/></td>
+          <td style={{...TC}}><input value={vals.comment} onChange={e=>upd("comment",e.target.value)} placeholder="Comment" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:86,textAlign:"center"}}>
+            <button onClick={save} style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:3,border:"1px solid rgba(67,233,123,0.5)",background:"rgba(67,233,123,0.12)",color:"#43e97b",cursor:"pointer",fontFamily:"inherit"}}>Save</button>
+            {" "}
+            <button onClick={onClose} style={{fontSize:10,padding:"3px 5px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.5)",cursor:"pointer",fontFamily:"inherit"}}>✕</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
   );
 }
 
 function AddCargoInlineRow({onSave,onClose}){
   const now=new Date();
-  const today=now.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
   const [vals,setVals]=useState({charterer:"",cargo:"",qty:"",load:"",disch:"",from:"",to:"",freight:"",vessel:"",status:""});
   const firstRef=useRef(null);
   useEffect(()=>{firstRef.current?.focus();},[]);
@@ -403,35 +397,30 @@ function AddCargoInlineRow({onSave,onClose}){
     await onSave({charterer:vals.charterer.trim(),cargo:vals.cargo.trim(),qty:vals.qty||null,load:vals.load||null,disch:vals.disch||null,from:vals.from||null,to:vals.to||null,freight:vals.freight||null,vessel:vals.vessel||null,status:vals.status?.toUpperCase()||null,updated:now.toISOString()});
     onClose();
   }
-  const cell={background:"rgba(14,28,58,0.8)",border:"none",borderBottom:"2px solid rgba(250,163,86,0.4)",padding:"2px 4px"};
+  const TC={borderBottom:"2px solid rgba(250,163,86,0.35)",padding:"2px 3px",background:"rgba(28,18,8,0.9)"};
   return(
-    <div style={{display:"flex",alignItems:"center",gap:0,background:"rgba(40,28,14,0.7)",borderRadius:6,border:"1px solid rgba(250,163,86,0.3)",marginBottom:4,padding:"2px 0",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-      <div style={{...cell,width:28,textAlign:"center",flexShrink:0}}>
-        <span style={{fontSize:11,color:"#faa356",fontWeight:700}}>+</span>
-      </div>
-      {[
-        {k:"status",ph:"Status",w:58},
-        {k:"vessel",ph:"Vessel",w:110},
-        {k:"charterer",ph:"Charterer *",w:110,ref:firstRef},
-        {k:"qty",ph:"Qty",w:60},
-        {k:"cargo",ph:"Cargo *",w:80},
-        {k:"load",ph:"Load",w:90},
-        {k:"disch",ph:"Disch",w:90},
-        {k:"from",ph:"From",w:80},
-        {k:"to",ph:"To",w:80},
-        {k:"freight",ph:"Freight",w:110},
-      ].map(({k,ph,w,ref:r})=>(
-        <div key={k} style={{...cell,flex:w?`0 0 ${w}px`:1,minWidth:0}}>
-          <input ref={r} value={vals[k]} onChange={e=>upd(k,e.target.value)} placeholder={ph}
-            onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}}
-            style={INP_INLINE}/>
-        </div>
-      ))}
-      <div style={{...cell,flexShrink:0,display:"flex",gap:4,padding:"2px 6px"}}>
-        <button onClick={save} style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:3,border:"1px solid rgba(250,163,86,0.5)",background:"rgba(250,163,86,0.12)",color:"#faa356",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Save</button>
-        <button onClick={onClose} style={{fontSize:10,padding:"3px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit"}}>✕</button>
-      </div>
-    </div>
+    <table style={{width:"100%",borderCollapse:"collapse",background:"rgba(40,25,10,0.5)",borderTop:"2px solid rgba(250,163,86,0.4)"}}>
+      <tbody>
+        <tr>
+          <td style={{...TC,width:28,textAlign:"center"}}><span style={{color:"#faa356",fontSize:12,fontWeight:700}}>+</span></td>
+          <td style={{...TC,width:56}}><input value={vals.status} onChange={e=>upd("status",e.target.value)} placeholder="Status" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:110}}><input value={vals.vessel} onChange={e=>upd("vessel",e.target.value)} placeholder="Vessel" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:120}}><input ref={firstRef} value={vals.charterer} onChange={e=>upd("charterer",e.target.value)} placeholder="Charterer *" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={{...INP_INLINE,fontWeight:700}}/></td>
+          <td style={{...TC,width:60}}><input value={vals.qty} onChange={e=>upd("qty",e.target.value)} placeholder="Qty" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:80}}><input value={vals.cargo} onChange={e=>upd("cargo",e.target.value)} placeholder="Cargo *" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={{...INP_INLINE,color:"#faa356"}}/></td>
+          <td style={{...TC,width:100}}><input value={vals.load} onChange={e=>upd("load",e.target.value)} placeholder="Load" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:100}}><input value={vals.disch} onChange={e=>upd("disch",e.target.value)} placeholder="Disch" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:78}}><input value={vals.from} onChange={e=>upd("from",e.target.value)} placeholder="From" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:78}}><input value={vals.to} onChange={e=>upd("to",e.target.value)} placeholder="To" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC}}><input value={vals.freight} onChange={e=>upd("freight",e.target.value)} placeholder="Freight" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:80,textAlign:"center"}}>
+            <button onClick={save} style={{fontSize:10,fontWeight:700,padding:"3px 7px",borderRadius:3,border:"1px solid rgba(250,163,86,0.5)",background:"rgba(250,163,86,0.12)",color:"#faa356",cursor:"pointer",fontFamily:"inherit"}}>Save</button>
+            {" "}
+            <button onClick={onClose} style={{fontSize:10,padding:"3px 5px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.5)",cursor:"pointer",fontFamily:"inherit"}}>✕</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
   );
 }
 
@@ -1590,7 +1579,6 @@ const filtV=useMemo(()=>{
                 </div>
 
                 {/* Vessel Table */}
-                {showAddVessel&&<AddVesselInlineRow onSave={onAddV} onClose={()=>setShowAddVessel(false)}/>}
                 <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}
                   onClick={e=>{
                     const th=e.target.closest("th");
@@ -1603,6 +1591,7 @@ const filtV=useMemo(()=>{
                     if(col?.sortKey) srt(col.sortKey);
                   }}>
                   <div style={{...tableWrap,minWidth:mobile?700:undefined}}>
+                    {showAddVessel&&<AddVesselInlineRow onSave={onAddV} onClose={()=>setShowAddVessel(false)}/>}
                     <MatrixTable
   columns={posColumns}
   data={filtV.slice(0, posPage * POS_PAGE_SIZE)}
@@ -2126,7 +2115,6 @@ const filtV=useMemo(()=>{
                 </button>
               </div>
             </div>
-            {showAddCargo&&<AddCargoInlineRow onSave={onAddC} onClose={()=>setShowAddCargo(false)}/>}
             <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}
               onClick={e=>{
                 const th=e.target.closest("th");
@@ -2138,6 +2126,7 @@ const filtV=useMemo(()=>{
                 if(col?.sortKey){const d=cSortK===col.sortKey?cSortD*-1:-1;setCsortK(col.sortKey);setCsortD(d);}
               }}>
             <div style={{...tableWrap,minWidth:mobile?700:undefined}}>
+              {showAddCargo&&<AddCargoInlineRow onSave={onAddC} onClose={()=>setShowAddCargo(false)}/>}
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
                 : <MatrixTable
