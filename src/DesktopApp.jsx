@@ -348,6 +348,93 @@ function AICreditWidget(){
   );
 }
 
+const INP_INLINE={background:"rgba(8,16,32,0.85)",border:"1px solid rgba(88,166,255,0.25)",borderRadius:4,color:"rgba(200,220,255,0.9)",fontFamily:"Inter,sans-serif",fontSize:11,padding:"5px 8px",outline:"none",width:"100%",boxSizing:"border-box"};
+
+function AddVesselInlineRow({onSave,onClose}){
+  const now=new Date();
+  const today=now.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+  const [vals,setVals]=useState({vessel:"",openPort:"",date:today,operator:"",dwt:"",coating:"",comment:""});
+  const firstRef=useRef(null);
+  useEffect(()=>{firstRef.current?.focus();},[]);
+  function upd(k,v){setVals(p=>({...p,[k]:v}));}
+  async function save(){
+    if(!vals.vessel.trim()||!vals.openPort.trim()) return;
+    await onSave({vessel:vals.vessel.trim().toUpperCase(),openPort:vals.openPort.trim().toUpperCase(),date:vals.date||today,operator:vals.operator||null,dwt:vals.dwt?parseInt(vals.dwt):null,coating:vals.coating||null,comment:vals.comment||null});
+    onClose();
+  }
+  const cell={background:"rgba(14,28,58,0.8)",border:"none",borderBottom:"2px solid rgba(67,233,123,0.4)",padding:"2px 4px"};
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:0,background:"rgba(22,45,88,0.7)",borderRadius:6,border:"1px solid rgba(67,233,123,0.3)",marginBottom:4,padding:"2px 0"}}>
+      <div style={{...cell,width:32,textAlign:"center",flexShrink:0}}>
+        <span style={{fontSize:11,color:"#43e97b",fontWeight:700}}>+</span>
+      </div>
+      {[
+        {k:"operator",ph:"Operator",w:140},
+        {k:"vessel",ph:"Vessel name *",w:140,ref:firstRef},
+        {k:"dwt",ph:"DWT",w:65},
+        {k:"coating",ph:"Coating",w:80},
+        {k:"date",ph:"Open date",w:100},
+        {k:"openPort",ph:"Open port *",w:130},
+        {k:"comment",ph:"Comment",w:null},
+      ].map(({k,ph,w,ref:r})=>(
+        <div key={k} style={{...cell,flex:w?`0 0 ${w}px`:1,minWidth:0}}>
+          <input ref={r} value={vals[k]} onChange={e=>upd(k,e.target.value)} placeholder={ph}
+            onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}}
+            style={INP_INLINE}/>
+        </div>
+      ))}
+      <div style={{...cell,flexShrink:0,display:"flex",gap:4,padding:"2px 6px"}}>
+        <button onClick={save} style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:3,border:"1px solid rgba(67,233,123,0.5)",background:"rgba(67,233,123,0.12)",color:"#43e97b",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Save</button>
+        <button onClick={onClose} style={{fontSize:10,padding:"3px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit"}}>✕</button>
+      </div>
+    </div>
+  );
+}
+
+function AddCargoInlineRow({onSave,onClose}){
+  const now=new Date();
+  const today=now.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+  const [vals,setVals]=useState({charterer:"",cargo:"",qty:"",load:"",disch:"",from:"",to:"",freight:"",vessel:"",status:""});
+  const firstRef=useRef(null);
+  useEffect(()=>{firstRef.current?.focus();},[]);
+  function upd(k,v){setVals(p=>({...p,[k]:v}));}
+  async function save(){
+    if(!vals.charterer.trim()||!vals.cargo.trim()) return;
+    await onSave({charterer:vals.charterer.trim(),cargo:vals.cargo.trim(),qty:vals.qty||null,load:vals.load||null,disch:vals.disch||null,from:vals.from||null,to:vals.to||null,freight:vals.freight||null,vessel:vals.vessel||null,status:vals.status?.toUpperCase()||null,updated:now.toISOString()});
+    onClose();
+  }
+  const cell={background:"rgba(14,28,58,0.8)",border:"none",borderBottom:"2px solid rgba(250,163,86,0.4)",padding:"2px 4px"};
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:0,background:"rgba(40,28,14,0.7)",borderRadius:6,border:"1px solid rgba(250,163,86,0.3)",marginBottom:4,padding:"2px 0",overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+      <div style={{...cell,width:28,textAlign:"center",flexShrink:0}}>
+        <span style={{fontSize:11,color:"#faa356",fontWeight:700}}>+</span>
+      </div>
+      {[
+        {k:"status",ph:"Status",w:58},
+        {k:"vessel",ph:"Vessel",w:110},
+        {k:"charterer",ph:"Charterer *",w:110,ref:firstRef},
+        {k:"qty",ph:"Qty",w:60},
+        {k:"cargo",ph:"Cargo *",w:80},
+        {k:"load",ph:"Load",w:90},
+        {k:"disch",ph:"Disch",w:90},
+        {k:"from",ph:"From",w:80},
+        {k:"to",ph:"To",w:80},
+        {k:"freight",ph:"Freight",w:110},
+      ].map(({k,ph,w,ref:r})=>(
+        <div key={k} style={{...cell,flex:w?`0 0 ${w}px`:1,minWidth:0}}>
+          <input ref={r} value={vals[k]} onChange={e=>upd(k,e.target.value)} placeholder={ph}
+            onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}}
+            style={INP_INLINE}/>
+        </div>
+      ))}
+      <div style={{...cell,flexShrink:0,display:"flex",gap:4,padding:"2px 6px"}}>
+        <button onClick={save} style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:3,border:"1px solid rgba(250,163,86,0.5)",background:"rgba(250,163,86,0.12)",color:"#faa356",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Save</button>
+        <button onClick={onClose} style={{fontSize:10,padding:"3px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit"}}>✕</button>
+      </div>
+    </div>
+  );
+}
+
 function AddVesselModal({onSave,onClose}){
   const vals=useRef({});
   const fields=[
@@ -650,19 +737,22 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   // Fetch monthly cargo counts from DB for graph — full dataset, not just loaded 200
   useEffect(()=>{
     async function fetchMonthly(){
-      // Fetch all dates — try updated first, fall back to updated_at
-      const{data,error}=await supabase.from("cargoes").select("updated,updated_at").order("updated",{ascending:true});
-      if(error||!data)return;
+      // Fetch all cargo dates — use created_at as fallback since updated may be null
+      const{data,error}=await supabase.from("cargoes").select("updated,updated_at,created_at");
+      if(error){console.error("fetchMonthly error:",error);return;}
+      if(!data?.length){console.warn("fetchMonthly: no data");return;}
       const map={};
+      let used=0;
       data.forEach(r=>{
-        // Use whichever date field is populated
-        const raw=r.updated||r.updated_at||null;
+        const raw=r.updated||r.updated_at||r.created_at||null;
         if(!raw) return;
         const d=new Date(raw);
         if(isNaN(d.getTime())) return;
         const key=d.getFullYear()+"-"+String(d.getMonth()).padStart(2,"0");
         map[key]=(map[key]||0)+1;
+        used++;
       });
+      console.log("fetchMonthly: bucketed",used,"of",data.length,"rows, buckets:",Object.keys(map).length);
       const buckets=Object.entries(map)
         .sort(([a],[b])=>a.localeCompare(b))
         .map(([k,count])=>{const[y,m]=k.split("-");return{year:parseInt(y),month:parseInt(m),count};});
@@ -1451,11 +1541,12 @@ const filtV=useMemo(()=>{
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
                   <CopyPositionsButton filtV={filtV} posPage={posPage} POS_PAGE_SIZE={POS_PAGE_SIZE} fmtDateShort={fmtDateShort}/>
-                  {/* Manual add vessel */}
-                  <button onClick={()=>setShowAddVessel(true)}
-                    style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
-                      border:"1px solid rgba(67,233,123,0.25)",background:"rgba(67,233,123,0.06)",color:"#43e97b"}}>
-                    + Add vessel
+                  {/* Inline add vessel */}
+                  <button onClick={()=>setShowAddVessel(v=>!v)}
+                    style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
+                      border:showAddVessel?"1px solid rgba(67,233,123,0.5)":"1px solid rgba(67,233,123,0.25)",
+                      background:showAddVessel?"rgba(67,233,123,0.12)":"rgba(67,233,123,0.06)",color:"#43e97b"}}>
+                    {showAddVessel?"✕ Cancel":"+ Add vessel"}
                   </button>
                   {selVessels.size>0&&(
                     <button onClick={()=>setTab("reports")} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
@@ -1499,6 +1590,7 @@ const filtV=useMemo(()=>{
                 </div>
 
                 {/* Vessel Table */}
+                {showAddVessel&&<AddVesselInlineRow onSave={onAddV} onClose={()=>setShowAddVessel(false)}/>}
                 <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}
                   onClick={e=>{
                     const th=e.target.closest("th");
@@ -1952,10 +2044,11 @@ const filtV=useMemo(()=>{
             </div>
             {/* Stats + Copy/CSV/Delete */}
             <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,flexWrap:"wrap"}}>
-              <button onClick={()=>setShowAddCargo(true)}
+              <button onClick={()=>setShowAddCargo(v=>!v)}
                 style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
-                  border:"1px solid rgba(250,163,86,0.3)",background:"rgba(250,163,86,0.07)",color:"#faa356"}}>
-                + Add cargo
+                  border:showAddCargo?"1px solid rgba(250,163,86,0.5)":"1px solid rgba(250,163,86,0.3)",
+                  background:showAddCargo?"rgba(250,163,86,0.12)":"rgba(250,163,86,0.07)",color:"#faa356"}}>
+                {showAddCargo?"✕ Cancel":"+ Add cargo"}
               </button>
               <Suspense fallback={null}><ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes} allFilteredCargoes={filtC}
                 onExportAll={async()=>{
@@ -2033,6 +2126,7 @@ const filtV=useMemo(()=>{
                 </button>
               </div>
             </div>
+            {showAddCargo&&<AddCargoInlineRow onSave={onAddC} onClose={()=>setShowAddCargo(false)}/>}
             <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}
               onClick={e=>{
                 const th=e.target.closest("th");
