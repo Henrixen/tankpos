@@ -2538,10 +2538,7 @@ const filtV=useMemo(()=>{
       )}
 
       {/* ── Add Vessel Modal ── */}
-      {showAddVessel&&<AddVesselModal onSave={onAddV} onClose={()=>setShowAddVessel(false)}/>}
 
-      {/* ── Add Cargo Modal ── */}
-      {showAddCargo&&<AddCargoModal onSave={onAddC} onClose={()=>setShowAddCargo(false)}/>}
 
     </div>
   );
