@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { C } from "./constants";
 import { loadIntel } from "./supabaseHelpers";
 import IntelVault from "./IntelVault";
+import { logUsage } from "./aiUsage";
 
 function AIAsk({vessels,cargoes,intelItems}){
   const [question,setQuestion]=useState("");
@@ -27,6 +28,7 @@ function AIAsk({vessels,cargoes,intelItems}){
         messages:[...msgs,{role:"user",content:q}]
       })});
       const d=await res.json();
+      if(d.usage) logUsage({type:"ask",inputTokens:d.usage.input_tokens||0,outputTokens:d.usage.output_tokens||0,note:q.slice(0,60)});
       const a=(d.content||[]).map(b=>b.text||"").join("").trim()
         .replace(/\*\*(.*?)\*\*/g,"$1")
         .replace(/\*(.*?)\*/g,"$1")
@@ -111,6 +113,7 @@ export function AskAIStrip({vessels,cargoes,intelItems}){
           system:"Maritime freight analyst. Concise answers: max 5 sentences, facts and numbers. No preamble.\n\n"+buildContext(),
           messages:[{role:"user",content:q}]})});
       const d=await res.json();
+      if(d.usage) logUsage({type:"ask_strip",inputTokens:d.usage.input_tokens||0,outputTokens:d.usage.output_tokens||0,note:q.slice(0,60)});
       const a=(d.content||[]).map(b=>b.text||"").join("").trim().replace(/\*\*(.*?)\*\*/g,"$1").replace(/\*(.*?)\*/g,"$1");
       setAnswer(a);setQuestion("");
     }catch(e){setAnswer("Error: "+e.message);}finally{setBusy(false);}
