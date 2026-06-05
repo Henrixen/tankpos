@@ -1452,17 +1452,17 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   useEffect(()=>{
     async function fetchMonthly(){
       // Fetch all cargo dates — use created_at as fallback since updated may be null
-      const{data,error}=await supabase.from("cargoes").select("updated,updated_at,created_at");
+      const{data,error}=await supabase.from("cargoes").select("updated");
       if(error){console.error("fetchMonthly error:",error);return;}
       if(!data?.length){console.warn("fetchMonthly: no data");return;}
       const map={};
       let used=0;
       data.forEach(r=>{
-        const raw=r.updated||r.updated_at||r.created_at||null;
+        const raw=r.updated||null;
         if(!raw) return;
         const d=new Date(raw);
         if(isNaN(d.getTime())) return;
-        const key=d.getFullYear()+"-"+String(d.getMonth()).padStart(2,"0");
+        const key=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
         map[key]=(map[key]||0)+1;
         used++;
       });
