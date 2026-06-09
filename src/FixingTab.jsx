@@ -371,8 +371,8 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
   return(
     <div style={{
       display:"flex",flexDirection:"column",
-      background:isActive?"rgba(20,45,100,0.7)":"rgba(8,18,38,0.85)",
-      border:"1px solid "+(isActive?"rgba(88,166,255,0.55)":"rgba(58,130,246,0.13)"),
+      background:isActive?"rgba(16,35,72,0.85)":"rgba(10,20,40,0.7)",
+      border:"1px solid "+(isActive?"rgba(88,166,255,0.35)":"rgba(58,130,246,0.1)"),
       borderRadius:9,overflow:"visible",
       boxShadow:isActive?"0 0 20px rgba(88,166,255,0.18)":activeDot?"0 2px 12px rgba(0,0,0,0.3)":"none",
       transition:"all 0.15s",cursor:"pointer",position:"relative"}}
@@ -606,7 +606,7 @@ function FixingTab({vessels}){
     const today=new Date();
     const formattedDate=`${today.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][today.getMonth()]} ${today.getFullYear()}`;
     const job={id,charterer,status:"OPEN",laycan:"",laytime:"",notes:"",indications:"",cargo_details:"",subs_fixed:"",owners:[],added_date:formattedDate,segment:"",trade:"",ui_heights:{cargo_details:150,notes:150,indications:150,subs_fixed:100},created_at:new Date().toISOString()};
-    await saveFixingJob(job); setJobs(prev=>[job,...prev]); setExpandedJob(id);
+    await saveFixingJob(job); setJobs(prev=>[job,...prev]); setExpandedJob(charterer||id);
   }
 
   async function deleteClientAndJobs(client){
@@ -722,7 +722,7 @@ function FixingTab({vessels}){
 
           {/* ── MATRIX VIEW: full-width, notes as popout ── */}
           {clientViewMode==="matrix"&&(
-            <div style={{display:"grid",gridTemplateColumns:mobile?"repeat(3,1fr)":"repeat(auto-fit,minmax(160px,1fr))",gap:mobile?4:6,marginBottom:2,width:"100%",position:"relative"}}>
+            <div style={{display:"grid",gridTemplateColumns:mobile?"repeat(3,1fr)":`repeat(${Math.ceil(charterersList.length/2)},1fr)`,gap:mobile?4:6,marginBottom:2,width:"100%",position:"relative"}}>
               {/* Notes popout overlay */}
               {notePopout&&(()=>{
                 const charterer=notePopout;
@@ -852,10 +852,17 @@ function FixingTab({vessels}){
             const viewMode=expandedPanelView[charterer]||"card";
             const setSort=v=>setExpandedPanelSort(p=>({...p,[charterer]:v}));
             const setView=v=>setExpandedPanelView(p=>({...p,[charterer]:v}));
+            // Parse "18 Apr 2026" style date strings
+            function parseJobDate(j){
+              if(j.created_at) return new Date(j.created_at).getTime();
+              const s=j.added_date||"";
+              const m=s.match(/(\d{1,2})\s([A-Za-z]{3})\s(\d{4})/);
+              if(m){const months={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};return new Date(parseInt(m[3]),months[m[2]],parseInt(m[1])).getTime();}
+              return 0;
+            }
             const sortedJobs=[...chartererJobs].sort((a,b)=>{
               if(sortKey==="date_desc"||sortKey==="date_asc"){
-                const da=new Date(a.created_at||a.added_date||0).getTime();
-                const db2=new Date(b.created_at||b.added_date||0).getTime();
+                const da=parseJobDate(a), db2=parseJobDate(b);
                 return sortKey==="date_desc"?db2-da:da-db2;
               }
               if(sortKey==="status"){
@@ -903,7 +910,7 @@ function FixingTab({vessels}){
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                       <thead>
                         <tr style={{background:"rgba(8,18,38,0.9)"}}>
-                          {["Date","Status","Summary","Laycan","Outcome",""].map(h=>(
+                          {["Date","Status","Summary","Indications",""].map(h=>(
                             <th key={h} style={{padding:"5px 10px",textAlign:"left",fontSize:10,fontWeight:700,
                               color:"rgba(120,160,220,0.45)",textTransform:"uppercase",letterSpacing:"0.07em",
                               borderBottom:"1px solid rgba(58,130,246,0.12)",whiteSpace:"nowrap"}}>{h}</th>
@@ -921,7 +928,9 @@ function FixingTab({vessels}){
                           return(
                             <React.Fragment key={job.id}>
                               <tr onClick={()=>setExpandedTableRow(p=>p===job.id?null:job.id)}
-                                style={{background:i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)",cursor:"pointer"}}>
+                                style={{background:i%2===0?"rgba(7,15,28,0.96)":"rgba(16,30,56,0.7)",cursor:"pointer",transition:"background 0.1s"}}
+                                onMouseEnter={e=>e.currentTarget.style.background="rgba(58,130,246,0.05)"}
+                                onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"rgba(7,15,28,0.96)":"rgba(16,30,56,0.7)"}>
                                 <td style={{padding:"6px 10px",color:"rgba(120,160,200,0.5)",whiteSpace:"nowrap"}}>{job.added_date||"—"}</td>
                                 <td style={{padding:"6px 10px",whiteSpace:"nowrap"}}>
                                   <span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,
@@ -929,14 +938,13 @@ function FixingTab({vessels}){
                                     {job.status||"—"}
                                   </span>
                                 </td>
-                                <td style={{padding:"6px 10px",color:"rgba(200,220,255,0.8)",fontWeight:600,maxWidth:300,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{titleText}</td>
-                                <td style={{padding:"6px 10px",color:"rgba(160,200,255,0.6)",whiteSpace:"nowrap"}}>{job.laycan||"—"}</td>
-                                <td style={{padding:"6px 10px",color:"rgba(160,200,255,0.5)",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{job.outcome||"—"}</td>
+                                <td style={{padding:"6px 10px",color:"rgba(200,220,255,0.8)",fontWeight:600,maxWidth:400,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{titleText}</td>
+                                <td style={{padding:"6px 10px",color:"rgba(160,200,255,0.55)",maxWidth:250,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:11}}>{job.indications?stripHtml(job.indications).split("\n")[0]:"—"}</td>
                                 <td style={{padding:"6px 8px",textAlign:"center",color:"rgba(88,166,255,0.4)",fontSize:10}}>{isRowExpanded?"▲":"▼"}</td>
                               </tr>
                               {isRowExpanded&&(
                                 <tr style={{background:"rgba(14,28,58,0.95)"}}>
-                                  <td colSpan={6} style={{padding:"12px 16px",borderBottom:"1px solid rgba(58,130,246,0.12)"}}>
+                                  <td colSpan={5} style={{padding:"12px 16px",borderBottom:"1px solid rgba(58,130,246,0.12)"}}>
                                     {/* Inline compact job detail */}
                                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8,fontSize:12}}>
                                       {[
