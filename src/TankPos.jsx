@@ -74,25 +74,25 @@ export default function TankPos(){
     setVesselDBLoading(false);
     console.log("vesselDB loaded on demand:", allRows.length);
 
-    // Re-enrich any positions already loaded that are missing specs
+    // Re-enrich positions already in memory with fresh vesselDB data
     setVessels(prev => {
       if(!prev.length) return prev;
       let changed = false;
       const next = prev.map(v => {
         const dbRec = map[v.vessel?.toLowerCase().trim()];
         if(!dbRec) return v;
-        if(v.dwt && v.coating) return v; // already fully enriched
-        changed = true;
-        return {
-          ...v,
-          dwt:      v.dwt      || dbRec.dwt      || null,
-          built:    v.built    || dbRec.built     || null,
-          loa:      v.loa      || dbRec.loa       || null,
-          beam:     v.beam     || dbRec.beam      || null,
-          cbm:      v.cbm      || dbRec.cbm       || null,
-          coating:  v.coating  || dbRec.coating   || "",
-          iceClass: v.iceClass || dbRec.ice_class || "",
-        };
+        // Only fill in fields that are missing (0, null, or empty)
+        const newLoa  = (v.loa  && v.loa  > 0) ? v.loa  : (dbRec.loa  || null);
+        const newBeam = (v.beam && v.beam > 0) ? v.beam : (dbRec.beam || null);
+        const newDwt  = v.dwt  || dbRec.dwt  || null;
+        const newBuilt= v.built|| dbRec.built || null;
+        const newCbm  = v.cbm  || dbRec.cbm  || null;
+        const newCoat = v.coating || dbRec.coating || "";
+        if(newLoa!==v.loa||newBeam!==v.beam||newDwt!==v.dwt||newCoat!==v.coating){
+          changed=true;
+          return{...v,loa:newLoa,beam:newBeam,dwt:newDwt,built:newBuilt,cbm:newCbm,coating:newCoat};
+        }
+        return v;
       });
       return changed ? next : prev;
     });
@@ -212,8 +212,8 @@ export default function TankPos(){
       date:        fmtDate,
       dwt:         r.dwt||dbRec?.dwt||null,
       built:       r.build_year||dbRec?.built||null,
-      loa:         r.overall_length!=null?Math.round(Number(r.overall_length))||null:(dbRec?.loa||null),
-      beam:        r.beam!=null?Math.round(Number(r.beam))||null:(dbRec?.beam||null),
+      loa:         (r.overall_length&&Number(r.overall_length)>0)?Math.round(Number(r.overall_length)):(dbRec?.loa||null),
+      beam:        (r.beam&&Number(r.beam)>0)?Math.round(Number(r.beam)):(dbRec?.beam||null),
       cbm:         r.cbm||dbRec?.cbm||null,
       coating:     r.coating_type_2||r.coating||r.coated||dbRec?.coating||"",
       comment:     r.details||"",
@@ -226,6 +226,7 @@ export default function TankPos(){
       updatedAt:   r.updated_at||"",
       fileDate:    r.file_date||null,
       source:      r.source||"external",
+      entered_by:  r.entered_by||"",
       spec: {
         iceClass: r.ice_class||dbRec?.ice_class||null,
         lastCargo: r.last_3_cargoes||null,
