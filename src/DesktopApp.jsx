@@ -388,35 +388,63 @@ function AddVesselInlineRow({onSave,onClose}){
 
 function AddCargoInlineRow({onSave,onClose}){
   const now=new Date();
-  const [vals,setVals]=useState({charterer:"",cargo:"",qty:"",load:"",disch:"",from:"",to:"",freight:"",vessel:"",status:""});
+  const valsRef=useRef({charterer:"",cargo:"",qty:"",load:"",disch:"",from:"",to:"",freight:"",vessel:"",status:""});
   const firstRef=useRef(null);
   useEffect(()=>{firstRef.current?.focus();},[]);
-  function upd(k,v){setVals(p=>({...p,[k]:v}));}
-  async function save(){
-    if(!vals.charterer.trim()||!vals.cargo.trim()) return;
-    await onSave({charterer:vals.charterer.trim(),cargo:vals.cargo.trim(),qty:vals.qty||null,load:vals.load||null,disch:vals.disch||null,from:vals.from||null,to:vals.to||null,freight:vals.freight||null,vessel:vals.vessel||null,status:vals.status?.toUpperCase()||null,updated:now.toISOString()});
+
+  async function trySave(){
+    const v=valsRef.current;
+    if(!v.charterer?.trim()&&!v.cargo?.trim()) return; // empty row — just close
+    if(v.charterer?.trim()||v.cargo?.trim()){
+      await onSave({charterer:v.charterer?.trim()||"",cargo:v.cargo?.trim()||"",qty:v.qty||null,load:v.load||null,disch:v.disch||null,from:v.from||null,to:v.to||null,freight:v.freight||null,vessel:v.vessel||null,status:v.status?.toUpperCase()||null,updated:now.toISOString(),entered_by:localStorage.getItem("signal_user")||"H"});
+    }
     onClose();
   }
-  const TC={borderBottom:"2px solid rgba(250,163,86,0.35)",padding:"2px 3px",background:"rgba(28,18,8,0.9)"};
+
+  const TC={borderBottom:"1px solid rgba(250,163,86,0.25)",padding:"0",background:"rgba(35,20,5,0.85)"};
+  const inp=(k,ph,w,extra)=>(
+    <td key={k} style={{...TC,width:w||undefined}}>
+      <input ref={k==="charterer"?firstRef:undefined}
+        defaultValue=""
+        placeholder={ph}
+        onChange={e=>{valsRef.current[k]=e.target.value;}}
+        onKeyDown={e=>{if(e.key==="Escape")onClose();}}
+        onBlur={e=>{
+          // Save when focus leaves the entire row (check if new focus is still in row)
+          setTimeout(()=>{
+            const active=document.activeElement;
+            if(!active||!active.closest(".cargo-new-row")) trysave_ref.current?.();
+          },80);
+        }}
+        style={{...INP_INLINE,...(extra||{})}}/>
+    </td>
+  );
+  const tryave_ref=useRef(tryave);
+  function tryave(){trySave();}
+  const tryave_refObj=useRef(null);
+  tryave_refObj.current=trySave;
+
+  // Simpler: just save on blur with a delay check
+  const rowRef=useRef(null);
+
   return(
-    <table style={{width:"100%",borderCollapse:"collapse",background:"rgba(40,25,10,0.5)",borderTop:"2px solid rgba(250,163,86,0.4)"}}>
+    <table ref={rowRef} style={{width:"100%",borderCollapse:"collapse",borderBottom:"2px solid rgba(250,163,86,0.3)"}} className="cargo-new-row">
       <tbody>
-        <tr>
-          <td style={{...TC,width:28,textAlign:"center"}}><span style={{color:"#faa356",fontSize:12,fontWeight:700}}>+</span></td>
-          <td style={{...TC,width:56}}><input value={vals.status} onChange={e=>upd("status",e.target.value)} placeholder="Status" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
-          <td style={{...TC,width:110}}><input value={vals.vessel} onChange={e=>upd("vessel",e.target.value)} placeholder="Vessel" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
-          <td style={{...TC,width:120}}><input ref={firstRef} value={vals.charterer} onChange={e=>upd("charterer",e.target.value)} placeholder="Charterer *" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={{...INP_INLINE,fontWeight:700}}/></td>
-          <td style={{...TC,width:60}}><input value={vals.qty} onChange={e=>upd("qty",e.target.value)} placeholder="Qty" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
-          <td style={{...TC,width:80}}><input value={vals.cargo} onChange={e=>upd("cargo",e.target.value)} placeholder="Cargo *" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={{...INP_INLINE,color:"#faa356"}}/></td>
-          <td style={{...TC,width:100}}><input value={vals.load} onChange={e=>upd("load",e.target.value)} placeholder="Load" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
-          <td style={{...TC,width:100}}><input value={vals.disch} onChange={e=>upd("disch",e.target.value)} placeholder="Disch" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
-          <td style={{...TC,width:78}}><input value={vals.from} onChange={e=>upd("from",e.target.value)} placeholder="From" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
-          <td style={{...TC,width:78}}><input value={vals.to} onChange={e=>upd("to",e.target.value)} placeholder="To" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
-          <td style={{...TC}}><input value={vals.freight} onChange={e=>upd("freight",e.target.value)} placeholder="Freight" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
-          <td style={{...TC,width:80,textAlign:"center"}}>
-            <button onClick={save} style={{fontSize:10,fontWeight:700,padding:"3px 7px",borderRadius:3,border:"1px solid rgba(250,163,86,0.5)",background:"rgba(250,163,86,0.12)",color:"#faa356",cursor:"pointer",fontFamily:"inherit"}}>Save</button>
-            {" "}
-            <button onClick={onClose} style={{fontSize:10,padding:"3px 5px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.5)",cursor:"pointer",fontFamily:"inherit"}}>✕</button>
+        <tr style={{background:"rgba(40,22,4,0.9)"}}>
+          <td style={{...TC,width:28,textAlign:"center",paddingLeft:4}}><span style={{color:"#faa356",fontSize:11}}>✦</span></td>
+          <td style={{...TC,width:56}}><input defaultValue="" placeholder="Status" onChange={e=>{valsRef.current.status=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:110}}><input defaultValue="" placeholder="Vessel" onChange={e=>{valsRef.current.vessel=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:120}}><input ref={firstRef} defaultValue="" placeholder="Charterer" onChange={e=>{valsRef.current.charterer=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={{...INP_INLINE,fontWeight:700}}/></td>
+          <td style={{...TC,width:60}}><input defaultValue="" placeholder="Qty" onChange={e=>{valsRef.current.qty=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:80}}><input defaultValue="" placeholder="Cargo" onChange={e=>{valsRef.current.cargo=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={{...INP_INLINE,color:"#faa356"}}/></td>
+          <td style={{...TC,width:100}}><input defaultValue="" placeholder="Load" onChange={e=>{valsRef.current.load=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:100}}><input defaultValue="" placeholder="Disch" onChange={e=>{valsRef.current.disch=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:78}}><input defaultValue="" placeholder="From" onChange={e=>{valsRef.current.from=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:78}}><input defaultValue="" placeholder="To" onChange={e=>{valsRef.current.to=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC}}><input defaultValue="" placeholder="Freight" onChange={e=>{valsRef.current.freight=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:26,textAlign:"center"}}>
+            <button onMouseDown={e=>{e.preventDefault();trySave();}}
+              style={{background:"none",border:"none",color:"#43e97b",cursor:"pointer",fontSize:11,padding:"2px 4px"}} title="Save (Enter)">✓</button>
           </td>
         </tr>
       </tbody>
@@ -637,10 +665,12 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
 
   function submitPin(p){
     if(p===MASTER_PIN){
+      localStorage.setItem("signal_user","H");
       setGuestMode(false);
       setUnlocked(true);
       setPinInput("");
     } else if(p===GUEST_PIN){
+      localStorage.setItem("signal_user","L");
       setGuestMode(true);
       setUnlocked(true);
       setPinInput("");
@@ -727,17 +757,17 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   useEffect(()=>{
     async function fetchMonthly(){
       // Fetch all cargo dates — use created_at as fallback since updated may be null
-      const{data,error}=await supabase.from("cargoes").select("updated");
+      const{data,error}=await supabase.from("cargoes").select("updated,updated_at,created_at");
       if(error){console.error("fetchMonthly error:",error);return;}
       if(!data?.length){console.warn("fetchMonthly: no data");return;}
       const map={};
       let used=0;
       data.forEach(r=>{
-        const raw=r.updated||null;
+        const raw=r.updated||r.updated_at||r.created_at||null;
         if(!raw) return;
         const d=new Date(raw);
         if(isNaN(d.getTime())) return;
-        const key=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+        const key=d.getFullYear()+"-"+String(d.getMonth()).padStart(2,"0");
         map[key]=(map[key]||0)+1;
         used++;
       });
@@ -835,6 +865,7 @@ const cargoColumns = [
   { key:"comment",   sortKey:"Comment",   label:"Comment",  align:"left", width:colWidthsC.Comment },
   { key:"tag",       sortKey:"tag",       label:"Tag",            align:"left", width:80 },
   { key:"updated",   sortKey:"Updated",   label:"Updated", align:"left", width:colWidthsC.Updated },
+  { key:"entered_by", label:"", align:"center", width:20 },
   { key: "delete", label: "", align: "center", width: 26 },
 ];
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
@@ -1885,8 +1916,9 @@ const filtV=useMemo(()=>{
                 })()}
                 <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels}
                   onAddCargoes={async(parsed)=>{
-                    const withTag=pendingParseTag?parsed.map(c=>({...c,tag:pendingParseTag})):parsed;
-                    const result=await onAddCargoes(withTag);
+                    const user=localStorage.getItem("signal_user")||"H";
+                    const withMeta=parsed.map(c=>({...c,entered_by:user,tag:pendingParseTag?pendingParseTag:c.tag||""}));
+                    const result=await onAddCargoes(withMeta);
                     if(pendingParseTag)setPendingParseTag(""); // reset after parse
                     return result;
                   }}
@@ -2115,6 +2147,8 @@ const filtV=useMemo(()=>{
                 </button>
               </div>
             </div>
+            {/* Row hover highlight via CSS */}
+            <style>{`.cargo-table tr:hover td{background:rgba(58,130,246,0.06)!important;}`}</style>
             <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}
               onClick={e=>{
                 const th=e.target.closest("th");
@@ -2125,7 +2159,7 @@ const filtV=useMemo(()=>{
                 const col=cargoColumns[idx];
                 if(col?.sortKey){const d=cSortK===col.sortKey?cSortD*-1:-1;setCsortK(col.sortKey);setCsortD(d);}
               }}>
-            <div style={{...tableWrap,minWidth:mobile?700:undefined}}>
+            <div style={{...tableWrap,minWidth:mobile?700:undefined}} className="cargo-table">
               {showAddCargo&&<AddCargoInlineRow onSave={onAddC} onClose={()=>setShowAddCargo(false)}/>}
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
@@ -2294,6 +2328,19 @@ const filtV=useMemo(()=>{
         {f.updated ? new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
       </td>
 
+      {/* WHO ENTERED — H or L badge */}
+      <td style={{...tdCtr,width:20,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
+        {f.entered_by&&(
+          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",
+            width:14,height:14,borderRadius:"50%",fontSize:8,fontWeight:700,lineHeight:1,
+            background:f.entered_by==="H"?"rgba(88,166,255,0.2)":"rgba(74,222,128,0.2)",
+            color:f.entered_by==="H"?"#58a6ff":"#4ade80",
+            border:"1px solid "+(f.entered_by==="H"?"rgba(88,166,255,0.4)":"rgba(74,222,128,0.4)"),
+            title:f.entered_by==="H"?"Entered by Henriksen":"Entered by Løken"}}>
+            {f.entered_by}
+          </span>
+        )}
+      </td>
       {/* DELETE */}
       <td
         style={{ ...tdCtr, width: 26, minWidth: 26, maxWidth: 26, padding: "0 2px" }}
