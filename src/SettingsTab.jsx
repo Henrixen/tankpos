@@ -31,7 +31,7 @@ function saveGroups(groups) { localStorage.setItem(STORAGE_KEY, JSON.stringify(g
 function CustomTagsEditor(){
   const PRESETS=["AG","CPP","DPP","ex Asia","Med","Parcel","TA","UKC","WAF"];
   const [custom,setCustom]=useState(()=>{try{return JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");}catch{return[];}});
-  const [editTag,setEditTag]=useState(null); // tag string being edited
+  const [editTag,setEditTag]=useState(null);
   const [editVal,setEditVal]=useState("");
   const [newVal,setNewVal]=useState("");
   const allTags=[...new Set([...PRESETS,...custom])].sort();
@@ -39,7 +39,6 @@ function CustomTagsEditor(){
   function saveCustom(list){setCustom(list);localStorage.setItem("signal_custom_tags",JSON.stringify(list));}
   function del(t){
     if(PRESETS.includes(t)){
-      // "delete" a preset = add to hidden list so it won't appear in getTagList
       const hidden=JSON.parse(localStorage.getItem("signal_hidden_tags")||"[]");
       localStorage.setItem("signal_hidden_tags",JSON.stringify([...new Set([...hidden,t])]));
     }
@@ -49,7 +48,6 @@ function CustomTagsEditor(){
   function commitEdit(oldT,newT){
     if(!newT.trim()||newT===oldT){setEditTag(null);return;}
     if(PRESETS.includes(oldT)){
-      // rename preset = hide it and add custom
       const hidden=JSON.parse(localStorage.getItem("signal_hidden_tags")||"[]");
       localStorage.setItem("signal_hidden_tags",JSON.stringify([...new Set([...hidden,oldT])]));
       saveCustom([...custom.filter(x=>x!==newT.trim()),newT.trim()]);
@@ -120,12 +118,11 @@ export default function SettingsTab() {
     setNewLabel("");setNewAliases("");setNewCategory("grade");setShowAdd(false);
   }
 
-  // Group by category
   const usedCats=[...new Set(groups.map(g=>g.category||"grade"))];
   const cats=CATEGORIES.filter(c=>usedCats.includes(c.id));
 
   return(
-    <div style={{display:"flex",flexDirection:"column",gap:24,maxWidth:1000}}>
+    <div style={{display:"flex",flexDirection:"column",gap:24,maxWidth:1000,padding:"20px 24px",fontFamily:"Inter,sans-serif"}}>
       <div style={{borderBottom:"1px solid rgba(58,130,246,0.14)",paddingBottom:10}}>
         <div style={{fontSize:12,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:4}}>Cargo Filter Groups</div>
         <div style={{fontSize:12,color:"rgba(180,200,230,0.45)"}}>Each group creates a filter button in the Cargoes panel. Pick a category to control which field is matched against your aliases.</div>
@@ -198,7 +195,6 @@ export default function SettingsTab() {
         </div>
       ))}
 
-      {/* Add new group form */}
       <div style={{border:"1px solid rgba(58,130,246,0.18)",borderRadius:7,padding:16,background:"rgba(8,16,32,0.6)"}}>
         <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>+ Add new filter group</div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
@@ -221,7 +217,6 @@ export default function SettingsTab() {
         </div>
       </div>
 
-      {/* Custom Tags section */}
       <div>
         <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>
           Tags <span style={{fontWeight:400,color:"rgba(120,160,220,0.3)",textTransform:"none"}}>— used in the Tag column, Tag filter, and Tag on parse</span>
@@ -230,6 +225,7 @@ export default function SettingsTab() {
           <CustomTagsEditor/>
         </div>
       </div>
+
       <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",borderTop:"1px solid rgba(58,130,246,0.12)",paddingTop:16}}>
         <button onClick={()=>setGroups(defaultGroups())} style={{...btn(false),padding:"5px 14px",fontSize:12,color:"rgba(248,113,113,0.7)",borderColor:"rgba(248,113,113,0.3)"}}>Reset to defaults</button>
         <span style={{fontSize:10,color:"rgba(120,160,220,0.4)"}}>Preview:</span>
