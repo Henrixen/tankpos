@@ -757,13 +757,13 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   useEffect(()=>{
     async function fetchMonthly(){
       // Fetch all cargo dates — use created_at as fallback since updated may be null
-      const{data,error}=await supabase.from("cargoes").select("updated,updated_at,created_at");
+      const{data,error}=await supabase.from("cargoes").select("updated,updated_at,updated_at_manual,created_at");
       if(error){console.error("fetchMonthly error:",error);return;}
-      if(!data?.length){console.warn("fetchMonthly: no data");return;}
-      const map={};
-      let used=0;
+      if(!data?.length){console.warn("fetchMonthly: no rows");return;}
+      const map={};let used=0;
       data.forEach(r=>{
-        const raw=r.updated||r.updated_at||r.created_at||null;
+        // Try every possible date column
+        const raw=r.updated||r.updated_at_manual||r.updated_at||r.created_at||null;
         if(!raw) return;
         const d=new Date(raw);
         if(isNaN(d.getTime())) return;
@@ -771,7 +771,7 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
         map[key]=(map[key]||0)+1;
         used++;
       });
-      console.log("fetchMonthly: bucketed",used,"of",data.length,"rows, buckets:",Object.keys(map).length);
+      console.log("fetchMonthly: rows=",data.length,"dated=",used,"buckets=",Object.keys(map).length,"sample=",data.slice(0,3).map(r=>r.updated||r.updated_at_manual||r.updated_at||r.created_at||"NULL"));
       const buckets=Object.entries(map)
         .sort(([a],[b])=>a.localeCompare(b))
         .map(([k,count])=>{const[y,m]=k.split("-");return{year:parseInt(y),month:parseInt(m),count};});
@@ -2328,15 +2328,15 @@ const filtV=useMemo(()=>{
         {f.updated ? new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
       </td>
 
-      {/* WHO ENTERED — H or L badge */}
+      {/* WHO ENTERED — H (blue) or L (green) badge */}
       <td style={{...tdCtr,width:20,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
-        {f.entered_by&&(
-          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",
-            width:14,height:14,borderRadius:"50%",fontSize:8,fontWeight:700,lineHeight:1,
-            background:f.entered_by==="H"?"rgba(88,166,255,0.2)":"rgba(74,222,128,0.2)",
-            color:f.entered_by==="H"?"#58a6ff":"#4ade80",
-            border:"1px solid "+(f.entered_by==="H"?"rgba(88,166,255,0.4)":"rgba(74,222,128,0.4)"),
-            title:f.entered_by==="H"?"Entered by Henriksen":"Entered by Løken"}}>
+        {(f.entered_by==="H"||f.entered_by==="L")&&(
+          <span title={f.entered_by==="H"?"Entered by Henriksen":"Entered by Løken"}
+            style={{display:"inline-flex",alignItems:"center",justifyContent:"center",
+              width:14,height:14,borderRadius:"50%",fontSize:8,fontWeight:700,lineHeight:1,
+              background:f.entered_by==="H"?"rgba(88,166,255,0.25)":"rgba(74,222,128,0.25)",
+              color:f.entered_by==="H"?"#79c0ff":"#4ade80",
+              border:"1px solid "+(f.entered_by==="H"?"rgba(88,166,255,0.5)":"rgba(74,222,128,0.5)")}}>
             {f.entered_by}
           </span>
         )}
