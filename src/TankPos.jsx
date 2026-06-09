@@ -397,44 +397,63 @@ export default function TankPos(){
   }, [vesselDB, saveV, saveSnapshot]);
 
   const addCargoes=useCallback(async(parsed)=>{
+    const nowIso=new Date().toISOString();
     const stamped=parsed.map((f,i)=>normaliseCargo({
       ...f,
       id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
-      updated: new Date().toISOString(),
+      updated: nowIso,
     }));
-    // Dedup by id and by charterer+load+disch+from
-    let added=0;
-    setCargoes(prev=>{
-      const existingIds=new Set(prev.map(c=>c.id));
-      const toAdd=stamped.filter(f=>{
-        if(existingIds.has(f.id))return false;
-        if(f.charterer&&f.load&&f.from){
-  const dupIdx=prev.findIndex(e=>
-    (e.charterer||"").toLowerCase()===(f.charterer||"").toLowerCase()&&
-    (e.load||"").toLowerCase()===(f.load||"").toLowerCase()&&
-    (e.from||"")===(f.from||"")
-  );
-  if(dupIdx>=0){
-    // Update existing record instead of adding new
-    prev[dupIdx]={...prev[dupIdx],...f};
-    return false;
-  }
-}
-        return true;
-      });
-      added=toAdd.length;
-      return [...prev,...toAdd];
+
+    // Fetch existing cargoes from Supabase for dedup check
+    // Match on charterer + load + from (laycan start) — if all three match, treat as same fixture
+    const {data:existing}=await supabase.from("cargoes")
+      .select("id,charterer,load,from,status,freight,vessel")
+      .gte("updated",new Date(Date.now()-90*24*60*60*1000).toISOString()); // last 90 days only
+
+    const existingMap={};
+    (existing||[]).forEach(e=>{
+      const key=`${(e.charterer||"").toLowerCase()}|${(e.load||"").toLowerCase()}|${e.from||""}`;
+      if(key.length>2) existingMap[key]=e;
     });
-    // Write new rows to Supabase
-    if(stamped.length>0){
-      const rows=stamped.map(c=>({...c,from:toISODate(c.from),to:toISODate(c.to)}));
-      console.log("upserting cargo ids:", rows.map(r=>r.id));
-      const{error}=await supabase.from("cargoes").upsert(rows,{onConflict:"id"});
-      if(error) console.error("cargo upsert error:",error);
-      else fetchCargoes(); // refresh after parse
+
+    const toInsert=[];
+    const toUpdate=[];
+
+    stamped.forEach(f=>{
+      const key=`${(f.charterer||"").toLowerCase()}|${(f.load||"").toLowerCase()}|${toISODate(f.from)||""}`;
+      const match=existingMap[key];
+      if(match){
+        // Exists — update with latest info (status, freight, vessel may have changed)
+        toUpdate.push({...match,...f,id:match.id,updated:nowIso,from:toISODate(f.from),to:toISODate(f.to)});
+      } else {
+        toInsert.push({...f,from:toISODate(f.from),to:toISODate(f.to)});
+      }
+    });
+
+    // Update local state
+    setCargoes(prev=>{
+      const updMap={};
+      toUpdate.forEach(u=>updMap[u.id]=normaliseCargo({...u,from:u.from,to:u.to}));
+      const updated=prev.map(c=>updMap[c.id]?{...c,...updMap[c.id]}:c);
+      const newNormed=toInsert.map(f=>normaliseCargo(f));
+      return [...updated,...newNormed];
+    });
+
+    // Write to Supabase
+    if(toUpdate.length>0){
+      const{error}=await supabase.from("cargoes").upsert(toUpdate,{onConflict:"id"});
+      if(error) console.error("cargo update error:",error);
     }
+    if(toInsert.length>0){
+      const{error}=await supabase.from("cargoes").insert(toInsert);
+      if(error) console.error("cargo insert error:",error);
+    }
+
+    console.log(`Parse result: ${toInsert.length} new, ${toUpdate.length} updated`);
+    fetchCargoes(); // refresh after parse
+
     setVessels(prev=>{const next=prev.map(v=>{const fix=stamped.find(f=>f.vessel&&f.vessel.toLowerCase()===v.vessel.toLowerCase());if(fix&&fix.status==="FIXED"){return{...v,openPort:"EMPLOYED"};}return v;});saveV(next);return next;});
-    return added;
+    return toInsert.length;
   },[]);
 
   const addV=useCallback(async(v)=>{
