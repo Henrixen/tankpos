@@ -1141,7 +1141,7 @@ const filtV=useMemo(()=>{
     align: "center", 
     width: 32 
   },
-  { key: "save", label: "⭐", align: "center", width: 24 },
+  { key: "save", label: "", align: "center", width: 26 },
   { key: "operator",  sortKey:"operator",  label: "Operator",  width: colWidthsV.Operator },
   { key: "vessel",    sortKey:"vessel",    label: "Vessel",    width: colWidthsV.Vessel },
   { key: "built",     sortKey:"built",     label: "Built",     align:"right", width: colWidthsV.Built },
@@ -1720,7 +1720,7 @@ const filtV=useMemo(()=>{
       {/* OPERATOR */}
       <EC
   value={v.operator}
-  color={C.dim}
+  color="rgba(160,200,255,0.65)"
   placeholder="Operator"
   onSave={val=>onUpdateV(v.vessel,"operator",val)}
   data-cell={`${i}-operator`}
@@ -1810,7 +1810,7 @@ const filtV=useMemo(()=>{
       </td>
 
       {/* SAVE FOR LATER ⭐ */}
-      <td style={{...tdCtr,width:24,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
+      <td style={{...tdCtr,width:26,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
         <button onClick={()=>toggleSavedVessel(v.vessel)}
           title={savedVessels.has(v.vessel)?"Remove from saved":"Save for later"}
           style={{background:"none",border:"none",cursor:"pointer",fontSize:12,padding:"2px",
