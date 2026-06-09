@@ -432,44 +432,47 @@ export default function TankPos(){
     if(!s) return "";
     const up=s.toUpperCase();
     if(up==="RNR"||up==="TBN"||up==="TBC") return s.toUpperCase();
-    // Already well-formatted — pass through (allow freetext override)
     if(/^(USD|EUR)\s+.+/i.test(s)) return s;
-    // Detect currency
     const isEur=/EUR|€/i.test(s);
     const cur=isEur?"EUR":"USD";
-    // Detect explicit k suffix BEFORE stripping (500k, 450K, 1.2k)
-    const kMatch=s.match(/(\d+(?:\.\d+)?)\s*[kK]/);
+    // Strip trailing port ratio FIRST: "126 1/2", "4.15 M L/S 2/1", "95 2/1"
+    const withoutRatio=s.replace(/\s+\d+\/\d+\s*$/,"").trim();
+    // "M L/S" = million lump sum, e.g. "4.15 M L/S"
+    const isMls=/\b\d+(\.\d+)?\s*M\s*(L\/S|ls)/i.test(withoutRatio);
+    const kMatch=withoutRatio.match(/(\d+(?:\.\d+)?)\s*[kK]/);
     const hasK=!!kMatch;
-    // Detect explicit PMT
-    const isPmt=/pmt|per\s*mt|per\s*ton|pt/i.test(s);
-    // Detect explicit LS
-    const isLs=/ls|lump\s*sum/i.test(s);
-    // Extract numeric value
-    const stripped=s.replace(/EUR|USD|\$|€|[kK]/gi,"").replace(/[,\s]/g,"");
-    const num=parseFloat(stripped.replace(/[^0-9.]/g,""));
-    if(isNaN(num)) return s; // unknown format — leave as typed
-    // Determine PMT vs LS
+    const isPmt=/pmt|per\s*mt|per\s*ton|\bpt\b/i.test(withoutRatio);
+    const isLs=/\bls\b|lump\s*sum|L\/S/i.test(withoutRatio);
+    const numStr=withoutRatio.replace(/EUR|USD|\$|€|[kK]\b|M\b|million|L\/S/gi,"").replace(/[,\s]/g,"");
+    const num=parseFloat(numStr.replace(/[^0-9.]/g,""));
+    if(isNaN(num)) return s;
+    if(isMls){ return cur+" "+num.toFixed(2).replace(".",",")+"m ls"; }
     if(isPmt) return cur+" "+Math.round(num)+" pmt";
-    if(isLs||hasK){
-      // k suffix: 500k → 500k ls. Already-big number: 500000 → 500k ls
-      const k=hasK?Math.round(num):Math.round(num/1000);
-      return cur+" "+k+"k ls";
+    if(isLs||hasK){ const k=hasK?Math.round(num):Math.round(num/1000); return cur+" "+k+"k ls"; }
+    if(num>=1500){
+      if(num>=1000000){ return cur+" "+(num/1000000).toFixed(2).replace(".",",")+"m ls"; }
+      return cur+" "+Math.round(num/1000)+"k ls";
     }
-    // No explicit suffix — use magnitude
-    if(num>=1500) return cur+" "+Math.round(num/1000)+"k ls";
     return cur+" "+Math.round(num)+" pmt";
   }
 
   const addCargoes=useCallback(async(parsed)=>{
     const nowIso=new Date().toISOString();
     const stamped=parsed.map((f,i)=>{
+      // Extract port ratio from freight before normalising (e.g. "126 1/2" → comment: "bss 1:2")
+      let freightRaw=f.freight||"";
+      let portNote="";
+      const ratioMatch=freightRaw.match(/\s+(\d+)\/(\d+)\s*$/);
+      if(ratioMatch){
+        portNote=`bss ${ratioMatch[1]}:${ratioMatch[2]}`;
+      }
       const norm=normaliseCargo({
         ...f,
-        freight: normaliseFreight(f.freight),
+        freight: normaliseFreight(freightRaw),
+        comment: [f.comment,portNote].filter(Boolean).join(" "),
         id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
         updated: nowIso,
       });
-      // Preserve entered_by — normaliseCargo may strip it
       if(f.entered_by) norm.entered_by=f.entered_by;
       return norm;
     });
@@ -529,7 +532,7 @@ export default function TankPos(){
     }
 
     console.log(`Parse result: ${toInsert.length} new, ${toUpdate.length} updated`);
-    fetchCargoes(); // refresh after parse
+    // No re-fetch — preserves parse order in UI
 
     setVessels(prev=>{const next=prev.map(v=>{const fix=stamped.find(f=>f.vessel&&f.vessel.toLowerCase()===v.vessel.toLowerCase());if(fix&&fix.status==="FIXED"){return{...v,openPort:"EMPLOYED"};}return v;});saveV(next);return next;});
     return toInsert.length;
