@@ -520,6 +520,9 @@ function FixingTab({vessels}){
   const [clients,setClients]=useState([{id:"c1",name:"Aramco"},{id:"c2",name:"Trafigura"},{id:"c3",name:"Circle K"},{id:"c4",name:"Equinor"},{id:"c5",name:"CSS SA"},{id:"c6",name:"BASF"},{id:"c7",name:"Essar"},{id:"c8",name:"Exxon"},{id:"c9",name:"ENI"}]);
   const [owners,setOwners]=useState([]);
   const [expandedJob,setExpandedJob]=useState(null);
+  const [expandedPanelSort,setExpandedPanelSort]=useState({}); // {charterer: sortKey}
+  const [expandedPanelView,setExpandedPanelView]=useState({}); // {charterer: "card"|"table"}
+  const [expandedTableRow,setExpandedTableRow]=useState(null); // job.id
   const [editingClient,setEditingClient]=useState(null);
   const [showNewClient,setShowNewClient]=useState(false);
   const [showOwnerDir,setShowOwnerDir]=useState(false);
@@ -844,24 +847,136 @@ function FixingTab({vessels}){
           {charterersList.map(charterer=>{
             const chartererJobs=filteredJobs.filter(j=>(j.charterer||"")===charterer);
             if(expandedJob!==charterer)return null;
+            // Local state via closure-captured refs — no extra useState needed
+            const sortKey=expandedPanelSort[charterer]||"date_desc";
+            const viewMode=expandedPanelView[charterer]||"card";
+            const setSort=v=>setExpandedPanelSort(p=>({...p,[charterer]:v}));
+            const setView=v=>setExpandedPanelView(p=>({...p,[charterer]:v}));
+            const sortedJobs=[...chartererJobs].sort((a,b)=>{
+              if(sortKey==="date_desc"||sortKey==="date_asc"){
+                const da=new Date(a.created_at||a.added_date||0).getTime();
+                const db2=new Date(b.created_at||b.added_date||0).getTime();
+                return sortKey==="date_desc"?db2-da:da-db2;
+              }
+              if(sortKey==="status"){
+                const order=["OPEN","WORKING","SUBS","FIXED","FAILED"];
+                return order.indexOf(a.status)-order.indexOf(b.status);
+              }
+              return 0;
+            });
+            const btnSt=(active)=>({
+              fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:3,cursor:"pointer",fontFamily:"inherit",
+              border:"1px solid "+(active?"rgba(88,166,255,0.5)":"rgba(58,130,246,0.2)"),
+              background:active?"rgba(88,166,255,0.15)":"transparent",
+              color:active?"#79c0ff":"rgba(120,160,220,0.45)",
+            });
             return(
               <div key={charterer} style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",marginBottom:6}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"rgba(16,26,48,0.8)",borderBottom:"1px solid "+C.bd2}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"rgba(16,26,48,0.8)",borderBottom:"1px solid "+C.bd2,flexWrap:"wrap"}}>
                   {/* + cargo button top-left */}
                   <button onClick={e=>{e.stopPropagation();createJob(charterer);}}
                     style={{background:"rgba(88,166,255,0.15)",border:"1px solid rgba(88,166,255,0.3)",borderRadius:4,color:"#79c0ff",fontSize:mobile?11:12,padding:"2px 10px",cursor:"pointer",fontFamily:"inherit",fontWeight:700,flexShrink:0}}>+ cargo</button>
                   <span style={{fontWeight:700,fontSize:mobile?11:13,color:C.blue,flex:1}}>{charterer||"—"}</span>
                   <span style={{fontSize:10,color:C.faint}}>{chartererJobs.length} cargo{chartererJobs.length!==1?"es":""}</span>
+                  {/* Sort controls */}
+                  <div style={{display:"flex",gap:3,alignItems:"center"}}>
+                    <span style={{fontSize:9,color:"rgba(120,160,200,0.4)",textTransform:"uppercase",letterSpacing:"0.07em"}}>Sort</span>
+                    {[["date_desc","Date ▼"],["date_asc","Date ▲"],["status","Status"]].map(([v,l])=>(
+                      <button key={v} onClick={()=>setSort(v)} style={btnSt(sortKey===v)}>{l}</button>
+                    ))}
+                  </div>
+                  {/* View toggle */}
+                  <div style={{display:"flex",gap:3,alignItems:"center"}}>
+                    <button onClick={()=>setView("card")} style={btnSt(viewMode==="card")} title="Card view">⊞ Cards</button>
+                    <button onClick={()=>setView("table")} style={btnSt(viewMode==="table")} title="Table view">≡ Table</button>
+                  </div>
                   <button onClick={()=>setExpandedJob(null)}
                     style={{background:"none",border:"none",color:C.faint,fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit",fontWeight:600}}>▲ close</button>
                 </div>
                 {chartererJobs.length===0&&(
                   <div style={{padding:"32px",textAlign:"center",color:C.faint,fontSize:12}}>No cargoes yet — click <strong style={{color:"#79c0ff"}}>+ cargo</strong> to add one.</div>
                 )}
+
+                {/* TABLE VIEW */}
+                {viewMode==="table"&&chartererJobs.length>0&&(
+                  <div style={{overflowX:"auto"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                      <thead>
+                        <tr style={{background:"rgba(8,18,38,0.9)"}}>
+                          {["Date","Status","Summary","Laycan","Outcome",""].map(h=>(
+                            <th key={h} style={{padding:"5px 10px",textAlign:"left",fontSize:10,fontWeight:700,
+                              color:"rgba(120,160,220,0.45)",textTransform:"uppercase",letterSpacing:"0.07em",
+                              borderBottom:"1px solid rgba(58,130,246,0.12)",whiteSpace:"nowrap"}}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedJobs.map((job,i)=>{
+                          const summary=[job.qty,job.product,job.load&&job.disch?`${job.load}→${job.disch}`:job.load||job.disch].filter(Boolean).join(" ");
+                          const rawText=stripHtml(job.cargo_details||"").trim();
+                          const cargoTitle=rawText.split(/\n+/).map(s=>s.trim()).filter(Boolean).join(" | ");
+                          const titleText=summary||cargoTitle||"New cargo";
+                          const statusCol=JOB_STATUS_COL[job.status]||C.faint;
+                          const isRowExpanded=expandedTableRow===job.id;
+                          return(
+                            <React.Fragment key={job.id}>
+                              <tr onClick={()=>setExpandedTableRow(p=>p===job.id?null:job.id)}
+                                style={{background:i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)",cursor:"pointer"}}>
+                                <td style={{padding:"6px 10px",color:"rgba(120,160,200,0.5)",whiteSpace:"nowrap"}}>{job.added_date||"—"}</td>
+                                <td style={{padding:"6px 10px",whiteSpace:"nowrap"}}>
+                                  <span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,
+                                    background:statusCol+"22",color:statusCol,border:"1px solid "+statusCol+"44"}}>
+                                    {job.status||"—"}
+                                  </span>
+                                </td>
+                                <td style={{padding:"6px 10px",color:"rgba(200,220,255,0.8)",fontWeight:600,maxWidth:300,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{titleText}</td>
+                                <td style={{padding:"6px 10px",color:"rgba(160,200,255,0.6)",whiteSpace:"nowrap"}}>{job.laycan||"—"}</td>
+                                <td style={{padding:"6px 10px",color:"rgba(160,200,255,0.5)",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{job.outcome||"—"}</td>
+                                <td style={{padding:"6px 8px",textAlign:"center",color:"rgba(88,166,255,0.4)",fontSize:10}}>{isRowExpanded?"▲":"▼"}</td>
+                              </tr>
+                              {isRowExpanded&&(
+                                <tr style={{background:"rgba(14,28,58,0.95)"}}>
+                                  <td colSpan={6} style={{padding:"12px 16px",borderBottom:"1px solid rgba(58,130,246,0.12)"}}>
+                                    {/* Inline compact job detail */}
+                                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8,fontSize:12}}>
+                                      {[
+                                        ["Product",job.product],["Qty",job.qty],["Load",job.load],["Disch",job.disch],
+                                        ["Laycan",job.laycan],["Status",job.status],["Outcome",job.outcome],
+                                        ["Fixed owner",job.fixed_owner],["Fixed vessel",job.fixed_vessel],
+                                      ].filter(([,v])=>v).map(([label,val])=>(
+                                        <div key={label}>
+                                          <div style={{fontSize:9,fontWeight:700,color:"rgba(120,160,220,0.45)",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>{label}</div>
+                                          <div style={{color:"rgba(200,220,255,0.8)"}}>{val}</div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {job.cargo_details&&<div style={{marginTop:8,fontSize:11,color:"rgba(160,200,255,0.6)",whiteSpace:"pre-wrap",borderTop:"1px solid rgba(58,130,246,0.1)",paddingTop:8}}
+                                      dangerouslySetInnerHTML={{__html:job.cargo_details}}/>}
+                                    {job.notes&&<div style={{marginTop:6,fontSize:11,color:"rgba(160,200,255,0.5)",whiteSpace:"pre-wrap"}}
+                                      dangerouslySetInnerHTML={{__html:job.notes}}/>}
+                                    <div style={{marginTop:10,display:"flex",gap:6}}>
+                                      <button onClick={e=>{e.stopPropagation();setExpandedTableRow(null);setExpandedJob(charterer);setView("card");setTimeout(()=>{document.querySelector(`[data-job-id="${job.id}"]`)?.scrollIntoView({behavior:"smooth",block:"center"});},100);}}
+                                        style={{fontSize:10,padding:"3px 10px",borderRadius:3,border:"1px solid rgba(88,166,255,0.3)",background:"rgba(88,166,255,0.1)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"}}>
+                                        ✎ Edit full detail
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* CARD VIEW (existing) */}
+                {viewMode==="card"&&(
                 <div style={{display:"flex",gap:0,alignItems:"flex-start",overflowX:mobile?"auto":"visible",WebkitOverflowScrolling:"touch"}}>
                   {/* Cargoes */}
                   <div style={{flex:1,minWidth:0}}>
-                    {chartererJobs.map(job=>{
+                    {sortedJobs.map(job=>{
                   const summary=[job.qty,job.product,job.load&&job.disch?`${job.load} → ${job.disch}`:job.load||job.disch,job.laycan].filter(Boolean).join("  ");
                   // For cargo_details: strip HTML then join lines with " | "
                   const rawText=stripHtml(job.cargo_details||"").trim();
@@ -998,8 +1113,9 @@ function FixingTab({vessels}){
                   );
                 })}
                 </div>
+                </div>
+                )}
               </div>
-            </div>
             );
           })}
         </div>
