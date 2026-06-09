@@ -1,6 +1,59 @@
 import React, { useState, useEffect } from "react";
 import { C } from "./constants";
 
+const INTERUKC_KEY = "signal_interukc_config";
+const DEFAULT_CONFIG = {
+  dwtMin: 15, dwtMax: 21,
+  owners: ["Stenersen","Furetank","Carl F","Maersk","Harren","Navix","Donso","Relet"],
+  reletsFrom: ["Exxon","Shell","Circle K","Essar","Total","CSS SA"],
+};
+
+function InterUKCEditor(){
+  const [cfg,setCfg]=useState(()=>{
+    try{return JSON.parse(localStorage.getItem(INTERUKC_KEY)||"null")||DEFAULT_CONFIG;}
+    catch{return DEFAULT_CONFIG;}
+  });
+  function save(next){setCfg(next);localStorage.setItem(INTERUKC_KEY,JSON.stringify(next));}
+  const inp={background:"rgba(10,18,34,0.95)",border:"1px solid rgba(88,166,255,0.35)",borderRadius:4,color:"#cde",fontFamily:"inherit",fontSize:11,padding:"4px 8px",outline:"none",width:"100%",boxSizing:"border-box"};
+
+  return(
+    <div style={{border:"1px solid rgba(58,130,246,0.18)",borderRadius:7,padding:"12px 16px",background:"rgba(8,16,32,0.6)",display:"flex",flexDirection:"column",gap:12}}>
+      {/* DWT range */}
+      <div style={{display:"flex",gap:12,alignItems:"center"}}>
+        <div style={{flex:"0 0 120px"}}>
+          <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",marginBottom:3}}>DWT min (k)</div>
+          <input type="number" value={cfg.dwtMin} onChange={e=>save({...cfg,dwtMin:Number(e.target.value)})} style={inp}/>
+        </div>
+        <div style={{flex:"0 0 120px"}}>
+          <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",marginBottom:3}}>DWT max (k)</div>
+          <input type="number" value={cfg.dwtMax} onChange={e=>save({...cfg,dwtMax:Number(e.target.value)})} style={inp}/>
+        </div>
+        <button onClick={()=>save(DEFAULT_CONFIG)} style={{fontSize:11,padding:"4px 12px",borderRadius:4,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit",marginTop:16}}>Reset defaults</button>
+      </div>
+      {/* Owners */}
+      {[["owners","Operators / Owners (contains match)"],["reletsFrom","Relets from (contains match)"]].map(([field,label])=>(
+        <div key={field}>
+          <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",marginBottom:6}}>{label}</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:6}}>
+            {cfg[field].map(name=>(
+              <div key={name} style={{display:"flex",alignItems:"center",gap:2,background:"rgba(88,166,255,0.1)",border:"1px solid rgba(88,166,255,0.25)",borderRadius:4,padding:"2px 6px"}}>
+                <span style={{fontSize:11,color:"rgba(160,200,255,0.85)"}}>{name}</span>
+                <button onClick={()=>save({...cfg,[field]:cfg[field].filter(x=>x!==name)})}
+                  style={{background:"none",border:"none",color:"rgba(255,107,107,0.5)",fontSize:10,cursor:"pointer",padding:"0 2px",lineHeight:1}}>✕</button>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <input placeholder={`Add ${field==="owners"?"operator":"company"}…`}
+              style={inp}
+              onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){save({...cfg,[field]:[...cfg[field],e.target.value.trim()]});e.target.value="";}}}/>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const STORAGE_KEY = "signal_cargo_filter_groups";
 
 const CATEGORIES = [
@@ -123,6 +176,14 @@ export default function SettingsTab() {
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:24,maxWidth:1000,padding:"20px 24px",fontFamily:"Inter,sans-serif"}}>
+      {/* Inter UKC Configuration */}
+      <div>
+        <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>
+          Inter UKC Pool <span style={{fontWeight:400,color:"rgba(120,160,220,0.3)",textTransform:"none"}}>— operators and DWT range for the Inter UKC filter</span>
+        </div>
+        <InterUKCEditor/>
+      </div>
+
       <div style={{borderBottom:"1px solid rgba(58,130,246,0.14)",paddingBottom:10}}>
         <div style={{fontSize:12,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:4}}>Cargo Filter Groups</div>
         <div style={{fontSize:12,color:"rgba(180,200,230,0.45)"}}>Each group creates a filter button in the Cargoes panel. Pick a category to control which field is matched against your aliases.</div>
