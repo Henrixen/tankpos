@@ -469,12 +469,17 @@ export default function TankPos(){
 
   const addCargoes=useCallback(async(parsed)=>{
     const nowIso=new Date().toISOString();
-    const stamped=parsed.map((f,i)=>normaliseCargo({
-      ...f,
-      freight: normaliseFreight(f.freight),
-      id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
-      updated: nowIso,
-    }));
+    const stamped=parsed.map((f,i)=>{
+      const norm=normaliseCargo({
+        ...f,
+        freight: normaliseFreight(f.freight),
+        id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
+        updated: nowIso,
+      });
+      // Preserve entered_by — normaliseCargo may strip it
+      if(f.entered_by) norm.entered_by=f.entered_by;
+      return norm;
+    });
 
     // Fetch existing cargoes from Supabase for dedup check
     // Match on charterer + load + from (laycan start) — if all three match, treat as same fixture
@@ -495,10 +500,9 @@ export default function TankPos(){
       const key=`${(f.charterer||"").toLowerCase()}|${(f.load||"").toLowerCase()}|${toISODate(f.from)||""}`;
       const match=existingMap[key];
       if(match){
-        // Exists — update with latest info (status, freight, vessel may have changed)
-        toUpdate.push({...match,...f,id:match.id,updated:nowIso,from:toISODate(f.from),to:toISODate(f.to)});
+        toUpdate.push({...match,...f,id:match.id,updated:nowIso,from:toISODate(f.from),to:toISODate(f.to),entered_by:match.entered_by||f.entered_by||""});
       } else {
-        toInsert.push({...f,from:toISODate(f.from),to:toISODate(f.to)});
+        toInsert.push({...f,from:toISODate(f.from),to:toISODate(f.to),entered_by:f.entered_by||""});
       }
     });
 
@@ -530,7 +534,7 @@ export default function TankPos(){
 
   const addV=useCallback(async(v)=>{
   setVessels(prev=>{const idx=prev.findIndex(x=>x.vessel?.toLowerCase()===v.vessel.toLowerCase());const next=idx>=0?prev.map((x,i)=>i===idx?enrichV(v,vesselDB):x):[...prev,enrichV(v,vesselDB)];saveV(next);return next;});
-  const{error}=await supabase.from("positions").upsert([{...v,updated_at:new Date().toISOString()}],{onConflict:"vessel_name"});
+  const{error}=await supabase.from("positions").upsert([{...v,updated_at:new Date().toISOString(),entered_by:v.entered_by||""}],{onConflict:"vessel_name"});
   if(error)console.error(error);
 },[vesselDB]);
   const addC=useCallback(async(c)=>{
