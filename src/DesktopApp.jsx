@@ -537,50 +537,48 @@ function AddCargoModal({onSave,onClose}){
   );
 }
 
-function CopyPositionsButton({filtV,posPage,POS_PAGE_SIZE,fmtDateShort}){
+function CopyPositionsButton({filtV,fmtDateShort}){
   const [copied,setCopied]=React.useState(false);
-  function copyPositions(){
-    // Copy ALL filtered vessels, not just the paged slice
-    const rows=filtV;
-    if(!rows.length) return;
+  const [fallbackText,setFallbackText]=React.useState(null);
+  function buildText(){
+    if(!filtV.length) return "";
     const byOp={};
-    rows.forEach(v=>{
-      const op=v.operator||"Unknown";
-      if(!byOp[op]) byOp[op]=[];
-      byOp[op].push(v);
-    });
+    filtV.forEach(v=>{const op=v.operator||"Unknown";if(!byOp[op])byOp[op]=[];byOp[op].push(v);});
     const lines=["|| Positions ||",""];
     Object.entries(byOp).sort(([a],[b])=>a.localeCompare(b)).forEach(([op,vs])=>{
       lines.push("*"+op+"*");
-      vs.forEach(v=>{
-        const parts=[v.vessel,v.openPort,fmtDateShort?fmtDateShort(v.date):v.date];
-        if(v.comment) parts.push(v.comment);
-        lines.push(parts.filter(Boolean).join(" – "));
-      });
+      vs.forEach(v=>{const p=[v.vessel,v.openPort,fmtDateShort?fmtDateShort(v.date):v.date];if(v.comment)p.push(v.comment);lines.push(p.filter(Boolean).join(" – "));});
       lines.push("");
     });
-    const text=lines.join("\n").trim();
-    try{
-      if(navigator.clipboard&&navigator.clipboard.writeText){
-        navigator.clipboard.writeText(text).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2500);}).catch(()=>{
-          const ta=document.createElement("textarea");ta.value=text;ta.style.cssText="position:fixed;top:0;left:0;opacity:0.01;";document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);
-          setCopied(true);setTimeout(()=>setCopied(false),2500);
-        });
-      } else {
-        const ta=document.createElement("textarea");ta.value=text;ta.style.cssText="position:fixed;top:0;left:0;opacity:0.01;";document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);
-        setCopied(true);setTimeout(()=>setCopied(false),2500);
-      }
-    }catch(e){console.error("Copy failed:",e);}
+    return lines.join("\n").trim();
   }
-  return(
-    <button onClick={copyPositions}
-      style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
-        border:copied?"1px solid rgba(67,233,123,0.5)":"1px solid rgba(58,130,246,0.25)",
-        background:copied?"rgba(67,233,123,0.1)":"rgba(58,130,246,0.08)",
-        color:copied?"#43e97b":"#79c0ff"}}>
+  function copyPositions(){
+    const text=buildText();if(!text)return;
+    const ta=document.createElement("textarea");
+    ta.value=text;ta.setAttribute("readonly","");
+    ta.style.cssText="position:fixed;top:0;left:0;width:2px;height:2px;padding:0;border:none;outline:none;background:transparent;";
+    document.body.appendChild(ta);ta.focus();ta.select();
+    let ok=false;try{ok=document.execCommand("copy");}catch(e){}
+    document.body.removeChild(ta);
+    if(ok){setCopied(true);setTimeout(()=>setCopied(false),2500);return;}
+    if(navigator.clipboard?.writeText){navigator.clipboard.writeText(text).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2500);}).catch(()=>setFallbackText(text));return;}
+    setFallbackText(text);
+  }
+  return(<>
+    <button onClick={copyPositions} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",border:copied?"1px solid rgba(67,233,123,0.5)":"1px solid rgba(58,130,246,0.25)",background:copied?"rgba(67,233,123,0.1)":"rgba(58,130,246,0.08)",color:copied?"#43e97b":"#79c0ff"}}>
       {copied?"✓ Copied!":filtV.length>0?`Copy (${filtV.length})`:"Copy positions"}
     </button>
-  );
+    {fallbackText&&(<>
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:9998}} onClick={()=>setFallbackText(null)}/>
+      <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:10,padding:"20px",width:520,maxWidth:"95vw",boxShadow:"0 12px 40px rgba(0,0,0,0.7)"}}>
+        <div style={{fontSize:12,fontWeight:700,color:"#79c0ff",marginBottom:8}}>Select all (Ctrl+A) → Copy (Ctrl+C)</div>
+        <textarea readOnly autoFocus value={fallbackText} onFocus={e=>e.target.select()} style={{width:"100%",height:280,background:"rgba(8,16,32,0.9)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:5,color:"rgba(200,220,255,0.9)",fontFamily:"monospace",fontSize:11,padding:"8px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
+        <div style={{display:"flex",justifyContent:"flex-end",marginTop:10}}>
+          <button onClick={()=>setFallbackText(null)} style={{fontSize:12,padding:"5px 16px",borderRadius:5,border:"1px solid rgba(58,130,246,0.3)",background:"rgba(58,130,246,0.1)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"}}>Close</button>
+        </div>
+      </div>
+    </>)}
+  </>);
 }
 
 function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
@@ -1649,7 +1647,7 @@ const filtV=useMemo(()=>{
                 <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,flexWrap:"wrap"}}>
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
-                  <CopyPositionsButton filtV={filtV} posPage={posPage} POS_PAGE_SIZE={POS_PAGE_SIZE} fmtDateShort={fmtDateShort}/>
+                  <CopyPositionsButton filtV={filtV} fmtDateShort={fmtDateShort}/>
                   {/* Inline add vessel */}
                   <button onClick={()=>setShowAddVessel(v=>!v)}
                     style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
