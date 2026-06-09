@@ -399,27 +399,45 @@ export default function TankPos(){
   }, [vesselDB, saveV, saveSnapshot]);
 
   // Normalise freight to standard format: "USD 450k ls" or "USD 45 pmt"
+  // Rules:
+  //   explicit 'k' suffix (500k, 450K)  → always LS
+  //   explicit 'pmt'/'per mt'           → always PMT
+  //   explicit 'ls'/'lump sum'          → always LS
+  //   raw number >= 1500 (e.g. 500000)  → LS (convert to k)
+  //   raw number < 1500 (e.g. 35, 125)  → PMT
+  //   freetext (USD 35 pmt, $500k ls)   → honour as typed, just normalise prefix
   function normaliseFreight(raw){
     if(!raw) return "";
     const s=String(raw).trim();
-    if(!s||s.toUpperCase()==="RNR") return "RNR";
-    // Already correct format
-    if(/^(USD|EUR)\s+\d+k?\s*(ls|pmt|per\s*mt)?$/i.test(s)) return s;
-    // Strip currency symbols, commas, spaces from number
-    const eurMatch=s.match(/EUR/i);
-    const cur=eurMatch?"EUR":"USD";
-    const digitsOnly=s.replace(/EUR|USD|\$|€/gi,"").replace(/[,\s]/g,"").trim();
-    const pmtMatch=/pmt|per\s*mt|per\s*ton|\bpt\b/i.test(s);
-    const lsMatch=/ls|lump\s*sum/i.test(s);
-    const num=parseFloat(digitsOnly.replace(/[^0-9.]/g,""));
-    if(isNaN(num)) return s; // can't parse, leave as-is
-    if(pmtMatch||(num<1500&&!lsMatch)){
-      // Per metric ton rate
-      return cur+" "+Math.round(num)+" pmt";
+    if(!s) return "";
+    const up=s.toUpperCase();
+    if(up==="RNR"||up==="TBN"||up==="TBC") return s.toUpperCase();
+    // Already well-formatted — pass through (allow freetext override)
+    if(/^(USD|EUR)\s+.+/i.test(s)) return s;
+    // Detect currency
+    const isEur=/EUR|€/i.test(s);
+    const cur=isEur?"EUR":"USD";
+    // Detect explicit k suffix BEFORE stripping (500k, 450K, 1.2k)
+    const kMatch=s.match(/(\d+(?:\.\d+)?)\s*[kK]/);
+    const hasK=!!kMatch;
+    // Detect explicit PMT
+    const isPmt=/pmt|per\s*mt|per\s*ton|pt/i.test(s);
+    // Detect explicit LS
+    const isLs=/ls|lump\s*sum/i.test(s);
+    // Extract numeric value
+    const stripped=s.replace(/EUR|USD|\$|€|[kK]/gi,"").replace(/[,\s]/g,"");
+    const num=parseFloat(stripped.replace(/[^0-9.]/g,""));
+    if(isNaN(num)) return s; // unknown format — leave as typed
+    // Determine PMT vs LS
+    if(isPmt) return cur+" "+Math.round(num)+" pmt";
+    if(isLs||hasK){
+      // k suffix: 500k → 500k ls. Already-big number: 500000 → 500k ls
+      const k=hasK?Math.round(num):Math.round(num/1000);
+      return cur+" "+k+"k ls";
     }
-    // Lump sum — convert to k format
-    const k=num>=1000?Math.round(num/1000):num;
-    return cur+" "+k+"k ls";
+    // No explicit suffix — use magnitude
+    if(num>=1500) return cur+" "+Math.round(num/1000)+"k ls";
+    return cur+" "+Math.round(num)+" pmt";
   }
 
   const addCargoes=useCallback(async(parsed)=>{
