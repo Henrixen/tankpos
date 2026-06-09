@@ -51,9 +51,11 @@ export default function TankPos(){
     let from = 0;
     const pageSize = 1000;
     while(true){
-      // Select CBM coating columns so we can derive the correct coating type
-      const {data, error} = await supabase.from("vessels_db").select("vessel,imo,dwt,built,loa,beam,cbm,coating,\"Epoxy\",\"MarineLine\",\"Interline\",\"Zinc\",\"Stainless\",ice_class,fuel,operator").range(from, from+pageSize-1);
-      if(error || !data || data.length === 0) break;
+      const {data, error} = await supabase.from("vessels_db")
+        .select("vessel,imo,dwt,built,loa,beam,cbm,coating,ice_class,fuel,operator")
+        .range(from, from+pageSize-1);
+      if(error){ console.error("vesselDB load error:", error); break; }
+      if(!data?.length) break;
       allRows = [...allRows, ...data];
       if(data.length < pageSize) break;
       from += pageSize;
@@ -61,17 +63,7 @@ export default function TankPos(){
     const map = {};
     const imoMap = {};
     allRows.forEach(r => {
-      // Derive coating from whichever coating column has the highest non-zero CBM value
-      const coatingMap = [
-        ["Epoxy",      r["Epoxy"]      || 0],
-        ["MarineLine", r["MarineLine"] || 0],
-        ["Interline",  r["Interline"]  || 0],
-        ["Zinc",       r["Zinc"]       || 0],
-        ["Stainless",  r["Stainless"]  || 0],
-      ];
-      const derived = coatingMap.filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1])[0];
-      const coatingVal = derived ? derived[0] : (r.coating || "");
-      const enriched = {...r, coating: coatingVal};
+      const enriched = {...r, coating: r.coating || ""};
       if(r.vessel) map[r.vessel.toLowerCase().trim()] = enriched;
       if(r.imo) imoMap[String(r.imo).trim()] = enriched;
     });
