@@ -1698,7 +1698,10 @@ const filtV=useMemo(()=>{
                     if(col?.sortKey) srt(col.sortKey);
                   }}>
                     {showAddVessel&&<AddVesselInlineRow onSave={onAddV} onClose={()=>setShowAddVessel(false)}/>}
-                  <div style={{...tableWrap,minWidth:mobile?"1400px":undefined}}>
+                  <div style={{...tableWrap,minWidth:mobile?"1400px":undefined}} className={mobile?"pos-table":undefined}>
+                    {mobile&&<style>{`
+                      .pos-table td, .pos-table td>*{overflow:visible!important;text-overflow:unset!important;white-space:nowrap!important;max-width:none!important;}
+                    `}</style>}
                     <MatrixTable
   columns={posColumns}
   data={filtV.slice(0, posPage * POS_PAGE_SIZE)}
@@ -1750,6 +1753,7 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i-1, "comment")}
   onDown={() => focusCell(i+1, "operator")}
   onUp={() => focusCell(i-1, "operator")}
+  style={mobile?{minWidth:120,whiteSpace:"nowrap"}:undefined}
 />
 
       {/* VESSEL */}
@@ -1764,6 +1768,7 @@ const filtV=useMemo(()=>{
         onShiftTab={() => focusCell(i, "operator")}
         onDown={() => focusCell(i+1, "vessel")}
         onUp={() => focusCell(i-1, "vessel")}
+        style={mobile?{minWidth:130,whiteSpace:"nowrap"}:undefined}
       />
 
       <td style={{ ...tdNum, color: C.dim }}>{v.built || ""}</td>
@@ -2244,8 +2249,13 @@ const filtV=useMemo(()=>{
                 </button>
               </div>
             </div>
-            {/* Row hover highlight via CSS */}
-            <style>{`.cargo-table tr:hover td{background:rgba(58,130,246,0.06)!important;}`}</style>
+            {/* Row hover highlight + mobile no-truncation */}
+            <style>{`
+              .cargo-table tr:hover td{background:rgba(58,130,246,0.06)!important;}
+              @media(max-width:900px){
+                .cargo-table td, .cargo-table td>*{overflow:visible!important;text-overflow:unset!important;white-space:nowrap!important;max-width:none!important;}
+              }
+            `}</style>
             <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}
               onClick={e=>{
                 const th=e.target.closest("th");
@@ -2311,6 +2321,7 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i, "status")}
   onDown={() => focusCell(i + 1, "cvessel")}
   onUp={() => focusCell(i - 1, "cvessel")}
+  style={mobile?{minWidth:'auto',overflow:'visible',whiteSpace:'nowrap'}:undefined}
 />
 
 <EC
@@ -2324,6 +2335,7 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i, "cvessel")}
   onDown={() => focusCell(i + 1, "charterer")}
   onUp={() => focusCell(i - 1, "charterer")}
+  style={mobile?{minWidth:'auto',overflow:'visible',whiteSpace:'nowrap'}:undefined}
 />
 
 <EC
@@ -2358,6 +2370,7 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i, "cargo")}
   onDown={() => focusCell(i + 1, "load")}
   onUp={() => focusCell(i - 1, "load")}
+  style={mobile?{minWidth:'auto',overflow:'visible',whiteSpace:'nowrap'}:undefined}
 />
 
 <EC
@@ -2369,6 +2382,7 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i, "load")}
   onDown={() => focusCell(i + 1, "disch")}
   onUp={() => focusCell(i - 1, "disch")}
+  style={mobile?{minWidth:'auto',overflow:'visible',whiteSpace:'nowrap'}:undefined}
 />
 
 <EC
@@ -2403,6 +2417,7 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i, "to")}
   onDown={() => focusCell(i + 1, "freight")}
   onUp={() => focusCell(i - 1, "freight")}
+  style={mobile?{minWidth:'auto',overflow:'visible',whiteSpace:'nowrap'}:undefined}
 />
 
 <EC
