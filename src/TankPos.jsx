@@ -303,14 +303,16 @@ export default function TankPos(){
 
   // Universal cargo updater — optimistic local update + Supabase write
   const updateC=useCallback(async(id,field,value)=>{
+    // Normalise freight format on save
+    const normValue=field==="freight"?normaliseFreight(value):value;
     const displayValue=(field==="from"||field==="to")?(() => {
-      const iso=toISODate(value);
-      if(!iso) return value;
+      const iso=toISODate(normValue);
+      if(!iso) return normValue;
       const dt=new Date(iso);
       return dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
-    })():value;
+    })():normValue;
     setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:displayValue}:c));
-    const dbValue=(field==="from"||field==="to")?toISODate(value):value;
+    const dbValue=(field==="from"||field==="to")?toISODate(normValue):normValue;
     const{error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id);
     if(error) console.error(error);
     // No re-fetch — local state already updated above, re-fetch reshuffles the table
@@ -396,10 +398,35 @@ export default function TankPos(){
     return r;
   }, [vesselDB, saveV, saveSnapshot]);
 
+  // Normalise freight to standard format: "USD 450k ls" or "USD 45 pmt"
+  function normaliseFreight(raw){
+    if(!raw) return "";
+    const s=String(raw).trim();
+    if(!s||s.toUpperCase()==="RNR") return "RNR";
+    // Already correct format
+    if(/^(USD|EUR)\s+\d+k?\s*(ls|pmt|per\s*mt)?$/i.test(s)) return s;
+    // Strip currency symbols, commas, spaces from number
+    const eurMatch=s.match(/EUR/i);
+    const cur=eurMatch?"EUR":"USD";
+    const digitsOnly=s.replace(/EUR|USD|\$|€/gi,"").replace(/[,\s]/g,"").trim();
+    const pmtMatch=/pmt|per\s*mt|per\s*ton|\bpt\b/i.test(s);
+    const lsMatch=/ls|lump\s*sum/i.test(s);
+    const num=parseFloat(digitsOnly.replace(/[^0-9.]/g,""));
+    if(isNaN(num)) return s; // can't parse, leave as-is
+    if(pmtMatch||(num<1500&&!lsMatch)){
+      // Per metric ton rate
+      return cur+" "+Math.round(num)+" pmt";
+    }
+    // Lump sum — convert to k format
+    const k=num>=1000?Math.round(num/1000):num;
+    return cur+" "+k+"k ls";
+  }
+
   const addCargoes=useCallback(async(parsed)=>{
     const nowIso=new Date().toISOString();
     const stamped=parsed.map((f,i)=>normaliseCargo({
       ...f,
+      freight: normaliseFreight(f.freight),
       id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
       updated: nowIso,
     }));
