@@ -869,8 +869,6 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   borderBottom:"1px solid rgba(255,255,255,0.035)",
   verticalAlign:"middle",
   whiteSpace:"nowrap",
-  overflow:"hidden",
-  textOverflow:"ellipsis"
 };
   const tdNum = {...td2, textAlign:"right", fontVariantNumeric:"tabular-nums", textTransform:"uppercase"};
 const tdCtr = {...td2, textAlign:"center", fontVariantNumeric:"tabular-nums", textTransform:"uppercase"};
@@ -885,7 +883,7 @@ const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
     background:C.bg2,
     boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)",
   };
-  const tableStyle={width:"max-content",minWidth:mobile?600:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:mobile?10:11,tableLayout:"fixed",fontFamily:"sans-serif"};
+  const tableStyle={width:"max-content",minWidth:mobile?900:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:mobile?10:11,tableLayout:"fixed",fontFamily:"sans-serif"};
   const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
 const cargoColumns = [
   { key: "select", label: "", align: "center", width: 28 },
@@ -1573,7 +1571,7 @@ const filtV=useMemo(()=>{
     <button onClick={onClick} style={{...fb(active),display:"block",width:"100%",textAlign:"left",padding:"3px 8px",fontSize:11,whiteSpace:"nowrap",flexShrink:0}}>{children}</button>
   );
   return(
-    <div style={{display:"grid",gridTemplateColumns:"repeat(9,minmax(0,1fr))",gap:10,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1,overflow:"hidden",minHeight:0}}>
+    <div style={{display:"grid",gridTemplateColumns:mobile?"repeat(8,minmax(88px,1fr))":"repeat(8,minmax(0,1fr))",gap:mobile?6:10,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1,overflow:mobile?"auto":"hidden",minHeight:0,overflowX:mobile?"auto":"hidden"}}>
       {/* Status */}
       <COL label="Status" col={C.amber}>
         {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
@@ -1624,19 +1622,6 @@ const filtV=useMemo(()=>{
         {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<B key={v} active={builtFilter.has(v)} onClick={()=>{setBuiltFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
         {builtFilter.size>0&&<B active={false} onClick={()=>{setBuiltFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
       </COL>
-      {/* Clear ALL */}
-      <div style={{display:"flex",flexDirection:"column",justifyContent:"flex-end",minWidth:0}}>
-        <button onClick={()=>{
-          setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());
-          setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());
-          setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);
-          setSearch("");setBucketFilters(new Set());
-        }} style={{fontSize:11,fontWeight:700,padding:"5px 8px",borderRadius:5,cursor:"pointer",
-          fontFamily:"inherit",border:"1px solid rgba(255,107,107,0.35)",
-          background:"rgba(255,107,107,0.08)",color:"rgba(255,107,107,0.7)",whiteSpace:"nowrap"}}>
-          ✕ Clear all
-        </button>
-      </div>
     </div>
   );
 })()}</div>
@@ -1648,6 +1633,10 @@ const filtV=useMemo(()=>{
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
                   <CopyPositionsButton filtV={filtV} fmtDateShort={fmtDateShort}/>
+                  <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());}}
+                    style={{fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",border:"1px solid rgba(255,107,107,0.3)",background:"rgba(255,107,107,0.06)",color:"rgba(255,107,107,0.65)"}}>
+                    ✕ Clear filters
+                  </button>
                   {/* Inline add vessel */}
                   <button onClick={()=>setShowAddVessel(v=>!v)}
                     style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
