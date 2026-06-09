@@ -756,28 +756,33 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   // Fetch monthly cargo counts from DB for graph — full dataset, not just loaded 200
   useEffect(()=>{
     async function fetchMonthly(){
-      // Fetch all cargo dates — use created_at as fallback since updated may be null
-      const{data,error}=await supabase.from("cargoes").select("updated,updated_at,updated_at_manual,created_at");
-      if(error){console.error("fetchMonthly error:",error);return;}
-      if(!data?.length){console.warn("fetchMonthly: no rows");return;}
-      const map={};let used=0;
-      data.forEach(r=>{
-        // Try every possible date column
-        const raw=r.updated||r.updated_at_manual||r.updated_at||r.created_at||null;
-        if(!raw) return;
+      // Paginate through ALL cargoes to get dates — default select may be capped
+      const BATCH=1000;
+      const allDates=[];
+      let from=0;
+      while(true){
+        const{data,error}=await supabase.from("cargoes").select("updated").range(from,from+BATCH-1);
+        if(error){console.error("fetchMonthly error:",error);break;}
+        if(!data?.length) break;
+        data.forEach(r=>{if(r.updated) allDates.push(r.updated);});
+        if(data.length<BATCH) break;
+        from+=BATCH;
+      }
+      console.log("fetchMonthly: fetched",allDates.length,"dated rows of ~",from,"total");
+      if(!allDates.length) return;
+      const map={};
+      allDates.forEach(raw=>{
         const d=new Date(raw);
         if(isNaN(d.getTime())) return;
         const key=d.getFullYear()+"-"+String(d.getMonth()).padStart(2,"0");
         map[key]=(map[key]||0)+1;
-        used++;
       });
-      console.log("fetchMonthly: rows=",data.length,"dated=",used,"buckets=",Object.keys(map).length,"sample=",data.slice(0,3).map(r=>r.updated||r.updated_at_manual||r.updated_at||r.created_at||"NULL"));
       const buckets=Object.entries(map)
         .sort(([a],[b])=>a.localeCompare(b))
         .map(([k,count])=>{const[y,m]=k.split("-");return{year:parseInt(y),month:parseInt(m),count};});
       if(buckets.length>0) setGraphMonthlyData(buckets);
     }
-    fetchMonthly();
+        fetchMonthly();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
   function inRange(dateStr,from,to){if(!dateStr)return false;const d=new Date(dateStr);d.setHours(0,0,0,0);return d>=from&&d<=to;}
@@ -865,7 +870,7 @@ const cargoColumns = [
   { key:"comment",   sortKey:"Comment",   label:"Comment",  align:"left", width:colWidthsC.Comment },
   { key:"tag",       sortKey:"tag",       label:"Tag",            align:"left", width:80 },
   { key:"updated",   sortKey:"Updated",   label:"Updated", align:"left", width:colWidthsC.Updated },
-  { key:"entered_by", label:"", align:"center", width:20 },
+  { key:"badge", label:"", align:"center", width:20 },
   { key: "delete", label: "", align: "center", width: 26 },
 ];
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
@@ -1103,7 +1108,7 @@ const filtV=useMemo(()=>{
   { key: "openPort",  sortKey:"openPort",  label: "Open Port", width: colWidthsV.OpenPort },
   { key: "comment",   sortKey:"comment",   label: "Comment",  width: colWidthsV.Comment },
   { key: "updatedAt", sortKey:"fileDate",  label: "Updated", align:"center", width: colWidthsV.FileDate },
-  { key: "entered_by", label: "", align: "center", width: 20 },
+  { key: "badge", label: "", align: "center", width: 20 },
   { key: "delete", label: "", align: "center", width: 24 },
 ];
 
