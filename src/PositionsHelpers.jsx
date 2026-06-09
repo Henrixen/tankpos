@@ -274,17 +274,26 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels, allFiltere
     const selV2 = selVessels&&selVessels.size>0 ? selVessels : null;
     const activeRows = mode==="cargo"&&selC ? rows.filter(c=>selC.has(c.id)) : mode==="pos"&&selV2 ? rows.filter(v=>selV2.has(v.vessel)) : rows;
     const txt = mode==="pos" ? posToText(activeRows) : cargoToText(activeRows);
+    if(!txt) return;
+    // execCommand approach — most reliable including mobile/iPad
     const ta = document.createElement("textarea");
     ta.value = txt;
-    ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;";
+    ta.setAttribute("readonly","");
+    ta.style.cssText = "position:fixed;top:0;left:0;width:2px;height:2px;padding:0;border:none;outline:none;background:transparent;";
     document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    try { document.execCommand("copy"); } catch(e){}
+    ta.focus(); ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch(e){}
     document.body.removeChild(ta);
-    if(navigator.clipboard) navigator.clipboard.writeText(txt).catch(()=>{});
-    setCopied(true);
-    setTimeout(()=>setCopied(false),3000);
+    if(ok){ setCopied(true); setTimeout(()=>setCopied(false),2500); return; }
+    // Fallback to clipboard API
+    if(navigator.clipboard?.writeText){
+      navigator.clipboard.writeText(txt)
+        .then(()=>{ setCopied(true); setTimeout(()=>setCopied(false),2500); })
+        .catch(()=>{ setCopied(true); setTimeout(()=>setCopied(false),2500); }); // show feedback anyway
+      return;
+    }
+    setCopied(true); setTimeout(()=>setCopied(false),2500);
   }
 
   if(!rows.length) return null;
