@@ -123,7 +123,7 @@ export default function TankPos(){
         .or(`charterer.ilike.%${t}%,vessel.ilike.%${t}%,load.ilike.%${t}%,disch.ilike.%${t}%,cargo.ilike.%${t}%,status.ilike.%${t}%`)
         .range(0,499).order("updated",{ascending:false});
       if(error){console.error(error);return;}
-      setCargoes(data.map(normaliseCargo));
+      setCargoes(data.map(r=>({...normaliseCargo(r),entered_by:r.entered_by||""})));
     } else {
       // Fetch with offline fallback
       const { data, source } = await fetchWithCache('cargoes', async () => {
@@ -141,7 +141,7 @@ export default function TankPos(){
       }
       
       console.log(`🚢 Loaded ${data.cargoes?.length || 0} cargoes from ${source}`);
-      setCargoes((data.cargoes || []).map(normaliseCargo));
+      setCargoes((data.cargoes || []).map(r=>({...normaliseCargo(r),entered_by:r.entered_by||""})));
       setHasMore((data.cargoes || []).length === 200);
       if(data.total != null) setCargoTotal(data.total);
     }
@@ -249,7 +249,7 @@ export default function TankPos(){
       if(data.length<BATCH){setHasMore(false);break;}
       from+=BATCH;
     }
-    if(allData.length>0) setCargoes(prev=>[...prev,...allData.map(normaliseCargo)]);
+    if(allData.length>0) setCargoes(prev=>[...prev,...allData.map(r=>({...normaliseCargo(r),entered_by:r.entered_by||""}))]);
   }
 
   const renameV=useCallback((oldName,newName)=>{
@@ -499,22 +499,32 @@ export default function TankPos(){
       }
     });
 
-    // Update local state
+    // Update local state — preserve entered_by through normaliseCargo
     setCargoes(prev=>{
       const updMap={};
-      toUpdate.forEach(u=>updMap[u.id]=normaliseCargo({...u,from:u.from,to:u.to}));
+      toUpdate.forEach(u=>{
+        const norm=normaliseCargo({...u,from:u.from,to:u.to});
+        norm.entered_by=u.entered_by||"";
+        updMap[u.id]=norm;
+      });
       const updated=prev.map(c=>updMap[c.id]?{...c,...updMap[c.id]}:c);
-      const newNormed=toInsert.map(f=>normaliseCargo(f));
+      const newNormed=toInsert.map(f=>{
+        const norm=normaliseCargo(f);
+        norm.entered_by=f.entered_by||"";
+        return norm;
+      });
       return [...updated,...newNormed];
     });
 
-    // Write to Supabase
+    // Write to Supabase — ensure entered_by is in every row
     if(toUpdate.length>0){
-      const{error}=await supabase.from("cargoes").upsert(toUpdate,{onConflict:"id"});
+      const rows=toUpdate.map(u=>({...u,entered_by:u.entered_by||""}));
+      const{error}=await supabase.from("cargoes").upsert(rows,{onConflict:"id"});
       if(error) console.error("cargo update error:",error);
     }
     if(toInsert.length>0){
-      const{error}=await supabase.from("cargoes").insert(toInsert);
+      const rows=toInsert.map(f=>({...f,entered_by:f.entered_by||""}));
+      const{error}=await supabase.from("cargoes").insert(rows);
       if(error) console.error("cargo insert error:",error);
     }
 
