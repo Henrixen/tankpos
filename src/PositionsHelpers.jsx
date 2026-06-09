@@ -27,7 +27,7 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
     {label:"Open today/tomorrow",sublabel:"PPT",vessels:ppt,col:"#2ecc71"},
     {label:"2-4 days",sublabel:"2-4d",vessels:d24,col:"#f5a623"},
     {label:"4-8 days",sublabel:"4-8d",vessels:d48,col:"#e8603c"},
-    {label:">8 days",sublabel:">8d",vessels:d48plus,col:"#e74c3c"},
+    {label:">8 days",sublabel:">8d",vessels:d48plus,col:"#58a6ff"},
   ];
   const maxCount=Math.max(1,...buckets.map(b=>b.vessels.length));
   const totalCount = buckets.reduce((sum, b) => sum + b.vessels.length, 0) || 1;
