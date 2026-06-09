@@ -359,7 +359,7 @@ function AddVesselInlineRow({onSave,onClose}){
   function upd(k,v){setVals(p=>({...p,[k]:v}));}
   async function save(){
     if(!vals.vessel.trim()||!vals.openPort.trim()) return;
-    await onSave({vessel:vals.vessel.trim().toUpperCase(),openPort:vals.openPort.trim().toUpperCase(),date:vals.date||today,operator:vals.operator||null,dwt:vals.dwt?parseInt(vals.dwt):null,coating:vals.coating||null,comment:vals.comment||null});
+    await onSave({vessel:vals.vessel.trim().toUpperCase(),openPort:vals.openPort.trim().toUpperCase(),date:vals.date||today,operator:vals.operator||null,dwt:vals.dwt?parseInt(vals.dwt):null,coating:vals.coating||null,comment:vals.comment||null,entered_by:localStorage.getItem("signal_user")||"H"});
     onClose();
   }
   const TC={borderBottom:"2px solid rgba(67,233,123,0.35)",padding:"2px 3px",background:"rgba(10,24,52,0.9)"};
@@ -1103,6 +1103,7 @@ const filtV=useMemo(()=>{
   { key: "openPort",  sortKey:"openPort",  label: "Open Port", width: colWidthsV.OpenPort },
   { key: "comment",   sortKey:"comment",   label: "Comment",  width: colWidthsV.Comment },
   { key: "updatedAt", sortKey:"fileDate",  label: "Updated", align:"center", width: colWidthsV.FileDate },
+  { key: "entered_by", label: "", align: "center", width: 20 },
   { key: "delete", label: "", align: "center", width: 24 },
 ];
 
@@ -1755,6 +1756,19 @@ const filtV=useMemo(()=>{
         {v.updatedAt ? new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
       </td>
 
+      {/* WHO ENTERED badge */}
+      <td style={{...tdCtr,width:20,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
+        {(v.entered_by==="H"||v.entered_by==="L")&&(
+          <span title={v.entered_by==="H"?"Entered by Henriksen":"Entered by Løken"}
+            style={{display:"inline-flex",alignItems:"center",justifyContent:"center",
+              width:14,height:14,borderRadius:"50%",fontSize:8,fontWeight:700,lineHeight:1,
+              background:v.entered_by==="H"?"rgba(88,166,255,0.25)":"rgba(74,222,128,0.25)",
+              color:v.entered_by==="H"?"#79c0ff":"#4ade80",
+              border:"1px solid "+(v.entered_by==="H"?"rgba(88,166,255,0.5)":"rgba(74,222,128,0.5)")}}>
+            {v.entered_by}
+          </span>
+        )}
+      </td>
       {/* DELETE */}
       <td style={{ ...tdCtr, width: 24, minWidth: 24, maxWidth: 24, padding: "0 2px" }} onClick={e=>e.stopPropagation()}>
         <button
