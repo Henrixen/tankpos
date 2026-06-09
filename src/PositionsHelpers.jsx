@@ -158,6 +158,28 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels, allFiltere
 
   function fmtDate(){ return new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}); }
 
+  // Format positions for copy — grouped by operator
+  function posToText(rows){
+    if(!rows.length) return "";
+    const byOp={};
+    rows.forEach(v=>{
+      const op=v.operator||"Unknown";
+      if(!byOp[op]) byOp[op]=[];
+      byOp[op].push(v);
+    });
+    const lines=["|| Positions ||",""];
+    Object.entries(byOp).sort(([a],[b])=>a.localeCompare(b)).forEach(([op,vs])=>{
+      lines.push("*"+op+"*");
+      vs.forEach(v=>{
+        const parts=[v.vessel,v.openPort,v.date];
+        if(v.comment) parts.push(v.comment);
+        lines.push(parts.filter(Boolean).join(" – "));
+      });
+      lines.push("");
+    });
+    return lines.join("\n").trim();
+  }
+
   // Copy format: Charterer / Vessel / Qty Cargo / Load to Disch / 2-4 May / USD 440k ls|RNR
   function cargoToText(rows){
     const UPPER=new Set(["ARA","USG","USGC","UKC","UKG","MED","GIB","SPORE","WAF","MEG","AG","CPP","DPP","LNG","LPG","ULSD","HVO","UCO","FAME","LSFO","HSFO","MGO","ARAG","NOLA","LOOP"]);
