@@ -834,12 +834,12 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const mobile = mobileProp !== undefined ? mobileProp : isMobile();
 
   const [colWidthsV,setColWidthsV]=useState(()=>mobile?{
-  Operator:130,Vessel:110,Built:50,DWT:55,Coating:65,LOA:50,Beam:46,CBM:60,Date:62,OpenPort:110,Comment:160,FileDate:76,Spec:55
+  Operator:null,Vessel:null,Built:null,DWT:null,Coating:null,LOA:null,Beam:null,CBM:null,Date:null,OpenPort:null,Comment:null,FileDate:null,Spec:null
   }:{
   Operator:190,Vessel:155,Built:60,DWT:72,Coating:78,LOA:62,Beam:56,CBM:78,Date:74,OpenPort:150,Comment:220,FileDate:96,Spec:72
   });
   const [colWidthsC,setColWidthsC]=useState(()=>mobile?{
-  Status:55,Vessel:110,Charterer:110,Cargo:75,Qty:56,Load:90,Disch:90,LaycanStart:68,LaycanEnd:68,Freight:76,Comment:130,Updated:76
+  Status:55,Vessel:null,Charterer:null,Cargo:null,Qty:null,Load:null,Disch:null,LaycanStart:null,LaycanEnd:null,Freight:null,Comment:null,Updated:null
   }:{
   Status:68,Vessel:150,Charterer:150,Cargo:95,Qty:68,Load:120,Disch:120,LaycanStart:82,LaycanEnd:82,Freight:96,Comment:180,Updated:96
   });
@@ -883,7 +883,7 @@ const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
     background:C.bg2,
     boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)",
   };
-  const tableStyle={width:"max-content",minWidth:mobile?900:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:mobile?10:11,tableLayout:"fixed",fontFamily:"sans-serif"};
+  const tableStyle={width:"max-content",minWidth:mobile?"1400px":"100%",borderCollapse:"separate",borderSpacing:0,fontSize:mobile?10:11,tableLayout:mobile?"auto":"fixed",fontFamily:"sans-serif"};
   const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
 const cargoColumns = [
   { key: "select", label: "", align: "center", width: 28 },
@@ -1698,7 +1698,7 @@ const filtV=useMemo(()=>{
                     if(col?.sortKey) srt(col.sortKey);
                   }}>
                     {showAddVessel&&<AddVesselInlineRow onSave={onAddV} onClose={()=>setShowAddVessel(false)}/>}
-                  <div style={{...tableWrap,minWidth:mobile?700:undefined}}>
+                  <div style={{...tableWrap,minWidth:mobile?"1400px":undefined}}>
                     <MatrixTable
   columns={posColumns}
   data={filtV.slice(0, posPage * POS_PAGE_SIZE)}
@@ -2256,7 +2256,7 @@ const filtV=useMemo(()=>{
                 const col=cargoColumns[idx];
                 if(col?.sortKey){const d=cSortK===col.sortKey?cSortD*-1:-1;setCsortK(col.sortKey);setCsortD(d);}
               }}>
-            <div style={{...tableWrap,minWidth:mobile?700:undefined}} className="cargo-table">
+            <div style={{...tableWrap,minWidth:mobile?"1200px":undefined}} className="cargo-table">
               {showAddCargo&&<AddCargoInlineRow onSave={onAddC} onClose={()=>setShowAddCargo(false)}/>}
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
