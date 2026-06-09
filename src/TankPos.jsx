@@ -81,6 +81,29 @@ export default function TankPos(){
     setVesselDBLoaded(true);
     setVesselDBLoading(false);
     console.log("vesselDB loaded on demand:", allRows.length);
+
+    // Re-enrich any positions already loaded that are missing specs
+    setVessels(prev => {
+      if(!prev.length) return prev;
+      let changed = false;
+      const next = prev.map(v => {
+        const dbRec = map[v.vessel?.toLowerCase().trim()];
+        if(!dbRec) return v;
+        if(v.dwt && v.coating) return v; // already fully enriched
+        changed = true;
+        return {
+          ...v,
+          dwt:      v.dwt      || dbRec.dwt      || null,
+          built:    v.built    || dbRec.built     || null,
+          loa:      v.loa      || dbRec.loa       || null,
+          beam:     v.beam     || dbRec.beam      || null,
+          cbm:      v.cbm      || dbRec.cbm       || null,
+          coating:  v.coating  || dbRec.coating   || "",
+          iceClass: v.iceClass || dbRec.ice_class || "",
+        };
+      });
+      return changed ? next : prev;
+    });
   }
 
   function onCargoSearch(term){
@@ -184,34 +207,38 @@ export default function TankPos(){
     }
     const imoKey = String(r.imo_number||r.imo||"").trim();
     const dbByIMO = window.vesselDBByIMO||{};
+    const dbByName = window.vesselDB||{};
     const imoRec = imoKey ? dbByIMO[imoKey] : null;
+    const nameRec = dbByName[(r.vessel_name||"").toLowerCase().trim()] || null;
+    // Use IMO match first, then name match for vessel specs
+    const dbRec = imoRec || nameRec;
     return{
       id:          String(r.id||""),
       vessel:      String(r.vessel_name||"").toUpperCase(),
       operator:    r.operator||"",
       openPort:    r.port_name||"",
       date:        fmtDate,
-      dwt:         r.dwt||null,
-      built:       r.build_year||null,
-      loa:         r.overall_length!=null?Math.round(Number(r.overall_length))||null:null,
-      beam:        r.beam!=null?Math.round(Number(r.beam))||null:null,
-      cbm:         r.cbm||imoRec?.cbm||null,
-      coating:     r.coating_type_2||r.coating||r.coated||"",
+      dwt:         r.dwt||dbRec?.dwt||null,
+      built:       r.build_year||dbRec?.built||null,
+      loa:         r.overall_length!=null?Math.round(Number(r.overall_length))||null:(dbRec?.loa||null),
+      beam:        r.beam!=null?Math.round(Number(r.beam))||null:(dbRec?.beam||null),
+      cbm:         r.cbm||dbRec?.cbm||null,
+      coating:     r.coating_type_2||r.coating||r.coated||dbRec?.coating||"",
       comment:     r.details||"",
       notes:       r.notes||"",
       last3:       r.last_3_cargoes||"",
       dirtyClean:  r.dirty_clean||"",
-      iceClass:    r.ice_class||"",
+      iceClass:    r.ice_class||dbRec?.ice_class||"",
       segment:     SEGMENT_RENAME[r.segment]||r.segment||"",
       superRegion: REGION_RENAME[r.super_region]||r.super_region||"",
       updatedAt:   r.updated_at||"",
       fileDate:    r.file_date||null,
       source:      r.source||"external",
       spec: {
-        iceClass: r.ice_class||null,
+        iceClass: r.ice_class||dbRec?.ice_class||null,
         lastCargo: r.last_3_cargoes||null,
         segment: r.segment||null,
-        coated: r.coating||r.coated||null,
+        coated: r.coating||r.coated||dbRec?.coating||null,
       }
     };
   }));
