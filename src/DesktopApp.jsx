@@ -717,8 +717,8 @@ const [posPage,setPosPage]=useState(1);
 const POS_PAGE_SIZE=100;
 const [superRegionFilter,setSuperRegionFilter]=useState(new Set());
 const [segmentFilter,setSegmentFilter]=useState(new Set());
-const [dwtFilter,setDwtFilter]=useState("");   // "" | "<10" | "10-15" | "15-20" | "20-30" | "30-40" | ">40"
-const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" | "2010-2015" | "2015-2020" | ">2020"
+const [dwtFilter,setDwtFilter]=useState(new Set()); // multi-select Set
+const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
   const [cGradeFilter,setCGradeFilter]=useState("");
@@ -1023,33 +1023,46 @@ const filtV=useMemo(()=>{
     });
   }
 
-  // Show saved vessels only
+  // Saved filter — OR with interUKC means: show if saved OR matches interUKC
   if(showSavedOnly){
-    list=list.filter(v=>savedVessels.has(v.vessel));
+    if(interUKCActive){
+      // Already have interUKC results; add any saved vessels not yet in list
+      const inList=new Set(list.map(v=>v.vessel));
+      const extra=vessels.filter(v=>savedVessels.has(v.vessel)&&!inList.has(v.vessel));
+      list=[...list,...extra];
+    } else {
+      list=list.filter(v=>savedVessels.has(v.vessel));
+    }
   }
 
-  if(dwtFilter){
+  if(dwtFilter.size>0){
     list=list.filter(v=>{
       const d=parseFloat(v.dwt)||0;
-      if(dwtFilter==="<10") return d<10000;
-      if(dwtFilter==="10-15") return d>=10000&&d<15000;
-      if(dwtFilter==="15-20") return d>=15000&&d<20000;
-      if(dwtFilter==="20-30") return d>=20000&&d<30000;
-      if(dwtFilter==="30-40") return d>=30000&&d<40000;
-      if(dwtFilter===">40") return d>=40000;
-      return true;
+      const match=v=>{
+        if(v==="<10") return d<10000;
+        if(v==="10-15") return d>=10000&&d<15000;
+        if(v==="15-20") return d>=15000&&d<20000;
+        if(v==="20-30") return d>=20000&&d<30000;
+        if(v==="30-40") return d>=30000&&d<40000;
+        if(v===">40") return d>=40000;
+        return false;
+      };
+      return [...dwtFilter].some(match);
     });
   }
 
-  if(builtFilter){
+  if(builtFilter.size>0){
     list=list.filter(v=>{
       const b=parseInt(v.built)||0;
-      if(builtFilter==="<2005") return b>0&&b<2005;
-      if(builtFilter==="2005-10") return b>=2005&&b<2010;
-      if(builtFilter==="2010-15") return b>=2010&&b<2015;
-      if(builtFilter==="2015-20") return b>=2015&&b<2020;
-      if(builtFilter===">2020") return b>=2020;
-      return true;
+      const match=val=>{
+        if(val==="<2005") return b>0&&b<2005;
+        if(val==="2005-10") return b>=2005&&b<2010;
+        if(val==="2010-15") return b>=2010&&b<2015;
+        if(val==="2015-20") return b>=2015&&b<2020;
+        if(val===">2020") return b>=2020;
+        return false;
+      };
+      return [...builtFilter].some(match);
     });
   }
 
@@ -1110,8 +1123,8 @@ const filtV=useMemo(()=>{
   posFileDaysBack,
   superRegionFilter,
   segmentFilter,
-  dwtFilter,
-  builtFilter,
+  [...dwtFilter].join(),
+  [...builtFilter].join(),
   interUKCActive,
   showSavedOnly,
   savedVessels,
@@ -1141,7 +1154,6 @@ const filtV=useMemo(()=>{
     align: "center", 
     width: 32 
   },
-  { key: "save", label: "", align: "center", width: 26 },
   { key: "operator",  sortKey:"operator",  label: "Operator",  width: colWidthsV.Operator },
   { key: "vessel",    sortKey:"vessel",    label: "Vessel",    width: colWidthsV.Vessel },
   { key: "built",     sortKey:"built",     label: "Built",     align:"right", width: colWidthsV.Built },
@@ -1154,7 +1166,7 @@ const filtV=useMemo(()=>{
   { key: "openPort",  sortKey:"openPort",  label: "Open Port", width: colWidthsV.OpenPort },
   { key: "comment",   sortKey:"comment",   label: "Comment",  width: colWidthsV.Comment },
   { key: "updatedAt", sortKey:"fileDate",  label: "Updated", align:"center", width: colWidthsV.FileDate },
-  { key: "badge", label: "", align: "center", width: 20 },
+  { key: "badge", label: "", align: "center", width: 32 },
   { key: "delete", label: "", align: "center", width: 24 },
 ];
 
@@ -1553,7 +1565,7 @@ const filtV=useMemo(()=>{
     <button onClick={onClick} style={{...fb(active),display:"block",width:"100%",textAlign:"left",padding:"3px 8px",fontSize:11,whiteSpace:"nowrap",flexShrink:0}}>{children}</button>
   );
   return(
-    <div style={{display:"grid",gridTemplateColumns:"repeat(8,minmax(0,1fr))",gap:10,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1,overflow:"hidden",minHeight:0}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(9,minmax(0,1fr))",gap:10,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1,overflow:"hidden",minHeight:0}}>
       {/* Status */}
       <COL label="Status" col={C.amber}>
         {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
@@ -1596,14 +1608,27 @@ const filtV=useMemo(()=>{
       </COL>
       {/* DWT */}
       <COL label="DWT" col="#f59e0b">
-        {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<B key={v} active={dwtFilter===v} onClick={()=>{setDwtFilter(dwtFilter===v?"":v);setPosPage(1);}}>{l}</B>))}
-        {dwtFilter&&<B active={false} onClick={()=>{setDwtFilter("");setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
+        {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<B key={v} active={dwtFilter.has(v)} onClick={e=>{setDwtFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
+        {dwtFilter.size>0&&<B active={false} onClick={()=>{setDwtFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
       </COL>
       {/* Built */}
       <COL label="Built" col="#94a3b8">
-        {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<B key={v} active={builtFilter===v} onClick={()=>{setBuiltFilter(builtFilter===v?"":v);setPosPage(1);}}>{l}</B>))}
-        {builtFilter&&<B active={false} onClick={()=>{setBuiltFilter("");setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
+        {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<B key={v} active={builtFilter.has(v)} onClick={()=>{setBuiltFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
+        {builtFilter.size>0&&<B active={false} onClick={()=>{setBuiltFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
       </COL>
+      {/* Clear ALL */}
+      <div style={{display:"flex",flexDirection:"column",justifyContent:"flex-end",minWidth:0}}>
+        <button onClick={()=>{
+          setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());
+          setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());
+          setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);
+          setSearch("");setBucketFilters(new Set());
+        }} style={{fontSize:11,fontWeight:700,padding:"5px 8px",borderRadius:5,cursor:"pointer",
+          fontFamily:"inherit",border:"1px solid rgba(255,107,107,0.35)",
+          background:"rgba(255,107,107,0.08)",color:"rgba(255,107,107,0.7)",whiteSpace:"nowrap"}}>
+          ✕ Clear all
+        </button>
+      </div>
     </div>
   );
 })()}</div>
@@ -1675,8 +1700,8 @@ const filtV=useMemo(()=>{
                     const col=posColumns[idx];
                     if(col?.sortKey) srt(col.sortKey);
                   }}>
-                  <div style={{...tableWrap,minWidth:mobile?700:undefined}}>
                     {showAddVessel&&<AddVesselInlineRow onSave={onAddV} onClose={()=>setShowAddVessel(false)}/>}
+                  <div style={{...tableWrap,minWidth:mobile?700:undefined}}>
                     <MatrixTable
   columns={posColumns}
   data={filtV.slice(0, posPage * POS_PAGE_SIZE)}
@@ -1809,17 +1834,15 @@ const filtV=useMemo(()=>{
         {v.updatedAt ? new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
       </td>
 
-      {/* SAVE FOR LATER ⭐ */}
-      <td style={{...tdCtr,width:26,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
+      {/* WHO ENTERED badge + SAVE star */}
+      <td style={{...tdCtr,width:32,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",alignItems:"center",gap:2}}>
         <button onClick={()=>toggleSavedVessel(v.vessel)}
           title={savedVessels.has(v.vessel)?"Remove from saved":"Save for later"}
-          style={{background:"none",border:"none",cursor:"pointer",fontSize:12,padding:"2px",
-            color:savedVessels.has(v.vessel)?"#fbbf24":"rgba(120,160,200,0.2)",lineHeight:1}}>
+          style={{background:"none",border:"none",cursor:"pointer",fontSize:11,padding:"1px",
+            color:savedVessels.has(v.vessel)?"#fbbf24":"rgba(120,160,200,0.15)",lineHeight:1}}>
           {savedVessels.has(v.vessel)?"⭐":"☆"}
         </button>
-      </td>
-      {/* WHO ENTERED badge */}
-      <td style={{...tdCtr,width:20,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
         {(v.entered_by==="H"||v.entered_by==="L")&&(
           <span title={v.entered_by==="H"?"Entered by Henriksen":"Entered by Løken"}
             style={{display:"inline-flex",alignItems:"center",justifyContent:"center",
@@ -1830,6 +1853,7 @@ const filtV=useMemo(()=>{
             {v.entered_by}
           </span>
         )}
+        </div>
       </td>
       {/* DELETE */}
       <td style={{ ...tdCtr, width: 24, minWidth: 24, maxWidth: 24, padding: "0 2px" }} onClick={e=>e.stopPropagation()}>
