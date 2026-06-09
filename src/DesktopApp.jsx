@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } fr
 import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
 import { loadHistory } from "./supabaseHelpers";
+import { supabase } from "./supabaseclient";
 import { getUsageCache, fetchUsageTotals } from "./aiUsage";
 
 // Every component lazy-loaded to fully break circular dependency chains
