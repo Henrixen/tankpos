@@ -753,36 +753,28 @@ const [builtFilter,setBuiltFilter]=useState(""); // "" | "<2005" | "2005-2010" |
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
-  // Fetch monthly cargo counts from DB for graph — full dataset, not just loaded 200
+  // Fetch monthly cargo counts — query month-by-month using date ranges (avoids field-level RLS issues)
   useEffect(()=>{
     async function fetchMonthly(){
-      // Paginate through ALL cargoes to get dates — default select may be capped
-      const BATCH=1000;
-      const allDates=[];
-      let from=0;
-      while(true){
-        const{data,error}=await supabase.from("cargoes").select("updated").range(from,from+BATCH-1);
-        if(error){console.error("fetchMonthly error:",error);break;}
-        if(!data?.length) break;
-        data.forEach(r=>{if(r.updated) allDates.push(r.updated);});
-        if(data.length<BATCH) break;
-        from+=BATCH;
+      const now=new Date();
+      const buckets=[];
+      // Go back 24 months from now
+      for(let i=23;i>=0;i--){
+        const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+        const nextD=new Date(d.getFullYear(),d.getMonth()+1,1);
+        const from=d.toISOString().slice(0,10);
+        const to=nextD.toISOString().slice(0,10);
+        const{count,error}=await supabase.from("cargoes")
+          .select("*",{count:"exact",head:true})
+          .gte("updated",from)
+          .lt("updated",to);
+        if(!error) buckets.push({year:d.getFullYear(),month:d.getMonth(),count:count||0});
       }
-      console.log("fetchMonthly: fetched",allDates.length,"dated rows of ~",from,"total");
-      if(!allDates.length) return;
-      const map={};
-      allDates.forEach(raw=>{
-        const d=new Date(raw);
-        if(isNaN(d.getTime())) return;
-        const key=d.getFullYear()+"-"+String(d.getMonth()).padStart(2,"0");
-        map[key]=(map[key]||0)+1;
-      });
-      const buckets=Object.entries(map)
-        .sort(([a],[b])=>a.localeCompare(b))
-        .map(([k,count])=>{const[y,m]=k.split("-");return{year:parseInt(y),month:parseInt(m),count};});
-      if(buckets.length>0) setGraphMonthlyData(buckets);
+      const nonZero=buckets.filter(b=>b.count>0);
+      console.log("fetchMonthly: buckets=",buckets.length,"nonZero=",nonZero.length,"sample=",nonZero.slice(-3));
+      if(nonZero.length>0) setGraphMonthlyData(buckets.filter((_,i)=>i>=buckets.findIndex(b=>b.count>0)));
     }
-        fetchMonthly();
+    fetchMonthly();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
   function inRange(dateStr,from,to){if(!dateStr)return false;const d=new Date(dateStr);d.setHours(0,0,0,0);return d>=from&&d<=to;}
