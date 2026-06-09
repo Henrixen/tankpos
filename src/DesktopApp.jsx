@@ -540,7 +540,9 @@ function AddCargoModal({onSave,onClose}){
 function CopyPositionsButton({filtV,posPage,POS_PAGE_SIZE,fmtDateShort}){
   const [copied,setCopied]=React.useState(false);
   function copyPositions(){
-    const rows=filtV.slice(0,posPage*POS_PAGE_SIZE);
+    // Copy ALL filtered vessels, not just the paged slice
+    const rows=filtV;
+    if(!rows.length) return;
     const byOp={};
     rows.forEach(v=>{
       const op=v.operator||"Unknown";
@@ -551,16 +553,24 @@ function CopyPositionsButton({filtV,posPage,POS_PAGE_SIZE,fmtDateShort}){
     Object.entries(byOp).sort(([a],[b])=>a.localeCompare(b)).forEach(([op,vs])=>{
       lines.push("*"+op+"*");
       vs.forEach(v=>{
-        const parts=[v.vessel,v.openPort,fmtDateShort(v.date)];
+        const parts=[v.vessel,v.openPort,fmtDateShort?fmtDateShort(v.date):v.date];
         if(v.comment) parts.push(v.comment);
         lines.push(parts.filter(Boolean).join(" – "));
       });
       lines.push("");
     });
     const text=lines.join("\n").trim();
-    if(navigator.clipboard) navigator.clipboard.writeText(text).catch(()=>{});
-    else{const ta=document.createElement("textarea");ta.value=text;ta.style.cssText="position:fixed;opacity:0";document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);}
-    setCopied(true);setTimeout(()=>setCopied(false),2500);
+    try{
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2500);}).catch(()=>{
+          const ta=document.createElement("textarea");ta.value=text;ta.style.cssText="position:fixed;top:0;left:0;opacity:0.01;";document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);
+          setCopied(true);setTimeout(()=>setCopied(false),2500);
+        });
+      } else {
+        const ta=document.createElement("textarea");ta.value=text;ta.style.cssText="position:fixed;top:0;left:0;opacity:0.01;";document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);
+        setCopied(true);setTimeout(()=>setCopied(false),2500);
+      }
+    }catch(e){console.error("Copy failed:",e);}
   }
   return(
     <button onClick={copyPositions}
@@ -568,7 +578,7 @@ function CopyPositionsButton({filtV,posPage,POS_PAGE_SIZE,fmtDateShort}){
         border:copied?"1px solid rgba(67,233,123,0.5)":"1px solid rgba(58,130,246,0.25)",
         background:copied?"rgba(67,233,123,0.1)":"rgba(58,130,246,0.08)",
         color:copied?"#43e97b":"#79c0ff"}}>
-      {copied?"✓ Copied!":"Copy positions"}
+      {copied?"✓ Copied!":filtV.length>0?`Copy (${filtV.length})`:"Copy positions"}
     </button>
   );
 }
