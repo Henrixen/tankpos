@@ -22,6 +22,7 @@ function AISMap({ selectedVessels = [], vessels = [] }) {
         return;
       }
 
+      console.log("AIS fetch result:", data?.length, "rows", data?.slice(0,2));
       setAisData(data || []);
     }
 
