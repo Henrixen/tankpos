@@ -37,7 +37,7 @@ const TabFallback = ()=>null;
 
 
 // TagCell helpers
-const PRESET_TAGS=["AG","CPP","DPP","ex Asia","Med","Parcel","TA","UKC","WAF"];
+const PRESET_TAGS=["AG","CPP","DPP","ex Asia","Med","Parcel","TA","UKC","WAF","Outsider Europe","Space Asia-Europe"];
 function getTagList(){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");return[...new Set([...PRESET_TAGS,...c])].sort();}catch{return PRESET_TAGS.slice();}}
 function addCustomTag(t){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");if(!c.includes(t))localStorage.setItem("signal_custom_tags",JSON.stringify([...c,t]));}catch{}}
 function removeCustomTag(t){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");localStorage.setItem("signal_custom_tags",JSON.stringify(c.filter(x=>x!==t)));}catch{}}
@@ -96,6 +96,80 @@ function TagCell({cargoId,tag,onUpdateC}){
             border:"1px solid rgba(88,166,255,0.3)",borderRadius:7,padding:"6px",
             boxShadow:"0 8px 28px rgba(0,0,0,0.7)",display:"flex",flexDirection:"column",gap:2,minWidth:150,maxHeight:280,overflowY:"auto"}}>
             {cur&&<button onClick={()=>{onUpdateC(cargoId,"tag","");setOpen(false);}}
+              style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",
+                background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",
+                fontFamily:"inherit",textAlign:"left",marginBottom:2}}>✕ clear</button>}
+            {tagList.map(t=>{
+              const tCol=tagColors[t]||null;
+              return(
+                <button key={t} onClick={()=>pick(t)}
+                  style={{fontSize:11,padding:"3px 8px",borderRadius:3,textAlign:"left",cursor:"pointer",fontFamily:"inherit",
+                    border:"1px solid "+(cur===t?(tCol||"rgba(88,166,255,0.5)"):(tCol?tCol+"55":"rgba(88,166,255,0.12)")),
+                    background:cur===t?(tCol?tCol+"33":"rgba(88,166,255,0.2)"):"transparent",
+                    color:cur===t?(tCol||"#79c0ff"):(tCol||"rgba(160,200,255,0.7)"),
+                    fontWeight:cur===t?700:400}}>
+                  {tCol&&<span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:tCol,marginRight:5,verticalAlign:"middle"}}/>}
+                  {t}
+                </button>
+              );
+            })}
+            <input placeholder="New tag + Enter"
+              onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){addNew(e.target.value);e.target.value="";}if(e.key==="Escape")setOpen(false);}}
+              style={{fontSize:10,padding:"3px 5px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none",marginTop:4}}/>
+            <div style={{fontSize:9,color:"rgba(88,166,255,0.3)",marginTop:3,textAlign:"center",cursor:"pointer"}}
+              onClick={()=>setOpen(false)}>
+              Manage tags in Settings →
+            </div>
+          </div>
+        </>
+      )}
+    </td>
+  );
+}
+
+function TagCellV({vesselName,tag,onUpdateV}){
+  const [open,setOpen]=useState(false);
+  const btnRef=React.useRef(null);
+  const [pos,setPos]=useState({top:0,left:0});
+  const [tagList,setTagList]=useState(getTagList);
+  const [tagColors,setTagColors]=useState(getTagColors);
+
+  function openPick(e){
+    e.stopPropagation();
+    setTagList(getTagList());
+    setTagColors(getTagColors());
+    if(btnRef.current){
+      const r=btnRef.current.getBoundingClientRect();
+      const popW=160; const popH=240;
+      let left=r.left;
+      if(left+popW>window.innerWidth-8) left=Math.max(4,window.innerWidth-popW-8);
+      let top=r.bottom+4;
+      if(top+popH>window.innerHeight-8) top=Math.max(4,r.top-popH-4);
+      setPos({top,left});
+    }
+    setOpen(v=>!v);
+  }
+  function pick(t){onUpdateV(vesselName,"tag",t);setOpen(false);}
+  function addNew(val){const t=val.trim();if(!t)return;addCustomTag(t);onUpdateV(vesselName,"tag",t);setTagList(getTagList());setOpen(false);}
+  const cur=tag||"";
+  const curCol=cur?getTagColor(cur):null;
+  return(
+    <td style={{padding:"2px 4px",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)"}} onClick={e=>e.stopPropagation()}>
+      <button ref={btnRef} onClick={openPick}
+        style={{background:curCol?curCol+"22":cur?"rgba(88,166,255,0.15)":"transparent",
+          border:"1px solid "+(curCol||( cur?"rgba(88,166,255,0.4)":"rgba(88,166,255,0.12)")),
+          borderRadius:3,color:curCol||( cur?"#79c0ff":"rgba(120,160,220,0.25)"),
+          fontSize:10,fontWeight:cur?700:400,padding:"1px 5px",cursor:"pointer",
+          fontFamily:"inherit",whiteSpace:"nowrap",maxWidth:76,overflow:"hidden",textOverflow:"ellipsis"}}>
+        {cur||"＋"}
+      </button>
+      {open&&(
+        <>
+          <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
+          <div style={{position:"fixed",top:pos.top,left:pos.left,zIndex:9999,background:"#0a1628",
+            border:"1px solid rgba(88,166,255,0.3)",borderRadius:7,padding:"6px",
+            boxShadow:"0 8px 28px rgba(0,0,0,0.7)",display:"flex",flexDirection:"column",gap:2,minWidth:150,maxHeight:280,overflowY:"auto"}}>
+            {cur&&<button onClick={()=>{onUpdateV(vesselName,"tag","");setOpen(false);}}
               style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",
                 background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",
                 fontFamily:"inherit",textAlign:"left",marginBottom:2}}>✕ clear</button>}
@@ -1857,6 +1931,7 @@ const filtV=useMemo(()=>{
         )}
         </div>
       </td>
+      <TagCellV vesselName={v.vessel} tag={v.tag} onUpdateV={onUpdateV}/>
       {/* DELETE */}
       <td style={{ ...tdCtr, width: 24, minWidth: 24, maxWidth: 24, padding: "0 2px" }} onClick={e=>e.stopPropagation()}>
         <button
