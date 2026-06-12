@@ -331,11 +331,11 @@ function TagManager(){
               </div>
               {editTag===t?(
                 <input autoFocus defaultValue={t}
-                  style={{flex:1,fontSize:12,padding:"2px 6px",borderRadius:4,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none"}}
+                  style={{width:140,fontSize:12,padding:"2px 6px",borderRadius:4,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none"}}
                   onBlur={e=>{if(e.target.value.trim()&&e.target.value!==t){removeCustomTag(t);addCustomTag(e.target.value.trim());}setEditTag(null);refresh();}}
                   onKeyDown={e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape")setEditTag(null);}}/>
               ):(
-                <span style={{flex:1,fontSize:12,color:tCol||"rgba(160,200,255,0.7)",fontWeight:600}} onClick={()=>!isPreset(t)&&setEditTag(t)}>
+                <span style={{fontSize:12,color:tCol||"rgba(160,200,255,0.7)",fontWeight:600}} onClick={()=>!isPreset(t)&&setEditTag(t)}>
                   {tCol&&<span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:tCol,marginRight:6,verticalAlign:"middle"}}/>}
                   {t}{isPreset(t)&&<span style={{fontSize:9,color:C.faint,marginLeft:6}}>preset</span>}
                 </span>
@@ -343,7 +343,7 @@ function TagManager(){
               <div style={{display:"flex",gap:2,background:"rgba(8,16,32,0.6)",borderRadius:5,padding:2}}>
                 {scopeOpts.map(o=>(
                   <button key={o.v} onClick={()=>{setTagScope(t,o.v);refresh();}}
-                    style={{fontSize:9,padding:"2px 7px",borderRadius:4,border:"none",cursor:"pointer",fontFamily:"inherit",
+                    style={{fontSize:10,padding:"2px 7px",borderRadius:4,border:"none",cursor:"pointer",fontFamily:"inherit",
                       background:scope===o.v?"rgba(88,166,255,0.25)":"transparent",
                       color:scope===o.v?"#79c0ff":C.faint,fontWeight:scope===o.v?700:400}}>
                     {o.label}
@@ -353,7 +353,7 @@ function TagManager(){
               {!isPreset(t)&&editTag!==t&&(
                 <>
                   <button onClick={()=>setEditTag(t)} style={{background:"none",border:"none",color:"rgba(120,160,220,0.4)",fontSize:11,cursor:"pointer",padding:"0 4px"}} title="Rename">✎</button>
-                  <button onClick={()=>{removeCustomTag(t);refresh();}} style={{background:"none",border:"none",color:"rgba(255,107,107,0.4)",fontSize:11,cursor:"pointer",padding:"0 4px"}} title="Delete">✕</button>
+                  <button onClick={()=>{if(window.confirm(`Delete tag "${t}"? This removes it from the tag list (existing items keep the tag text until changed).`)){removeCustomTag(t);refresh();}}} style={{background:"none",border:"none",color:"rgba(255,107,107,0.4)",fontSize:11,cursor:"pointer",padding:"0 4px"}} title="Delete">✕</button>
                 </>
               )}
             </div>
