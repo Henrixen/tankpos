@@ -303,9 +303,11 @@ function TagManager(){
   const isPreset=t=>PRESET_TAGS.includes(t);
   const scopeOpts=[{v:"both",label:"Both"},{v:"cargo",label:"Cargoes"},{v:"position",label:"Positions"}];
   return(
-    <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:8,padding:"14px 16px"}}>
-      <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Tag Management</div>
-      <div style={{fontSize:11,color:C.faint,marginBottom:12}}>Set whether each tag applies to Cargoes, Positions, or Both.</div>
+    <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:8,padding:"14px 16px",maxWidth:680}}>
+      <div style={{borderBottom:"1px solid rgba(58,130,246,0.14)",paddingBottom:10,marginBottom:12}}>
+        <div style={{fontSize:12,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:4}}>Tag Management</div>
+        <div style={{fontSize:12,color:"rgba(180,200,230,0.45)"}}>Set whether each tag applies to Cargoes, Positions, or Both.</div>
+      </div>
       <div style={{display:"flex",flexDirection:"column",gap:6}}>
         {tags.map(t=>{
           const tCol=colors[t]||null;
@@ -331,15 +333,16 @@ function TagManager(){
               </div>
               {editTag===t?(
                 <input autoFocus defaultValue={t}
-                  style={{width:140,fontSize:12,padding:"2px 6px",borderRadius:4,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none"}}
+                  style={{width:160,fontSize:12,padding:"2px 6px",borderRadius:4,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none"}}
                   onBlur={e=>{if(e.target.value.trim()&&e.target.value!==t){removeCustomTag(t);addCustomTag(e.target.value.trim());}setEditTag(null);refresh();}}
                   onKeyDown={e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape")setEditTag(null);}}/>
               ):(
-                <span style={{fontSize:12,color:tCol||"rgba(160,200,255,0.7)",fontWeight:600}} onClick={()=>!isPreset(t)&&setEditTag(t)}>
+                <span style={{width:160,fontSize:12,color:tCol||"rgba(160,200,255,0.7)",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} onClick={()=>!isPreset(t)&&setEditTag(t)}>
                   {tCol&&<span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:tCol,marginRight:6,verticalAlign:"middle"}}/>}
                   {t}{isPreset(t)&&<span style={{fontSize:9,color:C.faint,marginLeft:6}}>preset</span>}
                 </span>
               )}
+              <div style={{width:1,height:18,background:C.bd2,flexShrink:0}}/>
               <div style={{display:"flex",gap:2,background:"rgba(8,16,32,0.6)",borderRadius:5,padding:2}}>
                 {scopeOpts.map(o=>(
                   <button key={o.v} onClick={()=>{setTagScope(t,o.v);refresh();}}
@@ -350,12 +353,15 @@ function TagManager(){
                   </button>
                 ))}
               </div>
-              {!isPreset(t)&&editTag!==t&&(
-                <>
-                  <button onClick={()=>setEditTag(t)} style={{background:"none",border:"none",color:"rgba(120,160,220,0.4)",fontSize:11,cursor:"pointer",padding:"0 4px"}} title="Rename">✎</button>
-                  <button onClick={()=>{if(window.confirm(`Delete tag "${t}"? This removes it from the tag list (existing items keep the tag text until changed).`)){removeCustomTag(t);refresh();}}} style={{background:"none",border:"none",color:"rgba(255,107,107,0.4)",fontSize:11,cursor:"pointer",padding:"0 4px"}} title="Delete">✕</button>
-                </>
-              )}
+              <div style={{width:1,height:18,background:C.bd2,flexShrink:0}}/>
+              <div style={{width:44,display:"flex",flexShrink:0}}>
+                {!isPreset(t)&&editTag!==t&&(
+                  <>
+                    <button onClick={()=>setEditTag(t)} style={{background:"none",border:"none",color:"rgba(120,160,220,0.4)",fontSize:11,cursor:"pointer",padding:"0 4px"}} title="Rename">✎</button>
+                    <button onClick={()=>{if(window.confirm(`Delete tag "${t}"? This removes it from the tag list (existing items keep the tag text until changed).`)){removeCustomTag(t);refresh();}}} style={{background:"none",border:"none",color:"rgba(255,107,107,0.4)",fontSize:11,cursor:"pointer",padding:"0 4px"}} title="Delete">✕</button>
+                  </>
+                )}
+              </div>
             </div>
           );
         })}
