@@ -40,6 +40,14 @@ const TabFallback = ()=>null;
 const PRESET_TAGS=["AG","CPP","DPP","ex Asia","Med","Parcel","TA","UKC","WAF","Outsider Europe","Space Asia-Europe"];
 function getTagList(){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");return[...new Set([...PRESET_TAGS,...c])].sort();}catch{return PRESET_TAGS.slice();}}
 function addCustomTag(t){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");if(!c.includes(t))localStorage.setItem("signal_custom_tags",JSON.stringify([...c,t]));}catch{}}
+function getTagScopes(){try{return JSON.parse(localStorage.getItem("signal_tag_scopes")||"{}");}catch{return{};}}
+function setTagScope(t,scope){try{const s=getTagScopes();if(scope==="both")delete s[t];else s[t]=scope;localStorage.setItem("signal_tag_scopes",JSON.stringify(s));}catch{}}
+function getTagScope(t){return getTagScopes()[t]||"both";}
+function getTagListFor(view){ // view: "cargo" | "position"
+  const all=getTagList();
+  const scopes=getTagScopes();
+  return all.filter(t=>{const s=scopes[t]||"both";return s==="both"||s===view;});
+}
 function removeCustomTag(t){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");localStorage.setItem("signal_custom_tags",JSON.stringify(c.filter(x=>x!==t)));}catch{}}
 function getTagColors(){try{return JSON.parse(localStorage.getItem("signal_tag_colors")||"{}");} catch{return {};}}
 function setTagColor(t,col){try{const c=getTagColors();c[t]=col;localStorage.setItem("signal_tag_colors",JSON.stringify(c));}catch{}}
@@ -53,12 +61,12 @@ function TagCell({cargoId,tag,onUpdateC}){
   const [colorPick,setColorPick]=useState(null); // tag name being color-edited
   const btnRef=React.useRef(null);
   const [pos,setPos]=useState({top:0,left:0});
-  const [tagList,setTagList]=useState(getTagList);
+  const [tagList,setTagList]=useState(()=>getTagListFor("cargo"));
   const [tagColors,setTagColors]=useState(getTagColors);
 
   function openPick(e){
     e.stopPropagation();
-    setTagList(getTagList());
+    setTagList(getTagListFor("cargo"));
     setTagColors(getTagColors());
     if(btnRef.current){
       const r=btnRef.current.getBoundingClientRect();
@@ -74,9 +82,9 @@ function TagCell({cargoId,tag,onUpdateC}){
     setEditMode(null); setColorPick(null);
   }
   function pick(t){onUpdateC(cargoId,"tag",t);setOpen(false);}
-  function addNew(val){const t=val.trim();if(!t)return;addCustomTag(t);onUpdateC(cargoId,"tag",t);setTagList(getTagList());setOpen(false);}
-  function delTag(t,e){e.stopPropagation();removeCustomTag(t);setTagList(getTagList());if(tag===t)onUpdateC(cargoId,"tag","");}
-  function renameTag(o,nw){if(!nw.trim()||nw===o)return;removeCustomTag(o);addCustomTag(nw.trim());setTagList(getTagList());if(tag===o)onUpdateC(cargoId,"tag",nw.trim());setEditMode(null);}
+  function addNew(val){const t=val.trim();if(!t)return;addCustomTag(t);onUpdateC(cargoId,"tag",t);setTagList(getTagListFor("cargo"));setOpen(false);}
+  function delTag(t,e){e.stopPropagation();removeCustomTag(t);setTagList(getTagListFor("cargo"));if(tag===t)onUpdateC(cargoId,"tag","");}
+  function renameTag(o,nw){if(!nw.trim()||nw===o)return;removeCustomTag(o);addCustomTag(nw.trim());setTagList(getTagListFor("cargo"));if(tag===o)onUpdateC(cargoId,"tag",nw.trim());setEditMode(null);}
   const cur=tag||"";
   const curCol=cur?getTagColor(cur):null;
   return(
@@ -129,33 +137,22 @@ function TagCell({cargoId,tag,onUpdateC}){
 
 function TagCellV({vesselName,tag,onUpdateV}){
   const [open,setOpen]=useState(false);
-  const btnRef=React.useRef(null);
-  const [pos,setPos]=useState({top:0,left:0});
-  const [tagList,setTagList]=useState(getTagList);
+  const [tagList,setTagList]=useState(()=>getTagListFor("position"));
   const [tagColors,setTagColors]=useState(getTagColors);
 
   function openPick(e){
     e.stopPropagation();
-    setTagList(getTagList());
+    setTagList(getTagListFor("position"));
     setTagColors(getTagColors());
-    if(btnRef.current){
-      const r=btnRef.current.getBoundingClientRect();
-      const popW=160; const popH=240;
-      let left=r.left;
-      if(left+popW>window.innerWidth-8) left=Math.max(4,window.innerWidth-popW-8);
-      let top=r.bottom+4;
-      if(top+popH>window.innerHeight-8) top=Math.max(4,r.top-popH-4);
-      setPos({top,left});
-    }
     setOpen(v=>!v);
   }
   function pick(t){onUpdateV(vesselName,"tag",t);setOpen(false);}
-  function addNew(val){const t=val.trim();if(!t)return;addCustomTag(t);onUpdateV(vesselName,"tag",t);setTagList(getTagList());setOpen(false);}
+  function addNew(val){const t=val.trim();if(!t)return;addCustomTag(t);onUpdateV(vesselName,"tag",t);setTagList(getTagListFor("position"));setOpen(false);}
   const cur=tag||"";
   const curCol=cur?getTagColor(cur):null;
   return(
-    <td style={{padding:"2px 4px",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)"}} onClick={e=>e.stopPropagation()}>
-      <button ref={btnRef} onClick={openPick}
+    <td style={{padding:"2px 4px",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)",position:"relative"}} onClick={e=>e.stopPropagation()}>
+      <button onClick={openPick}
         style={{background:curCol?curCol+"22":cur?"rgba(88,166,255,0.15)":"transparent",
           border:"1px solid "+(curCol||( cur?"rgba(88,166,255,0.4)":"rgba(88,166,255,0.12)")),
           borderRadius:3,color:curCol||( cur?"#79c0ff":"rgba(120,160,220,0.25)"),
@@ -166,7 +163,7 @@ function TagCellV({vesselName,tag,onUpdateV}){
       {open&&(
         <>
           <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
-          <div style={{position:"fixed",top:pos.top,left:pos.left,zIndex:9999,background:"#0a1628",
+          <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,zIndex:9999,background:"#0a1628",
             border:"1px solid rgba(88,166,255,0.3)",borderRadius:7,padding:"6px",
             boxShadow:"0 8px 28px rgba(0,0,0,0.7)",display:"flex",flexDirection:"column",gap:2,minWidth:150,maxHeight:280,overflowY:"auto"}}>
             {cur&&<button onClick={()=>{onUpdateV(vesselName,"tag","");setOpen(false);}}
@@ -299,16 +296,20 @@ function BunkerHeader(){
 function TagManager(){
   const [tags,setTags]=React.useState(getTagList);
   const [colors,setColors]=React.useState(getTagColors);
+  const [scopes,setScopes]=React.useState(getTagScopes);
   const [editTag,setEditTag]=React.useState(null);
   const [colorPick,setColorPick]=React.useState(null);
-  function refresh(){setTags(getTagList());setColors(getTagColors());}
+  function refresh(){setTags(getTagList());setColors(getTagColors());setScopes(getTagScopes());}
   const isPreset=t=>PRESET_TAGS.includes(t);
+  const scopeOpts=[{v:"both",label:"Both"},{v:"cargo",label:"Cargoes"},{v:"position",label:"Positions"}];
   return(
     <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:8,padding:"14px 16px"}}>
-      <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>Tag Management</div>
+      <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Tag Management</div>
+      <div style={{fontSize:11,color:C.faint,marginBottom:12}}>Set whether each tag applies to Cargoes, Positions, or Both.</div>
       <div style={{display:"flex",flexDirection:"column",gap:6}}>
         {tags.map(t=>{
           const tCol=colors[t]||null;
+          const scope=scopes[t]||"both";
           return(
             <div key={t} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",background:C.bg2,borderRadius:6,border:"1px solid "+C.bd2}}>
               <div style={{position:"relative"}}>
@@ -339,6 +340,16 @@ function TagManager(){
                   {t}{isPreset(t)&&<span style={{fontSize:9,color:C.faint,marginLeft:6}}>preset</span>}
                 </span>
               )}
+              <div style={{display:"flex",gap:2,background:"rgba(8,16,32,0.6)",borderRadius:5,padding:2}}>
+                {scopeOpts.map(o=>(
+                  <button key={o.v} onClick={()=>{setTagScope(t,o.v);refresh();}}
+                    style={{fontSize:9,padding:"2px 7px",borderRadius:4,border:"none",cursor:"pointer",fontFamily:"inherit",
+                      background:scope===o.v?"rgba(88,166,255,0.25)":"transparent",
+                      color:scope===o.v?"#79c0ff":C.faint,fontWeight:scope===o.v?700:400}}>
+                    {o.label}
+                  </button>
+                ))}
+              </div>
               {!isPreset(t)&&editTag!==t&&(
                 <>
                   <button onClick={()=>setEditTag(t)} style={{background:"none",border:"none",color:"rgba(120,160,220,0.4)",fontSize:11,cursor:"pointer",padding:"0 4px"}} title="Rename">✎</button>
@@ -1247,6 +1258,7 @@ const filtV=useMemo(()=>{
   { key: "comment",   sortKey:"comment",   label: "Comment",  width: colWidthsV.Comment },
   { key: "updatedAt", sortKey:"fileDate",  label: "Updated", align:"center", width: colWidthsV.FileDate },
   { key: "badge", label: "", align: "center", width: 32 },
+  { key: "tag", label: "Tag", align: "center", width: 70 },
   { key: "delete", label: "", align: "center", width: 24 },
 ];
 
@@ -2677,6 +2689,7 @@ const filtV=useMemo(()=>{
         {tab==="settings"&&(
           <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px"}}>
             <TagManager/>
+            <div style={{height:1,background:C.bd2,margin:"4px 0"}}/>
             {/* Original settings component */}
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
           </div>
