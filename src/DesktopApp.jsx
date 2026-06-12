@@ -1777,8 +1777,10 @@ const filtV=useMemo(()=>{
                   </button>
                 </div>
 
+                {/* Vessel Table + Side panel row */}
+                <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
                 {/* Vessel Table */}
-                <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}
+                <div style={{width:"100%",flex:1,minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch"}}
                   onClick={e=>{
                     const th=e.target.closest("th");
                     if(!th) return;
@@ -2063,6 +2065,7 @@ const filtV=useMemo(()=>{
                       </div>
                     </div>
                   )}
+                </div>
                 </div>
 
                 {filtV.length > posPage * POS_PAGE_SIZE && (
