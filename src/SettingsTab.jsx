@@ -28,7 +28,7 @@ function InterUKCEditor(){
           <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",marginBottom:3}}>DWT max (k)</div>
           <input type="number" value={cfg.dwtMax} onChange={e=>save({...cfg,dwtMax:Number(e.target.value)})} style={inp}/>
         </div>
-        <button onClick={()=>save(DEFAULT_CONFIG)} style={{fontSize:11,padding:"4px 12px",borderRadius:4,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit",marginTop:16}}>Reset defaults</button>
+        <button onClick={()=>{if(window.confirm("Reset Inter UKC pool to defaults? This will overwrite your current operator/relet lists.")) save(DEFAULT_CONFIG);}} style={{fontSize:11,padding:"4px 12px",borderRadius:4,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit",marginTop:16}}>Reset defaults</button>
       </div>
       {/* Owners */}
       {[["owners","Operators / Owners (contains match)"],["reletsFrom","Relets from (contains match)"]].map(([field,label])=>(
@@ -38,7 +38,7 @@ function InterUKCEditor(){
             {cfg[field].map(name=>(
               <div key={name} style={{display:"flex",alignItems:"center",gap:2,background:"rgba(88,166,255,0.1)",border:"1px solid rgba(88,166,255,0.25)",borderRadius:4,padding:"2px 6px"}}>
                 <span style={{fontSize:11,color:"rgba(160,200,255,0.85)"}}>{name}</span>
-                <button onClick={()=>save({...cfg,[field]:cfg[field].filter(x=>x!==name)})}
+                <button onClick={()=>{if(window.confirm(`Remove "${name}" from this list?`)) save({...cfg,[field]:cfg[field].filter(x=>x!==name)});}}
                   style={{background:"none",border:"none",color:"rgba(255,107,107,0.5)",fontSize:10,cursor:"pointer",padding:"0 2px",lineHeight:1}}>✕</button>
               </div>
             ))}
@@ -81,66 +81,6 @@ function defaultGroups() {
 }
 function saveGroups(groups) { localStorage.setItem(STORAGE_KEY, JSON.stringify(groups)); }
 
-function CustomTagsEditor(){
-  const PRESETS=["AG","CPP","DPP","ex Asia","Med","Parcel","TA","UKC","WAF"];
-  const [custom,setCustom]=useState(()=>{try{return JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");}catch{return[];}});
-  const [editTag,setEditTag]=useState(null);
-  const [editVal,setEditVal]=useState("");
-  const [newVal,setNewVal]=useState("");
-  const allTags=[...new Set([...PRESETS,...custom])].sort();
-
-  function saveCustom(list){setCustom(list);localStorage.setItem("signal_custom_tags",JSON.stringify(list));}
-  function del(t){
-    if(PRESETS.includes(t)){
-      const hidden=JSON.parse(localStorage.getItem("signal_hidden_tags")||"[]");
-      localStorage.setItem("signal_hidden_tags",JSON.stringify([...new Set([...hidden,t])]));
-    }
-    saveCustom(custom.filter(x=>x!==t));
-  }
-  function startEdit(t){setEditTag(t);setEditVal(t);}
-  function commitEdit(oldT,newT){
-    if(!newT.trim()||newT===oldT){setEditTag(null);return;}
-    if(PRESETS.includes(oldT)){
-      const hidden=JSON.parse(localStorage.getItem("signal_hidden_tags")||"[]");
-      localStorage.setItem("signal_hidden_tags",JSON.stringify([...new Set([...hidden,oldT])]));
-      saveCustom([...custom.filter(x=>x!==newT.trim()),newT.trim()]);
-    } else {
-      saveCustom(custom.map(x=>x===oldT?newT.trim():x));
-    }
-    setEditTag(null);
-  }
-  function add(){if(!newVal.trim())return;saveCustom([...new Set([...custom,newVal.trim()])]);setNewVal("");}
-
-  const inp2={background:"rgba(10,18,34,0.95)",border:"1px solid rgba(88,166,255,0.4)",borderRadius:3,color:"#cde",fontFamily:"inherit",fontSize:11,padding:"2px 6px",outline:"none"};
-  return(
-    <div style={{display:"flex",flexDirection:"column",gap:8}}>
-      <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
-        {allTags.map(t=>(
-          <div key={t} style={{display:"flex",alignItems:"center",gap:1,background:"rgba(88,166,255,0.1)",border:"1px solid rgba(88,166,255,0.25)",borderRadius:4,padding:"2px 4px"}}>
-            {editTag===t?(
-              <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)}
-                onBlur={()=>commitEdit(t,editVal)}
-                onKeyDown={e=>{if(e.key==="Enter")commitEdit(t,editVal);if(e.key==="Escape")setEditTag(null);}}
-                style={{...inp2,width:80}}/>
-            ):(
-              <span style={{fontSize:11,color:"rgba(160,200,255,0.85)",padding:"0 2px"}}>{t}</span>
-            )}
-            <button onClick={()=>startEdit(t)} style={{background:"none",border:"none",color:"rgba(120,160,220,0.35)",fontSize:10,cursor:"pointer",padding:"0 2px",lineHeight:1}} title="Rename">✎</button>
-            <button onClick={()=>del(t)} style={{background:"none",border:"none",color:"rgba(255,107,107,0.4)",fontSize:10,cursor:"pointer",padding:"0 2px",lineHeight:1}} title="Delete">✕</button>
-          </div>
-        ))}
-      </div>
-      <div style={{display:"flex",gap:5,alignItems:"center"}}>
-        <input value={newVal} onChange={e=>setNewVal(e.target.value)} placeholder="New tag…"
-          onKeyDown={e=>e.key==="Enter"&&add()}
-          style={{...inp2,width:120}}/>
-        <button onClick={add} style={{fontSize:11,padding:"2px 10px",borderRadius:3,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(88,166,255,0.15)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>Add</button>
-        <span style={{fontSize:10,color:"rgba(120,160,220,0.3)",marginLeft:4}}>All tags are editable and deletable</span>
-      </div>
-    </div>
-  );
-}
-
 export default function SettingsTab() {
   const [groups, setGroups] = useState(loadGroups);
   useEffect(()=>{ saveGroups(groups); },[groups]);
@@ -178,8 +118,9 @@ export default function SettingsTab() {
     <div style={{display:"flex",flexDirection:"column",gap:24,maxWidth:1000,padding:"20px 24px",fontFamily:"Inter,sans-serif"}}>
       {/* Inter UKC Configuration */}
       <div>
-        <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>
-          Inter UKC Pool <span style={{fontWeight:400,color:"rgba(120,160,220,0.3)",textTransform:"none"}}>— operators and DWT range for the Inter UKC filter</span>
+        <div style={{borderBottom:"1px solid rgba(58,130,246,0.14)",paddingBottom:10,marginBottom:12}}>
+          <div style={{fontSize:12,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:4}}>Inter UKC Pool</div>
+          <div style={{fontSize:12,color:"rgba(180,200,230,0.45)"}}>Operators and DWT range used by the Inter UKC filter.</div>
         </div>
         <InterUKCEditor/>
       </div>
@@ -244,7 +185,7 @@ export default function SettingsTab() {
                         </td>
                         <td style={td}><div style={{display:"flex",gap:5}}>
                           <button onClick={()=>startEdit(g)} style={btn(false)}>✏ Edit</button>
-                          <button onClick={()=>del(g.id)} style={{...btn(false),color:"#f87171",borderColor:"rgba(248,113,113,0.35)"}}>✕ Delete</button>
+                          <button onClick={()=>{if(window.confirm(`Delete filter group "${g.label}"?`)) del(g.id);}} style={{...btn(false),color:"#f87171",borderColor:"rgba(248,113,113,0.35)"}}>✕ Delete</button>
                         </div></td>
                       </>
                     )}
@@ -278,17 +219,8 @@ export default function SettingsTab() {
         </div>
       </div>
 
-      <div>
-        <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>
-          Tags <span style={{fontWeight:400,color:"rgba(120,160,220,0.3)",textTransform:"none"}}>— used in the Tag column, Tag filter, and Tag on parse</span>
-        </div>
-        <div style={{border:"1px solid rgba(58,130,246,0.18)",borderRadius:7,padding:"12px 16px",background:"rgba(10,18,34,0.6)"}}>
-          <CustomTagsEditor/>
-        </div>
-      </div>
-
       <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",borderTop:"1px solid rgba(58,130,246,0.12)",paddingTop:16}}>
-        <button onClick={()=>setGroups(defaultGroups())} style={{...btn(false),padding:"5px 14px",fontSize:12,color:"rgba(248,113,113,0.7)",borderColor:"rgba(248,113,113,0.3)"}}>Reset to defaults</button>
+        <button onClick={()=>{if(window.confirm("Reset all cargo filter groups to defaults? This removes any custom groups you added.")) setGroups(defaultGroups());}} style={{...btn(false),padding:"5px 14px",fontSize:12,color:"rgba(248,113,113,0.7)",borderColor:"rgba(248,113,113,0.3)"}}>Reset to defaults</button>
         <span style={{fontSize:10,color:"rgba(120,160,220,0.4)"}}>Preview:</span>
         {groups.map(g=>(
           <span key={g.id} style={{fontSize:11,fontWeight:600,padding:"2px 10px",borderRadius:4,border:"1px solid rgba(88,166,255,0.3)",background:"rgba(88,166,255,0.1)",color:"#c8deff",fontFamily:"inherit"}}>{g.label}</span>
