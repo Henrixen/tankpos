@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
 
-function AISMap({ selectedVessels = [], vessels = [] }) {
+function AISMap({ selectedVessels = [], vessels = [], onAisVesselsChange }) {
   const [aisData, setAisData] = useState([]);
   const [mapCenter, setMapCenter] = useState([51.5, -0.1]); // Default: London
   const [zoom, setZoom] = useState(4);
@@ -22,8 +22,11 @@ function AISMap({ selectedVessels = [], vessels = [] }) {
         return;
       }
 
-      console.log("AIS fetch result:", data?.length, "rows", data?.slice(0,2));
       setAisData(data || []);
+      if (onAisVesselsChange) {
+        const names = new Set((data || []).map(d => (d.vessel_name || "").toUpperCase().trim()).filter(Boolean));
+        onAisVesselsChange(names);
+      }
     }
 
     fetchAIS();
@@ -98,7 +101,31 @@ function AISMap({ selectedVessels = [], vessels = [] }) {
       <div ref={mapRef} style={{ flex: 1, position: "relative", background: "#0d1117", minHeight: 400, overflow: "hidden" }}>
         <svg viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice" style={{ width: "100%", height: "100%", display: "block" }}>
           {/* Map background */}
-          <rect width="1000" height="600" fill="#0d1117" />
+          <rect width="1000" height="600" fill="#0a0e16" />
+          {/* Simplified world landmasses (equirectangular, low-poly) */}
+          <g fill="#161f30" stroke="#1f2c44" strokeWidth="1">
+            {/* North & South America */}
+            <path d="M120,60 L260,55 L290,110 L270,160 L300,210 L280,260 L240,300 L230,360 L210,420 L195,470 L175,440 L165,380 L150,320 L140,260 L110,200 L95,150 L100,100 Z"/>
+            {/* Greenland */}
+            <path d="M330,40 L380,35 L400,70 L370,100 L335,85 Z"/>
+            {/* Europe */}
+            <path d="M460,90 L520,80 L545,110 L530,140 L560,160 L540,190 L500,200 L470,170 L450,140 Z"/>
+            {/* Africa */}
+            <path d="M470,200 L560,195 L580,260 L560,340 L530,420 L500,460 L480,400 L470,320 L460,260 Z"/>
+            {/* Asia */}
+            <path d="M560,60 L760,50 L850,90 L880,140 L820,180 L760,170 L700,200 L650,180 L600,150 L570,110 Z"/>
+            {/* India */}
+            <path d="M650,200 L700,195 L710,250 L680,290 L655,250 Z"/>
+            {/* Australia */}
+            <path d="M780,360 L880,350 L910,400 L870,440 L800,430 L770,400 Z"/>
+            {/* UK/Ireland */}
+            <path d="M448,118 L468,112 L475,130 L460,145 L445,135 Z"/>
+          </g>
+          {/* Graticule lines */}
+          <g stroke="#1a2438" strokeWidth="0.5" opacity="0.5">
+            {[0,100,200,300,400,500,600,700,800,900,1000].map(x=><line key={"v"+x} x1={x} y1="0" x2={x} y2="600"/>)}
+            {[0,100,200,300,400,500,600].map(y=><line key={"h"+y} x1="0" y1={y} x2="1000" y2={y}/>)}
+          </g>
           
           {/* Draw routes for each vessel */}
           {Object.entries(vesselRoutes).map(([vessel, points], idx) => {
