@@ -937,6 +937,7 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [askAiExpanded,setAskAiExpanded]=useState(false);
   const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
   const [selectedAISVessels,setSelectedAISVessels]=useState([]);
+  const [aisVesselSet,setAisVesselSet]=useState(new Set());
   
   // Dashboard / bunker-matrix theme styles
   const th2={
@@ -1253,6 +1254,7 @@ const filtV=useMemo(()=>{
   },
   { key: "operator",  sortKey:"operator",  label: "Operator",  width: colWidthsV.Operator },
   { key: "vessel",    sortKey:"vessel",    label: "Vessel",    width: colWidthsV.Vessel },
+  { key: "ais",       label: "",           align:"center",     width: 18 },
   { key: "built",     sortKey:"built",     label: "Built",     align:"right", width: colWidthsV.Built },
   { key: "dwt",       sortKey:"dwt",       label: "DWT",           align:"right", width: colWidthsV.DWT },
   { key: "coating",   sortKey:"coating",   label: "Coating", width: colWidthsV.Coating },
@@ -1604,7 +1606,7 @@ const filtV=useMemo(()=>{
               {/* RIGHT: AIS Map (34%) - matches Rate Matrix height */}
 {!mobile&&(
   <div style={{width:"34%",height:460}}>
-    <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels}/></Suspense>
+    <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels} onAisVesselsChange={setAisVesselSet}/></Suspense>
   </div>
 )}
  </div>
@@ -1865,7 +1867,11 @@ const filtV=useMemo(()=>{
         style={mobile?{minWidth:130,whiteSpace:"nowrap"}:undefined}
       />
 
-      <td style={{ ...tdNum, color: C.dim }}>{v.built || ""}</td>
+      <td style={{padding:"2px 3px",textAlign:"center",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)"}} title={aisVesselSet.has((v.vessel||"").toUpperCase().trim())?"AIS data available":"No AIS data"}>
+        <span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",
+          background:aisVesselSet.has((v.vessel||"").toUpperCase().trim())?"#4ade80":"rgba(120,160,220,0.15)"}}/>
+      </td>
+
       <td style={{ ...tdNum, color: C.dim }}>{fmtN(v.dwt)}</td>
       <td style={{ ...tdTxt, color: C.dim }}>{v.coating || ""}</td>
       <td style={{ ...tdNum, color: C.dim }}>{v.loa || ""}</td>
