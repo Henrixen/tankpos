@@ -416,8 +416,10 @@ function FixingWindowChart({ vessels = [], tagFilter }) {
         .not("open_date", "is", null)
         .not("dwt", "is", null)
         .not("last_update_spotship", "is", null);
-      if (!error) setRows(data || []);
-      else console.error("FixingWindowChart fetch error:", error);
+      if (!error) {
+        setRows(data || []);
+        if (!data?.length) console.warn("FixingWindowChart: 0 rows from positions_external — check grants");
+      } else console.error("FixingWindowChart fetch error:", error);
       setLoading(false);
     }
     fetch();
@@ -435,10 +437,10 @@ function FixingWindowChart({ vessels = [], tagFilter }) {
     if (!r.last_update_spotship || !r.open_date) continue;
     const reportDate = r.last_update_spotship.slice(0,10);
     const fw = daysBetween(r.open_date, reportDate);
-    if (fw === null || fw < -14 || fw > 90) continue; // reasonable range
+    if (fw === null || fw < -90 || fw > 90) continue; // wide range, catches past-open vessels
     const wk = weekStart(r.last_update_spotship);
     const dwt = r.dwt ? Number(r.dwt) : (dwtMap[(r.vessel_name||"").toUpperCase()] || null);
-    if (!dwt) continue;
+    if (!dwt || dwt < 500) continue; // filter junk rows
     const seg = FW_SEGMENTS.find(s => dwt >= s.dwt[0] && dwt <= s.dwt[1]);
     if (!seg) continue;
     if (!weekMap[wk]) weekMap[wk] = {};
@@ -597,8 +599,9 @@ function FixingWindowChart({ vessels = [], tagFilter }) {
           Loading…
         </div>
       ) : chartData.length === 0 ? (
-        <div style={{height:160,display:"flex",alignItems:"center",justifyContent:"center",color:C.faint,fontSize:12}}>
-          No data — check that positions_external has records with open_date and last_update_spotship.
+        <div style={{height:160,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,color:C.faint,fontSize:12}}>
+          <span>No chart data ({rows.length} raw rows fetched)</span>
+          {rows.length > 0 && <span style={{fontSize:10}}>All rows filtered — check open_date vs last_update_spotship range</span>}
         </div>
       ) : (
         <canvas ref={canvasRef} width={800} height={180}
