@@ -45,7 +45,7 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
       const { data, error } = await supabase
         .from("positions_ais")
         .select("*")
-        .order("datetime", { ascending: false })
+        .order("datetime", { ascending: true })
         .limit(2000);
       if (error) { console.error("AIS fetch error:", error); return; }
       setAisData(data || []);
@@ -82,13 +82,14 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
   useEffect(() => {
     if (!mapLoaded || !map.current) return;
 
-    // Group by vessel
+    // Group by vessel (normalized uppercase)
     const routes = {};
     aisData.forEach(p => {
-      const name = (p.vessel_name || "Unknown").toUpperCase();
+      const name = (p.vessel_name || "Unknown").toUpperCase().trim();
       if (!routes[name]) routes[name] = [];
       routes[name].push(p);
     });
+    // Already sorted ascending from fetch, but re-sort to be safe
     Object.values(routes).forEach(pts =>
       pts.sort((a,b) => new Date(a.datetime) - new Date(b.datetime))
     );
@@ -106,7 +107,7 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
       const validPts = pts.filter(p => p.latitude && p.longitude);
       if (!validPts.length) return;
       const color = getColor(name);
-      const isSelected = selectedUp.includes(name);
+      const isSelected = selectedUp.some(s => s === name.toUpperCase().trim());
       const dimmed = hasSelection && !isSelected;
       const latest = validPts[validPts.length - 1];
 
@@ -263,15 +264,19 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
 
   }, [mapLoaded, aisData, selectedVessels]);
 
-  // Fly to selected vessel
+  // Fly to selected vessel — or reset to world view
   useEffect(() => {
     if (!mapLoaded || !map.current) return;
     const selectedUp = selectedVessels.map(s => s.toUpperCase().trim());
-    if (!selectedUp.length) return;
+
+    if (!selectedUp.length) {
+      map.current.flyTo({ center: [15, 30], zoom: 2, duration: 1000 });
+      return;
+    }
 
     const routes = {};
     aisData.forEach(p => {
-      const name = (p.vessel_name||"Unknown").toUpperCase();
+      const name = (p.vessel_name||"Unknown").toUpperCase().trim();
       if (!routes[name]) routes[name]=[];
       routes[name].push(p);
     });
@@ -280,15 +285,15 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
     if (!pts.length) return;
 
     if (pts.length === 1) {
-      map.current.flyTo({ center:[pts[0].longitude, pts[0].latitude], zoom:6, duration:1200 });
+      map.current.flyTo({ center:[pts[0].longitude, pts[0].latitude], zoom:7, duration:1200 });
     } else {
       const lngs = pts.map(p=>p.longitude), lats = pts.map(p=>p.latitude);
       map.current.fitBounds(
         [[Math.min(...lngs),Math.min(...lats)],[Math.max(...lngs),Math.max(...lats)]],
-        { padding:60, duration:1200, maxZoom:8 }
+        { padding:80, duration:1200, maxZoom:9 }
       );
     }
-  }, [JSON.stringify(selectedVessels), mapLoaded]);
+  }, [JSON.stringify(selectedVessels), mapLoaded, aisData]);
 
   const vesselCount = [...new Set(aisData.map(p=>(p.vessel_name||"").toUpperCase()).filter(Boolean))].length;
 
