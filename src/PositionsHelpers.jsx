@@ -397,7 +397,7 @@ function mean(arr) {
   return v.length ? v.reduce((a,b) => a+b, 0) / v.length : null;
 }
 
-function FixingWindowChart({ vessels, tagFilter }) {
+function FixingWindowChart({ vessels = [], tagFilter }) {
   const [rows, setRows] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [activeSeg, setActiveSeg] = React.useState(new Set(FW_SEGMENTS.map(s=>s.key)));
@@ -411,17 +411,20 @@ function FixingWindowChart({ vessels, tagFilter }) {
       since.setDate(since.getDate() - 84); // 12 weeks
       const { data, error } = await supabase
         .from("positions")
-        .select("vessel,dwt,date,updated_at,tag")
+        .select("vessel,date,updated_at,tag")
         .gte("updated_at", since.toISOString())
-        .not("date", "is", null)
-        .not("dwt", "is", null);
+        .not("date", "is", null);
       if (!error) setRows(data || []);
       setLoading(false);
     }
     fetch();
   }, []);
 
-  // Group by week + segment, compute avg fixing window (days from updated_at to open date)
+  // Build DWT lookup from in-memory vessels array
+  const dwtMap = {};
+  (vessels || []).forEach(v => { if (v.vessel && v.dwt) dwtMap[v.vessel.toUpperCase()] = Number(v.dwt); });
+
+  // Group by week + segment, compute avg fixing window
   const filtered = tagFilter
     ? rows.filter(r => r.tag === tagFilter)
     : rows;
@@ -429,11 +432,13 @@ function FixingWindowChart({ vessels, tagFilter }) {
   // Build weekly data
   const weekMap = {}; // { weekISO: { segKey: [days] } }
   for (const r of filtered) {
-    if (!r.updated_at || !r.date || !r.dwt) continue;
+    if (!r.updated_at || !r.date) continue;
     const fw = daysBetween(r.date, r.updated_at.slice(0,10));
-    if (fw === null || fw < -7 || fw > 60) continue; // ignore stale/extreme
+    if (fw === null || fw < -7 || fw > 60) continue;
     const wk = weekStart(r.updated_at);
-    const seg = FW_SEGMENTS.find(s => r.dwt >= s.dwt[0] && r.dwt <= s.dwt[1]);
+    const dwt = dwtMap[(r.vessel||"").toUpperCase()] || null;
+    if (!dwt) continue;
+    const seg = FW_SEGMENTS.find(s => dwt >= s.dwt[0] && dwt <= s.dwt[1]);
     if (!seg) continue;
     if (!weekMap[wk]) weekMap[wk] = {};
     if (!weekMap[wk][seg.key]) weekMap[wk][seg.key] = [];
