@@ -263,7 +263,7 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
       popup.current.remove();
     });
 
-  }, [mapLoaded, aisData, selectedVessels]);
+  }, [mapLoaded, aisData, JSON.stringify(selectedVessels)]);
 
   // Fly to selected vessel — or reset to world view
   useEffect(() => {
