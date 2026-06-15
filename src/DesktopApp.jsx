@@ -1880,6 +1880,7 @@ const filtV=useMemo(()=>{
           background:aisVesselSet.has((v.vessel||"").toUpperCase().trim())?"#4ade80":"rgba(120,160,220,0.15)"}}/>
       </td>
 
+      <td style={{ ...tdNum, color: C.dim }}>{v.built || ""}</td>
       <td style={{ ...tdNum, color: C.dim }}>{fmtN(v.dwt)}</td>
       <td style={{ ...tdTxt, color: C.dim }}>{v.coating || ""}</td>
       <td style={{ ...tdNum, color: C.dim }}>{v.loa || ""}</td>
