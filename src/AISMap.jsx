@@ -109,6 +109,7 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
       const color = getColor(name);
       const isSelected = selectedUp.some(s => s === name.toUpperCase().trim());
       const dimmed = hasSelection && !isSelected;
+      if (hasSelection) console.log("AIS route:", name, "isSelected:", isSelected, "pts:", validPts.length, "selectedUp:", selectedUp);
       const latest = validPts[validPts.length - 1];
 
       // Latest dot for every vessel
