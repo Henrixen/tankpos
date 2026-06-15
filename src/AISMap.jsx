@@ -44,9 +44,10 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
     async function fetchAIS() {
       const { data, error } = await supabase
         .from("positions_ais")
-        .select("*")
-        .order("datetime", { ascending: true })
-        .limit(2000);
+        .select("imo_no,vessel_name,longitude,latitude,destination,eta,datetime")
+        .not("latitude", "is", null)
+        .not("longitude", "is", null)
+        .limit(5000);
       if (error) { console.error("AIS fetch error:", error); return; }
       setAisData(data || []);
       if (onAisVesselsChange) {
@@ -89,10 +90,19 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
       if (!routes[name]) routes[name] = [];
       routes[name].push(p);
     });
-    // Already sorted ascending from fetch, but re-sort to be safe
-    Object.values(routes).forEach(pts =>
-      pts.sort((a,b) => new Date(a.datetime) - new Date(b.datetime))
-    );
+    // Sort by eta (most reliable timestamp), then deduplicate near-identical positions
+    Object.values(routes).forEach(pts => {
+      pts.sort((a,b) => new Date(a.eta||0) - new Date(b.eta||0));
+      // Remove duplicate lat/lng (same position reported multiple times)
+      const seen = new Set();
+      const deduped = pts.filter(p => {
+        const key = `${(p.longitude||0).toFixed(4)},${(p.latitude||0).toFixed(4)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      pts.splice(0, pts.length, ...deduped);
+    });
 
     const selectedUp = selectedVessels.map(s => s.toUpperCase().trim());
     const hasSelection = selectedUp.length > 0;
@@ -140,8 +150,8 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
           dotsFeatures.push({
             type: "Feature",
             geometry: { type: "Point", coordinates: [p.longitude, p.latitude] },
-            properties: { color, opacity: 0.5, radius: 3,
-              datetime: p.datetime, name }
+            properties: { color, opacity: 0.6, radius: 4,
+              eta: p.eta, destination: p.destination||"", name }
           });
         });
 
@@ -186,6 +196,8 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
       "circle-radius": ["get","radius"],
       "circle-color": ["get","color"],
       "circle-opacity": ["get","opacity"],
+      "circle-stroke-width": 1,
+      "circle-stroke-color": "rgba(255,255,255,0.2)",
     });
 
     // Arrow symbols — uses built-in Mapbox arrow image
@@ -244,21 +256,35 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
         : ["literal", false]);
     }
 
+    function makePopupHtml(p) {
+      const eta = p.eta ? new Date(p.eta).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
+      return `<div style="font-family:Inter,sans-serif;font-size:11px;color:#cde;background:#0a1628;border:1px solid rgba(88,166,255,0.3);border-radius:6px;padding:7px 10px;min-width:140px;max-width:200px">
+        <div style="font-weight:700;color:${p.color};margin-bottom:4px">${p.name}</div>
+        ${p.destination?`<div style="color:rgba(180,210,255,0.8);margin-bottom:2px">→ ${p.destination}</div>`:""}
+        ${eta?`<div style="color:rgba(140,170,210,0.6);font-size:10px">ETA ${eta}</div>`:""}
+      </div>`;
+    }
+
     // Hover popup on latest dots
     map.current.off("mouseenter","ais-latest");
     map.current.off("mouseleave","ais-latest");
+    map.current.off("mouseenter","ais-dots");
+    map.current.off("mouseleave","ais-dots");
     map.current.on("mouseenter","ais-latest", e => {
       map.current.getCanvas().style.cursor = "pointer";
-      const p = e.features[0].properties;
-      const html = `<div style="font-family:Inter,sans-serif;font-size:11px;color:#cde;background:#0a1628;border:1px solid rgba(88,166,255,0.3);border-radius:6px;padding:7px 10px;min-width:120px">
-        <div style="font-weight:700;color:${p.color};margin-bottom:3px">${p.name}</div>
-        ${p.destination?`<div style="color:rgba(180,210,255,0.7)">→ ${p.destination}</div>`:""}
-        ${p.eta?`<div style="color:rgba(140,170,210,0.5);font-size:10px">ETA ${p.eta}</div>`:""}
-        <div style="color:rgba(100,130,180,0.4);font-size:9px;margin-top:3px">${p.datetime?p.datetime.slice(0,16).replace("T"," ")+" UTC":""}</div>
-      </div>`;
-      popup.current.setLngLat(e.features[0].geometry.coordinates).setHTML(html).addTo(map.current);
+      popup.current.setLngLat(e.features[0].geometry.coordinates)
+        .setHTML(makePopupHtml(e.features[0].properties)).addTo(map.current);
     });
     map.current.on("mouseleave","ais-latest", () => {
+      map.current.getCanvas().style.cursor = "";
+      popup.current.remove();
+    });
+    map.current.on("mouseenter","ais-dots", e => {
+      map.current.getCanvas().style.cursor = "crosshair";
+      popup.current.setLngLat(e.features[0].geometry.coordinates)
+        .setHTML(makePopupHtml(e.features[0].properties)).addTo(map.current);
+    });
+    map.current.on("mouseleave","ais-dots", () => {
       map.current.getCanvas().style.cursor = "";
       popup.current.remove();
     });
