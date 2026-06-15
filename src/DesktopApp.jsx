@@ -18,6 +18,7 @@ const TCECalculator  = React.lazy(()=>import("./TCECalculator").then(m=>({defaul
 const Dashboard      = React.lazy(()=>import("./Dashboard"));
 const OpeningBreakdown = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.OpeningBreakdown})));
 const FixingWindow   = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.FixingWindow})));
+const FixingWindowChart = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.FixingWindowChart})));
 const ExportPanel    = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.ExportPanel})));
 const IntelVault     = React.lazy(()=>import("./IntelVault"));
 const IntelVaultStrip = React.lazy(()=>import("./IntelVault").then(m=>({default:m.IntelVaultStrip})));
@@ -1586,6 +1587,10 @@ const filtV=useMemo(()=>{
         opacity: 1 !important;
       }
     `}</style>
+    <Suspense fallback={null}><FixingWindowChart
+      vessels={filtV}
+      tagFilter={cTagFilter||null}
+    /></Suspense>
     <Suspense fallback={null}><FixingWindow
       vessels={filtV}
       opFilter={opFilter}
