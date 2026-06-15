@@ -403,40 +403,41 @@ function FixingWindowChart({ vessels = [], tagFilter }) {
   const [activeSeg, setActiveSeg] = React.useState(new Set(FW_SEGMENTS.map(s=>s.key)));
   const canvasRef = useRef(null);
 
-  // Fetch 12 weeks of positions data from Supabase
+  // Fetch 12 weeks from positions_external using last_update_spotship as time axis
   useEffect(() => {
     async function fetch() {
       setLoading(true);
       const since = new Date();
-      since.setDate(since.getDate() - 84); // 12 weeks
+      since.setDate(since.getDate() - 84); // 12 weeks back
       const { data, error } = await supabase
-        .from("positions")
-        .select("vessel,date,updated_at,tag")
-        .gte("updated_at", since.toISOString())
-        .not("date", "is", null);
+        .from("positions_external")
+        .select("vessel_name,dwt,open_date,last_update_spotship,segment")
+        .gte("last_update_spotship", since.toISOString())
+        .not("open_date", "is", null)
+        .not("dwt", "is", null)
+        .not("last_update_spotship", "is", null);
       if (!error) setRows(data || []);
+      else console.error("FixingWindowChart fetch error:", error);
       setLoading(false);
     }
     fetch();
   }, []);
 
-  // Build DWT lookup from in-memory vessels array
+  // Build DWT lookup from in-memory vessels array (fallback)
   const dwtMap = {};
   (vessels || []).forEach(v => { if (v.vessel && v.dwt) dwtMap[v.vessel.toUpperCase()] = Number(v.dwt); });
 
-  // Group by week + segment, compute avg fixing window
-  const filtered = tagFilter
-    ? rows.filter(r => r.tag === tagFilter)
-    : rows;
+  const filtered = tagFilter ? rows.filter(r => r.tag === tagFilter) : rows;
 
-  // Build weekly data
-  const weekMap = {}; // { weekISO: { segKey: [days] } }
+  // Build weekly data — open_date minus last_update_spotship = fixing window days
+  const weekMap = {};
   for (const r of filtered) {
-    if (!r.updated_at || !r.date) continue;
-    const fw = daysBetween(r.date, r.updated_at.slice(0,10));
-    if (fw === null || fw < -7 || fw > 60) continue;
-    const wk = weekStart(r.updated_at);
-    const dwt = dwtMap[(r.vessel||"").toUpperCase()] || null;
+    if (!r.last_update_spotship || !r.open_date) continue;
+    const reportDate = r.last_update_spotship.slice(0,10);
+    const fw = daysBetween(r.open_date, reportDate);
+    if (fw === null || fw < -14 || fw > 90) continue; // reasonable range
+    const wk = weekStart(r.last_update_spotship);
+    const dwt = r.dwt ? Number(r.dwt) : (dwtMap[(r.vessel_name||"").toUpperCase()] || null);
     if (!dwt) continue;
     const seg = FW_SEGMENTS.find(s => dwt >= s.dwt[0] && dwt <= s.dwt[1]);
     if (!seg) continue;
@@ -477,7 +478,9 @@ function FixingWindowChart({ vessels = [], tagFilter }) {
     const yMax = Math.ceil(Math.max(15, ...allVals));
     const yRange = yMax - yMin || 1;
 
-    const xOf = i => PAD.left + (i / (chartData.length - 1 || 1)) * cW;
+    const xOf = i => chartData.length === 1 
+      ? PAD.left + cW / 2  // center single point
+      : PAD.left + (i / (chartData.length - 1)) * cW;
     const yOf = v => PAD.top + cH - ((v - yMin) / yRange) * cH;
 
     // Grid lines
@@ -593,9 +596,9 @@ function FixingWindowChart({ vessels = [], tagFilter }) {
         <div style={{height:160,display:"flex",alignItems:"center",justifyContent:"center",color:C.faint,fontSize:12}}>
           Loading…
         </div>
-      ) : chartData.length < 2 ? (
+      ) : chartData.length === 0 ? (
         <div style={{height:160,display:"flex",alignItems:"center",justifyContent:"center",color:C.faint,fontSize:12}}>
-          Not enough historic data yet — positions are tracked weekly over time.
+          No data — check that positions_external has records with open_date and last_update_spotship.
         </div>
       ) : (
         <canvas ref={canvasRef} width={800} height={180}
