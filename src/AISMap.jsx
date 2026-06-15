@@ -90,13 +90,13 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
       if (!routes[name]) routes[name] = [];
       routes[name].push(p);
     });
-    // Sort by eta (most reliable timestamp), then deduplicate near-identical positions
+    // Sort by eta (actual position timestamp), deduplicate only exact same position
     Object.values(routes).forEach(pts => {
       pts.sort((a,b) => new Date(a.eta||0) - new Date(b.eta||0));
-      // Remove duplicate lat/lng (same position reported multiple times)
+      // Remove only exact duplicate coordinates (same position reported twice)
       const seen = new Set();
       const deduped = pts.filter(p => {
-        const key = `${(p.longitude||0).toFixed(4)},${(p.latitude||0).toFixed(4)}`;
+        const key = `${(p.longitude||0).toFixed(2)},${(p.latitude||0).toFixed(2)}`;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -119,7 +119,6 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
       const color = getColor(name);
       const isSelected = selectedUp.some(s => s === name.toUpperCase().trim());
       const dimmed = hasSelection && !isSelected;
-      if (hasSelection) console.log("AIS route:", name, "isSelected:", isSelected, "pts:", validPts.length, "selectedUp:", selectedUp);
       const latest = validPts[validPts.length - 1];
 
       // Latest dot for every vessel
@@ -187,9 +186,10 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
     // Trails
     setOrAdd("ais-trails", trailsGJ, "line", {
       "line-color": ["get","color"],
-      "line-width": 2,
+      "line-width": 2.5,
       "line-opacity": ["get","opacity"],
-    }, { "line-join":"round","line-cap":"round" });
+      "line-blur": 0.5,
+    }, { "line-join":"round", "line-cap":"round" });
 
     // Historical dots
     setOrAdd("ais-dots", dotsGJ, "circle", {
@@ -337,11 +337,6 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
             ? selectedVessels.map(s=>s.charAt(0)+s.slice(1).toLowerCase()).join(", ")
             : `${vesselCount} vessels`}
         </span>
-        {selectedVessels.length > 0 && (
-          <span style={{fontSize:9,color:"rgba(255,200,0,0.7)",marginLeft:8}}>
-            sel:{selectedVessels[0]} aisRows:{aisData.filter(p=>(p.vessel_name||"").toUpperCase().trim()===selectedVessels[0].toUpperCase().trim()).length}
-          </span>
-        )}
       </div>
 
       {/* Mapbox container */}
