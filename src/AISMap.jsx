@@ -1,54 +1,45 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import mapboxgl from "mapbox-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
 
-const COLORS = ["#58a6ff","#f778ba","#ea9a00","#4ade80","#a78bfa","#fb923c","#22d3ee","#e879f9","#86efac","#fbbf24","#60a5fa","#f472b6"];
+mapboxgl.accessToken = "pk.eyJ1IjoiaGhlbnJpa3NlbiIsImEiOiJjbXBhcWMyczMwMDVnMnNzaHd6emI4ampuIn0.u98OZhtN61S6IK23gV6ZYg";
 
-// Simple equirectangular projection
-function toX(lng) { return ((lng + 180) / 360) * 1000; }
-function toY(lat) { return ((90 - lat) / 180) * 500; }
-
-// World landmasses — simplified polygons for clean ocean background
-const LANDS = [
-  // North America
-  "M 185,60 L 235,55 L 265,75 L 280,110 L 265,150 L 290,175 L 280,210 L 255,245 L 240,290 L 220,340 L 205,390 L 190,420 L 175,400 L 165,360 L 155,310 L 145,260 L 130,210 L 115,170 L 105,130 L 110,90 Z",
-  // Greenland
-  "M 310,35 L 365,28 L 390,55 L 375,90 L 340,100 L 315,75 Z",
-  // South America
-  "M 225,340 L 265,330 L 285,370 L 290,420 L 275,470 L 250,490 L 228,460 L 215,420 L 210,380 Z",
-  // Europe
-  "M 460,85 L 510,75 L 540,95 L 535,125 L 555,140 L 545,165 L 510,175 L 485,155 L 462,130 Z",
-  // UK
-  "M 448,112 L 468,107 L 473,128 L 458,140 L 445,130 Z",
-  // Scandinavia
-  "M 490,68 L 530,60 L 545,90 L 525,110 L 500,105 L 488,85 Z",
-  // Africa
-  "M 465,175 L 555,170 L 575,220 L 570,290 L 545,360 L 520,415 L 495,425 L 478,380 L 465,310 L 458,240 Z",
-  // Middle East
-  "M 555,155 L 610,148 L 625,175 L 600,195 L 565,185 Z",
-  // Asia main
-  "M 545,65 L 760,50 L 850,75 L 870,110 L 840,150 L 780,160 L 720,170 L 670,165 L 620,145 L 575,120 L 558,95 Z",
-  // India
-  "M 640,175 L 685,170 L 700,210 L 690,255 L 665,270 L 645,235 L 638,200 Z",
-  // SE Asia
-  "M 760,175 L 810,165 L 825,195 L 800,215 L 770,205 Z",
-  // Australia
-  "M 770,340 L 870,330 L 905,370 L 900,415 L 860,440 L 795,430 L 765,395 Z",
-  // Japan
-  "M 840,120 L 865,115 L 870,140 L 848,150 L 838,135 Z",
+const COLORS = [
+  "#58a6ff","#f778ba","#4ade80","#ea9a00","#a78bfa",
+  "#fb923c","#22d3ee","#e879f9","#fbbf24","#60a5fa",
+  "#f472b6","#86efac","#34d399","#f87171","#818cf8"
 ];
 
-export default function AISMap({ selectedVessels = [], vessels = [], onAisVesselsChange }) {
-  const [aisData, setAisData] = useState([]);
-  const [pan, setPan] = useState({ x: 0, y: -50 });
-  const [scale, setScale] = useState(1.2);
-  const [hoveredVessel, setHoveredVessel] = useState(null);
-  const svgRef = useRef(null);
-  const dragging = useRef(false);
-  const dragStart = useRef(null);
-  const panStart = useRef(null);
+function bearing(p1, p2) {
+  const toR = d => d * Math.PI / 180;
+  const dLng = toR(p2[0] - p1[0]);
+  const lat1 = toR(p1[1]), lat2 = toR(p2[1]);
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
 
-  // Fetch ALL latest positions (one per vessel) for overview, plus full history for selected
+export default function AISMap({ selectedVessels = [], vessels = [], onAisVesselsChange }) {
+  const mapContainer = useRef(null);
+  const map = useRef(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [aisData, setAisData] = useState([]);
+  const [hoveredVessel, setHoveredVessel] = useState(null);
+  const popup = useRef(null);
+  const colorMapRef = useRef({});
+  const colorIdx = useRef(0);
+
+  function getColor(name) {
+    if (!colorMapRef.current[name]) {
+      colorMapRef.current[name] = COLORS[colorIdx.current % COLORS.length];
+      colorIdx.current++;
+    }
+    return colorMapRef.current[name];
+  }
+
+  // Fetch AIS data
   useEffect(() => {
     async function fetchAIS() {
       const { data, error } = await supabase
@@ -59,7 +50,7 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
       if (error) { console.error("AIS fetch error:", error); return; }
       setAisData(data || []);
       if (onAisVesselsChange) {
-        const names = new Set((data || []).map(d => (d.vessel_name || "").toUpperCase().trim()).filter(Boolean));
+        const names = new Set((data||[]).map(d=>(d.vessel_name||"").toUpperCase().trim()).filter(Boolean));
         onAisVesselsChange(names);
       }
     }
@@ -68,197 +59,270 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
     return () => clearInterval(iv);
   }, []);
 
-  // Group by vessel, sort by datetime asc (for route drawing)
-  const vesselRoutes = {};
-  aisData.forEach(p => {
-    const name = (p.vessel_name || "Unknown").toUpperCase();
-    if (!vesselRoutes[name]) vesselRoutes[name] = [];
-    vesselRoutes[name].push(p);
-  });
-  Object.values(vesselRoutes).forEach(pts => pts.sort((a,b) => new Date(a.datetime) - new Date(b.datetime)));
-
-  const vesselNames = Object.keys(vesselRoutes);
-  const colorMap = {};
-  vesselNames.forEach((n,i) => { colorMap[n] = COLORS[i % COLORS.length]; });
-
-  const selectedUp = selectedVessels.map(s => s.toUpperCase().trim());
-  const hasSelection = selectedUp.length > 0;
-
-  // Pan/zoom
-  const onWheel = useCallback(e => {
-    e.preventDefault();
-    setScale(s => Math.max(0.5, Math.min(8, s * (e.deltaY < 0 ? 1.12 : 0.89))));
-  }, []);
-  const onMouseDown = useCallback(e => {
-    dragging.current = true;
-    dragStart.current = { x: e.clientX, y: e.clientY };
-    panStart.current = { ...pan };
-  }, [pan]);
-  const onMouseMove = useCallback(e => {
-    if (!dragging.current) return;
-    setPan({ x: panStart.current.x + (e.clientX - dragStart.current.x), y: panStart.current.y + (e.clientY - dragStart.current.y) });
-  }, []);
-  const onMouseUp = useCallback(() => { dragging.current = false; }, []);
-
-  // Center on selected vessel when selection changes
+  // Init map
   useEffect(() => {
-    if (selectedUp.length === 0) return;
-    const pts = selectedUp.flatMap(n => vesselRoutes[n] || []).filter(p => p.latitude && p.longitude);
+    if (map.current || !mapContainer.current) return;
+    map.current = new mapboxgl.Map({
+      container: mapContainer.current,
+      style: "mapbox://styles/mapbox/dark-v11",
+      center: [15, 35],
+      zoom: 2,
+      projection: "mercator",
+    });
+    map.current.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
+    map.current.on("load", () => setMapLoaded(true));
+    popup.current = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 12,
+      className: "ais-popup" });
+    return () => {
+      if (map.current) { map.current.remove(); map.current = null; }
+    };
+  }, []);
+
+  // Build GeoJSON and update layers whenever data/selection changes
+  useEffect(() => {
+    if (!mapLoaded || !map.current) return;
+
+    // Group by vessel
+    const routes = {};
+    aisData.forEach(p => {
+      const name = (p.vessel_name || "Unknown").toUpperCase();
+      if (!routes[name]) routes[name] = [];
+      routes[name].push(p);
+    });
+    Object.values(routes).forEach(pts =>
+      pts.sort((a,b) => new Date(a.datetime) - new Date(b.datetime))
+    );
+
+    const selectedUp = selectedVessels.map(s => s.toUpperCase().trim());
+    const hasSelection = selectedUp.length > 0;
+
+    // Build GeoJSON
+    const dotsFeatures = [];
+    const trailFeatures = [];
+    const arrowFeatures = [];
+    const latestFeatures = [];
+
+    Object.entries(routes).forEach(([name, pts]) => {
+      const validPts = pts.filter(p => p.latitude && p.longitude);
+      if (!validPts.length) return;
+      const color = getColor(name);
+      const isSelected = selectedUp.includes(name);
+      const dimmed = hasSelection && !isSelected;
+      const latest = validPts[validPts.length - 1];
+
+      // Latest dot for every vessel
+      latestFeatures.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [latest.longitude, latest.latitude] },
+        properties: {
+          name, color,
+          opacity: dimmed ? 0.25 : 1,
+          radius: isSelected ? 7 : 5,
+          destination: latest.destination || "",
+          eta: latest.eta ? latest.eta.slice(0,10) : "",
+          datetime: latest.datetime,
+        }
+      });
+
+      // Trail + arrows for selected/hovered
+      if (isSelected && validPts.length > 1) {
+        // Trail line
+        trailFeatures.push({
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: validPts.map(p => [p.longitude, p.latitude]) },
+          properties: { color, opacity: 0.8 }
+        });
+
+        // Historical dots
+        validPts.slice(0, -1).forEach((p, i) => {
+          dotsFeatures.push({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [p.longitude, p.latitude] },
+            properties: { color, opacity: 0.5, radius: 3,
+              datetime: p.datetime, name }
+          });
+        });
+
+        // Arrow markers at midpoints between consecutive points
+        for (let i = 0; i < validPts.length - 1; i++) {
+          const p1 = validPts[i], p2 = validPts[i+1];
+          const midLng = (p1.longitude + p2.longitude) / 2;
+          const midLat = (p1.latitude + p2.latitude) / 2;
+          const br = bearing([p1.longitude, p1.latitude], [p2.longitude, p2.latitude]);
+          arrowFeatures.push({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [midLng, midLat] },
+            properties: { color, bearing: br, name }
+          });
+        }
+      }
+    });
+
+    const dotsGJ   = { type:"FeatureCollection", features: dotsFeatures };
+    const trailsGJ = { type:"FeatureCollection", features: trailFeatures };
+    const arrowsGJ = { type:"FeatureCollection", features: arrowFeatures };
+    const latestGJ = { type:"FeatureCollection", features: latestFeatures };
+
+    function setOrAdd(id, data, type, paint, layout={}) {
+      if (map.current.getSource(id)) {
+        map.current.getSource(id).setData(data);
+      } else {
+        map.current.addSource(id, { type: "geojson", data });
+        map.current.addLayer({ id, type, source: id, paint, layout });
+      }
+    }
+
+    // Trails
+    setOrAdd("ais-trails", trailsGJ, "line", {
+      "line-color": ["get","color"],
+      "line-width": 2,
+      "line-opacity": ["get","opacity"],
+    }, { "line-join":"round","line-cap":"round" });
+
+    // Historical dots
+    setOrAdd("ais-dots", dotsGJ, "circle", {
+      "circle-radius": ["get","radius"],
+      "circle-color": ["get","color"],
+      "circle-opacity": ["get","opacity"],
+    });
+
+    // Arrow symbols — uses built-in Mapbox arrow image
+    if (!map.current.getLayer("ais-arrows")) {
+      map.current.addSource("ais-arrows", { type:"geojson", data: arrowsGJ });
+      map.current.addLayer({
+        id: "ais-arrows", type: "symbol", source: "ais-arrows",
+        layout: {
+          "icon-image": "triangle-11",
+          "icon-rotate": ["get","bearing"],
+          "icon-rotation-alignment": "map",
+          "icon-allow-overlap": true,
+          "icon-size": 0.8,
+        },
+        paint: { "icon-color": ["get","color"], "icon-opacity": 0.9 }
+      });
+    } else {
+      map.current.getSource("ais-arrows").setData(arrowsGJ);
+    }
+
+    // Latest position dots (all vessels)
+    setOrAdd("ais-latest", latestGJ, "circle", {
+      "circle-radius": ["get","radius"],
+      "circle-color": ["get","color"],
+      "circle-opacity": ["get","opacity"],
+      "circle-stroke-width": hasSelection ? ["case",["==",["get","opacity"],1],2,0] : 0,
+      "circle-stroke-color": "#fff",
+    });
+
+    // Vessel name labels for selected
+    if (!map.current.getLayer("ais-labels")) {
+      map.current.addSource("ais-labels", { type:"geojson", data: latestGJ });
+      map.current.addLayer({
+        id: "ais-labels", type:"symbol", source:"ais-labels",
+        filter: hasSelection
+          ? ["in", ["get","name"], ["literal", selectedUp]]
+          : ["literal", false],
+        layout: {
+          "text-field": ["get","name"],
+          "text-size": 11,
+          "text-font": ["DIN Offc Pro Bold","Arial Unicode MS Bold"],
+          "text-offset": [0,-1.5],
+          "text-anchor": "bottom",
+          "text-allow-overlap": false,
+        },
+        paint: {
+          "text-color": ["get","color"],
+          "text-halo-color":"rgba(0,0,0,0.8)",
+          "text-halo-width":1.5,
+        }
+      });
+    } else {
+      map.current.getSource("ais-labels").setData(latestGJ);
+      map.current.setFilter("ais-labels", hasSelection
+        ? ["in", ["get","name"], ["literal", selectedUp]]
+        : ["literal", false]);
+    }
+
+    // Hover popup on latest dots
+    map.current.off("mouseenter","ais-latest");
+    map.current.off("mouseleave","ais-latest");
+    map.current.on("mouseenter","ais-latest", e => {
+      map.current.getCanvas().style.cursor = "pointer";
+      const p = e.features[0].properties;
+      const html = `<div style="font-family:Inter,sans-serif;font-size:11px;color:#cde;background:#0a1628;border:1px solid rgba(88,166,255,0.3);border-radius:6px;padding:7px 10px;min-width:120px">
+        <div style="font-weight:700;color:${p.color};margin-bottom:3px">${p.name}</div>
+        ${p.destination?`<div style="color:rgba(180,210,255,0.7)">→ ${p.destination}</div>`:""}
+        ${p.eta?`<div style="color:rgba(140,170,210,0.5);font-size:10px">ETA ${p.eta}</div>`:""}
+        <div style="color:rgba(100,130,180,0.4);font-size:9px;margin-top:3px">${p.datetime?p.datetime.slice(0,16).replace("T"," ")+" UTC":""}</div>
+      </div>`;
+      popup.current.setLngLat(e.features[0].geometry.coordinates).setHTML(html).addTo(map.current);
+    });
+    map.current.on("mouseleave","ais-latest", () => {
+      map.current.getCanvas().style.cursor = "";
+      popup.current.remove();
+    });
+
+  }, [mapLoaded, aisData, selectedVessels]);
+
+  // Fly to selected vessel
+  useEffect(() => {
+    if (!mapLoaded || !map.current) return;
+    const selectedUp = selectedVessels.map(s => s.toUpperCase().trim());
+    if (!selectedUp.length) return;
+
+    const routes = {};
+    aisData.forEach(p => {
+      const name = (p.vessel_name||"Unknown").toUpperCase();
+      if (!routes[name]) routes[name]=[];
+      routes[name].push(p);
+    });
+
+    const pts = selectedUp.flatMap(n => (routes[n]||[]).filter(p=>p.latitude&&p.longitude));
     if (!pts.length) return;
-    const avgLat = pts.reduce((a,b) => a + b.latitude, 0) / pts.length;
-    const avgLng = pts.reduce((a,b) => a + b.longitude, 0) / pts.length;
-    const cx = toX(avgLng); const cy = toY(avgLat);
-    setScale(4);
-    setPan({ x: 500 - cx * 4, y: 250 - cy * 4 });
-  }, [JSON.stringify(selectedVessels)]);
 
-  const transform = `translate(${pan.x},${pan.y}) scale(${scale})`;
+    if (pts.length === 1) {
+      map.current.flyTo({ center:[pts[0].longitude, pts[0].latitude], zoom:6, duration:1200 });
+    } else {
+      const lngs = pts.map(p=>p.longitude), lats = pts.map(p=>p.latitude);
+      map.current.fitBounds(
+        [[Math.min(...lngs),Math.min(...lats)],[Math.max(...lngs),Math.max(...lats)]],
+        { padding:60, duration:1200, maxZoom:8 }
+      );
+    }
+  }, [JSON.stringify(selectedVessels), mapLoaded]);
 
-  // Count latest positions for header
-  const latestCount = vesselNames.length;
+  const vesselCount = [...new Set(aisData.map(p=>(p.vessel_name||"").toUpperCase()).filter(Boolean))].length;
 
   return (
-    <div style={{ background: C.bg2, border: "1px solid "+C.bd, borderRadius: 7, overflow: "hidden",
-      display: "flex", flexDirection: "column", height: "100%", position: "relative", userSelect: "none" }}>
+    <div style={{background:C.bg2, border:"1px solid "+C.bd, borderRadius:7,
+      overflow:"hidden", display:"flex", flexDirection:"column", height:"100%", position:"relative"}}>
 
       {/* Header */}
-      <div style={{ padding: "6px 10px", borderBottom: "1px solid "+C.bd2, background: C.bg,
-        display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: C.tx }}>🗺️ AIS Live Map</span>
-        <span style={{ fontSize: 11, color: C.faint }}>
-          {hasSelection ? selectedUp.join(", ").toLowerCase() : `${latestCount} vessels`}
+      <div style={{padding:"6px 10px", borderBottom:"1px solid "+C.bd2, background:C.bg,
+        display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0}}>
+        <span style={{fontSize:12, fontWeight:700, color:C.tx}}>🗺️ AIS Live Map</span>
+        <span style={{fontSize:11, color:C.faint}}>
+          {selectedVessels.length > 0
+            ? selectedVessels.map(s=>s.charAt(0)+s.slice(1).toLowerCase()).join(", ")
+            : `${vesselCount} vessels`}
         </span>
       </div>
 
-      {/* Map */}
-      <div style={{ flex: 1, position: "relative", overflow: "hidden", cursor: dragging.current ? "grabbing" : "grab" }}
-        onWheel={onWheel}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}>
+      {/* Mapbox container */}
+      <div ref={mapContainer} style={{flex:1, minHeight:0}}/>
 
-        <svg ref={svgRef} width="100%" height="100%" viewBox="0 0 1000 500"
-          preserveAspectRatio="xMidYMid meet" style={{ display: "block" }}>
-          <defs>
-            <marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
-              <path d="M0,0 L6,3 L0,6 Z" fill="rgba(255,255,255,0.7)"/>
-            </marker>
-          </defs>
-
-          <g transform={transform}>
-            {/* Ocean */}
-            <rect x="-5000" y="-5000" width="11000" height="11000" fill="#08111e"/>
-
-            {/* Land */}
-            {LANDS.map((d,i) => (
-              <path key={i} d={d} fill="#1a2540" stroke="#253656" strokeWidth={0.5/scale}/>
-            ))}
-
-            {/* Graticule */}
-            <g stroke="#0e1c30" strokeWidth={0.4/scale}>
-              {[-180,-120,-60,0,60,120,180].map(lng => (
-                <line key={"v"+lng} x1={toX(lng)} y1={toY(-90)} x2={toX(lng)} y2={toY(90)}/>
-              ))}
-              {[-60,-30,0,30,60].map(lat => (
-                <line key={"h"+lat} x1={toX(-180)} y1={toY(lat)} x2={toX(180)} y2={toY(lat)}/>
-              ))}
-            </g>
-
-            {/* Render all vessels */}
-            {vesselNames.map(name => {
-              const pts = vesselRoutes[name].filter(p => p.latitude && p.longitude);
-              if (!pts.length) return null;
-              const color = colorMap[name];
-              const isSelected = selectedUp.includes(name);
-              const isHovered = hoveredVessel === name;
-              const latest = pts[pts.length - 1];
-              const lx = toX(latest.longitude);
-              const ly = toY(latest.latitude);
-              const dimmed = hasSelection && !isSelected;
-              const r = isSelected ? 5/scale : 3/scale;
-
-              return (
-                <g key={name} style={{ cursor: "pointer" }}>
-                  {/* Route trail — only for selected or hovered */}
-                  {(isSelected || isHovered) && pts.length > 1 && (
-                    <>
-                      <polyline
-                        points={pts.map(p => `${toX(p.longitude)},${toY(p.latitude)}`).join(" ")}
-                        fill="none"
-                        stroke={color}
-                        strokeWidth={1.5/scale}
-                        strokeOpacity={0.8}
-                      />
-                      {/* Historical dots */}
-                      {pts.slice(0, -1).map((p,i) => (
-                        <circle key={i} cx={toX(p.longitude)} cy={toY(p.latitude)}
-                          r={1.5/scale} fill={color} fillOpacity={0.5}/>
-                      ))}
-                    </>
-                  )}
-
-                  {/* Current position dot */}
-                  <circle
-                    cx={lx} cy={ly}
-                    r={r}
-                    fill={color}
-                    fillOpacity={dimmed ? 0.3 : 0.9}
-                    stroke={isSelected ? "white" : "none"}
-                    strokeWidth={1/scale}
-                    onMouseEnter={() => setHoveredVessel(name)}
-                    onMouseLeave={() => setHoveredVessel(null)}
-                  />
-
-                  {/* Label — only for selected or hovered */}
-                  {(isSelected || isHovered) && (
-                    <text x={lx + 6/scale} y={ly - 4/scale}
-                      fill={color} fontSize={10/scale} fontWeight="700"
-                      style={{ pointerEvents: "none" }}>
-                      {name.charAt(0)+name.slice(1).toLowerCase()}
-                    </text>
-                  )}
-
-                  {/* Destination tooltip on hover */}
-                  {isHovered && (latest.destination || latest.eta) && (
-                    <text x={lx + 6/scale} y={ly + 8/scale}
-                      fill="rgba(180,210,255,0.7)" fontSize={8/scale}
-                      style={{ pointerEvents: "none" }}>
-                      {[latest.destination, latest.eta ? `ETA ${latest.eta.slice(0,10)}` : ""].filter(Boolean).join(" · ")}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-          </g>
-        </svg>
-
-        {/* Zoom controls */}
-        <div style={{ position: "absolute", top: 8, right: 8, display: "flex", flexDirection: "column", gap: 3 }}>
-          {["+","−"].map((lbl,i) => (
-            <button key={lbl} onClick={() => setScale(s => Math.max(0.5, Math.min(8, i===0 ? s*1.4 : s/1.4)))}
-              style={{ background: C.bg2, border: "1px solid "+C.bd, borderRadius: 4, color: C.tx,
-                fontSize: 14, width: 28, height: 28, cursor: "pointer", fontWeight: 700,
-                display: "flex", alignItems: "center", justifyContent: "center" }}>
-              {lbl}
-            </button>
-          ))}
-          <button onClick={() => { setScale(1.2); setPan({ x: 0, y: -50 }); }}
-            style={{ background: C.bg2, border: "1px solid "+C.bd, borderRadius: 4, color: C.faint,
-              fontSize: 10, width: 28, height: 28, cursor: "pointer", display: "flex",
-              alignItems: "center", justifyContent: "center" }} title="Reset view">
-            ↺
-          </button>
+      {/* Hint */}
+      {selectedVessels.length === 0 && (
+        <div style={{position:"absolute", bottom:18, left:"50%", transform:"translateX(-50%)",
+          fontSize:10, color:C.faint, pointerEvents:"none",
+          background:"rgba(8,14,26,0.7)", padding:"3px 10px", borderRadius:10}}>
+          Click a vessel in the positions table to see its route
         </div>
+      )}
 
-        {/* Hint */}
-        {!hasSelection && (
-          <div style={{ position: "absolute", bottom: 8, left: "50%", transform: "translateX(-50%)",
-            fontSize: 10, color: C.faint, pointerEvents: "none" }}>
-            Click a vessel to see route trail
-          </div>
-        )}
-      </div>
+      <style>{`
+        .mapboxgl-popup-content { background:transparent !important; padding:0 !important; box-shadow:none !important; }
+        .mapboxgl-popup-tip { display:none !important; }
+      `}</style>
     </div>
   );
 }
