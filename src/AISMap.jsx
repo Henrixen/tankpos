@@ -311,6 +311,11 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
             ? selectedVessels.map(s=>s.charAt(0)+s.slice(1).toLowerCase()).join(", ")
             : `${vesselCount} vessels`}
         </span>
+        {selectedVessels.length > 0 && (
+          <span style={{fontSize:9,color:"rgba(255,200,0,0.7)",marginLeft:8}}>
+            sel:{selectedVessels[0]} aisRows:{aisData.filter(p=>(p.vessel_name||"").toUpperCase().trim()===selectedVessels[0].toUpperCase().trim()).length}
+          </span>
+        )}
       </div>
 
       {/* Mapbox container */}
