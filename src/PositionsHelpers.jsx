@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { C, OP_COLORS } from "./constants";
 import { daysBetween, isOpenPPT, normaliseQty } from "./utils";
+import { supabase } from "./supabaseclient";
 
 function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), onBucketFilter}){
   // Use filteredVessels for the bar chart when a filter is active, fall back to all vessels
@@ -367,4 +368,236 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels, allFiltere
 
 // ─── TCE Calculator ───────────────────────────────────────────────────────────
 
-export { OpeningBreakdown, FixingWindow, ExportPanel };
+// ─── Fixing Window Historic Chart ─────────────────────────────────────────────
+
+const FW_SEGMENTS = [
+  { key:"sub10",  label:"Sub 10k",  color:"#58a6ff", dwt:[0,       10000] },
+  { key:"city",   label:"City",     color:"#4ade80", dwt:[10001,   14500] },
+  { key:"inter",  label:"Inter",    color:"#f778ba", dwt:[14501,   22000] },
+  { key:"flexi",  label:"Flexi",    color:"#ea9a00", dwt:[22001,   28000] },
+  { key:"handy",  label:"Handy",    color:"#a78bfa", dwt:[28001,   39000] },
+  { key:"mr",     label:"MR",       color:"#22d3ee", dwt:[39001,   60000] },
+];
+
+function weekStart(dateStr) {
+  const d = new Date(dateStr);
+  const day = d.getDay(); // 0=Sun
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Mon
+  const mon = new Date(d.setDate(diff));
+  return mon.toISOString().slice(0, 10);
+}
+
+function fmtWeek(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+}
+
+function mean(arr) {
+  const v = arr.filter(x => x !== null && x !== undefined && isFinite(x));
+  return v.length ? v.reduce((a,b) => a+b, 0) / v.length : null;
+}
+
+function FixingWindowChart({ vessels, tagFilter }) {
+  const [rows, setRows] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [activeSeg, setActiveSeg] = React.useState(new Set(FW_SEGMENTS.map(s=>s.key)));
+  const canvasRef = useRef(null);
+
+  // Fetch 12 weeks of positions data from Supabase
+  useEffect(() => {
+    async function fetch() {
+      setLoading(true);
+      const since = new Date();
+      since.setDate(since.getDate() - 84); // 12 weeks
+      const { data, error } = await supabase
+        .from("positions")
+        .select("vessel,dwt,date,updated_at,tag")
+        .gte("updated_at", since.toISOString())
+        .not("date", "is", null)
+        .not("dwt", "is", null);
+      if (!error) setRows(data || []);
+      setLoading(false);
+    }
+    fetch();
+  }, []);
+
+  // Group by week + segment, compute avg fixing window (days from updated_at to open date)
+  const filtered = tagFilter
+    ? rows.filter(r => r.tag === tagFilter)
+    : rows;
+
+  // Build weekly data
+  const weekMap = {}; // { weekISO: { segKey: [days] } }
+  for (const r of filtered) {
+    if (!r.updated_at || !r.date || !r.dwt) continue;
+    const fw = daysBetween(r.date, r.updated_at.slice(0,10));
+    if (fw === null || fw < -7 || fw > 60) continue; // ignore stale/extreme
+    const wk = weekStart(r.updated_at);
+    const seg = FW_SEGMENTS.find(s => r.dwt >= s.dwt[0] && r.dwt <= s.dwt[1]);
+    if (!seg) continue;
+    if (!weekMap[wk]) weekMap[wk] = {};
+    if (!weekMap[wk][seg.key]) weekMap[wk][seg.key] = [];
+    weekMap[wk][seg.key].push(fw);
+  }
+
+  const weeks = Object.keys(weekMap).sort();
+  const chartData = weeks.map(wk => ({
+    week: wk,
+    label: fmtWeek(wk),
+    ...Object.fromEntries(FW_SEGMENTS.map(s => [s.key, mean(weekMap[wk][s.key] || [])]))
+  }));
+
+  // Canvas drawing
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !chartData.length) return;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+    const PAD = { top: 20, right: 20, bottom: 32, left: 38 };
+    const cW = W - PAD.left - PAD.right;
+    const cH = H - PAD.top - PAD.bottom;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = "#08111e";
+    ctx.fillRect(0, 0, W, H);
+
+    if (!chartData.length) return;
+
+    // Y range
+    const allVals = chartData.flatMap(d => FW_SEGMENTS.filter(s=>activeSeg.has(s.key)).map(s => d[s.key])).filter(v => v !== null);
+    if (!allVals.length) return;
+    const yMin = Math.floor(Math.min(0, ...allVals));
+    const yMax = Math.ceil(Math.max(15, ...allVals));
+    const yRange = yMax - yMin || 1;
+
+    const xOf = i => PAD.left + (i / (chartData.length - 1 || 1)) * cW;
+    const yOf = v => PAD.top + cH - ((v - yMin) / yRange) * cH;
+
+    // Grid lines
+    const ticks = 5;
+    for (let i = 0; i <= ticks; i++) {
+      const v = yMin + (yRange * i / ticks);
+      const y = yOf(v);
+      ctx.beginPath();
+      ctx.strokeStyle = "rgba(58,100,180,0.15)";
+      ctx.lineWidth = 1;
+      ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(140,170,210,0.5)";
+      ctx.font = "10px Inter,sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(Math.round(v) + "d", PAD.left - 4, y + 3);
+    }
+
+    // X axis labels
+    ctx.fillStyle = "rgba(140,170,210,0.5)";
+    ctx.font = "10px Inter,sans-serif";
+    ctx.textAlign = "center";
+    chartData.forEach((d, i) => {
+      if (chartData.length <= 8 || i % Math.ceil(chartData.length / 8) === 0) {
+        ctx.fillText(d.label, xOf(i), PAD.top + cH + 18);
+      }
+    });
+
+    // Zero line
+    if (yMin < 0 && yMax > 0) {
+      const y0 = yOf(0);
+      ctx.beginPath();
+      ctx.strokeStyle = "rgba(120,160,220,0.3)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4,4]);
+      ctx.moveTo(PAD.left, y0); ctx.lineTo(PAD.left + cW, y0);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Draw segment lines
+    FW_SEGMENTS.filter(s => activeSeg.has(s.key)).forEach(seg => {
+      const pts = chartData.map((d,i) => ({ x: xOf(i), y: d[seg.key] !== null ? yOf(d[seg.key]) : null }));
+      const valid = pts.filter(p => p.y !== null);
+      if (!valid.length) return;
+
+      // Line
+      ctx.beginPath();
+      ctx.strokeStyle = seg.color;
+      ctx.lineWidth = 2;
+      ctx.lineJoin = "round";
+      let first = true;
+      pts.forEach(p => {
+        if (p.y === null) { first = true; return; }
+        if (first) { ctx.moveTo(p.x, p.y); first = false; }
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.stroke();
+
+      // Dots + labels
+      pts.forEach((p, i) => {
+        if (p.y === null) return;
+        ctx.beginPath();
+        ctx.fillStyle = seg.color;
+        ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
+        ctx.fill();
+
+        const v = chartData[i][seg.key];
+        if (v !== null) {
+          ctx.fillStyle = seg.color;
+          ctx.font = "bold 9px Inter,sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(v.toFixed(1), p.x, p.y - 7);
+        }
+      });
+    });
+  }, [chartData, activeSeg]);
+
+  return (
+    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,padding:"10px 12px",marginBottom:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",flex:1}}>
+          📈 Fixing Window History
+        </div>
+        {tagFilter && (
+          <span style={{fontSize:10,padding:"2px 7px",borderRadius:4,border:"1px solid rgba(88,166,255,0.3)",color:"#79c0ff",background:"rgba(88,166,255,0.1)"}}>
+            {tagFilter}
+          </span>
+        )}
+        {/* Segment toggles */}
+        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+          {FW_SEGMENTS.map(s => {
+            const on = activeSeg.has(s.key);
+            return (
+              <button key={s.key} onClick={() => setActiveSeg(prev => {
+                const n = new Set(prev);
+                if (n.has(s.key)) n.delete(s.key); else n.add(s.key);
+                return n;
+              })} style={{
+                fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:4, cursor:"pointer",
+                fontFamily:"inherit", border:"1px solid "+(on ? s.color : "rgba(88,166,255,0.15)"),
+                background: on ? s.color+"22" : "transparent",
+                color: on ? s.color : "rgba(140,170,210,0.35)"
+              }}>
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{height:160,display:"flex",alignItems:"center",justifyContent:"center",color:C.faint,fontSize:12}}>
+          Loading…
+        </div>
+      ) : chartData.length < 2 ? (
+        <div style={{height:160,display:"flex",alignItems:"center",justifyContent:"center",color:C.faint,fontSize:12}}>
+          Not enough historic data yet — positions are tracked weekly over time.
+        </div>
+      ) : (
+        <canvas ref={canvasRef} width={800} height={180}
+          style={{width:"100%",height:180,display:"block",borderRadius:4}}/>
+      )}
+    </div>
+  );
+}
+
+export { OpeningBreakdown, FixingWindow, FixingWindowChart, ExportPanel };
