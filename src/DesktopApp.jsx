@@ -1234,8 +1234,10 @@ const filtV=useMemo(()=>{
     key: "select", 
     label: (
       <div 
-        onClick={() => {
-          if (selVessels.size === filtV.length && filtV.length > 0) {
+        onClick={(e) => {
+          e.stopPropagation();
+          const allSelected = filtV.length > 0 && filtV.every(v => selVessels.has(v.vessel));
+          if (allSelected) {
             setSelVessels(new Set());
           } else {
             setSelVessels(new Set(filtV.map(v => v.vessel)));
@@ -1244,8 +1246,8 @@ const filtV=useMemo(()=>{
         style={{ cursor: "pointer", userSelect: "none" }}
         title="Click to toggle all"
       >
-        <div style={{ fontSize: 11, color: selVessels.size > 0 && selVessels.size === filtV.length ? "#4fc3f7" : C.faint }}>
-          {selVessels.size > 0 && selVessels.size === filtV.length ? "[✓]" : "[ ]"}
+        <div style={{ fontSize: 11, color: filtV.length > 0 && filtV.every(v => selVessels.has(v.vessel)) ? "#4fc3f7" : C.faint }}>
+          {filtV.length > 0 && filtV.every(v => selVessels.has(v.vessel)) ? "[✓]" : "[ ]"}
         </div>
         <div style={{ fontSize: 8, color: C.faint, marginTop: 2 }}>All</div>
       </div>
@@ -1809,8 +1811,9 @@ const filtV=useMemo(()=>{
   keyField="vessel"
   selectedKey={sel}
   onRowClick={(row) => {
-    setSel(sel === row.vessel ? null : row.vessel);
-    setSelectedAISVessels([row.vessel]);
+    const deselecting = sel === row.vessel;
+    setSel(deselecting ? null : row.vessel);
+    setSelectedAISVessels(deselecting ? [] : [row.vessel]);
   }}
   onRowContextMenu={(row, e) => {
     e.preventDefault();
