@@ -10,6 +10,17 @@ const JOB_STATUS_COL = {OPEN:C.blue,WORKING:C.amber,SUBS:C.purple,FIXED:C.green,
 const TRADES = ["UKC","Med","EU Feast","AG","TA West","Ex US","Asia"];
 const EDIT_FIELDS = ["cargo_details","notes","indications","subs_fixed"];
 
+// Manually curated client logos — key = lowercase client name, value = image URL
+const CLIENT_LOGOS = {
+  "aramco": "https://companieslogo.com/img/orig/2222.SR-99009d53.png?t=1720244490",
+  "basf": "https://logos-world.net/wp-content/uploads/2022/06/BASF-Logo.png",
+  "circle k": "https://upload.wikimedia.org/wikipedia/commons/1/16/Circle_k_logo_detail.png",
+  "css sa": "https://logos-world.net/wp-content/uploads/2023/05/TotalEnergies-Logo.png",
+  "equinor": "https://1000logos.net/wp-content/uploads/2024/12/Equinor-Emblem.png",
+  "exxon": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fd/Exxon_logo_2016.svg/1280px-Exxon_logo_2016.svg.png",
+  "trafigura": "https://logos-world.net/wp-content/uploads/2025/01/Trafigura-Logo.jpg",
+};
+
 function focusJobField(jobId, field){
   const el = document.querySelector(`[data-job-field="${jobId}-${field}"]`);
   if (el) { el.focus(); if (el.select) el.select(); }
@@ -383,9 +394,8 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
   // Pick accent color: SUBS=purple, WORKING/OPEN=amber, FIXED=green, else dim
   const accentCol = counts.SUBS?"#a78bfa":counts.WORKING?"#f59e0b":counts.OPEN?"#60a5fa":counts.FIXED?"#34d399":"rgba(58,130,246,0.25)";
   const activeDot = counts.SUBS||counts.WORKING||counts.OPEN||counts.FIXED;
-  // Best-effort company logo lookup (Clearbit, free, no key) — silently hides on failure
-  const domainGuess=(charterer||"").toLowerCase().replace(/[^a-z0-9\s]/g,"").trim().split(/\s+/)[0];
-  const logoUrl=domainGuess?`https://logo.clearbit.com/${domainGuess}.com`:null;
+  // Manually mapped company logos (keyed by lowercase client name)
+  const logoUrl=CLIENT_LOGOS[(charterer||"").trim().toLowerCase()]||null;
 
   return(
     <div style={{
@@ -400,13 +410,6 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
       {/* Top accent bar */}
       <div style={{height:3,borderRadius:"9px 9px 0 0",background:isActive?"rgba(88,166,255,0.7)":activeDot?accentCol:"rgba(58,130,246,0.12)",transition:"background 0.2s"}}/>
 
-      {logoUrl&&logoOk&&(
-        <img src={logoUrl} alt="" onError={()=>setLogoOk(false)}
-          style={{position:"absolute",top:mobile?6:9,right:mobile?6:9,width:mobile?14:16,height:mobile?14:16,borderRadius:3,
-            objectFit:"contain",background:"rgba(255,255,255,0.92)",padding:1.5,
-            border:"1px solid rgba(88,166,255,0.2)",pointerEvents:"none"}}/>
-      )}
-
       <div style={{padding:mobile?"7px 8px 6px":"11px 13px 10px",flex:1,display:"flex",flexDirection:"column",gap:0}}>
         {isEditingName&&client?(
           <input autoFocus defaultValue={client.name}
@@ -416,11 +419,16 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
             style={{...inpS,width:"100%",fontSize:mobile?11:13,fontWeight:700,padding:"2px 6px"}}/>
         ):(
           <div style={{display:"flex",alignItems:"flex-start",gap:3,minHeight:mobile?24:34}}>
+            {logoUrl&&logoOk&&(
+              <img src={logoUrl} alt="" onError={()=>setLogoOk(false)}
+                style={{width:mobile?14:16,height:mobile?14:16,borderRadius:3,flexShrink:0,marginTop:1,
+                  objectFit:"contain",background:"rgba(255,255,255,0.92)",padding:1.5,
+                  border:"1px solid rgba(88,166,255,0.2)"}}/>
+            )}
             <span style={{
               fontSize:mobile?10:12,fontWeight:700,lineHeight:1.25,
               color:isActive?"#a8d4ff":"rgba(200,225,255,0.88)",
-              flex:1,wordBreak:"break-word",letterSpacing:"0.01em",
-              paddingRight:logoUrl&&logoOk?(mobile?16:19):0
+              flex:1,wordBreak:"break-word",letterSpacing:"0.01em"
             }}>{charterer||"—"}</span>
             {client&&(
               <div style={{position:"relative",flexShrink:0,marginTop:1}} onClick={e=>e.stopPropagation()}>
