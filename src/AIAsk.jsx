@@ -23,7 +23,7 @@ function AIAsk({vessels,cargoes,intelItems}){
     try{
       const msgs=convHistory.slice(-6).flatMap(h=>[{role:"user",content:h.q},{role:"assistant",content:h.a}]);
       const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({
-        model:"claude-sonnet-4-20250514",max_tokens:500,
+        model:"claude-sonnet-4-6",max_tokens:500,
         system:"Maritime freight analyst. Short direct answers: facts and numbers only, max 4 sentences. No preamble.\n\n"+buildContext(),
         messages:[...msgs,{role:"user",content:q}]
       })});
@@ -109,7 +109,7 @@ export function AskAIStrip({vessels,cargoes,intelItems}){
     try{
       const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
         headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,
+        body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:400,
           system:"Maritime freight analyst. Concise answers: max 5 sentences, facts and numbers. No preamble.\n\n"+buildContext(),
           messages:[{role:"user",content:q}]})});
       const d=await res.json();
