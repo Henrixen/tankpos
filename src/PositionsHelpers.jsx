@@ -258,8 +258,8 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels, allFiltere
       csvRows = [
         ["Vessel","Operator","Built","DWT","LOA","Beam","CBM","Open Date","Open Port","Comment","Fuel","Ice Class"],
         ...rows.map(v=>[
-          v.vessel||"",v.operator||"",v.built||"",v.dwt||"",v.loa||"",v.beam||"",v.cbm||"",
-          v.date||"",v.openPort||"",v.comment||"",v.spec?.fuel||"",v.spec?.iceClass||""
+          (v.vessel||"").toUpperCase(),(v.operator||"").toUpperCase(),v.built||"",v.dwt||"",v.loa||"",v.beam||"",v.cbm||"",
+          v.date||"",(v.openPort||"").toUpperCase(),v.comment||"",v.spec?.fuel||"",v.spec?.iceClass||""
         ])
       ];
     } else {
@@ -332,7 +332,7 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels, allFiltere
           // Build CSV string same as exportExcel but copy instead of download
           let csvRows;
           if(mode==="pos"){
-            csvRows=[["Vessel","Operator","Built","DWT","LOA","Beam","CBM","Open Date","Open Port","Comment","Fuel","Ice Class"],...activeRows.map(v=>[v.vessel||"",v.operator||"",v.built||"",v.dwt||"",v.loa||"",v.beam||"",v.cbm||"",v.date||"",v.openPort||"",v.comment||"",v.spec?.fuel||"",v.spec?.iceClass||""])];
+            csvRows=[["Vessel","Operator","Built","DWT","LOA","Beam","CBM","Open Date","Open Port","Comment","Fuel","Ice Class"],...activeRows.map(v=>[(v.vessel||"").toUpperCase(),(v.operator||"").toUpperCase(),v.built||"",v.dwt||"",v.loa||"",v.beam||"",v.cbm||"",v.date||"",(v.openPort||"").toUpperCase(),v.comment||"",v.spec?.fuel||"",v.spec?.iceClass||""])];
           } else {
             csvRows=[["Vessel","Charterer","Cargo","Qty","Load Port","Disch Port","Laycan","Freight","Status"],...activeRows.map(c=>[c.vessel||"",c.charterer||"",c.cargo||"",c.qty||"",c.load||"",c.disch||"",c.from&&c.to?c.from+" - "+c.to:c.from||c.to||"",c.freight||"",c.status||""])];
           }
