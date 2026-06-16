@@ -435,9 +435,12 @@ function FixingWindowChart({ vessels = [], tagFilter }) {
   const weekMap = {};
   for (const r of filtered) {
     if (!r.last_update_spotship || !r.open_date) continue;
-    const reportDate = r.last_update_spotship.slice(0,10);
-    const fw = daysBetween(r.open_date, reportDate);
-    if (fw === null || fw < -90 || fw > 90) continue; // wide range, catches past-open vessels
+    // Calculate fixing window: days from report date to open date
+    const reportMs = new Date(r.last_update_spotship).getTime();
+    const openMs = new Date(r.open_date).getTime();
+    if (isNaN(reportMs) || isNaN(openMs)) continue;
+    const fw = Math.round((openMs - reportMs) / 86400000);
+    if (fw < -90 || fw > 180) continue;
     const wk = weekStart(r.last_update_spotship);
     const dwt = r.dwt ? Number(r.dwt) : (dwtMap[(r.vessel_name||"").toUpperCase()] || null);
     if (!dwt || dwt < 500) continue; // filter junk rows
