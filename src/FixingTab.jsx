@@ -418,19 +418,15 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
             onClick={e=>e.stopPropagation()}
             style={{...inpS,width:"100%",fontSize:mobile?11:13,fontWeight:700,padding:"2px 6px"}}/>
         ):(
-          <div style={{display:"flex",alignItems:"flex-start",gap:5,minHeight:mobile?24:34}}>
-            <span style={{
-              fontSize:mobile?10:12,fontWeight:700,lineHeight:1.25,
-              color:isActive?"#a8d4ff":"rgba(200,225,255,0.88)",
-              flex:1,wordBreak:"break-word",letterSpacing:"0.01em"
-            }}>{charterer||"—"}</span>
-            {logoUrl&&logoOk&&(
-              <img src={logoUrl} alt="" onError={()=>setLogoOk(false)}
-                style={{width:mobile?20:24,height:mobile?20:24,flexShrink:0,marginTop:-1,
-                  objectFit:"contain"}}/>
-            )}
-            {client&&(
-              <div style={{position:"relative",flexShrink:0,marginTop:1}} onClick={e=>e.stopPropagation()}>
+          <div style={{display:"flex",flexDirection:"column",gap:4,minHeight:mobile?24:34}}>
+            <div style={{display:"flex",alignItems:"flex-start",gap:3}}>
+              <span style={{
+                fontSize:mobile?10:12,fontWeight:700,lineHeight:1.25,
+                color:isActive?"#a8d4ff":"rgba(200,225,255,0.88)",
+                flex:1,wordBreak:"break-word",letterSpacing:"0.01em"
+              }}>{charterer||"—"}</span>
+              {client&&(
+                <div style={{position:"relative",flexShrink:0,marginTop:1}} onClick={e=>e.stopPropagation()}>
                 <button onClick={e=>{e.stopPropagation();setShowPencilMenu(v=>!v);}}
                   style={{background:"none",border:"none",color:"rgba(120,160,220,0.25)",fontSize:10,cursor:"pointer",padding:"0 1px",lineHeight:1}}>✎</button>
                 {showPencilMenu&&(
@@ -444,6 +440,13 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
                     </div>
                   </>
                 )}
+              </div>
+            )}
+            </div>
+            {logoUrl&&logoOk&&(
+              <div style={{display:"flex",justifyContent:"center"}}>
+                <img src={logoUrl} alt="" onError={()=>setLogoOk(false)}
+                  style={{width:mobile?28:36,height:mobile?28:36,objectFit:"contain"}}/>
               </div>
             )}
           </div>
