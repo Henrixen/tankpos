@@ -21,24 +21,18 @@ function cycleJobField(jobId, currentField, backwards=false){
   focusJobField(jobId, EDIT_FIELDS[nextIdx]);
 }
 
-// RichEditor — height is tracked in state (displayHeight) so React renders stay in sync.
-// onToggleExpand(expanded, savedH, expandedH) lets the parent sync siblings.
-function RichEditor({ jobId, field, title, titleRight, value, onChange, onResizeSave, height=120, placeholder="", color=C.tx, onToggleExpand=null, alwaysExpanded=false, expandState=null, fillHeight=false }){
+// RichEditor — each instance resizes INDEPENDENTLY; ↕ toggles expand/collapse
+function RichEditor({ jobId, field, title, titleRight, value, onChange, onResizeSave, height=120, placeholder="", color=C.tx }){
   const editorRef = React.useRef(null);
   const wrapRef = React.useRef(null);
   const [isExpanded, setIsExpanded] = React.useState(false);
-  // displayHeight drives the wrapper height via React state — never fight the render cycle
-  const [displayHeight, setDisplayHeight] = React.useState(height);
-  const savedHeightRef = React.useRef(height);
-  const progResizing = React.useRef(false);
+  const savedHeightRef = React.useRef(height); // track the collapsed height
+  const progResizing = React.useRef(false); // suppress observer during programmatic resize
 
-  // Keep saved height in sync when height prop changes (e.g. from drag-save) while collapsed
   React.useEffect(()=>{
-    if (!isExpanded && !alwaysExpanded) {
-      savedHeightRef.current = height;
-      setDisplayHeight(height);
-    }
-  }, [height]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Keep savedHeightRef in sync with incoming height prop (from drag saves)
+    if (!isExpanded) savedHeightRef.current = height;
+  }, [height, isExpanded]);
 
   React.useEffect(()=>{
     const el = editorRef.current;
@@ -47,235 +41,50 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
     if (el.innerHTML !== next) el.innerHTML = next;
   }, [value]);
 
-  // alwaysExpanded: auto-size to content, no collapse
-  React.useEffect(()=>{
-    if (!alwaysExpanded) return;
-    const el = editorRef.current;
-    const wrap = wrapRef.current;
-    if (!el || !wrap) return;
-    wrap.style.resize = "none";
-    const newH = Math.max(height, el.scrollHeight + 60);
-    setDisplayHeight(newH);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function calcExpandedH(){
-    const el = editorRef.current;
-    if (!el) return 200;
-    // Temporarily remove minHeight to get true content scrollHeight
-    const prev = el.style.minHeight;
-    el.style.minHeight = "0";
-    const h = Math.max(120, el.scrollHeight + 60);
-    el.style.minHeight = prev;
-    return h;
+  function exec(cmd){ editorRef.current?.focus(); document.execCommand(cmd,false,null); onChange(editorRef.current?.innerHTML||""); }
+  function handleInput(){ onChange(editorRef.current?.innerHTML||""); }
+  function handlePaste(e){
+    e.preventDefault();
+    const text = e.clipboardData.getData("text/plain");
+    if (document.queryCommandSupported && document.queryCommandSupported("insertText")) {
+      document.execCommand("insertText", false, text);
+    } else {
+      // Fallback: insert at cursor manually
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(document.createTextNode(text));
+        range.collapse(false);
+      }
+    }
+    onChange(editorRef.current?.innerHTML||"");
+  }
+  function handleKeyDown(e){
+    if(e.key==="Tab"){ e.preventDefault(); cycleJobField(jobId,field,e.shiftKey); }
   }
 
   function toggleExpand(){
-    if (alwaysExpanded) return;
-    if (!isExpanded) {
-      // expanding
-      savedHeightRef.current = displayHeight;
-      const newH = calcExpandedH();
-      setDisplayHeight(newH);
-      setIsExpanded(true);
-      // Re-measure after paint in case content wasn't fully laid out
-      setTimeout(()=>{
-        const remeasured = calcExpandedH();
-        if (remeasured > newH) setDisplayHeight(remeasured);
-      }, 50);
-      if (onToggleExpand) onToggleExpand(true, savedHeightRef.current, newH);
-    } else {
-      // collapsing
-      const h = savedHeightRef.current || height;
-      setDisplayHeight(h);
-      setIsExpanded(false);
-      if (onToggleExpand) onToggleExpand(false, h, h);
-    }
-  }
-
-  // Called by a sibling via the onToggleExpand → parent sync pattern
-  // When parent passes expandState prop, apply it (for synchronized groups)
-  React.useEffect(()=>{
-    if (!expandState || alwaysExpanded) return;
+    const el = editorRef.current;
+    const wrap = wrapRef.current;
+    if (!el || !wrap) return;
     progResizing.current = true;
-    if (expandState.expanded) {
-      setDisplayHeight(expandState.expandedH || calcExpandedH());
-      setIsExpanded(true);
-    } else {
-      setDisplayHeight(expandState.savedH || height);
+    if (isExpanded) {
+      const h = savedHeightRef.current || height;
+      wrap.style.height = h + "px";
+      wrap.style.minHeight = h + "px";
       setIsExpanded(false);
+    } else {
+      savedHeightRef.current = wrap.offsetHeight || height;
+      const newH = Math.max(80, el.scrollHeight + 44);
+      wrap.style.height = newH + "px";
+      wrap.style.minHeight = newH + "px";
+      setIsExpanded(true);
     }
     setTimeout(()=>{ progResizing.current = false; }, 300);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expandState?.key]);
-
-  function exec(cmd){ editorRef.current?.focus(); document.execCommand(cmd,false,null); onChange(editorRef.current?.innerHTML||""); }
-  function handleInput(){
-    onChange(editorRef.current?.innerHTML||"");
-    if (alwaysExpanded && editorRef.current) {
-      setDisplayHeight(h => Math.max(h, editorRef.current.scrollHeight + 60));
-    }
   }
 
-  // Insert a cols×rows table with equal column widths and resizer handles
-  function insertTable(rows=3, cols=3){
-    const el = editorRef.current;
-    if (!el) return;
-    el.focus();
-    const colW = Math.floor(100 / cols);
-    // Build colgroup for initial equal widths
-    let html = `<table style="width:100%;table-layout:fixed"><colgroup>`;
-    for(let c=0;c<cols;c++) html+=`<col style="width:${colW}%">`;
-    html+=`</colgroup><thead><tr>`;
-    for(let c=0;c<cols;c++) html+=`<th><div class="col-resizer" contenteditable="false"></div></th>`;
-    html+=`</tr></thead><tbody>`;
-    for(let r=0;r<rows-1;r++){
-      html+=`<tr>`;
-      for(let c=0;c<cols;c++) html+=`<td><div class="col-resizer" contenteditable="false"></div></td>`;
-      html+=`</tr>`;
-    }
-    html+=`</tbody></table><p><br></p>`;
-    document.execCommand("insertHTML", false, html);
-    onChange(el.innerHTML||"");
-  }
-
-  // Column resize drag logic — attached to the editor div
-  function handleColResizeMouseDown(e){
-    const resizer = e.target.closest?.(".col-resizer");
-    if (!resizer) return;
-    e.preventDefault();
-    const cell = resizer.parentElement; // td or th
-    const table = cell.closest("table");
-    if (!cell || !table) return;
-    const startX = e.clientX;
-    const startW = cell.offsetWidth;
-    const tableW = table.offsetWidth;
-    function onMove(ev){
-      const delta = ev.clientX - startX;
-      const newW = Math.max(30, startW + delta);
-      const pct = (newW / tableW * 100).toFixed(1) + "%";
-      // Find col index
-      const cells = Array.from(cell.parentElement.children);
-      const idx = cells.indexOf(cell);
-      const cols = table.querySelectorAll("col");
-      if (cols[idx]) cols[idx].style.width = pct;
-    }
-    function onUp(){
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      onChange(editorRef.current?.innerHTML||"");
-    }
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  }
-
-  // Insert image from file
-  function insertImage(file){
-    if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = e => {
-      editorRef.current?.focus();
-      document.execCommand("insertImage", false, e.target.result);
-      onChange(editorRef.current?.innerHTML||"");
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function handlePaste(e){
-    // Handle image paste
-    const items = Array.from(e.clipboardData?.items||[]);
-    const imgItem = items.find(i=>i.type.startsWith("image/"));
-    if (imgItem) {
-      e.preventDefault();
-      insertImage(imgItem.getAsFile());
-      return;
-    }
-    // Plain text paste — let browser handle, then fire onChange
-    setTimeout(()=>{ onChange(editorRef.current?.innerHTML||""); }, 0);
-  }
-
-  function handleKeyDown(e){
-    const el = editorRef.current;
-
-    // ── Tab handling ──────────────────────────────────────────
-    if (e.key === "Tab") {
-      // If cursor is inside a table cell, navigate cells (OneNote style)
-      const sel = window.getSelection();
-      const anchorNode = sel?.anchorNode;
-      const td = anchorNode?.nodeType === 3
-        ? anchorNode.parentElement?.closest("td,th")
-        : anchorNode?.closest?.("td,th");
-      if (td) {
-        e.preventDefault();
-        const cells = Array.from(td.closest("table").querySelectorAll("td,th"));
-        const idx = cells.indexOf(td);
-        if (!e.shiftKey) {
-          if (idx < cells.length - 1) {
-            // Move to next cell
-            const next = cells[idx+1];
-            next.focus();
-            const r = document.createRange(); r.selectNodeContents(next); r.collapse(false);
-            sel.removeAllRanges(); sel.addRange(r);
-          } else {
-            // Last cell → add new row
-            const row = td.closest("tr");
-            const tbody = row.closest("tbody") || row.parentElement;
-            const newRow = row.cloneNode(true);
-            newRow.querySelectorAll("td,th").forEach(c=>{ c.innerHTML='<div class="col-resizer" contenteditable="false"></div>'; });
-            tbody.appendChild(newRow);
-            const firstCell = newRow.querySelector("td,th");
-            if (firstCell) { firstCell.focus(); const r=document.createRange();r.selectNodeContents(firstCell);r.collapse(false);sel.removeAllRanges();sel.addRange(r); }
-            onChange(el?.innerHTML||"");
-          }
-        } else {
-          // Shift+Tab → previous cell
-          if (idx > 0) {
-            const prev = cells[idx-1];
-            prev.focus();
-            const r=document.createRange();r.selectNodeContents(prev);r.collapse(false);
-            sel.removeAllRanges();sel.addRange(r);
-          }
-        }
-        return;
-      }
-      // Not in a table — cycle to next field
-      e.preventDefault();
-      cycleJobField(jobId, field, e.shiftKey);
-      return;
-    }
-
-    // ── Enter in table cell → new row below ──────────────────
-    if (e.key === "Enter" && !e.shiftKey) {
-      const sel = window.getSelection();
-      const anchorNode = sel?.anchorNode;
-      const td = anchorNode?.nodeType === 3
-        ? anchorNode.parentElement?.closest("td,th")
-        : anchorNode?.closest?.("td,th");
-      if (td) {
-        e.preventDefault();
-        const row = td.closest("tr");
-        const tbody = row.closest("tbody") || row.parentElement;
-        const newRow = row.cloneNode(true);
-        newRow.querySelectorAll("td,th").forEach(c=>{ c.innerHTML='<div class="col-resizer" contenteditable="false"></div>'; });
-        const insertAfter = row.nextSibling;
-        tbody.insertBefore(newRow, insertAfter);
-        const firstCell = newRow.querySelector("td,th");
-        if (firstCell) { firstCell.focus(); const r=document.createRange();r.selectNodeContents(firstCell);r.collapse(false);sel.removeAllRanges();sel.addRange(r); }
-        onChange(el?.innerHTML||"");
-        return;
-      }
-    }
-
-    // ── Cargo field: Enter inserts " | " separator ────────────
-    if (field === "cargo_details" && e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      document.execCommand("insertHTML", false, " | ");
-      onChange(el?.innerHTML||"");
-      return;
-    }
-  }
-
-  // Save height on manual drag only
+  // Save height on manual drag only (not programmatic)
   React.useEffect(()=>{
     const el = wrapRef.current;
     if (!el || !window.ResizeObserver) return;
@@ -285,24 +94,21 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
       clearTimeout(t);
       t = setTimeout(()=>{
         const h = el.offsetHeight;
-        if (h && !isExpanded && !alwaysExpanded) {
+        if (h && !isExpanded) {
           savedHeightRef.current = h;
-          setDisplayHeight(h);
           onResizeSave?.(Math.round(h));
         }
       }, 250);
     });
     ro.observe(el);
     return ()=>{ clearTimeout(t); ro.disconnect(); };
-  }, [jobId, field, onResizeSave, isExpanded, alwaysExpanded]);
+  }, [jobId, field, onResizeSave, isExpanded]);
 
   const btnSt = {fontSize:10,padding:"1px 6px",borderRadius:3,border:"1px solid "+C.bd,background:C.bg3,color:C.faint,cursor:"pointer",lineHeight:1.4,fontFamily:"inherit"};
   return (
-    <div ref={wrapRef} data-richwrap={`${jobId}-${field}`} style={{
+    <div ref={wrapRef} style={{
       background:C.bg3, border:"1px solid "+C.bd, borderRadius:6,
-      height:alwaysExpanded?"100%":isExpanded?displayHeight:fillHeight?"100%":displayHeight,
-      minHeight:alwaysExpanded?displayHeight:displayHeight,
-      resize:alwaysExpanded||fillHeight?"none":"vertical", overflow:isExpanded||alwaysExpanded?"hidden":fillHeight?"auto":"auto",
+      height:height, minHeight:height, resize:"vertical", overflow:"auto",
       boxSizing:"border-box", transition:"none"
     }}>
       <style>{`
@@ -313,14 +119,9 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
         [data-job-field="${jobId}-${field}"] ol ol{list-style-type:lower-alpha;}
         [data-job-field="${jobId}-${field}"] li{margin:0;padding:0;}
         [data-job-field="${jobId}-${field}"] p{margin:0;}
-        [data-job-field="${jobId}-${field}"] img{max-width:100%;height:auto;border-radius:3px;margin:2px 0;}
-        [data-job-field="${jobId}-${field}"] table{border-collapse:collapse;width:100%;margin:4px 0;table-layout:fixed;}
-        [data-job-field="${jobId}-${field}"] td,[data-job-field="${jobId}-${field}"] th{border:1px solid rgba(88,130,200,0.3);padding:4px 6px;min-width:40px;min-height:24px;height:24px;outline:none;word-break:break-word;vertical-align:top;position:relative;box-sizing:border-box;}
-        [data-job-field="${jobId}-${field}"] th{background:rgba(20,40,80,0.5);font-weight:700;}
-        [data-job-field="${jobId}-${field}"] td .col-resizer,[data-job-field="${jobId}-${field}"] th .col-resizer{position:absolute;top:0;right:0;width:4px;height:100%;cursor:col-resize;z-index:2;background:transparent;user-select:none;}
-        [data-job-field="${jobId}-${field}"] td .col-resizer:hover,[data-job-field="${jobId}-${field}"] th .col-resizer:hover{background:rgba(88,130,200,0.4);}
+        [data-job-field="${jobId}-${field}"] *{color:inherit !important;font-family:inherit !important;font-size:inherit !important;background:transparent !important;}
       `}</style>
-      <div style={{
+      <div data-richwrap={`${jobId}-${field}`} style={{
         display:"flex", alignItems:"center", justifyContent:"space-between",
         padding:"4px 6px", borderBottom:"1px solid "+C.bd2,
         background:C.bg4, position:"sticky", top:0, zIndex:1
@@ -328,23 +129,20 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
         <span style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:700}}>{title}</span>
         <div style={{display:"flex",alignItems:"center",gap:3}}>
           {titleRight}
-          {!alwaysExpanded&&(
-            <button type="button" onMouseDown={e=>e.preventDefault()} onClick={toggleExpand}
-              title={isExpanded?"Collapse to saved height":"Expand to fit all content"}
-              style={{...btnSt,color:isExpanded?"#58a6ff":C.faint,fontWeight:isExpanded?700:400}}>
-              {isExpanded?"↑":"↕"}
-            </button>
-          )}
+          <button type="button" onMouseDown={e=>e.preventDefault()} onClick={toggleExpand}
+            title={isExpanded?"Collapse to saved height":"Expand to fit all content"}
+            style={{...btnSt,color:isExpanded?"#58a6ff":C.faint,fontWeight:isExpanded?700:400}}>
+            {isExpanded?"↑":"↕"}
+          </button>
           <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>exec("insertUnorderedList")} title="Bullet list" style={btnSt}>•</button>
           <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>exec("insertOrderedList")} title="Numbered list" style={btnSt}>1.</button>
-          <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>insertTable(3,3)} title="Insert table (3×3)" style={btnSt}>⊞</button>
         </div>
       </div>
       <div ref={editorRef} contentEditable suppressContentEditableWarning
         data-job-field={`${jobId}-${field}`}
-        onInput={handleInput} onKeyDown={handleKeyDown} onPaste={handlePaste} onMouseDown={handleColResizeMouseDown}
+        onInput={handleInput} onKeyDown={handleKeyDown} onPaste={handlePaste}
         style={{
-          padding:"8px 10px", minHeight:isExpanded?0:Math.max(50,displayHeight-36),
+          padding:"8px 10px", minHeight:Math.max(50,height-36),
           color, fontFamily:"Inter,system-ui,-apple-system,Segoe UI,sans-serif",
           fontSize:12, lineHeight:1.6, outline:"none", whiteSpace:"pre-wrap"
         }}
@@ -354,51 +152,46 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
   );
 }
 
-function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingClientName,setEditingClientName,renameClient,setPendingDelClient,createJob,inpS,JOB_STATUS_COL,mobile=false}){
+function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingClientName,setEditingClientName,renameClient,setPendingDelClient,createJob,inpS,JOB_STATUS_COL}){
   const [showPencilMenu,setShowPencilMenu]=useState(false);
+  const [logoOk,setLogoOk]=useState(true);
   const allCJobs=jobs.filter(j=>(j.charterer||"")===charterer);
   const total=allCJobs.length;
   const isActive=expandedJob===charterer;
   const client=clients.find(c=>c.name===charterer);
   const isEditingName=editingClientName===client?.id;
-  // Status counts for mini-dots
-  const counts={};
-  ["OPEN","WORKING","SUBS","FIXED","FAILED"].forEach(s=>{ counts[s]=allCJobs.filter(j=>j.status===s).length; });
-  // Pick accent color: SUBS=purple, WORKING/OPEN=amber, FIXED=green, else dim
-  const accentCol = counts.SUBS?"#a78bfa":counts.WORKING?"#f59e0b":counts.OPEN?"#60a5fa":counts.FIXED?"#34d399":"rgba(58,130,246,0.25)";
-  const activeDot = counts.SUBS||counts.WORKING||counts.OPEN||counts.FIXED;
-
+  // Guess a domain from the company name for the logo lookup (best-effort, silently hidden on failure)
+  const domainGuess=(charterer||"").toLowerCase().replace(/[^a-z0-9\s]/g,"").trim().split(/\s+/)[0];
+  const logoUrl=domainGuess?`https://logo.clearbit.com/${domainGuess}.com`:null;
   return(
     <div style={{
-      display:"flex",flexDirection:"column",
-      background:isActive?"rgba(16,35,72,0.85)":"rgba(10,20,40,0.7)",
-      border:"1px solid "+(isActive?"rgba(88,166,255,0.35)":"rgba(58,130,246,0.1)"),
-      borderRadius:9,overflow:"visible",
-      boxShadow:isActive?"0 0 20px rgba(88,166,255,0.18)":activeDot?"0 2px 12px rgba(0,0,0,0.3)":"none",
-      transition:"all 0.15s",cursor:"pointer",position:"relative"}}
+      display:"flex",flexDirection:"column",position:"relative",
+      background:isActive?"rgba(30,60,120,0.5)":"rgba(8,18,38,0.85)",
+      border:"1px solid "+(isActive?"rgba(88,166,255,0.6)":"rgba(58,130,246,0.15)"),
+      borderRadius:8,overflow:"visible",minWidth:150,
+      boxShadow:isActive?"0 0 16px rgba(88,166,255,0.22)":"none",
+      transition:"all 0.15s",cursor:"pointer"}}
       onClick={()=>setExpandedJob(isActive?null:charterer)}>
-
-      {/* Top accent bar */}
-      <div style={{height:3,borderRadius:"9px 9px 0 0",background:isActive?"rgba(88,166,255,0.7)":activeDot?accentCol:"rgba(58,130,246,0.12)",transition:"background 0.2s"}}/>
-
-      <div style={{padding:mobile?"7px 8px 6px":"11px 13px 10px",flex:1,display:"flex",flexDirection:"column",gap:0}}>
+      {logoUrl&&logoOk&&(
+        <img src={logoUrl} alt="" onError={()=>setLogoOk(false)}
+          style={{position:"absolute",top:8,right:8,width:18,height:18,borderRadius:4,
+            objectFit:"contain",background:"rgba(255,255,255,0.92)",padding:2,
+            border:"1px solid rgba(88,166,255,0.2)",pointerEvents:"none"}}/>
+      )}
+      <div style={{padding:"12px 14px 10px"}}>
         {isEditingName&&client?(
           <input autoFocus defaultValue={client.name}
             onBlur={e=>renameClient(client.id,e.target.value)}
             onKeyDown={e=>{if(e.key==="Enter")renameClient(client.id,e.target.value);if(e.key==="Escape")setEditingClientName(null);}}
             onClick={e=>e.stopPropagation()}
-            style={{...inpS,width:"100%",fontSize:mobile?11:13,fontWeight:700,padding:"2px 6px"}}/>
+            style={{...inpS,width:"100%",fontSize:13,fontWeight:700,padding:"2px 6px"}}/>
         ):(
-          <div style={{display:"flex",alignItems:"flex-start",gap:3,minHeight:mobile?24:34}}>
-            <span style={{
-              fontSize:mobile?10:12,fontWeight:700,lineHeight:1.25,
-              color:isActive?"#a8d4ff":"rgba(200,225,255,0.88)",
-              flex:1,wordBreak:"break-word",letterSpacing:"0.01em"
-            }}>{charterer||"—"}</span>
+          <div style={{display:"flex",alignItems:"center",gap:4}}>
+            <span style={{fontSize:13,fontWeight:700,color:isActive?"#79c0ff":"rgba(200,220,255,0.85)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1,paddingRight:logoUrl&&logoOk?22:0}}>{charterer||"—"}</span>
             {client&&(
-              <div style={{position:"relative",flexShrink:0,marginTop:1}} onClick={e=>e.stopPropagation()}>
+              <div style={{position:"relative",flexShrink:0}} onClick={e=>e.stopPropagation()}>
                 <button onClick={e=>{e.stopPropagation();setShowPencilMenu(v=>!v);}}
-                  style={{background:"none",border:"none",color:"rgba(120,160,220,0.25)",fontSize:10,cursor:"pointer",padding:"0 1px",lineHeight:1}}>✎</button>
+                  style={{background:"none",border:"none",color:"rgba(120,160,220,0.3)",fontSize:11,cursor:"pointer",padding:"0 2px",lineHeight:1}}>✎</button>
                 {showPencilMenu&&(
                   <>
                     <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setShowPencilMenu(false)}/>
@@ -406,7 +199,7 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
                       <button onClick={()=>{setEditingClientName(client.id);setShowPencilMenu(false);}}
                         style={{display:"block",width:"100%",background:"none",border:"none",color:"rgba(160,200,255,0.7)",fontSize:11,padding:"4px 8px",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>✎ Rename</button>
                       <button onClick={()=>{setPendingDelClient(client);setShowPencilMenu(false);}}
-                        style={{display:"block",width:"100%",background:"none",border:"none",color:"rgba(255,107,107,0.6)",fontSize:11,padding:"4px 8px",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>✕ Delete</button>
+                        style={{display:"block",width:"100%",background:"none",border:"none",color:"rgba(255,107,107,0.6)",fontSize:11,padding:"4px 8px",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>✕ Delete client</button>
                     </div>
                   </>
                 )}
@@ -414,23 +207,9 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
             )}
           </div>
         )}
-
-        {/* Bottom row: cargo count + status dots */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:"auto",paddingTop:mobile?4:8}}>
-          <span style={{
-            fontSize:mobile?9:10,fontWeight:600,
-            color:isActive?"rgba(140,190,255,0.7)":"rgba(100,140,200,0.45)",
-            letterSpacing:"0.04em"
-          }}>{total} cargo{total!==1?"es":""}</span>
-          <div style={{display:"flex",gap:3,alignItems:"center"}}>
-            {[["OPEN","#60a5fa"],["WORKING","#f59e0b"],["SUBS","#a78bfa"],["FIXED","#34d399"]].map(([s,col])=>counts[s]>0&&(
-              <span key={s} title={`${counts[s]} ${s}`} style={{
-                fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,
-                background:col+"22",color:col,border:"1px solid "+col+"44",
-                letterSpacing:"0.03em",lineHeight:1.4
-              }}>{counts[s]}</span>
-            ))}
-          </div>
+        {/* Total cargo count — always shown */}
+        <div style={{fontSize:11,color:isActive?"rgba(140,190,255,0.6)":"rgba(120,160,220,0.3)",marginTop:4,fontWeight:400}}>
+          {total} cargo{total!==1?"es":""}
         </div>
       </div>
     </div>
@@ -520,9 +299,6 @@ function FixingTab({vessels}){
   const [clients,setClients]=useState([{id:"c1",name:"Aramco"},{id:"c2",name:"Trafigura"},{id:"c3",name:"Circle K"},{id:"c4",name:"Equinor"},{id:"c5",name:"CSS SA"},{id:"c6",name:"BASF"},{id:"c7",name:"Essar"},{id:"c8",name:"Exxon"},{id:"c9",name:"ENI"}]);
   const [owners,setOwners]=useState([]);
   const [expandedJob,setExpandedJob]=useState(null);
-  const [expandedPanelSort,setExpandedPanelSort]=useState({}); // {charterer: sortKey}
-  const [expandedPanelView,setExpandedPanelView]=useState({}); // {charterer: "card"|"table"}
-  const [expandedTableRow,setExpandedTableRow]=useState(null); // job.id
   const [editingClient,setEditingClient]=useState(null);
   const [showNewClient,setShowNewClient]=useState(false);
   const [showOwnerDir,setShowOwnerDir]=useState(false);
@@ -541,8 +317,6 @@ function FixingTab({vessels}){
   const [clientSort,setClientSort]=useState("name"); // "name"|"open"|"subs"|"working"|"fixed"
   const [editingClientName,setEditingClientName]=useState(null); // id of client being renamed
   const [notePopout,setNotePopout]=useState(null); // charterer name for popout // "matrix" | "list"
-  // Sync expand state for each job's 3 top editors: { [jobId]: {expanded, savedH, expandedH, key} }
-  const [jobExpandStates,setJobExpandStates]=useState({});
 
   useEffect(()=>{
     loadFixingJobs().then(setJobs);
@@ -606,7 +380,7 @@ function FixingTab({vessels}){
     const today=new Date();
     const formattedDate=`${today.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][today.getMonth()]} ${today.getFullYear()}`;
     const job={id,charterer,status:"OPEN",laycan:"",laytime:"",notes:"",indications:"",cargo_details:"",subs_fixed:"",owners:[],added_date:formattedDate,segment:"",trade:"",ui_heights:{cargo_details:150,notes:150,indications:150,subs_fixed:100},created_at:new Date().toISOString()};
-    await saveFixingJob(job); setJobs(prev=>[job,...prev]); setExpandedJob(charterer||id);
+    await saveFixingJob(job); setJobs(prev=>[job,...prev]); setExpandedJob(id);
   }
 
   async function deleteClientAndJobs(client){
@@ -673,8 +447,8 @@ function FixingTab({vessels}){
       )}
 
       {/* ── MAIN LAYOUT ── */}
-      <div style={{display:"flex",gap:12,alignItems:"flex-start",width:"100%",flexDirection:mobile?"column":"row"}}>
-        <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:8,width:mobile?"100%":undefined}}>
+      <div style={{display:"flex",gap:12,alignItems:"flex-start",width:"100%"}}>
+        <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:8}}>
 
           {/* Toolbar row */}
           <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
@@ -722,7 +496,7 @@ function FixingTab({vessels}){
 
           {/* ── MATRIX VIEW: full-width, notes as popout ── */}
           {clientViewMode==="matrix"&&(
-            <div style={{display:"grid",gridTemplateColumns:mobile?"repeat(3,1fr)":`repeat(${Math.ceil(charterersList.length/2)},1fr)`,gap:mobile?4:6,marginBottom:2,width:"100%",position:"relative"}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(148px,1fr))",gap:6,marginBottom:2,width:"100%",position:"relative"}}>
               {/* Notes popout overlay */}
               {notePopout&&(()=>{
                 const charterer=notePopout;
@@ -753,7 +527,7 @@ function FixingTab({vessels}){
                   clients={clients} editingClientName={editingClientName}
                   setEditingClientName={setEditingClientName} renameClient={renameClient}
                   setPendingDelClient={setPendingDelClient} createJob={createJob}
-                  inpS={inpS} JOB_STATUS_COL={JOB_STATUS_COL} mobile={mobile}/>
+                  inpS={inpS} JOB_STATUS_COL={JOB_STATUS_COL}/>
               ))}
             </div>
           )}
@@ -846,145 +620,22 @@ function FixingTab({vessels}){
           )}
           {charterersList.map(charterer=>{
             const chartererJobs=filteredJobs.filter(j=>(j.charterer||"")===charterer);
-            if(expandedJob!==charterer)return null;
-            // Local state via closure-captured refs — no extra useState needed
-            const sortKey=expandedPanelSort[charterer]||"date_desc";
-            const viewMode=expandedPanelView[charterer]||"card";
-            const setSort=v=>setExpandedPanelSort(p=>({...p,[charterer]:v}));
-            const setView=v=>setExpandedPanelView(p=>({...p,[charterer]:v}));
-            // Parse "18 Apr 2026" style date strings
-            function parseJobDate(j){
-              if(j.created_at) return new Date(j.created_at).getTime();
-              const s=j.added_date||"";
-              const m=s.match(/(\d{1,2})\s([A-Za-z]{3})\s(\d{4})/);
-              if(m){const months={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};return new Date(parseInt(m[3]),months[m[2]],parseInt(m[1])).getTime();}
-              return 0;
-            }
-            const sortedJobs=[...chartererJobs].sort((a,b)=>{
-              if(sortKey==="date_desc"||sortKey==="date_asc"){
-                const da=parseJobDate(a), db2=parseJobDate(b);
-                return sortKey==="date_desc"?db2-da:da-db2;
-              }
-              if(sortKey==="status"){
-                const order=["OPEN","WORKING","SUBS","FIXED","FAILED"];
-                return order.indexOf(a.status)-order.indexOf(b.status);
-              }
-              return 0;
-            });
-            const btnSt=(active)=>({
-              fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:3,cursor:"pointer",fontFamily:"inherit",
-              border:"1px solid "+(active?"rgba(88,166,255,0.5)":"rgba(58,130,246,0.2)"),
-              background:active?"rgba(88,166,255,0.15)":"transparent",
-              color:active?"#79c0ff":"rgba(120,160,220,0.45)",
-            });
+            if(!chartererJobs.length||expandedJob!==charterer)return null;
             return(
               <div key={charterer} style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",marginBottom:6}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"rgba(16,26,48,0.8)",borderBottom:"1px solid "+C.bd2,flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"rgba(16,26,48,0.8)",borderBottom:"1px solid "+C.bd2}}>
                   {/* + cargo button top-left */}
                   <button onClick={e=>{e.stopPropagation();createJob(charterer);}}
-                    style={{background:"rgba(88,166,255,0.15)",border:"1px solid rgba(88,166,255,0.3)",borderRadius:4,color:"#79c0ff",fontSize:mobile?11:12,padding:"2px 10px",cursor:"pointer",fontFamily:"inherit",fontWeight:700,flexShrink:0}}>+ cargo</button>
-                  <span style={{fontWeight:700,fontSize:mobile?11:13,color:C.blue,flex:1}}>{charterer||"—"}</span>
-                  <span style={{fontSize:10,color:C.faint}}>{chartererJobs.length} cargo{chartererJobs.length!==1?"es":""}</span>
-                  {/* Sort controls */}
-                  <div style={{display:"flex",gap:3,alignItems:"center"}}>
-                    <span style={{fontSize:9,color:"rgba(120,160,200,0.4)",textTransform:"uppercase",letterSpacing:"0.07em"}}>Sort</span>
-                    {[["date_desc","Date ▼"],["date_asc","Date ▲"],["status","Status"]].map(([v,l])=>(
-                      <button key={v} onClick={()=>setSort(v)} style={btnSt(sortKey===v)}>{l}</button>
-                    ))}
-                  </div>
-                  {/* View toggle */}
-                  <div style={{display:"flex",gap:3,alignItems:"center"}}>
-                    <button onClick={()=>setView("card")} style={btnSt(viewMode==="card")} title="Card view">⊞ Cards</button>
-                    <button onClick={()=>setView("table")} style={btnSt(viewMode==="table")} title="Table view">≡ Table</button>
-                  </div>
+                    style={{background:"rgba(88,166,255,0.15)",border:"1px solid rgba(88,166,255,0.3)",borderRadius:4,color:"#79c0ff",fontSize:12,padding:"2px 10px",cursor:"pointer",fontFamily:"inherit",fontWeight:700,flexShrink:0}}>+ cargo</button>
+                  <span style={{fontWeight:700,fontSize:13,color:C.blue,flex:1}}>{charterer||"—"}</span>
+                  <span style={{fontSize:11,color:C.faint}}>{chartererJobs.length} cargo{chartererJobs.length!==1?"es":""}</span>
                   <button onClick={()=>setExpandedJob(null)}
                     style={{background:"none",border:"none",color:C.faint,fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit",fontWeight:600}}>▲ close</button>
                 </div>
-                {chartererJobs.length===0&&(
-                  <div style={{padding:"32px",textAlign:"center",color:C.faint,fontSize:12}}>No cargoes yet — click <strong style={{color:"#79c0ff"}}>+ cargo</strong> to add one.</div>
-                )}
-
-                {/* TABLE VIEW */}
-                {viewMode==="table"&&chartererJobs.length>0&&(
-                  <div style={{overflowX:"auto"}}>
-                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                      <thead>
-                        <tr style={{background:"rgba(8,18,38,0.9)"}}>
-                          {["Date","Status","Summary","Indications",""].map(h=>(
-                            <th key={h} style={{padding:"5px 10px",textAlign:"left",fontSize:10,fontWeight:700,
-                              color:"rgba(120,160,220,0.45)",textTransform:"uppercase",letterSpacing:"0.07em",
-                              borderBottom:"1px solid rgba(58,130,246,0.12)",whiteSpace:"nowrap"}}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sortedJobs.map((job,i)=>{
-                          const summary=[job.qty,job.product,job.load&&job.disch?`${job.load}→${job.disch}`:job.load||job.disch].filter(Boolean).join(" ");
-                          const rawText=stripHtml(job.cargo_details||"").trim();
-                          const cargoTitle=rawText.split(/\n+/).map(s=>s.trim()).filter(Boolean).join(" | ");
-                          const titleText=summary||cargoTitle||"New cargo";
-                          const statusCol=JOB_STATUS_COL[job.status]||C.faint;
-                          const isRowExpanded=expandedTableRow===job.id;
-                          return(
-                            <React.Fragment key={job.id}>
-                              <tr onClick={()=>setExpandedTableRow(p=>p===job.id?null:job.id)}
-                                style={{background:i%2===0?"rgba(7,15,28,0.96)":"rgba(16,30,56,0.7)",cursor:"pointer",transition:"background 0.1s"}}
-                                onMouseEnter={e=>e.currentTarget.style.background="rgba(58,130,246,0.05)"}
-                                onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"rgba(7,15,28,0.96)":"rgba(16,30,56,0.7)"}>
-                                <td style={{padding:"6px 10px",color:"rgba(120,160,200,0.5)",whiteSpace:"nowrap"}}>{job.added_date||"—"}</td>
-                                <td style={{padding:"6px 10px",whiteSpace:"nowrap"}}>
-                                  <span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,
-                                    background:statusCol+"22",color:statusCol,border:"1px solid "+statusCol+"44"}}>
-                                    {job.status||"—"}
-                                  </span>
-                                </td>
-                                <td style={{padding:"6px 10px",color:"rgba(200,220,255,0.8)",fontWeight:600,maxWidth:400,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{titleText}</td>
-                                <td style={{padding:"6px 10px",color:"rgba(160,200,255,0.55)",maxWidth:250,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:11}}>{job.indications?stripHtml(job.indications).split("\n")[0]:"—"}</td>
-                                <td style={{padding:"6px 8px",textAlign:"center",color:"rgba(88,166,255,0.4)",fontSize:10}}>{isRowExpanded?"▲":"▼"}</td>
-                              </tr>
-                              {isRowExpanded&&(
-                                <tr style={{background:"rgba(14,28,58,0.95)"}}>
-                                  <td colSpan={5} style={{padding:"12px 16px",borderBottom:"1px solid rgba(58,130,246,0.12)"}}>
-                                    {/* Inline compact job detail */}
-                                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8,fontSize:12}}>
-                                      {[
-                                        ["Product",job.product],["Qty",job.qty],["Load",job.load],["Disch",job.disch],
-                                        ["Laycan",job.laycan],["Status",job.status],["Outcome",job.outcome],
-                                        ["Fixed owner",job.fixed_owner],["Fixed vessel",job.fixed_vessel],
-                                      ].filter(([,v])=>v).map(([label,val])=>(
-                                        <div key={label}>
-                                          <div style={{fontSize:9,fontWeight:700,color:"rgba(120,160,220,0.45)",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>{label}</div>
-                                          <div style={{color:"rgba(200,220,255,0.8)"}}>{val}</div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                    {job.cargo_details&&<div style={{marginTop:8,fontSize:11,color:"rgba(160,200,255,0.6)",whiteSpace:"pre-wrap",borderTop:"1px solid rgba(58,130,246,0.1)",paddingTop:8}}
-                                      dangerouslySetInnerHTML={{__html:job.cargo_details}}/>}
-                                    {job.notes&&<div style={{marginTop:6,fontSize:11,color:"rgba(160,200,255,0.5)",whiteSpace:"pre-wrap"}}
-                                      dangerouslySetInnerHTML={{__html:job.notes}}/>}
-                                    <div style={{marginTop:10,display:"flex",gap:6}}>
-                                      <button onClick={e=>{e.stopPropagation();setExpandedTableRow(null);setExpandedJob(charterer);setView("card");setTimeout(()=>{document.querySelector(`[data-job-id="${job.id}"]`)?.scrollIntoView({behavior:"smooth",block:"center"});},100);}}
-                                        style={{fontSize:10,padding:"3px 10px",borderRadius:3,border:"1px solid rgba(88,166,255,0.3)",background:"rgba(88,166,255,0.1)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"}}>
-                                        ✎ Edit full detail
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {/* CARD VIEW (existing) */}
-                {viewMode==="card"&&(
-                <div style={{display:"flex",gap:0,alignItems:"flex-start",overflowX:mobile?"auto":"visible",WebkitOverflowScrolling:"touch"}}>
+                <div style={{display:"flex",gap:0,alignItems:"flex-start"}}>
                   {/* Cargoes */}
                   <div style={{flex:1,minWidth:0}}>
-                    {sortedJobs.map(job=>{
+                    {chartererJobs.map(job=>{
                   const summary=[job.qty,job.product,job.load&&job.disch?`${job.load} → ${job.disch}`:job.load||job.disch,job.laycan].filter(Boolean).join("  ");
                   // For cargo_details: strip HTML then join lines with " | "
                   const rawText=stripHtml(job.cargo_details||"").trim();
@@ -999,9 +650,8 @@ function FixingTab({vessels}){
                         <button onClick={e=>{e.stopPropagation();setPendingDelJob({id:job.id,label:titleText||job.charterer||"job"});}}
                           style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.4,padding:"0 2px"}}>✕</button>
                       </div>
-      {/* 3 editors — sync height AND expand/collapse together */}
+                      {/* 3 editors — sync height when any one resizes */}
                       {(()=>{
-                        const client=clients.find(c=>c.name===charterer);
                         const syncH=Math.max(
                           job.ui_heights?.cargo_details||150,
                           job.ui_heights?.notes||150,
@@ -1013,36 +663,24 @@ function FixingTab({vessels}){
                           updateJobHeight(job.id,"notes",newH);
                           updateJobHeight(job.id,"indications",newH);
                         }
-                        const syncExpand = jobExpandStates[job.id] || null;
-                        function handleSyncToggle(expanded, savedH, expandedH){
-                          setJobExpandStates(prev=>({...prev,[job.id]:{expanded,savedH,expandedH,key:Date.now()+""}}));
-                        }
                         return(
-                      <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
-                        {/* Left column: top 3 editors + subs/fixed below */}
-                        <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:8}}>
-                        <div style={{display:"flex",gap:8,alignItems:"stretch"}}>
-                          <div style={{flex:"0 0 14%",minWidth:110,display:"flex",flexDirection:"column"}}>
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                        <div style={{display:"flex",gap:8}}>
+                          <div style={{flex:"0 0 18%",minWidth:120}}>
                             <RichEditor jobId={job.id} field="cargo_details" title="Cargo"
                               value={job.cargo_details||""} placeholder="Cargo details…"
                               height={syncH}
-                              fillHeight={true}
                               onChange={val=>updateJob(job.id,{cargo_details:val})}
-                              onResizeSave={onResizeSync}
-                              onToggleExpand={handleSyncToggle}
-                              expandState={syncExpand?.key && syncExpand}/>
+                              onResizeSave={onResizeSync}/>
                           </div>
-                          <div style={{flex:"0 0 22%",minWidth:0,display:"flex",flexDirection:"column"}}>
+                          <div style={{flex:"0 0 28%",minWidth:0}}>
                             <RichEditor jobId={job.id} field="notes" title="Notes & Guidance"
                               value={job.notes||""} placeholder="Notes & guidance…"
                               height={syncH}
-                              fillHeight={true}
                               onChange={val=>updateJob(job.id,{notes:val})}
-                              onResizeSave={onResizeSync}
-                              onToggleExpand={handleSyncToggle}
-                              expandState={syncExpand?.key && syncExpand}/>
+                              onResizeSave={onResizeSync}/>
                           </div>
-                          <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column"}}>
+                          <div style={{flex:1,minWidth:0}}>
                             <RichEditor jobId={job.id} field="indications" title="Indications"
                               titleRight={
                                 <>
@@ -1074,15 +712,11 @@ function FixingTab({vessels}){
                               }
                               value={job.indications||""} placeholder="Indications…"
                               height={syncH}
-                              fillHeight={true}
                               onChange={val=>updateJob(job.id,{indications:val})}
-                              onResizeSave={onResizeSync}
-                              onToggleExpand={handleSyncToggle}
-                              expandState={syncExpand?.key && syncExpand}/>
+                              onResizeSave={onResizeSync}/>
                           </div>
-                          {/* Client notes — always expanded, same row */}
                         </div>
-                        {/* Subs/Fixed — same width as 3 editors above */}
+                        {/* Subs/Fixed + status counts on right */}
                         <div style={{borderTop:"1px solid "+C.bd2,paddingTop:8}}>
                           <RichEditor jobId={job.id} field="subs_fixed"
                             title={job.status==="FIXED"?"✓ Fixed":job.status==="SUBS"?"On Subs":"Subs / Fixed"}
@@ -1099,37 +733,41 @@ function FixingTab({vessels}){
                             onChange={val=>updateJob(job.id,{subs_fixed:val})}
                             onResizeSave={h=>updateJobHeight(job.id,"subs_fixed",h)}/>
                         </div>
-                        </div>{/* end left column */}
-                        {/* Right column: Client Notes spanning full height */}
-                        {client&&(
-                          <div style={{flex:"0 0 200px",minWidth:170,alignSelf:"stretch",display:"flex",flexDirection:"column"}}>
-                            <RichEditor
-                              jobId={"client-"+client.id} field="clientnotes"
-                              title="Client Notes"
-                              value={client.notes||""}
-                              placeholder="Client notes…"
-                              height={syncH}
-                              alwaysExpanded={true}
-                              onChange={val=>updateClient(client.id,{notes:val})}
-                              onResizeSave={h=>updateClient(client.id,{notes_height:h})}/>
-                          </div>
-                        )}
                       </div>
                         );
                       })()}
                     </div>
                   );
                 })}
+                  </div>
+                  {/* Client notes sidebar */}
+                  {(()=>{
+                    const client=clients.find(c=>c.name===charterer);
+                    if(!client)return null;
+                    return(
+                      <div style={{width:220,flexShrink:0,borderLeft:"1px solid "+C.bd2,display:"flex",flexDirection:"column"}}>
+                        <div style={{padding:"6px 10px",background:"rgba(16,26,48,0.7)",borderBottom:"1px solid "+C.bd2,fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Client notes</div>
+                        <textarea value={client.notes||""} onChange={e=>{
+                          updateClient(client.id,{notes:e.target.value});
+                          // Auto-resize
+                          e.target.style.height="auto";
+                          e.target.style.height=Math.max(120,e.target.scrollHeight)+"px";
+                        }}
+                          onInput={e=>{e.target.style.height="auto";e.target.style.height=Math.max(120,e.target.scrollHeight)+"px";}}
+                          ref={el=>{if(el){el.style.height="auto";el.style.height=Math.max(120,el.scrollHeight)+"px";}}}
+                          placeholder="Notes about this client…"
+                          style={{...inpS,resize:"none",overflow:"hidden",fontSize:11,background:"rgba(8,16,32,0.5)",border:"none",borderRadius:0,lineHeight:1.6,padding:"8px 10px",minHeight:120,color:C.tx}}/>
+                      </div>
+                    );
+                  })()}
                 </div>
-                </div>
-                )}
               </div>
             );
           })}
         </div>
 
         {/* Owner Directory — wider */}
-        {!mobile&&<div style={{flex:"0 0 460px",width:460,display:"flex",flexDirection:"column",gap:6}}>
+        <div style={{flex:"0 0 460px",width:460,display:"flex",flexDirection:"column",gap:6}}>
           {pendingDelOwner&&(
             <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:C.bg2,border:"1px solid "+C.red,borderRadius:8,padding:"12px 20px",zIndex:9999,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.5)",fontFamily:"sans-serif",fontSize:12,minWidth:280}}>
               <span style={{color:C.tx,flex:1}}>Remove <strong>{owners.find(o=>o.id===pendingDelOwner)?.company||"entry"}</strong>?</span>
@@ -1226,7 +864,7 @@ function FixingTab({vessels}){
               })()}
             </div>
           )}
-        </div>}
+        </div>
       </div>
     </div>
   );
