@@ -28,7 +28,7 @@ function IntelVault({onVaultUpdate}){
         method:"POST",
         headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",
+          model:"claude-sonnet-4-6",
           max_tokens:2000,
           system:`You are a maritime market intelligence extractor. Today is ${today}.
 
@@ -199,7 +199,7 @@ export function IntelVaultStrip({onVaultUpdate}){
         method:"POST",
         headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",max_tokens:2000,
+          model:"claude-sonnet-4-6",max_tokens:2000,
           system:`You are a maritime market intelligence extractor. Today is ${today}. Split the input into logical items. Output as JSON array only, no markdown. Each item: {"tag":"TAG","title":"short title max 6 words","content":"full intel text"}. Tags: RATES,FIXTURE,QUOTE,MARKET,FM,RUMOUR,COUNTERPARTY,EVENT,TC,SALE`,
           messages:[{role:"user",content:text.trim()}]
         })
