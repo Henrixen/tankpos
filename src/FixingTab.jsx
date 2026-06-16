@@ -5,8 +5,8 @@ import { classifyRegion, daysBetween, stripHtml } from "./utils";
 import { loadFixingJobs, saveFixingJob, deleteFixingJob, loadClients, saveClient, deleteClient } from "./supabaseHelpers";
 import { isMobile } from "./constants";
 
-const JOB_STATUS = ["OPEN","WORKING","SUBS","FIXED","FAILED"];
-const JOB_STATUS_COL = {OPEN:C.blue,WORKING:C.amber,SUBS:C.purple,FIXED:C.green,FAILED:C.red};
+const JOB_STATUS = ["OPEN","WORKING","SUBS","FIXED","FAILED","WDWF"];
+const JOB_STATUS_COL = {OPEN:C.blue,WORKING:C.amber,SUBS:C.purple,FIXED:C.green,FAILED:C.red,WDWF:"rgba(148,163,184,0.85)"};
 const TRADES = ["UKC","Med","EU Feast","AG","TA West","Ex US","Asia"];
 const EDIT_FIELDS = ["cargo_details","notes","indications","subs_fixed"];
 
@@ -390,7 +390,7 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
   const isEditingName=editingClientName===client?.id;
   // Status counts for mini-dots
   const counts={};
-  ["OPEN","WORKING","SUBS","FIXED","FAILED"].forEach(s=>{ counts[s]=allCJobs.filter(j=>j.status===s).length; });
+  ["OPEN","WORKING","SUBS","FIXED","FAILED","WDWF"].forEach(s=>{ counts[s]=allCJobs.filter(j=>j.status===s).length; });
   // Pick accent color: SUBS=purple, WORKING/OPEN=amber, FIXED=green, else dim
   const accentCol = counts.SUBS?"#a78bfa":counts.WORKING?"#f59e0b":counts.OPEN?"#60a5fa":counts.FIXED?"#34d399":"rgba(58,130,246,0.25)";
   const activeDot = counts.SUBS||counts.WORKING||counts.OPEN||counts.FIXED;
@@ -460,7 +460,7 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
             letterSpacing:"0.04em"
           }}>{total} cargo{total!==1?"es":""}</span>
           <div style={{display:"flex",gap:3,alignItems:"center"}}>
-            {[["OPEN","#60a5fa"],["WORKING","#f59e0b"],["SUBS","#a78bfa"],["FIXED","#34d399"]].map(([s,col])=>counts[s]>0&&(
+            {[["OPEN","#60a5fa"],["WORKING","#f59e0b"],["SUBS","#a78bfa"],["FIXED","#34d399"],["WDWF","#94a3b8"]].map(([s,col])=>counts[s]>0&&(
               <span key={s} title={`${counts[s]} ${s}`} style={{
                 fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,
                 background:col+"22",color:col,border:"1px solid "+col+"44",
@@ -801,7 +801,7 @@ function FixingTab({vessels}){
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                 <thead>
                   <tr style={{background:"rgba(14,22,40,0.98)"}}>
-                    {[["Charterer","name"],["Open","open"],["Working","working"],["Subs","subs"],["Fixed","fixed"],["Failed","failed"],["",""]].map(([h,sk])=>(
+                    {[["Charterer","name"],["Open","open"],["Working","working"],["Subs","subs"],["Fixed","fixed"],["Failed","failed"],["WDWF","wdwf"],["",""]].map(([h,sk])=>(
                       <th key={h} onClick={sk?()=>setClientSort(sk):undefined}
                         style={{padding:"7px 12px",textAlign:"left",fontSize:10,fontWeight:700,
                           color:clientSort===sk?"rgba(200,220,255,0.9)":"rgba(120,160,220,0.55)",
@@ -847,7 +847,7 @@ function FixingTab({vessels}){
                               </div>
                             )}
                           </td>
-                          {["OPEN","WORKING","SUBS","FIXED","FAILED"].map(s=>(
+                          {["OPEN","WORKING","SUBS","FIXED","FAILED","WDWF"].map(s=>(
                             <td key={s} style={{padding:"8px 12px",textAlign:"center",color:counts[s]>0?JOB_STATUS_COL[s]:"rgba(100,130,180,0.18)",fontWeight:counts[s]>0?700:400,borderBottom:"1px solid rgba(58,130,246,0.07)"}}>
                               {counts[s]>0?counts[s]:"—"}
                             </td>
@@ -903,7 +903,7 @@ function FixingTab({vessels}){
                 return sortKey==="date_desc"?db2-da:da-db2;
               }
               if(sortKey==="status"){
-                const order=["OPEN","WORKING","SUBS","FIXED","FAILED"];
+                const order=["OPEN","WORKING","SUBS","FIXED","FAILED","WDWF"];
                 return order.indexOf(a.status)-order.indexOf(b.status);
               }
               return 0;
