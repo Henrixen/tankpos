@@ -190,8 +190,21 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
       insertImage(imgItem.getAsFile());
       return;
     }
-    // Plain text paste — let browser handle, then fire onChange
-    setTimeout(()=>{ onChange(editorRef.current?.innerHTML||""); }, 0);
+    // Strip all formatting — insert as plain text so it inherits the editor's color/font
+    e.preventDefault();
+    const text = e.clipboardData.getData("text/plain");
+    if (document.queryCommandSupported && document.queryCommandSupported("insertText")) {
+      document.execCommand("insertText", false, text);
+    } else {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(document.createTextNode(text));
+        range.collapse(false);
+      }
+    }
+    onChange(editorRef.current?.innerHTML||"");
   }
 
   function handleKeyDown(e){
@@ -319,6 +332,8 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
         [data-job-field="${jobId}-${field}"] th{background:rgba(20,40,80,0.5);font-weight:700;}
         [data-job-field="${jobId}-${field}"] td .col-resizer,[data-job-field="${jobId}-${field}"] th .col-resizer{position:absolute;top:0;right:0;width:4px;height:100%;cursor:col-resize;z-index:2;background:transparent;user-select:none;}
         [data-job-field="${jobId}-${field}"] td .col-resizer:hover,[data-job-field="${jobId}-${field}"] th .col-resizer:hover{background:rgba(88,130,200,0.4);}
+        [data-job-field="${jobId}-${field}"] *{color:inherit !important;font-family:inherit !important;font-size:inherit !important;background:transparent !important;}
+        [data-job-field="${jobId}-${field}"] img{background:initial !important;}
       `}</style>
       <div style={{
         display:"flex", alignItems:"center", justifyContent:"space-between",
@@ -356,6 +371,7 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
 
 function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingClientName,setEditingClientName,renameClient,setPendingDelClient,createJob,inpS,JOB_STATUS_COL,mobile=false}){
   const [showPencilMenu,setShowPencilMenu]=useState(false);
+  const [logoOk,setLogoOk]=useState(true);
   const allCJobs=jobs.filter(j=>(j.charterer||"")===charterer);
   const total=allCJobs.length;
   const isActive=expandedJob===charterer;
@@ -367,6 +383,9 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
   // Pick accent color: SUBS=purple, WORKING/OPEN=amber, FIXED=green, else dim
   const accentCol = counts.SUBS?"#a78bfa":counts.WORKING?"#f59e0b":counts.OPEN?"#60a5fa":counts.FIXED?"#34d399":"rgba(58,130,246,0.25)";
   const activeDot = counts.SUBS||counts.WORKING||counts.OPEN||counts.FIXED;
+  // Best-effort company logo lookup (Clearbit, free, no key) — silently hides on failure
+  const domainGuess=(charterer||"").toLowerCase().replace(/[^a-z0-9\s]/g,"").trim().split(/\s+/)[0];
+  const logoUrl=domainGuess?`https://logo.clearbit.com/${domainGuess}.com`:null;
 
   return(
     <div style={{
@@ -381,6 +400,13 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
       {/* Top accent bar */}
       <div style={{height:3,borderRadius:"9px 9px 0 0",background:isActive?"rgba(88,166,255,0.7)":activeDot?accentCol:"rgba(58,130,246,0.12)",transition:"background 0.2s"}}/>
 
+      {logoUrl&&logoOk&&(
+        <img src={logoUrl} alt="" onError={()=>setLogoOk(false)}
+          style={{position:"absolute",top:mobile?6:9,right:mobile?6:9,width:mobile?14:16,height:mobile?14:16,borderRadius:3,
+            objectFit:"contain",background:"rgba(255,255,255,0.92)",padding:1.5,
+            border:"1px solid rgba(88,166,255,0.2)",pointerEvents:"none"}}/>
+      )}
+
       <div style={{padding:mobile?"7px 8px 6px":"11px 13px 10px",flex:1,display:"flex",flexDirection:"column",gap:0}}>
         {isEditingName&&client?(
           <input autoFocus defaultValue={client.name}
@@ -393,7 +419,8 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
             <span style={{
               fontSize:mobile?10:12,fontWeight:700,lineHeight:1.25,
               color:isActive?"#a8d4ff":"rgba(200,225,255,0.88)",
-              flex:1,wordBreak:"break-word",letterSpacing:"0.01em"
+              flex:1,wordBreak:"break-word",letterSpacing:"0.01em",
+              paddingRight:logoUrl&&logoOk?(mobile?16:19):0
             }}>{charterer||"—"}</span>
             {client&&(
               <div style={{position:"relative",flexShrink:0,marginTop:1}} onClick={e=>e.stopPropagation()}>
