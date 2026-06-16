@@ -891,10 +891,10 @@ function FixingTab({vessels}){
             const setView=v=>setExpandedPanelView(p=>({...p,[charterer]:v}));
             // Parse "18 Apr 2026" style date strings
             function parseJobDate(j){
-              if(j.created_at) return new Date(j.created_at).getTime();
               const s=j.added_date||"";
               const m=s.match(/(\d{1,2})\s([A-Za-z]{3})\s(\d{4})/);
               if(m){const months={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};return new Date(parseInt(m[3]),months[m[2]],parseInt(m[1])).getTime();}
+              if(j.created_at) return new Date(j.created_at).getTime();
               return 0;
             }
             const sortedJobs=[...chartererJobs].sort((a,b)=>{
