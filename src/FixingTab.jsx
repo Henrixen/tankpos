@@ -418,18 +418,17 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
             onClick={e=>e.stopPropagation()}
             style={{...inpS,width:"100%",fontSize:mobile?11:13,fontWeight:700,padding:"2px 6px"}}/>
         ):(
-          <div style={{display:"flex",alignItems:"flex-start",gap:3,minHeight:mobile?24:34}}>
-            {logoUrl&&logoOk&&(
-              <img src={logoUrl} alt="" onError={()=>setLogoOk(false)}
-                style={{width:mobile?14:16,height:mobile?14:16,borderRadius:3,flexShrink:0,marginTop:1,
-                  objectFit:"contain",background:"rgba(255,255,255,0.92)",padding:1.5,
-                  border:"1px solid rgba(88,166,255,0.2)"}}/>
-            )}
+          <div style={{display:"flex",alignItems:"flex-start",gap:5,minHeight:mobile?24:34}}>
             <span style={{
               fontSize:mobile?10:12,fontWeight:700,lineHeight:1.25,
               color:isActive?"#a8d4ff":"rgba(200,225,255,0.88)",
               flex:1,wordBreak:"break-word",letterSpacing:"0.01em"
             }}>{charterer||"—"}</span>
+            {logoUrl&&logoOk&&(
+              <img src={logoUrl} alt="" onError={()=>setLogoOk(false)}
+                style={{width:mobile?20:24,height:mobile?20:24,flexShrink:0,marginTop:-1,
+                  objectFit:"contain"}}/>
+            )}
             {client&&(
               <div style={{position:"relative",flexShrink:0,marginTop:1}} onClick={e=>e.stopPropagation()}>
                 <button onClick={e=>{e.stopPropagation();setShowPencilMenu(v=>!v);}}
