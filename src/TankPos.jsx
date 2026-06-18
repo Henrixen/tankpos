@@ -5,11 +5,9 @@ import { isMobile } from "./constants";
 import { enrichV, normaliseCargo, mergeVessels, toISODate } from "./utils";
 import { saveV, saveSnapshot, loadHistory } from "./supabaseHelpers";
 import { v4 as uuidv4 } from 'uuid';
+import DesktopApp from "./DesktopApp";
 import { fetchWithCache } from "./offlineCache";
 import OfflineIndicator from "./OfflineIndicator";
-
-// Lazy-load DesktopApp to break the TankPos→DesktopApp→...→TankPos circular dep
-const DesktopApp = React.lazy(()=>import("./DesktopApp"));
 
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
@@ -23,25 +21,7 @@ export default function TankPos(){
   const [cargoTotal,setCargoTotal]=useState(0);
   const [hasMore,setHasMore]=useState(false);
   const searchTimer=useRef(null);
-  const refreshTimer=useRef(null); // debounced re-fetch after edits
   const [mobile,setMobile]=useState(()=>isMobile());
-  // Manual layout override — stored in localStorage so it persists
-  // URL param ?reset_layout=1 clears the override (escape hatch if stuck)
-  const [layoutOverride,setLayoutOverride]=useState(()=>{
-    if(new URLSearchParams(window.location.search).has("reset_layout")){
-      localStorage.removeItem("signal_layout");
-      return null;
-    }
-    const stored=localStorage.getItem("signal_layout");
-    return stored||null; // null=auto, "mobile"=force mobile, "desktop"=force desktop
-  });
-  const effectiveMobile = layoutOverride==="mobile" ? true : layoutOverride==="desktop" ? false : mobile;
-
-  function toggleLayout(){
-    const next = effectiveMobile ? "desktop" : "mobile";
-    setLayoutOverride(next);
-    localStorage.setItem("signal_layout",next);
-  }
   const [fileDate, setFileDate] = useState(() => new Date().toISOString().slice(0,10));
 
   async function loadVesselDB(){
@@ -51,11 +31,8 @@ export default function TankPos(){
     let from = 0;
     const pageSize = 1000;
     while(true){
-      const {data, error} = await supabase.from("vessels_db")
-        .select("vessel,imo,dwt,built,loa,beam,cbm,coating,ice_class,fuel,operator")
-        .range(from, from+pageSize-1);
-      if(error){ console.error("vesselDB load error:", error); break; }
-      if(!data?.length) break;
+      const {data, error} = await supabase.from("vessels_db").select("vessel,imo,dwt,built,loa,beam,cbm,coating,ice_class,fuel,operator").range(from, from+pageSize-1);
+      if(error || !data || data.length === 0) break;
       allRows = [...allRows, ...data];
       if(data.length < pageSize) break;
       from += pageSize;
@@ -63,9 +40,8 @@ export default function TankPos(){
     const map = {};
     const imoMap = {};
     allRows.forEach(r => {
-      const enriched = {...r, coating: r.coating || ""};
-      if(r.vessel) map[r.vessel.toLowerCase().trim()] = enriched;
-      if(r.imo) imoMap[String(r.imo).trim()] = enriched;
+      if(r.vessel) map[r.vessel.toLowerCase().trim()] = r;
+      if(r.imo) imoMap[String(r.imo).trim()] = r;
     });
     setVesselDB(map);
     window.vesselDB = map;
@@ -73,29 +49,6 @@ export default function TankPos(){
     setVesselDBLoaded(true);
     setVesselDBLoading(false);
     console.log("vesselDB loaded on demand:", allRows.length);
-
-    // Re-enrich positions already in memory with fresh vesselDB data
-    setVessels(prev => {
-      if(!prev.length) return prev;
-      let changed = false;
-      const next = prev.map(v => {
-        const dbRec = map[v.vessel?.toLowerCase().trim()];
-        if(!dbRec) return v;
-        // Only fill in fields that are missing (0, null, or empty)
-        const newLoa  = (v.loa  && v.loa  > 0) ? v.loa  : (dbRec.loa  || null);
-        const newBeam = (v.beam && v.beam > 0) ? v.beam : (dbRec.beam || null);
-        const newDwt  = v.dwt  || dbRec.dwt  || null;
-        const newBuilt= v.built|| dbRec.built || null;
-        const newCbm  = v.cbm  || dbRec.cbm  || null;
-        const newCoat = v.coating || dbRec.coating || "";
-        if(newLoa!==v.loa||newBeam!==v.beam||newDwt!==v.dwt||newCoat!==v.coating){
-          changed=true;
-          return{...v,loa:newLoa,beam:newBeam,dwt:newDwt,built:newBuilt,cbm:newCbm,coating:newCoat};
-        }
-        return v;
-      });
-      return changed ? next : prev;
-    });
   }
 
   function onCargoSearch(term){
@@ -123,7 +76,7 @@ export default function TankPos(){
         .or(`charterer.ilike.%${t}%,vessel.ilike.%${t}%,load.ilike.%${t}%,disch.ilike.%${t}%,cargo.ilike.%${t}%,status.ilike.%${t}%`)
         .range(0,499).order("updated",{ascending:false});
       if(error){console.error(error);return;}
-      setCargoes(data.map(r=>({...normaliseCargo(r),entered_by:r.entered_by||""})));
+      setCargoes(data.map(normaliseCargo));
     } else {
       // Fetch with offline fallback
       const { data, source } = await fetchWithCache('cargoes', async () => {
@@ -141,7 +94,7 @@ export default function TankPos(){
       }
       
       console.log(`🚢 Loaded ${data.cargoes?.length || 0} cargoes from ${source}`);
-      setCargoes((data.cargoes || []).map(r=>({...normaliseCargo(r),entered_by:r.entered_by||""})));
+      setCargoes((data.cargoes || []).map(normaliseCargo));
       setHasMore((data.cargoes || []).length === 200);
       if(data.total != null) setCargoTotal(data.total);
     }
@@ -175,19 +128,19 @@ export default function TankPos(){
     "7. MR (>40)":"MR",
   };
   
-  // Fetch positions directly — skip localStorage cache for large datasets (quota guard)
-  const { data: posData, error: posError } = await supabase
-    .from("positions_latest").select("*").limit(10000);
-  if (posError) { console.error('positions fetch error:', posError); return; }
-  const data = posData;
-  // Try to cache but silently skip if storage is full
-  try {
-    const serialized = JSON.stringify(data);
-    if (serialized.length < 3_000_000) { // only cache if < ~3MB
-      localStorage.setItem('tankpos_positions_v1', serialized);
-    }
-  } catch(e) { /* quota exceeded — fine, data is in memory */ }
-  console.log(`📍 Loaded ${data.length} positions from network`);
+  // Fetch with offline fallback
+  const { data, source } = await fetchWithCache('positions', async () => {
+    const { data, error } = await supabase.from("positions_latest").select("*").limit(10000);
+    if (error) throw error;
+    return data;
+  });
+  
+  if (!data) {
+    console.error('No positions data available (offline + no cache)');
+    return;
+  }
+  
+  console.log(`📍 Loaded ${data.length} positions from ${source}`);
   
   const mn=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   setVessels((data||[]).map(r=>{
@@ -199,57 +152,44 @@ export default function TankPos(){
     }
     const imoKey = String(r.imo_number||r.imo||"").trim();
     const dbByIMO = window.vesselDBByIMO||{};
-    const dbByName = window.vesselDB||{};
     const imoRec = imoKey ? dbByIMO[imoKey] : null;
-    const nameRec = dbByName[(r.vessel_name||"").toLowerCase().trim()] || null;
-    // Use IMO match first, then name match for vessel specs
-    const dbRec = imoRec || nameRec;
     return{
       id:          String(r.id||""),
       vessel:      String(r.vessel_name||"").toUpperCase(),
       operator:    r.operator||"",
       openPort:    r.port_name||"",
       date:        fmtDate,
-      dwt:         r.dwt||dbRec?.dwt||null,
-      built:       r.build_year||dbRec?.built||null,
-      loa:         (r.overall_length&&Number(r.overall_length)>0)?Math.round(Number(r.overall_length)):(dbRec?.loa||null),
-      beam:        (r.beam&&Number(r.beam)>0)?Math.round(Number(r.beam)):(dbRec?.beam||null),
-      cbm:         r.cbm||dbRec?.cbm||null,
-      coating:     r.coating_type_2||r.coating||r.coated||dbRec?.coating||"",
+      dwt:         r.dwt||null,
+      built:       r.build_year||null,
+      loa:         r.overall_length!=null?Math.round(Number(r.overall_length))||null:null,
+      beam:        r.beam!=null?Math.round(Number(r.beam))||null:null,
+      cbm:         r.cbm||imoRec?.cbm||null,
+      coating:     r.coating_type_2||r.coating||r.coated||"",
       comment:     r.details||"",
       notes:       r.notes||"",
       last3:       r.last_3_cargoes||"",
       dirtyClean:  r.dirty_clean||"",
-      iceClass:    r.ice_class||dbRec?.ice_class||"",
+      iceClass:    r.ice_class||"",
       segment:     SEGMENT_RENAME[r.segment]||r.segment||"",
       superRegion: REGION_RENAME[r.super_region]||r.super_region||"",
       updatedAt:   r.updated_at||"",
       fileDate:    r.file_date||null,
       source:      r.source||"external",
-      entered_by:  r.entered_by||"",
       spec: {
-        iceClass: r.ice_class||dbRec?.ice_class||null,
+        iceClass: r.ice_class||null,
         lastCargo: r.last_3_cargoes||null,
         segment: r.segment||null,
-        coated: r.coating||r.coated||dbRec?.coating||null,
+        coated: r.coating||r.coated||null,
       }
     };
   }));
 }
   async function loadMoreCargoes(){
-    // Load ALL remaining cargoes, not just 200 at a time
-    let allData=[];
-    let from=cargoes.length;
-    const BATCH=1000;
-    while(true){
-      const{data,error}=await supabase.from("cargoes").select("*")
-        .range(from,from+BATCH-1).order("updated",{ascending:false});
-      if(error){console.error(error);break;}
-      allData=[...allData,...data];
-      if(data.length<BATCH){setHasMore(false);break;}
-      from+=BATCH;
-    }
-    if(allData.length>0) setCargoes(prev=>[...prev,...allData.map(r=>({...normaliseCargo(r),entered_by:r.entered_by||""}))]);
+    const{data,error}=await supabase.from("cargoes").select("*")
+      .range(cargoes.length,cargoes.length+199).order("updated",{ascending:false});
+    if(error){console.error(error);return;}
+    if(data.length<200) setHasMore(false);
+    setCargoes(prev=>[...prev,...data.map(normaliseCargo)]);
   }
 
   const renameV=useCallback((oldName,newName)=>{
@@ -318,24 +258,22 @@ export default function TankPos(){
     .ilike("vessel_name", name);
 
   if (error) console.error("updateV error:", error);
-  // No re-fetch — local state already updated optimistically, re-fetch reshuffles table
 }, []);
 
   // Universal cargo updater — optimistic local update + Supabase write
   const updateC=useCallback(async(id,field,value)=>{
-    // Normalise freight format on save
-    const normValue=field==="freight"?normaliseFreight(value):value;
     const displayValue=(field==="from"||field==="to")?(() => {
-      const iso=toISODate(normValue);
-      if(!iso) return normValue;
+      const iso=toISODate(value);
+      if(!iso) return value;
       const dt=new Date(iso);
       return dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
-    })():normValue;
-    setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:displayValue}:c));
-    const dbValue=(field==="from"||field==="to")?toISODate(normValue):normValue;
-    const{error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id);
-    if(error) console.error(error);
-    // No re-fetch — local state already updated above, re-fetch reshuffles the table
+    })():value;
+    const editor=localStorage.getItem("signal_user")||"H";
+    const nowIso=new Date().toISOString();
+    setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:displayValue,entered_by:editor,updated:nowIso}:c));
+    const dbValue=(field==="from"||field==="to")?toISODate(value):value;
+    const{error}=await supabase.from("cargoes").update({[field]:dbValue,entered_by:editor,updated:nowIso}).eq("id",id);
+    if(error)console.error(error);
   },[]);
 
   const addVessels = useCallback(async (parsed) => {
@@ -409,138 +347,54 @@ export default function TankPos(){
   .from("positions")
   .upsert(rows, { onConflict: 'vessel_name' });
     if (error) console.error("positions insert error:", error);
-    else {
-      console.log("positions saved ok:", rows.length, "rows");
-      // Re-fetch so the table reflects what's now in DB (parse complete)
-      fetchPositions();
-    }
+    else console.log("positions saved ok:", rows.length, "rows");
     
     return r;
   }, [vesselDB, saveV, saveSnapshot]);
 
-  // Normalise freight to standard format: "USD 450k ls" or "USD 45 pmt"
-  // Rules:
-  //   explicit 'k' suffix (500k, 450K)  → always LS
-  //   explicit 'pmt'/'per mt'           → always PMT
-  //   explicit 'ls'/'lump sum'          → always LS
-  //   raw number >= 1500 (e.g. 500000)  → LS (convert to k)
-  //   raw number < 1500 (e.g. 35, 125)  → PMT
-  //   freetext (USD 35 pmt, $500k ls)   → honour as typed, just normalise prefix
-  function normaliseFreight(raw){
-    if(!raw) return "";
-    const s=String(raw).trim();
-    if(!s) return "";
-    const up=s.toUpperCase();
-    if(up==="RNR"||up==="TBN"||up==="TBC") return s.toUpperCase();
-    if(/^(USD|EUR)\s+.+/i.test(s)) return s;
-    const isEur=/EUR|€/i.test(s);
-    const cur=isEur?"EUR":"USD";
-    // Strip trailing port ratio FIRST: "126 1/2", "4.15 M L/S 2/1", "95 2/1"
-    const withoutRatio=s.replace(/\s+\d+\/\d+\s*$/,"").trim();
-    // "M L/S" = million lump sum, e.g. "4.15 M L/S"
-    const isMls=/\b\d+(\.\d+)?\s*M\s*(L\/S|ls)/i.test(withoutRatio);
-    const kMatch=withoutRatio.match(/(\d+(?:\.\d+)?)\s*[kK]/);
-    const hasK=!!kMatch;
-    const isPmt=/pmt|per\s*mt|per\s*ton|\bpt\b/i.test(withoutRatio);
-    const isLs=/\bls\b|lump\s*sum|L\/S/i.test(withoutRatio);
-    const numStr=withoutRatio.replace(/EUR|USD|\$|€|[kK]\b|M\b|million|L\/S/gi,"").replace(/[,\s]/g,"");
-    const num=parseFloat(numStr.replace(/[^0-9.]/g,""));
-    if(isNaN(num)) return s;
-    if(isMls){ return cur+" "+num.toFixed(2).replace(".",",")+"m ls"; }
-    if(isPmt) return cur+" "+Math.round(num)+" pmt";
-    if(isLs||hasK){ const k=hasK?Math.round(num):Math.round(num/1000); return cur+" "+k+"k ls"; }
-    if(num>=1500){
-      if(num>=1000000){ return cur+" "+(num/1000000).toFixed(2).replace(".",",")+"m ls"; }
-      return cur+" "+Math.round(num/1000)+"k ls";
-    }
-    return cur+" "+Math.round(num)+" pmt";
-  }
-
   const addCargoes=useCallback(async(parsed)=>{
-    const nowIso=new Date().toISOString();
-    const stamped=parsed.map((f,i)=>{
-      // Extract port ratio from freight before normalising (e.g. "126 1/2" → comment: "bss 1:2")
-      let freightRaw=f.freight||"";
-      let portNote="";
-      const ratioMatch=freightRaw.match(/\s+(\d+)\/(\d+)\s*$/);
-      if(ratioMatch){
-        portNote=`bss ${ratioMatch[1]}:${ratioMatch[2]}`;
-      }
-      const norm=normaliseCargo({
-        ...f,
-        freight: normaliseFreight(freightRaw),
-        comment: [f.comment,portNote].filter(Boolean).join(" "),
-        id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
-        updated: nowIso,
-      });
-      if(f.entered_by) norm.entered_by=f.entered_by;
-      return norm;
-    });
-
-    // Fetch existing cargoes from Supabase for dedup check
-    // Match on charterer + load + from (laycan start) — if all three match, treat as same fixture
-    const {data:existing}=await supabase.from("cargoes")
-      .select("id,charterer,load,from,status,freight,vessel")
-      .gte("updated",new Date(Date.now()-90*24*60*60*1000).toISOString()); // last 90 days only
-
-    const existingMap={};
-    (existing||[]).forEach(e=>{
-      const key=`${(e.charterer||"").toLowerCase()}|${(e.load||"").toLowerCase()}|${e.from||""}`;
-      if(key.length>2) existingMap[key]=e;
-    });
-
-    const toInsert=[];
-    const toUpdate=[];
-
-    stamped.forEach(f=>{
-      const key=`${(f.charterer||"").toLowerCase()}|${(f.load||"").toLowerCase()}|${toISODate(f.from)||""}`;
-      const match=existingMap[key];
-      if(match){
-        toUpdate.push({...match,...f,id:match.id,updated:nowIso,from:toISODate(f.from),to:toISODate(f.to),entered_by:match.entered_by||f.entered_by||""});
-      } else {
-        toInsert.push({...f,from:toISODate(f.from),to:toISODate(f.to),entered_by:f.entered_by||""});
-      }
-    });
-
-    // Update local state — preserve entered_by through normaliseCargo
+    const stamped=parsed.map((f,i)=>normaliseCargo({
+      ...f,
+      id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
+      updated: new Date().toISOString(),
+    }));
+    // Dedup by id and by charterer+load+disch+from
+    let added=0;
     setCargoes(prev=>{
-      const updMap={};
-      toUpdate.forEach(u=>{
-        const norm=normaliseCargo({...u,from:u.from,to:u.to});
-        norm.entered_by=u.entered_by||"";
-        updMap[u.id]=norm;
+      const existingIds=new Set(prev.map(c=>c.id));
+      const toAdd=stamped.filter(f=>{
+        if(existingIds.has(f.id))return false;
+        if(f.charterer&&f.load&&f.from){
+  const dupIdx=prev.findIndex(e=>
+    (e.charterer||"").toLowerCase()===(f.charterer||"").toLowerCase()&&
+    (e.load||"").toLowerCase()===(f.load||"").toLowerCase()&&
+    (e.from||"")===(f.from||"")
+  );
+  if(dupIdx>=0){
+    // Update existing record instead of adding new
+    prev[dupIdx]={...prev[dupIdx],...f};
+    return false;
+  }
+}
+        return true;
       });
-      const updated=prev.map(c=>updMap[c.id]?{...c,...updMap[c.id]}:c);
-      const newNormed=toInsert.map(f=>{
-        const norm=normaliseCargo(f);
-        norm.entered_by=f.entered_by||"";
-        return norm;
-      });
-      return [...updated,...newNormed];
+      added=toAdd.length;
+      return [...prev,...toAdd];
     });
-
-    // Write to Supabase — ensure entered_by is in every row
-    if(toUpdate.length>0){
-      const rows=toUpdate.map(u=>({...u,entered_by:u.entered_by||""}));
+    // Write new rows to Supabase
+    if(stamped.length>0){
+      const rows=stamped.map(c=>({...c,from:toISODate(c.from),to:toISODate(c.to)}));
+      console.log("upserting cargo ids:", rows.map(r=>r.id));
       const{error}=await supabase.from("cargoes").upsert(rows,{onConflict:"id"});
-      if(error) console.error("cargo update error:",error);
+      if(error)console.error("cargo upsert error:",error);
     }
-    if(toInsert.length>0){
-      const rows=toInsert.map(f=>({...f,entered_by:f.entered_by||""}));
-      const{error}=await supabase.from("cargoes").insert(rows);
-      if(error) console.error("cargo insert error:",error);
-    }
-
-    console.log(`Parse result: ${toInsert.length} new, ${toUpdate.length} updated`);
-    // No re-fetch — preserves parse order in UI
-
     setVessels(prev=>{const next=prev.map(v=>{const fix=stamped.find(f=>f.vessel&&f.vessel.toLowerCase()===v.vessel.toLowerCase());if(fix&&fix.status==="FIXED"){return{...v,openPort:"EMPLOYED"};}return v;});saveV(next);return next;});
-    return toInsert.length;
+    return added;
   },[]);
 
   const addV=useCallback(async(v)=>{
   setVessels(prev=>{const idx=prev.findIndex(x=>x.vessel?.toLowerCase()===v.vessel.toLowerCase());const next=idx>=0?prev.map((x,i)=>i===idx?enrichV(v,vesselDB):x):[...prev,enrichV(v,vesselDB)];saveV(next);return next;});
-  const{error}=await supabase.from("positions").upsert([{...v,updated_at:new Date().toISOString(),entered_by:v.entered_by||""}],{onConflict:"vessel_name"});
+  const{error}=await supabase.from("positions").upsert([{...v,updated_at:new Date().toISOString()}],{onConflict:"vessel_name"});
   if(error)console.error(error);
 },[vesselDB]);
   const addC=useCallback(async(c)=>{
@@ -587,12 +441,11 @@ export default function TankPos(){
     }
   },[]);
 
-  const props={vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB,mobile:effectiveMobile,onToggleLayout:toggleLayout,layoutOverride};
+  const props={vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
   return (
     <>
-      <React.Suspense fallback={null}>
-        <DesktopApp {...props} offlineIndicator={<OfflineIndicator cacheKey="positions"/>}/>
-      </React.Suspense>
+      <OfflineIndicator cacheKey="positions" />
+      <DesktopApp {...props}/>
     </>
   );
 }
