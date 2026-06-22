@@ -1988,9 +1988,9 @@ const filtV=useMemo(()=>{
 />
                   </div>
 
-                  {/* Side panel — fixed overlay on right, follows scroll, independent of table layout */}
+                  {/* Side panel — anchored to right of positions table */}
                   {selV&&(
-                    <div style={{width:260,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"fixed",top:72,right:18,zIndex:1000,maxHeight:"calc(100vh - 96px)",display:"flex",flexDirection:"column",boxShadow:"0 16px 50px rgba(0,0,0,0.7)"}}>
+                    <div style={{width:260,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"absolute",top:0,right:0,zIndex:1000,maxHeight:"calc(100vh - 120px)",display:"flex",flexDirection:"column",boxShadow:"0 16px 50px rgba(0,0,0,0.7)"}}>
                       <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
                         <div>
                           <div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>
