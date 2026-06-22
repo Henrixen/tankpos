@@ -1791,7 +1791,7 @@ const filtV=useMemo(()=>{
                 {/* Vessel Table + Side panel row */}
                 <div style={{display:"flex",gap:10,alignItems:"flex-start",position:"relative"}}>
                 {/* Vessel Table */}
-                <div style={{width:"100%",flex:1,minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch"}}
+                <div style={{width:selV?"auto":"100%",flex:1,minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch"}}
                   onClick={e=>{
                     const th=e.target.closest("th");
                     if(!th) return;
@@ -1988,7 +1988,7 @@ const filtV=useMemo(()=>{
 />
                   </div>
 
-                  {/* Side panel — sticky right of table, follows scroll */}
+                  {/* Side panel — right of table, sticky, table shrinks + scrolls */}
                   {selV&&(
                     <div style={{width:240,flexShrink:0,alignSelf:"flex-start",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"sticky",top:64,zIndex:30,maxHeight:"calc(100vh - 84px)",display:"flex",flexDirection:"column",boxShadow:"0 12px 40px rgba(0,0,0,0.55)"}}>
                       <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
