@@ -358,11 +358,12 @@ export default function TankPos(){
   }, [vesselDB, saveV, saveSnapshot]);
 
   const addCargoes=useCallback(async(parsed)=>{
-    const stamped=parsed.map((f,i)=>normaliseCargo({
+    const editorC=localStorage.getItem("signal_user")||"H";
+    const stamped=parsed.map((f,i)=>({...normaliseCargo({
       ...f,
       id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
       updated: new Date().toISOString(),
-    }));
+    }),entered_by:editorC}));
     // Dedup by id and by charterer+load+disch+from
     let added=0;
     setCargoes(prev=>{
