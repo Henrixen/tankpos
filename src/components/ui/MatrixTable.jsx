@@ -14,7 +14,7 @@ export default function MatrixTable({
     background: C.bg2,
     border: "1px solid " + C.bd,
     borderRadius: 8,
-    overflow: "hidden"
+    overflow: "visible"
   };
 
   const th = {
@@ -57,7 +57,7 @@ export default function MatrixTable({
                 key={col.key}
                 style={{
                   ...th,
-                  textAlign: col.align || "left"
+                  textAlign: col.headerAlign || col.align || "left"
                 }}
               >
                 {col.label}
