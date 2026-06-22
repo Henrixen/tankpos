@@ -1259,10 +1259,10 @@ const filtV=useMemo(()=>{
   { key: "operator",  sortKey:"operator",  label: "Operator",  width: colWidthsV.Operator },
   { key: "vessel",    sortKey:"vessel",    label: "Vessel",    width: colWidthsV.Vessel },
   { key: "ais",       label: "",           align:"center",     width: 18 },
-  { key: "built",     sortKey:"built",     label: "Built",     align:"right", headerAlign:"left", width: colWidthsV.Built },
-  { key: "dwt",       sortKey:"dwt",       label: "DWT",           align:"right", headerAlign:"left", width: colWidthsV.DWT },
+  { key: "built",     sortKey:"built",     label: "Built",     align:"left", width: colWidthsV.Built },
+  { key: "dwt",       sortKey:"dwt",       label: "DWT",           align:"left", width: colWidthsV.DWT },
   { key: "coating",   sortKey:"coating",   label: "Coating", width: colWidthsV.Coating },
-  { key: "loa",       sortKey:"loa",       label: "LOA",           align:"right", headerAlign:"left", width: colWidthsV.LOA },
+  { key: "loa",       sortKey:"loa",       label: "LOA",           align:"left", width: colWidthsV.LOA },
   { key: "beam",      sortKey:"beam",      label: "Beam",        align:"right", width: colWidthsV.Beam },
   { key: "cbm",       sortKey:"cbm",       label: "CBM",           align:"right", width: colWidthsV.CBM },
   { key: "date",      sortKey:"date",      label: "Date",        align:"center", width: colWidthsV.Date },
@@ -1882,10 +1882,10 @@ const filtV=useMemo(()=>{
           background:aisVesselSet.has((v.vessel||"").toUpperCase().trim())?"#4ade80":"rgba(120,160,220,0.15)"}}/>
       </td>
 
-      <td style={{ ...tdNum, color: C.dim }}>{v.built || ""}</td>
-      <td style={{ ...tdNum, color: C.dim }}>{fmtN(v.dwt)}</td>
+      <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.built || ""}</td>
+      <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtN(v.dwt)}</td>
       <td style={{ ...tdTxt, color: C.dim }}>{v.coating || ""}</td>
-      <td style={{ ...tdNum, color: C.dim }}>{v.loa || ""}</td>
+      <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.loa || ""}</td>
       <td style={{ ...tdNum, color: C.dim }}>{v.beam || ""}</td>
       <td style={{ ...tdNum, color: C.dim }}>{fmtN(v.cbm)}</td>
 
@@ -1988,9 +1988,9 @@ const filtV=useMemo(()=>{
 />
                   </div>
 
-                  {/* Side panel — floating overlay, top right, table untouched */}
+                  {/* Side panel — floating overlay, follows scroll (fixed) */}
                   {selV&&(
-                    <div style={{width:240,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"absolute",top:0,right:0,zIndex:20,maxHeight:"calc(100vh - 90px)",display:"flex",flexDirection:"column",boxShadow:"0 12px 40px rgba(0,0,0,0.55)"}}>
+                    <div style={{width:240,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"fixed",top:64,right:16,zIndex:50,maxHeight:"calc(100vh - 84px)",display:"flex",flexDirection:"column",boxShadow:"0 12px 40px rgba(0,0,0,0.55)"}}>
                       <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
                         <div>
                           <div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>
