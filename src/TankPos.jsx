@@ -153,6 +153,8 @@ export default function TankPos(){
     const imoKey = String(r.imo_number||r.imo||"").trim();
     const dbByIMO = window.vesselDBByIMO||{};
     const imoRec = imoKey ? dbByIMO[imoKey] : null;
+    const nameRec = (window.vesselDB||{})[String(r.vessel_name||"").toLowerCase().trim()];
+    const vrec = imoRec || nameRec || null;
     return{
       id:          String(r.id||""),
       vessel:      String(r.vessel_name||"").toUpperCase(),
@@ -176,10 +178,11 @@ export default function TankPos(){
       fileDate:    r.file_date||null,
       source:      r.source||"external",
       spec: {
-        iceClass: r.ice_class||null,
-        lastCargo: r.last_3_cargoes||null,
-        segment: r.segment||null,
-        coated: r.coating||r.coated||null,
+        fuel: vrec?.fuel||null,
+        iceClass: r.ice_class||vrec?.ice_class||null,
+        lastCargo: r.last_3_cargoes||vrec?.last_cargo||null,
+        segment: r.segment||vrec?.segment||null,
+        coated: r.coating||r.coated||vrec?.coating||null,
       }
     };
   }));
@@ -339,6 +342,7 @@ export default function TankPos(){
   file_date: nowIso,
   updated_at_manual: nowIso,
   updated_at: nowIso,
+  entered_by: localStorage.getItem("signal_user")||"H",
   spec: spec,
 };
     });
