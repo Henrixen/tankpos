@@ -1791,7 +1791,7 @@ const filtV=useMemo(()=>{
                 {/* Vessel Table + Side panel row */}
                 <div style={{display:"flex",gap:10,alignItems:"flex-start",position:"relative"}}>
                 {/* Vessel Table */}
-                <div style={{width:"100%",flex:1,minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch"}}
+                <div style={{flex:selV?"0 1 auto":"1 1 100%",minWidth:0,maxWidth:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}
                   onClick={e=>{
                     const th=e.target.closest("th");
                     if(!th) return;
@@ -1988,9 +1988,9 @@ const filtV=useMemo(()=>{
 />
                   </div>
 
-                  {/* Side panel — anchored to right of positions table */}
+                  {/* Side panel — sticky, sits in blank area right of table, follows scroll */}
                   {selV&&(
-                    <div style={{width:260,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"absolute",top:0,right:0,zIndex:1000,maxHeight:"calc(100vh - 120px)",display:"flex",flexDirection:"column",boxShadow:"0 16px 50px rgba(0,0,0,0.7)"}}>
+                    <div style={{width:260,flexShrink:0,alignSelf:"flex-start",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"sticky",top:72,zIndex:1000,maxHeight:"calc(100vh - 96px)",display:"flex",flexDirection:"column",boxShadow:"0 16px 50px rgba(0,0,0,0.7)"}}>
                       <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
                         <div>
                           <div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>
