@@ -334,7 +334,7 @@ export default function TankPos(){
   overall_length: ev.loa || null,
   beam: ev.beam || null,
   cbm: ev.cbm || null,
-  coating: ev.coating || extractCoating(ev.comment||"") || null,
+  coating: ev.coating || dbVessel?.coating || extractCoating(ev.comment||"") || null,
   details: ev.comment || null,
   file_date: nowIso,
   updated_at_manual: nowIso,
