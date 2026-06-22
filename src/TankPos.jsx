@@ -299,7 +299,8 @@ export default function TankPos(){
     setVessels(prev => {
       const before = prev.length;
       // We pass nowIso into the local state so the UI updates immediately
-      const next = mergeVessels(prev, parsed.map(p => ({ ...p, fileDate: nowIso })), vdb);
+      const editorInit = localStorage.getItem("signal_user")||"H";
+      const next = mergeVessels(prev, parsed.map(p => ({ ...p, fileDate: nowIso, entered_by: editorInit })), vdb);
       r = { 
         added: next.length - before, 
         updated: parsed.length - Math.max(0, next.length - before), 
