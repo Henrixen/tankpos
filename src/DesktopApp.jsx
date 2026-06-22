@@ -165,7 +165,7 @@ function TagCellV({vesselName,tag,onUpdateV}){
       {open&&(
         <>
           <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
-          <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,zIndex:9999,background:"#0a1628",
+          <div style={{position:"absolute",top:"calc(100% + 4px)",right:0,zIndex:9999,background:"#0a1628",
             border:"1px solid rgba(88,166,255,0.3)",borderRadius:7,padding:"6px",
             boxShadow:"0 8px 28px rgba(0,0,0,0.7)",display:"flex",flexDirection:"column",gap:2,minWidth:150,maxHeight:280,overflowY:"auto"}}>
             {cur&&<button onClick={()=>{onUpdateV(vesselName,"tag","");setOpen(false);}}
@@ -1988,9 +1988,9 @@ const filtV=useMemo(()=>{
 />
                   </div>
 
-                  {/* Side panel — floating overlay, follows scroll (fixed) */}
+                  {/* Side panel — sticky right of table, follows scroll */}
                   {selV&&(
-                    <div style={{width:240,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"fixed",top:64,right:16,zIndex:50,maxHeight:"calc(100vh - 84px)",display:"flex",flexDirection:"column",boxShadow:"0 12px 40px rgba(0,0,0,0.55)"}}>
+                    <div style={{width:240,flexShrink:0,alignSelf:"flex-start",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"sticky",top:64,zIndex:30,maxHeight:"calc(100vh - 84px)",display:"flex",flexDirection:"column",boxShadow:"0 12px 40px rgba(0,0,0,0.55)"}}>
                       <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
                         <div>
                           <div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>
