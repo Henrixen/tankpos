@@ -76,7 +76,7 @@ export default function TankPos(){
         .or(`charterer.ilike.%${t}%,vessel.ilike.%${t}%,load.ilike.%${t}%,disch.ilike.%${t}%,cargo.ilike.%${t}%,status.ilike.%${t}%`)
         .range(0,499).order("updated",{ascending:false});
       if(error){console.error(error);return;}
-      setCargoes(data.map(normaliseCargo));
+      setCargoes(data.map(r=>({...normaliseCargo(r),entered_by:r.entered_by})));
     } else {
       // Fetch with offline fallback
       const { data, source } = await fetchWithCache('cargoes', async () => {
@@ -94,7 +94,7 @@ export default function TankPos(){
       }
       
       console.log(`🚢 Loaded ${data.cargoes?.length || 0} cargoes from ${source}`);
-      setCargoes((data.cargoes || []).map(normaliseCargo));
+      setCargoes((data.cargoes || []).map(r=>({...normaliseCargo(r),entered_by:r.entered_by})));
       setHasMore((data.cargoes || []).length === 200);
       if(data.total != null) setCargoTotal(data.total);
     }
@@ -192,7 +192,7 @@ export default function TankPos(){
       .range(cargoes.length,cargoes.length+199).order("updated",{ascending:false});
     if(error){console.error(error);return;}
     if(data.length<200) setHasMore(false);
-    setCargoes(prev=>[...prev,...data.map(normaliseCargo)]);
+    setCargoes(prev=>[...prev,...data.map(r=>({...normaliseCargo(r),entered_by:r.entered_by}))]);
   }
 
   const renameV=useCallback((oldName,newName)=>{
