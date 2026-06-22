@@ -807,6 +807,24 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [sortK,setSortK]=useState("fileDate");
   const [sortD,setSortD]=useState(-1);
   const [sel,setSel]=useState(null);
+  const posRowRef=useRef(null);
+  const [panelPos,setPanelPos]=useState({left:0,top:0});
+  useEffect(()=>{
+    if(!sel)return;
+    const measure=()=>{
+      const el=posRowRef.current;
+      if(!el)return;
+      const r=el.getBoundingClientRect();
+      const tableEl=el.querySelector("table");
+      const tableRight=tableEl?tableEl.getBoundingClientRect().right:r.left+400;
+      const left=Math.min(tableRight+12, window.innerWidth-280);
+      setPanelPos({left:Math.max(12,left),top:Math.max(72,r.top)});
+    };
+    measure();
+    window.addEventListener("scroll",measure,true);
+    window.addEventListener("resize",measure);
+    return()=>{window.removeEventListener("scroll",measure,true);window.removeEventListener("resize",measure);};
+  },[sel]);
   const [showVesselPopout,setShowVesselPopout]=useState(false);
   const [popoutVessel,setPopoutVessel]=useState(null);
   const [contextMenu,setContextMenu]=useState(null);
@@ -1789,9 +1807,9 @@ const filtV=useMemo(()=>{
                 </div>
 
                 {/* Vessel Table + Side panel row */}
-                <div style={{display:"flex",gap:10,alignItems:"flex-start",position:"relative"}}>
+                <div ref={posRowRef} style={{display:"flex",gap:10,alignItems:"flex-start",position:"relative"}}>
                 {/* Vessel Table */}
-                <div style={{flex:selV?"0 1 auto":"1 1 100%",minWidth:0,maxWidth:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}
+                <div style={{width:"100%",flex:1,minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch"}}
                   onClick={e=>{
                     const th=e.target.closest("th");
                     if(!th) return;
@@ -1988,9 +2006,9 @@ const filtV=useMemo(()=>{
 />
                   </div>
 
-                  {/* Side panel — sticky, sits in blank area right of table, follows scroll */}
+                  {/* Side panel — fixed at measured table-right edge, follows scroll */}
                   {selV&&(
-                    <div style={{width:260,flexShrink:0,alignSelf:"flex-start",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"sticky",top:72,zIndex:1000,maxHeight:"calc(100vh - 96px)",display:"flex",flexDirection:"column",boxShadow:"0 16px 50px rgba(0,0,0,0.7)"}}>
+                    <div style={{width:260,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"fixed",left:panelPos.left,top:panelPos.top,zIndex:1000,maxHeight:"calc(100vh - 96px)",display:"flex",flexDirection:"column",boxShadow:"0 16px 50px rgba(0,0,0,0.7)"}}>
                       <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
                         <div>
                           <div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>
