@@ -38,6 +38,27 @@ const TabFallback = ()=>null;
 
 
 
+// PanelEC — div-based click-to-edit cell for the vessel popout (EC is <td>-only, breaks in flex)
+function PanelEC({value,color,placeholder,onSave}){
+  const [editing,setEditing]=React.useState(false);
+  const [draft,setDraft]=React.useState("");
+  const ref=React.useRef(null);
+  function start(){setDraft(value||"");setEditing(true);setTimeout(()=>{ref.current?.focus();ref.current?.select?.();},15);}
+  function commit(){setEditing(false);const t=(draft||"").trim();if(t!==(value||""))onSave?.(t);}
+  if(editing)return(
+    <input ref={ref} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={commit}
+      onKeyDown={e=>{e.stopPropagation();if(e.key==="Enter"){e.preventDefault();commit();}if(e.key==="Escape"){e.preventDefault();setEditing(false);}}}
+      placeholder={placeholder||""}
+      style={{width:140,background:"#0f1d33",border:"1px solid #2a4a7f",borderRadius:4,color:"#e6edf7",fontSize:12,padding:"2px 6px",outline:"none",fontFamily:"inherit",textAlign:"right"}}/>
+  );
+  return(
+    <span onClick={start} title="Click to edit"
+      style={{fontSize:12,color:value?(color||"#e6edf7"):"#4a5a78",cursor:"text",textAlign:"right",maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+      {value||placeholder||"—"}
+    </span>
+  );
+}
+
 // TagCell helpers
 const PRESET_TAGS=["AG","CPP","DPP","ex Asia","Med","Parcel","TA","UKC","WAF","Outsider Europe","Space Asia-Europe"];
 function getTagList(){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");return[...new Set([...PRESET_TAGS,...c])].sort();}catch{return PRESET_TAGS.slice();}}
@@ -2003,7 +2024,7 @@ const filtV=useMemo(()=>{
                         {[["Open Port","openPort",C.amber],["Date","date",C.blue],["Comment","comment",C.dim],["Operator","operator",C.purple],["Built","built",C.dim],["DWT","dwt",C.amber],["Coating","coating",C.green],["LOA","loa",C.dim],["Beam","beam",C.dim],["CBM","cbm",C.dim]].map(([l,f,col])=>(
                           <div key={f} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderBottom:"1px solid "+C.bg,gap:4}}>
                             <span style={{fontSize:12,color:C.faint,minWidth:55,flexShrink:0}}>{l}</span>
-                            <EC value={selV[f]} color={col} placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
+                            <PanelEC value={selV[f]} color={col} placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
                           </div>
                         ))}
 
@@ -2013,7 +2034,7 @@ const filtV=useMemo(()=>{
                           return(
                             <div key={f} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderBottom:"1px solid "+C.bg,gap:4}}>
                               <span style={{fontSize:12,color:C.faint,minWidth:55,flexShrink:0}}>{l}</span>
-                              <EC value={val} color={col} placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
+                              <PanelEC value={val} color={col} placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
                             </div>
                           );
                         })}
