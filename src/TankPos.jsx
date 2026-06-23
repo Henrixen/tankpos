@@ -158,6 +158,7 @@ export default function TankPos(){
     return{
       id:          String(r.id||""),
       vessel:      String(r.vessel_name||"").toUpperCase(),
+      imoNo:       r.imo_no!=null?String(r.imo_no):null,
       operator:    r.operator||"",
       openPort:    r.port_name||"",
       date:        fmtDate,
@@ -186,6 +187,24 @@ export default function TankPos(){
       }
     };
   }));
+
+  // Merge in persistent vessel notes (separate table, survives position updates)
+  try {
+    const { data: noteRows } = await supabase.from("vessel_notes").select("imo_no,vessel_name,note");
+    if (noteRows && noteRows.length) {
+      const byImo = {}, byName = {};
+      noteRows.forEach(n => {
+        if (n.imo_no) byImo[String(n.imo_no)] = n.note;
+        if (n.vessel_name) byName[String(n.vessel_name).toUpperCase()] = n.note;
+      });
+      setVessels(prev => prev.map(v => {
+        const note = (v.imoNo && byImo[v.imoNo] != null) ? byImo[v.imoNo]
+                   : (byName[v.vessel] != null) ? byName[v.vessel]
+                   : v.notes;
+        return note != null ? { ...v, notes: note } : v;
+      }));
+    }
+  } catch (e) { console.error("vessel_notes load:", e); }
 }
   async function loadMoreCargoes(){
     const{data,error}=await supabase.from("cargoes").select("*")
@@ -236,13 +255,29 @@ export default function TankPos(){
     return next;
   });
 
+  // Notes persist in a separate table so they survive position re-pastes/feed updates
+  if (field === "notes") {
+    const vobj = vessels.find(v => v.vessel === name);
+    const editor = localStorage.getItem("signal_user") || "H";
+    const payload = {
+      vessel_name: name,
+      imo_no: vobj?.imoNo || null,
+      note: value || null,
+      entered_by: editor,
+      updated_at: new Date().toISOString(),
+    };
+    const onConflict = vobj?.imoNo ? "imo_no" : "vessel_name";
+    const { error } = await supabase.from("vessel_notes").upsert([payload], { onConflict });
+    if (error) console.error("vessel_notes upsert:", error);
+    return;
+  }
+
   const fieldMap = {
     openPort: "port_name",
     date: "open_date",
     built: "build_year",
     loa: "overall_length",
     comment: "details",
-    notes: "notes",
     operator: "operator",
     dwt: "dwt",
     beam: "beam",
@@ -261,7 +296,7 @@ export default function TankPos(){
     .ilike("vessel_name", name);
 
   if (error) console.error("updateV error:", error);
-}, []);
+}, [vessels]);
 
   // Universal cargo updater — optimistic local update + Supabase write
   const updateC=useCallback(async(id,field,value)=>{
