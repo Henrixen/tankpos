@@ -188,23 +188,37 @@ export default function TankPos(){
     };
   }));
 
-  // Merge in persistent vessel notes (separate table, survives position updates)
+  // Merge in vessel_overrides — manual edits (notes + spec) win over CSV/feed, per field
   try {
-    const { data: noteRows } = await supabase.from("vessel_notes").select("imo_no,vessel_name,note");
-    if (noteRows && noteRows.length) {
+    const { data: ovRows } = await supabase.from("vessel_overrides")
+      .select("imo_no,vessel_name,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo");
+    if (ovRows && ovRows.length) {
       const byImo = {}, byName = {};
-      noteRows.forEach(n => {
-        if (n.imo_no) byImo[String(n.imo_no)] = n.note;
-        if (n.vessel_name) byName[String(n.vessel_name).toUpperCase()] = n.note;
+      ovRows.forEach(o => {
+        if (o.imo_no) byImo[String(o.imo_no)] = o;
+        if (o.vessel_name) byName[String(o.vessel_name).toUpperCase()] = o;
       });
       setVessels(prev => prev.map(v => {
-        const note = (v.imoNo && byImo[v.imoNo] != null) ? byImo[v.imoNo]
-                   : (byName[v.vessel] != null) ? byName[v.vessel]
-                   : v.notes;
-        return note != null ? { ...v, notes: note } : v;
+        const o = (v.imoNo && byImo[v.imoNo]) || byName[v.vessel];
+        if (!o) return v;
+        const merged = { ...v };
+        // top-level fields: only apply override when non-null (manual wins)
+        if (o.note != null)    merged.notes   = o.note;
+        if (o.coating != null) merged.coating = o.coating;
+        if (o.loa != null)     merged.loa     = o.loa;
+        if (o.beam != null)    merged.beam    = o.beam;
+        if (o.cbm != null)     merged.cbm     = o.cbm;
+        if (o.dwt != null)     merged.dwt     = o.dwt;
+        if (o.built != null)   merged.built   = o.built;
+        // spec sub-object
+        merged.spec = { ...(v.spec || {}) };
+        if (o.fuel != null)      merged.spec.fuel      = o.fuel;
+        if (o.ice_class != null) merged.spec.iceClass  = o.ice_class;
+        if (o.last_cargo != null)merged.spec.lastCargo = o.last_cargo;
+        return merged;
       }));
     }
-  } catch (e) { console.error("vessel_notes load:", e); }
+  } catch (e) { console.error("vessel_overrides load:", e); }
 }
   async function loadMoreCargoes(){
     const{data,error}=await supabase.from("cargoes").select("*")
@@ -255,34 +269,41 @@ export default function TankPos(){
     return next;
   });
 
-  // Notes persist in a separate table so they survive position re-pastes/feed updates
-  if (field === "notes") {
+  // Vessel-spec + notes persist in vessel_overrides (manual wins, survives CSV/feed updates).
+  // Map popout field -> override column.
+  const OVERRIDE_COLS = {
+    notes: "note",
+    coating: "coating",
+    loa: "loa",
+    beam: "beam",
+    cbm: "cbm",
+    dwt: "dwt",
+    built: "built",
+    "spec.fuel": "fuel",
+    "spec.iceClass": "ice_class",
+    "spec.lastCargo": "last_cargo",
+  };
+  if (OVERRIDE_COLS[field]) {
     const vobj = vessels.find(v => v.vessel === name);
     const editor = localStorage.getItem("signal_user") || "H";
     const payload = {
       vessel_name: name,
       imo_no: vobj?.imoNo || null,
-      note: value || null,
+      [OVERRIDE_COLS[field]]: value || null,
       entered_by: editor,
       updated_at: new Date().toISOString(),
     };
     const onConflict = vobj?.imoNo ? "imo_no" : "vessel_name";
-    const { error } = await supabase.from("vessel_notes").upsert([payload], { onConflict });
-    if (error) console.error("vessel_notes upsert:", error);
+    const { error } = await supabase.from("vessel_overrides").upsert([payload], { onConflict });
+    if (error) console.error("vessel_overrides upsert:", error);
     return;
   }
 
   const fieldMap = {
     openPort: "port_name",
     date: "open_date",
-    built: "build_year",
-    loa: "overall_length",
     comment: "details",
     operator: "operator",
-    dwt: "dwt",
-    beam: "beam",
-    cbm: "cbm",
-    coating: "coating",
   };
 
   const dbField = fieldMap[field] || field;
