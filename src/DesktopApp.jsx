@@ -1988,9 +1988,9 @@ const filtV=useMemo(()=>{
 />
                   </div>
 
-                  {/* Side panel — fixed, beside table aligned with table top */}
+                  {/* Side panel — fixed to right edge, aligned with table top */}
                   {selV&&(
-                    <div style={{width:260,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"fixed",left:"min(540px, calc(100vw - 290px))",top:160,zIndex:1000,maxHeight:"calc(100vh - 180px)",display:"flex",flexDirection:"column",boxShadow:"0 16px 50px rgba(0,0,0,0.7)"}}>
+                    <div style={{width:260,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"fixed",right:14,top:200,zIndex:1000,maxHeight:"calc(100vh - 220px)",display:"flex",flexDirection:"column",boxShadow:"0 16px 50px rgba(0,0,0,0.7)"}}>
                       <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
                         <div>
                           <div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>
