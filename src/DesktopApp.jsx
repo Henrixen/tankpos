@@ -828,6 +828,21 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [sortK,setSortK]=useState("fileDate");
   const [sortD,setSortD]=useState(-1);
   const [sel,setSel]=useState(null);
+  const posTableWrapRef=useRef(null);
+  const [panelLeft,setPanelLeft]=useState(null);
+  useEffect(()=>{
+    if(!sel){setPanelLeft(null);return;}
+    // measure once when a vessel is selected — places panel just right of the table
+    const t=setTimeout(()=>{
+      const el=posTableWrapRef.current;
+      if(!el)return;
+      const tbl=el.querySelector("table");
+      const rightEdge=(tbl||el).getBoundingClientRect().right;
+      const left=Math.min(rightEdge+14, window.innerWidth-274);
+      setPanelLeft(Math.max(12,left));
+    },30);
+    return()=>clearTimeout(t);
+  },[sel]);
   const [showVesselPopout,setShowVesselPopout]=useState(false);
   const [popoutVessel,setPopoutVessel]=useState(null);
   const [contextMenu,setContextMenu]=useState(null);
@@ -1812,7 +1827,7 @@ const filtV=useMemo(()=>{
                 {/* Vessel Table + Side panel row */}
                 <div style={{display:"flex",gap:10,alignItems:"flex-start",position:"relative"}}>
                 {/* Vessel Table */}
-                <div style={{width:"100%",flex:1,minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch"}}
+                <div ref={posTableWrapRef} style={{width:"100%",flex:1,minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch"}}
                   onClick={e=>{
                     const th=e.target.closest("th");
                     if(!th) return;
@@ -2009,9 +2024,9 @@ const filtV=useMemo(()=>{
 />
                   </div>
 
-                  {/* Side panel — fixed to right edge, aligned with table top */}
+                  {/* Side panel — anchored to table's right edge (measured once on open) */}
                   {selV&&(
-                    <div style={{width:260,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"fixed",right:90,top:200,zIndex:1000,maxHeight:"calc(100vh - 220px)",display:"flex",flexDirection:"column",boxShadow:"0 16px 50px rgba(0,0,0,0.7)"}}>
+                    <div style={{width:260,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"fixed",left:panelLeft!=null?panelLeft:undefined,right:panelLeft!=null?undefined:90,top:200,zIndex:1000,maxHeight:"calc(100vh - 220px)",display:"flex",flexDirection:"column",boxShadow:"0 16px 50px rgba(0,0,0,0.7)"}}>
                       <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
                         <div>
                           <div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>
