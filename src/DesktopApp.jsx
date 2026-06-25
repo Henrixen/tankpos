@@ -60,9 +60,28 @@ function PanelEC({value,color,placeholder,onSave}){
 }
 
 // TagCell helpers
-const PRESET_TAGS=["AG","CPP","DPP","ex Asia","Med","Parcel","TA","UKC","WAF","Outsider Europe","Space Asia-Europe"];
-function getTagList(){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");return[...new Set([...PRESET_TAGS,...c])].sort();}catch{return PRESET_TAGS.slice();}}
-function addCustomTag(t){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");if(!c.includes(t))localStorage.setItem("signal_custom_tags",JSON.stringify([...c,t]));}catch{}}
+const PRESET_TAGS=["AG","CPP","DPP","EX ASIA","MED","PARCEL","TA","UKC","WAF","OUTSIDER EUROPE","SPACE ASIA-EUROPE"];
+
+// DWT display: always full number with space thousands (e.g. 15 212), handling
+// raw numbers (15212) and feed "8K"/"26K" strings alike.
+function fmtDwtFull(raw){
+  if(raw==null||raw==="")return "";
+  let n;
+  if(typeof raw==="number")n=raw;
+  else{
+    const s=String(raw).trim().toUpperCase().replace(/\s/g,"");
+    if(/^\d+(\.\d+)?K$/.test(s))n=parseFloat(s)*1000;
+    else n=parseFloat(s.replace(/[^\d.]/g,""));
+  }
+  if(!isFinite(n)||n<=0)return String(raw);
+  return Math.round(n).toLocaleString("en-US").replace(/,/g," ");
+}
+
+// Coating display map — keep full value in DB, show short code in UI
+const COATING_DISPLAY={"STAINLESS STEEL":"STST","MARINELINE":"MARINE","EPOXY":"EPOXY","ZINC":"ZINC"};
+function fmtCoating(c){if(!c)return "";const k=String(c).trim().toUpperCase();return COATING_DISPLAY[k]||c;}
+function getTagList(){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");return[...new Set([...PRESET_TAGS,...c].map(t=>(t||"").toUpperCase()))].sort();}catch{return PRESET_TAGS.slice();}}
+function addCustomTag(t){try{t=(t||"").toUpperCase();const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");if(!c.includes(t))localStorage.setItem("signal_custom_tags",JSON.stringify([...c,t]));}catch{}}
 function getTagScopes(){try{return JSON.parse(localStorage.getItem("signal_tag_scopes")||"{}");}catch{return{};}}
 function setTagScope(t,scope){try{const s=getTagScopes();if(scope==="both")delete s[t];else s[t]=scope;localStorage.setItem("signal_tag_scopes",JSON.stringify(s));}catch{}}
 function getTagScope(t){return getTagScopes()[t]||"both";}
@@ -125,7 +144,7 @@ function TagCell({cargoId,tag,onUpdateC}){
           <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
           <div style={{position:"fixed",top:pos.top,left:pos.left,zIndex:9999,background:"#0a1628",
             border:"1px solid rgba(88,166,255,0.3)",borderRadius:7,padding:"6px",
-            boxShadow:"0 8px 28px rgba(0,0,0,0.7)",display:"flex",flexDirection:"column",gap:2,minWidth:150,maxHeight:280,overflowY:"auto"}}>
+            boxShadow:"0 8px 28px rgba(0,0,0,0.7)",display:"flex",flexDirection:"column",gap:2,minWidth:150}}>
             {cur&&<button onClick={()=>{onUpdateC(cargoId,"tag","");setOpen(false);}}
               style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",
                 background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",
@@ -174,21 +193,21 @@ function TagCellV({vesselName,tag,onUpdateV}){
   const cur=tag||"";
   const curCol=cur?getTagColor(cur):null;
   return(
-    <td style={{padding:"2px 4px",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)",position:"relative"}} onClick={e=>e.stopPropagation()}>
+    <td style={{padding:"2px 4px",verticalAlign:"middle",textAlign:"center",borderBottom:"1px solid rgba(255,255,255,0.035)",position:"relative"}} onClick={e=>e.stopPropagation()}>
       <button onClick={openPick}
         style={{background:curCol?curCol+"22":cur?"rgba(88,166,255,0.15)":"transparent",
           border:"1px solid "+(curCol||( cur?"rgba(88,166,255,0.4)":"rgba(88,166,255,0.12)")),
           borderRadius:3,color:curCol||( cur?"#79c0ff":"rgba(120,160,220,0.25)"),
           fontSize:10,fontWeight:cur?700:400,padding:"1px 5px",cursor:"pointer",
           fontFamily:"inherit",whiteSpace:"nowrap",maxWidth:76,overflow:"hidden",textOverflow:"ellipsis"}}>
-        {cur||"＋"}
+        {cur?cur.toUpperCase():"＋"}
       </button>
       {open&&(
         <>
           <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
           <div style={{position:"absolute",top:"calc(100% + 4px)",right:0,zIndex:9999,background:"#0a1628",
             border:"1px solid rgba(88,166,255,0.3)",borderRadius:7,padding:"6px",
-            boxShadow:"0 8px 28px rgba(0,0,0,0.7)",display:"flex",flexDirection:"column",gap:2,minWidth:150,maxHeight:280,overflowY:"auto"}}>
+            boxShadow:"0 8px 28px rgba(0,0,0,0.7)",display:"flex",flexDirection:"column",gap:2,minWidth:150}}>
             {cur&&<button onClick={()=>{onUpdateV(vesselName,"tag","");setOpen(false);}}
               style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",
                 background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",
@@ -1290,7 +1309,7 @@ const filtV=useMemo(()=>{
   { key: "coating",   sortKey:"coating",   label: "Coating", width: colWidthsV.Coating },
   { key: "loa",       sortKey:"loa",       label: "LOA",           align:"left", width: colWidthsV.LOA },
   { key: "beam",      sortKey:"beam",      label: "Beam",        align:"right", width: colWidthsV.Beam },
-  { key: "cbm",       sortKey:"cbm",       label: "CBM",           align:"right", width: colWidthsV.CBM },
+  { key: "cbm",       sortKey:"cbm",       label: "CBM",           align:"left", width: colWidthsV.CBM },
   { key: "date",      sortKey:"date",      label: "Date",        align:"center", width: colWidthsV.Date },
   { key: "openPort",  sortKey:"openPort",  label: "Open Port", width: colWidthsV.OpenPort },
   { key: "comment",   sortKey:"comment",   label: "Comment",  width: colWidthsV.Comment },
@@ -1612,7 +1631,7 @@ const filtV=useMemo(()=>{
     />
   </div>
 
-  <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", position:"relative" }}>
+  <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position:"relative" }}>
     {/* CSS overrides: vivid opaque bar colours for FixingWindow */}
     <style>{`
       /* Kill transparency on all bars inside the fixing window container */
@@ -1703,7 +1722,12 @@ const filtV=useMemo(()=>{
     <button onClick={onClick} style={{...fb(active),display:"block",width:"100%",textAlign:"left",padding:"3px 8px",fontSize:11,whiteSpace:"nowrap",flexShrink:0}}>{children}</button>
   );
   return(
-    <div style={{display:"grid",gridTemplateColumns:mobile?"repeat(8,minmax(88px,1fr))":"repeat(8,minmax(0,1fr))",gap:mobile?6:10,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1,overflow:mobile?"auto":"hidden",minHeight:0,overflowX:mobile?"auto":"hidden"}}>
+    <div style={{display:"grid",gridTemplateColumns:mobile?"repeat(9,minmax(88px,1fr))":"repeat(9,minmax(0,1fr))",gap:mobile?6:10,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1,overflow:mobile?"auto":"hidden",minHeight:0,overflowX:mobile?"auto":"hidden"}}>
+      {/* Tags — manually applied tags on positions (capitalized) */}
+      <COL label="Tags" col="#79c0ff">
+        {(()=>{const used=[...new Set(vessels.map(v=>(v.tag||"").trim()).filter(Boolean))].sort();return used.length?used.map(t=>(<B key={t} active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t.toUpperCase()}</B>)):<span style={{fontSize:10,color:"rgba(140,170,210,0.35)"}}>none</span>;})()}
+        {posTagFilter.size>0&&<B active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
+      </COL>
       {/* Status */}
       <COL label="Status" col={C.amber}>
         {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
@@ -1715,10 +1739,10 @@ const filtV=useMemo(()=>{
           <span style={{color:interUKCActive?"#4fc3f7":"rgba(79,195,247,0.65)"}}>Inter UKC</span>
         </B>
         <B active={showSavedOnly} onClick={()=>setShowSavedOnly(v=>!v)}>
-          <span style={{color:showSavedOnly?"#fbbf24":"rgba(251,191,36,0.55)"}}>⭐ Saved ({savedVessels.size})</span>
+          Saved ({savedVessels.size}) <span style={{color:"#fbbf24"}}>★</span>
+          {savedVessels.size>0&&<span onClick={e=>{e.stopPropagation();if(window.confirm("Clear all saved vessels?"))clearSavedVessels();}} style={{marginLeft:5,color:C.red,cursor:"pointer"}}>✕</span>}
         </B>
-        {savedVessels.size>0&&<B active={false} onClick={clearSavedVessels}><span style={{color:C.red}}>✕ Saved</span></B>}
-        {(interUKCActive||showSavedOnly)&&<B active={false} onClick={()=>{setInterUKCActive(false);setShowSavedOnly(false);}}><span style={{color:C.red}}>✕ Clear</span></B>}
+        {interUKCActive&&<B active={false} onClick={()=>{setInterUKCActive(false);}}><span style={{color:C.red}}>✕ Clear</span></B>}
       </COL>
       {/* Updated */}
       <COL label="Updated" col={C.blue}>
@@ -1753,11 +1777,6 @@ const filtV=useMemo(()=>{
       <COL label="Built" col="#94a3b8">
         {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<B key={v} active={builtFilter.has(v)} onClick={()=>{setBuiltFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
         {builtFilter.size>0&&<B active={false} onClick={()=>{setBuiltFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
-      </COL>
-      {/* Tags — manually applied tags on positions */}
-      <COL label="Tags" col="#79c0ff">
-        {(()=>{const used=[...new Set(vessels.map(v=>(v.tag||"").trim()).filter(Boolean))].sort();return used.length?used.map(t=>(<B key={t} active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t}</B>)):<span style={{fontSize:10,color:"rgba(140,170,210,0.35)"}}>none</span>;})()}
-        {posTagFilter.size>0&&<B active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
       </COL>
     </div>
   );
@@ -1917,11 +1936,11 @@ const filtV=useMemo(()=>{
       </td>
 
       <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.built || ""}</td>
-      <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtN(v.dwt)}</td>
-      <td style={{ ...tdTxt, color: C.dim }}>{v.coating || ""}</td>
+      <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtDwtFull(v.dwt)}</td>
+      <td style={{ ...tdTxt, color: C.dim }} title={v.coating||""}>{fmtCoating(v.coating)}</td>
       <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.loa || ""}</td>
       <td style={{ ...tdNum, color: C.dim }}>{v.beam || ""}</td>
-      <td style={{ ...tdNum, color: C.dim }}>{fmtN(v.cbm)}</td>
+      <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtN(v.cbm)}</td>
 
       {/* DATE */}
       <EC
