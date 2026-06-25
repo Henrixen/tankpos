@@ -1871,7 +1871,7 @@ const filtV=useMemo(()=>{
                 {/* Vessel Table + Side panel row */}
                 <div ref={(el)=>{window.__posRow=el;}} style={{display:"flex",gap:10,alignItems:"flex-start",position:"relative"}}>
                 {/* Vessel Table */}
-                <div style={{width:"100%",flex:1,minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch"}}
+                <div className="pos-table-wrap" style={{width:"100%",flex:1,minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch"}}
                   onClick={e=>{
                     const th=e.target.closest("th");
                     if(!th) return;
@@ -2445,6 +2445,7 @@ const filtV=useMemo(()=>{
             {/* Row hover highlight + mobile no-truncation */}
             <style>{`
               .cargo-table tr:hover td{background:rgba(58,130,246,0.06)!important;}
+              .pos-table-wrap tbody tr:hover td{background:rgba(58,130,246,0.06)!important;}
               @media(max-width:900px){
                 .cargo-table td, .cargo-table td>*{overflow:visible!important;text-overflow:unset!important;white-space:nowrap!important;max-width:none!important;}
               }
