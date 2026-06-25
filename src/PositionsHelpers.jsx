@@ -400,196 +400,176 @@ function mean(arr) {
 function FixingWindowChart({ vessels = [], tagFilter }) {
   const [rows, setRows] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  const [activeSeg, setActiveSeg] = React.useState(new Set(FW_SEGMENTS.map(s=>s.key)));
-  const canvasRef = useRef(null);
+  const [activeSeg, setActiveSeg] = React.useState(new Set(FW_SEGMENTS.map(s => s.key)));
+  const [hover, setHover] = React.useState(null);          // {x,y,week,items:[{seg,val}]}
+  const [brush, setBrush] = React.useState(null);          // {x0,x1} pixel drag
+  const [range, setRange] = React.useState(null);          // {from,to} committed week range
+  const [showList, setShowList] = React.useState(false);
+  const [excluded, setExcluded] = React.useState(new Set()); // vessel names to drop
+  const wrapRef = useRef(null);
+  const [W, setW] = React.useState(760);
+  const H = 240;
+  const PAD = { top: 18, right: 16, bottom: 30, left: 40 };
+
+  // responsive width
+  useEffect(() => {
+    if (!wrapRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      for (const e of entries) setW(Math.max(360, e.contentRect.width));
+    });
+    ro.observe(wrapRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   // Fetch 12 weeks from positions_external using last_update_spotship as time axis
   useEffect(() => {
-    async function fetch() {
+    let alive = true;
+    (async () => {
       setLoading(true);
       const since = new Date();
-      since.setDate(since.getDate() - 84); // 12 weeks back
+      since.setDate(since.getDate() - 84);
       const { data, error } = await supabase
         .from("positions_external")
-        .select("vessel_name,dwt,open_date,last_update_spotship,segment")
+        .select("vessel_name,operator,dwt,open_date,last_update_spotship,segment,tag")
         .gte("last_update_spotship", since.toISOString())
         .not("open_date", "is", null)
         .not("dwt", "is", null)
         .not("last_update_spotship", "is", null);
-      if (!error) {
-        setRows(data || []);
-        if (!data?.length) console.warn("FixingWindowChart: 0 rows from positions_external — check grants");
-      } else console.error("FixingWindowChart fetch error:", error);
+      if (!alive) return;
+      if (!error) setRows(data || []);
+      else console.error("FixingWindowChart fetch error:", error);
       setLoading(false);
-    }
-    fetch();
+    })();
+    return () => { alive = false; };
   }, []);
 
-  // Build DWT lookup from in-memory vessels array (fallback)
+  // DWT lookup from in-memory vessels (fallback) + a set of currently-visible vessel names
+  // (so search / tag filtering in the table flows through to the chart)
   const dwtMap = {};
-  (vessels || []).forEach(v => { if (v.vessel && v.dwt) dwtMap[v.vessel.toUpperCase()] = Number(v.dwt); });
+  const visibleNames = new Set();
+  (vessels || []).forEach(v => {
+    if (v.vessel) {
+      visibleNames.add(v.vessel.toUpperCase());
+      if (v.dwt) dwtMap[v.vessel.toUpperCase()] = Number(v.dwt);
+    }
+  });
+  const useVisibleFilter = (vessels || []).length > 0;
 
-  const filtered = tagFilter ? rows.filter(r => r.tag === tagFilter) : rows;
-
-  // Build weekly data — open_date minus last_update_spotship = fixing window days
-  const weekMap = {};
-  for (const r of filtered) {
-    if (!r.last_update_spotship || !r.open_date) continue;
-    // Calculate fixing window: days from report date to open date
+  // Per-row fixing-window computation → keep the raw enriched rows so we can both
+  // build the chart AND list the vessels behind it.
+  const enriched = [];
+  const tagFiltered = tagFilter ? rows.filter(r => r.tag === tagFilter) : rows;
+  for (const r of tagFiltered) {
+    const nm = (r.vessel_name || "").toUpperCase();
+    if (useVisibleFilter && !visibleNames.has(nm)) continue;   // respect table search/tags
+    if (excluded.has(nm)) continue;                            // user-deselected
     const reportMs = new Date(r.last_update_spotship).getTime();
     const openMs = new Date(r.open_date).getTime();
     if (isNaN(reportMs) || isNaN(openMs)) continue;
     const fw = Math.round((openMs - reportMs) / 86400000);
-    if (fw < -90 || fw > 180) continue;
-    const wk = weekStart(r.last_update_spotship);
-    const dwt = r.dwt ? Number(r.dwt) : (dwtMap[(r.vessel_name||"").toUpperCase()] || null);
-    if (!dwt || dwt < 500) continue; // filter junk rows
+    if (fw < 0 || fw > 180) continue;                          // forward-only, drop negatives & junk
+    const dwt = r.dwt ? Number(r.dwt) : (dwtMap[nm] || null);
+    if (!dwt || dwt < 500) continue;
     const seg = FW_SEGMENTS.find(s => dwt >= s.dwt[0] && dwt <= s.dwt[1]);
     if (!seg) continue;
-    if (!weekMap[wk]) weekMap[wk] = {};
-    if (!weekMap[wk][seg.key]) weekMap[wk][seg.key] = [];
-    weekMap[wk][seg.key].push(fw);
+    const wk = weekStart(r.last_update_spotship);
+    enriched.push({
+      vessel: r.vessel_name, operator: r.operator || "", dwt, fw, seg: seg.key,
+      week: wk, openDate: r.open_date, updated: r.last_update_spotship,
+    });
   }
 
+  // Build weekly averages, honouring committed date range
+  const weekMap = {};
+  for (const e of enriched) {
+    if (range && (e.week < range.from || e.week > range.to)) continue;
+    (weekMap[e.week] = weekMap[e.week] || {});
+    (weekMap[e.week][e.seg] = weekMap[e.week][e.seg] || []).push(e.fw);
+  }
   const weeks = Object.keys(weekMap).sort();
   const chartData = weeks.map(wk => ({
-    week: wk,
-    label: fmtWeek(wk),
-    ...Object.fromEntries(FW_SEGMENTS.map(s => [s.key, mean(weekMap[wk][s.key] || [])]))
+    week: wk, label: fmtWeek(wk),
+    ...Object.fromEntries(FW_SEGMENTS.map(s => [s.key, mean(weekMap[wk][s.key] || [])])),
   }));
 
-  // Canvas drawing
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !chartData.length) return;
-    const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
-    const PAD = { top: 20, right: 20, bottom: 32, left: 38 };
-    const cW = W - PAD.left - PAD.right;
-    const cH = H - PAD.top - PAD.bottom;
+  // vessel count behind the current view
+  const vesselCount = new Set(enriched
+    .filter(e => !range || (e.week >= range.from && e.week <= range.to))
+    .map(e => e.vessel.toUpperCase())).size;
 
-    ctx.clearRect(0, 0, W, H);
+  // Scales
+  const cW = W - PAD.left - PAD.right;
+  const cH = H - PAD.top - PAD.bottom;
+  const activeVals = chartData.flatMap(d => FW_SEGMENTS.filter(s => activeSeg.has(s.key)).map(s => d[s.key])).filter(v => v != null);
+  const yMin = 0;                                              // never negative
+  const yMax = Math.max(15, Math.ceil(Math.max(0, ...activeVals)));
+  const yRange = yMax - yMin || 1;
+  const xOf = i => chartData.length === 1 ? PAD.left + cW / 2 : PAD.left + (i / (chartData.length - 1)) * cW;
+  const yOf = v => PAD.top + cH - ((v - yMin) / yRange) * cH;
+  const iFromX = px => {
+    if (chartData.length <= 1) return 0;
+    const t = (px - PAD.left) / cW;
+    return Math.max(0, Math.min(chartData.length - 1, Math.round(t * (chartData.length - 1))));
+  };
 
-    // Background
-    ctx.fillStyle = "#08111e";
-    ctx.fillRect(0, 0, W, H);
-
+  // pointer handlers for hover + brush
+  const svgX = e => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return (e.clientX - rect.left) * (W / rect.width);
+  };
+  const onMove = e => {
+    const px = svgX(e);
+    if (brush) { setBrush(b => ({ ...b, x1: px })); return; }
     if (!chartData.length) return;
-
-    // Y range
-    const allVals = chartData.flatMap(d => FW_SEGMENTS.filter(s=>activeSeg.has(s.key)).map(s => d[s.key])).filter(v => v !== null);
-    if (!allVals.length) return;
-    const yMin = Math.floor(Math.min(0, ...allVals));
-    const yMax = Math.ceil(Math.max(15, ...allVals));
-    const yRange = yMax - yMin || 1;
-
-    const xOf = i => chartData.length === 1 
-      ? PAD.left + cW / 2  // center single point
-      : PAD.left + (i / (chartData.length - 1)) * cW;
-    const yOf = v => PAD.top + cH - ((v - yMin) / yRange) * cH;
-
-    // Grid lines
-    const ticks = 5;
-    for (let i = 0; i <= ticks; i++) {
-      const v = yMin + (yRange * i / ticks);
-      const y = yOf(v);
-      ctx.beginPath();
-      ctx.strokeStyle = "rgba(58,100,180,0.15)";
-      ctx.lineWidth = 1;
-      ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y);
-      ctx.stroke();
-      ctx.fillStyle = "rgba(140,170,210,0.5)";
-      ctx.font = "10px Inter,sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText(Math.round(v) + "d", PAD.left - 4, y + 3);
-    }
-
-    // X axis labels
-    ctx.fillStyle = "rgba(140,170,210,0.5)";
-    ctx.font = "10px Inter,sans-serif";
-    ctx.textAlign = "center";
-    chartData.forEach((d, i) => {
-      if (chartData.length <= 8 || i % Math.ceil(chartData.length / 8) === 0) {
-        ctx.fillText(d.label, xOf(i), PAD.top + cH + 18);
+    const i = iFromX(px);
+    const d = chartData[i];
+    const items = FW_SEGMENTS.filter(s => activeSeg.has(s.key) && d[s.key] != null)
+      .map(s => ({ seg: s, val: d[s.key] }));
+    setHover({ x: xOf(i), i, week: d.label, items });
+  };
+  const onDown = e => { const px = svgX(e); setBrush({ x0: px, x1: px }); setHover(null); };
+  const onUp = () => {
+    if (brush) {
+      const lo = Math.min(brush.x0, brush.x1), hi = Math.max(brush.x0, brush.x1);
+      if (hi - lo > 8 && chartData.length) {
+        const i0 = iFromX(lo), i1 = iFromX(hi);
+        setRange({ from: chartData[i0].week, to: chartData[i1].week });
       }
-    });
-
-    // Zero line
-    if (yMin < 0 && yMax > 0) {
-      const y0 = yOf(0);
-      ctx.beginPath();
-      ctx.strokeStyle = "rgba(120,160,220,0.3)";
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4,4]);
-      ctx.moveTo(PAD.left, y0); ctx.lineTo(PAD.left + cW, y0);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      setBrush(null);
     }
+  };
 
-    // Draw segment lines
-    FW_SEGMENTS.filter(s => activeSeg.has(s.key)).forEach(seg => {
-      const pts = chartData.map((d,i) => ({ x: xOf(i), y: d[seg.key] !== null ? yOf(d[seg.key]) : null }));
-      const valid = pts.filter(p => p.y !== null);
-      if (!valid.length) return;
-
-      // Line
-      ctx.beginPath();
-      ctx.strokeStyle = seg.color;
-      ctx.lineWidth = 2;
-      ctx.lineJoin = "round";
-      let first = true;
-      pts.forEach(p => {
-        if (p.y === null) { first = true; return; }
-        if (first) { ctx.moveTo(p.x, p.y); first = false; }
-        else ctx.lineTo(p.x, p.y);
-      });
-      ctx.stroke();
-
-      // Dots + labels
-      pts.forEach((p, i) => {
-        if (p.y === null) return;
-        ctx.beginPath();
-        ctx.fillStyle = seg.color;
-        ctx.arc(p.x, p.y, 3, 0, Math.PI*2);
-        ctx.fill();
-
-        const v = chartData[i][seg.key];
-        if (v !== null) {
-          ctx.fillStyle = seg.color;
-          ctx.font = "bold 9px Inter,sans-serif";
-          ctx.textAlign = "center";
-          ctx.fillText(v.toFixed(1), p.x, p.y - 7);
-        }
-      });
+  const linePath = seg => {
+    let d = "", started = false;
+    chartData.forEach((row, i) => {
+      const v = row[seg.key];
+      if (v == null) { started = false; return; }
+      const X = xOf(i), Y = yOf(v);
+      d += (started ? "L" : "M") + X.toFixed(1) + "," + Y.toFixed(1) + " ";
+      started = true;
     });
-  }, [chartData, activeSeg]);
+    return d.trim();
+  };
+
+  const AX = "rgba(210,225,245,0.85)";   // brighter axis text
 
   return (
-    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,padding:"10px 12px",marginBottom:10}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",flex:1}}>
+    <div ref={wrapRef} style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px", marginBottom: 10 }}>
+      {/* Header row: title + segment toggles */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em" }}>
           📈 Fixing Window History
         </div>
         {tagFilter && (
-          <span style={{fontSize:10,padding:"2px 7px",borderRadius:4,border:"1px solid rgba(88,166,255,0.3)",color:"#79c0ff",background:"rgba(88,166,255,0.1)"}}>
-            {tagFilter}
-          </span>
+          <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, border: "1px solid rgba(88,166,255,0.3)", color: "#79c0ff", background: "rgba(88,166,255,0.1)" }}>{tagFilter}</span>
         )}
-        {/* Segment toggles */}
-        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+        <div style={{ flex: 1 }} />
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {FW_SEGMENTS.map(s => {
             const on = activeSeg.has(s.key);
             return (
-              <button key={s.key} onClick={() => setActiveSeg(prev => {
-                const n = new Set(prev);
-                if (n.has(s.key)) n.delete(s.key); else n.add(s.key);
-                return n;
-              })} style={{
-                fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:4, cursor:"pointer",
-                fontFamily:"inherit", border:"1px solid "+(on ? s.color : "rgba(88,166,255,0.15)"),
-                background: on ? s.color+"22" : "transparent",
-                color: on ? s.color : "rgba(140,170,210,0.35)"
-              }}>
+              <button key={s.key} onClick={() => setActiveSeg(prev => { const n = new Set(prev); n.has(s.key) ? n.delete(s.key) : n.add(s.key); return n; })}
+                style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, cursor: "pointer", fontFamily: "inherit", border: "1px solid " + (on ? s.color : "rgba(88,166,255,0.15)"), background: on ? s.color + "22" : "transparent", color: on ? s.color : "rgba(140,170,210,0.35)" }}>
                 {s.label}
               </button>
             );
@@ -597,18 +577,118 @@ function FixingWindowChart({ vessels = [], tagFilter }) {
         </div>
       </div>
 
+      {/* Sub-header: avg/count + range + vessel-list toggle (own line, below buttons) */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, fontSize: 10, color: "rgba(150,180,220,0.6)" }}>
+        <span>{vesselCount} vessels</span>
+        {range && (
+          <span style={{ color: "#79c0ff", cursor: "pointer" }} onClick={() => setRange(null)}>
+            {fmtWeek(range.from)}–{fmtWeek(range.to)} ✕ clear range
+          </span>
+        )}
+        <div style={{ flex: 1 }} />
+        <button onClick={() => setShowList(v => !v)} style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, cursor: "pointer", fontFamily: "inherit", border: "1px solid rgba(88,166,255,0.25)", background: showList ? "rgba(88,166,255,0.12)" : "transparent", color: "#79c0ff" }}>
+          {showList ? "Hide vessels" : `Vessels (${vesselCount})`}
+        </button>
+      </div>
+
       {loading ? (
-        <div style={{height:160,display:"flex",alignItems:"center",justifyContent:"center",color:C.faint,fontSize:12}}>
-          Loading…
-        </div>
+        <div style={{ height: H, display: "flex", alignItems: "center", justifyContent: "center", color: C.faint, fontSize: 12 }}>Loading…</div>
       ) : chartData.length === 0 ? (
-        <div style={{height:160,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,color:C.faint,fontSize:12}}>
-          <span>No chart data ({rows.length} raw rows fetched)</span>
-          {rows.length > 0 && <span style={{fontSize:10}}>All rows filtered — check open_date vs last_update_spotship range</span>}
-        </div>
+        <div style={{ height: H, display: "flex", alignItems: "center", justifyContent: "center", color: C.faint, fontSize: 12 }}>No data in range</div>
       ) : (
-        <canvas ref={canvasRef} width={800} height={180}
-          style={{width:"100%",height:180,display:"block",borderRadius:4}}/>
+        <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block", userSelect: "none", cursor: brush ? "ew-resize" : "crosshair" }}
+          onMouseMove={onMove} onMouseLeave={() => { setHover(null); }} onMouseDown={onDown} onMouseUp={onUp}>
+          {/* gridlines + y labels */}
+          {Array.from({ length: 6 }).map((_, i) => {
+            const v = yMin + (yRange * i / 5), y = yOf(v);
+            return (
+              <g key={i}>
+                <line x1={PAD.left} y1={y} x2={PAD.left + cW} y2={y} stroke="rgba(58,100,180,0.18)" strokeWidth="1" />
+                <text x={PAD.left - 5} y={y + 3} fill={AX} fontSize="10" textAnchor="end">{Math.round(v)}d</text>
+              </g>
+            );
+          })}
+          {/* x labels */}
+          {chartData.map((d, i) => {
+            const show = chartData.length <= 9 || i % Math.ceil(chartData.length / 9) === 0;
+            return show ? <text key={i} x={xOf(i)} y={PAD.top + cH + 16} fill={AX} fontSize="10" textAnchor="middle">{d.label}</text> : null;
+          })}
+          {/* committed range shading */}
+          {range && (() => {
+            const i0 = chartData.findIndex(d => d.week === range.from);
+            const i1 = chartData.findIndex(d => d.week === range.to);
+            if (i0 < 0 || i1 < 0) return null;
+            const x0 = xOf(i0), x1 = xOf(i1);
+            return <rect x={Math.min(x0, x1)} y={PAD.top} width={Math.abs(x1 - x0) || 2} height={cH} fill="rgba(88,166,255,0.08)" />;
+          })()}
+          {/* active brush */}
+          {brush && <rect x={Math.min(brush.x0, brush.x1)} y={PAD.top} width={Math.abs(brush.x1 - brush.x0)} height={cH} fill="rgba(88,166,255,0.15)" stroke="rgba(88,166,255,0.4)" />}
+          {/* segment lines + dots */}
+          {FW_SEGMENTS.filter(s => activeSeg.has(s.key)).map(seg => (
+            <g key={seg.key}>
+              <path d={linePath(seg)} fill="none" stroke={seg.color} strokeWidth="2" strokeLinejoin="round" />
+              {chartData.map((d, i) => d[seg.key] == null ? null : (
+                <circle key={i} cx={xOf(i)} cy={yOf(d[seg.key])} r={hover && hover.i === i ? 4 : 2.5} fill={seg.color} />
+              ))}
+            </g>
+          ))}
+          {/* hover guide line */}
+          {hover && <line x1={hover.x} y1={PAD.top} x2={hover.x} y2={PAD.top + cH} stroke="rgba(120,160,220,0.35)" strokeWidth="1" strokeDasharray="3,3" />}
+        </svg>
+      )}
+
+      {/* hover tooltip */}
+      {hover && hover.items.length > 0 && (
+        <div style={{ position: "relative" }}>
+          <div style={{ position: "absolute", left: Math.min(Math.max(hover.x, 60), W - 120), top: -H + 6, transform: "translateX(-50%)", background: "#0a1628", border: "1px solid " + C.bd, borderRadius: 6, padding: "6px 8px", pointerEvents: "none", zIndex: 5, boxShadow: "0 6px 20px rgba(0,0,0,0.5)" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.tx, marginBottom: 3 }}>{hover.week}</div>
+            {hover.items.map(it => (
+              <div key={it.seg.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: it.seg.color }} />
+                <span style={{ color: "rgba(180,210,240,0.8)", flex: 1 }}>{it.seg.label}</span>
+                <span style={{ color: it.seg.color, fontWeight: 700 }}>{it.val.toFixed(1)}d</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ fontSize: 9, color: "rgba(120,150,190,0.45)", marginTop: 2 }}>Drag across the chart to select a date range · hover for values</div>
+
+      {/* vessel list — expand below */}
+      {showList && (
+        <div style={{ marginTop: 8, border: "1px solid " + C.bd, borderRadius: 6, maxHeight: 220, overflowY: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+            <thead>
+              <tr style={{ position: "sticky", top: 0, background: "#0c1729" }}>
+                {["", "Owner", "Vessel", "DWT", "Open", "Updated"].map((h, i) => (
+                  <th key={i} style={{ textAlign: i > 2 ? "right" : "left", padding: "5px 8px", fontSize: 9, color: AX, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid " + C.bd }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from(new Map(enriched
+                .filter(e => !range || (e.week >= range.from && e.week <= range.to))
+                .map(e => [e.vessel.toUpperCase(), e])).values())
+                .sort((a, b) => a.vessel.localeCompare(b.vessel))
+                .map(e => {
+                  const off = excluded.has(e.vessel.toUpperCase());
+                  return (
+                    <tr key={e.vessel} style={{ opacity: off ? 0.4 : 1, borderBottom: "1px solid rgba(58,100,180,0.08)" }}>
+                      <td style={{ padding: "4px 8px" }}>
+                        <input type="checkbox" checked={!off} onChange={() => setExcluded(prev => { const n = new Set(prev); const k = e.vessel.toUpperCase(); n.has(k) ? n.delete(k) : n.add(k); return n; })} />
+                      </td>
+                      <td style={{ padding: "4px 8px", color: "rgba(160,190,230,0.7)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 120 }}>{e.operator}</td>
+                      <td style={{ padding: "4px 8px", color: C.tx, fontWeight: 600 }}>{e.vessel}</td>
+                      <td style={{ padding: "4px 8px", textAlign: "right", color: "rgba(160,190,230,0.7)" }}>{Math.round(e.dwt / 1000)}K</td>
+                      <td style={{ padding: "4px 8px", textAlign: "right", color: "rgba(160,190,230,0.7)" }}>{fmtWeek(e.openDate)}</td>
+                      <td style={{ padding: "4px 8px", textAlign: "right", color: "rgba(160,190,230,0.7)" }}>{fmtWeek(e.updated)}</td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
