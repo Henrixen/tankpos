@@ -483,6 +483,7 @@ function AICreditWidget(){
 }
 
 const INP_INLINE={background:"rgba(8,16,32,0.85)",border:"1px solid rgba(88,166,255,0.25)",borderRadius:4,color:"rgba(200,220,255,0.9)",fontFamily:"Inter,sans-serif",fontSize:11,padding:"5px 8px",outline:"none",width:"100%",boxSizing:"border-box"};
+const rangeInp={background:"rgba(8,16,32,0.85)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:3,color:"rgba(200,220,255,0.9)",fontFamily:"inherit",fontSize:10,padding:"2px 4px",outline:"none",width:"50%",minWidth:0,boxSizing:"border-box"};
 
 function AddVesselInlineRow({onSave,onClose}){
   const now=new Date();
@@ -845,6 +846,8 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [search,setSearch]=useState("");
   const [filters,setFilters]=useState(new Set());
   const [posTagFilter,setPosTagFilter]=useState(new Set());
+  const [dwtRange,setDwtRange]=useState({min:"",max:""});
+  const [builtRange,setBuiltRange]=useState({min:"",max:""});
   const [sortK,setSortK]=useState("fileDate");
   const [sortD,setSortD]=useState(-1);
   const [sel,setSel]=useState(null);
@@ -1153,6 +1156,18 @@ const filtV=useMemo(()=>{
   if(posTagFilter.size>0){
     list=list.filter(v=>posTagFilter.has((v.tag||"").trim()));
   }
+  // Custom DWT range (in tonnes). Handles "8K"/raw numbers.
+  const parseDwt=(raw)=>{if(raw==null||raw==="")return null;if(typeof raw==="number")return raw;const s=String(raw).trim().toUpperCase().replace(/\s/g,"");if(/^\d+(\.\d+)?K$/.test(s))return parseFloat(s)*1000;const n=parseFloat(s.replace(/[^\d.]/g,""));return isFinite(n)?n:null;};
+  if(dwtRange.min!==""||dwtRange.max!==""){
+    const lo=dwtRange.min!==""?Number(dwtRange.min):-Infinity;
+    const hi=dwtRange.max!==""?Number(dwtRange.max):Infinity;
+    list=list.filter(v=>{const d=parseDwt(v.dwt);return d!=null&&d>=lo&&d<=hi;});
+  }
+  if(builtRange.min!==""||builtRange.max!==""){
+    const lo=builtRange.min!==""?Number(builtRange.min):-Infinity;
+    const hi=builtRange.max!==""?Number(builtRange.max):Infinity;
+    list=list.filter(v=>{const b=parseInt(v.built);return isFinite(b)&&b>=lo&&b<=hi;});
+  }
 
   // Inter UKC filter
   if(interUKCActive){
@@ -1268,6 +1283,7 @@ const filtV=useMemo(()=>{
   superRegionFilter,
   segmentFilter,
   [...posTagFilter].join(),
+  dwtRange.min,dwtRange.max,builtRange.min,builtRange.max,
   [...dwtFilter].join(),
   [...builtFilter].join(),
   interUKCActive,
@@ -1739,8 +1755,11 @@ const filtV=useMemo(()=>{
           <span style={{color:interUKCActive?"#4fc3f7":"rgba(79,195,247,0.65)"}}>Inter UKC</span>
         </B>
         <B active={showSavedOnly} onClick={()=>setShowSavedOnly(v=>!v)}>
-          Saved ({savedVessels.size}) <span style={{color:"#fbbf24"}}>★</span>
-          {savedVessels.size>0&&<span onClick={e=>{e.stopPropagation();if(window.confirm("Clear all saved vessels?"))clearSavedVessels();}} style={{marginLeft:5,color:C.red,cursor:"pointer"}}>✕</span>}
+          <span style={{display:"flex",alignItems:"center",gap:5,width:"100%"}}>
+            <span>Saved ({savedVessels.size})</span>
+            <span style={{color:"#fbbf24"}}>★</span>
+            {savedVessels.size>0&&<span onClick={e=>{e.stopPropagation();if(window.confirm("Clear all saved vessels?"))clearSavedVessels();}} style={{marginLeft:"auto",color:C.red,cursor:"pointer"}}>✕</span>}
+          </span>
         </B>
         {interUKCActive&&<B active={false} onClick={()=>{setInterUKCActive(false);}}><span style={{color:C.red}}>✕ Clear</span></B>}
       </COL>
@@ -1771,12 +1790,20 @@ const filtV=useMemo(()=>{
       {/* DWT */}
       <COL label="DWT" col="#f59e0b">
         {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<B key={v} active={dwtFilter.has(v)} onClick={e=>{setDwtFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
-        {dwtFilter.size>0&&<B active={false} onClick={()=>{setDwtFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
+        <div style={{display:"flex",gap:3,marginTop:3}}>
+          <input type="number" value={dwtRange.min} placeholder="min" onChange={e=>{setDwtRange(r=>({...r,min:e.target.value}));setPosPage(1);}} style={rangeInp}/>
+          <input type="number" value={dwtRange.max} placeholder="max" onChange={e=>{setDwtRange(r=>({...r,max:e.target.value}));setPosPage(1);}} style={rangeInp}/>
+        </div>
+        {(dwtFilter.size>0||dwtRange.min!==""||dwtRange.max!=="")&&<B active={false} onClick={()=>{setDwtFilter(new Set());setDwtRange({min:"",max:""});setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
       </COL>
       {/* Built */}
       <COL label="Built" col="#94a3b8">
         {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<B key={v} active={builtFilter.has(v)} onClick={()=>{setBuiltFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
-        {builtFilter.size>0&&<B active={false} onClick={()=>{setBuiltFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
+        <div style={{display:"flex",gap:3,marginTop:3}}>
+          <input type="number" value={builtRange.min} placeholder="from" onChange={e=>{setBuiltRange(r=>({...r,min:e.target.value}));setPosPage(1);}} style={rangeInp}/>
+          <input type="number" value={builtRange.max} placeholder="to" onChange={e=>{setBuiltRange(r=>({...r,max:e.target.value}));setPosPage(1);}} style={rangeInp}/>
+        </div>
+        {(builtFilter.size>0||builtRange.min!==""||builtRange.max!=="")&&<B active={false} onClick={()=>{setBuiltFilter(new Set());setBuiltRange({min:"",max:""});setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
       </COL>
     </div>
   );
@@ -1789,7 +1816,7 @@ const filtV=useMemo(()=>{
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
                   <CopyPositionsButton filtV={filtV} fmtDateShort={fmtDateShort}/>
-                  <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());}}
+                  <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());}}
                     style={{fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",border:"1px solid rgba(255,107,107,0.3)",background:"rgba(255,107,107,0.06)",color:"rgba(255,107,107,0.65)"}}>
                     ✕ Clear filters
                   </button>
@@ -2005,7 +2032,7 @@ const filtV=useMemo(()=>{
         <div style={{display:"flex",alignItems:"center",gap:2}}>
         <button onClick={()=>toggleSavedVessel(v.vessel)}
           title={savedVessels.has(v.vessel)?"Remove from saved":"Save for later"}
-          style={{background:"none",border:"none",cursor:"pointer",fontSize:11,padding:"1px",
+          style={{background:"none",border:"none",cursor:"pointer",fontSize:15,padding:"1px",
             color:savedVessels.has(v.vessel)?"#fbbf24":"rgba(120,160,200,0.15)",lineHeight:1}}>
           {savedVessels.has(v.vessel)?"⭐":"☆"}
         </button>
