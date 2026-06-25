@@ -408,8 +408,8 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
   const [excluded, setExcluded] = React.useState(new Set()); // vessel names to drop
   const wrapRef = useRef(null);
   const [W, setW] = React.useState(760);
-  const H = 260;
-  const PAD = { top: 18, right: 16, bottom: 42, left: 40 };
+  const H = 200;
+  const PAD = { top: 16, right: 16, bottom: 38, left: 40 };
 
   // responsive width
   useEffect(() => {
@@ -554,7 +554,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
   const AX = "rgba(210,225,245,0.85)";   // brighter axis text
 
   return (
-    <div ref={wrapRef} style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px", marginBottom: 10 }}>
+    <div ref={wrapRef} style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px", marginBottom: 10, position: "relative" }}>
       {/* Header row: title + segment toggles */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em" }}>
@@ -656,12 +656,16 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
 
       <div style={{ fontSize: 9, color: "rgba(120,150,190,0.45)", marginTop: 2 }}>Drag across the chart to select a date range · hover for values</div>
 
-      {/* vessel list — expand below */}
+      {/* vessel list — floating overlay below chart (covers section beneath, own scroll) */}
       {showList && (
-        <div style={{ marginTop: 8, border: "1px solid " + C.bd, borderRadius: 6, maxHeight: 220, overflowY: "auto" }}>
+        <div style={{ position: "absolute", left: 8, right: 8, top: "100%", marginTop: -2, zIndex: 60, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, boxShadow: "0 16px 50px rgba(0,0,0,0.7)", maxHeight: 320, overflowY: "auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", borderBottom: "1px solid " + C.bd, position: "sticky", top: 0, background: C.bg2 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.tx }}>{vesselCount} vessels in chart</span>
+            <button onClick={() => setShowList(false)} style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, cursor: "pointer", fontFamily: "inherit", border: "1px solid rgba(88,166,255,0.25)", background: "transparent", color: "#79c0ff" }}>Hide vessels</button>
+          </div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
             <thead>
-              <tr style={{ position: "sticky", top: 0, background: "#0c1729" }}>
+              <tr style={{ position: "sticky", top: 33, background: "#0c1729" }}>
                 {["", "Owner", "Vessel", "DWT", "Open", "Updated"].map((h, i) => (
                   <th key={i} style={{ textAlign: i > 2 ? "right" : "left", padding: "5px 8px", fontSize: 9, color: AX, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid " + C.bd }}>{h}</th>
                 ))}
