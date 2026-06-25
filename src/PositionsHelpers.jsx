@@ -628,15 +628,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
             const show = chartData.length <= 9 || i % Math.ceil(chartData.length / 9) === 0;
             return show ? <text key={i} x={xOf(i)} y={PAD.top + cH + 16} fill={AX} fontSize="10" textAnchor="middle">{d.label}</text> : null;
           })}
-          {/* committed range shading */}
-          {range && (() => {
-            const i0 = chartData.findIndex(d => d.week === range.from);
-            const i1 = chartData.findIndex(d => d.week === range.to);
-            if (i0 < 0 || i1 < 0) return null;
-            const x0 = xOf(i0), x1 = xOf(i1);
-            return <rect x={Math.min(x0, x1)} y={PAD.top} width={Math.abs(x1 - x0) || 2} height={cH} fill="rgba(88,166,255,0.08)" />;
-          })()}
-          {/* active brush */}
+          {/* active brush only — committed range no longer shaded (clean zoom view) */}
           {brush && <rect x={Math.min(brush.x0, brush.x1)} y={PAD.top} width={Math.abs(brush.x1 - brush.x0)} height={cH} fill="rgba(88,166,255,0.15)" stroke="rgba(88,166,255,0.4)" />}
           {/* segment lines + dots */}
           {FW_SEGMENTS.filter(s => activeSeg.has(s.key)).map(seg => (
@@ -678,9 +670,12 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
         const width = r ? r.width : 360;
         return (
           <div style={{ position: "fixed", left, top, width, zIndex: 200, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, boxShadow: "0 18px 55px rgba(0,0,0,0.75)", maxHeight: 340, overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", borderBottom: "1px solid " + C.bd, position: "sticky", top: 0, background: C.bg2 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: C.tx }}>{vesselCount} vessels in chart</span>
-              <button onClick={() => setShowList(false)} style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, cursor: "pointer", fontFamily: "inherit", border: "1px solid rgba(88,166,255,0.25)", background: "transparent", color: "#79c0ff" }}>Hide vessels</button>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid " + C.bd, position: "sticky", top: 0, background: C.bg2 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.tx }}>{vesselCount} in chart{excluded.size > 0 ? ` · ${excluded.size} excluded` : ""}</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                {excluded.size > 0 && <button onClick={() => setExcluded(new Set())} style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, cursor: "pointer", fontFamily: "inherit", border: "1px solid rgba(88,166,255,0.25)", background: "transparent", color: "#79c0ff" }}>Clear all</button>}
+                <button onClick={() => setShowList(false)} style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, cursor: "pointer", fontFamily: "inherit", border: "1px solid rgba(88,166,255,0.25)", background: "transparent", color: "#79c0ff" }}>Hide vessels</button>
+              </div>
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
               <thead>
