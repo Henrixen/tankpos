@@ -397,7 +397,7 @@ function mean(arr) {
   return v.length ? v.reduce((a,b) => a+b, 0) / v.length : null;
 }
 
-function FixingWindowChart({ vessels = [], tagFilter }) {
+function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
   const [rows, setRows] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [activeSeg, setActiveSeg] = React.useState(new Set(FW_SEGMENTS.map(s => s.key)));
@@ -408,8 +408,8 @@ function FixingWindowChart({ vessels = [], tagFilter }) {
   const [excluded, setExcluded] = React.useState(new Set()); // vessel names to drop
   const wrapRef = useRef(null);
   const [W, setW] = React.useState(760);
-  const H = 240;
-  const PAD = { top: 18, right: 16, bottom: 30, left: 40 };
+  const H = 260;
+  const PAD = { top: 18, right: 16, bottom: 42, left: 40 };
 
   // responsive width
   useEffect(() => {
@@ -453,7 +453,7 @@ function FixingWindowChart({ vessels = [], tagFilter }) {
       if (v.dwt) dwtMap[v.vessel.toUpperCase()] = Number(v.dwt);
     }
   });
-  const useVisibleFilter = (vessels || []).length > 0;
+  const useVisibleFilter = filterActive && (vessels || []).length > 0;
 
   // Per-row fixing-window computation → keep the raw enriched rows so we can both
   // build the chart AND list the vessels behind it.
