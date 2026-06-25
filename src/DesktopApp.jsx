@@ -825,6 +825,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [tab,setTab]=useState(()=>guestMode?"pos":"pos");
   const [search,setSearch]=useState("");
   const [filters,setFilters]=useState(new Set());
+  const [posTagFilter,setPosTagFilter]=useState(new Set());
   const [sortK,setSortK]=useState("fileDate");
   const [sortD,setSortD]=useState(-1);
   const [sel,setSel]=useState(null);
@@ -1130,6 +1131,9 @@ const filtV=useMemo(()=>{
   if(segmentFilter.size>0){
     list=list.filter(v=>segmentFilter.has(String(v.segment||"").trim()));
   }
+  if(posTagFilter.size>0){
+    list=list.filter(v=>posTagFilter.has((v.tag||"").trim()));
+  }
 
   // Inter UKC filter
   if(interUKCActive){
@@ -1244,6 +1248,7 @@ const filtV=useMemo(()=>{
   posFileDaysBack,
   superRegionFilter,
   segmentFilter,
+  [...posTagFilter].join(),
   [...dwtFilter].join(),
   [...builtFilter].join(),
   interUKCActive,
@@ -1749,6 +1754,11 @@ const filtV=useMemo(()=>{
         {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<B key={v} active={builtFilter.has(v)} onClick={()=>{setBuiltFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
         {builtFilter.size>0&&<B active={false} onClick={()=>{setBuiltFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
       </COL>
+      {/* Tags — manually applied tags on positions */}
+      <COL label="Tags" col="#79c0ff">
+        {(()=>{const used=[...new Set(vessels.map(v=>(v.tag||"").trim()).filter(Boolean))].sort();return used.length?used.map(t=>(<B key={t} active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t}</B>)):<span style={{fontSize:10,color:"rgba(140,170,210,0.35)"}}>none</span>;})()}
+        {posTagFilter.size>0&&<B active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
+      </COL>
     </div>
   );
 })()}</div>
@@ -1760,7 +1770,7 @@ const filtV=useMemo(()=>{
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
                   <CopyPositionsButton filtV={filtV} fmtDateShort={fmtDateShort}/>
-                  <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());}}
+                  <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());}}
                     style={{fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",border:"1px solid rgba(255,107,107,0.3)",background:"rgba(255,107,107,0.06)",color:"rgba(255,107,107,0.65)"}}>
                     ✕ Clear filters
                   </button>
