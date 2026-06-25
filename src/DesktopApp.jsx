@@ -1615,7 +1615,7 @@ const filtV=useMemo(()=>{
         .filter(d=>d!==null&&d>=0&&d<=60);
       const avg=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):null;
       return avg!==null?(
-        <div style={{position:"absolute",top:4,right:6,zIndex:10,fontSize:10,color:"rgba(160,200,255,0.55)",fontWeight:600,pointerEvents:"none"}}>
+        <div style={{position:"absolute",top:30,left:14,zIndex:10,fontSize:10,color:"rgba(160,200,255,0.55)",fontWeight:600,pointerEvents:"none"}}>
           Avg <span style={{color:"#58a6ff",fontWeight:700}}>{avg}d</span>
           <span style={{color:"rgba(120,160,200,0.4)",marginLeft:4,fontSize:9}}>({vals.length} vessels)</span>
         </div>
@@ -1634,6 +1634,7 @@ const filtV=useMemo(()=>{
     `}</style>
     <Suspense fallback={null}><FixingWindowChart
       vessels={filtV}
+      filterActive={filtV.length !== vessels.length}
       tagFilter={cTagFilter||null}
     /></Suspense>
   </div>
