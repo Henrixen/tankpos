@@ -492,10 +492,10 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
     ...Object.fromEntries(FW_SEGMENTS.map(s => [s.key, mean(weekMap[wk][s.key] || [])])),
   }));
 
-  // vessel count behind the current view
-  const vesselCount = new Set(enriched
-    .filter(e => !range || (e.week >= range.from && e.week <= range.to))
-    .map(e => e.vessel.toUpperCase())).size;
+  // vessel count + avg behind the current view
+  const inView = enriched.filter(e => !range || (e.week >= range.from && e.week <= range.to));
+  const vesselCount = new Set(inView.map(e => e.vessel.toUpperCase())).size;
+  const avgFW = inView.length ? Math.round(inView.reduce((a, b) => a + b.fw, 0) / inView.length) : null;
 
   // Scales
   const cW = W - PAD.left - PAD.right;
@@ -543,7 +543,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
     let d = "", started = false;
     chartData.forEach((row, i) => {
       const v = row[seg.key];
-      if (v == null) { started = false; return; }
+      if (v == null) return;            // skip missing weeks but keep the line going
       const X = xOf(i), Y = yOf(v);
       d += (started ? "L" : "M") + X.toFixed(1) + "," + Y.toFixed(1) + " ";
       started = true;
@@ -579,7 +579,8 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
 
       {/* Sub-header: avg/count + range + vessel-list toggle (own line, below buttons) */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, fontSize: 10, color: "rgba(150,180,220,0.6)" }}>
-        <span>{vesselCount} vessels</span>
+        {avgFW != null && <span>Avg <span style={{ color: "#58a6ff", fontWeight: 700 }}>{avgFW}d</span></span>}
+        <span>{vesselCount} vessels in chart</span>
         {range && (
           <span style={{ color: "#79c0ff", cursor: "pointer" }} onClick={() => setRange(null)}>
             {fmtWeek(range.from)}–{fmtWeek(range.to)} ✕ clear range
