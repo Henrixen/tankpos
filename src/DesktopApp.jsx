@@ -1810,9 +1810,9 @@ const filtV=useMemo(()=>{
                 </div>
 
                 {/* Vessel Table + Side panel row */}
-                <div style={{display:"flex",gap:10,alignItems:"flex-start",position:"relative"}}>
+                <div style={{display:"flex",gap:10,alignItems:"flex-start",position:"relative",flexWrap:"nowrap"}}>
                 {/* Vessel Table */}
-                <div style={{width:selV?"calc(100% - 274px)":"100%",flex:selV?"0 0 calc(100% - 274px)":"1 1 100%",minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch",transition:"width 0.15s ease"}}
+                <div style={{width:selV?"calc(100% - 284px)":"100%",flex:selV?"0 0 calc(100% - 284px)":"1 1 100%",minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch",transition:"width 0.15s ease"}}
                   onClick={e=>{
                     const th=e.target.closest("th");
                     if(!th) return;
