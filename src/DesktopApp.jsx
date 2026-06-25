@@ -1636,11 +1636,6 @@ const filtV=useMemo(()=>{
       vessels={filtV}
       tagFilter={cTagFilter||null}
     /></Suspense>
-    <Suspense fallback={null}><FixingWindow
-      vessels={filtV}
-      opFilter={opFilter}
-      onOpFilter={op => setOpFilter(o => o === op ? null : op)}
-    /></Suspense>
   </div>
 </div>
  
