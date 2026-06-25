@@ -381,9 +381,10 @@ const FW_SEGMENTS = [
 
 function weekStart(dateStr) {
   const d = new Date(dateStr);
-  const day = d.getDay(); // 0=Sun
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Mon
-  const mon = new Date(d.setDate(diff));
+  if (isNaN(d)) return null;
+  const day = d.getDay();                       // 0=Sun..6=Sat
+  const back = day === 0 ? 6 : day - 1;         // days back to Monday
+  const mon = new Date(d.getTime() - back * 86400000);
   return mon.toISOString().slice(0, 10);
 }
 
@@ -428,16 +429,28 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
       setLoading(true);
       const since = new Date();
       since.setDate(since.getDate() - 84);
-      const { data, error } = await supabase
-        .from("positions_external")
-        .select("vessel_name,operator,dwt,open_date,last_update_spotship,segment,tag")
-        .gte("last_update_spotship", since.toISOString())
-        .not("open_date", "is", null)
-        .not("dwt", "is", null)
-        .not("last_update_spotship", "is", null);
+      // positions_external is large (60k+). Supabase caps at 1000/req by default,
+      // so paginate ordered by most-recent until we've covered the window.
+      const PAGE = 1000;
+      let all = [], from = 0, done = false;
+      while (!done && alive) {
+        const { data, error } = await supabase
+          .from("positions_external")
+          .select("vessel_name,operator,dwt,open_date,last_update_spotship,segment,tag")
+          .gte("last_update_spotship", since.toISOString())
+          .not("open_date", "is", null)
+          .not("dwt", "is", null)
+          .not("last_update_spotship", "is", null)
+          .order("last_update_spotship", { ascending: false })
+          .range(from, from + PAGE - 1);
+        if (error) { console.error("FixingWindowChart fetch error:", error); break; }
+        all = all.concat(data || []);
+        if (!data || data.length < PAGE) done = true;
+        else from += PAGE;
+        if (from > 80000) done = true; // safety cap
+      }
       if (!alive) return;
-      if (!error) setRows(data || []);
-      else console.error("FixingWindowChart fetch error:", error);
+      setRows(all);
       setLoading(false);
     })();
     return () => { alive = false; };
@@ -473,6 +486,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
     const seg = FW_SEGMENTS.find(s => dwt >= s.dwt[0] && dwt <= s.dwt[1]);
     if (!seg) continue;
     const wk = weekStart(r.last_update_spotship);
+    if (!wk) continue;
     enriched.push({
       vessel: r.vessel_name, operator: r.operator || "", dwt, fw, seg: seg.key,
       week: wk, openDate: r.open_date, updated: r.last_update_spotship,
@@ -656,45 +670,51 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
 
       <div style={{ fontSize: 9, color: "rgba(120,150,190,0.45)", marginTop: 2 }}>Drag across the chart to select a date range · hover for values</div>
 
-      {/* vessel list — floating overlay below chart (covers section beneath, own scroll) */}
-      {showList && (
-        <div style={{ position: "absolute", left: 8, right: 8, top: "100%", marginTop: -2, zIndex: 60, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, boxShadow: "0 16px 50px rgba(0,0,0,0.7)", maxHeight: 320, overflowY: "auto" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", borderBottom: "1px solid " + C.bd, position: "sticky", top: 0, background: C.bg2 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.tx }}>{vesselCount} vessels in chart</span>
-            <button onClick={() => setShowList(false)} style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, cursor: "pointer", fontFamily: "inherit", border: "1px solid rgba(88,166,255,0.25)", background: "transparent", color: "#79c0ff" }}>Hide vessels</button>
+      {/* vessel list — fixed overlay anchored below chart (escapes overflow:hidden clipping) */}
+      {showList && (() => {
+        const r = wrapRef.current ? wrapRef.current.getBoundingClientRect() : null;
+        const left = r ? r.left : 20;
+        const top = r ? r.bottom - 2 : 200;
+        const width = r ? r.width : 360;
+        return (
+          <div style={{ position: "fixed", left, top, width, zIndex: 200, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, boxShadow: "0 18px 55px rgba(0,0,0,0.75)", maxHeight: 340, overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", borderBottom: "1px solid " + C.bd, position: "sticky", top: 0, background: C.bg2 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.tx }}>{vesselCount} vessels in chart</span>
+              <button onClick={() => setShowList(false)} style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, cursor: "pointer", fontFamily: "inherit", border: "1px solid rgba(88,166,255,0.25)", background: "transparent", color: "#79c0ff" }}>Hide vessels</button>
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead>
+                <tr style={{ position: "sticky", top: 33, background: "#0c1729" }}>
+                  {["", "Owner", "Vessel", "DWT", "Open", "Updated"].map((h, i) => (
+                    <th key={i} style={{ textAlign: i > 2 ? "right" : "left", padding: "5px 8px", fontSize: 9, color: AX, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid " + C.bd }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from(new Map(enriched
+                  .filter(e => !range || (e.week >= range.from && e.week <= range.to))
+                  .map(e => [e.vessel.toUpperCase(), e])).values())
+                  .sort((a, b) => a.vessel.localeCompare(b.vessel))
+                  .map(e => {
+                    const off = excluded.has(e.vessel.toUpperCase());
+                    return (
+                      <tr key={e.vessel} style={{ opacity: off ? 0.4 : 1, borderBottom: "1px solid rgba(58,100,180,0.08)" }}>
+                        <td style={{ padding: "4px 8px" }}>
+                          <input type="checkbox" checked={!off} onChange={() => setExcluded(prev => { const n = new Set(prev); const k = e.vessel.toUpperCase(); n.has(k) ? n.delete(k) : n.add(k); return n; })} />
+                        </td>
+                        <td style={{ padding: "4px 8px", color: "rgba(160,190,230,0.7)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 120 }}>{e.operator}</td>
+                        <td style={{ padding: "4px 8px", color: C.tx, fontWeight: 600 }}>{e.vessel}</td>
+                        <td style={{ padding: "4px 8px", textAlign: "right", color: "rgba(160,190,230,0.7)" }}>{Math.round(e.dwt / 1000)}K</td>
+                        <td style={{ padding: "4px 8px", textAlign: "right", color: "rgba(160,190,230,0.7)" }}>{fmtWeek(e.openDate)}</td>
+                        <td style={{ padding: "4px 8px", textAlign: "right", color: "rgba(160,190,230,0.7)" }}>{fmtWeek(e.updated)}</td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
           </div>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-            <thead>
-              <tr style={{ position: "sticky", top: 33, background: "#0c1729" }}>
-                {["", "Owner", "Vessel", "DWT", "Open", "Updated"].map((h, i) => (
-                  <th key={i} style={{ textAlign: i > 2 ? "right" : "left", padding: "5px 8px", fontSize: 9, color: AX, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid " + C.bd }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from(new Map(enriched
-                .filter(e => !range || (e.week >= range.from && e.week <= range.to))
-                .map(e => [e.vessel.toUpperCase(), e])).values())
-                .sort((a, b) => a.vessel.localeCompare(b.vessel))
-                .map(e => {
-                  const off = excluded.has(e.vessel.toUpperCase());
-                  return (
-                    <tr key={e.vessel} style={{ opacity: off ? 0.4 : 1, borderBottom: "1px solid rgba(58,100,180,0.08)" }}>
-                      <td style={{ padding: "4px 8px" }}>
-                        <input type="checkbox" checked={!off} onChange={() => setExcluded(prev => { const n = new Set(prev); const k = e.vessel.toUpperCase(); n.has(k) ? n.delete(k) : n.add(k); return n; })} />
-                      </td>
-                      <td style={{ padding: "4px 8px", color: "rgba(160,190,230,0.7)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 120 }}>{e.operator}</td>
-                      <td style={{ padding: "4px 8px", color: C.tx, fontWeight: 600 }}>{e.vessel}</td>
-                      <td style={{ padding: "4px 8px", textAlign: "right", color: "rgba(160,190,230,0.7)" }}>{Math.round(e.dwt / 1000)}K</td>
-                      <td style={{ padding: "4px 8px", textAlign: "right", color: "rgba(160,190,230,0.7)" }}>{fmtWeek(e.openDate)}</td>
-                      <td style={{ padding: "4px 8px", textAlign: "right", color: "rgba(160,190,230,0.7)" }}>{fmtWeek(e.updated)}</td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
