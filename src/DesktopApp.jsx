@@ -1310,6 +1310,26 @@ const filtV=useMemo(()=>{
     });
   },[vessels]);
   const selV=sel?vessels.find(v=>v.vessel===sel):null;
+  const [panelBox,setPanelBox]=useState({left:0,top:120});
+  useEffect(()=>{
+    if(!selV)return;
+    let raf=null;
+    const update=()=>{
+      raf=null;
+      const row=window.__posRow;
+      if(!row)return;
+      const tbl=row.querySelector("table");
+      const rect=(tbl||row).getBoundingClientRect();
+      const left=Math.min(rect.right+12, window.innerWidth-272);
+      const top=Math.max(70, Math.min(rect.top, window.innerHeight-200));
+      setPanelBox({left:Math.max(8,left),top});
+    };
+    const onScrollResize=()=>{ if(raf==null) raf=requestAnimationFrame(update); };
+    update();
+    window.addEventListener("scroll",onScrollResize,true);
+    window.addEventListener("resize",onScrollResize);
+    return()=>{window.removeEventListener("scroll",onScrollResize,true);window.removeEventListener("resize",onScrollResize);if(raf)cancelAnimationFrame(raf);};
+  },[selV]);
   const selFixes=sel?cargoes.filter(c=>c.vessel&&c.vessel.toLowerCase()===sel.toLowerCase()):[];
   const cTokens=cSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const filtC=useMemo(()=>{
@@ -1810,9 +1830,9 @@ const filtV=useMemo(()=>{
                 </div>
 
                 {/* Vessel Table + Side panel row */}
-                <div style={{display:"flex",gap:10,alignItems:"flex-start",position:"relative",flexWrap:"nowrap"}}>
+                <div ref={(el)=>{window.__posRow=el;}} style={{display:"flex",gap:10,alignItems:"flex-start",position:"relative"}}>
                 {/* Vessel Table */}
-                <div style={{width:selV?"calc(100% - 284px)":"100%",flex:selV?"0 0 calc(100% - 284px)":"1 1 100%",minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch",transition:"width 0.15s ease"}}
+                <div style={{width:"100%",flex:1,minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch"}}
                   onClick={e=>{
                     const th=e.target.closest("th");
                     if(!th) return;
@@ -2009,9 +2029,9 @@ const filtV=useMemo(()=>{
 />
                   </div>
 
-                  {/* Side panel — in freed table space, sticky (follows scroll), no viewport drift */}
+                  {/* Side panel — fixed, tracks table right-edge via rAF (smooth, no drift) */}
                   {selV&&(
-                    <div style={{width:260,flexShrink:0,alignSelf:"flex-start",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"sticky",top:14,zIndex:30,maxHeight:"calc(100vh - 90px)",display:"flex",flexDirection:"column",boxShadow:"0 16px 50px rgba(0,0,0,0.7)"}}>
+                    <div style={{width:260,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"fixed",left:panelBox.left,top:panelBox.top,zIndex:1000,maxHeight:"calc(100vh - 90px)",display:"flex",flexDirection:"column",boxShadow:"0 16px 50px rgba(0,0,0,0.7)"}}>
                       <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
                         <div>
                           <div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>
