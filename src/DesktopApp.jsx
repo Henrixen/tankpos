@@ -1607,20 +1607,7 @@ const filtV=useMemo(()=>{
     />
   </div>
 
-  <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position:"relative" }}>
-    {/* Avg fixing window — computed from filtV, excluding >60d */}
-    {(()=>{
-      const vals=filtV
-        .map(v=>daysBetween(v.date))
-        .filter(d=>d!==null&&d>=0&&d<=60);
-      const avg=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):null;
-      return avg!==null?(
-        <div style={{position:"absolute",top:30,left:14,zIndex:10,fontSize:10,color:"rgba(160,200,255,0.55)",fontWeight:600,pointerEvents:"none"}}>
-          Avg <span style={{color:"#58a6ff",fontWeight:700}}>{avg}d</span>
-          <span style={{color:"rgba(120,160,200,0.4)",marginLeft:4,fontSize:9}}>({vals.length} vessels)</span>
-        </div>
-      ):null;
-    })()}
+  <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", position:"relative" }}>
     {/* CSS overrides: vivid opaque bar colours for FixingWindow */}
     <style>{`
       /* Kill transparency on all bars inside the fixing window container */
