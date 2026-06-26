@@ -407,6 +407,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
   const [range, setRange] = React.useState(null);          // {from,to} committed week range
   const [showList, setShowList] = React.useState(false);
   const [excluded, setExcluded] = React.useState(new Set()); // vessel names to drop
+  const [lookback, setLookback] = React.useState(14);        // days of history (default 2 weeks)
   const wrapRef = useRef(null);
   const [W, setW] = React.useState(760);
   const H = 200;
@@ -428,7 +429,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
     (async () => {
       setLoading(true);
       const since = new Date();
-      since.setDate(since.getDate() - 84);
+      since.setDate(since.getDate() - lookback);
       // positions_external is large (60k+). Supabase caps at 1000/req by default,
       // so paginate ordered by most-recent until we've covered the window.
       const PAGE = 1000;
@@ -454,7 +455,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
       setLoading(false);
     })();
     return () => { alive = false; };
-  }, []);
+  }, [lookback]);
 
   // DWT lookup from in-memory vessels (fallback) + a set of currently-visible vessel names
   // (so search / tag filtering in the table flows through to the chart)
@@ -475,7 +476,6 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
   for (const r of tagFiltered) {
     const nm = (r.vessel_name || "").toUpperCase();
     if (useVisibleFilter && !visibleNames.has(nm)) continue;   // respect table search/tags
-    if (excluded.has(nm)) continue;                            // user-deselected
     const reportMs = new Date(r.last_update_spotship).getTime();
     const openMs = new Date(r.open_date).getTime();
     if (isNaN(reportMs) || isNaN(openMs)) continue;
@@ -496,6 +496,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
   // Build weekly averages, honouring committed date range
   const weekMap = {};
   for (const e of enriched) {
+    if (excluded.has(e.vessel.toUpperCase())) continue;       // chart excludes deselected
     if (range && (e.week < range.from || e.week > range.to)) continue;
     (weekMap[e.week] = weekMap[e.week] || {});
     (weekMap[e.week][e.seg] = weekMap[e.week][e.seg] || []).push(e.fw);
@@ -507,7 +508,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
   }));
 
   // vessel count + avg behind the current view
-  const inView = enriched.filter(e => !range || (e.week >= range.from && e.week <= range.to));
+  const inView = enriched.filter(e => !excluded.has(e.vessel.toUpperCase()) && (!range || (e.week >= range.from && e.week <= range.to)));
   const vesselCount = new Set(inView.map(e => e.vessel.toUpperCase())).size;
   const avgFW = inView.length ? Math.round(inView.reduce((a, b) => a + b.fw, 0) / inView.length) : null;
 
@@ -600,6 +601,12 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
             {fmtWeek(range.from)}–{fmtWeek(range.to)} ✕ clear range
           </span>
         )}
+        <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+          <span style={{ color: "rgba(120,150,190,0.45)" }}>History:</span>
+          {[[14, "2w"], [28, "4w"], [56, "8w"], [84, "12w"]].map(([d, l]) => (
+            <button key={d} onClick={() => setLookback(d)} style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 3, cursor: "pointer", fontFamily: "inherit", border: "1px solid " + (lookback === d ? "#58a6ff" : "rgba(88,166,255,0.15)"), background: lookback === d ? "rgba(88,166,255,0.15)" : "transparent", color: lookback === d ? "#79c0ff" : "rgba(140,170,210,0.5)" }}>{l}</button>
+          ))}
+        </div>
         <div style={{ flex: 1 }} />
         <button onClick={() => setShowList(v => !v)} style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, cursor: "pointer", fontFamily: "inherit", border: "1px solid rgba(88,166,255,0.25)", background: showList ? "rgba(88,166,255,0.12)" : "transparent", color: "#79c0ff" }}>
           {showList ? "Hide vessels" : `Vessels (${vesselCount})`}
