@@ -483,7 +483,17 @@ function AICreditWidget(){
 }
 
 const INP_INLINE={background:"rgba(8,16,32,0.85)",border:"1px solid rgba(88,166,255,0.25)",borderRadius:4,color:"rgba(200,220,255,0.9)",fontFamily:"Inter,sans-serif",fontSize:11,padding:"5px 8px",outline:"none",width:"100%",boxSizing:"border-box"};
-const rangeInp={background:"rgba(8,16,32,0.85)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:3,color:"rgba(200,220,255,0.9)",fontFamily:"inherit",fontSize:10,padding:"2px 4px",outline:"none",width:"50%",minWidth:0,boxSizing:"border-box"};
+const rangeInp={background:"rgba(8,16,32,0.85)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:3,color:"rgba(200,220,255,0.9)",fontFamily:"inherit",fontSize:10,padding:"3px 6px",outline:"none",width:"50%",minWidth:0,boxSizing:"border-box",MozAppearance:"textfield"};
+
+// Stable range-input pair (module-level so it isn't remounted each render → no cursor jump)
+function RangeBox({minVal,maxVal,minPh,maxPh,onMin,onMax}){
+  return (
+    <div style={{display:"flex",gap:3,marginTop:3}}>
+      <input type="text" inputMode="numeric" value={minVal} placeholder={minPh} onChange={e=>onMin(e.target.value.replace(/[^\d]/g,""))} style={rangeInp}/>
+      <input type="text" inputMode="numeric" value={maxVal} placeholder={maxPh} onChange={e=>onMax(e.target.value.replace(/[^\d]/g,""))} style={rangeInp}/>
+    </div>
+  );
+}
 
 function AddVesselInlineRow({onSave,onClose}){
   const now=new Date();
@@ -1490,6 +1500,7 @@ const filtV=useMemo(()=>{
           <span style={{color:C.tx,flex:1}}>Delete <strong>{pendingDel.label}</strong>?</span>
           <button onClick={()=>{
             if(pendingDel.id==="__SELECTED__"){[...selVessels].forEach(v=>onDelV(v));setSelVessels(new Set());}
+            else if(pendingDel.type==="clearsaved"){clearSavedVessels();}
             else if(pendingDel.type==="vessel"||pendingDel.type==="all") onDelV(pendingDel.id);
             else if(pendingDel.type==="cargo") onDelC(pendingDel.id);
             else if(pendingDel.type==="allcargo"){
@@ -1758,7 +1769,7 @@ const filtV=useMemo(()=>{
           <span style={{display:"flex",alignItems:"center",gap:5,width:"100%"}}>
             <span>Saved ({savedVessels.size})</span>
             <span style={{color:"#fbbf24"}}>★</span>
-            {savedVessels.size>0&&<span onClick={e=>{e.stopPropagation();if(window.confirm("Clear all saved vessels?"))clearSavedVessels();}} style={{marginLeft:"auto",color:C.red,cursor:"pointer"}}>✕</span>}
+            {savedVessels.size>0&&<span onClick={e=>{e.stopPropagation();setPendingDel({type:"clearsaved",label:`all ${savedVessels.size} saved vessels`});}} style={{marginLeft:"auto",color:C.red,cursor:"pointer"}}>✕</span>}
           </span>
         </B>
         {interUKCActive&&<B active={false} onClick={()=>{setInterUKCActive(false);}}><span style={{color:C.red}}>✕ Clear</span></B>}
@@ -1790,19 +1801,13 @@ const filtV=useMemo(()=>{
       {/* DWT */}
       <COL label="DWT" col="#f59e0b">
         {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<B key={v} active={dwtFilter.has(v)} onClick={e=>{setDwtFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
-        <div style={{display:"flex",gap:3,marginTop:3}}>
-          <input type="number" value={dwtRange.min} placeholder="min" onChange={e=>{setDwtRange(r=>({...r,min:e.target.value}));setPosPage(1);}} style={rangeInp}/>
-          <input type="number" value={dwtRange.max} placeholder="max" onChange={e=>{setDwtRange(r=>({...r,max:e.target.value}));setPosPage(1);}} style={rangeInp}/>
-        </div>
+        <RangeBox minVal={dwtRange.min} maxVal={dwtRange.max} minPh="min" maxPh="max" onMin={v=>{setDwtRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setDwtRange(r=>({...r,max:v}));setPosPage(1);}}/>
         {(dwtFilter.size>0||dwtRange.min!==""||dwtRange.max!=="")&&<B active={false} onClick={()=>{setDwtFilter(new Set());setDwtRange({min:"",max:""});setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
       </COL>
       {/* Built */}
       <COL label="Built" col="#94a3b8">
         {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<B key={v} active={builtFilter.has(v)} onClick={()=>{setBuiltFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
-        <div style={{display:"flex",gap:3,marginTop:3}}>
-          <input type="number" value={builtRange.min} placeholder="from" onChange={e=>{setBuiltRange(r=>({...r,min:e.target.value}));setPosPage(1);}} style={rangeInp}/>
-          <input type="number" value={builtRange.max} placeholder="to" onChange={e=>{setBuiltRange(r=>({...r,max:e.target.value}));setPosPage(1);}} style={rangeInp}/>
-        </div>
+        <RangeBox minVal={builtRange.min} maxVal={builtRange.max} minPh="from" maxPh="to" onMin={v=>{setBuiltRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setBuiltRange(r=>({...r,max:v}));setPosPage(1);}}/>
         {(builtFilter.size>0||builtRange.min!==""||builtRange.max!=="")&&<B active={false} onClick={()=>{setBuiltFilter(new Set());setBuiltRange({min:"",max:""});setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
       </COL>
     </div>
