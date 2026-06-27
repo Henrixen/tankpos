@@ -252,7 +252,7 @@ function RateMatrix({onBunkerChange, bunkerHeader}){
 
   function onSave(key,val){
     const prev=matrixRef.current[key]||{};
-    const ts=key.endsWith("-comment")?new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short"}):(prev.ts||"");
+    const ts=(val&&val.trim())?new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short"}):(prev.ts||"");
     matrixRef.current={...matrixRef.current,[key]:{...prev,rate:val,ts}};
     // Auto-calc TCE for EU routes when rate is entered
     if(key.endsWith("-rate")){
@@ -313,13 +313,13 @@ function RateMatrix({onBunkerChange, bunkerHeader}){
         <table style={{borderCollapse:"collapse",width:"100%"}}>
           <thead><tr>
             <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
-            <th style={{...thS,width:"15%"}}>Rate ($ lsum)</th>
+            <th style={{...thS,width:"15%",color:"#79c0ff"}}>Rate ($ lsum)</th>
             <th style={{...thS,width:"15%",color:C.green}}>TCE $/day</th>
-            <th style={{...thS,width:"40%"}}><span>Comment</span></th>
+            <th style={{...thS,width:"40%",textAlign:"left"}}><span>Comment</span></th>
           </tr></thead>
           <tbody>
             {euRoutes.map((rt,i)=>(
-              <tr key={rt.id||i} style={{background:i%2===0?C.bg:C.bg2}}>
+              <tr key={rt.id||i} style={{background:i%2?"rgba(255,255,255,0.02)":"transparent"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(58,130,246,0.06)"} onMouseLeave={e=>e.currentTarget.style.background=i%2?"rgba(255,255,255,0.02)":"transparent"}>
                 <td style={{...tdR,color:C.dim,paddingLeft:4}}>
                   <RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/>
                 </td>
@@ -342,11 +342,11 @@ function RateMatrix({onBunkerChange, bunkerHeader}){
             <thead><tr>
               <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
               {RATE_SIZES.map(sz=>(<th key={sz} style={{...thS,width:"11.67%"}}>{sz}</th>))}
-              <th style={{...thS,width:"40%"}}>Comment</th>
+              <th style={{...thS,width:"40%",textAlign:"left"}}>Comment</th>
             </tr></thead>
             <tbody>
               {rg.routes.map((rt,rtIdx)=>(
-                <tr key={rt.id||rtIdx} style={{background:rtIdx%2===0?C.bg:C.bg2}}>
+                <tr key={rt.id||rtIdx} style={{background:rtIdx%2?"rgba(255,255,255,0.02)":"transparent"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(58,130,246,0.06)"} onMouseLeave={e=>e.currentTarget.style.background=rtIdx%2?"rgba(255,255,255,0.02)":"transparent"}>
                   <td style={{...tdR,color:C.dim,paddingLeft:4}}>
                     <RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/>
                   </td>
