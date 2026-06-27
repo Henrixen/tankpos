@@ -408,6 +408,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
   const [showList, setShowList] = React.useState(false);
   const [excluded, setExcluded] = React.useState(new Set()); // vessel names to drop
   const [lookback, setLookback] = React.useState(14);        // days of history (default 2 weeks)
+  const [listSort, setListSort] = React.useState({ key: "vessel", dir: 1 }); // vessel list sort
   const wrapRef = useRef(null);
   const [W, setW] = React.useState(760);
   const H = 200;
@@ -502,8 +503,11 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
     (weekMap[e.week][e.seg] = weekMap[e.week][e.seg] || []).push(e.fw);
   }
   const weeks = Object.keys(weekMap).sort();
-  const chartData = weeks.map(wk => ({
-    week: wk, label: fmtWeek(wk),
+  const thisMonday = weekStart(new Date().toISOString());
+  const chartData = weeks.map((wk, i) => ({
+    week: wk,
+    label: wk === thisMonday ? "Now" : fmtWeek(wk),
+    isLive: wk === thisMonday,
     ...Object.fromEntries(FW_SEGMENTS.map(s => [s.key, mean(weekMap[wk][s.key] || [])])),
   }));
 
@@ -642,7 +646,10 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
             <g key={seg.key}>
               <path d={linePath(seg)} fill="none" stroke={seg.color} strokeWidth="2" strokeLinejoin="round" />
               {chartData.map((d, i) => d[seg.key] == null ? null : (
-                <circle key={i} cx={xOf(i)} cy={yOf(d[seg.key])} r={hover && hover.i === i ? 4 : 2.5} fill={seg.color} />
+                <circle key={i} cx={xOf(i)} cy={yOf(d[seg.key])}
+                  r={d.isLive ? 4 : (hover && hover.i === i ? 4 : 2.5)}
+                  fill={seg.color}
+                  stroke={d.isLive ? "#fff" : "none"} strokeWidth={d.isLive ? 1.5 : 0} />
               ))}
             </g>
           ))}
@@ -687,8 +694,11 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
               <thead>
                 <tr style={{ position: "sticky", top: 33, background: "#0c1729" }}>
-                  {["", "Owner", "Vessel", "DWT", "Open", "Updated"].map((h, i) => (
-                    <th key={i} style={{ textAlign: i > 2 ? "right" : "left", padding: "5px 8px", fontSize: 9, color: AX, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid " + C.bd }}>{h}</th>
+                  {[["",""],["operator","Owner"],["vessel","Vessel"],["dwt","DWT"],["openDate","Open"],["updated","Updated"]].map(([key, h], i) => (
+                    <th key={i} onClick={() => key && setListSort(s => ({ key, dir: s.key === key ? -s.dir : 1 }))}
+                      style={{ textAlign: i > 2 ? "right" : "left", padding: "5px 8px", fontSize: 9, color: AX, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: "1px solid " + C.bd, cursor: key ? "pointer" : "default", userSelect: "none" }}>
+                      {h}{listSort.key === key && key ? (listSort.dir === 1 ? " ▲" : " ▼") : ""}
+                    </th>
                   ))}
                 </tr>
               </thead>
@@ -696,7 +706,13 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
                 {Array.from(new Map(enriched
                   .filter(e => !range || (e.week >= range.from && e.week <= range.to))
                   .map(e => [e.vessel.toUpperCase(), e])).values())
-                  .sort((a, b) => a.vessel.localeCompare(b.vessel))
+                  .sort((a, b) => {
+                    const k = listSort.key;
+                    let av = a[k], bv = b[k];
+                    if (k === "dwt") { av = Number(av) || 0; bv = Number(bv) || 0; return (av - bv) * listSort.dir; }
+                    if (k === "openDate" || k === "updated") { return (new Date(av) - new Date(bv)) * listSort.dir; }
+                    return String(av || "").localeCompare(String(bv || "")) * listSort.dir;
+                  })
                   .map(e => {
                     const off = excluded.has(e.vessel.toUpperCase());
                     return (
