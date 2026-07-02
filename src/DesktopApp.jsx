@@ -2813,7 +2813,7 @@ const filtV=useMemo(()=>{
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
           </div>
         )}
-        {tab==="reports"&&<Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} selectedCargoes={Array.from(selCargoes)}/></Suspense>}
+        {tab==="reports"&&<Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={Array.from(selCargoes)}/></Suspense>}
         {tab==="map"&&<Suspense fallback={<TabFallback/>}><FreightMapTab/></Suspense>}
       </div>
 
