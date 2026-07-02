@@ -39,26 +39,63 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
     return colorMapRef.current[name];
   }
 
-  // Fetch AIS data
+  // AIS is fetched ON DEMAND only.
+  // No startup fetch and no 1-minute polling, to avoid Supabase egress burn.
   useEffect(() => {
-    async function fetchAIS() {
-      const { data, error } = await supabase
+    let cancelled = false;
+
+    function getSelectedImos() {
+      return [...new Set((selectedVessels || [])
+        .map(v => {
+          if (v && typeof v === "object") return v.imo_no || v.imo || v.imoNo || null;
+          return null;
+        })
+        .filter(Boolean)
+        .map(x => Number(String(x).replace(/[^0-9]/g, "")))
+        .filter(Boolean))];
+    }
+
+    function getSelectedNames() {
+      return [...new Set((selectedVessels || [])
+        .map(v => typeof v === "string" ? v : (v?.vessel || v?.vessel_name || v?.name || ""))
+        .map(s => String(s || "").toUpperCase().trim())
+        .filter(Boolean))];
+    }
+
+    async function fetchSelectedAIS() {
+      const imos = getSelectedImos();
+      const names = getSelectedNames();
+
+      if (!imos.length && !names.length) {
+        setAisData([]);
+        onAisVesselsChange?.(new Set());
+        return;
+      }
+
+      let q = supabase
         .from("positions_ais")
         .select("imo_no,vessel_name,longitude,latitude,destination,eta,datetime")
         .not("latitude", "is", null)
         .not("longitude", "is", null)
-        .limit(5000);
-      if (error) { console.error("AIS fetch error:", error); return; }
-      setAisData(data || []);
-      if (onAisVesselsChange) {
-        const names = new Set((data||[]).map(d=>(d.vessel_name||"").toUpperCase().trim()).filter(Boolean));
-        onAisVesselsChange(names);
-      }
+        .order("datetime", { ascending: false })
+        .limit(150);
+
+      // Best: match by IMO. Fallback to vessel_name only if your AIS rows start storing names.
+      if (imos.length) q = q.in("imo_no", imos);
+      else q = q.in("vessel_name", names);
+
+      const { data, error } = await q;
+      if (cancelled) return;
+      if (error) { console.error("AIS fetch error:", error); setAisData([]); return; }
+
+      const rows = data || [];
+      setAisData(rows);
+      onAisVesselsChange?.(new Set(rows.map(d => (d.vessel_name || d.imo_no || "").toString().toUpperCase().trim()).filter(Boolean)));
     }
-    fetchAIS();
-    const iv = setInterval(fetchAIS, 60000);
-    return () => clearInterval(iv);
-  }, []);
+
+    fetchSelectedAIS();
+    return () => { cancelled = true; };
+  }, [JSON.stringify(selectedVessels)]);
 
   // Init map
   useEffect(() => {
@@ -83,10 +120,10 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
   useEffect(() => {
     if (!mapLoaded || !map.current) return;
 
-    // Group by vessel (normalized uppercase)
+    // Group by vessel_name if available, otherwise IMO. Your AIS rows currently have vessel_name=null.
     const routes = {};
     aisData.forEach(p => {
-      const name = (p.vessel_name || "Unknown").toUpperCase().trim();
+      const name = (p.vessel_name || (p.imo_no ? `IMO ${p.imo_no}` : "Unknown")).toString().toUpperCase().trim();
       if (!routes[name]) routes[name] = [];
       routes[name].push(p);
     });
@@ -104,7 +141,10 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
       pts.splice(0, pts.length, ...deduped);
     });
 
-    const selectedUp = selectedVessels.map(s => s.toUpperCase().trim());
+    const selectedUp = selectedVessels.map(s =>
+      (typeof s === "string" ? s : (s?.vessel || s?.vessel_name || s?.name || (s?.imo_no ? `IMO ${s.imo_no}` : "")))
+        .toString().toUpperCase().trim()
+    ).filter(Boolean);
     const hasSelection = selectedUp.length > 0;
 
     // Build GeoJSON
@@ -294,7 +334,10 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
   // Fly to selected vessel — or reset to world view
   useEffect(() => {
     if (!mapLoaded || !map.current) return;
-    const selectedUp = selectedVessels.map(s => s.toUpperCase().trim());
+    const selectedUp = selectedVessels.map(s =>
+      (typeof s === "string" ? s : (s?.vessel || s?.vessel_name || s?.name || (s?.imo_no ? `IMO ${s.imo_no}` : "")))
+        .toString().toUpperCase().trim()
+    ).filter(Boolean);
 
     if (!selectedUp.length) {
       map.current.flyTo({ center: [15, 30], zoom: 2, duration: 1000 });
@@ -303,7 +346,7 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
 
     const routes = {};
     aisData.forEach(p => {
-      const name = (p.vessel_name||"Unknown").toUpperCase().trim();
+      const name = (p.vessel_name || (p.imo_no ? `IMO ${p.imo_no}` : "Unknown")).toString().toUpperCase().trim();
       if (!routes[name]) routes[name]=[];
       routes[name].push(p);
     });
@@ -322,7 +365,7 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
     }
   }, [JSON.stringify(selectedVessels), mapLoaded, aisData]);
 
-  const vesselCount = [...new Set(aisData.map(p=>(p.vessel_name||"").toUpperCase()).filter(Boolean))].length;
+  const vesselCount = [...new Set(aisData.map(p => (p.vessel_name || (p.imo_no ? `IMO ${p.imo_no}` : "")).toString().toUpperCase()).filter(Boolean))].length;
 
   return (
     <div style={{background:C.bg2, border:"1px solid "+C.bd, borderRadius:7,
@@ -334,7 +377,10 @@ export default function AISMap({ selectedVessels = [], vessels = [], onAisVessel
         <span style={{fontSize:12, fontWeight:700, color:C.tx}}>🗺️ AIS Live Map</span>
         <span style={{fontSize:11, color:C.faint}}>
           {selectedVessels.length > 0
-            ? selectedVessels.map(s=>s.charAt(0)+s.slice(1).toLowerCase()).join(", ")
+            ? selectedVessels.map(s => {
+                const label = typeof s === "string" ? s : (s?.vessel || s?.vessel_name || s?.name || (s?.imo_no ? `IMO ${s.imo_no}` : ""));
+                return String(label).charAt(0) + String(label).slice(1).toLowerCase();
+              }).join(", ")
             : `${vesselCount} vessels`}
         </span>
       </div>
