@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
+import { classifyRegion, fmtDateShort } from "./utils";
+// Loaded from CDN so no package.json / npm install is required.
+import { toPng, toBlob } from "https://esm.sh/html-to-image@1.11.13";
 
-const REPORT_TYPES = ["Intermediate", "Asia to Europe", "Transatlantic", "TimeCharter"];
+const REPORT_TYPES = ["Intermediate", "Asia to Europe", "Transatlantic", "TimeCharter", "Position List"];
 
 function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
   const [reportType, setReportType] = useState("");
@@ -14,6 +17,63 @@ function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
   const [quotes, setQuotes] = useState([]);
   const [reportDate, setReportDate] = useState(new Date().toISOString().split("T")[0]);
   const [savedReports, setSavedReports] = useState([]);
+
+  // --- Position List specific state ---
+  const [posGroupBy, setPosGroupBy] = useState("segment"); // 'segment' | 'region'
+  const [posTitle, setPosTitle] = useState("CHEMS & SPECIALIZED POSITION LIST");
+  const [posSubtitle, setPosSubtitle] = useState("10-22,000 DWT · COATED AND STST");
+  const [posExportStatus, setPosExportStatus] = useState("");
+  const posReportRef = useRef(null);
+
+  function posRegionOf(v) {
+    return v.superRegion || classifyRegion(v.openPort) || "Other";
+  }
+
+  const posGrouped = useMemo(() => {
+    const key = posGroupBy === "region" ? posRegionOf : (v) => v.segment || "UNASSIGNED";
+    const buckets = {};
+    (selectedVessels || []).forEach((v) => {
+      const k = key(v);
+      if (!buckets[k]) buckets[k] = [];
+      buckets[k].push(v);
+    });
+    return buckets;
+  }, [selectedVessels, posGroupBy]);
+
+  const posGroupCounts = useMemo(
+    () => Object.entries(posGrouped).map(([label, rows]) => ({ label, count: rows.length })),
+    [posGrouped]
+  );
+
+  async function copyPositionImage() {
+    if (!posReportRef.current) return;
+    setPosExportStatus("Copying...");
+    try {
+      const blob = await toBlob(posReportRef.current, { backgroundColor: C.bg, pixelRatio: 2 });
+      if (!blob) throw new Error("No blob generated");
+      await navigator.clipboard.write([new window.ClipboardItem({ "image/png": blob })]);
+      setPosExportStatus("Copied — paste directly into your email body.");
+    } catch (e) {
+      console.error(e);
+      setPosExportStatus("Copy failed — try Download PNG instead.");
+    }
+  }
+
+  async function downloadPositionPng() {
+    if (!posReportRef.current) return;
+    setPosExportStatus("Rendering PNG...");
+    try {
+      const dataUrl = await toPng(posReportRef.current, { backgroundColor: C.bg, pixelRatio: 2 });
+      const link = document.createElement("a");
+      link.download = `positions-report-${Date.now()}.png`;
+      link.href = dataUrl;
+      link.click();
+      setPosExportStatus("PNG downloaded.");
+    } catch (e) {
+      console.error(e);
+      setPosExportStatus("PNG export failed.");
+    }
+  }
 
   useEffect(() => {
     loadReports();
@@ -269,13 +329,42 @@ function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
             <span style={{ fontSize: 16, fontWeight: 700, color: C.blue }}>{reportType}</span>
             <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} style={{ background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 12, padding: "6px 10px", outline: "none" }} />
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {reportType === "Position List" && (
+              <>
+                <button onClick={() => setPosGroupBy("segment")} style={{ background: posGroupBy === "segment" ? C.blue : "transparent", border: "1px solid " + C.bd, borderRadius: 6, color: posGroupBy === "segment" ? "#fff" : C.dim, fontSize: 11, fontWeight: 700, padding: "8px 12px", cursor: "pointer" }}>By Segment</button>
+                <button onClick={() => setPosGroupBy("region")} style={{ background: posGroupBy === "region" ? C.blue : "transparent", border: "1px solid " + C.bd, borderRadius: 6, color: posGroupBy === "region" ? "#fff" : C.dim, fontSize: 11, fontWeight: 700, padding: "8px 12px", cursor: "pointer" }}>By Region</button>
+              </>
+            )}
             <button onClick={saveReport} style={{ background: "linear-gradient(135deg, #3fb950 0%, #2ecc71 100%)", border: "none", borderRadius: 6, color: "#fff", fontSize: 11, fontWeight: 700, padding: "8px 16px", cursor: "pointer", boxShadow: "0 2px 8px rgba(63,185,80,0.3)" }}>Save Report</button>
-            <button onClick={exportReport} style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", border: "none", borderRadius: 6, color: "#fff", fontSize: 11, fontWeight: 700, padding: "8px 16px", cursor: "pointer", boxShadow: "0 2px 8px rgba(102,126,234,0.3)" }}>Print</button>
-            <button onClick={copyReport} style={{ background: "linear-gradient(135deg, #f5a623 0%, #f39c12 100%)", border: "none", borderRadius: 6, color: "#fff", fontSize: 11, fontWeight: 700, padding: "8px 16px", cursor: "pointer", boxShadow: "0 2px 8px rgba(245,166,35,0.3)" }}>Copy</button>
+            <button onClick={exportReport} style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", border: "none", borderRadius: 6, color: "#fff", fontSize: 11, fontWeight: 700, padding: "8px 16px", cursor: "pointer", boxShadow: "0 2px 8px rgba(102,126,234,0.3)" }}>Print / PDF</button>
+            {reportType === "Position List" ? (
+              <>
+                <button onClick={copyPositionImage} style={{ background: "linear-gradient(135deg, #f5a623 0%, #f39c12 100%)", border: "none", borderRadius: 6, color: "#fff", fontSize: 11, fontWeight: 700, padding: "8px 16px", cursor: "pointer", boxShadow: "0 2px 8px rgba(245,166,35,0.3)" }}>Copy for Email</button>
+                <button onClick={downloadPositionPng} style={{ background: "transparent", border: "1px solid " + C.bd, borderRadius: 6, color: C.dim, fontSize: 11, fontWeight: 700, padding: "8px 16px", cursor: "pointer" }}>Download PNG</button>
+              </>
+            ) : (
+              <button onClick={copyReport} style={{ background: "linear-gradient(135deg, #f5a623 0%, #f39c12 100%)", border: "none", borderRadius: 6, color: "#fff", fontSize: 11, fontWeight: 700, padding: "8px 16px", cursor: "pointer", boxShadow: "0 2px 8px rgba(245,166,35,0.3)" }}>Copy</button>
+            )}
           </div>
         </div>
+        {reportType === "Position List" && posExportStatus && (
+          <div style={{ fontSize: 11, color: C.dim, padding: "0 4px" }}>{posExportStatus}</div>
+        )}
 
+        {reportType === "Position List" ? (
+          <PositionListReport
+            grouped={posGrouped}
+            groupCounts={posGroupCounts}
+            title={posTitle}
+            setTitle={setPosTitle}
+            subtitle={posSubtitle}
+            setSubtitle={setPosSubtitle}
+            reportDate={reportDate}
+            reportRef={posReportRef}
+          />
+        ) : (
+        <>
         {/* KPI Cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
           <div style={{ background: "linear-gradient(135deg, rgba(102,126,234,0.12) 0%, rgba(118,75,162,0.12) 100%)", border: "1px solid rgba(102,126,234,0.3)", borderRadius: 8, padding: 16 }}>
@@ -421,6 +510,112 @@ function ReportsTab({ selectedVessels = [], selectedCargoes = [] }) {
             )}
           </div>
         </div>
+        </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function fmtDwtFull(n) {
+  if (n == null || n === "") return "";
+  return Number(n).toLocaleString("en-US").replace(/,/g, " ");
+}
+
+function GroupBarChart({ data, width = 460, height = 160 }) {
+  if (!data || data.length === 0) return null;
+  const padding = { top: 22, right: 10, bottom: 26, left: 10 };
+  const w = width - padding.left - padding.right;
+  const h = height - padding.top - padding.bottom;
+  const max = Math.max(...data.map(d => d.count), 1);
+  const barW = w / data.length / 1.6;
+  const xFor = i => padding.left + (i + 0.5) * (w / data.length);
+  const yFor = v => padding.top + h - (v / max) * h;
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height}>
+      <text x={padding.left} y={12} fill={C.tx} fontSize="12" fontWeight="600">No. of ships</text>
+      {data.map((d, i) => (
+        <g key={d.label}>
+          <rect x={xFor(i) - barW / 2} y={yFor(d.count)} width={barW} height={h - (yFor(d.count) - padding.top)} fill={C.blue} opacity="0.6" rx="2" />
+          <text x={xFor(i)} y={yFor(d.count) - 6} fill={C.tx} fontSize="11" textAnchor="middle">{d.count}</text>
+          <text x={xFor(i)} y={height - 8} fill={C.dim} fontSize="10" textAnchor="middle">{d.label}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function PositionListReport({ grouped, groupCounts, title, setTitle, subtitle, setSubtitle, reportDate, reportRef }) {
+  const dateDisplay = new Date(reportDate).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .report-print-area, .report-print-area * { visibility: visible; }
+          .report-print-area { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+      `}</style>
+
+      {/* Editable title/subtitle — not part of the exported image styling concerns, just content */}
+      <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 12, display: "flex", gap: 8 }}>
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Report title" style={{ flex: 2, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 12, padding: "8px 10px", outline: "none" }} />
+        <input value={subtitle} onChange={e => setSubtitle(e.target.value)} placeholder="Subtitle" style={{ flex: 3, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 6, color: C.tx, fontSize: 12, padding: "8px 10px", outline: "none" }} />
+      </div>
+
+      <div ref={reportRef} className="report-print-area" style={{ background: "#070f1c", border: "1px solid rgba(58,130,246,0.14)", fontFamily: "Inter, system-ui, sans-serif" }}>
+        {/* Header */}
+        <div style={{ background: "#0c1e3d", padding: "10px 16px", textAlign: "right" }}>
+          <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>{dateDisplay}</span>
+        </div>
+        <div style={{ background: "#fff", padding: "16px 0", textAlign: "center" }}>
+          <img src="/steem1960-logo.png" alt="Steem1960" style={{ height: 40 }} onError={e => { e.target.style.display = "none"; }} />
+        </div>
+        <div style={{ background: "#0c1e3d", padding: "14px 16px", textAlign: "center", color: "#fff" }}>
+          <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: 0.5 }}>{title}</div>
+          <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>{subtitle}</div>
+        </div>
+
+        {/* Table */}
+        <div style={{ padding: 12 }}>
+          {Object.keys(grouped).length === 0 ? (
+            <div style={{ padding: 30, textAlign: "center", color: "rgba(219,230,245,0.5)", fontSize: 12 }}>
+              No vessels selected — go to Positions, select vessels, then "To Report".
+            </div>
+          ) : (
+            <div style={{ border: "1px solid rgba(58,130,246,0.14)" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1.4fr 0.7fr 0.7fr 0.8fr 0.7fr 0.8fr 1.2fr 0.8fr", background: C.blue, color: "#fff", fontSize: 11, fontWeight: 700, padding: "6px 8px" }}>
+                <div>VESSEL</div><div>DWT</div><div>BUILT</div><div>COATING</div><div>OPEN</div><div>PORT</div><div>COMMENT</div><div>OPERATOR</div>
+              </div>
+              {Object.entries(grouped).map(([bucket, rows]) => (
+                <div key={bucket}>
+                  <div style={{ background: "#0c1e3d", color: "#dbe6f5", fontSize: 11, fontWeight: 700, padding: "4px 8px", letterSpacing: 0.5 }}>{bucket}</div>
+                  {rows.map((v, i) => (
+                    <div key={(v.vessel || "") + i} style={{ display: "grid", gridTemplateColumns: "1.4fr 0.7fr 0.7fr 0.8fr 0.7fr 0.8fr 1.2fr 0.8fr", background: i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent", color: "#dbe6f5", fontSize: 11, padding: "4px 8px", borderTop: "1px solid rgba(58,130,246,0.14)" }}>
+                      <div>{v.vessel}</div>
+                      <div>{fmtDwtFull(v.dwt)}</div>
+                      <div>{v.built || ""}</div>
+                      <div>{v.coating || ""}</div>
+                      <div>{v.date ? fmtDateShort(v.date) : ""}</div>
+                      <div>{v.openPort || ""}</div>
+                      <div style={{ color: "rgba(219,230,245,0.6)" }}>{v.comment || ""}</div>
+                      <div>{v.operator || ""}</div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Chart */}
+        {groupCounts.length > 0 && (
+          <div style={{ padding: "0 12px 16px" }}>
+            <div style={{ background: "#0c1729", border: "1px solid rgba(58,130,246,0.14)", padding: 8 }}>
+              <GroupBarChart data={groupCounts} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
