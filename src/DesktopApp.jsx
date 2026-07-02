@@ -945,7 +945,7 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   },[]);
   function inRange(dateStr,from,to){if(!dateStr)return false;const d=new Date(dateStr);d.setHours(0,0,0,0);return d>=from&&d<=to;}
   const [mxSearch,setMxSearch]=useState("");
-  const [cSortK,setCsortK]=useState("added");
+  const [cSortK,setCsortK]=useState("updated");
   const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
   const [selVessels,setSelVessels]=useState(()=>new Set());
   const [history,setHistory]=useState([]);
@@ -1057,8 +1057,7 @@ const cargoColumns = [
   { key:"freight",   sortKey:"Freight",   label:"Freight",  align:"left", width:colWidthsC.Freight },
   { key:"comment",   sortKey:"Comment",   label:"Comment",  align:"left", width:colWidthsC.Comment },
   { key:"tag",       sortKey:"tag",       label:"Tag",            align:"left", width:80 },
-  { key:"added",     sortKey:"Added",     label:"Added", align:"left", width:colWidthsC.Updated },
-  { key:"changed",   sortKey:"Changed",   label:"Changed", align:"left", width:colWidthsC.Updated },
+  { key:"updated",   sortKey:"Updated",   label:"Updated", align:"left", width:colWidthsC.Updated },
   { key:"badge", label:"", align:"center", width:20 },
   { key: "delete", label: "", align: "center", width: 26 },
 ];
@@ -1417,10 +1416,10 @@ const filtV=useMemo(()=>{
     });
     if(cSortK){
       list=[...list].sort((a,b)=>{
-        const colToField={Status:"status",Vessel:"vessel",Charterer:"charterer",Cargo:"cargo",Qty:"qty",Load:"load",Disch:"disch",LaycanStart:"from",LaycanEnd:"to",Freight:"freight",Comment:"comment",Updated:"updated",Added:"added",Changed:"changed"};
+        const colToField={Status:"status",Vessel:"vessel",Charterer:"charterer",Cargo:"cargo",Qty:"qty",Load:"load",Disch:"disch",LaycanStart:"from",LaycanEnd:"to",Freight:"freight",Comment:"comment",Updated:"updated"};
         const fld=colToField[cSortK]||cSortK;
         let av=a[fld]||"",bv=b[fld]||"";
-        if(fld==="updated"||fld==="added"||fld==="changed"){av=av?new Date(av).getTime():0;bv=bv?new Date(bv).getTime():0;return(av-bv)*cSortD;}
+        if(fld==="updated"){av=av?new Date(av).getTime():0;bv=bv?new Date(bv).getTime():0;return(av-bv)*cSortD;}
         return String(av).toLowerCase()<String(bv).toLowerCase()?-cSortD:String(av).toLowerCase()>String(bv).toLowerCase()?cSortD:0;
       });
     }
@@ -2639,14 +2638,9 @@ const filtV=useMemo(()=>{
       {/* TAG */}
       <TagCell cargoId={f.id} tag={f.tag} onUpdateC={onUpdateC}/>
 
-      {/* ADDED — creation date, frozen, drives sort */}
+      {/* UPDATED */}
       <td style={{ ...td2, color: C.faint, textAlign:"left" }}>
-        {f.added ? new Date(f.added).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : (f.updated ? new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "")}
-      </td>
-
-      {/* CHANGED — last edit date (blank if never edited) */}
-      <td style={{ ...td2, color: C.faint, textAlign:"left" }}>
-        {f.changed ? new Date(f.changed).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
+        {f.updated ? new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
       </td>
 
       {/* WHO ENTERED — H (blue) or L (green) badge */}
@@ -2819,7 +2813,7 @@ const filtV=useMemo(()=>{
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
           </div>
         )}
-        {tab==="reports"&&<Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={Array.from(selVessels)} selectedCargoes={Array.from(selCargoes)}/></Suspense>}
+        {tab==="reports"&&<Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} selectedCargoes={Array.from(selCargoes)}/></Suspense>}
         {tab==="map"&&<Suspense fallback={<TabFallback/>}><FreightMapTab/></Suspense>}
       </div>
 
