@@ -76,7 +76,7 @@ export default function TankPos(){
         .or(`charterer.ilike.%${t}%,vessel.ilike.%${t}%,load.ilike.%${t}%,disch.ilike.%${t}%,cargo.ilike.%${t}%,status.ilike.%${t}%`)
         .range(0,499).order("updated",{ascending:false});
       if(error){console.error(error);return;}
-      setCargoes(data.map(r=>({...normaliseCargo(r),entered_by:r.entered_by})));
+      setCargoes(data.map(r=>({...normaliseCargo(r),entered_by:r.entered_by,added:r.added,changed:r.changed})));
     } else {
       // Fetch with offline fallback
       const { data, source } = await fetchWithCache('cargoes', async () => {
@@ -94,7 +94,7 @@ export default function TankPos(){
       }
       
       console.log(`🚢 Loaded ${data.cargoes?.length || 0} cargoes from ${source}`);
-      setCargoes((data.cargoes || []).map(r=>({...normaliseCargo(r),entered_by:r.entered_by})));
+      setCargoes((data.cargoes || []).map(r=>({...normaliseCargo(r),entered_by:r.entered_by,added:r.added,changed:r.changed})));
       setHasMore((data.cargoes || []).length === 200);
       if(data.total != null) setCargoTotal(data.total);
     }
@@ -225,7 +225,7 @@ export default function TankPos(){
       .range(cargoes.length,cargoes.length+199).order("updated",{ascending:false});
     if(error){console.error(error);return;}
     if(data.length<200) setHasMore(false);
-    setCargoes(prev=>[...prev,...data.map(r=>({...normaliseCargo(r),entered_by:r.entered_by}))]);
+    setCargoes(prev=>[...prev,...data.map(r=>({...normaliseCargo(r),entered_by:r.entered_by,added:r.added,changed:r.changed}))]);
   }
 
   const renameV=useCallback((oldName,newName)=>{
@@ -329,9 +329,10 @@ export default function TankPos(){
     })():value;
     const editor=localStorage.getItem("signal_user")||"H";
     const nowIso=new Date().toISOString();
-    setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:displayValue,entered_by:editor,updated:nowIso}:c));
+    // Edits stamp 'changed' only — 'added' (creation time, the sort anchor) is never touched
+    setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:displayValue,entered_by:editor,changed:nowIso}:c));
     const dbValue=(field==="from"||field==="to")?toISODate(value):value;
-    const{error}=await supabase.from("cargoes").update({[field]:dbValue,entered_by:editor,updated:nowIso}).eq("id",id);
+    const{error}=await supabase.from("cargoes").update({[field]:dbValue,entered_by:editor,changed:nowIso}).eq("id",id);
     if(error)console.error(error);
   },[]);
 
@@ -419,7 +420,7 @@ export default function TankPos(){
       ...f,
       id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
       updated: new Date().toISOString(),
-    }),entered_by:editorC}));
+    }),entered_by:editorC,added:f.added||new Date().toISOString(),changed:null}));
     // Dedup by id and by charterer+load+disch+from
     let added=0;
     setCargoes(prev=>{
@@ -460,7 +461,7 @@ export default function TankPos(){
   if(error)console.error(error);
 },[vesselDB]);
   const addC=useCallback(async(c)=>{
-    const norm=normaliseCargo({...c,id:c.id||("c_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),updated:c.updated||new Date().toISOString()});
+    const norm={...normaliseCargo({...c,id:c.id||("c_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),updated:c.updated||new Date().toISOString()}),added:c.added||new Date().toISOString(),changed:null};
     setCargoes(prev=>[...prev,norm]);
     const row={...norm,from:toISODate(norm.from),to:toISODate(norm.to)};
     const{error}=await supabase.from("cargoes").upsert([row],{onConflict:"id"});
