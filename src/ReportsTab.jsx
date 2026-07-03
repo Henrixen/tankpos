@@ -288,9 +288,28 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     return ORDER.filter(k => B[k]).map(k => ({ label: k, count: B[k] }));
   }, [reportVessels]);
 
+  const [dbTags, setDbTags] = useState([]);
+
+  // Load all known tags directly from Supabase so they show without needing to select vessels first
+  useEffect(() => {
+    if (section !== "poslist") return;
+    async function fetchTags() {
+      try {
+        const { data } = await supabase.from("positions").select("tag").not("tag", "is", null);
+        if (!data) return;
+        const s = new Set();
+        data.forEach(r => { if (r.tag) { const raw = Array.isArray(r.tag) ? r.tag : String(r.tag).split(","); raw.forEach(t => { const v = t.trim().toUpperCase(); if (v) s.add(v); }); } });
+        setDbTags([...s].sort());
+      } catch (e) { console.error("fetchTags:", e); }
+    }
+    fetchTags();
+  }, [section]);
+
   const allTags = useMemo(() => {
-    const s = new Set(); allVessels.forEach(v => parseTags(v).forEach(t => s.add(t))); return [...s].sort();
-  }, [allVessels]);
+    const s = new Set([...dbTags]);
+    allVessels.forEach(v => parseTags(v).forEach(t => s.add(t)));
+    return [...s].sort();
+  }, [allVessels, dbTags]);
 
   const vesselPool = useMemo(() => {
     const now = new Date();
@@ -488,14 +507,15 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
           ))}
         </div>
 
-        {section === "poslist" && <>
+        {section === "poslist" && (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
           <div style={{ padding: "8px 12px", borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.tx }}>{reportVessels.length} vessel{reportVessels.length !== 1 ? "s" : ""} in report</div>
             <div style={{ fontSize: 9, color: C.faint, marginTop: 2 }}>Draft auto-saved · persists across tabs</div>
           </div>
 
           {/* ADD VESSELS — fills all space between stats and bottom */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", padding: "8px 10px", gap: 5 }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0, padding: "8px 10px", gap: 5 }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", flexShrink: 0 }}>Add vessels</div>
             {/* Date filter */}
             <div style={{ display: "flex", gap: 3, flexWrap: "wrap", flexShrink: 0 }}>
@@ -506,31 +526,32 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
             </div>
             <input value={poolSearch} onChange={e => setPoolSearch(e.target.value)} placeholder="Search vessel..."
               style={{ ...IS, width: "100%", boxSizing: "border-box", flexShrink: 0 }} />
+            {/* Tags — always visible, loaded from Supabase */}
             {allTags.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 3, flexShrink: 0 }}>
                 {allTags.map(t => (
                   <button key={t} onClick={() => setTagFilter(p => { const n = new Set(p); n.has(t) ? n.delete(t) : n.add(t); return n; })}
                     style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3, cursor: "pointer", border: `1px solid ${tagFilter.has(t) ? ACCENT : C.bd}`, background: tagFilter.has(t) ? ACCENT : "transparent", color: tagFilter.has(t) ? "#fff" : C.dim, fontFamily: "inherit" }}>{t}</button>
                 ))}
-                {tagFilter.size > 0 && <button onClick={() => setTagFilter(new Set())} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer" }}>✕</button>}
+                {tagFilter.size > 0 && <button onClick={() => setTagFilter(new Set())} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer" }}>✕ clear</button>}
               </div>
             )}
-            {/* Pool list — fills remaining height */}
-            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+            {/* Pool list — scrollable, constrained by flex */}
+            <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column", gap: 2 }}>
               {vesselPool.length === 0 ? (
                 <div style={{ padding: "12px 0", textAlign: "center", color: C.faint, fontSize: 10 }}>
                   {allVessels.length === 0 ? "Select vessels on Positions tab" : "No vessels match filters"}
                 </div>
               ) : vesselPool.map(v => (
                 <div key={v.vessel} onClick={() => addFromPool(v)}
-                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 7px", borderRadius: 4, background: C.bg3, cursor: "pointer", border: "1px solid transparent" }}
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 7px", borderRadius: 4, background: C.bg3, cursor: "pointer", border: "1px solid transparent", flexShrink: 0 }}
                   onMouseEnter={e => e.currentTarget.style.borderColor = ACCENT}
                   onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: C.tx }}>{v.vessel}</div>
-                    <div style={{ fontSize: 9, color: C.faint }}>{v.segment || ""}{v.dwt ? ` · ${fmtDwt(v.dwt)}` : ""}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel}</div>
+                    <div style={{ fontSize: 9, color: C.faint }}>{v.segment || ""}{v.dwt ? ` · ${fmtDwt(v.dwt)}` : ""}{parseTags(v).length ? ` · ${parseTags(v).join(", ")}` : ""}</div>
                   </div>
-                  <span style={{ fontSize: 15, color: ACCENT, fontWeight: 700, lineHeight: 1 }}>+</span>
+                  <span style={{ fontSize: 15, color: ACCENT, fontWeight: 700, lineHeight: 1, flexShrink: 0, marginLeft: 4 }}>+</span>
                 </div>
               ))}
             </div>
@@ -558,7 +579,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
               </div>
             )}
           </div>
-        </>}
+          </div>
+        )}
 
         {section === "market" && (
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px" }}>
