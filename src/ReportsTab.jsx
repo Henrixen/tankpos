@@ -540,6 +540,34 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     }
 
     // ── Format C: Dash-separated (WhatsApp/email, original format) ─────────────
+    const MN = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+    function fmtDate(str) {
+      // DD.MM. → "D MMM"
+      const dot = str.match(/(\d{1,2})\.(\d{1,2})\.?/);
+      if (dot) { const d=parseInt(dot[1]),m=parseInt(dot[2])-1; return `${d} ${MN[m]||dot[2]}`; }
+      // DD MMM already
+      const txt = str.match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
+      if (txt) return `${parseInt(txt[1])} ${txt[2].toUpperCase()}`;
+      return str.toUpperCase();
+    }
+    function extractFromText(text) {
+      // Date: try DD.MM. first, then D MMM
+      let date = "", port = "";
+      const dotM = text.match(/(\d{1,2})\.(\d{1,2})\.?\s*(?:\d{2,4})?/);
+      const txtM = text.match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
+      if (dotM) { date = fmtDate(dotM[0]); text = text.replace(dotM[0], " ").trim(); }
+      else if (txtM) { date = fmtDate(txtM[0]); text = text.replace(txtM[0], " ").trim(); }
+      // Port: word after "open" keyword OR last uppercase word(s) remaining
+      const openM = text.match(/\bopen\s+([A-Z]{2,})/i);
+      if (openM) { port = openM[1].toUpperCase(); }
+      else {
+        // Take the last non-comment word (skip "CII", "rating", single letters)
+        const words = text.split(/\s+/).filter(w => w.length >= 2 && !/^(CII|RATING|OPEN|THE|AND|OR|WITH|CLEAN|DIRTY|ANY|DIRECTION|ALL|OPTION|!!+)$/i.test(w));
+        if (words.length) port = words[words.length-1].toUpperCase();
+      }
+      return { port, date };
+    }
+
     const rows = []; let curOp = "";
     nonEmpty.forEach(line => {
       if (/^\*[^*]+\*$/.test(line) || /^_[^_]+_$/.test(line)) {
@@ -548,11 +576,10 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       const parts = line.split(/\s*[\u2013\u2014]\s*|\s+-\s+/).map(s => s.trim()).filter(Boolean);
       if (parts.length >= 2) {
         const vessel = parts[0].toUpperCase();
-        const port   = parts[1].toUpperCase();
-        const date   = (parts[2] || "").toUpperCase();
-        const dir    = parts.slice(3).join(" \u2013 ");
-        const op     = curOp || lookupOp(vessel);
-        rows.push({ id:"q"+Date.now()+Math.random().toString(36).slice(2), operator: op, vessel, port, date, direction: dir });
+        const rest = parts.slice(1).join(" ");
+        const { port, date } = extractFromText(rest);
+        const op = curOp || lookupOp(vessel);
+        rows.push({ id:"q"+Date.now()+Math.random().toString(36).slice(2), operator: op, vessel, port, date, direction: "" });
       } else if (line.length > 1 && !line.startsWith("||")) {
         curOp = line.replace(/[*_]/g, "").trim();
       }
@@ -580,13 +607,36 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     const lines = ["|| " + quickTitle + " ||", ""];
     opOrder.forEach(op => {
       lines.push("*" + op + "*");
-      byOp[op].forEach(r => {
-        lines.push([r.vessel, r.port, r.date].filter(Boolean).join(" \u2013 "));
-        if (r.direction) lines.push(r.direction);
-      });
+      // Only vessel – port – date, NO comments or direction
+      byOp[op].forEach(r => lines.push([r.vessel, r.port, r.date].filter(Boolean).join(" \u2013 ")));
       lines.push("");
     });
     return lines.join("\n").trim();
+  }
+
+  function buildQuickTextByDate() {
+    if (!quickRows.length) return "";
+    const MN = {JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+    function sortKey(dateStr) {
+      if (!dateStr) return 99999;
+      const m1 = dateStr.match(/(\d{1,2})\s+([A-Z]{3})/i);
+      if (m1) return (MN[m1[2].toUpperCase()]||0)*100 + parseInt(m1[1]);
+      const m2 = dateStr.match(/(\d{1,2})\.(\d{1,2})/);
+      if (m2) return parseInt(m2[2])*100 + parseInt(m2[1]);
+      return 99999;
+    }
+    const sorted = [...quickRows].sort((a,b) => sortKey(a.date) - sortKey(b.date));
+    const lines = ["|| " + quickTitle + " ||", ""];
+    sorted.forEach(r => lines.push([r.date, r.vessel, r.port].filter(Boolean).join(" \u2013 ")));
+    return lines.join("\n").trim();
+  }
+
+  const [quickCopiedDate, setQuickCopiedDate] = useState(false);
+  async function copyQuickByDate() {
+    const text = buildQuickTextByDate(); if (!text) return;
+    try { await navigator.clipboard.writeText(text); }
+    catch { const ta=document.createElement("textarea"); ta.value=text; ta.style.cssText="position:fixed;top:0;left:0;width:2px;height:2px;background:transparent;"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); }
+    setQuickCopiedDate(true); setTimeout(()=>setQuickCopiedDate(false), 2500);
   }
 
   const [quickImgParsing, setQuickImgParsing] = useState(false);
@@ -1012,6 +1062,10 @@ Any direction`}</pre>
                 style={{ ...SB, opacity: quickRows.length ? 1 : 0.4, background: quickCopied ? "rgba(67,233,123,0.15)" : "rgba(245,166,35,0.12)", border: "1px solid " + (quickCopied ? "rgba(67,233,123,0.5)" : "rgba(245,166,35,0.45)"), color: quickCopied ? "#43e97b" : "#f5a623" }}>
                 {quickCopied ? "✓ Copied!" : "Copy for WhatsApp"}
               </button>
+              <button onClick={copyQuickByDate} disabled={!quickRows.length}
+                style={{ ...SB, opacity: quickRows.length ? 1 : 0.4, background: quickCopiedDate ? "rgba(67,233,123,0.15)" : "rgba(99,102,241,0.12)", border: "1px solid " + (quickCopiedDate ? "rgba(67,233,123,0.5)" : "rgba(99,102,241,0.45)"), color: quickCopiedDate ? "#43e97b" : "#a5b4fc" }}>
+                {quickCopiedDate ? "✓ Copied!" : "Copy by date ↑"}
+              </button>
             </div>
 
             <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1067,13 +1121,29 @@ Any direction`}</pre>
                 <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT }}>Step 3 — Copy &amp; send</div>
-                    <button onClick={copyQuick} style={{ ...SB, background: quickCopied ? "rgba(67,233,123,0.15)" : "rgba(245,166,35,0.12)", border: "1px solid " + (quickCopied ? "rgba(67,233,123,0.5)" : "rgba(245,166,35,0.45)"), color: quickCopied ? "#43e97b" : "#f5a623" }}>
-                      {quickCopied ? "✓ Copied!" : "Copy for WhatsApp / email"}
-                    </button>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={copyQuick} style={{ ...SB, background: quickCopied ? "rgba(67,233,123,0.15)" : "rgba(245,166,35,0.12)", border: "1px solid " + (quickCopied ? "rgba(67,233,123,0.5)" : "rgba(245,166,35,0.45)"), color: quickCopied ? "#43e97b" : "#f5a623" }}>
+                        {quickCopied ? "✓ Copied!" : "Copy by operator"}
+                      </button>
+                      <button onClick={copyQuickByDate} style={{ ...SB, background: quickCopiedDate ? "rgba(67,233,123,0.15)" : "rgba(99,102,241,0.12)", border: "1px solid " + (quickCopiedDate ? "rgba(67,233,123,0.5)" : "rgba(99,102,241,0.45)"), color: quickCopiedDate ? "#43e97b" : "#a5b4fc" }}>
+                        {quickCopiedDate ? "✓ Copied!" : "Copy by date ↑"}
+                      </button>
+                    </div>
                   </div>
-                  <pre style={{ margin: 0, fontFamily: "monospace", fontSize: 12, color: C.tx, lineHeight: 1.9, whiteSpace: "pre-wrap", wordBreak: "break-word", background: C.bg3, padding: "10px 12px", borderRadius: 5 }}>
-                    {buildQuickText()}
-                  </pre>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 9, color: C.faint, marginBottom: 4, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>By operator</div>
+                      <pre style={{ margin: 0, fontFamily: "monospace", fontSize: 12, color: C.tx, lineHeight: 1.9, whiteSpace: "pre-wrap", wordBreak: "break-word", background: C.bg3, padding: "10px 12px", borderRadius: 5 }}>
+                        {buildQuickText()}
+                      </pre>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9, color: C.faint, marginBottom: 4, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>By date (ascending)</div>
+                      <pre style={{ margin: 0, fontFamily: "monospace", fontSize: 12, color: C.tx, lineHeight: 1.9, whiteSpace: "pre-wrap", wordBreak: "break-word", background: C.bg3, padding: "10px 12px", borderRadius: 5 }}>
+                        {buildQuickTextByDate()}
+                      </pre>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
