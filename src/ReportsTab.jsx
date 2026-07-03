@@ -607,21 +607,15 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         r.readAsDataURL(file);
       });
       setQuickParseMsg("Extracting positions from image...");
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      const resp = await fetch("/api/parse-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1000,
-          messages: [{
-            role: "user",
-            content: [
-              { type: "image", source: { type: "base64", media_type: file.type || "image/png", data: b64 } },
-              { type: "text", text: "Extract all vessel positions from this image. Return ONLY a valid JSON array, no other text, no markdown fences. Each object must have exactly these keys: operator, vessel, port, date, direction. Use empty string for missing fields. Vessel names and ports in UPPERCASE. Example: [{\"operator\":\"MAERSK TANKERS\",\"vessel\":\"ERIKA SCHULTE\",\"port\":\"GRANGEMOUTH\",\"date\":\"6 JUL\",\"direction\":\"\"}]" }
-            ]
-          }]
-        })
+        body: JSON.stringify({ image: b64, mediaType: file.type || "image/png" }),
       });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `Server error ${resp.status}`);
+      }
       const json = await resp.json();
       const raw = (json.content?.[0]?.text || "").replace(/```json|```/g, "").trim();
       let parsed;
