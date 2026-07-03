@@ -488,6 +488,63 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     return lines.join("\n").trim();
   }
 
+  const [quickImgParsing, setQuickImgParsing] = useState(false);
+
+  async function handleImagePaste(e) {
+    const items = Array.from(e.clipboardData?.items || []);
+    const imgItem = items.find(i => i.type.startsWith("image/"));
+    if (!imgItem) return; // no image — let default text paste through
+    e.preventDefault();
+    setQuickImgParsing(true);
+    setQuickParseMsg("Reading image...");
+    try {
+      const file = imgItem.getAsFile();
+      const b64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result.split(",")[1]);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      setQuickParseMsg("Extracting positions from image...");
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: file.type || "image/png", data: b64 } },
+              { type: "text", text: "Extract all vessel positions from this image. Return ONLY a valid JSON array, no other text, no markdown fences. Each object must have exactly these keys: operator, vessel, port, date, direction. Use empty string for missing fields. Vessel names and ports in UPPERCASE. Example: [{\"operator\":\"MAERSK TANKERS\",\"vessel\":\"ERIKA SCHULTE\",\"port\":\"GRANGEMOUTH\",\"date\":\"6 JUL\",\"direction\":\"\"}]" }
+            ]
+          }]
+        })
+      });
+      const json = await resp.json();
+      const raw = (json.content?.[0]?.text || "").replace(/```json|```/g, "").trim();
+      let parsed;
+      try { parsed = JSON.parse(raw); } catch { throw new Error("Could not parse API response — try text paste instead"); }
+      if (!Array.isArray(parsed) || !parsed.length) throw new Error("No positions found in image");
+      const rows = parsed.map(r => ({
+        id: "q" + Date.now() + Math.random().toString(36).slice(2),
+        operator: r.operator || lookupOp((r.vessel || "").toUpperCase()) || "",
+        vessel: (r.vessel || "").toUpperCase(),
+        port: (r.port || "").toUpperCase(),
+        date: (r.date || "").toUpperCase(),
+        direction: r.direction || ""
+      }));
+      setQuickRows(p => [...p, ...rows]);
+      const missing = rows.filter(r => !r.operator).length;
+      setQuickParseMsg(`✓ ${rows.length} position${rows.length !== 1 ? "s" : ""} extracted from image${missing ? ` — ${missing} operator(s) not matched, fill manually` : "."}`);
+    } catch (err) {
+      console.error("imagePaste:", err);
+      setQuickParseMsg("Image parse failed: " + err.message);
+    } finally {
+      setQuickImgParsing(false);
+    }
+  }
+
   async function copyQuick() {
     const text = buildQuickText(); if (!text) return;
     try { await navigator.clipboard.writeText(text); }
@@ -535,6 +592,13 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                 ))}
                 {tagFilter.size > 0 && <button onClick={() => setTagFilter(new Set())} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer" }}>✕ clear</button>}
               </div>
+            )}
+            {/* Import all button — shown when pool has vessels */}
+            {vesselPool.length > 0 && (
+              <button onClick={() => { vesselPool.forEach(v => addFromPool(v)); setQuickParseMsg(""); }}
+                style={{ fontSize: 10, fontWeight: 700, padding: "5px 8px", borderRadius: 4, cursor: "pointer", border: `1px solid ${ACCENT}`, background: `${ACCENT}22`, color: ACCENT, fontFamily: "inherit", flexShrink: 0 }}>
+                Import all ({vesselPool.length})
+              </button>
             )}
             {/* Pool list — scrollable, constrained by flex */}
             <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column", gap: 2 }}>
@@ -859,14 +923,20 @@ Any direction`}</pre>
               {/* Step 1 */}
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px" }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT, marginBottom: 6 }}>Step 1 — Paste positions</div>
-                <textarea value={quickPaste} onChange={e => { setQuickPaste(e.target.value); setQuickParseMsg(""); }}
-                  placeholder="Paste from WhatsApp or email. Example:\n*MAERSK TANKERS*\nERIKA SCHULTE - GRANGEMOUTH - 6 JUL\nFURE VEN - THAMES - 6 JUL\n\nOperators auto-matched from your vessel database."
-                  style={{ width: "100%", minHeight: 120, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 11, padding: 9, outline: "none", resize: "vertical", fontFamily: "monospace", lineHeight: 1.6, boxSizing: "border-box" }} />
+                <textarea value={quickPaste}
+                  onChange={e => { setQuickPaste(e.target.value); setQuickParseMsg(""); }}
+                  onPaste={handleImagePaste}
+                  placeholder="Paste text from WhatsApp or email, OR paste a screenshot directly (Ctrl/Cmd+V).\n\nText example:\n*MAERSK TANKERS*\nERIKA SCHULTE - GRANGEMOUTH - 6 JUL\nFURE VEN - THAMES - 6 JUL\n\nOperators auto-matched from your vessel database."
+                  style={{ width: "100%", minHeight: 120, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 11, padding: 9, outline: "none", resize: "vertical", fontFamily: "monospace", lineHeight: 1.6, boxSizing: "border-box", opacity: quickImgParsing ? 0.5 : 1 }} />
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                  <button onClick={parsePaste} style={{ ...SB, background: ACCENT, color: "#fff", border: "none" }}>Parse &amp; add rows</button>
+                  <button onClick={parsePaste} disabled={quickImgParsing} style={{ ...SB, background: ACCENT, color: "#fff", border: "none", opacity: quickImgParsing ? 0.5 : 1 }}>Parse &amp; add rows</button>
                   {quickPaste.trim() && <button onClick={() => { setQuickPaste(""); setQuickParseMsg(""); }} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Clear paste</button>}
                   <button onClick={addQuickRow} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }} title="Add a blank row to fill in manually">+ Add row manually</button>
-                  {quickParseMsg && <span style={{ fontSize: 11, color: quickParseMsg.startsWith("✓") ? "#43e97b" : "#f5a623" }}>{quickParseMsg}</span>}
+                  {quickImgParsing && <span style={{ fontSize: 11, color: ACCENT }}>⏳ {quickParseMsg}</span>}
+                  {!quickImgParsing && quickParseMsg && <span style={{ fontSize: 11, color: quickParseMsg.startsWith("✓") ? "#43e97b" : "#f5a623" }}>{quickParseMsg}</span>}
+                </div>
+                <div style={{ fontSize: 9, color: C.faint, marginTop: 5 }}>
+                  💡 Works with text paste AND screenshot paste — just Ctrl/Cmd+V with an image in clipboard
                 </div>
               </div>
 
