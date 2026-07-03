@@ -208,8 +208,9 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [quickRows, setQuickRows] = useState([]);
   const [quickTitle, setQuickTitle] = useState("Available tonnage");
   const [quickPaste, setQuickPaste] = useState("");
-  const [showPaste, setShowPaste] = useState(true);
   const [quickCopied, setQuickCopied] = useState(false);
+  const [quickParseMsg, setQuickParseMsg] = useState("");
+  const [vesselOpDb, setVesselOpDb] = useState({}); // vessel name → operator lookup
 
   const ACCENT = C.blue || "#3a82f6";
 
@@ -386,25 +387,64 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const avgRate = Object.values(rateGrid).flatMap(r => Object.values(r).filter(v => v)).map(v => parseFloat(v) || 0).reduce((a, b) => a + b, 0) / Math.max(1, Object.values(rateGrid).flatMap(r => Object.values(r).filter(v => v)).length) || 0;
   const avgTCE = Object.values(tceEarnings).filter(v => v).map(v => parseFloat(v) || 0).reduce((a, b) => a + b, 0) / Math.max(1, Object.values(tceEarnings).filter(v => v).length) || 0;
 
+  // Load vessel→operator lookup when Quick tab opens
+  useEffect(() => {
+    if (section !== "quick" || Object.keys(vesselOpDb).length > 0) return;
+    async function fetchVesselOps() {
+      try {
+        // Try vessels_db first, fallback to positions_latest
+        const { data: dbData } = await supabase
+          .from("vessels_db").select("vessel_name, operator").not("operator", "is", null);
+        const { data: posData } = await supabase
+          .from("positions_latest").select("vessel, operator").not("operator", "is", null);
+        const lookup = {};
+        (posData || []).forEach(r => { if (r.vessel && r.operator) lookup[r.vessel.toUpperCase().trim()] = r.operator; });
+        (dbData || []).forEach(r => { if (r.vessel_name && r.operator) lookup[r.vessel_name.toUpperCase().trim()] = r.operator; });
+        setVesselOpDb(lookup);
+      } catch (e) { console.error("vesselOpDb:", e); }
+    }
+    fetchVesselOps();
+  }, [section]);
   // ── Quick Positions helpers ───────────────────────────────────────────────
+  function lookupOp(vesselName) {
+    if (!vesselName || !Object.keys(vesselOpDb).length) return "";
+    const key = vesselName.toUpperCase().trim();
+    if (vesselOpDb[key]) return vesselOpDb[key];
+    const match = Object.keys(vesselOpDb).find(k => k.startsWith(key) || key.startsWith(k));
+    return match ? vesselOpDb[match] : "";
+  }
+
   function parsePaste() {
+    if (!quickPaste.trim()) { setQuickParseMsg("Paste some positions first."); return; }
     const lines = quickPaste.split("\n").map(l => l.trim()).filter(Boolean);
     const rows = []; let curOp = "";
     lines.forEach(line => {
+      // WhatsApp bold *Name* or _Name_ = operator
       if (/^\*[^*]+\*$/.test(line) || /^_[^_]+_$/.test(line)) {
         curOp = line.replace(/[*_]/g, "").trim(); return;
       }
-      const parts = line.split(/\s*[–—\-]\s*/);
-      if (parts.length >= 2 && parts[0].trim().length > 0) {
-        rows.push({ id: "q"+Date.now()+Math.random().toString(36).slice(2), operator: curOp, vessel: parts[0].trim().toUpperCase(), port: (parts[1]||"").trim().toUpperCase(), date: (parts[2]||"").trim().toUpperCase(), direction: parts.slice(3).join(" – ").trim() });
-      } else if (rows.length > 0 && !rows[rows.length-1].direction && !/\d/.test(line.slice(0,3))) {
-        rows[rows.length-1].direction = line;
-      } else if (parts.length < 2) {
-        curOp = line;
+      // Split on en-dash, em-dash, or spaced hyphen
+      const parts = line.split(/\s*[\u2013\u2014]\s*|\s+-\s+/).map(s => s.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        const vessel = parts[0].toUpperCase();
+        const port   = parts[1].toUpperCase();
+        const date   = (parts[2] || "").toUpperCase();
+        const dir    = parts.slice(3).join(" \u2013 ");
+        const op     = curOp || lookupOp(vessel);
+        rows.push({ id: "q"+Date.now()+Math.random().toString(36).slice(2), operator: op, vessel, port, date, direction: dir });
+      } else if (line.length > 1 && !line.startsWith("||")) {
+        curOp = line.replace(/[*_]/g, "").trim();
       }
     });
-    setQuickRows(rows);
-    if (rows.length) setShowPaste(false);
+    if (!rows.length) {
+      setQuickParseMsg("No positions detected. Make sure lines use VESSEL \u2013 PORT \u2013 DATE format (dashes between each field).");
+      return;
+    }
+    rows.forEach(r => { if (!r.operator) r.operator = lookupOp(r.vessel); });
+    setQuickRows(p => [...p, ...rows]);
+    setQuickPaste("");
+    const missing = rows.filter(r => !r.operator).length;
+    setQuickParseMsg("\u2713 " + rows.length + " position" + (rows.length !== 1 ? "s" : "") + " added" + (missing ? " \u2014 " + missing + " operator(s) not found, fill in manually." : "."));
   }
 
   function addQuickRow() {
@@ -417,11 +457,11 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if (!quickRows.length) return "";
     const byOp = {}; const opOrder = [];
     quickRows.forEach(r => { const op=r.operator||"Unknown"; if(!byOp[op]){byOp[op]=[];opOrder.push(op);} byOp[op].push(r); });
-    const lines = [`|| ${quickTitle} ||`, ""];
+    const lines = ["|| " + quickTitle + " ||", ""];
     opOrder.forEach(op => {
-      lines.push(`*${op}*`);
+      lines.push("*" + op + "*");
       byOp[op].forEach(r => {
-        lines.push([r.vessel,r.port,r.date].filter(Boolean).join(" – "));
+        lines.push([r.vessel, r.port, r.date].filter(Boolean).join(" \u2013 "));
         if (r.direction) lines.push(r.direction);
       });
       lines.push("");
@@ -542,17 +582,29 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         )}
 
         {section === "quick" && (
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "8px 10px", gap: 6, overflow: "hidden" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "8px 10px", gap: 8, overflow: "hidden" }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em" }}>Quick daily positions</div>
-            <div style={{ fontSize: 10, color: C.faint, lineHeight: 1.5 }}>
-              Paste raw positions from WhatsApp or email, parse into rows, then copy in broker format.
+            <div style={{ fontSize: 10, color: C.dim, lineHeight: 1.6 }}>
+              Build a position list before Supabase data arrives. Paste WhatsApp or email positions, edit, then copy.
             </div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginTop: 4 }}>How it works</div>
+            {[["1","Paste raw positions from WhatsApp or email"],
+              ["2","Hit Parse — operators auto-matched from your vessel database"],
+              ["3","Fix any missing fields in the editable table"],
+              ["4","Copy for WhatsApp — paste straight into chat or email"]
+            ].map(([n,t]) => (
+              <div key={n} style={{ display: "flex", gap: 7, alignItems: "flex-start" }}>
+                <div style={{ width: 16, height: 16, minWidth: 16, borderRadius: "50%", background: ACCENT, color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", marginTop: 1 }}>{n}</div>
+                <div style={{ fontSize: 10, color: C.dim, lineHeight: 1.5 }}>{t}</div>
+              </div>
+            ))}
             <div style={{ flex: 1 }} />
             <div style={{ paddingTop: 8, borderTop: "1px solid " + C.bd }}>
-              <div style={{ fontSize: 9, color: C.faint, marginBottom: 4 }}>Format used in copy:</div>
-              <div style={{ fontSize: 9, color: C.dim, fontFamily: "monospace", lineHeight: 1.6, background: C.bg3, padding: "6px 8px", borderRadius: 4 }}>
-                {"|| Available tonnage ||\n*Operator*\nVESSEL – PORT – DATE\nDirection"}
-              </div>
+              <div style={{ fontSize: 9, color: C.faint, marginBottom: 4 }}>Output format:</div>
+              <pre style={{ margin: 0, fontSize: 9, color: C.dim, fontFamily: "monospace", lineHeight: 1.7, background: C.bg3, padding: "6px 8px", borderRadius: 4 }}>{`|| Available tonnage ||
+*Operator*
+VESSEL – PORT – DATE
+Any direction`}</pre>
             </div>
           </div>
         )}
@@ -769,62 +821,53 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
             {/* Toolbar */}
             <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 12px", background: C.bg2, borderBottom: "1px solid " + C.bd, flexWrap: "wrap", flexShrink: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>Quick Positions</span>
-              <input value={quickTitle} onChange={e => setQuickTitle(e.target.value)}
-                style={{ ...IS, minWidth: 160 }} placeholder="Available tonnage" />
+              <input value={quickTitle} onChange={e => setQuickTitle(e.target.value)} style={{ ...IS, minWidth: 160 }} placeholder="Available tonnage" />
               <div style={{ flex: 1 }} />
-              <button onClick={addQuickRow} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>+ Add row</button>
               {quickRows.length > 0 && (
-                <button onClick={() => { if (window.confirm("Clear all rows?")) setQuickRows([]); }}
-                  style={{ ...SB, background: "transparent", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444" }}>Clear</button>
+                <button onClick={() => { if (window.confirm("Clear all " + quickRows.length + " rows?")) { setQuickRows([]); setQuickParseMsg(""); } }}
+                  style={{ ...SB, background: "transparent", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444" }}>Clear all</button>
               )}
-              <button onClick={copyQuick} style={{ ...SB, background: quickCopied ? "rgba(67,233,123,0.15)" : "rgba(245,166,35,0.12)", border: `1px solid ${quickCopied ? "rgba(67,233,123,0.5)" : "rgba(245,166,35,0.45)"}`, color: quickCopied ? "#43e97b" : "#f5a623" }}>
+              <button onClick={copyQuick} disabled={!quickRows.length}
+                style={{ ...SB, opacity: quickRows.length ? 1 : 0.4, background: quickCopied ? "rgba(67,233,123,0.15)" : "rgba(245,166,35,0.12)", border: "1px solid " + (quickCopied ? "rgba(67,233,123,0.5)" : "rgba(245,166,35,0.45)"), color: quickCopied ? "#43e97b" : "#f5a623" }}>
                 {quickCopied ? "✓ Copied!" : "Copy for WhatsApp"}
               </button>
             </div>
 
             <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-              {/* Paste zone */}
-              <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7 }}>
-                <button onClick={() => setShowPaste(p => !p)}
-                  style={{ display: "flex", width: "100%", alignItems: "center", gap: 6, padding: "8px 12px", background: "none", border: "none", cursor: "pointer", color: C.dim, fontSize: 11, fontWeight: 700, fontFamily: "inherit" }}>
-                  <span style={{ fontSize: 10 }}>{showPaste ? "▲" : "▼"}</span>
-                  Paste from WhatsApp / email
-                </button>
-                {showPaste && (
-                  <div style={{ padding: "0 12px 12px" }}>
-                    <textarea value={quickPaste} onChange={e => setQuickPaste(e.target.value)}
-                      placeholder={"Paste positions here, e.g.:\n*MAERSK TANKERS*\nERIKA SCHULTE - GRANGEMOUTH - 6 JUL\n*FureBear*\nFURE VEN - THAMES - 6 JUL"}
-                      style={{ width: "100%", minHeight: 130, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 11, padding: 9, outline: "none", resize: "vertical", fontFamily: "monospace", lineHeight: 1.6, boxSizing: "border-box" }} />
-                    <div style={{ display: "flex", gap: 7, marginTop: 7 }}>
-                      <button onClick={parsePaste}
-                        style={{ ...SB, background: ACCENT, color: "#fff", border: "none" }}>
-                        Parse positions
-                      </button>
-                      <button onClick={() => setQuickPaste("")}
-                        style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-                )}
+              {/* Step 1 */}
+              <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT, marginBottom: 6 }}>Step 1 — Paste positions</div>
+                <textarea value={quickPaste} onChange={e => { setQuickPaste(e.target.value); setQuickParseMsg(""); }}
+                  placeholder="Paste from WhatsApp or email. Example:\n*MAERSK TANKERS*\nERIKA SCHULTE - GRANGEMOUTH - 6 JUL\nFURE VEN - THAMES - 6 JUL\n\nOperators auto-matched from your vessel database."
+                  style={{ width: "100%", minHeight: 120, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 11, padding: 9, outline: "none", resize: "vertical", fontFamily: "monospace", lineHeight: 1.6, boxSizing: "border-box" }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                  <button onClick={parsePaste} style={{ ...SB, background: ACCENT, color: "#fff", border: "none" }}>Parse &amp; add rows</button>
+                  {quickPaste.trim() && <button onClick={() => { setQuickPaste(""); setQuickParseMsg(""); }} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Clear paste</button>}
+                  <button onClick={addQuickRow} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }} title="Add a blank row to fill in manually">+ Add row manually</button>
+                  {quickParseMsg && <span style={{ fontSize: 11, color: quickParseMsg.startsWith("✓") ? "#43e97b" : "#f5a623" }}>{quickParseMsg}</span>}
+                </div>
               </div>
 
-              {/* Row editor */}
+              {/* Step 2: Edit */}
               {quickRows.length > 0 && (
                 <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, overflow: "hidden" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.9fr 0.7fr 1.1fr 22px", background: ACCENT, color: "#fff", fontSize: 10, fontWeight: 700, padding: "5px 10px", gap: 6 }}>
-                    <div>OPERATOR</div><div>VESSEL</div><div>PORT</div><div>DATE</div><div>DIRECTION</div><div></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", borderBottom: "1px solid " + C.bd }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT }}>Step 2 — Check &amp; edit ({quickRows.length} row{quickRows.length !== 1 ? "s" : ""}) — <span style={{ fontWeight: 400, color: C.faint }}>orange = operator not yet matched</span></div>
+                    <button onClick={addQuickRow} style={{ fontSize: 10, color: ACCENT, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>+ Add row</button>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 22px", background: ACCENT, color: "#fff", fontSize: 10, fontWeight: 700, padding: "5px 10px", gap: 6 }}>
+                    <div>OPERATOR</div><div>VESSEL</div><div>PORT</div><div>DATE</div><div>DIRECTION (optional)</div><div></div>
                   </div>
                   {quickRows.map((r, i) => {
-                    const INP = { background: "transparent", border: "none", borderBottom: "1px solid rgba(58,130,246,0.3)", color: C.tx, fontSize: 11, outline: "none", padding: "1px 2px", width: "100%", fontFamily: "inherit", minWidth: 0 };
-                    const rowBg = i % 2 === 0 ? "rgba(255,255,255,0.025)" : "transparent";
+                    const iOp = r.operator ? C.tx : "#f5a623";
+                    const INP = (col) => ({ background: "transparent", border: "none", borderBottom: "1px solid rgba(58,130,246,0.28)", color: col || C.tx, fontSize: 11, outline: "none", padding: "1px 2px", width: "100%", fontFamily: "inherit", minWidth: 0 });
                     return (
-                      <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.9fr 0.7fr 1.1fr 22px", background: rowBg, padding: "5px 10px", gap: 6, borderTop: "1px solid rgba(58,130,246,0.1)", alignItems: "center" }}>
-                        <input style={INP} value={r.operator} onChange={e => updateQuickRow(r.id, "operator", e.target.value)} placeholder="Operator" />
-                        <input style={{ ...INP, fontWeight: 600 }} value={r.vessel} onChange={e => updateQuickRow(r.id, "vessel", e.target.value.toUpperCase())} placeholder="VESSEL" />
-                        <input style={INP} value={r.port} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} placeholder="PORT" />
-                        <input style={INP} value={r.date} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} placeholder="DATE" />
-                        <input style={{ ...INP, color: C.dim }} value={r.direction} onChange={e => updateQuickRow(r.id, "direction", e.target.value)} placeholder="Any direction..." />
+                      <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 22px", background: i%2===0?"rgba(255,255,255,0.025)":"transparent", padding: "5px 10px", gap: 6, borderTop: "1px solid rgba(58,130,246,0.1)", alignItems: "center" }}>
+                        <input style={INP(iOp)} value={r.operator} onChange={e => updateQuickRow(r.id, "operator", e.target.value)} placeholder="Type operator..." title={r.operator ? r.operator : "Not found in DB — type it here"} />
+                        <input style={{ ...INP(), fontWeight: 600 }} value={r.vessel} onChange={e => updateQuickRow(r.id, "vessel", e.target.value.toUpperCase())} placeholder="VESSEL" />
+                        <input style={INP()} value={r.port} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} placeholder="PORT" />
+                        <input style={INP()} value={r.date} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} placeholder="DATE" />
+                        <input style={{ ...INP(C.dim) }} value={r.direction} onChange={e => updateQuickRow(r.id, "direction", e.target.value)} placeholder="Any direction / options..." />
                         <button onClick={() => deleteQuickRow(r.id)} style={{ background: "none", border: "none", color: "rgba(239,68,68,0.55)", cursor: "pointer", fontSize: 12, padding: 0 }}>✕</button>
                       </div>
                     );
@@ -832,23 +875,18 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                 </div>
               )}
 
-              {/* Live preview */}
+              {/* Step 3: Preview + Copy */}
               {quickRows.length > 0 && (
-                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 14px" }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Preview</div>
-                  <pre style={{ margin: 0, fontFamily: "monospace", fontSize: 12, color: C.tx, lineHeight: 1.7, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT }}>Step 3 — Copy &amp; send</div>
+                    <button onClick={copyQuick} style={{ ...SB, background: quickCopied ? "rgba(67,233,123,0.15)" : "rgba(245,166,35,0.12)", border: "1px solid " + (quickCopied ? "rgba(67,233,123,0.5)" : "rgba(245,166,35,0.45)"), color: quickCopied ? "#43e97b" : "#f5a623" }}>
+                      {quickCopied ? "✓ Copied!" : "Copy for WhatsApp / email"}
+                    </button>
+                  </div>
+                  <pre style={{ margin: 0, fontFamily: "monospace", fontSize: 12, color: C.tx, lineHeight: 1.9, whiteSpace: "pre-wrap", wordBreak: "break-word", background: C.bg3, padding: "10px 12px", borderRadius: 5 }}>
                     {buildQuickText()}
                   </pre>
-                </div>
-              )}
-
-              {quickRows.length === 0 && (
-                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <div style={{ textAlign: "center", color: C.faint }}>
-                    <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>Paste positions above or click + Add row</div>
-                    <div style={{ fontSize: 11, marginTop: 4 }}>Formats WhatsApp/email positions for quick sending</div>
-                  </div>
                 </div>
               )}
             </div>
