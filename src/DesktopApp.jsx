@@ -698,10 +698,14 @@ function CopyPositionsButton({filtV,fmtDateShort}){
     if(!filtV.length) return "";
     const byOp={};
     filtV.forEach(v=>{const op=v.operator||"Unknown";if(!byOp[op])byOp[op]=[];byOp[op].push(v);});
-    const lines=["|| Positions ||",""];
+    const lines=["|| Available tonnage ||",""];
     Object.entries(byOp).sort(([a],[b])=>a.localeCompare(b)).forEach(([op,vs])=>{
       lines.push("*"+op+"*");
-      vs.forEach(v=>{const p=[v.vessel,v.openPort,fmtDateShort?fmtDateShort(v.date):v.date];if(v.comment)p.push(v.comment);lines.push(p.filter(Boolean).join(" – "));});
+      vs.forEach(v=>{
+        const d=fmtDateShort?fmtDateShort(v.date):v.date;
+        const p=[(v.vessel||"").toUpperCase(),(v.openPort||"").toUpperCase(),(d||"").toUpperCase()];
+        lines.push(p.filter(Boolean).join(" – "));
+      });
       lines.push("");
     });
     return lines.join("\n").trim();
@@ -719,7 +723,7 @@ function CopyPositionsButton({filtV,fmtDateShort}){
     setFallbackText(text);
   }
   return(<>
-    <button onClick={copyPositions} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",border:copied?"1px solid rgba(67,233,123,0.5)":"1px solid rgba(58,130,246,0.25)",background:copied?"rgba(67,233,123,0.1)":"rgba(58,130,246,0.08)",color:copied?"#43e97b":"#79c0ff"}}>
+    <button title="Copy positions" onClick={copyPositions} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",border:copied?"1px solid rgba(67,233,123,0.5)":"1px solid rgba(58,130,246,0.25)",background:copied?"rgba(67,233,123,0.1)":"rgba(58,130,246,0.08)",color:copied?"#43e97b":"#79c0ff"}}>
       {copied?"✓ Copied!":filtV.length>0?`Copy (${filtV.length})`:"Copy positions"}
     </button>
     {fallbackText&&(<>
@@ -1391,7 +1395,7 @@ const filtV=useMemo(()=>{
     return()=>{window.removeEventListener("scroll",onScrollResize,true);window.removeEventListener("resize",onScrollResize);if(raf)cancelAnimationFrame(raf);};
   },[selV]);
   const selFixes=sel?cargoes.filter(c=>c.vessel&&c.vessel.toLowerCase()===sel.toLowerCase()):[];
-  const cTokens=cSearch.trim().toLowerCase().split(",").map(g=>g.trim().split(/\s+/).filter(Boolean)).filter(g=>g.length);
+  const cTokens=cSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const filtC=useMemo(()=>{
     const now=new Date();
     const startOfWeek=(d)=>{const r=new Date(d);r.setHours(0,0,0,0);r.setDate(r.getDate()-r.getDay()+1);return r;};
@@ -1412,7 +1416,7 @@ const filtV=useMemo(()=>{
       
       if(cDateFilter){const hay=(c.from||" ")+" "+(c.to||"");if(!hay.toLowerCase().includes(cDateFilter.toLowerCase()))return false;}
       if(!cTokens.length)return true;
-      return cTokens.some(terms=>terms.every(t=>JSON.stringify(c).toLowerCase().includes(t)));
+      return cTokens.every(t=>JSON.stringify(c).toLowerCase().includes(t));
     });
     if(cSortK){
       list=[...list].sort((a,b)=>{
