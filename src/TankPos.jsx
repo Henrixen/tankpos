@@ -160,6 +160,7 @@ export default function TankPos(){
       vessel:      String(r.vessel_name||"").toUpperCase(),
       imoNo:       r.imo_no!=null?String(r.imo_no):null,
       operator:    r.operator||"",
+      tag:         r.tag||null,
       openPort:    r.port_name||"",
       date:        fmtDate,
       dwt:         r.dwt||null,
@@ -191,7 +192,7 @@ export default function TankPos(){
   // Merge in vessel_overrides — manual edits (notes + spec) win over CSV/feed, per field
   try {
     const { data: ovRows } = await supabase.from("vessel_overrides")
-      .select("imo_no,vessel_name,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo");
+      .select("imo_no,vessel_name,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo,operator,tags");
     if (ovRows && ovRows.length) {
       const byImo = {}, byName = {};
       ovRows.forEach(o => {
@@ -210,6 +211,9 @@ export default function TankPos(){
         if (o.cbm != null)     merged.cbm     = o.cbm;
         if (o.dwt != null)     merged.dwt     = o.dwt;
         if (o.built != null)   merged.built   = o.built;
+        // operator + tags — always win over feed, stored in vessel_overrides for persistence
+        if (o.operator != null) merged.operator = o.operator;
+        if (o.tags != null)     merged.tag      = o.tags;
         // spec sub-object
         merged.spec = { ...(v.spec || {}) };
         if (o.fuel != null)      merged.spec.fuel      = o.fuel;
@@ -282,6 +286,8 @@ export default function TankPos(){
     "spec.fuel": "fuel",
     "spec.iceClass": "ice_class",
     "spec.lastCargo": "last_cargo",
+    operator: "operator",  // persists through feed re-imports
+    tag:      "tags",      // persists through feed re-imports
   };
   if (OVERRIDE_COLS[field]) {
     const vobj = vessels.find(v => v.vessel === name);
@@ -303,7 +309,7 @@ export default function TankPos(){
     openPort: "port_name",
     date: "open_date",
     comment: "details",
-    operator: "operator",
+    // operator removed — now persisted via vessel_overrides (survives feed re-imports)
   };
 
   const dbField = fieldMap[field] || field;
@@ -504,7 +510,30 @@ export default function TankPos(){
     }
   },[]);
 
-  const props={vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
+  // saveTag — stores position tags in vessel_overrides so they survive feed re-imports
+  // Call with (vesselName, imoNo, tagsString) e.g. saveTag("FURE VEN", "1234567", "UKC,INTER")
+  // Pass tagsString="" or null to clear all tags
+  const saveTag = useCallback(async (vesselName, imoNo, tagsString) => {
+    const tags = tagsString || null;
+    setVessels(prev => {
+      const next = prev.map(v => v.vessel === vesselName ? { ...v, tag: tags } : v);
+      saveV(next);
+      return next;
+    });
+    const editor = localStorage.getItem("signal_user") || "H";
+    const payload = {
+      vessel_name: vesselName,
+      imo_no: imoNo || null,
+      tags,
+      entered_by: editor,
+      updated_at: new Date().toISOString(),
+    };
+    const onConflict = imoNo ? "imo_no" : "vessel_name";
+    const { error } = await supabase.from("vessel_overrides").upsert([payload], { onConflict });
+    if (error) console.error("saveTag error:", error);
+  }, [saveV]);
+
+  const props={vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB,onSaveTag:saveTag};
   return (
     <>
       <OfflineIndicator cacheKey="positions" />
