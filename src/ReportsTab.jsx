@@ -290,15 +290,24 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   const [dbTags, setDbTags] = useState([]);
 
-  // Load all known tags directly from Supabase so they show without needing to select vessels first
+  // Load all known filter values (tags + regions + segments) from Supabase
   useEffect(() => {
     if (section !== "poslist") return;
     async function fetchTags() {
       try {
-        const { data } = await supabase.from("positions").select("tag").not("tag", "is", null);
+        const { data } = await supabase
+          .from("positions_latest")
+          .select("tag, super_region, segment");
         if (!data) return;
         const s = new Set();
-        data.forEach(r => { if (r.tag) { const raw = Array.isArray(r.tag) ? r.tag : String(r.tag).split(","); raw.forEach(t => { const v = t.trim().toUpperCase(); if (v) s.add(v); }); } });
+        data.forEach(r => {
+          if (r.tag) {
+            const raw = Array.isArray(r.tag) ? r.tag : String(r.tag).split(",");
+            raw.forEach(t => { const v = t.trim().toUpperCase(); if (v) s.add(v); });
+          }
+          if (r.super_region) s.add(String(r.super_region).toUpperCase().trim());
+          if (r.segment) s.add(String(r.segment).toUpperCase().trim());
+        });
         setDbTags([...s].sort());
       } catch (e) { console.error("fetchTags:", e); }
     }
@@ -307,7 +316,11 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   const allTags = useMemo(() => {
     const s = new Set([...dbTags]);
-    allVessels.forEach(v => parseTags(v).forEach(t => s.add(t)));
+    allVessels.forEach(v => {
+      parseTags(v).forEach(t => s.add(t));
+      if (v.superRegion) s.add(v.superRegion.toUpperCase().trim());
+      if (v.segment) s.add(v.segment.toUpperCase().trim());
+    });
     return [...s].sort();
   }, [allVessels, dbTags]);
 
@@ -316,7 +329,15 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     return allVessels.filter(v => {
       if (reportedNames.has(v.vessel)) return false;
       if (poolSearch && !v.vessel?.toLowerCase().includes(poolSearch.toLowerCase())) return false;
-      if (tagFilter.size > 0 && ![...tagFilter].some(t => parseTags(v).includes(t))) return false;
+      if (tagFilter.size > 0) {
+        // Match against manual tag, superRegion, or segment
+        const vVals = [
+          ...parseTags(v),
+          v.superRegion ? v.superRegion.toUpperCase().trim() : null,
+          v.segment ? v.segment.toUpperCase().trim() : null,
+        ].filter(Boolean);
+        if (![...tagFilter].some(t => vVals.includes(t))) return false;
+      }
       if (dateFilter !== "all" && v.updated_at) {
         const diff = (now - new Date(v.updated_at)) / 86400000;
         if (dateFilter === "today" && diff > 1) return false;
@@ -435,14 +456,95 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   function parsePaste() {
     if (!quickPaste.trim()) { setQuickParseMsg("Paste some positions first."); return; }
-    const lines = quickPaste.split("\n").map(l => l.trim()).filter(Boolean);
+    const raw = quickPaste;
+    const lines = raw.split("\n").map(l => l.trim());
+    const nonEmpty = lines.filter(Boolean);
+
+    // ── Format A: Tab-separated (TSV from Excel/email tables) ─────────────────
+    const tabLines = lines.filter(l => (l.match(/\t/g) || []).length >= 2);
+    if (tabLines.length >= 2) {
+      const hdrIdx = lines.findIndex(l => /vessel/i.test(l) || /position/i.test(l));
+      let ci = { vessel: 0, port: 5, date: 6, comment: 7 };
+      if (hdrIdx >= 0) {
+        const hdrs = lines[hdrIdx].toLowerCase().split("\t").map(h => h.trim());
+        ci = {
+          vessel:  hdrs.findIndex(h => h === "vessel"),
+          port:    hdrs.findIndex(h => h === "position" || h === "port" || h === "open port"),
+          date:    hdrs.findIndex(h => h === "date"),
+          comment: hdrs.findIndex(h => h === "comment"),
+        };
+      }
+      const rows = []; let curRegion = "";
+      lines.forEach(line => {
+        if (!line.trim()) return;
+        const cols = line.split("\t").map(c => c.trim());
+        if (cols.length <= 1) { curRegion = cols[0].toUpperCase(); return; }
+        const vessel = (cols[ci.vessel >= 0 ? ci.vessel : 0] || "").toUpperCase();
+        if (!vessel) return;
+        const port = (cols[ci.port >= 0 ? ci.port : 5] || "").toUpperCase();
+        const date = (cols[ci.date >= 0 ? ci.date : 6] || "").toUpperCase();
+        const dir  = ci.comment >= 0 ? (cols[ci.comment] || "") : "";
+        rows.push({ id:"q"+Date.now()+Math.random().toString(36).slice(2), operator: lookupOp(vessel), vessel, port, date, direction: dir || curRegion });
+      });
+      if (rows.length) {
+        setQuickRows(p => [...p, ...rows]); setQuickPaste("");
+        const m = rows.filter(r=>!r.operator).length;
+        setQuickParseMsg("✓ "+rows.length+" position"+(rows.length!==1?"s":"")+" parsed from table"+(m?" — "+m+" operators not found.":"."));
+        return;
+      }
+    }
+
+    // ── Format B: Column-per-line (each cell on its own line, from PDF/email copy) ─
+    // Detect: several of the first lines are single known column-header words
+    const KNOWN_HDRS = ["vessel","dwt","cbm","built","last cargo","position","date","comment","loa","beam"];
+    const firstFew = nonEmpty.slice(0, 12).map(l => l.toLowerCase().trim());
+    const hdrCount = firstFew.filter(l => KNOWN_HDRS.some(h => l === h || l.startsWith(h))).length;
+    if (hdrCount >= 3) {
+      // Find how many header columns there are (consecutive known-header lines at start)
+      let colCount = 0;
+      for (const l of nonEmpty) {
+        if (KNOWN_HDRS.some(h => l.toLowerCase() === h || l.toLowerCase().startsWith(h))) colCount++;
+        else break;
+      }
+      colCount = colCount || 8;
+      // Build column name → index map
+      const headers = nonEmpty.slice(0, colCount).map(l => l.toLowerCase().trim());
+      const ci2 = {
+        vessel:  headers.findIndex(h => h === "vessel"),
+        port:    headers.findIndex(h => h === "position" || h === "port"),
+        date:    headers.findIndex(h => h === "date"),
+        comment: headers.findIndex(h => h === "comment"),
+      };
+      const dataLines = nonEmpty.slice(colCount);
+      const rows = []; let curRegion = "";
+      for (let i = 0; i < dataLines.length; i += colCount) {
+        const group = dataLines.slice(i, i + colCount);
+        while (group.length < colCount) group.push("");
+        // Single value + rest empty = region header
+        if (group[0] && group.slice(1).every(f => !f.trim())) {
+          curRegion = group[0].toUpperCase(); continue;
+        }
+        const vessel = (group[ci2.vessel >= 0 ? ci2.vessel : 0] || "").toUpperCase();
+        if (!vessel) continue;
+        const port    = (group[ci2.port    >= 0 ? ci2.port    : 5] || "").toUpperCase();
+        const date    = (group[ci2.date    >= 0 ? ci2.date    : 6] || "").toUpperCase();
+        const comment = ci2.comment >= 0 ? (group[ci2.comment] || "") : "";
+        rows.push({ id:"q"+Date.now()+Math.random().toString(36).slice(2), operator: lookupOp(vessel), vessel, port, date, direction: comment || curRegion });
+      }
+      if (rows.length) {
+        setQuickRows(p => [...p, ...rows]); setQuickPaste("");
+        const m = rows.filter(r=>!r.operator).length;
+        setQuickParseMsg("✓ "+rows.length+" position"+(rows.length!==1?"s":"")+" parsed"+(m?" — "+m+" operators not found.":"."));
+        return;
+      }
+    }
+
+    // ── Format C: Dash-separated (WhatsApp/email, original format) ─────────────
     const rows = []; let curOp = "";
-    lines.forEach(line => {
-      // WhatsApp bold *Name* or _Name_ = operator
+    nonEmpty.forEach(line => {
       if (/^\*[^*]+\*$/.test(line) || /^_[^_]+_$/.test(line)) {
         curOp = line.replace(/[*_]/g, "").trim(); return;
       }
-      // Split on en-dash, em-dash, or spaced hyphen
       const parts = line.split(/\s*[\u2013\u2014]\s*|\s+-\s+/).map(s => s.trim()).filter(Boolean);
       if (parts.length >= 2) {
         const vessel = parts[0].toUpperCase();
@@ -450,20 +552,19 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         const date   = (parts[2] || "").toUpperCase();
         const dir    = parts.slice(3).join(" \u2013 ");
         const op     = curOp || lookupOp(vessel);
-        rows.push({ id: "q"+Date.now()+Math.random().toString(36).slice(2), operator: op, vessel, port, date, direction: dir });
+        rows.push({ id:"q"+Date.now()+Math.random().toString(36).slice(2), operator: op, vessel, port, date, direction: dir });
       } else if (line.length > 1 && !line.startsWith("||")) {
         curOp = line.replace(/[*_]/g, "").trim();
       }
     });
     if (!rows.length) {
-      setQuickParseMsg("No positions detected. Make sure lines use VESSEL \u2013 PORT \u2013 DATE format (dashes between each field).");
+      setQuickParseMsg("No positions detected. Try: VESSEL \u2013 PORT \u2013 DATE on each line, or paste a screenshot instead.");
       return;
     }
     rows.forEach(r => { if (!r.operator) r.operator = lookupOp(r.vessel); });
-    setQuickRows(p => [...p, ...rows]);
-    setQuickPaste("");
+    setQuickRows(p => [...p, ...rows]); setQuickPaste("");
     const missing = rows.filter(r => !r.operator).length;
-    setQuickParseMsg("\u2713 " + rows.length + " position" + (rows.length !== 1 ? "s" : "") + " added" + (missing ? " \u2014 " + missing + " operator(s) not found, fill in manually." : "."));
+    setQuickParseMsg("\u2713 "+rows.length+" position"+(rows.length!==1?"s":"")+" added"+(missing?" \u2014 "+missing+" operator(s) not found, fill in manually.":"."));
   }
 
   function addQuickRow() {
