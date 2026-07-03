@@ -1395,7 +1395,7 @@ const filtV=useMemo(()=>{
     return()=>{window.removeEventListener("scroll",onScrollResize,true);window.removeEventListener("resize",onScrollResize);if(raf)cancelAnimationFrame(raf);};
   },[selV]);
   const selFixes=sel?cargoes.filter(c=>c.vessel&&c.vessel.toLowerCase()===sel.toLowerCase()):[];
-  const cTokens=cSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const cTokens=cSearch.trim().toLowerCase().split(",").map(g=>g.trim().split(/\s+/).filter(Boolean)).filter(g=>g.length);
   const filtC=useMemo(()=>{
     const now=new Date();
     const startOfWeek=(d)=>{const r=new Date(d);r.setHours(0,0,0,0);r.setDate(r.getDate()-r.getDay()+1);return r;};
@@ -1416,7 +1416,7 @@ const filtV=useMemo(()=>{
       
       if(cDateFilter){const hay=(c.from||" ")+" "+(c.to||"");if(!hay.toLowerCase().includes(cDateFilter.toLowerCase()))return false;}
       if(!cTokens.length)return true;
-      return cTokens.every(t=>JSON.stringify(c).toLowerCase().includes(t));
+      return cTokens.some(terms=>terms.every(t=>JSON.stringify(c).toLowerCase().includes(t)));
     });
     if(cSortK){
       list=[...list].sort((a,b)=>{
