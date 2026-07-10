@@ -85,16 +85,20 @@ export default function TankPos(){
       } catch (e) { console.error("cargoSearch:", e); }
     }, 350);
   }
-  // Load vessels from local storage, cargoes from Supabase
+  // Load vessels from local storage, cargoes from Supabase.
+  // Sequenced (not simultaneous) to reduce the initial Supabase connection
+  // burst — positions_latest is the heaviest query, so it goes first while
+  // the pool is least contended.
   useEffect(()=>{
-  fetchPositions();
-  fetchCargoes();
+  (async () => {
+    await fetchPositions();
+    await fetchCargoes();
+  })();
 },[]);
 
-  // Auto-load vesselDB on startup
-  useEffect(() => {
-    loadVesselDB();
-  }, []);
+  // vesselDB is no longer auto-loaded on startup — it's large (paginated,
+  // ~5-6 requests) and only needed for Parse/vessel-detail lookups.
+  // loadVesselDB() is still called on-demand via onLoadVesselDB in DesktopApp.
 
   useEffect(()=>{const fn=()=>setMobile(isMobile());window.addEventListener("resize",fn);return()=>window.removeEventListener("resize",fn);},[]);
 
@@ -130,6 +134,32 @@ export default function TankPos(){
     }
   }
 
+  // Retry wrapper for transient Supabase pool-timeout / gateway errors
+  // (PGRST003, connection pool exhaustion, 504s). Retries with backoff;
+  // returns the last result/error if all attempts fail.
+  function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+
+  async function withSupabaseRetry(requestFn, label, attempts=3){
+    let lastError = null;
+    for (let attempt = 0; attempt < attempts; attempt++){
+      try {
+        const result = await requestFn();
+        if (!result.error) return result;
+        lastError = result.error;
+        const msg = String(result.error.message || "");
+        const retryable = result.error.code === "PGRST003" || msg.includes("connection pool") || msg.includes("timeout") || msg.includes("504");
+        if (!retryable || attempt === attempts - 1) return result;
+      } catch (error) {
+        lastError = error;
+        if (attempt === attempts - 1) throw error;
+      }
+      const delays = [1000, 3000, 7000];
+      console.warn(`${label}: retrying after failure (attempt ${attempt + 1})`);
+      await sleep(delays[attempt] || 7000);
+    }
+    return { data: null, error: lastError };
+  }
+
   async function fetchPositions(){
   const REGION_RENAME={
     "East Coast South America":"EC SAM",
@@ -158,9 +188,23 @@ export default function TankPos(){
     "7. MR (>40)":"MR",
   };
   
-  // Fetch with offline fallback
+  // Only request the columns the dashboard actually maps below — the full
+  // view is wide (40+ cols incl. spec/comment/AIS fields) and returning "*"
+  // adds unnecessary sort/transfer weight on top of the view's own
+  // DISTINCT ON dedup cost, which was contributing to pool-timeout 504s.
+  const POSITION_FIELDS = [
+    "vessel_name","operator","open_date","port_name","dwt","build_year",
+    "overall_length","beam","cbm","details","file_date","imo_no",
+    "dirty_clean","segment","ice_class","last_3_cargoes",
+    "coating_type_2","super_region","updated_at","source"
+  ].join(",");
+
+  // Fetch with offline fallback + retry on transient pool-timeout errors
   const { data, source } = await fetchWithCache('positions', async () => {
-    const { data, error } = await supabase.from("positions_latest").select("*").limit(10000);
+    const { data, error } = await withSupabaseRetry(
+      () => supabase.from("positions_latest").select(POSITION_FIELDS).limit(5000),
+      "fetchPositions"
+    );
     if (error) throw error;
     return data;
   });
