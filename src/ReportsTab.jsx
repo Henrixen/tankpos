@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
 import { classifyRegion, fmtDateShort } from "./utils";
+import { calcTCE, lookupDist, BENCHMARK_ROUTES, loadTCEDefaults } from "./TCECalculator";
 
 const STEEM_LOGO = "data:image/png;base64,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";
 
@@ -109,6 +110,61 @@ function BarLineChart({ data, barKey, lineKey, barLabel, lineLabel, title, accen
   );
 }
 
+// ─── Small TCE trend chart: Last month vs Spot, with a dashed YTD reference line ──
+function TCETrendMini({ lastMonth, current, ytd }) {
+  const lm = parseFloat(lastMonth) || null;
+  const cur = parseFloat(current) || null;
+  const y = parseFloat(ytd) || null;
+  if (lm == null && cur == null) return (
+    <div style={{ padding: 20, textAlign: "center", color: "rgba(219,230,245,0.3)", fontSize: 11 }}>Enter TCE figures below to see the trend</div>
+  );
+  const W = 300, H = 150, P = { t: 20, r: 20, b: 26, l: 34 };
+  const w = W - P.l - P.r, h = H - P.t - P.b;
+  const vals = [lm, cur, y].filter(v => v != null);
+  const maxV = Math.max(...vals, 1) * 1.15, minV = Math.min(...vals, 0) * 0.9;
+  const yFor = v => P.t + h - ((v - minV) / (maxV - minV || 1)) * h;
+  const bw = w * 0.18;
+  const x1 = P.l + w * 0.28, x2 = P.l + w * 0.72;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H}>
+      {y != null && <>
+        <line x1={P.l} y1={yFor(y)} x2={W - P.r} y2={yFor(y)} stroke="#a3a3a3" strokeWidth="1.3" strokeDasharray="5,4" />
+        <text x={W - P.r} y={yFor(y) - 5} fill="rgba(219,230,245,0.5)" fontSize="9" textAnchor="end">YTD avg ${y.toLocaleString("nb-NO")}/d</text>
+      </>}
+      {lm != null && <>
+        <rect x={x1 - bw / 2} y={yFor(lm)} width={bw} height={h - (yFor(lm) - P.t)} fill="rgba(219,230,245,0.35)" rx="2" />
+        <text x={x1} y={yFor(lm) - 6} fill="#dbe6f5" fontSize="10" textAnchor="middle">${lm.toLocaleString("nb-NO")}/d</text>
+        <text x={x1} y={H - 8} fill="rgba(219,230,245,0.5)" fontSize="9" textAnchor="middle">Last month</text>
+      </>}
+      {cur != null && <>
+        <rect x={x2 - bw / 2} y={yFor(cur)} width={bw} height={h - (yFor(cur) - P.t)} fill="#3a82f6" rx="2" />
+        <text x={x2} y={yFor(cur) - 6} fill="#dbe6f5" fontSize="10" textAnchor="middle">${cur.toLocaleString("nb-NO")}/d</text>
+        <text x={x2} y={H - 8} fill="rgba(219,230,245,0.5)" fontSize="9" textAnchor="middle">Spot</text>
+      </>}
+    </svg>
+  );
+}
+
+// ─── Tiny inline sparkline for Handy FFA Aug/Sep/Oct trend ──
+function FfaSparkline({ aug, sep, oct }) {
+  const vals = [aug, sep, oct].map(v => parseFloat(v)).filter(v => !isNaN(v));
+  if (vals.length < 2) return <span style={{ fontSize: 10, color: C.faint }}>—</span>;
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = max - min || 1;
+  const pts = [aug, sep, oct].map((v, i) => {
+    const n = parseFloat(v);
+    const x = 4 + i * 31;
+    const y = isNaN(n) ? 11 : 18 - ((n - min) / range) * 14;
+    return `${x},${y}`;
+  }).join(" ");
+  return (
+    <svg width="70" height="22" viewBox="0 0 70 22">
+      <polyline points={pts} fill="none" stroke="#79c0ff" strokeWidth="1.6" />
+      <circle cx="66" cy={pts.split(" ")[2]?.split(",")[1] || 11} r="2" fill="#79c0ff" />
+    </svg>
+  );
+}
+
 // ─── Single interactive+capturable vessel row ─────────────────────────────────
 function VesselRow({ v, localIdx, globalIdx, editing, onEdit, onSave, onDelete,
   onDragStart, onDragEnter, onDragEnd, isDragOver }) {
@@ -203,6 +259,21 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [reportDate, setReportDate] = useState(new Date().toISOString().split("T")[0]);
   const [savedReports, setSavedReports] = useState([]);
 
+  // ── Intermediate report rebuild: drivers, benchmark rates, Handy, TCE stats ──
+  const [driverBullets, setDriverBullets] = useState([""]);
+  const [benchmarkRows, setBenchmarkRows] = useState(
+    BENCHMARK_ROUTES.map(r => ({ ...r, freight: "", lastWeek: "", tce: null, tceLastWeek: null, override: false }))
+  );
+  const [tceDefaults, setTceDefaults] = useState(null); // vessel profile shared with TCECalculator
+  const [tceStats, setTceStats] = useState({ current: "", lastMonth: "", ytd: "" });
+  const [handy, setHandy] = useState({
+    tc23: { spotWS: "", ffaAug: "", ffaSep: "", ffaOct: "" },
+    tc6:  { spotWS: "", ffaAug: "", ffaSep: "", ffaOct: "" },
+  });
+  const [handyParsing, setHandyParsing] = useState(false);
+  const [handyParseMsg, setHandyParseMsg] = useState("");
+  const importedCargoIds = useRef(new Set());
+
   const importedNames = useRef(new Set(reportVessels.map(v => v.vessel)));
   // Quick positions state
   const [quickRows, setQuickRows] = useState([]);
@@ -272,6 +343,142 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     }
     fetchFixHistory();
   }, []);
+
+  // Load the shared vessel profile (same one used in TCECalculator) so
+  // benchmark-route TCE figures stay consistent across the app.
+  useEffect(() => { loadTCEDefaults().then(d => setTceDefaults(d)); }, []);
+
+  // Load saved benchmark route freight/TCE from Supabase for the Intermediate report
+  useEffect(() => {
+    if (reportType !== "Intermediate") return;
+    (async () => {
+      const { data, error } = await supabase.from("tce_routes").select("*");
+      if (error || !data) return;
+      setBenchmarkRows(prev => prev.map(r => {
+        const saved = data.find(d => d.route_key === r.key);
+        return saved ? { ...r, freight: String(saved.freight ?? ""), tce: saved.tce ?? null, override: false } : r;
+      }));
+    })();
+  }, [reportType]);
+
+  // Seed Recent Fixtures from Cargoes tab selections — one-way import, doesn't
+  // overwrite fields the user has already amended by hand in the report.
+  useEffect(() => {
+    if (!selectedCargoes?.length) return;
+    const toAdd = selectedCargoes
+      .filter(c => !importedCargoIds.current.has(c.id))
+      .map(c => ({
+        vessel: c.vessel || "",
+        charterer: c.charterer || "",
+        cargo: c.cargo || "",
+        load: c.load || c.loadPort || "",
+        disch: c.disch || c.dischPort || "",
+        laycanFrom: c.from || c.laycanFrom || "",
+        laycanTo: c.to || c.laycanTo || "",
+        freight: c.freight || "",
+      }));
+    if (toAdd.length) {
+      selectedCargoes.forEach(c => importedCargoIds.current.add(c.id));
+      setFixtures(prev => [...prev, ...toAdd]);
+    }
+  }, [selectedCargoes]);
+
+  // Recalculate a benchmark row's TCE from its freight input, using the
+  // shared vessel profile and the route's single-leg laden distance.
+  function recalcBenchmarkTCE(row, freightVal) {
+    if (!tceDefaults || !row.dist) return null;
+    const f = parseFloat(String(freightVal).replace(/[^0-9.\-]/g, ""));
+    if (!f) return null;
+    const r = calcTCE({ freight: f, ballastNm: 0, ladenNm: row.dist, repoNm: 0, ...tceDefaults });
+    return r ? r.tce : null;
+  }
+
+  function updateBenchmarkFreight(key, val) {
+    setBenchmarkRows(prev => prev.map(r => {
+      if (r.key !== key) return r;
+      const dist = r.dist ?? lookupDist(r.from, r.to);
+      const tce = recalcBenchmarkTCE({ ...r, dist }, val);
+      // Marked as override — this only affects the current report and does
+      // not write back to tce_routes, so refreshing pulls the saved value again.
+      return { ...r, dist, freight: val, tce, override: true };
+    }));
+  }
+
+  function refreshBenchmarkFromSaved() {
+    (async () => {
+      const { data } = await supabase.from("tce_routes").select("*");
+      if (!data) return;
+      setBenchmarkRows(prev => prev.map(r => {
+        const saved = data.find(d => d.route_key === r.key);
+        return saved ? { ...r, freight: String(saved.freight ?? ""), tce: saved.tce ?? null, override: false } : r;
+      }));
+    })();
+  }
+
+  async function handleHandyImagePaste(e) {
+    const items = Array.from(e.clipboardData?.items || []);
+    const imgItem = items.find(i => i.type.startsWith("image/"));
+    if (!imgItem) return;
+    e.preventDefault();
+    setHandyParsing(true);
+    setHandyParseMsg("Reading image...");
+    try {
+      const file = imgItem.getAsFile();
+      const b64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result.split(",")[1]);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      setHandyParseMsg("Extracting Handy WS/FFA levels...");
+      const resp = await fetch("/api/parse-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: b64, mediaType: file.type || "image/png" }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || `Server error ${resp.status}`);
+      }
+      const json = await resp.json();
+      const raw = (json.content?.[0]?.text || "").replace(/```json|```/g, "").trim();
+      let parsed;
+      try { parsed = JSON.parse(raw); } catch { throw new Error("Could not parse API response — try pasting text instead"); }
+      // Expected shape: { tc23: {spotWS,ffaAug,ffaSep,ffaOct}, tc6: {...} } — merge
+      // whatever fields came back, leaving anything not found untouched.
+      setHandy(prev => ({
+        tc23: { ...prev.tc23, ...(parsed.tc23 || {}) },
+        tc6:  { ...prev.tc6,  ...(parsed.tc6  || {}) },
+      }));
+      setHandyParseMsg("✓ Handy levels extracted from image.");
+    } catch (err) {
+      console.error("handyImagePaste:", err);
+      setHandyParseMsg("Image parse failed: " + err.message);
+    } finally {
+      setHandyParsing(false);
+    }
+  }
+
+  // Plain-text fallback (no AI call) — matches lines like "TC23 WS 160" or
+  // "FFA Aug TC6 158" so a pasted broker note can populate Handy without a screenshot.
+  function parseHandyText(text) {
+    const next = { tc23: { ...handy.tc23 }, tc6: { ...handy.tc6 } };
+    const lines = text.split("\n");
+    lines.forEach(line => {
+      const seg = /tc\s*23/i.test(line) ? "tc23" : /tc\s*6\b/i.test(line) ? "tc6" : null;
+      if (!seg) return;
+      const wsMatch = line.match(/ws\s*(\d+)/i);
+      if (!wsMatch) return;
+      const monthMatch = line.match(/\b(aug|sep|oct)\b/i);
+      if (monthMatch) {
+        const key = "ffa" + monthMatch[1][0].toUpperCase() + monthMatch[1].slice(1).toLowerCase();
+        next[seg][key] = wsMatch[1];
+      } else if (/spot/i.test(line)) {
+        next[seg].spotWS = wsMatch[1];
+      }
+    });
+    setHandy(next);
+  }
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const posGrouped = useMemo(() => groupVessels(reportVessels, posGroupBy), [reportVessels, posGroupBy]);
@@ -947,7 +1154,193 @@ Any direction`}</pre>
                   <div style={{ fontSize: 14, fontWeight: 600 }}>Select a report type from the left panel</div>
                 </div>
               </div>
-            ) : <>
+            ) : reportType === "Intermediate" ? <>
+              <style>{`.driver-list{margin:0;padding-left:16px;font-size:12px;line-height:1.7;color:${C.tx}}.driver-list:has(li:nth-child(5)){column-count:2;column-gap:24px}`}</style>
+
+              {/* ── Header ── */}
+              <div style={{ background: "#0b1f3f", borderRadius: 8, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 7, background: "#4a90e2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#0b1f3f" }}>S1</div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Steem1960 Shipbrokers</div>
+                    <div style={{ fontSize: 11, color: "#9fc4f0" }}>Intermediate summary</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} style={IS} />
+                  <button onClick={saveReport} style={{ ...SB, background: "rgba(63,185,80,0.15)", border: "1px solid rgba(63,185,80,0.45)", color: "#3fb950" }}>Save</button>
+                  <button onClick={() => window.print()} style={{ ...SB, background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.45)", color: "#a5b4fc" }}>Print</button>
+                </div>
+              </div>
+
+              {/* ── Market drivers / What to watch ── */}
+              <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 13 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, textTransform: "uppercase", letterSpacing: "0.05em" }}>Market drivers / What to watch</div>
+                  <button onClick={() => setDriverBullets(p => [...p, ""])}
+                    style={{ background: ACCENT, border: "none", borderRadius: 3, color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", cursor: "pointer" }}>+ Add</button>
+                </div>
+                <ul className="driver-list">
+                  {driverBullets.map((b, i) => (
+                    <li key={i} style={{ marginBottom: 4, display: "flex", alignItems: "flex-start", gap: 6, listStyle: "none", marginLeft: -16 }}>
+                      <span style={{ marginTop: 2 }}>•</span>
+                      <input value={b} onChange={e => setDriverBullets(p => { const n = [...p]; n[i] = e.target.value; return n; })}
+                        placeholder="e.g. general weather delays"
+                        style={{ flex: 1, background: "transparent", border: "none", borderBottom: "1px solid " + C.bd, color: C.tx, fontSize: 12, padding: "2px 0", outline: "none", fontFamily: "inherit" }} />
+                      <button onClick={() => setDriverBullets(p => p.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 11 }}>✕</button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* ── Benchmark rates ── */}
+              <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden" }}>
+                <div style={{ padding: "8px 13px", background: "rgba(74,144,226,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#79c0ff", textTransform: "uppercase", letterSpacing: "0.05em" }}>Benchmark rates</div>
+                  <button onClick={refreshBenchmarkFromSaved} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim, fontSize: 10 }}>↻ Refresh from saved</button>
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead><tr>
+                      <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>Intermediate routes</th>
+                      <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>Spot</th>
+                      <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>Last week</th>
+                    </tr></thead>
+                    <tbody>
+                      {benchmarkRows.map((r, i) => (
+                        <tr key={r.key} style={{ borderTop: "1px solid " + C.bd, background: i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent" }}>
+                          <td style={{ padding: "6px 10px", fontWeight: 700, color: C.tx }}>{r.label}</td>
+                          <td style={{ padding: "6px 10px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <input value={r.freight} onChange={e => updateBenchmarkFreight(r.key, e.target.value)} placeholder="USD"
+                                style={{ width: 100, background: C.bg, border: "1px solid " + (r.override ? "#f5a623" : C.bd), borderRadius: 3, color: C.tx, fontSize: 11, padding: "4px 6px", outline: "none", fontFamily: "inherit" }} />
+                              <span style={{ fontSize: 10, color: C.faint }}>{r.tce != null ? `(USD ${Math.round(r.tce / 1000)}k pd)` : ""}</span>
+                              {r.override && <span title="Overridden this report only — refresh to pull the saved value" style={{ fontSize: 9, color: "#f5a623" }}>override</span>}
+                            </div>
+                          </td>
+                          <td style={{ padding: "6px 10px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <input value={r.lastWeek} onChange={e => setBenchmarkRows(p => p.map(x => x.key === r.key ? { ...x, lastWeek: e.target.value, tceLastWeek: recalcBenchmarkTCE({ ...x, dist: x.dist ?? lookupDist(x.from, x.to) }, e.target.value) } : x))} placeholder="USD"
+                                style={{ width: 100, background: C.bg, border: "1px solid " + C.bd, borderRadius: 3, color: C.faint, fontSize: 11, padding: "4px 6px", outline: "none", fontFamily: "inherit" }} />
+                              <span style={{ fontSize: 10, color: C.faint }}>{r.tceLastWeek != null ? `(USD ${Math.round(r.tceLastWeek / 1000)}k pd)` : ""}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* ── TCE earnings ── */}
+              <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 13 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>TCE earnings</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
+                  {[["current", "Current"], ["lastMonth", "Last month avg"], ["ytd", "YTD avg"]].map(([k, label]) => (
+                    <div key={k}>
+                      <label style={{ display: "block", fontSize: 10, color: C.dim, marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>{label}</label>
+                      <input value={tceStats[k]} onChange={e => setTceStats(p => ({ ...p, [k]: e.target.value }))} placeholder="e.g. 31000"
+                        style={{ width: "100%", background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontSize: 12, padding: "7px 9px", outline: "none", boxSizing: "border-box" }} />
+                      <div style={{ fontSize: 10, color: C.faint, marginTop: 3 }}>{tceStats[k] ? `USD ${Math.round(parseFloat(tceStats[k]) / 1000)}k pd` : ""}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Handy ── */}
+              <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden" }}>
+                <div style={{ padding: "8px 13px", background: "rgba(74,144,226,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#79c0ff", textTransform: "uppercase", letterSpacing: "0.05em" }}>Handy</div>
+                  <div style={{ fontSize: 10, color: C.faint }}>Paste a screenshot or text with WS/FFA levels below</div>
+                </div>
+                <div style={{ padding: "8px 13px" }}>
+                  <textarea
+                    onPaste={handleHandyImagePaste}
+                    onChange={e => { if (e.target.value.trim()) { parseHandyText(e.target.value); e.target.value = ""; } }}
+                    placeholder="Paste screenshot (Ctrl+V) or type e.g. 'TC23 spot WS 160, FFA Aug WS 163' then click away…"
+                    style={{ width: "100%", minHeight: 44, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontSize: 11, padding: 7, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
+                  {handyParseMsg && <div style={{ fontSize: 10, color: handyParsing ? C.dim : "#3fb950", marginTop: 4 }}>{handyParseMsg}</div>}
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead><tr>
+                      <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>Segment</th>
+                      <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>Spot WS</th>
+                      <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>FFA trend (Aug–Oct)</th>
+                    </tr></thead>
+                    <tbody>
+                      {["tc23", "tc6"].map((seg, i) => (
+                        <tr key={seg} style={{ borderTop: "1px solid " + C.bd, background: i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent" }}>
+                          <td style={{ padding: "6px 10px", fontWeight: 700, color: C.tx }}>{seg === "tc23" ? "TC23" : "TC6"}</td>
+                          <td style={{ padding: "6px 10px" }}>
+                            <input value={handy[seg].spotWS} onChange={e => setHandy(p => ({ ...p, [seg]: { ...p[seg], spotWS: e.target.value } }))} placeholder="WS"
+                              style={{ width: 70, background: C.bg, border: "1px solid " + C.bd, borderRadius: 3, color: C.tx, fontSize: 11, padding: "4px 6px", outline: "none", fontFamily: "inherit" }} />
+                          </td>
+                          <td style={{ padding: "6px 10px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <FfaSparkline aug={handy[seg].ffaAug} sep={handy[seg].ffaSep} oct={handy[seg].ffaOct} />
+                              <div style={{ display: "flex", gap: 4 }}>
+                                {["ffaAug", "ffaSep", "ffaOct"].map(f => (
+                                  <input key={f} value={handy[seg][f]} onChange={e => setHandy(p => ({ ...p, [seg]: { ...p[seg], [f]: e.target.value } }))}
+                                    placeholder={f.slice(3)}
+                                    style={{ width: 46, background: C.bg, border: "1px solid " + C.bd, borderRadius: 3, color: C.faint, fontSize: 10, padding: "3px 5px", outline: "none", fontFamily: "inherit" }} />
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* ── Recent fixtures — seeded from Cargoes tab selections, amendable here ── */}
+              <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, textTransform: "uppercase", letterSpacing: "0.05em" }}>Recent fixtures</div>
+                  <button onClick={() => setFixtures(p => [...p, { vessel: "", charterer: "", cargo: "", load: "", disch: "", laycanFrom: "", laycanTo: "", freight: "" }])}
+                    style={{ background: ACCENT, border: "none", borderRadius: 3, color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", cursor: "pointer" }}>+ Add</button>
+                </div>
+                {fixtures.length === 0 ? <div style={{ padding: 10, textAlign: "center", color: C.faint, fontSize: 10 }}>None yet — select cargoes in the Cargoes tab to import, or add manually</div> : (
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 640 }}>
+                      <thead><tr>
+                        {["Vessel", "Charterer", "Cargo", "Load", "Disch", "From", "To", "Freight", ""].map(h => (
+                          <th key={h} style={{ padding: "5px 8px", textAlign: "left", fontSize: 9, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>{h}</th>
+                        ))}
+                      </tr></thead>
+                      <tbody>
+                        {fixtures.map((f, i) => (
+                          <tr key={i} style={{ borderTop: "1px solid " + C.bd }}>
+                            {["vessel", "charterer", "cargo", "load", "disch", "laycanFrom", "laycanTo", "freight"].map(field => (
+                              <td key={field} style={{ padding: "3px 5px" }}>
+                                <input value={f[field] || ""} onChange={e => setFixtures(p => { const n = [...p]; n[i] = { ...n[i], [field]: e.target.value }; return n; })}
+                                  style={{ width: field === "vessel" ? 100 : 70, background: C.bg, border: "1px solid " + C.bd, borderRadius: 3, color: C.tx, fontSize: 10, padding: "3px 5px", outline: "none", fontFamily: "inherit" }} />
+                              </td>
+                            ))}
+                            <td style={{ padding: "3px 5px" }}>
+                              <button onClick={() => setFixtures(p => p.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 12 }}>✕</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* ── TCE trend (50%) + Fixing window (50%) ── */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11 }}>
+                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.tx, marginBottom: 6 }}>TCE trend</div>
+                  <TCETrendMini lastMonth={tceStats.lastMonth} current={tceStats.current} ytd={tceStats.ytd} />
+                </div>
+                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10 }}>
+                  <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" barLabel="No. of ships" lineLabel="Avg. fix window" title="Fixing window (days)" accent="#4a90e2" />
+                </div>
+              </div>
+            </> : <>
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 11, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: ACCENT }}>{reportType}</span>
