@@ -102,7 +102,7 @@ function rowToRecord(row, isNB) {
   }
   const imo = String(row["IMO No"] || "").replace(/\s/g, "").trim();
   const rec = {
-    vessel:    (row["Ship Name"] || "").trim(),
+    vessel:    String(row["Ship Name"] || "").trim(),
     imo:       imo && imo !== "0" ? imo : null,
     dwt:       cleanNum(row["DWT"])    || null,
     loa:       cleanNum(row["LOA"])    || null,
@@ -110,21 +110,21 @@ function rowToRecord(row, isNB) {
     cbm:       cbm                    || null,
     coating:   deriveCoating(row),
     built:     cleanNum(row["Built"]) || null,
-    flag:      (row["Flag"]          || "").trim() || null,
-    operator:  (row["Operator"]      || "").trim() || null,
-    owner:     (row["Owner/Manager"] || "").trim() || null,
-    ice_class: (row["Ice Class"]     || "").trim() || null,
-    fuel_type: (row["Fuel Data"]     || "").trim() || null,
+    flag:      String(row["Flag"]          || "").trim() || null,
+    operator:  String(row["Operator"]      || "").trim() || null,
+    owner:     String(row["Owner/Manager"] || "").trim() || null,
+    ice_class: String(row["Ice Class"]     || "").trim() || null,
+    fuel_type: String(row["Fuel Data"]     || "").trim() || null,
     tanks:     cleanNum(row["Tanks"]) || null,
-    tier_name: (row["Tier Name"]     || "").trim() || null,
-    comments:  (row["Comments"]      || "").trim() || null,
+    tier_name: String(row["Tier Name"]     || "").trim() || null,
+    comments:  String(row["Comments"]      || "").trim() || null,
   };
   if (isNB) {
     rec.delivery_date = toISODate(row["Dld"]         || null);
     rec.nb_contract   = toISODate(row["NB Contract"] || null);
-    rec.yard          = (row["Yard"]             || "").trim() || null;
-    rec.yard_no       = (row["YdNo"]             || "").trim() || null;
-    rec.country_build = (row["Country of Build"] || "").trim() || null;
+    rec.yard          = String(row["Yard"]             || "").trim() || null;
+    rec.yard_no       = String(row["YdNo"]             || "").trim() || null;
+    rec.country_build = String(row["Country of Build"] || "").trim() || null;
   }
   return rec;
 }
