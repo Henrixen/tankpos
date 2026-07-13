@@ -116,6 +116,8 @@ function rowToRecord(row, isNB) {
     ice_class: String(row["Ice Class"]     || "").trim() || null,
     fuel_type: String(row["Fuel Data"]     || "").trim() || null,
     tanks:     cleanNum(row["Tanks"]) || null,
+    segs:      cleanNum(row["Segs"]) || null,
+    other_data:String(row["Other Data"]    || "").trim() || null,
     tier_name: String(row["Tier Name"]     || "").trim() || null,
     comments:  String(row["Comments"]      || "").trim() || null,
   };
