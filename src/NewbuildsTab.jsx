@@ -37,6 +37,25 @@ function fmtMonth(d){
   return d.toLocaleDateString("en-GB",{month:"short",year:"numeric"});
 }
 
+// Barton newbuild placeholder names are prefixed "ZZNB " until a real name
+// is assigned — strip it for display only, underlying data stays intact.
+function dispName(v){
+  return String(v||"").replace(/^ZZNB\s*/i,"").trim();
+}
+
+function monthKey(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+}
+
+const TAG_OPTIONS = [
+  { key:"",       label:"No tag",          color:"rgba(120,160,200,0.4)" },
+  { key:"watch",  label:"Watch",           color:"#58a6ff" },
+  { key:"hot",    label:"Hot",             color:"#ff6b6b" },
+  { key:"client", label:"Client interest", color:"#4ade80" },
+];
+function tagColor(key){ return TAG_OPTIONS.find(t=>t.key===key)?.color || "rgba(120,160,200,0.4)"; }
+function tagLabel(key){ return TAG_OPTIONS.find(t=>t.key===key)?.label || ""; }
+
 // Quick free-text date parser for manually pasted newbuild positions (DD Mon / DD Mon YYYY / Mon YYYY)
 function parseFlexibleDate(s){
   if(!s) return null;
@@ -47,6 +66,8 @@ function parseFlexibleDate(s){
 }
 
 const inp={background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"4px 7px",outline:"none",boxSizing:"border-box"};
+const BTN_SM={fontSize:11,fontWeight:600,padding:"5px 12px",borderRadius:5,cursor:"pointer",fontFamily:"inherit",
+  border:"1px solid rgba(88,166,255,0.3)",background:"rgba(88,166,255,0.08)",color:"#79c0ff"};
 
 function SectionCard({title,subtitle,right,children}){
   return(
@@ -69,9 +90,13 @@ export default function NewbuildsTab(){
   const [positions,setPositions]=useState([]); // manually pasted newbuild positions
   const [segFilter,setSegFilter]=useState(null);
   const [countryFilter,setCountryFilter]=useState(null);
+  const [coatingFilter,setCoatingFilter]=useState(null);
+  const [monthFilter,setMonthFilter]=useState(null); // 'YYYY-MM'
   const [search,setSearch]=useState("");
   const [monthsAhead,setMonthsAhead]=useState(3);
   const [pendingDel,setPendingDel]=useState(null);
+  const [editingVessel,setEditingVessel]=useState(null); // {imo, vessel, note, tag}
+  const [copyStatus,setCopyStatus]=useState(null);
 
   useEffect(()=>{
     async function fetchNB(){
@@ -120,6 +145,68 @@ export default function NewbuildsTab(){
     setPendingDel(null);
   }
 
+  async function toggleStar(n){
+    const next=!n.starred;
+    setNewbuilds(prev=>prev.map(x=>x.imo===n.imo?{...x,starred:next}:x));
+    const { error } = await supabase.from("vessels_newbuilds").update({ starred: next }).eq("imo", n.imo);
+    if(error) console.error("star update error:", error);
+  }
+
+  function openEditor(n){
+    setEditingVessel({ imo:n.imo, vessel:n.vessel, note:n.note||"", tag:n.tag||"" });
+  }
+
+  async function saveEditor(){
+    if(!editingVessel) return;
+    const { imo, note, tag } = editingVessel;
+    setNewbuilds(prev=>prev.map(x=>x.imo===imo?{...x,note,tag}:x));
+    const { error } = await supabase.from("vessels_newbuilds").update({ note, tag }).eq("imo", imo);
+    if(error) console.error("note/tag update error:", error);
+    setEditingVessel(null);
+  }
+
+  // Cross-browser clipboard copy (execCommand works reliably on iOS Safari
+  // where navigator.clipboard often silently fails)
+  function copyToClipboard(text){
+    const ta=document.createElement("textarea");
+    ta.value=text;
+    ta.style.position="fixed"; ta.style.width="2px"; ta.style.height="2px";
+    ta.style.background="transparent"; ta.style.opacity="0";
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    let ok=false;
+    try{ ok=document.execCommand("copy"); } catch{ ok=false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  function handleCopy(list){
+    if(!list.length) return;
+    const lines=list.map(n=>{
+      const seg=n._seg?.label?.replace(/^\d+\.\s*/,"")||"—";
+      return `*${dispName(n.vessel).toUpperCase()}* — ${n.dwt?fmtN(n.dwt):"—"} dwt — ${n.coating||"—"} — ${seg}\nOperator: ${n.operator||"—"}   Owner: ${n.owner||"—"}`;
+    });
+    const ok=copyToClipboard(lines.join("\n\n"));
+    setCopyStatus(ok?`Copied ${list.length} vessel(s)`:"Copy failed");
+    setTimeout(()=>setCopyStatus(null),2500);
+  }
+
+  function handleExportCSV(list){
+    if(!list.length) return;
+    const headers=["Vessel","DWT","Coating","Segment","Operator","Owner"];
+    const rows=list.map(n=>{
+      const seg=n._seg?.label?.replace(/^\d+\.\s*/,"")||"";
+      return [dispName(n.vessel), n.dwt||"", n.coating||"", seg, n.operator||"", n.owner||""];
+    });
+    const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=`newbuild_orderbook_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   // ── Derived data ──────────────────────────────────────────────────────
   const enriched=useMemo(()=>newbuilds.map(n=>({
     ...n,
@@ -129,19 +216,48 @@ export default function NewbuildsTab(){
   const filtered=useMemo(()=>enriched.filter(n=>{
     if(segFilter && n._seg?.key!==segFilter) return false;
     if(countryFilter && n.country_build!==countryFilter) return false;
+    if(coatingFilter && n.coating!==coatingFilter) return false;
+    if(monthFilter){
+      if(!n.delivery_date) return false;
+      const d=new Date(n.delivery_date);
+      if(isNaN(d.getTime())||monthKey(d)!==monthFilter) return false;
+    }
     if(search.trim()){
       const t=search.trim().toLowerCase();
       const hay=[n.vessel,n.operator,n.owner,n.yard,n.country_build].filter(Boolean).join(" ").toLowerCase();
       if(!hay.includes(t)) return false;
     }
     return true;
-  }),[enriched,segFilter,countryFilter,search]);
+  }),[enriched,segFilter,countryFilter,coatingFilter,monthFilter,search]);
 
   const countries=useMemo(()=>{
     const counts={};
     enriched.forEach(n=>{ if(n.country_build) counts[n.country_build]=(counts[n.country_build]||0)+1; });
     return Object.entries(counts).sort((a,b)=>b[1]-a[1]);
   },[enriched]);
+
+  const coatings=useMemo(()=>{
+    const counts={};
+    enriched.forEach(n=>{ if(n.coating) counts[n.coating]=(counts[n.coating]||0)+1; });
+    return Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  },[enriched]);
+
+  const monthOptions=useMemo(()=>{
+    const map=new Map();
+    enriched.forEach(n=>{
+      if(!n.delivery_date) return;
+      const d=new Date(n.delivery_date);
+      if(isNaN(d.getTime())) return;
+      const key=monthKey(d);
+      if(!map.has(key)) map.set(key, fmtMonth(d));
+    });
+    return Array.from(map.entries()).sort((a,b)=>a[0].localeCompare(b[0]));
+  },[enriched]);
+
+  const filtersActive = !!(segFilter||countryFilter||coatingFilter||monthFilter||search);
+  function resetFilters(){
+    setSegFilter(null); setCountryFilter(null); setCoatingFilter(null); setMonthFilter(null); setSearch("");
+  }
 
   const segCounts=useMemo(()=>{
     const counts={};
@@ -154,31 +270,32 @@ export default function NewbuildsTab(){
     return counts;
   },[enriched]);
 
-  // Next N months delivery window — Barton deliveries + manually pasted positions, merged
+  // Next N months delivery window — Barton deliveries + manually pasted positions, merged.
+  // Barton side respects the shared filters (segment/coating/country/month/search);
+  // manually pasted broker chatter always shows regardless, since it has no
+  // coating/country/segment data of its own.
   const cutoff=useMemo(()=>monthsFromNow(monthsAhead),[monthsAhead]);
   const upcoming=useMemo(()=>{
-    const fromBarton=enriched.filter(n=>{
+    const fromBarton=filtered.filter(n=>{
       if(!n.delivery_date) return false;
       const d=new Date(n.delivery_date);
       return d>=new Date() && d<=cutoff;
     }).map(n=>({
       source:"barton",
-      vessel:n.vessel, operator:n.operator, owner:n.owner, dwt:n.dwt,
-      coating:n.coating, delivery:n.delivery_date, country:n.country_build,
-      yard:n.yard, seg:n._seg?.label||"", comment:n.comments||"",
+      vessel:n.vessel, operator:n.operator, dwt:n.dwt,
+      coating:n.coating, delivery:n.delivery_date,
     }));
     const fromManual=positions.map(p=>({
       source:"manual",
-      vessel:p.vessel_name, operator:p.operator, owner:null, dwt:null,
-      coating:null, delivery:p.open_date, country:null,
-      yard:null, seg:"", comment:p.comment||"", id:p.id, port:p.port_name,
+      vessel:p.vessel_name, operator:p.operator, dwt:null,
+      coating:null, delivery:p.open_date, id:p.id,
     }));
     return [...fromBarton,...fromManual].sort((a,b)=>{
       const da=a.delivery?new Date(a.delivery).getTime():0;
       const db=b.delivery?new Date(b.delivery).getTime():0;
       return da-db;
     });
-  },[enriched,positions,cutoff]);
+  },[filtered,positions,cutoff]);
 
   const totalShips=enriched.length;
   const totalDWT=enriched.reduce((a,n)=>a+(Number(n.dwt)||0),0);
@@ -241,8 +358,56 @@ export default function NewbuildsTab(){
           )}
         </div>
 
-        {/* ── Right: Delivery window + filters + table ── */}
+        {/* ── Right: Segment breakdown + filters + delivery window + orderbook ── */}
         <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:10}}>
+
+          <SectionCard title="Segment Breakdown" subtitle="Across full Barton newbuild orderbook — click a row to filter">
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead>
+                  <tr style={{background:"rgba(8,18,38,0.9)"}}>
+                    {["Segment","Ships","Sum DWT"].map(h=>(
+                      <th key={h} style={{padding:"5px 9px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.12)"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {NB_SEGMENTS.map(s=>(
+                    <tr key={s.key} onClick={()=>setSegFilter(f=>f===s.key?null:s.key)}
+                      style={{cursor:"pointer",background:segFilter===s.key?"rgba(88,166,255,0.1)":"transparent"}}>
+                      <td style={{padding:"5px 9px",fontWeight:700,color:s.color}}>{s.label}</td>
+                      <td style={{padding:"5px 9px",color:"rgba(200,220,255,0.8)"}}>{segCounts[s.key]?.ships||0}</td>
+                      <td style={{padding:"5px 9px",color:"rgba(200,220,255,0.8)"}}>{fmtN(segCounts[s.key]?.dwt||0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </SectionCard>
+
+          {/* ── Shared filter bar — narrows both Upcoming Deliveries and Full Orderbook ── */}
+          <SectionCard title="Filters" subtitle="Applies to Upcoming Deliveries and Full Orderbook below">
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search vessel/operator/yard…" style={{...inp,width:200}}/>
+              <select value={coatingFilter||""} onChange={e=>setCoatingFilter(e.target.value||null)} style={{...inp,width:150}}>
+                <option value="">All coatings</option>
+                {coatings.map(([c,n])=>(<option key={c} value={c}>{c} ({n})</option>))}
+              </select>
+              <select value={countryFilter||""} onChange={e=>setCountryFilter(e.target.value||null)} style={{...inp,width:170}}>
+                <option value="">All countries</option>
+                {countries.map(([c,n])=>(<option key={c} value={c}>{c} ({n})</option>))}
+              </select>
+              <select value={monthFilter||""} onChange={e=>setMonthFilter(e.target.value||null)} style={{...inp,width:150}}>
+                <option value="">All delivery months</option>
+                {monthOptions.map(([k,label])=>(<option key={k} value={k}>{label}</option>))}
+              </select>
+              {filtersActive&&(
+                <button onClick={resetFilters}
+                  style={{fontSize:10,background:"rgba(255,107,107,0.1)",border:"1px solid rgba(255,107,107,0.3)",borderRadius:4,color:"rgba(255,107,107,0.7)",padding:"6px 10px",cursor:"pointer",fontFamily:"inherit"}}>✕ Reset filters</button>
+              )}
+              <div style={{marginLeft:"auto",fontSize:11,color:C.faint}}>{filtered.length} of {totalShips} vessels match</div>
+            </div>
+          </SectionCard>
 
           <SectionCard
             title="Upcoming Deliveries"
@@ -267,7 +432,7 @@ export default function NewbuildsTab(){
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                   <thead>
                     <tr style={{background:"rgba(8,18,38,0.9)"}}>
-                      {["Vessel","Operator/Owner","DWT","Coating","Delivery","Country/Port","Yard","Seg","Comment",""].map(h=>(
+                      {["Vessel","DWT","Coating","Delivery","Operator",""].map(h=>(
                         <th key={h} style={{padding:"5px 9px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.12)",whiteSpace:"nowrap"}}>{h}</th>
                       ))}
                     </tr>
@@ -276,17 +441,13 @@ export default function NewbuildsTab(){
                     {upcoming.map((u,i)=>(
                       <tr key={i} style={{background:u.source==="manual"?"rgba(167,139,250,0.06)":i%2===0?"rgba(7,15,28,0.5)":"transparent"}}>
                         <td style={{padding:"5px 9px",fontWeight:700,color:u.source==="manual"?"#a78bfa":"#79c0ff",whiteSpace:"nowrap"}}>
-                          {u.vessel}
+                          {dispName(u.vessel)}
                           {u.source==="manual"&&<span style={{fontSize:9,marginLeft:5,color:"rgba(167,139,250,0.6)",fontWeight:400}}>manual</span>}
                         </td>
-                        <td style={{padding:"5px 9px",color:"rgba(200,220,255,0.7)",whiteSpace:"nowrap"}}>{u.operator||u.owner||"—"}</td>
                         <td style={{padding:"5px 9px",color:C.faint,whiteSpace:"nowrap"}}>{u.dwt?fmtN(u.dwt):"—"}</td>
                         <td style={{padding:"5px 9px",color:C.faint,whiteSpace:"nowrap"}}>{u.coating||"—"}</td>
                         <td style={{padding:"5px 9px",color:"rgba(160,200,255,0.7)",whiteSpace:"nowrap"}}>{u.delivery?(parseFlexibleDate(u.delivery)?fmtMonth(parseFlexibleDate(u.delivery)):u.delivery):"—"}</td>
-                        <td style={{padding:"5px 9px",color:C.faint,whiteSpace:"nowrap"}}>{u.country||u.port||"—"}</td>
-                        <td style={{padding:"5px 9px",color:C.faint,whiteSpace:"nowrap"}}>{u.yard||"—"}</td>
-                        <td style={{padding:"5px 9px",color:C.faint,whiteSpace:"nowrap"}}>{u.seg||"—"}</td>
-                        <td style={{padding:"5px 9px",color:"rgba(160,200,255,0.55)",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.comment||""}</td>
+                        <td style={{padding:"5px 9px",color:"rgba(200,220,255,0.7)",whiteSpace:"nowrap"}}>{u.operator||"—"}</td>
                         <td style={{padding:"5px 9px"}}>
                           {u.source==="manual"&&<button onClick={()=>setPendingDel({id:u.id,vessel_name:u.vessel})} style={{background:"none",border:"none",color:"rgba(255,107,107,0.4)",cursor:"pointer",fontSize:11,padding:0}}>✕</button>}
                         </td>
@@ -298,44 +459,14 @@ export default function NewbuildsTab(){
             )}
           </SectionCard>
 
-          <SectionCard title="Segment Breakdown" subtitle="Across full Barton newbuild orderbook">
-            <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                <thead>
-                  <tr style={{background:"rgba(8,18,38,0.9)"}}>
-                    {["Segment","Ships","Sum DWT"].map(h=>(
-                      <th key={h} style={{padding:"5px 9px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.12)"}}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {NB_SEGMENTS.map(s=>(
-                    <tr key={s.key} onClick={()=>setSegFilter(f=>f===s.key?null:s.key)}
-                      style={{cursor:"pointer",background:segFilter===s.key?"rgba(88,166,255,0.1)":"transparent"}}>
-                      <td style={{padding:"5px 9px",fontWeight:700,color:s.color}}>{s.label}</td>
-                      <td style={{padding:"5px 9px",color:"rgba(200,220,255,0.8)"}}>{segCounts[s.key]?.ships||0}</td>
-                      <td style={{padding:"5px 9px",color:"rgba(200,220,255,0.8)"}}>{fmtN(segCounts[s.key]?.dwt||0)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </SectionCard>
-
           <SectionCard
             title="Full Orderbook"
             subtitle={`${filtered.length} of ${totalShips} vessels`}
             right={
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search vessel/operator/yard…" style={{...inp,width:180}}/>
-                <select value={countryFilter||""} onChange={e=>setCountryFilter(e.target.value||null)} style={{...inp,width:160}}>
-                  <option value="">All countries</option>
-                  {countries.map(([c,n])=>(<option key={c} value={c}>{c} ({n})</option>))}
-                </select>
-                {(segFilter||countryFilter||search)&&(
-                  <button onClick={()=>{setSegFilter(null);setCountryFilter(null);setSearch("");}}
-                    style={{fontSize:10,background:"rgba(255,107,107,0.1)",border:"1px solid rgba(255,107,107,0.3)",borderRadius:4,color:"rgba(255,107,107,0.7)",padding:"4px 8px",cursor:"pointer",fontFamily:"inherit"}}>✕ Clear</button>
-                )}
+                {copyStatus&&<span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>{copyStatus}</span>}
+                <button onClick={()=>handleCopy(filtered)} style={{...BTN_SM}}>📋 Copy</button>
+                <button onClick={()=>handleExportCSV(filtered)} style={{...BTN_SM}}>⬇ Export CSV</button>
               </div>
             }>
             {loading?(
@@ -343,11 +474,11 @@ export default function NewbuildsTab(){
             ):filtered.length===0?(
               <div style={{padding:"20px",textAlign:"center",color:C.faint,fontSize:12}}>No vessels match this filter.</div>
             ):(
-              <div style={{overflowX:"auto",maxHeight:420,overflowY:"auto"}}>
+              <div style={{overflowX:"auto",maxHeight:460,overflowY:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                   <thead>
                     <tr style={{background:"rgba(8,18,38,0.9)",position:"sticky",top:0}}>
-                      {["Vessel","DWT","Coating","Built/Delivery","Operator","Owner","Country","Yard","Seg"].map(h=>(
+                      {["★","Vessel","DWT","CBM","Coating","Delivery","Operator","Owner","LOA","Beam","Tanks","Segs","Yard","Fuel Data","Other Data","Comments","Note"].map(h=>(
                         <th key={h} style={{padding:"5px 9px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.12)",whiteSpace:"nowrap"}}>{h}</th>
                       ))}
                     </tr>
@@ -355,15 +486,32 @@ export default function NewbuildsTab(){
                   <tbody>
                     {filtered.map((n,i)=>(
                       <tr key={n.imo||n.vessel||i} style={{background:i%2===0?"rgba(7,15,28,0.5)":"transparent"}}>
-                        <td style={{padding:"4px 9px",fontWeight:700,color:"#79c0ff",whiteSpace:"nowrap"}}>{n.vessel}</td>
+                        <td style={{padding:"4px 9px"}}>
+                          <button onClick={()=>toggleStar(n)} disabled={!n.imo} style={{background:"none",border:"none",cursor:n.imo?"pointer":"default",fontSize:13,padding:0,color:n.starred?"#f5c518":"rgba(120,160,200,0.25)"}}>★</button>
+                        </td>
+                        <td style={{padding:"4px 9px",fontWeight:700,color:"#79c0ff",whiteSpace:"nowrap"}}>
+                          {n.tag&&<span title={tagLabel(n.tag)} style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:tagColor(n.tag),marginRight:6}}/>}
+                          {dispName(n.vessel)}
+                        </td>
                         <td style={{padding:"4px 9px",color:C.faint,whiteSpace:"nowrap"}}>{fmtN(n.dwt)}</td>
+                        <td style={{padding:"4px 9px",color:C.faint,whiteSpace:"nowrap"}}>{fmtN(n.cbm)}</td>
                         <td style={{padding:"4px 9px",color:C.faint,whiteSpace:"nowrap"}}>{n.coating||"—"}</td>
                         <td style={{padding:"4px 9px",color:"rgba(160,200,255,0.6)",whiteSpace:"nowrap"}}>{n.delivery_date?fmtMonth(new Date(n.delivery_date)):"—"}</td>
                         <td style={{padding:"4px 9px",color:"rgba(200,220,255,0.7)",whiteSpace:"nowrap"}}>{n.operator||"—"}</td>
                         <td style={{padding:"4px 9px",color:"rgba(200,220,255,0.6)",whiteSpace:"nowrap"}}>{n.owner||"—"}</td>
-                        <td style={{padding:"4px 9px",color:C.faint,whiteSpace:"nowrap"}}>{n.country_build||"—"}</td>
+                        <td style={{padding:"4px 9px",color:C.faint,whiteSpace:"nowrap"}}>{fmtN(n.loa)}</td>
+                        <td style={{padding:"4px 9px",color:C.faint,whiteSpace:"nowrap"}}>{fmtN(n.beam)}</td>
+                        <td style={{padding:"4px 9px",color:C.faint,whiteSpace:"nowrap"}}>{fmtN(n.tanks)}</td>
+                        <td style={{padding:"4px 9px",color:C.faint,whiteSpace:"nowrap"}}>{fmtN(n.segs)}</td>
                         <td style={{padding:"4px 9px",color:C.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:140}}>{n.yard||"—"}</td>
-                        <td style={{padding:"4px 9px",color:n._seg?.color||C.faint,whiteSpace:"nowrap",fontWeight:600}}>{n._seg?.label||"—"}</td>
+                        <td style={{padding:"4px 9px",color:C.faint,whiteSpace:"nowrap"}}>{n.fuel_type||"—"}</td>
+                        <td style={{padding:"4px 9px",color:C.faint,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.other_data||"—"}</td>
+                        <td style={{padding:"4px 9px",color:C.faint,maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.comments||"—"}</td>
+                        <td style={{padding:"4px 9px"}}>
+                          <button onClick={()=>openEditor(n)} disabled={!n.imo} style={{background:"none",border:"none",cursor:n.imo?"pointer":"default",fontSize:12,padding:0,color:n.note?"#79c0ff":"rgba(120,160,200,0.35)"}}>
+                            {n.note?"📝":"✎"}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -373,6 +521,26 @@ export default function NewbuildsTab(){
           </SectionCard>
         </div>
       </div>
+
+      {/* ── Note/tag editor modal ── */}
+      {editingVessel&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setEditingVessel(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:10,padding:20,width:380,maxWidth:"90vw",fontFamily:"sans-serif"}}>
+            <div style={{fontSize:13,fontWeight:700,color:C.tx,marginBottom:12}}>{dispName(editingVessel.vessel)}</div>
+            <div style={{fontSize:11,color:C.faint,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>Tag</div>
+            <select value={editingVessel.tag} onChange={e=>setEditingVessel(v=>({...v,tag:e.target.value}))} style={{...inp,width:"100%",marginBottom:12}}>
+              {TAG_OPTIONS.map(t=>(<option key={t.key} value={t.key}>{t.label}</option>))}
+            </select>
+            <div style={{fontSize:11,color:C.faint,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.06em"}}>Note</div>
+            <textarea value={editingVessel.note} onChange={e=>setEditingVessel(v=>({...v,note:e.target.value}))} rows={4}
+              style={{...inp,width:"100%",resize:"vertical",marginBottom:14,boxSizing:"border-box"}} placeholder="e.g. client interest, follow up next month…"/>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button onClick={()=>setEditingVessel(null)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,padding:"6px 16px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>Cancel</button>
+              <button onClick={saveEditor} style={{background:"#43e97b",border:"none",borderRadius:5,color:"#06281a",padding:"6px 16px",cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit"}}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
