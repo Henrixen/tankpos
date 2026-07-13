@@ -10,6 +10,31 @@ const COATING_COLS = [
   ["Zinc",       "Zinc"],
 ];
 
+// Barton workbook tab names are fixed — only the filename changes month to
+// month. Mode → sheet name mapping so the uploader always reads the right
+// tab without relying on filename text.
+const SHEET_BY_MODE = {
+  fleet:     "Existing Fleet",
+  newbuilds: "Ships on Order",
+};
+
+// SheetJS (xlsx) loaded via CDN script tag attaching to window — static CDN
+// URL imports fail in Vite, so this follows the same pattern already used
+// for the html-to-image bundle elsewhere in the app.
+let xlsxLoadPromise = null;
+function loadXLSX() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (xlsxLoadPromise) return xlsxLoadPromise;
+  xlsxLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js";
+    script.onload = () => resolve(window.XLSX);
+    script.onerror = () => reject(new Error("Failed to load XLSX parser from CDN"));
+    document.head.appendChild(script);
+  });
+  return xlsxLoadPromise;
+}
+
 function cleanNum(v) {
   if (!v) return 0;
   try { return parseInt(String(v).replace(/[\s\xa0]/g, "").replace(",", ".").split(".")[0], 10) || 0; }
@@ -34,6 +59,23 @@ function cleanDate(v) {
   if (!m) return null;
   const yr = m[2].length === 2 ? "20" + m[2] : m[2];
   return `${yr}-${months[m[1]] || "01"}-01`;
+}
+
+// Handles the three shapes "Dld"/"NB Contract" can arrive in: a real JS
+// Date (xlsx parsed with cellDates:true), an Excel serial number (fallback),
+// or the legacy "MMM-YY" string from CSV exports.
+function toISODate(v) {
+  if (v === null || v === undefined || v === "") return null;
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    const y = v.getFullYear(), m = String(v.getMonth()+1).padStart(2,"0"), d = String(v.getDate()).padStart(2,"0");
+    return `${y}-${m}-${d}`;
+  }
+  if (typeof v === "number") {
+    const epoch = new Date(Date.UTC(1899, 11, 30));
+    const d = new Date(epoch.getTime() + v * 86400000);
+    return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+  }
+  return cleanDate(String(v));
 }
 
 function parseCSV(text) {
@@ -78,8 +120,8 @@ function rowToRecord(row, isNB) {
     comments:  (row["Comments"]      || "").trim() || null,
   };
   if (isNB) {
-    rec.delivery_date = cleanDate(row["Dld"]          || "");
-    rec.nb_contract   = cleanDate(row["NB Contract"]  || "");
+    rec.delivery_date = toISODate(row["Dld"]         || null);
+    rec.nb_contract   = toISODate(row["NB Contract"] || null);
     rec.yard          = (row["Yard"]             || "").trim() || null;
     rec.yard_no       = (row["YdNo"]             || "").trim() || null;
     rec.country_build = (row["Country of Build"] || "").trim() || null;
@@ -114,13 +156,46 @@ export default function VesselUploader() {
   const [progress, setProgress] = useState(null); // {done,total}
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview]   = useState(false);
+  const [staleRows, setStaleRows]     = useState([]); // vessels in DB but missing from this file
+  const [staleLoading, setStaleLoading] = useState(false);
+  const [syncMode, setSyncMode] = useState(true); // remove stale vessels on upload
+  const [showStale, setShowStale] = useState(false);
   const fileRef = useRef(null);
 
-  function handleFile(e) {
+  async function handleFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
-    setStatus(null); setRows([]); setProgress(null);
+    setStatus(null); setRows([]); setProgress(null); setStaleRows([]);
+
+    const ext = file.name.toLowerCase().split(".").pop();
+
+    if (ext === "xlsx" || ext === "xls") {
+      const isNB = mode === "newbuilds";
+      const sheetName = SHEET_BY_MODE[mode];
+      setStatus({ type:"info", msg:`Loading workbook and reading "${sheetName}" tab…` });
+      try {
+        const XLSX = await loadXLSX();
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type:"array", cellDates:true });
+        const sheet = wb.Sheets[sheetName];
+        if (!sheet) {
+          setStatus({ type:"warn", msg:`Sheet "${sheetName}" not found in this file. Tabs present: ${wb.SheetNames.join(", ")}` });
+          return;
+        }
+        const parsed = XLSX.utils.sheet_to_json(sheet, { defval:"", raw:true });
+        const records = parsed.map(r => rowToRecord(r, isNB)).filter(r => r.vessel);
+        setRows(records);
+        setStatus({ type:"info", msg:`Parsed ${records.length} vessels from "${sheetName}" (${file.name})` });
+        checkStale(records, mode);
+      } catch (err) {
+        console.error(err);
+        setStatus({ type:"warn", msg:`Failed to read workbook: ${err.message}` });
+      }
+      return;
+    }
+
+    // Legacy CSV path (semicolon-delimited single-sheet export)
     const isNB = file.name.toLowerCase().includes("newbuild") || mode === "newbuilds";
     if (isNB) setMode("newbuilds");
     const reader = new FileReader();
@@ -129,8 +204,23 @@ export default function VesselUploader() {
       const records = parsed.map(r => rowToRecord(r, isNB)).filter(r => r.vessel);
       setRows(records);
       setStatus({ type:"info", msg:`Parsed ${records.length} vessels from ${file.name}` });
+      checkStale(records, isNB ? "newbuilds" : "fleet");
     };
     reader.readAsText(file, "utf-8");
+  }
+
+  // Compares the freshly parsed file against what's currently in Supabase
+  // and finds IMO-matched rows that are no longer present — i.e. vessels
+  // that have since delivered / been cancelled / removed from this tab.
+  async function checkStale(records, forMode) {
+    const table = forMode === "newbuilds" ? "vessels_newbuilds" : "vessels_db";
+    const newImos = new Set(records.map(r => r.imo).filter(Boolean));
+    setStaleLoading(true);
+    const { data, error } = await supabase.from(table).select("imo,vessel").not("imo", "is", null).limit(20000);
+    setStaleLoading(false);
+    if (error) { console.error("stale-check fetch error:", error); return; }
+    const missing = (data || []).filter(d => d.imo && !newImos.has(d.imo));
+    setStaleRows(missing);
   }
 
   async function handleUpload() {
@@ -164,10 +254,28 @@ export default function VesselUploader() {
     }
 
     setUploading(false);
+
+    let removeMsg = "";
+    if (errors === 0 && syncMode && staleRows.length > 0) {
+      setStatus({ type:"info", msg:`Removing ${staleRows.length} vessel(s) no longer in this file…` });
+      const imos = staleRows.map(r => r.imo);
+      const DEL_BATCH = 200;
+      let delErrors = 0;
+      for (let i = 0; i < imos.length; i += DEL_BATCH) {
+        const chunk = imos.slice(i, i + DEL_BATCH);
+        const { error } = await supabase.from(table).delete().in("imo", chunk);
+        if (error) { console.error(error); delErrors++; }
+      }
+      removeMsg = delErrors === 0
+        ? ` Removed ${staleRows.length} vessel(s) no longer in file.`
+        : ` Warning: some removals failed — check console.`;
+      setStaleRows([]);
+    }
+
     if (errors === 0) {
-      setStatus({ type:"ok", msg:`✓ ${total} vessels upserted into ${table} successfully.` });
+      setStatus({ type:"ok", msg:`✓ ${total} vessels upserted into ${table} successfully.${removeMsg}` });
     } else {
-      setStatus({ type:"warn", msg:`Completed with ${errors} batch error(s). Check console for details.` });
+      setStatus({ type:"warn", msg:`Completed with ${errors} batch error(s). Check console for details.${removeMsg}` });
     }
     setProgress(null);
   }
@@ -180,14 +288,14 @@ export default function VesselUploader() {
       <div style={{ marginBottom:20 }}>
         <div style={{ fontSize:18, fontWeight:700, color:"#e8f2ff", marginBottom:4 }}>Vessel Database Uploader</div>
         <div style={{ fontSize:12, color:"rgba(120,160,200,0.5)" }}>
-          Upload Barton CSV files to update the vessel database. Upserts by IMO — safe to re-run monthly.
+          Upload the Barton .xlsx directly — the correct tab is read automatically per mode. Upserts by IMO and can remove vessels that dropped off the tab (delivered/cancelled). Safe to re-run monthly.
         </div>
       </div>
 
       {/* Mode selector */}
       <div style={{ display:"flex", gap:8, marginBottom:20 }}>
         {[["fleet","Existing Fleet","vessels_db"],["newbuilds","Newbuilds","vessels_newbuilds"]].map(([m,label,tbl])=>(
-          <button key={m} onClick={()=>{setMode(m);setRows([]);setFileName("");setStatus(null);}}
+          <button key={m} onClick={()=>{setMode(m);setRows([]);setFileName("");setStatus(null);setStaleRows([]);}}
             style={{...BTN(true, mode===m?"#58a6ff":"rgba(88,166,255,0.3)"),
               border:`1px solid ${mode===m?"rgba(88,166,255,0.6)":"rgba(58,130,246,0.2)"}`,
               background:mode===m?"rgba(88,166,255,0.15)":"transparent",
@@ -202,15 +310,48 @@ export default function VesselUploader() {
       <div style={{...CARD, borderStyle:"dashed", borderColor:"rgba(88,166,255,0.25)", cursor:"pointer",
         background:"rgba(8,18,38,0.7)", textAlign:"center"}}
         onClick={()=>fileRef.current?.click()}>
-        <input ref={fileRef} type="file" accept=".csv,.txt" style={{display:"none"}} onChange={handleFile}/>
+        <input ref={fileRef} type="file" accept=".csv,.txt,.xlsx,.xls" style={{display:"none"}} onChange={handleFile}/>
         <div style={{fontSize:28, marginBottom:8}}>📂</div>
         <div style={{fontSize:13, color:"rgba(160,200,255,0.7)", fontWeight:600}}>
-          {fileName || `Click to select ${mode === "newbuilds" ? "Newbuilds" : "Existing Fleet"} CSV`}
+          {fileName || `Click to select the Barton file (.xlsx or CSV)`}
         </div>
         <div style={{fontSize:11, color:"rgba(100,140,180,0.4)", marginTop:4}}>
-          Semicolon-delimited CSV from Barton report
+          .xlsx reads the "{SHEET_BY_MODE[mode]}" tab automatically — or drop a semicolon-delimited CSV export
         </div>
       </div>
+
+      {/* Stale-vessel warning (vessels in DB but missing from this file — likely delivered/cancelled) */}
+      {(staleLoading || staleRows.length > 0) && (
+        <div style={{...CARD, borderColor:"rgba(250,184,74,0.3)", background:"rgba(250,184,74,0.05)"}}>
+          {staleLoading ? (
+            <div style={{fontSize:12, color:"rgba(250,184,74,0.8)"}}>Checking for vessels no longer in this file…</div>
+          ) : (
+            <>
+              <div style={{display:"flex", alignItems:"center", gap:12, flexWrap:"wrap"}}>
+                <div style={{fontSize:12, fontWeight:600, color:"#faa356"}}>
+                  {staleRows.length} vessel(s) in the database are missing from this file — likely delivered, cancelled, or removed.
+                </div>
+                <button onClick={()=>setShowStale(v=>!v)} style={{...BTN(true,"#faa356"), padding:"4px 10px"}}>
+                  {showStale?"Hide":"Show"} list
+                </button>
+                <label style={{display:"flex", alignItems:"center", gap:6, fontSize:11, color:"rgba(250,184,74,0.8)", marginLeft:"auto", cursor:"pointer"}}>
+                  <input type="checkbox" checked={syncMode} onChange={e=>setSyncMode(e.target.checked)} />
+                  Remove these on upload (sync mode)
+                </label>
+              </div>
+              {showStale && (
+                <div style={{marginTop:10, maxHeight:180, overflowY:"auto", fontSize:11, color:"rgba(250,220,180,0.8)"}}>
+                  {staleRows.map(r=>(
+                    <div key={r.imo} style={{padding:"3px 0", borderBottom:"1px solid rgba(250,184,74,0.1)"}}>
+                      {r.vessel} <span style={{opacity:0.5}}>· IMO {r.imo}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Summary */}
       {rows.length > 0 && (
@@ -235,7 +376,9 @@ export default function VesselUploader() {
               </button>
               <button onClick={handleUpload} disabled={uploading}
                 style={{...BTN(!uploading, "#43e97b"), padding:"6px 18px", fontSize:13}}>
-                {uploading ? `Uploading… ${progress?.done||0}/${progress?.total||rows.length}` : `⬆ Upload to ${mode==="newbuilds"?"vessels_newbuilds":"vessels_db"}`}
+                {uploading ? `Uploading… ${progress?.done||0}/${progress?.total||rows.length}` :
+                  syncMode && staleRows.length>0 ? `⬆ Upload & Remove ${staleRows.length} → ${mode==="newbuilds"?"vessels_newbuilds":"vessels_db"}` :
+                  `⬆ Upload to ${mode==="newbuilds"?"vessels_newbuilds":"vessels_db"}`}
               </button>
             </div>
           </div>
@@ -302,11 +445,10 @@ export default function VesselUploader() {
       <div style={{...CARD, background:"rgba(8,16,32,0.5)"}}>
         <div style={{fontSize:11, fontWeight:700, color:"rgba(120,160,220,0.5)", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10}}>Monthly update workflow</div>
         {[
-          ["1","Export CSVs from Barton","Use semicolon delimiter. Two files: Existing Fleet + Newbuilds."],
-          ["2","Select mode above","Choose 'Existing Fleet' or 'Newbuilds' to match the file."],
-          ["3","Click the upload area","Select the CSV file — it parses instantly in your browser."],
-          ["4","Review the summary","Check vessel count and coating distribution looks right."],
-          ["5","Click Upload","Upserts by IMO number — existing records update, new ones insert. Safe to re-run."],
+          ["1","Select mode above","Choose 'Existing Fleet' or 'Newbuilds' — this decides which Barton tab gets read."],
+          ["2","Click the upload area","Select the monthly Barton .xlsx file (same file works for both modes — just re-select mode and upload again for the other tab)."],
+          ["3","Review the summary","Check vessel count, coating distribution, and the removal warning (if any vessels dropped off the tab)."],
+          ["4","Click Upload","Upserts by IMO — existing records update, new ones insert. With sync mode on, vessels missing from the file (delivered/cancelled) are removed too. Safe to re-run."],
         ].map(([n,title,desc])=>(
           <div key={n} style={{display:"flex",gap:12,marginBottom:8,alignItems:"flex-start"}}>
             <div style={{width:22,height:22,borderRadius:"50%",background:"rgba(88,166,255,0.15)",
