@@ -1,9 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { C, TCE_DEFAULTS } from "./constants";
+import { supabase } from "./supabaseclient";
 
 const TCE_STORE_KEY = "tankpos-tce-defaults-v1";
 async function loadTCEDefaults(){try{const r=await window.storage.get(TCE_STORE_KEY,true);return r?JSON.parse(r.value):null;}catch(_){return null;}}
 async function saveTCEDefaults(d){try{await window.storage.set(TCE_STORE_KEY,JSON.stringify(d),true);}catch(_){}}
+
+// UKC intermediate benchmark routes — used by BenchmarkRoutes below and by
+// ReportsTab's Benchmark Rates table. "from"/"to" are lookupDist() keys.
+const BENCHMARK_ROUTES = [
+  { key:"immingham_ara",  label:"Immingham–ARA",   from:"immingham",  to:"ara" },
+  { key:"mongstad_ara",   label:"Mongstad–ARA",    from:"mongstad",   to:"ara" },
+  { key:"kaarstoe_ara",   label:"Kaarstoe–ARA",    from:"kaarstoe",   to:"ara" },
+  { key:"ara_thames",     label:"ARA–Thames",      from:"ara",        to:"thames" },
+  { key:"lehavre_ara",    label:"Le Havre–ARA",    from:"le havre",   to:"ara" },
+  { key:"gothenburg_ara", label:"Gothenburg–ARA",  from:"gothenburg", to:"ara" },
+  { key:"tees_ara",       label:"Tees–ARA",        from:"tees",       to:"ara" },
+];
 
 // EU ETS constants
 const ETS_CO2_FACTOR=3.114;
@@ -88,6 +101,107 @@ function calcFreightFromTCE({targetTCE,...rest}){
   }
   return Math.round(mid);
 }
+
+// ─── Benchmark Routes (UKC intermediates) ─────────────────────────────────────
+// Predefined routes with a live freight input — TCE recalculates automatically
+// using the same "Standard Variables" vessel profile as the main calculator.
+// Simplification: distance is treated as a single laden leg (ballast = 0nm) —
+// these are quoted as spot benchmark levels, not full round-voyage P&Ls, so
+// this is an approximation, not a substitute for a full voyage calc.
+function BenchmarkRoutes({ defaults }) {
+  const [rows, setRows] = useState(BENCHMARK_ROUTES.map(r => ({ ...r, freight: "", tce: null, dist: lookupDist(r.from, r.to) })));
+  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState(null);
+
+  useEffect(() => { loadRows(); }, []);
+
+  async function loadRows() {
+    setLoading(true);
+    const { data, error } = await supabase.from("tce_routes").select("*");
+    if (!error && data) {
+      setRows(prev => prev.map(r => {
+        const saved = data.find(d => d.route_key === r.key);
+        return saved ? { ...r, freight: String(saved.freight ?? ""), tce: saved.tce ?? null } : r;
+      }));
+    }
+    setLoading(false);
+  }
+
+  function recalc(row) {
+    const f = numD(row.freight);
+    const dist = row.dist;
+    if (!f || !dist) return null;
+    const r = calcTCE({
+      freight: f, ballastNm: 0, ladenNm: dist, repoNm: 0,
+      ...defaults,
+    });
+    return r ? r.tce : null;
+  }
+
+  async function updateFreight(key, val) {
+    setRows(prev => prev.map(r => {
+      if (r.key !== key) return r;
+      const next = { ...r, freight: val };
+      next.tce = recalc(next);
+      return next;
+    }));
+  }
+
+  async function saveRow(row) {
+    setStatus("Saving…");
+    const { error } = await supabase.from("tce_routes").upsert(
+      { route_key: row.key, label: row.label, freight: numD(row.freight), tce: row.tce, updated_at: new Date().toISOString() },
+      { onConflict: "route_key" }
+    );
+    setStatus(error ? "Save failed" : "Saved ✓");
+    setTimeout(() => setStatus(null), 2000);
+  }
+
+  return (
+    <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:8, overflow:"hidden", marginTop:12 }}>
+      <div style={{ padding:"8px 12px", background:C.bg3, borderBottom:"1px solid "+C.bd2, fontSize:12, fontWeight:700, color:C.tx, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <span>📍 Benchmark Routes — UKC intermediates</span>
+        {status && <span style={{ fontSize:11, color:C.green, fontWeight:600 }}>{status}</span>}
+      </div>
+      <div style={{ padding:"6px 12px", fontSize:11, color:C.faint }}>
+        Distance is a single laden leg (no ballast/repositioning) using the Standard Variables vessel profile above — a spot-benchmark approximation, not a full voyage P&L.
+      </div>
+      <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+          <thead>
+            <tr style={{ background:C.bg3 }}>
+              {["Route","NM","Freight (lumpsum USD)","TCE ($/day)",""].map(h=>(
+                <th key={h} style={{ padding:"6px 10px", textAlign:"left", fontSize:10, fontWeight:700, color:C.faint, textTransform:"uppercase" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r,i)=>(
+              <tr key={r.key} style={{ background:i%2===0?"rgba(255,255,255,0.02)":"transparent", borderTop:"1px solid "+C.bd }}>
+                <td style={{ padding:"6px 10px", fontWeight:700, color:C.tx }}>{r.label}</td>
+                <td style={{ padding:"6px 10px", color:C.faint }}>{r.dist ?? "—"}</td>
+                <td style={{ padding:"6px 10px" }}>
+                  <input value={r.freight} onChange={e=>updateFreight(r.key, e.target.value)} placeholder="USD"
+                    style={{ width:120, background:C.bg, border:"1px solid "+C.bd, borderRadius:4, color:C.tx, fontSize:12, padding:"4px 7px", outline:"none", fontFamily:"inherit" }}/>
+                </td>
+                <td style={{ padding:"6px 10px", fontWeight:700, color: r.tce!=null ? (r.tce>=0?C.green:C.red) : C.faint }}>
+                  {r.tce!=null ? "$"+r.tce.toLocaleString("nb-NO") : "—"}
+                </td>
+                <td style={{ padding:"6px 10px" }}>
+                  <button onClick={()=>saveRow(r)} disabled={!r.freight}
+                    style={{ fontSize:10, fontWeight:700, padding:"4px 9px", borderRadius:4, cursor:r.freight?"pointer":"default", border:"1px solid "+C.bd, background:"transparent", color:C.blue, fontFamily:"inherit" }}>
+                    Save
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 
 // ─── Distance Table Browser ───────────────────────────────────────────────────
 function DistanceTable(){
@@ -299,8 +413,8 @@ function TCECalculator(){
 
       <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-start"}}>
 
-        {/* ── LEFT: Voyage Inputs ── */}
-        <div style={{flex:"1 1 310px",minWidth:290,background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
+        {/* ── LEFT: Voyage Inputs (narrowed now the middle column is gone) ── */}
+        <div style={{flex:"1 1 260px",maxWidth:340,minWidth:260,background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
           <div style={{padding:"8px 12px",background:C.bg3,borderBottom:"1px solid "+C.bd2,fontSize:12,fontWeight:700,color:C.tx}}>
             {mode==="freight"?"Enter freight → get TCE":"Enter target TCE → get required freight"}
           </div>
@@ -349,41 +463,11 @@ function TCECalculator(){
           </div>
         </div>
 
-        {/* ── MIDDLE: Result ── */}
-          <div style={{flex:"0 0 220px",minWidth:200,background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
-            <div style={{padding:"10px 14px",borderBottom:"1px solid "+C.bd2,background:mode==="freight"?"rgba(79,195,247,.07)":"rgba(67,233,123,.07)"}}>
-              <div style={{fontSize:12,color:C.faint,textTransform:"uppercase",letterSpacing:".07em"}}>TCE</div>
-              {mode==="freight"
-                ? <div style={{fontSize:28,fontWeight:800,color:result&&result.tce!=null?(result.tce>=0?C.green:C.red):C.faint,lineHeight:1.1}}>
-                    {result&&result.tce!=null?"$"+result.tce.toLocaleString("nb-NO"):"—"}
-                    <span style={{fontSize:12,color:C.faint,fontWeight:400}}>/day</span>
-                  </div>
-                : <div style={{fontSize:22,fontWeight:800,color:result?C.blue:C.faint,lineHeight:1.1}}>
-                    {result?"$"+(result.freight||0).toLocaleString("nb-NO"):"—"}
-                    <span style={{fontSize:12,color:C.faint,fontWeight:400}}> lumpsum</span>
-                  </div>
-              }
-              {mode==="tce"&&result&&result.tce!=null&&<div style={{fontSize:12,color:C.green,marginTop:2}}>✓ TCE check: ${result.tce.toLocaleString("nb-NO")}/day</div>}
-            </div>
-            <div style={{padding:"4px 0"}}>
-              {result&&resRow("Freight",fmt(result.freight),C.blue)}
-              {result&&resRow("Days total",fmtN(result.totalDays)+"d")}
-              {result&&resRow("  Ballast",fmtN(result.daysBallast)+"d",C.faint)}
-              {result&&resRow("  Laden",fmtN(result.daysLaden)+"d",C.faint)}
-              {result&&resRow("Net revenue",fmt(result.netRevenue),result.netRevenue>=0?C.green:C.red)}
-              {result&&resRow("Total bunkers",fmt(result.totalBunkers),C.amber)}
-              {result&&resRow("Commission",fmt(result.commAmt),C.dim)}
-              {result&&result.ets>0&&resRow("EU ETS",fmt(result.ets),"#fd79a8")}
-              {result&&result.lpc>0&&resRow("Load port costs",fmt(result.lpc),C.dim)}
-              {result&&result.dpc>0&&resRow("Disch port costs",fmt(result.dpc),C.dim)}
-              {result&&resRow("Total expenses",fmt(result.totalExpenses),C.red)}
-            </div>
-          </div>
-
-        {/* ── RIGHT: Standard Variables ── */}
-        <div style={{flex:"1 1 260px",minWidth:240,background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
+        {/* ── RIGHT: Standard Variables (narrowed to match) ── */}
+        <div style={{flex:"1 1 260px",maxWidth:340,minWidth:240,background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
           <div style={{padding:"8px 12px",background:C.bg3,borderBottom:"1px solid "+C.bd2,fontSize:12,fontWeight:700,color:C.tx}}>
             ⚙ Standard Variables
+
           </div>
           <div style={{padding:"10px 14px"}}>
             <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4}}>Vessel</div>
@@ -408,7 +492,43 @@ function TCECalculator(){
           </div>
         </div>
 
-    </div>
+      </div>
+
+      {/* ── Result strip — moved here from the old middle column ── */}
+      <div style={{marginTop:12,background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
+        <div style={{padding:"8px 14px",borderBottom:"1px solid "+C.bd2,background:mode==="freight"?"rgba(79,195,247,.07)":"rgba(67,233,123,.07)",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:".07em"}}>TCE</div>
+            {mode==="freight"
+              ? <div style={{fontSize:24,fontWeight:800,color:result&&result.tce!=null?(result.tce>=0?C.green:C.red):C.faint,lineHeight:1.1}}>
+                  {result&&result.tce!=null?"$"+result.tce.toLocaleString("nb-NO"):"—"}
+                  <span style={{fontSize:11,color:C.faint,fontWeight:400}}>/day</span>
+                </div>
+              : <div style={{fontSize:20,fontWeight:800,color:result?C.blue:C.faint,lineHeight:1.1}}>
+                  {result?"$"+(result.freight||0).toLocaleString("nb-NO"):"—"}
+                  <span style={{fontSize:11,color:C.faint,fontWeight:400}}> lumpsum</span>
+                </div>
+            }
+          </div>
+          {mode==="tce"&&result&&result.tce!=null&&<div style={{fontSize:12,color:C.green}}>✓ TCE check: ${result.tce.toLocaleString("nb-NO")}/day</div>}
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap"}}>
+          {result&&resRow("Freight",fmt(result.freight),C.blue)}
+          {result&&resRow("Days total",fmtN(result.totalDays)+"d")}
+          {result&&resRow("  Ballast",fmtN(result.daysBallast)+"d",C.faint)}
+          {result&&resRow("  Laden",fmtN(result.daysLaden)+"d",C.faint)}
+          {result&&resRow("Net revenue",fmt(result.netRevenue),result.netRevenue>=0?C.green:C.red)}
+          {result&&resRow("Total bunkers",fmt(result.totalBunkers),C.amber)}
+          {result&&resRow("Commission",fmt(result.commAmt),C.dim)}
+          {result&&result.ets>0&&resRow("EU ETS",fmt(result.ets),"#fd79a8")}
+          {result&&result.lpc>0&&resRow("Load port costs",fmt(result.lpc),C.dim)}
+          {result&&result.dpc>0&&resRow("Disch port costs",fmt(result.dpc),C.dim)}
+          {result&&resRow("Total expenses",fmt(result.totalExpenses),C.red)}
+        </div>
+      </div>
+
+      <BenchmarkRoutes defaults={defaults}/>
+
   </div>
   );
 }
@@ -420,5 +540,5 @@ const SEGMENTS=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];
 const TRADES=["UKC","Med","EU Feast", "AG","TA West","Ex US","Asia"];
 
 
-export { calcEuEts, calcTCE, calcFreightFromTCE, DistanceTable, PortCostRow, TCECalculator, numD, lookupDist };
+export { calcEuEts, calcTCE, calcFreightFromTCE, DistanceTable, PortCostRow, TCECalculator, numD, lookupDist, BenchmarkRoutes, BENCHMARK_ROUTES, loadTCEDefaults };
 export default TCECalculator;
