@@ -240,9 +240,11 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const dragFrom = useRef(null);
   const dragTo = useRef(null);
   const previewRef = useRef(null);
+  const marketPreviewRef = useRef(null);
 
   // Pool filters
   const [tagFilter, setTagFilter] = useState(new Set());
+  const [tagsExpanded, setTagsExpanded] = useState(false);
   const [dateFilter, setDateFilter] = useState("all");
   const [poolSearch, setPoolSearch] = useState("");
 
@@ -380,6 +382,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if (toAdd.length) {
       selectedCargoes.forEach(c => importedCargoIds.current.add(c.id));
       setFixtures(prev => [...prev, ...toAdd]);
+      setSection("market");
+      setReportType(prev => prev || "Intermediate");
     }
   }, [selectedCargoes]);
 
@@ -601,6 +605,29 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     setExportStatus("Rendering...");
     try { const url = await capturePng(); const a = document.createElement("a"); a.download = `positions-${posDate}.png`; a.href = url; a.click(); setExportStatus("Downloaded."); }
     catch (e) { setExportStatus("Failed: " + e.message); }
+  }
+
+  // ── Market report export — same html-to-image pattern as Position List ──
+  const [marketExportStatus, setMarketExportStatus] = useState("");
+  async function captureMarketPng() {
+    const lib = await loadHTI();
+    return lib.toPng(marketPreviewRef.current, { backgroundColor: "#0b1f3f", pixelRatio: 2, filter: exportFilter });
+  }
+  async function handleMarketCopyEmail() {
+    setMarketExportStatus("Copying...");
+    try {
+      const lib = await loadHTI();
+      const blob = await lib.toBlob(marketPreviewRef.current, { backgroundColor: "#0b1f3f", pixelRatio: 2, filter: exportFilter });
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      setMarketExportStatus("Copied — paste into your email body.");
+    } catch (e) { setMarketExportStatus("Copy failed: " + e.message); }
+    setTimeout(() => setMarketExportStatus(""), 3000);
+  }
+  async function handleMarketDownloadPng() {
+    setMarketExportStatus("Rendering...");
+    try { const url = await captureMarketPng(); const a = document.createElement("a"); a.download = `${reportType || "market"}-report-${reportDate}.png`; a.href = url; a.click(); setMarketExportStatus("Downloaded."); }
+    catch (e) { setMarketExportStatus("Failed: " + e.message); }
+    setTimeout(() => setMarketExportStatus(""), 3000);
   }
 
   // ── Market report ─────────────────────────────────────────────────────────
@@ -911,10 +938,27 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
       <div style={{ width: 220, minWidth: 220, display: "flex", flexDirection: "column", background: C.bg2, borderRight: "1px solid " + C.bd, overflow: "hidden" }}>
         <div style={{ display: "flex", borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
-          {[["poslist", "Positions"], ["market", "Market"], ["quick", "Quick"]].map(([k, l]) => (
-            <button key={k} onClick={() => setSection(k)} style={{ flex: 1, padding: "10px 4px", fontSize: 11, fontWeight: 700, cursor: "pointer", border: "none", borderBottom: section === k ? `2px solid ${ACCENT}` : "2px solid transparent", background: "transparent", color: section === k ? ACCENT : C.dim, fontFamily: "inherit" }}>{l}</button>
+          {[["poslist", "Positions"], ["market", "Market"]].map(([k, l]) => (
+            <button key={k} onClick={() => setSection(k === "poslist" && section === "quick" ? "quick" : k)}
+              style={{ flex: 1, padding: "10px 4px", fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none",
+                borderBottom: (section === k || (k === "poslist" && section === "quick")) ? `2px solid ${ACCENT}` : "2px solid transparent",
+                background: "transparent", color: (section === k || (k === "poslist" && section === "quick")) ? ACCENT : C.dim, fontFamily: "inherit" }}>
+              {l}
+            </button>
           ))}
         </div>
+        {(section === "poslist" || section === "quick") && (
+          <div style={{ display: "flex", gap: 4, padding: "6px 8px", borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
+            {[["poslist", "Position List"], ["quick", "Quick"]].map(([k, l]) => (
+              <button key={k} onClick={() => setSection(k)}
+                style={{ flex: 1, padding: "5px 4px", fontSize: 10, fontWeight: 700, cursor: "pointer", borderRadius: 4,
+                  border: "1px solid " + (section === k ? ACCENT : C.bd), background: section === k ? "rgba(58,130,246,0.12)" : "transparent",
+                  color: section === k ? ACCENT : C.dim, fontFamily: "inherit" }}>
+                {l}
+              </button>
+            ))}
+          </div>
+        )}
 
         {section === "poslist" && (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
@@ -935,13 +979,18 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
             </div>
             <input value={poolSearch} onChange={e => setPoolSearch(e.target.value)} placeholder="Search vessel..."
               style={{ ...IS, width: "100%", boxSizing: "border-box", flexShrink: 0 }} />
-            {/* Tags — always visible, loaded from Supabase */}
+            {/* Tags — collapsed to a manageable set by default; active tags always shown */}
             {allTags.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 3, flexShrink: 0 }}>
-                {allTags.map(t => (
+                {(tagsExpanded ? allTags : Array.from(new Set([...allTags.slice(0, 10), ...tagFilter]))).map(t => (
                   <button key={t} onClick={() => setTagFilter(p => { const n = new Set(p); n.has(t) ? n.delete(t) : n.add(t); return n; })}
                     style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3, cursor: "pointer", border: `1px solid ${tagFilter.has(t) ? ACCENT : C.bd}`, background: tagFilter.has(t) ? ACCENT : "transparent", color: tagFilter.has(t) ? "#fff" : C.dim, fontFamily: "inherit" }}>{t}</button>
                 ))}
+                {allTags.length > 10 && (
+                  <button onClick={() => setTagsExpanded(e => !e)} style={{ fontSize: 9, fontWeight: 700, color: ACCENT, background: "none", border: "none", cursor: "pointer" }}>
+                    {tagsExpanded ? "▲ show less" : `▼ show all (${allTags.length})`}
+                  </button>
+                )}
                 {tagFilter.size > 0 && <button onClick={() => setTagFilter(new Set())} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer" }}>✕ clear</button>}
               </div>
             )}
@@ -1049,7 +1098,7 @@ Any direction`}</pre>
       </div>
 
       {/* ── Main ────────────────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
 
         {section === "poslist" && <>
           {/* Toolbar */}
@@ -1075,7 +1124,7 @@ Any direction`}</pre>
           </div>
 
           {/* Scrollable report area */}
-          <div style={{ flex: 1, overflowY: "auto", overflowX: "auto", padding: 12 }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto", padding: 12 }}>
             {/* Captured node — entire report */}
             <div ref={previewRef} className="pos-print" style={{ background: "#070f1c", fontFamily: "Inter,system-ui,sans-serif", width: 750 }}>
               {/* Date bar */}
@@ -1146,7 +1195,7 @@ Any direction`}</pre>
         </>}
 
         {section === "market" && (
-          <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 12 }}>
             {!reportType ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1 }}>
                 <div style={{ textAlign: "center", color: C.dim }}>
@@ -1155,7 +1204,24 @@ Any direction`}</pre>
                 </div>
               </div>
             ) : reportType === "Intermediate" ? <>
-              <style>{`.driver-list{margin:0;padding-left:16px;font-size:12px;line-height:1.7;color:${C.tx}}.driver-list:has(li:nth-child(5)){column-count:2;column-gap:24px}`}</style>
+              <style>{`.driver-list{margin:0;padding-left:16px;font-size:12px;line-height:1.7;color:${C.tx}}.driver-list:has(li:nth-child(5)){column-count:2;column-gap:24px}
+                .rpt-edit{background:transparent;border:none;border-bottom:1px dashed transparent;color:inherit;font-family:inherit;font-size:inherit;outline:none;padding:2px 3px;border-radius:2px;transition:border-color .15s,background .15s;box-sizing:border-box}
+                .rpt-edit:hover{border-bottom-color:rgba(74,144,226,0.4)}
+                .rpt-edit:focus{border-bottom-color:#4a90e2;background:rgba(74,144,226,0.08)}
+              `}</style>
+
+              {/* ── Toolbar (not captured in export/print) ── */}
+              <div className="no-export" style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
+                {marketExportStatus && <span style={{ fontSize: 11, color: C.dim }}>{marketExportStatus}</span>}
+                <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} style={IS} />
+                <button onClick={saveReport} style={{ ...SB, background: "rgba(63,185,80,0.15)", border: "1px solid rgba(63,185,80,0.45)", color: "#3fb950" }}>Save</button>
+                <button onClick={() => window.print()} style={{ ...SB, background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.45)", color: "#a5b4fc" }}>Print</button>
+                <button onClick={handleMarketCopyEmail} style={{ ...SB, background: "rgba(245,166,35,0.15)", border: "1px solid rgba(245,166,35,0.45)", color: "#f5a623" }}>Copy for email</button>
+                <button onClick={handleMarketDownloadPng} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Download PNG</button>
+              </div>
+
+              {/* ── Printable/exportable report content ── */}
+              <div ref={marketPreviewRef} className="pos-print" style={{ display: "flex", flexDirection: "column", gap: 12, background: "#0b1f3f", padding: 10, borderRadius: 8 }}>
 
               {/* ── Header ── */}
               <div style={{ background: "#0b1f3f", borderRadius: 8, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1166,18 +1232,14 @@ Any direction`}</pre>
                     <div style={{ fontSize: 11, color: "#9fc4f0" }}>Intermediate summary</div>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} style={IS} />
-                  <button onClick={saveReport} style={{ ...SB, background: "rgba(63,185,80,0.15)", border: "1px solid rgba(63,185,80,0.45)", color: "#3fb950" }}>Save</button>
-                  <button onClick={() => window.print()} style={{ ...SB, background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.45)", color: "#a5b4fc" }}>Print</button>
-                </div>
+                <div style={{ fontSize: 11, color: "#9fc4f0" }}>{new Date(reportDate).toLocaleDateString("en-GB")}</div>
               </div>
 
               {/* ── Market drivers / What to watch ── */}
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 13 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, textTransform: "uppercase", letterSpacing: "0.05em" }}>Market drivers / What to watch</div>
-                  <button onClick={() => setDriverBullets(p => [...p, ""])}
+                  <button onClick={() => setDriverBullets(p => [...p, ""])} className="no-export"
                     style={{ background: ACCENT, border: "none", borderRadius: 3, color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", cursor: "pointer" }}>+ Add</button>
                 </div>
                 <ul className="driver-list">
@@ -1185,9 +1247,9 @@ Any direction`}</pre>
                     <li key={i} style={{ marginBottom: 4, display: "flex", alignItems: "flex-start", gap: 6, listStyle: "none", marginLeft: -16 }}>
                       <span style={{ marginTop: 2 }}>•</span>
                       <input value={b} onChange={e => setDriverBullets(p => { const n = [...p]; n[i] = e.target.value; return n; })}
-                        placeholder="e.g. general weather delays"
-                        style={{ flex: 1, background: "transparent", border: "none", borderBottom: "1px solid " + C.bd, color: C.tx, fontSize: 12, padding: "2px 0", outline: "none", fontFamily: "inherit" }} />
-                      <button onClick={() => setDriverBullets(p => p.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 11 }}>✕</button>
+                        placeholder="e.g. general weather delays" className="rpt-edit"
+                        style={{ flex: 1, fontSize: 12 }} />
+                      <button onClick={() => setDriverBullets(p => p.filter((_, j) => j !== i))} className="no-export" style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 11 }}>✕</button>
                     </li>
                   ))}
                 </ul>
@@ -1197,7 +1259,7 @@ Any direction`}</pre>
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden" }}>
                 <div style={{ padding: "8px 13px", background: "rgba(74,144,226,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#79c0ff", textTransform: "uppercase", letterSpacing: "0.05em" }}>Benchmark rates</div>
-                  <button onClick={refreshBenchmarkFromSaved} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim, fontSize: 10 }}>↻ Refresh from saved</button>
+                  <button onClick={refreshBenchmarkFromSaved} className="no-export" style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim, fontSize: 10 }}>↻ Refresh from saved</button>
                 </div>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -1212,16 +1274,16 @@ Any direction`}</pre>
                           <td style={{ padding: "6px 10px", fontWeight: 700, color: C.tx }}>{r.label}</td>
                           <td style={{ padding: "6px 10px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <input value={r.freight} onChange={e => updateBenchmarkFreight(r.key, e.target.value)} placeholder="USD"
-                                style={{ width: 100, background: C.bg, border: "1px solid " + (r.override ? "#f5a623" : C.bd), borderRadius: 3, color: C.tx, fontSize: 11, padding: "4px 6px", outline: "none", fontFamily: "inherit" }} />
+                              <input value={r.freight} onChange={e => updateBenchmarkFreight(r.key, e.target.value)} placeholder="USD" className="rpt-edit"
+                                style={{ width: 90, fontSize: 12, fontWeight: 600, borderBottomColor: r.override ? "#f5a623" : undefined, color: r.override ? "#f5a623" : C.tx }} />
                               <span style={{ fontSize: 10, color: C.faint }}>{r.tce != null ? `(USD ${Math.round(r.tce / 1000)}k pd)` : ""}</span>
                               {r.override && <span title="Overridden this report only — refresh to pull the saved value" style={{ fontSize: 9, color: "#f5a623" }}>override</span>}
                             </div>
                           </td>
                           <td style={{ padding: "6px 10px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <input value={r.lastWeek} onChange={e => setBenchmarkRows(p => p.map(x => x.key === r.key ? { ...x, lastWeek: e.target.value, tceLastWeek: recalcBenchmarkTCE({ ...x, dist: x.dist ?? lookupDist(x.from, x.to) }, e.target.value) } : x))} placeholder="USD"
-                                style={{ width: 100, background: C.bg, border: "1px solid " + C.bd, borderRadius: 3, color: C.faint, fontSize: 11, padding: "4px 6px", outline: "none", fontFamily: "inherit" }} />
+                              <input value={r.lastWeek} onChange={e => setBenchmarkRows(p => p.map(x => x.key === r.key ? { ...x, lastWeek: e.target.value, tceLastWeek: recalcBenchmarkTCE({ ...x, dist: x.dist ?? lookupDist(x.from, x.to) }, e.target.value) } : x))} placeholder="USD" className="rpt-edit"
+                                style={{ width: 90, fontSize: 12, color: C.faint }} />
                               <span style={{ fontSize: 10, color: C.faint }}>{r.tceLastWeek != null ? `(USD ${Math.round(r.tceLastWeek / 1000)}k pd)` : ""}</span>
                             </div>
                           </td>
@@ -1239,8 +1301,8 @@ Any direction`}</pre>
                   {[["current", "Current"], ["lastMonth", "Last month avg"], ["ytd", "YTD avg"]].map(([k, label]) => (
                     <div key={k}>
                       <label style={{ display: "block", fontSize: 10, color: C.dim, marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>{label}</label>
-                      <input value={tceStats[k]} onChange={e => setTceStats(p => ({ ...p, [k]: e.target.value }))} placeholder="e.g. 31000"
-                        style={{ width: "100%", background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontSize: 12, padding: "7px 9px", outline: "none", boxSizing: "border-box" }} />
+                      <input value={tceStats[k]} onChange={e => setTceStats(p => ({ ...p, [k]: e.target.value }))} placeholder="e.g. 31000" className="rpt-edit"
+                        style={{ width: "100%", fontSize: 18, fontWeight: 700 }} />
                       <div style={{ fontSize: 10, color: C.faint, marginTop: 3 }}>{tceStats[k] ? `USD ${Math.round(parseFloat(tceStats[k]) / 1000)}k pd` : ""}</div>
                     </div>
                   ))}
@@ -1251,9 +1313,9 @@ Any direction`}</pre>
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden" }}>
                 <div style={{ padding: "8px 13px", background: "rgba(74,144,226,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#79c0ff", textTransform: "uppercase", letterSpacing: "0.05em" }}>Handy</div>
-                  <div style={{ fontSize: 10, color: C.faint }}>Paste a screenshot or text with WS/FFA levels below</div>
+                  <div className="no-export" style={{ fontSize: 10, color: C.faint }}>Paste a screenshot or text with WS/FFA levels below</div>
                 </div>
-                <div style={{ padding: "8px 13px" }}>
+                <div className="no-export" style={{ padding: "8px 13px" }}>
                   <textarea
                     onPaste={handleHandyImagePaste}
                     onChange={e => { if (e.target.value.trim()) { parseHandyText(e.target.value); e.target.value = ""; } }}
@@ -1273,8 +1335,8 @@ Any direction`}</pre>
                         <tr key={seg} style={{ borderTop: "1px solid " + C.bd, background: i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent" }}>
                           <td style={{ padding: "6px 10px", fontWeight: 700, color: C.tx }}>{seg === "tc23" ? "TC23" : "TC6"}</td>
                           <td style={{ padding: "6px 10px" }}>
-                            <input value={handy[seg].spotWS} onChange={e => setHandy(p => ({ ...p, [seg]: { ...p[seg], spotWS: e.target.value } }))} placeholder="WS"
-                              style={{ width: 70, background: C.bg, border: "1px solid " + C.bd, borderRadius: 3, color: C.tx, fontSize: 11, padding: "4px 6px", outline: "none", fontFamily: "inherit" }} />
+                            <input value={handy[seg].spotWS} onChange={e => setHandy(p => ({ ...p, [seg]: { ...p[seg], spotWS: e.target.value } }))} placeholder="WS" className="rpt-edit"
+                              style={{ width: 55, fontSize: 12, fontWeight: 600 }} />
                           </td>
                           <td style={{ padding: "6px 10px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1282,8 +1344,8 @@ Any direction`}</pre>
                               <div style={{ display: "flex", gap: 4 }}>
                                 {["ffaAug", "ffaSep", "ffaOct"].map(f => (
                                   <input key={f} value={handy[seg][f]} onChange={e => setHandy(p => ({ ...p, [seg]: { ...p[seg], [f]: e.target.value } }))}
-                                    placeholder={f.slice(3)}
-                                    style={{ width: 46, background: C.bg, border: "1px solid " + C.bd, borderRadius: 3, color: C.faint, fontSize: 10, padding: "3px 5px", outline: "none", fontFamily: "inherit" }} />
+                                    placeholder={f.slice(3)} className="rpt-edit"
+                                    style={{ width: 40, fontSize: 10, color: C.faint }} />
                                 ))}
                               </div>
                             </div>
@@ -1299,7 +1361,7 @@ Any direction`}</pre>
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, textTransform: "uppercase", letterSpacing: "0.05em" }}>Recent fixtures</div>
-                  <button onClick={() => setFixtures(p => [...p, { vessel: "", charterer: "", cargo: "", load: "", disch: "", laycanFrom: "", laycanTo: "", freight: "" }])}
+                  <button onClick={() => setFixtures(p => [...p, { vessel: "", charterer: "", cargo: "", load: "", disch: "", laycanFrom: "", laycanTo: "", freight: "" }])} className="no-export"
                     style={{ background: ACCENT, border: "none", borderRadius: 3, color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", cursor: "pointer" }}>+ Add</button>
                 </div>
                 {fixtures.length === 0 ? <div style={{ padding: 10, textAlign: "center", color: C.faint, fontSize: 10 }}>None yet — select cargoes in the Cargoes tab to import, or add manually</div> : (
@@ -1316,11 +1378,11 @@ Any direction`}</pre>
                             {["vessel", "charterer", "cargo", "load", "disch", "laycanFrom", "laycanTo", "freight"].map(field => (
                               <td key={field} style={{ padding: "3px 5px" }}>
                                 <input value={f[field] || ""} onChange={e => setFixtures(p => { const n = [...p]; n[i] = { ...n[i], [field]: e.target.value }; return n; })}
-                                  style={{ width: field === "vessel" ? 100 : 70, background: C.bg, border: "1px solid " + C.bd, borderRadius: 3, color: C.tx, fontSize: 10, padding: "3px 5px", outline: "none", fontFamily: "inherit" }} />
+                                  className="rpt-edit" style={{ width: field === "vessel" ? 100 : 68, fontSize: 11 }} />
                               </td>
                             ))}
                             <td style={{ padding: "3px 5px" }}>
-                              <button onClick={() => setFixtures(p => p.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 12 }}>✕</button>
+                              <button onClick={() => setFixtures(p => p.filter((_, j) => j !== i))} className="no-export" style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 12 }}>✕</button>
                             </td>
                           </tr>
                         ))}
@@ -1340,6 +1402,8 @@ Any direction`}</pre>
                   <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" barLabel="No. of ships" lineLabel="Avg. fix window" title="Fixing window (days)" accent="#4a90e2" />
                 </div>
               </div>
+
+              </div>{/* /marketPreviewRef */}
             </> : <>
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 11, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -1441,7 +1505,7 @@ Any direction`}</pre>
 
         {/* ── QUICK POSITIONS ──────────────────────────────────────────────── */}
         {section === "quick" && (
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
             {/* Toolbar */}
             <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 12px", background: C.bg2, borderBottom: "1px solid " + C.bd, flexWrap: "wrap", flexShrink: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>Quick Positions</span>
@@ -1461,7 +1525,7 @@ Any direction`}</pre>
               </button>
             </div>
 
-            <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
               {/* Step 1 */}
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px" }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT, marginBottom: 6 }}>Step 1 — Paste positions</div>
