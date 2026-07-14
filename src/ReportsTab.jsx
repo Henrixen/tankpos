@@ -37,6 +37,10 @@ function fmtDwt(n) {
   return Number(n).toLocaleString("en-US").replace(/,/g, "\u2009");
 }
 function fmtCoating(s) { return s ? String(s).toUpperCase() : ""; }
+function fmtUSD(val) {
+  const n = parseFloat(String(val).replace(/[^0-9.\-]/g, ""));
+  return isNaN(n) || !n ? "" : "USD " + Math.round(n).toLocaleString("nb-NO");
+}
 function fmtOpen(d) { if (!d) return ""; try { return fmtDateShort(d); } catch { return d; } }
 function parseTags(v) {
   if (!v?.tag) return [];
@@ -272,7 +276,9 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     tc23: { spotWS: "", ffaAug: "", ffaSep: "", ffaOct: "" },
     tc6:  { spotWS: "", ffaAug: "", ffaSep: "", ffaOct: "" },
   });
-  const [handyParsing, setHandyParsing] = useState(false);
+  const [benchmarkRefreshStatus, setBenchmarkRefreshStatus] = useState(null);
+  const [pendingDriverDelete, setPendingDriverDelete] = useState(null);
+  const [pendingFixtureDelete, setPendingFixtureDelete] = useState(null);
   const [handyParseMsg, setHandyParseMsg] = useState("");
   const importedCargoIds = useRef(new Set());
 
@@ -409,13 +415,26 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   }
 
   function refreshBenchmarkFromSaved() {
+    setBenchmarkRefreshStatus("Refreshing…");
     (async () => {
-      const { data } = await supabase.from("tce_routes").select("*");
-      if (!data) return;
-      setBenchmarkRows(prev => prev.map(r => {
-        const saved = data.find(d => d.route_key === r.key);
-        return saved ? { ...r, freight: String(saved.freight ?? ""), tce: saved.tce ?? null, override: false } : r;
-      }));
+      const { data, error } = await supabase.from("tce_routes").select("*");
+      if (error) { setBenchmarkRefreshStatus("Refresh failed"); setTimeout(() => setBenchmarkRefreshStatus(null), 2500); return; }
+      if (!data || !data.length) { setBenchmarkRefreshStatus("No saved routes found — save some in the TCE tab first"); setTimeout(() => setBenchmarkRefreshStatus(null), 3500); return; }
+      setBenchmarkRows(prev => {
+        const updated = prev.map(r => {
+          const saved = data.find(d => d.route_key === r.key);
+          return saved ? { ...r, freight: String(saved.freight ?? ""), tce: saved.tce ?? null, override: false } : r;
+        });
+        // Pick up any custom routes ("+ Add leg") saved in the TCE tab that aren't in this report's list yet
+        const existingKeys = new Set(updated.map(r => r.key));
+        const extras = data.filter(d => !existingKeys.has(d.route_key)).map(d => ({
+          key: d.route_key, label: d.label || d.route_key, from: "", to: "", dist: d.nm_laden || null,
+          freight: String(d.freight ?? ""), lastWeek: "", tce: d.tce ?? null, tceLastWeek: null, override: false,
+        }));
+        return [...updated, ...extras];
+      });
+      setBenchmarkRefreshStatus("Refreshed ✓");
+      setTimeout(() => setBenchmarkRefreshStatus(null), 2000);
     })();
   }
 
@@ -541,13 +560,18 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       if (reportedNames.has(v.vessel)) return false;
       if (poolSearch && !v.vessel?.toLowerCase().includes(poolSearch.toLowerCase())) return false;
       if (tagFilter.size > 0) {
-        // Match against manual tag, superRegion, or segment
+        // Match against manual tag, superRegion, or segment — normalized and
+        // substring-based, since filter labels (e.g. "2. CITYCLASS (10-15)")
+        // rarely match a vessel's raw segment string ("Cityclass") exactly.
+        const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
         const vVals = [
           ...parseTags(v),
-          v.superRegion ? v.superRegion.toUpperCase().trim() : null,
-          v.segment ? v.segment.toUpperCase().trim() : null,
-        ].filter(Boolean);
-        if (![...tagFilter].some(t => vVals.includes(t))) return false;
+          v.superRegion ? v.superRegion : null,
+          v.segment ? v.segment : null,
+        ].filter(Boolean).map(norm);
+        const activeNorm = [...tagFilter].map(norm);
+        const matches = activeNorm.some(t => vVals.some(vv => vv.includes(t) || t.includes(vv)));
+        if (!matches) return false;
       }
       if (dateFilter !== "all" && v.updated_at) {
         const diff = (now - new Date(v.updated_at)) / 86400000;
@@ -609,15 +633,16 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   // ── Market report export — same html-to-image pattern as Position List ──
   const [marketExportStatus, setMarketExportStatus] = useState("");
+  const lightExportRef = useRef(null);
   async function captureMarketPng() {
     const lib = await loadHTI();
-    return lib.toPng(marketPreviewRef.current, { backgroundColor: "#0b1f3f", pixelRatio: 2, filter: exportFilter });
+    return lib.toPng(lightExportRef.current, { backgroundColor: "#ffffff", pixelRatio: 2 });
   }
   async function handleMarketCopyEmail() {
     setMarketExportStatus("Copying...");
     try {
       const lib = await loadHTI();
-      const blob = await lib.toBlob(marketPreviewRef.current, { backgroundColor: "#0b1f3f", pixelRatio: 2, filter: exportFilter });
+      const blob = await lib.toBlob(lightExportRef.current, { backgroundColor: "#ffffff", pixelRatio: 2 });
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
       setMarketExportStatus("Copied — paste into your email body.");
     } catch (e) { setMarketExportStatus("Copy failed: " + e.message); }
@@ -1221,7 +1246,7 @@ Any direction`}</pre>
               </div>
 
               {/* ── Printable/exportable report content ── */}
-              <div ref={marketPreviewRef} className="pos-print" style={{ display: "flex", flexDirection: "column", gap: 12, background: "#0b1f3f", padding: 10, borderRadius: 8 }}>
+              <div ref={marketPreviewRef} style={{ display: "flex", flexDirection: "column", gap: 12, background: "#0b1f3f", padding: 10, borderRadius: 8 }}>
 
               {/* ── Header ── */}
               <div style={{ background: "#0b1f3f", borderRadius: 8, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1239,17 +1264,37 @@ Any direction`}</pre>
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 13 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, textTransform: "uppercase", letterSpacing: "0.05em" }}>Market drivers / What to watch</div>
-                  <button onClick={() => setDriverBullets(p => [...p, ""])} className="no-export"
-                    style={{ background: ACCENT, border: "none", borderRadius: 3, color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", cursor: "pointer" }}>+ Add</button>
+                  <span className="no-export" style={{ fontSize: 10, color: C.faint }}>Press Enter to add a line</span>
                 </div>
                 <ul className="driver-list">
                   {driverBullets.map((b, i) => (
                     <li key={i} style={{ marginBottom: 4, display: "flex", alignItems: "flex-start", gap: 6, listStyle: "none", marginLeft: -16 }}>
                       <span style={{ marginTop: 2 }}>•</span>
                       <input value={b} onChange={e => setDriverBullets(p => { const n = [...p]; n[i] = e.target.value; return n; })}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            setDriverBullets(p => { const n = [...p]; n.splice(i + 1, 0, ""); return n; });
+                            setTimeout(() => {
+                              const els = document.querySelectorAll(".driver-list input");
+                              els[i + 1]?.focus();
+                            }, 0);
+                          } else if (e.key === "Backspace" && b === "" && driverBullets.length > 1) {
+                            e.preventDefault();
+                            setDriverBullets(p => p.filter((_, j) => j !== i));
+                          }
+                        }}
                         placeholder="e.g. general weather delays" className="rpt-edit"
                         style={{ flex: 1, fontSize: 12 }} />
-                      <button onClick={() => setDriverBullets(p => p.filter((_, j) => j !== i))} className="no-export" style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 11 }}>✕</button>
+                      {pendingDriverDelete === i ? (
+                        <span className="no-export" style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                          <button onClick={() => { setDriverBullets(p => p.filter((_, j) => j !== i)); setPendingDriverDelete(null); }}
+                            style={{ background: C.red, border: "none", borderRadius: 3, color: "#fff", fontSize: 9, fontWeight: 700, padding: "2px 7px", cursor: "pointer" }}>Delete</button>
+                          <button onClick={() => setPendingDriverDelete(null)} style={{ background: "none", border: "1px solid " + C.bd, borderRadius: 3, color: C.dim, fontSize: 9, padding: "2px 7px", cursor: "pointer" }}>Cancel</button>
+                        </span>
+                      ) : (
+                        <button onClick={() => setPendingDriverDelete(i)} className="no-export" style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 11 }}>✕</button>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -1259,7 +1304,10 @@ Any direction`}</pre>
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden" }}>
                 <div style={{ padding: "8px 13px", background: "rgba(74,144,226,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#79c0ff", textTransform: "uppercase", letterSpacing: "0.05em" }}>Benchmark rates</div>
-                  <button onClick={refreshBenchmarkFromSaved} className="no-export" style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim, fontSize: 10 }}>↻ Refresh from saved</button>
+                  <div className="no-export" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {benchmarkRefreshStatus && <span style={{ fontSize: 10, color: C.dim }}>{benchmarkRefreshStatus}</span>}
+                    <button onClick={refreshBenchmarkFromSaved} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim, fontSize: 10 }}>↻ Refresh from saved</button>
+                  </div>
                 </div>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -1273,16 +1321,16 @@ Any direction`}</pre>
                         <tr key={r.key} style={{ borderTop: "1px solid " + C.bd, background: i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent" }}>
                           <td style={{ padding: "6px 10px", fontWeight: 700, color: C.tx }}>{r.label}</td>
                           <td style={{ padding: "6px 10px" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <input value={r.freight} onChange={e => updateBenchmarkFreight(r.key, e.target.value)} placeholder="USD" className="rpt-edit"
-                                style={{ width: 90, fontSize: 12, fontWeight: 600, borderBottomColor: r.override ? "#f5a623" : undefined, color: r.override ? "#f5a623" : C.tx }} />
-                              <span style={{ fontSize: 10, color: C.faint }}>{r.tce != null ? `(USD ${Math.round(r.tce / 1000)}k pd)` : ""}</span>
-                              {r.override && <span title="Overridden this report only — refresh to pull the saved value" style={{ fontSize: 9, color: "#f5a623" }}>override</span>}
-                            </div>
+                            {/* Imported from the TCE tab only — not editable here; use "Refresh from saved" to pull the latest value */}
+                            <span style={{ fontSize: 12, fontWeight: 600, color: C.tx }}>{r.freight ? fmtUSD(r.freight) : "—"}</span>
+                            {r.tce != null && <span style={{ fontSize: 10, color: C.faint, marginLeft: 6 }}>(USD {Math.round(r.tce / 1000)}k pd)</span>}
                           </td>
                           <td style={{ padding: "6px 10px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <input value={r.lastWeek} onChange={e => setBenchmarkRows(p => p.map(x => x.key === r.key ? { ...x, lastWeek: e.target.value, tceLastWeek: recalcBenchmarkTCE({ ...x, dist: x.dist ?? lookupDist(x.from, x.to) }, e.target.value) } : x))} placeholder="USD" className="rpt-edit"
+                              <input value={r.lastWeek} onChange={e => setBenchmarkRows(p => p.map(x => x.key === r.key ? { ...x, lastWeek: e.target.value, tceLastWeek: recalcBenchmarkTCE({ ...x, dist: x.dist ?? lookupDist(x.from, x.to) }, e.target.value) } : x))}
+                                onFocus={e => { e.target.value = String(r.lastWeek).replace(/[^0-9.\-]/g, ""); }}
+                                onBlur={e => { const n = parseFloat(e.target.value.replace(/[^0-9.\-]/g, "")); if (!isNaN(n)) e.target.value = n.toLocaleString("nb-NO"); }}
+                                placeholder="USD" className="rpt-edit"
                                 style={{ width: 90, fontSize: 12, color: C.faint }} />
                               <span style={{ fontSize: 10, color: C.faint }}>{r.tceLastWeek != null ? `(USD ${Math.round(r.tceLastWeek / 1000)}k pd)` : ""}</span>
                             </div>
@@ -1377,12 +1425,27 @@ Any direction`}</pre>
                           <tr key={i} style={{ borderTop: "1px solid " + C.bd }}>
                             {["vessel", "charterer", "cargo", "load", "disch", "laycanFrom", "laycanTo", "freight"].map(field => (
                               <td key={field} style={{ padding: "3px 5px" }}>
-                                <input value={f[field] || ""} onChange={e => setFixtures(p => { const n = [...p]; n[i] = { ...n[i], [field]: e.target.value }; return n; })}
-                                  className="rpt-edit" style={{ width: field === "vessel" ? 100 : 68, fontSize: 11 }} />
+                                {field === "freight" ? (
+                                  <input value={f.freight || ""} onChange={e => setFixtures(p => { const n = [...p]; n[i] = { ...n[i], freight: e.target.value }; return n; })}
+                                    onFocus={e => { e.target.value = String(f.freight || "").replace(/[^0-9.\-]/g, ""); }}
+                                    onBlur={e => { const num = parseFloat(e.target.value.replace(/[^0-9.\-]/g, "")); if (!isNaN(num)) e.target.value = num.toLocaleString("nb-NO"); }}
+                                    className="rpt-edit" style={{ width: 90, fontSize: 11 }} placeholder="USD" />
+                                ) : (
+                                  <input value={f[field] || ""} onChange={e => setFixtures(p => { const n = [...p]; n[i] = { ...n[i], [field]: e.target.value }; return n; })}
+                                    className="rpt-edit" style={{ width: field === "vessel" ? 100 : 68, fontSize: 11 }} />
+                                )}
                               </td>
                             ))}
                             <td style={{ padding: "3px 5px" }}>
-                              <button onClick={() => setFixtures(p => p.filter((_, j) => j !== i))} className="no-export" style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 12 }}>✕</button>
+                              {pendingFixtureDelete === i ? (
+                                <span className="no-export" style={{ display: "flex", gap: 4 }}>
+                                  <button onClick={() => { setFixtures(p => p.filter((_, j) => j !== i)); setPendingFixtureDelete(null); }}
+                                    style={{ background: C.red, border: "none", borderRadius: 3, color: "#fff", fontSize: 9, fontWeight: 700, padding: "2px 6px", cursor: "pointer" }}>Delete</button>
+                                  <button onClick={() => setPendingFixtureDelete(null)} style={{ background: "none", border: "1px solid " + C.bd, borderRadius: 3, color: C.dim, fontSize: 9, padding: "2px 6px", cursor: "pointer" }}>✕</button>
+                                </span>
+                              ) : (
+                                <button onClick={() => setPendingFixtureDelete(i)} className="no-export" style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 12 }}>✕</button>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -1404,6 +1467,106 @@ Any direction`}</pre>
               </div>
 
               </div>{/* /marketPreviewRef */}
+
+              {/* ── Hidden light-themed export node — captured for PNG/print instead of the dark editor above ── */}
+              <div ref={lightExportRef} className="pos-print" style={{ position: "fixed", left: -9999, top: 0, width: 700, background: "#ffffff", color: "#16233f", fontFamily: "-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" }}>
+                <div style={{ background: "#0b1f3f", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 7, background: "#4a90e2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#0b1f3f" }}>S1</div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Steem1960 Shipbrokers</div>
+                      <div style={{ fontSize: 11, color: "#9fc4f0" }}>Intermediate summary</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#c9d8ee" }}>{new Date(reportDate).toLocaleDateString("en-GB")}</div>
+                </div>
+
+                <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ background: "#eaf2fc", borderRadius: 8, padding: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Market drivers / What to watch</div>
+                    <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, lineHeight: 1.6 }}>
+                      {driverBullets.filter(b => b.trim()).map((b, i) => <li key={i}>{b}</li>)}
+                    </ul>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Benchmark rates</div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                      <thead><tr style={{ background: "#eaf2fc" }}>
+                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Intermediate routes</th>
+                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Spot</th>
+                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Last week</th>
+                      </tr></thead>
+                      <tbody>
+                        {benchmarkRows.map((r, i) => (
+                          <tr key={r.key} style={{ borderTop: "1px solid #d9e2ef" }}>
+                            <td style={{ padding: "5px 8px", fontWeight: 700 }}>{r.label}</td>
+                            <td style={{ padding: "5px 8px" }}>{r.freight ? fmtUSD(r.freight) : "—"} {r.tce != null && <span style={{ color: "#6b7280" }}>(USD {Math.round(r.tce / 1000)}k pd)</span>}</td>
+                            <td style={{ padding: "5px 8px", color: "#6b7280" }}>{r.lastWeek ? fmtUSD(r.lastWeek) : "—"} {r.tceLastWeek != null && `(USD ${Math.round(r.tceLastWeek / 1000)}k pd)`}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Handy</div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                      <thead><tr style={{ background: "#eaf2fc" }}>
+                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Segment</th>
+                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Spot WS</th>
+                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>FFA Aug / Sep / Oct</th>
+                      </tr></thead>
+                      <tbody>
+                        {["tc23", "tc6"].map((seg, i) => (
+                          <tr key={seg} style={{ borderTop: "1px solid #d9e2ef" }}>
+                            <td style={{ padding: "5px 8px", fontWeight: 700 }}>{seg === "tc23" ? "TC23" : "TC6"}</td>
+                            <td style={{ padding: "5px 8px" }}>{handy[seg].spotWS ? "WS " + handy[seg].spotWS : "—"}</td>
+                            <td style={{ padding: "5px 8px", color: "#6b7280" }}>{[handy[seg].ffaAug, handy[seg].ffaSep, handy[seg].ffaOct].filter(Boolean).map(v => "WS " + v).join(" / ") || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Recent fixtures</div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
+                      <thead><tr style={{ background: "#eaf2fc" }}>
+                        {["Vessel", "Charterer", "Cargo", "Load", "Disch", "From", "To", "Freight"].map(h => (
+                          <th key={h} style={{ padding: "4px 6px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>{h}</th>
+                        ))}
+                      </tr></thead>
+                      <tbody>
+                        {fixtures.map((f, i) => (
+                          <tr key={i} style={{ borderTop: "1px solid #d9e2ef" }}>
+                            <td style={{ padding: "4px 6px" }}>{f.vessel}</td>
+                            <td style={{ padding: "4px 6px" }}>{f.charterer}</td>
+                            <td style={{ padding: "4px 6px" }}>{f.cargo}</td>
+                            <td style={{ padding: "4px 6px" }}>{f.load}</td>
+                            <td style={{ padding: "4px 6px" }}>{f.disch}</td>
+                            <td style={{ padding: "4px 6px" }}>{f.laycanFrom}</td>
+                            <td style={{ padding: "4px 6px" }}>{f.laycanTo}</td>
+                            <td style={{ padding: "4px 6px" }}>{f.freight ? fmtUSD(f.freight) : ""}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>TCE earnings</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
+                      {[["current", "Current"], ["lastMonth", "Last month avg"], ["ytd", "YTD avg"]].map(([k, label]) => (
+                        <div key={k} style={{ background: "#eaf2fc", borderRadius: 6, padding: "6px 9px" }}>
+                          <div style={{ fontSize: 9, color: "#6b7280", textTransform: "uppercase" }}>{label}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700 }}>{tceStats[k] ? `USD ${Math.round(parseFloat(tceStats[k]) / 1000)}k pd` : "—"}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </> : <>
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 11, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
