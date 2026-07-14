@@ -125,12 +125,12 @@ function routeDefaults(r, defaults) {
   };
 }
 
-function BenchmarkRoutes({ defaults }) {
+function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   const [rows, setRows] = useState(BENCHMARK_ROUTES.map(r => routeDefaults(r, defaults)));
   const [status, setStatus] = useState(null);
   const [expanded, setExpanded] = useState({});
-  const [sharedBunker, setSharedBunker] = useState(String(defaults.bunker ?? ""));
   const [etsPopout, setEtsPopout] = useState(null); // route key currently showing EU ETS calc
+  const [pendingDelete, setPendingDelete] = useState(null); // route key awaiting delete confirmation
 
   useEffect(() => { loadRows(); }, []);
 
@@ -180,6 +180,12 @@ function BenchmarkRoutes({ defaults }) {
     return r ? r.tce : null;
   }
 
+  // Recompute every row's TCE whenever the shared bunker price changes (kept
+  // in sync via an effect since the bunker input now lives outside this component).
+  useEffect(() => {
+    setRows(prev => prev.map(r => ({ ...r, tce: recalc(r) })));
+  }, [sharedBunker]);
+
   function updateField(key, field, val) {
     setRows(prev => prev.map(r => {
       if (r.key !== key) return r;
@@ -187,16 +193,6 @@ function BenchmarkRoutes({ defaults }) {
       next.tce = recalc(next);
       return next;
     }));
-  }
-
-  // Bunker price is shared across all routes (synced from Standard Variables
-  // by default) — changing it recalculates every route's TCE at once.
-  function updateSharedBunker(val) {
-    setSharedBunker(val);
-    setRows(prev => prev.map(r => ({ ...r, tce: recalc(r, val) })));
-  }
-  function syncBunkerFromStandard() {
-    updateSharedBunker(String(defaults.bunker ?? ""));
   }
 
   async function saveRow(row) {
@@ -211,6 +207,12 @@ function BenchmarkRoutes({ defaults }) {
     setTimeout(() => setStatus(null), 2000);
   }
 
+  async function deleteRow(row) {
+    await supabase.from("tce_routes").delete().eq("route_key", row.key);
+    setRows(prev => prev.filter(r => r.key !== row.key));
+    setPendingDelete(null);
+  }
+
   const miniInp = (row, field, label, width = 54) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
       <span style={{ fontSize: 9, color: C.faint, textTransform: "uppercase" }}>{label}</span>
@@ -222,17 +224,22 @@ function BenchmarkRoutes({ defaults }) {
   // EU ETS mini-calculator popout — reuses the same calcEuEts formula as the
   // main calculator's "auto" toggle, applied to this route's own distance/speed.
   function EtsPopout({ row }) {
-    const [intraEU, setIntraEU] = useState(true);
+    const [scope, setScope] = useState(100); // 100 | 50
     const ets = calcEuEts(numD(row.nmBallast), numD(row.nmLaden), numD(row.cons), numD(row.cons),
       defaults.consLoad, defaults.consDisch, defaults.consIdle, defaults.daysLoad, defaults.noticeLoad,
-      defaults.daysDisch, defaults.noticeDisch, defaults.daysWaiting, numD(row.speed), intraEU);
+      defaults.daysDisch, defaults.noticeDisch, defaults.daysWaiting, numD(row.speed), scope === 100);
     return (
-      <div style={{ position: "absolute", zIndex: 20, marginTop: 4, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 6, padding: 10, boxShadow: "0 4px 14px rgba(0,0,0,0.4)", width: 220 }}>
+      <div style={{ position: "absolute", zIndex: 20, marginTop: 4, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 6, padding: 10, boxShadow: "0 4px 14px rgba(0,0,0,0.4)", width: 200 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: C.tx, marginBottom: 6 }}>EU ETS calculator</div>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.dim, marginBottom: 8, cursor: "pointer" }}>
-          <input type="checkbox" checked={intraEU} onChange={e => setIntraEU(e.target.checked)} />
-          Full EU scope (untick for 50% deep-sea)
-        </label>
+        <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+          {[100, 50].map(s => (
+            <button key={s} onClick={() => setScope(s)}
+              style={{ flex: 1, fontSize: 11, fontWeight: 700, padding: "4px 0", borderRadius: 4, cursor: "pointer", fontFamily: "inherit",
+                border: "1px solid " + (scope === s ? C.blue : C.bd), background: scope === s ? "rgba(88,166,255,0.15)" : "transparent", color: scope === s ? C.blue : C.dim }}>
+              {s}%
+            </button>
+          ))}
+        </div>
         <div style={{ fontSize: 16, fontWeight: 800, color: C.blue, marginBottom: 8 }}>${ets.toLocaleString("nb-NO")}</div>
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={() => { updateField(row.key, "euEts", String(ets)); setEtsPopout(null); }}
@@ -251,21 +258,6 @@ function BenchmarkRoutes({ defaults }) {
   }
 
   return (
-    <div>
-      {/* Shared bunker — sits above/outside the routes box; applies to every route below */}
-      <div style={{ padding:"8px 12px", background:C.bg2, border:"1px solid "+C.bd, borderRadius:8, marginBottom:8, display:"flex", alignItems:"flex-end", gap:8 }}>
-        <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
-          <span style={{ fontSize:9, color:C.faint, textTransform:"uppercase" }}>Bunker (MGO) $/mt</span>
-          <input value={sharedBunker} onChange={e=>updateSharedBunker(e.target.value)}
-            style={{ width:90, background:C.bg3, border:"1px solid "+C.bd, borderRadius:4, color:C.tx, fontSize:12, padding:"4px 6px", outline:"none", fontFamily:"inherit", textAlign:"right" }}/>
-        </div>
-        <button onClick={syncBunkerFromStandard}
-          style={{ fontSize:10, fontWeight:700, padding:"5px 9px", borderRadius:4, border:"1px solid "+C.bd, background:"transparent", color:C.dim, cursor:"pointer", fontFamily:"inherit" }}>
-          ↻ Sync from Standard Variables
-        </button>
-        <span style={{ fontSize:10, color:C.faint }}>No live MGO market feed connected — enter manually</span>
-      </div>
-
     <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:8, overflow:"hidden" }}>
       <div style={{ padding:"8px 12px", background:C.bg3, borderBottom:"1px solid "+C.bd2, fontSize:12, fontWeight:700, color:C.tx, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <span>📍 Benchmark Routes</span>
@@ -299,32 +291,47 @@ function BenchmarkRoutes({ defaults }) {
               </button>
             </div>
             {isOpen && (
-              <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:8, paddingLeft:22 }}>
-                {miniInp(r,"nmBallast","NM Ballast")}
-                {miniInp(r,"nmLaden","NM Laden")}
-                {miniInp(r,"nmRepo","NM Repo")}
-                {miniInp(r,"pdaLoad","PDA Load")}
-                {miniInp(r,"pdaDisch","PDA Disch")}
-                <div style={{ position:"relative" }}>
-                  <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
-                    <span style={{ fontSize:9, color:C.faint, textTransform:"uppercase" }}>EU ETS</span>
-                    <div style={{ display:"flex", gap:3 }}>
-                      <input value={r.euEts} onChange={e=>updateField(r.key,"euEts",e.target.value)}
-                        style={{ width:54, background:C.bg3, border:"1px solid "+C.bd, borderRadius:4, color:C.tx, fontSize:12, padding:"3px 6px", outline:"none", fontFamily:"inherit", textAlign:"right" }} />
-                      <button onClick={()=>setEtsPopout(p=>p===r.key?null:r.key)}
-                        style={{ fontSize:9, padding:"0 5px", borderRadius:4, border:"1px solid "+C.bd, background:"transparent", color:C.blue, cursor:"pointer", fontFamily:"inherit" }}>calc</button>
+              <div style={{ marginTop:8, paddingLeft:22 }}>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                  {miniInp(r,"nmBallast","NM Ballast")}
+                  {miniInp(r,"nmLaden","NM Laden")}
+                  {miniInp(r,"nmRepo","NM Repo")}
+                  {miniInp(r,"pdaLoad","PDA Load")}
+                  {miniInp(r,"pdaDisch","PDA Disch")}
+                  <div style={{ position:"relative" }}>
+                    <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+                      <span style={{ fontSize:9, color:C.faint, textTransform:"uppercase" }}>EU ETS</span>
+                      <div style={{ display:"flex", gap:3 }}>
+                        <input value={r.euEts} onChange={e=>updateField(r.key,"euEts",e.target.value)}
+                          style={{ width:54, background:C.bg3, border:"1px solid "+C.bd, borderRadius:4, color:C.tx, fontSize:12, padding:"3px 6px", outline:"none", fontFamily:"inherit", textAlign:"right" }} />
+                        <button onClick={()=>setEtsPopout(p=>p===r.key?null:r.key)}
+                          style={{ fontSize:9, padding:"0 5px", borderRadius:4, border:"1px solid "+C.bd, background:"transparent", color:C.blue, cursor:"pointer", fontFamily:"inherit" }}>calc</button>
+                      </div>
                     </div>
+                    {etsPopout===r.key && <EtsPopout row={r}/>}
                   </div>
-                  {etsPopout===r.key && <EtsPopout row={r}/>}
+                  {miniInp(r,"speed","Speed")}
+                  {miniInp(r,"cons","Cons")}
                 </div>
-                {miniInp(r,"speed","Speed")}
-                {miniInp(r,"cons","Cons")}
+                <div style={{ marginTop:8 }}>
+                  {pendingDelete===r.key ? (
+                    <div style={{ display:"flex", alignItems:"center", gap:8, background:"rgba(255,107,107,0.08)", border:"1px solid rgba(255,107,107,0.3)", borderRadius:5, padding:"6px 9px" }}>
+                      <span style={{ fontSize:11, color:C.red }}>Delete "{r.label}"? This can't be undone.</span>
+                      <button onClick={()=>deleteRow(r)} style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:4, border:"none", background:C.red, color:"#fff", cursor:"pointer", fontFamily:"inherit" }}>Delete</button>
+                      <button onClick={()=>setPendingDelete(null)} style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:4, border:"1px solid "+C.bd, background:"transparent", color:C.dim, cursor:"pointer", fontFamily:"inherit" }}>Cancel</button>
+                    </div>
+                  ) : (
+                    <button onClick={()=>setPendingDelete(r.key)}
+                      style={{ fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:4, border:"1px solid rgba(255,107,107,0.4)", background:"transparent", color:C.red, cursor:"pointer", fontFamily:"inherit" }}>
+                      ✕ Delete route
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
         );})}
       </div>
-    </div>
     </div>
   );
 }
@@ -382,7 +389,7 @@ function PortCostRow({label,ports,onChange,col}){
       <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{label}</div>
       {ports.map((p,i)=>(
         <div key={i} style={{display:"flex",gap:6,marginBottom:3,alignItems:"center",padding:"2px 0",borderBottom:"1px solid "+C.bg3}}>
-          <input value={p.name} onChange={e=>updatePort(i,"name",e.target.value)} placeholder="Port"
+          <input value={p.name} onChange={e=>updatePort(i,"name",e.target.value)}
             style={{flex:"0 0 90px",background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 6px",outline:"none"}}/>
           <input value={typeof p.cost==="number"?p.cost.toLocaleString("nb-NO"):p.cost}
             onChange={e=>updatePort(i,"cost",e.target.value)}
@@ -414,8 +421,31 @@ function TCECalculator(){
   const [isIntraEU,setIsIntraEU]=useState(true);
   const [result,setResult]=useState(null);
   const [showDist,setShowDist]=useState(false);
+  const [sharedBunker,setSharedBunker]=useState("");
+  const [pbtStatus,setPbtStatus]=useState(null);
 
   useEffect(()=>{loadTCEDefaults().then(d=>{if(d)setDefaults(prev=>({...TCE_DEFAULTS,...d,...prev===TCE_DEFAULTS?d:{}}));setLoaded(true);});},[]);
+  useEffect(()=>{ if(loaded && sharedBunker==="") setSharedBunker(String(defaults.bunker??"")); },[loaded]);
+
+  function updateSharedBunker(val){ setSharedBunker(val); }
+
+  // Pulls the same last-saved PBT MGO price the Dashboard's bunker panel uses
+  // (Supabase "dashboard" table, key "last-bunker-prices") — no separate live fetch here.
+  async function syncBunkerFromPBT(){
+    setPbtStatus("Syncing…");
+    const { data, error } = await supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle();
+    if(error || !data){ setPbtStatus("No PBT data saved yet — refresh it from the Dashboard first"); setTimeout(()=>setPbtStatus(null),3500); return; }
+    try{
+      const parsed=JSON.parse(data.value);
+      if(parsed.ARA_MGO){
+        setSharedBunker(String(parsed.ARA_MGO));
+        setPbtStatus(`Synced — ARA MGO $${parsed.ARA_MGO}/mt${parsed.date?` (${parsed.date})`:""}`);
+      } else {
+        setPbtStatus("No MGO price found in saved PBT data");
+      }
+    }catch(_){ setPbtStatus("Sync failed"); }
+    setTimeout(()=>setPbtStatus(null),3500);
+  }
 
   function sV(k,val){setVars(p=>({...p,[k]:val}));setResult(null);}
   function sD(k,val){const next={...defaults,[k]:val};setDefaults(next);saveTCEDefaults(next);setResult(null);}
@@ -496,12 +526,32 @@ function TCECalculator(){
         ))}
       </div>
 
-      <div style={{marginBottom:14,maxWidth:1100}}><DistanceTable/></div>
+      <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"stretch",marginBottom:14,maxWidth:920}}>
+        <div style={{flex:"1 1 380px",minWidth:300}}><DistanceTable/></div>
+        <div style={{flex:"1 1 300px",minWidth:280,background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"10px 14px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Bunker (MGO) $/mt</div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <input value={sharedBunker} onChange={e=>updateSharedBunker(e.target.value)}
+              style={{width:90,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontSize:13,fontWeight:700,padding:"6px 8px",outline:"none",fontFamily:"inherit",textAlign:"right"}}/>
+            <button onClick={syncBunkerFromPBT}
+              style={{fontSize:11,fontWeight:700,padding:"6px 12px",borderRadius:5,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(88,166,255,0.12)",color:"#58a6ff",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+              ↻ Sync from PBT
+            </button>
+          </div>
+          <div style={{fontSize:10,color:C.faint,marginTop:6}}>{pbtStatus || "Pulls the same PBT MGO price used on the Dashboard"}</div>
+        </div>
+      </div>
 
-      <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-start",maxWidth:1100}}>
+      <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-start",maxWidth:920}}>
+
+        {/* ── Standard Variables trigger — opens as a popout, sits left of the calculator ── */}
+        <button onClick={()=>setStdVarsOpen(true)} title="Standard Variables"
+          style={{flex:"0 0 40px",height:40,alignSelf:"flex-start",background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,color:C.faint,cursor:"pointer",fontSize:16}}>
+          ⚙
+        </button>
 
         {/* ── LEFT: Voyage Inputs (narrowed now the middle column is gone) ── */}
-        <div style={{flex:"1 1 260px",maxWidth:340,minWidth:260,background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
+        <div style={{flex:"1 1 300px",maxWidth:420,minWidth:280,background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
           <div style={{padding:"8px 12px",background:C.bg3,borderBottom:"1px solid "+C.bd2,fontSize:12,fontWeight:700,color:C.tx}}>
             {mode==="freight"?"Enter freight → get TCE":"Enter target TCE → get required freight"}
           </div>
@@ -545,11 +595,14 @@ function TCECalculator(){
                 {autoEts?"auto":"manual"}
               </button>
             </div>
-            {autoEts&&<div style={{fontSize:12,color:C.faint,paddingLeft:136,marginTop:2}}>
-              <label style={{cursor:"pointer"}}>
-                <input type="checkbox" checked={isIntraEU} onChange={e=>setIsIntraEU(e.target.checked)} style={{marginRight:4}}/>
-                Full EU scope (untick for 50% deep-sea)
-              </label>
+            {autoEts&&<div style={{display:"flex",gap:4,paddingLeft:136,marginTop:4}}>
+              {[[true,"100%"],[false,"50%"]].map(([val,label])=>(
+                <button key={label} onClick={()=>setIsIntraEU(val)}
+                  style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",
+                    border:"1px solid "+(isIntraEU===val?C.green:C.bd),background:isIntraEU===val?"rgba(63,185,80,0.12)":"transparent",color:isIntraEU===val?C.green:C.dim}}>
+                  {label}
+                </button>
+              ))}
             </div>}
 
             <button onClick={calculate}
@@ -591,47 +644,48 @@ function TCECalculator(){
           </div>
         </div>
 
-        {/* ── RIGHT: Standard Variables (narrowed to match) ── */}
-        <div style={{flex:"1 1 260px",maxWidth:340,minWidth:240,background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
-          <button onClick={()=>setStdVarsOpen(o=>!o)}
-            style={{width:"100%",textAlign:"left",padding:"8px 12px",background:C.bg3,borderBottom:"1px solid "+C.bd2,fontSize:12,fontWeight:700,color:C.tx,border:"none",cursor:"pointer",fontFamily:"inherit",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span>⚙ Standard Variables</span>
-            <span style={{fontSize:10,color:C.faint}}>{stdVarsOpen?"▾ hide":"▸ rarely changed — show"}</span>
-          </button>
-          {stdVarsOpen && (
-          <div style={{padding:"10px 14px"}}>
-            <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4}}>Vessel</div>
-            {numInp("Quantity","qty",defaults.qty,sD,"mt")}
-            {numInp("Speed","speed",defaults.speed,sD,"kts")}
-            <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginTop:10,marginBottom:4}}>Consumption (mt/day)</div>
-            {numInp("Ballast","consBallast",defaults.consBallast,sD,"mt")}
-            {numInp("Laden","consLaden",defaults.consLaden,sD,"mt")}
-            {numInp("Loading","consLoad",defaults.consLoad,sD,"mt")}
-            {numInp("Discharging","consDisch",defaults.consDisch,sD,"mt")}
-            {numInp("Idle","consIdle",defaults.consIdle,sD,"mt")}
-            <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginTop:10,marginBottom:4}}>Port / Time</div>
-            {numInp("Days load","daysLoad",defaults.daysLoad,sD,"days")}
-            {numInp("Notice load","noticeLoad",defaults.noticeLoad,sD,"days")}
-            {numInp("Days disch","daysDisch",defaults.daysDisch,sD,"days")}
-            {numInp("Notice disch","noticeDisch",defaults.noticeDisch,sD,"days")}
-            {numInp("Days waiting","daysWaiting",defaults.daysWaiting,sD,"days")}
-            <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginTop:10,marginBottom:4}}>Costs</div>
-            {numInp("Bunker price","bunker",defaults.bunker,sD,"$/mt","",true)}
-            {numInp("Commission","commission",defaults.commission,sD,"%")}
-            <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginTop:10,marginBottom:4}}>Other</div>
-            {numInp("Other revenue","otherRevenue",v.otherRevenue,sV,"USD","0")}
-            {numInp("Other expenses","otherExpenses",v.otherExpenses,sV,"USD","0")}
-            <div style={{fontSize:12,color:C.faint,marginTop:10,fontStyle:"italic"}}>Standard variables saved automatically</div>
-          </div>
-          )}
-        </div>
-
-        {/* ── FAR RIGHT: Benchmark Routes ── */}
-        <div style={{flex:"1 1 320px",maxWidth:420,minWidth:300}}>
-          <BenchmarkRoutes defaults={defaults}/>
+        {/* ── Benchmark Routes — next to the calculator ── */}
+        <div style={{flex:"1 1 380px",maxWidth:460,minWidth:320}}>
+          <BenchmarkRoutes defaults={defaults} sharedBunker={sharedBunker} updateSharedBunker={updateSharedBunker}/>
         </div>
 
       </div>
+
+      {/* ── Standard Variables popout ── */}
+      {stdVarsOpen && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setStdVarsOpen(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,width:360,maxWidth:"90vw",maxHeight:"85vh",overflowY:"auto"}}>
+            <div style={{position:"sticky",top:0,padding:"10px 14px",background:C.bg3,borderBottom:"1px solid "+C.bd2,fontSize:12,fontWeight:700,color:C.tx,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>⚙ Standard Variables</span>
+              <button onClick={()=>setStdVarsOpen(false)} style={{background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:16}}>✕</button>
+            </div>
+            <div style={{padding:"10px 14px"}}>
+              <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginBottom:4}}>Vessel</div>
+              {numInp("Quantity","qty",defaults.qty,sD,"mt")}
+              {numInp("Speed","speed",defaults.speed,sD,"kts")}
+              <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginTop:10,marginBottom:4}}>Consumption (mt/day)</div>
+              {numInp("Ballast","consBallast",defaults.consBallast,sD,"mt")}
+              {numInp("Laden","consLaden",defaults.consLaden,sD,"mt")}
+              {numInp("Loading","consLoad",defaults.consLoad,sD,"mt")}
+              {numInp("Discharging","consDisch",defaults.consDisch,sD,"mt")}
+              {numInp("Idle","consIdle",defaults.consIdle,sD,"mt")}
+              <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginTop:10,marginBottom:4}}>Port / Time</div>
+              {numInp("Days load","daysLoad",defaults.daysLoad,sD,"days")}
+              {numInp("Notice load","noticeLoad",defaults.noticeLoad,sD,"days")}
+              {numInp("Days disch","daysDisch",defaults.daysDisch,sD,"days")}
+              {numInp("Notice disch","noticeDisch",defaults.noticeDisch,sD,"days")}
+              {numInp("Days waiting","daysWaiting",defaults.daysWaiting,sD,"days")}
+              <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginTop:10,marginBottom:4}}>Costs</div>
+              {numInp("Bunker price","bunker",defaults.bunker,sD,"$/mt","",true)}
+              {numInp("Commission","commission",defaults.commission,sD,"%")}
+              <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginTop:10,marginBottom:4}}>Other</div>
+              {numInp("Other revenue","otherRevenue",v.otherRevenue,sV,"USD","0")}
+              {numInp("Other expenses","otherExpenses",v.otherExpenses,sV,"USD","0")}
+              <div style={{fontSize:12,color:C.faint,marginTop:10,fontStyle:"italic"}}>Saved automatically</div>
+            </div>
+          </div>
+        </div>
+      )}
 
   </div>
   );
