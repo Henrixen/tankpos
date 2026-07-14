@@ -63,10 +63,10 @@ function groupVessels(list, by) {
 }
 
 // ─── Generic bar+line SVG chart ───────────────────────────────────────────────
-function BarLineChart({ data, barKey, lineKey, barLabel, lineLabel, title, accent = "#3a82f6" }) {
+function BarLineChart({ data, barKey, lineKey, barLabel, lineLabel, title, accent = "#3a82f6", loading = false }) {
   if (!data?.length) return (
     <div style={{ padding: 20, textAlign: "center", color: "rgba(219,230,245,0.3)", fontSize: 11 }}>
-      {title} · loading...
+      {title} · {loading ? "loading..." : "no data in this window"}
     </div>
   );
   const W = 440, H = 170;
@@ -317,16 +317,25 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   useEffect(() => { loadSavedReports(); }, []);
 
+  const [fixHistoryLoading, setFixHistoryLoading] = useState(true);
+
   useEffect(() => {
     async function fetchFixHistory() {
+      setFixHistoryLoading(true);
       try {
         const since = new Date(); since.setDate(since.getDate() - 84);
-        const { data } = await supabase
-          .from("positions")
-          .select("updated_at, date")
+        // positions_latest is the unified view (manual + external feed) — the
+        // plain "positions" table alone misses almost all feed-sourced rows.
+        // Filtered to Intermediate segment, UKC/NWE region, matching this report's scope.
+        const { data, error } = await supabase
+          .from("positions_latest")
+          .select("updated_at, open_date, segment, super_region")
           .gte("updated_at", since.toISOString())
-          .not("date", "is", null);
-        if (!data?.length) return;
+          .ilike("segment", "%intermediate%")
+          .or("super_region.ilike.%ukc%,super_region.ilike.%nwe%")
+          .not("open_date", "is", null);
+        if (error) { console.error("fixHistory:", error); setFixHistoryLoading(false); return; }
+        if (!data?.length) { setFixHistoryLoading(false); return; }
         const weeks = {};
         data.forEach(row => {
           if (!row.updated_at) return;
@@ -335,8 +344,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
           const key = ws.toISOString().slice(0, 10);
           if (!weeks[key]) weeks[key] = { ships: 0, totalDays: 0, cnt: 0 };
           weeks[key].ships++;
-          if (row.date) {
-            const days = Math.round((new Date(row.date) - d) / 86400000);
+          if (row.open_date) {
+            const days = Math.round((new Date(row.open_date) - d) / 86400000);
             if (days >= 0 && days <= 60) { weeks[key].totalDays += days; weeks[key].cnt++; }
           }
         });
@@ -348,6 +357,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
             avgWindow: v.cnt > 0 ? Math.round(v.totalDays / v.cnt) : 0
           })));
       } catch (e) { console.error("fixHistory:", e); }
+      setFixHistoryLoading(false);
     }
     fetchFixHistory();
   }, []);
@@ -958,7 +968,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   return (
     <div style={{ display: "flex", width: "100%", height: "100%", background: C.bg, fontFamily: "Inter,system-ui,sans-serif", overflow: "hidden" }}>
-      <style>{`@media print{body>*{visibility:hidden;}.pos-print,.pos-print *{visibility:visible;}.pos-print{position:absolute;left:0;top:0;width:100%;}.no-export{display:none!important;}}`}</style>
+      <style>{`@media print{body>*{visibility:hidden;}.pos-print,.pos-print *{visibility:visible;}.pos-print{position:absolute;left:0;top:0;width:100%;}.pos-print-wrap{height:auto!important;overflow:visible!important;}.no-export{display:none!important;}}`}</style>
 
       {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
       <div style={{ width: 220, minWidth: 220, display: "flex", flexDirection: "column", background: C.bg2, borderRight: "1px solid " + C.bd, overflow: "hidden" }}>
@@ -992,60 +1002,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
             <div style={{ fontSize: 9, color: C.faint, marginTop: 2 }}>Draft auto-saved · persists across tabs</div>
           </div>
 
-          {/* ADD VESSELS — fills all space between stats and bottom */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0, padding: "8px 10px", gap: 5 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", flexShrink: 0 }}>Add vessels</div>
-            {/* Date filter */}
-            <div style={{ display: "flex", gap: 3, flexWrap: "wrap", flexShrink: 0 }}>
-              {[["all", "All"], ["today", "Today"], ["2d", "2d"], ["7d", "7d"]].map(([k, l]) => (
-                <button key={k} onClick={() => setDateFilter(k)}
-                  style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 3, cursor: "pointer", border: `1px solid ${dateFilter === k ? ACCENT : C.bd}`, background: dateFilter === k ? ACCENT : "transparent", color: dateFilter === k ? "#fff" : C.dim, fontFamily: "inherit" }}>{l}</button>
-              ))}
-            </div>
-            <input value={poolSearch} onChange={e => setPoolSearch(e.target.value)} placeholder="Search vessel..."
-              style={{ ...IS, width: "100%", boxSizing: "border-box", flexShrink: 0 }} />
-            {/* Tags — collapsed to a manageable set by default; active tags always shown */}
-            {allTags.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 3, flexShrink: 0 }}>
-                {(tagsExpanded ? allTags : Array.from(new Set([...allTags.slice(0, 10), ...tagFilter]))).map(t => (
-                  <button key={t} onClick={() => setTagFilter(p => { const n = new Set(p); n.has(t) ? n.delete(t) : n.add(t); return n; })}
-                    style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3, cursor: "pointer", border: `1px solid ${tagFilter.has(t) ? ACCENT : C.bd}`, background: tagFilter.has(t) ? ACCENT : "transparent", color: tagFilter.has(t) ? "#fff" : C.dim, fontFamily: "inherit" }}>{t}</button>
-                ))}
-                {allTags.length > 10 && (
-                  <button onClick={() => setTagsExpanded(e => !e)} style={{ fontSize: 9, fontWeight: 700, color: ACCENT, background: "none", border: "none", cursor: "pointer" }}>
-                    {tagsExpanded ? "▲ show less" : `▼ show all (${allTags.length})`}
-                  </button>
-                )}
-                {tagFilter.size > 0 && <button onClick={() => setTagFilter(new Set())} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer" }}>✕ clear</button>}
-              </div>
-            )}
-            {/* Import all button — shown when pool has vessels */}
-            {vesselPool.length > 0 && (
-              <button onClick={() => { vesselPool.forEach(v => addFromPool(v)); setQuickParseMsg(""); }}
-                style={{ fontSize: 10, fontWeight: 700, padding: "5px 8px", borderRadius: 4, cursor: "pointer", border: `1px solid ${ACCENT}`, background: `${ACCENT}22`, color: ACCENT, fontFamily: "inherit", flexShrink: 0 }}>
-                Import all ({vesselPool.length})
-              </button>
-            )}
-            {/* Pool list — scrollable, constrained by flex */}
-            <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-              {vesselPool.length === 0 ? (
-                <div style={{ padding: "12px 0", textAlign: "center", color: C.faint, fontSize: 10 }}>
-                  {allVessels.length === 0 ? "Select vessels on Positions tab" : "No vessels match filters"}
-                </div>
-              ) : vesselPool.map(v => (
-                <div key={v.vessel} onClick={() => addFromPool(v)}
-                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 7px", borderRadius: 4, background: C.bg3, cursor: "pointer", border: "1px solid transparent", flexShrink: 0 }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = ACCENT}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel}</div>
-                    <div style={{ fontSize: 9, color: C.faint }}>{v.segment || ""}{v.dwt ? ` · ${fmtDwt(v.dwt)}` : ""}{parseTags(v).length ? ` · ${parseTags(v).join(", ")}` : ""}</div>
-                  </div>
-                  <span style={{ fontSize: 15, color: ACCENT, fontWeight: 700, lineHeight: 1, flexShrink: 0, marginLeft: 4 }}>+</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <div style={{ flex: 1 }} />
 
           {/* Saved + Clear at bottom */}
           <div style={{ flexShrink: 0, borderTop: "1px solid " + C.bd }}>
@@ -1148,6 +1105,9 @@ Any direction`}</pre>
             <input value={posSubtitle} onChange={e => setPosSubtitle(e.target.value)} style={{ ...IS, flex: 3 }} placeholder="Subtitle" />
           </div>
 
+          {/* Report preview (left) + Add Vessels panel (right) */}
+          <div style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
+
           {/* Scrollable report area */}
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto", padding: 12 }}>
             {/* Captured node — entire report */}
@@ -1211,11 +1171,73 @@ Any direction`}</pre>
                     <BarLineChart data={openTimingData} barKey="count" title="Open timing" barLabel="Ships" accent={ACCENT} />
                   </div>
                   <div style={{ background: "#0c1729", border: "1px solid rgba(58,130,246,0.12)", padding: "8px 10px" }}>
-                    <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" title="Fixing window history" barLabel="Ships" lineLabel="Avg days" accent={ACCENT} />
+                    <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" title="Fixing window history" barLabel="Ships" lineLabel="Avg days" accent={ACCENT} loading={fixHistoryLoading} />
                   </div>
                 </div>
               )}
             </div>
+          </div>
+
+          {/* ── Add Vessels — moved here to the right of the report, next to all that empty space ── */}
+          <div style={{ width: 300, flexShrink: 0, borderLeft: "1px solid " + C.bd, display: "flex", flexDirection: "column", overflow: "hidden", padding: "10px 12px", gap: 6 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em" }}>Add vessels</div>
+
+            <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+              {[["all", "All"], ["today", "Today"], ["2d", "2d"], ["7d", "7d"]].map(([k, l]) => (
+                <button key={k} onClick={() => setDateFilter(k)}
+                  style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 3, cursor: "pointer", border: `1px solid ${dateFilter === k ? ACCENT : C.bd}`, background: dateFilter === k ? ACCENT : "transparent", color: dateFilter === k ? "#fff" : C.dim, fontFamily: "inherit" }}>{l}</button>
+              ))}
+            </div>
+            <input value={poolSearch} onChange={e => setPoolSearch(e.target.value)} placeholder="Search vessel..."
+              style={{ ...IS, width: "100%", boxSizing: "border-box" }} />
+
+            <div style={{ borderTop: "1px solid " + C.bd, margin: "2px 0" }} />
+
+            {allTags.length > 0 && (
+              <>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                  {(tagsExpanded ? allTags : Array.from(new Set([...allTags.slice(0, 10), ...tagFilter]))).map(t => (
+                    <button key={t} onClick={() => setTagFilter(p => { const n = new Set(p); n.has(t) ? n.delete(t) : n.add(t); return n; })}
+                      style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3, cursor: "pointer", border: `1px solid ${tagFilter.has(t) ? ACCENT : C.bd}`, background: tagFilter.has(t) ? ACCENT : "transparent", color: tagFilter.has(t) ? "#fff" : C.dim, fontFamily: "inherit" }}>{t}</button>
+                  ))}
+                  {allTags.length > 10 && (
+                    <button onClick={() => setTagsExpanded(e => !e)} style={{ fontSize: 9, fontWeight: 700, color: ACCENT, background: "none", border: "none", cursor: "pointer" }}>
+                      {tagsExpanded ? "▲ show less" : `▼ show all (${allTags.length})`}
+                    </button>
+                  )}
+                  {tagFilter.size > 0 && <button onClick={() => setTagFilter(new Set())} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer" }}>✕ clear</button>}
+                </div>
+                <div style={{ borderTop: "1px solid " + C.bd, margin: "2px 0" }} />
+              </>
+            )}
+
+            {vesselPool.length > 0 && (
+              <button onClick={() => { vesselPool.forEach(v => addFromPool(v)); setQuickParseMsg(""); }}
+                style={{ fontSize: 10, fontWeight: 700, padding: "5px 8px", borderRadius: 4, cursor: "pointer", border: `1px solid ${ACCENT}`, background: `${ACCENT}22`, color: ACCENT, fontFamily: "inherit" }}>
+                Import all ({vesselPool.length})
+              </button>
+            )}
+
+            <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+              {vesselPool.length === 0 ? (
+                <div style={{ padding: "12px 0", textAlign: "center", color: C.faint, fontSize: 10 }}>
+                  {allVessels.length === 0 ? "Select vessels on Positions tab" : "No vessels match filters"}
+                </div>
+              ) : vesselPool.map(v => (
+                <div key={v.vessel} onClick={() => addFromPool(v)}
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 7px", borderRadius: 4, background: C.bg3, cursor: "pointer", border: "1px solid transparent", flexShrink: 0 }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = ACCENT}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel}</div>
+                    <div style={{ fontSize: 9, color: C.faint }}>{v.segment || ""}{v.dwt ? ` · ${fmtDwt(v.dwt)}` : ""}{parseTags(v).length ? ` · ${parseTags(v).join(", ")}` : ""}</div>
+                  </div>
+                  <span style={{ fontSize: 15, color: ACCENT, fontWeight: 700, lineHeight: 1, flexShrink: 0, marginLeft: 4 }}>+</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           </div>
         </>}
 
@@ -1462,14 +1484,15 @@ Any direction`}</pre>
                   <TCETrendMini lastMonth={tceStats.lastMonth} current={tceStats.current} ytd={tceStats.ytd} />
                 </div>
                 <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10 }}>
-                  <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" barLabel="No. of ships" lineLabel="Avg. fix window" title="Fixing window (days)" accent="#4a90e2" />
+                  <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" barLabel="No. of ships" lineLabel="Avg. fix window" title="Fixing window (days)" accent="#4a90e2" loading={fixHistoryLoading} />
                 </div>
               </div>
 
               </div>{/* /marketPreviewRef */}
 
               {/* ── Hidden light-themed export node — captured for PNG/print instead of the dark editor above ── */}
-              <div ref={lightExportRef} className="pos-print" style={{ position: "fixed", left: -9999, top: 0, width: 700, background: "#ffffff", color: "#16233f", fontFamily: "-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" }}>
+              <div className="pos-print-wrap" style={{ height: 0, overflow: "hidden" }}>
+              <div ref={lightExportRef} className="pos-print" style={{ width: 700, background: "#ffffff", color: "#16233f", fontFamily: "-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" }}>
                 <div style={{ background: "#0b1f3f", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div style={{ width: 32, height: 32, borderRadius: 7, background: "#4a90e2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#0b1f3f" }}>S1</div>
@@ -1566,6 +1589,7 @@ Any direction`}</pre>
                     </div>
                   </div>
                 </div>
+              </div>
               </div>
             </> : <>
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 11, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
