@@ -244,15 +244,16 @@ function BenchmarkRoutes({ defaults }) {
     );
   }
 
-  return (
-    <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:8, overflow:"hidden" }}>
-      <div style={{ padding:"8px 12px", background:C.bg3, borderBottom:"1px solid "+C.bd2, fontSize:12, fontWeight:700, color:C.tx, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <span>📍 Benchmark Routes</span>
-        {status && <span style={{ fontSize:11, color:C.green, fontWeight:600 }}>{status}</span>}
-      </div>
+  function addLeg(){
+    const key = "custom_" + Date.now();
+    setRows(prev => [...prev, { key, label:"New route", freight:"", nmBallast:"0", nmLaden:"", nmRepo:"0", pdaLoad:"0", pdaDisch:"0", euEts:"0", speed:String(defaults.speed??""), cons:String(defaults.consLaden??""), tce:null }]);
+    setExpanded(p => ({ ...p, [key]: true }));
+  }
 
-      {/* Shared bunker — applies to every route below; sync pulls the current Standard Variables value */}
-      <div style={{ padding:"8px 12px", borderBottom:"1px solid "+C.bd, display:"flex", alignItems:"flex-end", gap:8 }}>
+  return (
+    <div>
+      {/* Shared bunker — sits above/outside the routes box; applies to every route below */}
+      <div style={{ padding:"8px 12px", background:C.bg2, border:"1px solid "+C.bd, borderRadius:8, marginBottom:8, display:"flex", alignItems:"flex-end", gap:8 }}>
         <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
           <span style={{ fontSize:9, color:C.faint, textTransform:"uppercase" }}>Bunker (MGO) $/mt</span>
           <input value={sharedBunker} onChange={e=>updateSharedBunker(e.target.value)}
@@ -265,6 +266,16 @@ function BenchmarkRoutes({ defaults }) {
         <span style={{ fontSize:10, color:C.faint }}>No live MGO market feed connected — enter manually</span>
       </div>
 
+    <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:8, overflow:"hidden" }}>
+      <div style={{ padding:"8px 12px", background:C.bg3, borderBottom:"1px solid "+C.bd2, fontSize:12, fontWeight:700, color:C.tx, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <span>📍 Benchmark Routes</span>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          {status && <span style={{ fontSize:11, color:C.green, fontWeight:600 }}>{status}</span>}
+          <button onClick={addLeg} title="Add a custom route"
+            style={{ fontSize:13, fontWeight:700, padding:"1px 8px", borderRadius:4, border:"1px solid "+C.bd, background:"transparent", color:C.blue, cursor:"pointer", fontFamily:"inherit" }}>+ Add leg</button>
+        </div>
+      </div>
+
       <div style={{ display:"flex", flexDirection:"column", maxHeight:560, overflowY:"auto" }}>
         {rows.map(r=>{
           const isOpen = !!expanded[r.key];
@@ -272,7 +283,7 @@ function BenchmarkRoutes({ defaults }) {
           <div key={r.key} style={{ borderBottom:"1px solid "+C.bd, padding:"7px 12px" }}>
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
               <button onClick={()=>setExpanded(p=>({...p,[r.key]:!p[r.key]}))}
-                style={{ background:"none", border:"none", color:C.faint, cursor:"pointer", fontSize:11, padding:0, width:14 }}>
+                style={{background:"none", border:"none", color:C.faint, cursor:"pointer", fontSize:16, padding:0, width:18}}>
                 {isOpen?"▾":"▸"}
               </button>
               <input value={r.label} onChange={e=>updateField(r.key,"label",e.target.value)} placeholder="Route name"
@@ -313,6 +324,7 @@ function BenchmarkRoutes({ defaults }) {
           </div>
         );})}
       </div>
+    </div>
     </div>
   );
 }
@@ -367,10 +379,7 @@ function PortCostRow({label,ports,onChange,col}){
   function updatePort(i,field,val){onChange(ports.map((p,j)=>j!==i?p:{...p,[field]:val}));}
   return(
     <div style={{marginBottom:6}}>
-      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-        <span style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",flex:1}}>{label}</span>
-        <button onClick={addPort} style={{background:"none",border:"1px solid "+C.bd,borderRadius:3,color:col||C.blue,fontSize:12,padding:"1px 6px",cursor:"pointer",fontFamily:"inherit"}}>+ port</button>
-      </div>
+      <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{label}</div>
       {ports.map((p,i)=>(
         <div key={i} style={{display:"flex",gap:6,marginBottom:3,alignItems:"center",padding:"2px 0",borderBottom:"1px solid "+C.bg3}}>
           <input value={p.name} onChange={e=>updatePort(i,"name",e.target.value)} placeholder="Port"
@@ -383,6 +392,9 @@ function PortCostRow({label,ports,onChange,col}){
             style={{width:90,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 6px",outline:"none",textAlign:"right"}}/>
           <span style={{fontSize:12,color:C.faint,minWidth:28}}>USD</span>
           {ports.length>1&&(<button onClick={()=>removePort(i)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,padding:"0 2px",lineHeight:1}}>×</button>)}
+          {i===ports.length-1&&(
+            <button onClick={addPort} title="Add another port" style={{background:"none",border:"1px solid "+C.bd,borderRadius:3,color:col||C.blue,fontSize:13,fontWeight:700,padding:"1px 7px",cursor:"pointer",fontFamily:"inherit",lineHeight:1.4}}>+</button>
+          )}
         </div>
       ))}
     </div>
@@ -449,10 +461,13 @@ function TCECalculator(){
   const fmt=x=>x==null?"—":x<0?"-$"+Math.abs(x).toLocaleString("nb-NO"):"$"+x.toLocaleString("nb-NO");
   const fmtN=x=>x==null?"—":x.toLocaleString("nb-NO");
 
-  const numInp=(label,k,val,setter,unit,ph="")=>(
+  const numInp=(label,k,val,setter,unit,ph="",fmt=false)=>(
     <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 0",borderBottom:"1px solid "+C.bg3}}>
       <span style={{flex:"0 0 130px",fontSize:12,color:C.dim}}>{label}</span>
-      <input value={val} onChange={e=>{setter(k,e.target.value);setResult(null);}} placeholder={ph}
+      <input value={fmt&&typeof val==="number"?val.toLocaleString("nb-NO"):val}
+        onChange={e=>{setter(k,e.target.value);setResult(null);}} placeholder={ph}
+        onFocus={e=>{if(fmt)e.target.value=String(val).replace(/\s/g,"");}}
+        onBlur={e=>{if(fmt){const n=parseFloat(e.target.value.replace(/[^0-9.\-]/g,""));if(!isNaN(n))setter(k,n);}}}
         style={{width:90,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,
           fontFamily:"inherit",fontSize:12,padding:"3px 6px",outline:"none",textAlign:"right"}}/>
       {unit&&<span style={{fontSize:12,color:C.faint,minWidth:28}}>{unit}</span>}
@@ -481,9 +496,9 @@ function TCECalculator(){
         ))}
       </div>
 
-      <div style={{marginBottom:14}}><DistanceTable/></div>
+      <div style={{marginBottom:14,maxWidth:1100}}><DistanceTable/></div>
 
-      <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-start"}}>
+      <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-start",maxWidth:1100}}>
 
         {/* ── LEFT: Voyage Inputs (narrowed now the middle column is gone) ── */}
         <div style={{flex:"1 1 260px",maxWidth:340,minWidth:260,background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
@@ -495,11 +510,7 @@ function TCECalculator(){
             <PortCostRow label="Load Port(s)" ports={loadPorts} onChange={setLoadPorts} col={C.blue}/>
             <PortCostRow label="Discharge Port(s)" ports={dischPorts} onChange={setDischPorts} col={C.green}/>
 
-            <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginTop:10,marginBottom:4}}>Voyage</div>
-            {mode==="freight"
-              ? numInp("Freight (lumpsum)","freight",v.freight,sV,"USD")
-              : numInp("Target TCE","targetTCE",v.targetTCE,sV,"$/day")}
-            <div style={{display:"flex",gap:8,padding:"4px 0",borderBottom:"1px solid "+C.bg3}}>
+            <div style={{display:"flex",gap:8,padding:"4px 0",borderBottom:"1px solid "+C.bg3,marginTop:10}}>
               {[["ballastNm","Ballast NM"],["ladenNm","Laden NM"],["repoNm","Repo NM"]].map(([k,label])=>(
                 <div key={k} style={{display:"flex",flexDirection:"column",gap:1,flex:1}}>
                   <span style={{fontSize:10,color:C.faint,textTransform:"uppercase"}}>{label}</span>
@@ -509,8 +520,18 @@ function TCECalculator(){
               ))}
             </div>
 
+            <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:1,maxWidth:140}}>
+              <span style={{fontSize:10,color:C.faint,textTransform:"uppercase"}}>{mode==="freight"?"Freight":"Target TCE"}</span>
+              <input value={mode==="freight"&&typeof v.freight==="number"?v.freight.toLocaleString("nb-NO"):(mode==="freight"?v.freight:v.targetTCE)}
+                onChange={e=>{sV(mode==="freight"?"freight":"targetTCE",e.target.value);setResult(null);}}
+                onFocus={e=>{if(mode==="freight")e.target.value=String(v.freight).replace(/\s/g,"");}}
+                onBlur={e=>{if(mode==="freight"){const n=parseFloat(e.target.value.replace(/[^0-9.\-]/g,""));if(!isNaN(n))sV("freight",n);}}}
+                placeholder={mode==="freight"?"USD":"$/day"}
+                style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 6px",outline:"none",textAlign:"right",boxSizing:"border-box"}}/>
+            </div>
+
             <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginTop:10,marginBottom:4}}>Costs</div>
-            {numInp("Canal cost","canalCost",defaults.canalCost,sD,"USD")}
+            {numInp("Canal cost","canalCost",defaults.canalCost,sD,"USD","",true)}
 
             {/* EU ETS */}
             <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 0",borderBottom:"1px solid "+C.bg3}}>
@@ -536,6 +557,37 @@ function TCECalculator(){
                 fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"9px",cursor:"pointer",width:"100%"}}>
               {mode==="freight"?"Calculate TCE →":"Calculate Required Freight →"}
             </button>
+
+            {/* ── Result — now inside the same card as the inputs, right below Calculate ── */}
+            <div style={{marginTop:12,background:mode==="freight"?"rgba(79,195,247,.07)":"rgba(67,233,123,.07)",borderRadius:6,padding:"10px 12px"}}>
+              <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:".07em"}}>TCE</div>
+              {mode==="freight"
+                ? <div style={{fontSize:24,fontWeight:800,color:result&&result.tce!=null?(result.tce>=0?C.green:C.red):C.faint,lineHeight:1.1}}>
+                    {result&&result.tce!=null?"$"+result.tce.toLocaleString("nb-NO"):"—"}
+                    <span style={{fontSize:11,color:C.faint,fontWeight:400}}>/day</span>
+                  </div>
+                : <div style={{fontSize:20,fontWeight:800,color:result?C.blue:C.faint,lineHeight:1.1}}>
+                    {result?"$"+(result.freight||0).toLocaleString("nb-NO"):"—"}
+                    <span style={{fontSize:11,color:C.faint,fontWeight:400}}> lumpsum</span>
+                  </div>
+              }
+              {mode==="tce"&&result&&result.tce!=null&&<div style={{fontSize:12,color:C.green,marginTop:2}}>✓ TCE check: ${result.tce.toLocaleString("nb-NO")}/day</div>}
+              {result&&(
+                <div style={{marginTop:8,borderTop:"1px solid "+C.bg3}}>
+                  {resRow("Freight",fmt(result.freight),C.blue)}
+                  {resRow("Days total",fmtN(result.totalDays)+"d")}
+                  {resRow("  Ballast",fmtN(result.daysBallast)+"d",C.faint)}
+                  {resRow("  Laden",fmtN(result.daysLaden)+"d",C.faint)}
+                  {resRow("Net revenue",fmt(result.netRevenue),result.netRevenue>=0?C.green:C.red)}
+                  {resRow("Total bunkers",fmt(result.totalBunkers),C.amber)}
+                  {resRow("Commission",fmt(result.commAmt),C.dim)}
+                  {result.ets>0&&resRow("EU ETS",fmt(result.ets),"#fd79a8")}
+                  {result.lpc>0&&resRow("Load port costs",fmt(result.lpc),C.dim)}
+                  {result.dpc>0&&resRow("Disch port costs",fmt(result.dpc),C.dim)}
+                  {resRow("Total expenses",fmt(result.totalExpenses),C.red)}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -564,7 +616,7 @@ function TCECalculator(){
             {numInp("Notice disch","noticeDisch",defaults.noticeDisch,sD,"days")}
             {numInp("Days waiting","daysWaiting",defaults.daysWaiting,sD,"days")}
             <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginTop:10,marginBottom:4}}>Costs</div>
-            {numInp("Bunker price","bunker",defaults.bunker,sD,"$/mt")}
+            {numInp("Bunker price","bunker",defaults.bunker,sD,"$/mt","",true)}
             {numInp("Commission","commission",defaults.commission,sD,"%")}
             <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginTop:10,marginBottom:4}}>Other</div>
             {numInp("Other revenue","otherRevenue",v.otherRevenue,sV,"USD","0")}
@@ -579,39 +631,6 @@ function TCECalculator(){
           <BenchmarkRoutes defaults={defaults}/>
         </div>
 
-      </div>
-
-      {/* ── Result strip — moved here from the old middle column ── */}
-      <div style={{marginTop:12,background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
-        <div style={{padding:"8px 14px",borderBottom:"1px solid "+C.bd2,background:mode==="freight"?"rgba(79,195,247,.07)":"rgba(67,233,123,.07)",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-          <div>
-            <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:".07em"}}>TCE</div>
-            {mode==="freight"
-              ? <div style={{fontSize:24,fontWeight:800,color:result&&result.tce!=null?(result.tce>=0?C.green:C.red):C.faint,lineHeight:1.1}}>
-                  {result&&result.tce!=null?"$"+result.tce.toLocaleString("nb-NO"):"—"}
-                  <span style={{fontSize:11,color:C.faint,fontWeight:400}}>/day</span>
-                </div>
-              : <div style={{fontSize:20,fontWeight:800,color:result?C.blue:C.faint,lineHeight:1.1}}>
-                  {result?"$"+(result.freight||0).toLocaleString("nb-NO"):"—"}
-                  <span style={{fontSize:11,color:C.faint,fontWeight:400}}> lumpsum</span>
-                </div>
-            }
-          </div>
-          {mode==="tce"&&result&&result.tce!=null&&<div style={{fontSize:12,color:C.green}}>✓ TCE check: ${result.tce.toLocaleString("nb-NO")}/day</div>}
-        </div>
-        <div style={{display:"flex",flexWrap:"wrap"}}>
-          {result&&resRow("Freight",fmt(result.freight),C.blue)}
-          {result&&resRow("Days total",fmtN(result.totalDays)+"d")}
-          {result&&resRow("  Ballast",fmtN(result.daysBallast)+"d",C.faint)}
-          {result&&resRow("  Laden",fmtN(result.daysLaden)+"d",C.faint)}
-          {result&&resRow("Net revenue",fmt(result.netRevenue),result.netRevenue>=0?C.green:C.red)}
-          {result&&resRow("Total bunkers",fmt(result.totalBunkers),C.amber)}
-          {result&&resRow("Commission",fmt(result.commAmt),C.dim)}
-          {result&&result.ets>0&&resRow("EU ETS",fmt(result.ets),"#fd79a8")}
-          {result&&result.lpc>0&&resRow("Load port costs",fmt(result.lpc),C.dim)}
-          {result&&result.dpc>0&&resRow("Disch port costs",fmt(result.dpc),C.dim)}
-          {result&&resRow("Total expenses",fmt(result.totalExpenses),C.red)}
-        </div>
       </div>
 
   </div>
