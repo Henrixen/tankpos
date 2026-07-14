@@ -2788,9 +2788,6 @@ const filtV=useMemo(()=>{
         {/* ── DASHBOARD ── */}
         {tab==="tce"&&(
           <div style={{padding:"14px 0"}}>
-            <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>
-              ⚡ TCE Calculator — enter voyage variables to compute TCE or required freight
-            </div>
             <Suspense fallback={<TabFallback/>}><TCECalculator/></Suspense>
           </div>
         )}
