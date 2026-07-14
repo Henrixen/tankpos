@@ -103,45 +103,84 @@ function calcFreightFromTCE({targetTCE,...rest}){
 }
 
 // ─── Benchmark Routes (UKC intermediates) ─────────────────────────────────────
-// Predefined routes with a live freight input — TCE recalculates automatically
-// using the same "Standard Variables" vessel profile as the main calculator.
-// Simplification: distance is treated as a single laden leg (ballast = 0nm) —
-// these are quoted as spot benchmark levels, not full round-voyage P&Ls, so
-// this is an approximation, not a substitute for a full voyage calc.
+// Each route has its own editable voyage inputs (nm ballast/laden/reposition,
+// PDA load/disch, EU ETS, speed, consumption) — defaulting from the Standard
+// Variables profile (defaults) but fully overridable per route. Change the
+// freight and TCE recalculates immediately using that row's own inputs.
+function routeDefaults(r, defaults) {
+  const dist = lookupDist(r.from, r.to);
+  return {
+    key: r.key,
+    label: r.label,       // free text — editable, no longer tied to from/to
+    freight: "",
+    nmBallast: "0",
+    nmLaden: dist != null ? String(dist) : "",
+    nmRepo: "0",
+    pdaLoad: "0",
+    pdaDisch: "0",
+    euEts: "0",
+    speed: String(defaults.speed ?? ""),
+    cons: String(defaults.consLaden ?? ""),
+    tce: null,
+  };
+}
+
 function BenchmarkRoutes({ defaults }) {
-  const [rows, setRows] = useState(BENCHMARK_ROUTES.map(r => ({ ...r, freight: "", tce: null, dist: lookupDist(r.from, r.to) })));
-  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState(BENCHMARK_ROUTES.map(r => routeDefaults(r, defaults)));
   const [status, setStatus] = useState(null);
 
   useEffect(() => { loadRows(); }, []);
 
   async function loadRows() {
-    setLoading(true);
     const { data, error } = await supabase.from("tce_routes").select("*");
     if (!error && data) {
       setRows(prev => prev.map(r => {
         const saved = data.find(d => d.route_key === r.key);
-        return saved ? { ...r, freight: String(saved.freight ?? ""), tce: saved.tce ?? null } : r;
+        if (!saved) return r;
+        return {
+          ...r,
+          label: saved.label ?? r.label,
+          freight: String(saved.freight ?? ""),
+          nmBallast: saved.nm_ballast != null ? String(saved.nm_ballast) : r.nmBallast,
+          nmLaden: saved.nm_laden != null ? String(saved.nm_laden) : r.nmLaden,
+          nmRepo: saved.nm_repo != null ? String(saved.nm_repo) : r.nmRepo,
+          pdaLoad: saved.pda_load != null ? String(saved.pda_load) : r.pdaLoad,
+          pdaDisch: saved.pda_disch != null ? String(saved.pda_disch) : r.pdaDisch,
+          euEts: saved.eu_ets != null ? String(saved.eu_ets) : r.euEts,
+          speed: saved.speed != null ? String(saved.speed) : r.speed,
+          cons: saved.cons != null ? String(saved.cons) : r.cons,
+          tce: saved.tce ?? null,
+        };
       }));
     }
-    setLoading(false);
   }
 
   function recalc(row) {
     const f = numD(row.freight);
-    const dist = row.dist;
-    if (!f || !dist) return null;
+    const lNm = numD(row.nmLaden);
+    if (!f || !lNm) return null;
+    const cons = numD(row.cons);
     const r = calcTCE({
-      freight: f, ballastNm: 0, ladenNm: dist, repoNm: 0,
-      ...defaults,
+      freight: f,
+      ballastNm: numD(row.nmBallast),
+      ladenNm: lNm,
+      repoNm: numD(row.nmRepo),
+      consBallast: cons, consLaden: cons,
+      consLoad: defaults.consLoad, consDisch: defaults.consDisch, consIdle: defaults.consIdle,
+      daysLoad: defaults.daysLoad, noticeLoad: defaults.noticeLoad,
+      daysDisch: defaults.daysDisch, noticeDisch: defaults.noticeDisch, daysWaiting: defaults.daysWaiting,
+      bunker: defaults.bunker, commission: defaults.commission, speed: numD(row.speed),
+      canalCost: defaults.canalCost, euEts: numD(row.euEts),
+      loadPortCosts: [{ cost: numD(row.pdaLoad) }],
+      dischPortCosts: [{ cost: numD(row.pdaDisch) }],
     });
     return r ? r.tce : null;
   }
 
-  async function updateFreight(key, val) {
+  function updateField(key, field, val) {
     setRows(prev => prev.map(r => {
       if (r.key !== key) return r;
-      const next = { ...r, freight: val };
+      const next = { ...r, [field]: val };
       next.tce = recalc(next);
       return next;
     }));
@@ -149,54 +188,63 @@ function BenchmarkRoutes({ defaults }) {
 
   async function saveRow(row) {
     setStatus("Saving…");
-    const { error } = await supabase.from("tce_routes").upsert(
-      { route_key: row.key, label: row.label, freight: numD(row.freight), tce: row.tce, updated_at: new Date().toISOString() },
-      { onConflict: "route_key" }
-    );
+    const { error } = await supabase.from("tce_routes").upsert({
+      route_key: row.key, label: row.label, freight: numD(row.freight), tce: row.tce,
+      nm_ballast: numD(row.nmBallast), nm_laden: numD(row.nmLaden), nm_repo: numD(row.nmRepo),
+      pda_load: numD(row.pdaLoad), pda_disch: numD(row.pdaDisch), eu_ets: numD(row.euEts),
+      speed: numD(row.speed), cons: numD(row.cons), updated_at: new Date().toISOString(),
+    }, { onConflict: "route_key" });
     setStatus(error ? "Save failed" : "Saved ✓");
     setTimeout(() => setStatus(null), 2000);
   }
 
+  const miniInp = (row, field, label, width = 54) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+      <span style={{ fontSize: 9, color: C.faint, textTransform: "uppercase" }}>{label}</span>
+      <input value={row[field]} onChange={e => updateField(row.key, field, e.target.value)}
+        style={{ width, background: C.bg, border: "1px solid " + C.bd, borderRadius: 3, color: C.tx, fontSize: 11, padding: "3px 5px", outline: "none", fontFamily: "inherit" }} />
+    </div>
+  );
+
   return (
-    <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:8, overflow:"hidden", marginTop:12 }}>
+    <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:8, overflow:"hidden" }}>
       <div style={{ padding:"8px 12px", background:C.bg3, borderBottom:"1px solid "+C.bd2, fontSize:12, fontWeight:700, color:C.tx, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <span>📍 Benchmark Routes — UKC intermediates</span>
+        <span>📍 Benchmark Routes</span>
         {status && <span style={{ fontSize:11, color:C.green, fontWeight:600 }}>{status}</span>}
       </div>
-      <div style={{ padding:"6px 12px", fontSize:11, color:C.faint }}>
-        Distance is a single laden leg (no ballast/repositioning) using the Standard Variables vessel profile above — a spot-benchmark approximation, not a full voyage P&L.
-      </div>
-      <div style={{ overflowX:"auto" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-          <thead>
-            <tr style={{ background:C.bg3 }}>
-              {["Route","NM","Freight (lumpsum USD)","TCE ($/day)",""].map(h=>(
-                <th key={h} style={{ padding:"6px 10px", textAlign:"left", fontSize:10, fontWeight:700, color:C.faint, textTransform:"uppercase" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r,i)=>(
-              <tr key={r.key} style={{ background:i%2===0?"rgba(255,255,255,0.02)":"transparent", borderTop:"1px solid "+C.bd }}>
-                <td style={{ padding:"6px 10px", fontWeight:700, color:C.tx }}>{r.label}</td>
-                <td style={{ padding:"6px 10px", color:C.faint }}>{r.dist ?? "—"}</td>
-                <td style={{ padding:"6px 10px" }}>
-                  <input value={r.freight} onChange={e=>updateFreight(r.key, e.target.value)} placeholder="USD"
-                    style={{ width:120, background:C.bg, border:"1px solid "+C.bd, borderRadius:4, color:C.tx, fontSize:12, padding:"4px 7px", outline:"none", fontFamily:"inherit" }}/>
-                </td>
-                <td style={{ padding:"6px 10px", fontWeight:700, color: r.tce!=null ? (r.tce>=0?C.green:C.red) : C.faint }}>
-                  {r.tce!=null ? "$"+r.tce.toLocaleString("nb-NO") : "—"}
-                </td>
-                <td style={{ padding:"6px 10px" }}>
-                  <button onClick={()=>saveRow(r)} disabled={!r.freight}
-                    style={{ fontSize:10, fontWeight:700, padding:"4px 9px", borderRadius:4, cursor:r.freight?"pointer":"default", border:"1px solid "+C.bd, background:"transparent", color:C.blue, fontFamily:"inherit" }}>
-                    Save
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div style={{ padding:"10px 12px", display:"flex", flexDirection:"column", gap:10, maxHeight:560, overflowY:"auto" }}>
+        {rows.map(r=>(
+          <div key={r.key} style={{ border:"1px solid "+C.bd, borderRadius:6, padding:8, background:"rgba(255,255,255,0.015)" }}>
+            <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:6 }}>
+              <input value={r.label} onChange={e=>updateField(r.key,"label",e.target.value)} placeholder="Route name"
+                style={{ flex:1, background:"transparent", border:"none", borderBottom:"1px solid "+C.bd, color:C.tx, fontSize:12, fontWeight:700, padding:"2px 0", outline:"none", fontFamily:"inherit" }}/>
+              <button onClick={()=>saveRow(r)} disabled={!r.freight}
+                style={{ fontSize:9, fontWeight:700, padding:"3px 7px", borderRadius:4, cursor:r.freight?"pointer":"default", border:"1px solid "+C.bd, background:"transparent", color:C.blue, fontFamily:"inherit", whiteSpace:"nowrap" }}>
+                Save
+              </button>
+            </div>
+            <div style={{ display:"flex", gap:6, alignItems:"flex-end", marginBottom:6 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+                <span style={{ fontSize:9, color:C.faint, textTransform:"uppercase" }}>Freight (USD)</span>
+                <input value={r.freight} onChange={e=>updateField(r.key,"freight",e.target.value)} placeholder="USD"
+                  style={{ width:100, background:C.bg, border:"1px solid "+C.bd, borderRadius:3, color:C.tx, fontSize:12, padding:"4px 6px", outline:"none", fontFamily:"inherit" }}/>
+              </div>
+              <div style={{ fontSize:14, fontWeight:800, color: r.tce!=null ? (r.tce>=0?C.green:C.red) : C.faint, paddingBottom:3 }}>
+                {r.tce!=null ? "$"+r.tce.toLocaleString("nb-NO")+"/d" : "—"}
+              </div>
+            </div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {miniInp(r,"nmBallast","NM Ballast")}
+              {miniInp(r,"nmLaden","NM Laden")}
+              {miniInp(r,"nmRepo","NM Repo")}
+              {miniInp(r,"pdaLoad","PDA Load")}
+              {miniInp(r,"pdaDisch","PDA Disch")}
+              {miniInp(r,"euEts","EU ETS")}
+              {miniInp(r,"speed","Speed")}
+              {miniInp(r,"cons","Cons")}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -492,6 +540,11 @@ function TCECalculator(){
           </div>
         </div>
 
+        {/* ── FAR RIGHT: Benchmark Routes ── */}
+        <div style={{flex:"1 1 320px",maxWidth:420,minWidth:300}}>
+          <BenchmarkRoutes defaults={defaults}/>
+        </div>
+
       </div>
 
       {/* ── Result strip — moved here from the old middle column ── */}
@@ -526,8 +579,6 @@ function TCECalculator(){
           {result&&resRow("Total expenses",fmt(result.totalExpenses),C.red)}
         </div>
       </div>
-
-      <BenchmarkRoutes defaults={defaults}/>
 
   </div>
   );
