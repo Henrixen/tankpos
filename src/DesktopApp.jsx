@@ -10,6 +10,7 @@ const EC             = React.lazy(()=>import("./EC"));
 const ParsePanel     = React.lazy(()=>import("./ParsePanel"));
 const AskAIStrip     = React.lazy(()=>import("./AIAsk").then(m=>({default:m.AskAIStrip})));
 const RateMatrix     = React.lazy(()=>import("./RateMatrix").then(m=>({default:m.RateMatrix})));
+const RateMatrixCard = React.lazy(()=>import("./RateMatrix").then(m=>({default:m.RateMatrixCard})));
 const RateMatrixBunkerInput = React.lazy(()=>import("./RateMatrix").then(m=>({default:m.RateMatrixBunkerInput})));
 const FixingTab      = React.lazy(()=>import("./FixingTab"));
 const TimeCharterTab = React.lazy(()=>import("./TimeCharterTab"));
@@ -1692,16 +1693,14 @@ const filtV=useMemo(()=>{
   </div>
 </div>
  
-              {/* CENTER: Rate Matrix (34%) */}
+              {/* CENTER: reserved for the Regional Position Snapshot map (next up) — Rate Matrix moved to Cargoes tab */}
               {!mobile&&(
-                <div style={{width:"34%",height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-                  <div style={{padding:"8px 10px",flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-                    <Suspense fallback={null}><RateMatrix bunkerHeader={<Suspense fallback={null}><BunkerHeader/></Suspense>}/></Suspense>
-                  </div>
+                <div style={{width:"34%",height:460,background:C.bg2,border:"1px dashed "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{fontSize:11,color:C.faint,textAlign:"center",padding:"0 16px"}}>Regional Position Snapshot — coming here next</span>
                 </div>
               )}
- 
-              {/* RIGHT: AIS Map (34%) - matches Rate Matrix height */}
+
+              {/* RIGHT: AIS Map (34%) */}
 {!mobile&&(
   <div style={{width:"34%",height:460}}>
     <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels} onAisVesselsChange={setAisVesselSet}/></Suspense>
@@ -2278,6 +2277,15 @@ const filtV=useMemo(()=>{
                   </div>
                 );
               })()}
+
+              {/* Rate Matrix — condensed card, click to expand; moved here from Positions */}
+              {!mobile&&(
+                <div style={{flex:"0 0 260px",position:"relative"}}>
+                  <Suspense fallback={null}>
+                    <RateMatrixCard collapsedHeight={460} bunkerHeader={<Suspense fallback={null}><BunkerHeader/></Suspense>}/>
+                  </Suspense>
+                </div>
+              )}
 
               {/* Right: Cargo count by month — animated, full history */}
               {!mobile&&(()=>{
