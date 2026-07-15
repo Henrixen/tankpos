@@ -381,8 +381,9 @@ const SECTION_OPTIONS = [
   { key: "TA", label: "Transatlantic" },
 ];
 
-function RateMatrixCard({ collapsedHeight = 460, bunkerHeader }) {
-  const [expanded, setExpanded] = useState(false);
+function RateMatrixCard({ collapsedHeight = 460, bunkerHeader, onExpandChange }) {
+  const [expanded, setExpandedRaw] = useState(false);
+  const setExpanded = (v) => { setExpandedRaw(v); onExpandChange?.(v); };
   const [showSettings, setShowSettings] = useState(false);
   const [minimizedSection, setMinimizedSection] = useState(() => localStorage.getItem(MINIMIZED_SECTION_KEY) || "Europe");
   const cardRef = useRef(null);
@@ -409,18 +410,15 @@ function RateMatrixCard({ collapsedHeight = 460, bunkerHeader }) {
       background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden",
       display: "flex", flexDirection: "column",
       height: expanded ? "auto" : collapsedHeight,
-      maxHeight: expanded ? "80vh" : collapsedHeight,
-      position: expanded ? "absolute" : "relative",
-      width: expanded ? "min(900px, 90vw)" : "100%",
-      zIndex: expanded ? 50 : "auto",
-      boxShadow: expanded ? "0 12px 40px rgba(0,0,0,0.5)" : "none",
-      transition: "max-height .18s ease, width .18s ease",
+      maxHeight: expanded ? 720 : collapsedHeight,
+      width: "100%",
+      transition: "max-height .18s ease",
     }}>
       <div style={{ padding: "7px 10px", background: C.bg3, borderBottom: "1px solid " + C.bd2, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: C.tx, flex: 1 }}>Rate Matrix</span>
         <button onClick={() => setShowSettings(s => !s)} title="Choose minimized view"
           style={{ background: "none", border: "none", color: C.faint, cursor: "pointer", fontSize: 13 }}>⚙</button>
-        <button onClick={() => { setExpanded(e => !e); setShowSettings(false); }} title={expanded ? "Collapse" : "Expand"}
+        <button onClick={() => { setExpanded(!expanded); setShowSettings(false); }} title={expanded ? "Collapse" : "Expand"}
           style={{ background: "none", border: "none", color: C.blue, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
           {expanded ? "▾ collapse" : "▸ expand"}
         </button>
