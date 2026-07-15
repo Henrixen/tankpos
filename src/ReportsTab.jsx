@@ -854,6 +854,63 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       }
     });
     if (!rows.length) {
+      // ── Format D: one field per line, grouped per vessel (e.g. gas/chem
+      // position lists) — no header row, variable blank-line spacing between
+      // blocks. Anchor on the DWT-range line ("17.999 / 19.844"), since it's
+      // the one line pattern that reliably appears exactly once per vessel.
+      const DWT_RE = /^\d[\d.,]*\s*\/\s*\d[\d.,]*$/;
+      const YEAR_RE = /^(19|20)\d{2}$/;
+      const ICE_RE = /^[1-3][A-C]$/i;
+      const DATE_RE = /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i;
+
+      const anchors = [];
+      lines.forEach((l, i) => { if (DWT_RE.test(l)) anchors.push(i); });
+
+      if (anchors.length) {
+        const dRows = [];
+        anchors.forEach((idx, ai) => {
+          // Walk backward for built year, then vessel name
+          let year = "", vessel = "";
+          for (let j = idx - 1; j >= 0 && j >= idx - 6; j--) {
+            const l = lines[j];
+            if (!l.trim()) continue;
+            if (!year && YEAR_RE.test(l.trim())) { year = l.trim(); continue; }
+            if (year && l.trim() && !YEAR_RE.test(l.trim())) { vessel = l.trim().toUpperCase(); break; }
+          }
+          if (!vessel) return;
+
+          // Walk forward (until the next anchor) for ice class, cargo types, port, date, destination
+          const forwardEnd = ai + 1 < anchors.length ? anchors[ai + 1] : Math.min(lines.length, idx + 8);
+          const rest = lines.slice(idx + 1, forwardEnd).map(l => l.trim()).filter(Boolean);
+          let ri = 0;
+          let iceClass = "", cargoTypes = "", port = "", dateStr = "", destination = "";
+          if (rest[ri] && ICE_RE.test(rest[ri])) { iceClass = rest[ri]; ri++; }
+          if (rest[ri]) { cargoTypes = rest[ri]; ri++; }
+          if (rest[ri]) { port = rest[ri].toUpperCase(); ri++; }
+          if (rest[ri]) {
+            const m = rest[ri].match(DATE_RE);
+            dateStr = m ? fmtDate(m[0]) : rest[ri].toUpperCase();
+            ri++;
+          }
+          if (rest[ri]) { destination = rest[ri].replace(/\s{2,}/g, " ").toUpperCase(); ri++; }
+
+          dRows.push({
+            id: "q" + Date.now() + Math.random().toString(36).slice(2),
+            operator: lookupOp(vessel), vessel, port, date: dateStr,
+            direction: destination,
+            comment: [year && "built " + year, iceClass, cargoTypes].filter(Boolean).join(" · "),
+          });
+        });
+        if (dRows.length) {
+          setQuickRows(p => [...p, ...dRows]); setQuickPaste("");
+          const m = dRows.filter(r => !r.operator).length;
+          setQuickParseMsg("✓ " + dRows.length + " position" + (dRows.length !== 1 ? "s" : "") + " parsed" + (m ? " — " + m + " operators not found." : "."));
+          return;
+        }
+      }
+    }
+
+    if (!rows.length) {
       setQuickParseMsg("No positions detected. Try: VESSEL \u2013 PORT \u2013 DATE on each line, or paste a screenshot instead.");
       return;
     }
