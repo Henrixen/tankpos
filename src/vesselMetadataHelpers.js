@@ -75,7 +75,7 @@ export async function getVesselDetails(vesselName, imoNo) {
 export async function getCustomTags() {
   try {
     const { data, error } = await supabase
-      .from("custom_tags")
+      .from("vessel_tags")
       .select("*")
       .order("tag_name");
 
@@ -90,7 +90,7 @@ export async function getCustomTags() {
 export async function addCustomTag(tagName, tagColor, tagCategory = "general") {
   try {
     const { data, error } = await supabase
-      .from("custom_tags")
+      .from("vessel_tags")
       .insert([{ tag_name: tagName, tag_color: tagColor, tag_category: tagCategory }])
       .select()
       .single();
@@ -105,7 +105,7 @@ export async function addCustomTag(tagName, tagColor, tagCategory = "general") {
 
 export async function deleteCustomTag(tagId) {
   try {
-    const { error } = await supabase.from("custom_tags").delete().eq("id", tagId);
+    const { error } = await supabase.from("vessel_tags").delete().eq("id", tagId);
     if (error) throw error;
     return { success: true };
   } catch (err) {
