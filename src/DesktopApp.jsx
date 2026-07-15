@@ -2818,7 +2818,7 @@ const filtV=useMemo(()=>{
         {tab==="map"&&<Suspense fallback={<TabFallback/>}><FreightMapTab/></Suspense>}
       </div>
 
-      {/* Vessel Popout */}
+      {/* Vessel Popout — also feeds the AIS map so clicking a vessel shows its route */}
       {showVesselPopout && popoutVessel && (
         <VesselPopout
           vessel={popoutVessel}
@@ -2853,6 +2853,7 @@ const filtV=useMemo(()=>{
             onClick={() => {
               setPopoutVessel(contextMenu.vessel);
               setShowVesselPopout(true);
+              setSelectedAISVessels([contextMenu.vessel]);
               setContextMenu(null);
             }}
             style={{
@@ -2887,22 +2888,7 @@ const filtV=useMemo(()=>{
         </div>
       )}
 
-      {/* Vessel Popout Modal */}
-      {showVesselPopout && popoutVessel && (
-        <VesselPopout
-          vessel={popoutVessel}
-          onClose={() => {
-            setShowVesselPopout(false);
-            setPopoutVessel(null);
-          }}
-          onUpdate={(updatedVessel) => {
-            // Refresh will happen automatically via Supabase realtime
-            // or trigger a manual refresh here if needed
-            setShowVesselPopout(false);
-            setPopoutVessel(null);
-          }}
-        />
-      )}
+
 
       {/* ── Add Vessel Modal ── */}
 
