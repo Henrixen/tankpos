@@ -265,7 +265,7 @@ export default function TankPos(){
   // Merge in vessel_overrides — manual edits (notes + spec) win over CSV/feed, per field
   try {
     const { data: ovRows } = await supabase.from("vessel_overrides")
-      .select("imo_no,vessel_name,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo");
+      .select("imo_no,vessel_name,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo,tag");
     if (ovRows && ovRows.length) {
       const byImo = {}, byName = {};
       ovRows.forEach(o => {
@@ -284,6 +284,7 @@ export default function TankPos(){
         if (o.cbm != null)     merged.cbm     = o.cbm;
         if (o.dwt != null)     merged.dwt     = o.dwt;
         if (o.built != null)   merged.built   = o.built;
+        if (o.tag != null)     merged.tag     = o.tag;
         // spec sub-object
         merged.spec = { ...(v.spec || {}) };
         if (o.fuel != null)      merged.spec.fuel      = o.fuel;
@@ -353,6 +354,7 @@ export default function TankPos(){
     cbm: "cbm",
     dwt: "dwt",
     built: "built",
+    tag: "tag",
     "spec.fuel": "fuel",
     "spec.iceClass": "ice_class",
     "spec.lastCargo": "last_cargo",
