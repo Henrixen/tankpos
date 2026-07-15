@@ -100,24 +100,23 @@ function VesselPopout({ vessel, onClose, onUpdate }) {
   return (
     <>
       {/* Backdrop */}
-      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 9998, backdropFilter: "blur(2px)" }} />
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9998 }} />
 
-      {/* Popout */}
+      {/* Right-docked panel */}
       <div
         ref={popoutRef}
         style={{
           position: "fixed",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
+          top: 0,
+          right: 0,
+          height: "100vh",
           zIndex: 9999,
           background: C.bg2,
-          border: "1px solid " + C.bd,
-          borderRadius: 12,
-          width: 520,
-          maxHeight: "80vh",
+          borderLeft: "1px solid " + C.bd,
+          width: 420,
+          maxWidth: "90vw",
           overflowY: "auto",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
+          boxShadow: "-12px 0 40px rgba(0,0,0,0.5)",
         }}
       >
         {/* Header */}
