@@ -138,7 +138,7 @@ function CommentCell({ck,matrixRef,onSave,rev:extRev=0}){
   );
 }
 
-function RateMatrix({onBunkerChange, bunkerHeader}){
+function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
   const [rev,forceUpdate]=useState(0);
   const [lastSaved,setLastSaved]=useState(()=>localStorage.getItem("signal_matrix_lastsaved")||null);
 
@@ -305,6 +305,7 @@ function RateMatrix({onBunkerChange, bunkerHeader}){
       )}
 
       {/* Intra Europe: Rate + TCE columns */}
+      {(!sectionFilter || sectionFilter==="Europe") && (
       <div>
         <div style={{display:"flex",alignItems:"center",fontSize:12,fontWeight:700,color:REGION_COLORS.Europe,textTransform:"uppercase",letterSpacing:"0.07em",padding:"3px 5px",background:REGION_COLORS.Europe+"18",borderLeft:"2px solid "+REGION_COLORS.Europe,marginBottom:2}}>
           <span style={{flex:1}}>Intra Europe</span>
@@ -331,9 +332,10 @@ function RateMatrix({onBunkerChange, bunkerHeader}){
           </tbody>
         </table>
       </div>
+      )}
 
       {/* Asia + TA: by size */}
-      {rateRoutes.map((rg,rgIdx)=>(
+      {rateRoutes.map((rg,rgIdx)=>({rg,rgIdx})).filter(({rg})=>!sectionFilter||sectionFilter===rg.region).map(({rg,rgIdx})=>(
         <div key={rg.region}>
           <div style={{fontSize:12,fontWeight:700,color:REGION_COLORS[rg.region],textTransform:"uppercase",letterSpacing:"0.07em",padding:"3px 5px",background:REGION_COLORS[rg.region]+"18",borderLeft:"2px solid "+REGION_COLORS[rg.region],marginBottom:2}}>
             {rg.label}
@@ -368,5 +370,86 @@ function RateMatrix({onBunkerChange, bunkerHeader}){
 
 // ─── Intel Vault ──────────────────────────────────────────────────────────────
 
-export { RateMatrix, RateMatrixBunkerInput, getBunkerState, defaultRateMatrix };
+// ─── Rate Matrix Card — condensed by default, expands to full matrix ─────────
+// Sits alongside other same-height panels (e.g. the Parsing section) when
+// collapsed; click the arrow (or click elsewhere) to expand/collapse.
+// The settings gear flips the card to choose which section shows when minimized.
+const MINIMIZED_SECTION_KEY = "signal_matrix_minimized_section";
+const SECTION_OPTIONS = [
+  { key: "Europe", label: "Intra Europe" },
+  { key: "Asia", label: "Asia → Europe" },
+  { key: "TA", label: "Transatlantic" },
+];
+
+function RateMatrixCard({ collapsedHeight = 460, bunkerHeader }) {
+  const [expanded, setExpanded] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [minimizedSection, setMinimizedSection] = useState(() => localStorage.getItem(MINIMIZED_SECTION_KEY) || "Europe");
+  const cardRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (expanded && cardRef.current && !cardRef.current.contains(e.target)) {
+        setExpanded(false);
+        setShowSettings(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [expanded]);
+
+  function chooseSection(key) {
+    setMinimizedSection(key);
+    localStorage.setItem(MINIMIZED_SECTION_KEY, key);
+    setShowSettings(false);
+  }
+
+  return (
+    <div ref={cardRef} style={{
+      background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden",
+      display: "flex", flexDirection: "column",
+      height: expanded ? "auto" : collapsedHeight,
+      maxHeight: expanded ? "80vh" : collapsedHeight,
+      position: expanded ? "absolute" : "relative",
+      width: expanded ? "min(900px, 90vw)" : "100%",
+      zIndex: expanded ? 50 : "auto",
+      boxShadow: expanded ? "0 12px 40px rgba(0,0,0,0.5)" : "none",
+      transition: "max-height .18s ease, width .18s ease",
+    }}>
+      <div style={{ padding: "7px 10px", background: C.bg3, borderBottom: "1px solid " + C.bd2, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: C.tx, flex: 1 }}>Rate Matrix</span>
+        <button onClick={() => setShowSettings(s => !s)} title="Choose minimized view"
+          style={{ background: "none", border: "none", color: C.faint, cursor: "pointer", fontSize: 13 }}>⚙</button>
+        <button onClick={() => { setExpanded(e => !e); setShowSettings(false); }} title={expanded ? "Collapse" : "Expand"}
+          style={{ background: "none", border: "none", color: C.blue, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
+          {expanded ? "▾ collapse" : "▸ expand"}
+        </button>
+      </div>
+
+      {showSettings ? (
+        <div style={{ padding: 14, flex: 1, overflowY: "auto" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
+            Show when minimized
+          </div>
+          {SECTION_OPTIONS.map(opt => (
+            <button key={opt.key} onClick={() => chooseSection(opt.key)}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 10px", marginBottom: 5, borderRadius: 5, cursor: "pointer",
+                border: "1px solid " + (minimizedSection === opt.key ? REGION_COLORS[opt.key] : C.bd),
+                background: minimizedSection === opt.key ? REGION_COLORS[opt.key] + "18" : "transparent",
+                color: minimizedSection === opt.key ? REGION_COLORS[opt.key] : C.dim, fontFamily: "inherit", fontSize: 12, fontWeight: 600 }}>
+              {minimizedSection === opt.key ? "✓ " : ""}{opt.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div style={{ flex: 1, overflow: "hidden", padding: 8 }}>
+          <RateMatrix bunkerHeader={bunkerHeader} sectionFilter={expanded ? null : minimizedSection} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+export { RateMatrix, RateMatrixCard, RateMatrixBunkerInput, getBunkerState, defaultRateMatrix };
 export default RateMatrix;
