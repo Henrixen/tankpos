@@ -1008,6 +1008,7 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [askAiExpanded,setAskAiExpanded]=useState(false);
   const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
   const [selectedAISVessels,setSelectedAISVessels]=useState([]);
+  const [matrixExpanded,setMatrixExpanded]=useState(false);
   const [aisVesselSet,setAisVesselSet]=useState(new Set());
   
   // Dashboard / bunker-matrix theme styles
@@ -2207,7 +2208,7 @@ const filtV=useMemo(()=>{
             {/* Parse + filter panel + graph */}
             <div style={{display:"flex",gap:10,alignItems:"stretch",flexDirection:mobile?"column":"row"}}>
               {/* Left: OnParse tag selector + ParsePanel */}
-              <div style={{flex:mobile?"1 1 auto":"0 0 50%",display:"flex",flexDirection:"column",gap:4}}>
+              <div style={{flex:mobile?"1 1 auto":"0 0 25%",display:"flex",flexDirection:"column",gap:4}}>
                 {/* ON PARSE tag selector — above Parse & Add */}
                 {(()=>{
                   const usedTags=getTagList();
@@ -2280,15 +2281,15 @@ const filtV=useMemo(()=>{
 
               {/* Rate Matrix — condensed card, click to expand; moved here from Positions */}
               {!mobile&&(
-                <div style={{flex:"0 0 260px",position:"relative"}}>
+                <div style={{flex: matrixExpanded ? "0 0 50%" : "0 0 25%", position:"relative", transition:"flex-basis .18s ease"}}>
                   <Suspense fallback={null}>
-                    <RateMatrixCard collapsedHeight={460} bunkerHeader={<Suspense fallback={null}><BunkerHeader/></Suspense>}/>
+                    <RateMatrixCard collapsedHeight={460} bunkerHeader={<Suspense fallback={null}><BunkerHeader/></Suspense>} onExpandChange={setMatrixExpanded}/>
                   </Suspense>
                 </div>
               )}
 
-              {/* Right: Cargo count by month — animated, full history */}
-              {!mobile&&(()=>{
+              {/* Right: Cargo count by month — animated, full history (minimized while Rate Matrix is expanded) */}
+              {!matrixExpanded&&!mobile&&(()=>{
                 const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
                 const now=new Date();
                 // Use updated date (entry date) for all cargoes
