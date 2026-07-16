@@ -251,6 +251,10 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const [dateFilter, setDateFilter] = useState("all");
   const [poolSearch, setPoolSearch] = useState("");
+  const [posPasteText, setPosPasteText] = useState("");
+  const [posPasteOpen, setPosPasteOpen] = useState(false);
+  const [posPasting, setPosPasting] = useState(false);
+  const [posPasteMsg, setPosPasteMsg] = useState("");
 
   // Fixing window history (Supabase)
   const [fixHistory, setFixHistory] = useState([]);
@@ -568,7 +572,10 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     const now = new Date();
     return allVessels.filter(v => {
       if (reportedNames.has(v.vessel)) return false;
-      if (poolSearch && !v.vessel?.toLowerCase().includes(poolSearch.toLowerCase())) return false;
+      if (poolSearch && !(
+        v.vessel?.toLowerCase().includes(poolSearch.toLowerCase()) ||
+        v.operator?.toLowerCase().includes(poolSearch.toLowerCase())
+      )) return false;
       if (tagFilter.size > 0) {
         // Match against manual tag, superRegion, or segment — normalized and
         // substring-based, since filter labels (e.g. "2. CITYCLASS (10-15)")
@@ -579,9 +586,17 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
           v.superRegion ? v.superRegion : null,
           v.segment ? v.segment : null,
         ].filter(Boolean).map(norm);
-        const activeNorm = [...tagFilter].map(norm);
-        const matches = activeNorm.some(t => vVals.some(vv => vv.includes(t) || t.includes(vv)));
-        if (!matches) return false;
+        // Segment tags are the numbered ones ("1. SMALL (<10)", "3. INTERMEDIATE...").
+        // A vessel only ever has ONE segment and ONE region, so selecting a segment
+        // tag and a region tag together should narrow down (AND) — not broaden (OR)
+        // the way multiple tags within the same category naturally do.
+        const active = [...tagFilter];
+        const segmentTags = active.filter(t => /^\d+\.\s/.test(t)).map(norm);
+        const otherTags = active.filter(t => !/^\d+\.\s/.test(t)).map(norm);
+        const matchesAny = (tags) => tags.some(t => vVals.some(vv => vv.includes(t) || t.includes(vv)));
+        const segmentOk = segmentTags.length === 0 || matchesAny(segmentTags);
+        const otherOk = otherTags.length === 0 || matchesAny(otherTags);
+        if (!segmentOk || !otherOk) return false;
       }
       if (dateFilter !== "all" && v.updated_at) {
         const diff = (now - new Date(v.updated_at)) / 86400000;
@@ -599,6 +614,78 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     importedNames.current.add(v.vessel);
     setReportVessels(p => [...p, { ...v, _rid: v.vessel + "_" + Date.now() }]);
   }
+
+  // Paste positions straight into this list — tries the two most common
+  // quick patterns first, falls back to the same AI text endpoint Quick
+  // Positions uses for anything messier. Vessels found in allVessels get
+  // added with their real DWT/segment/etc; anything not recognized is added
+  // as a lightweight manual entry so it still shows up in the list.
+  async function parsePositionListPaste() {
+    if (!posPasteText.trim()) { setPosPasteMsg("Paste some positions first."); return; }
+    const raw = posPasteText
+      .replace(/\r\n?/g, "\n")
+      .replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, " ")
+      .replace(/[\u200B\u200C\u200D\uFEFF]/g, "");
+    const nonEmpty = raw.split("\n").map(l => l.trim()).filter(Boolean);
+    let parsedRows = [];
+
+    // Quick pattern 1: dash-separated "VESSEL – PORT – DATE"
+    nonEmpty.forEach(line => {
+      const parts = line.split(/\s*[\u2013\u2014]\s*|\s+-\s+/).map(s => s.trim()).filter(Boolean);
+      if (parts.length >= 2) parsedRows.push({ vessel: parts[0].toUpperCase(), port: (parts[1]||"").toUpperCase(), date: parts[2]||"", direction: parts.slice(3).join(" ") });
+    });
+    // Quick pattern 2: space-separated "VESSEL (multi-word) PORT DAY"
+    if (!parsedRows.length) {
+      const LINE_RE = /^(.+?)\s+([A-Za-z]{2,})\s+(\d{1,2})$/;
+      const MN2 = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+      const curMonth = MN2[new Date().getMonth()];
+      nonEmpty.forEach(line => {
+        const m = line.match(LINE_RE);
+        if (m) parsedRows.push({ vessel: m[1].toUpperCase(), port: m[2].toUpperCase(), date: `${parseInt(m[3])} ${curMonth}`, direction: "" });
+      });
+    }
+
+    // Fallback: AI text parsing for anything messier
+    if (!parsedRows.length) {
+      setPosPasting(true); setPosPasteMsg("No fixed pattern matched — trying AI parsing...");
+      try {
+        const resp = await fetch("/api/parse-positions-text", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: raw }),
+        });
+        if (!resp.ok) { const err = await resp.json().catch(() => ({})); throw new Error(err.error || `Server error ${resp.status}`); }
+        const json = await resp.json();
+        const rawText = (json.content?.[0]?.text || "").replace(/```json|```/g, "").trim();
+        const parsed = JSON.parse(rawText);
+        parsedRows = (Array.isArray(parsed) ? parsed : []).filter(r => r.vessel).map(r => ({
+          vessel: (r.vessel || "").toUpperCase(), port: (r.port || "").toUpperCase(), date: r.date || "", direction: r.direction || "",
+        }));
+      } catch (err) {
+        console.error("Position list AI parse:", err);
+        setPosPasting(false); setPosPasteMsg("Parsing failed: " + err.message);
+        return;
+      }
+      setPosPasting(false);
+    }
+
+    if (!parsedRows.length) { setPosPasteMsg("No positions detected in this text."); return; }
+
+    let matched = 0;
+    parsedRows.forEach(r => {
+      const found = allVessels.find(v => v.vessel?.toUpperCase() === r.vessel);
+      if (found && !reportedNames.has(found.vessel)) { addFromPool(found); matched++; }
+      else if (!found) {
+        importedNames.current.add(r.vessel);
+        setReportVessels(p => [...p, {
+          vessel: r.vessel, port: r.port, open_date: r.date, comment: r.direction,
+          operator: lookupOp ? lookupOp(r.vessel) : "", segment: "", dwt: null, superRegion: "",
+          _rid: r.vessel + "_" + Date.now() + Math.random().toString(36).slice(2),
+        }]);
+      }
+    });
+    setPosPasteMsg(`✓ ${parsedRows.length} position${parsedRows.length!==1?"s":""} added (${matched} matched from your vessel database, ${parsedRows.length-matched} added manually).`);
+    setPosPasteText("");
+  }
+
   function deleteRow(rid) {
     setReportVessels(p => { const rem = p.find(x => x._rid === rid); if (rem) importedNames.current.delete(rem.vessel); return p.filter(x => x._rid !== rid); });
     if (editingRid === rid) setEditingRid(null);
@@ -946,27 +1033,41 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if (!rows.length) {
       // ── Format E: single line per vessel, space-separated —
       // "VESSEL (multi-word) PORT DAY", no dashes, no month (day-of-month
-      // only, assumed to mean the current month).
+      // only, assumed to mean the current month). A standalone short line
+      // right before or after the block (e.g. "stenersen") is treated as a
+      // shared operator applying to every vessel in the block.
       const LINE_RE = /^(.+?)\s+([A-Za-z]{2,})\s+(\d{1,2})$/;
       const MN2 = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
       const curMonth = MN2[new Date().getMonth()];
+      const matchIdx = [];
+      nonEmpty.forEach((line, i) => { if (LINE_RE.test(line)) matchIdx.push(i); });
+
+      let sharedOperator = "";
+      const looksLikeOperatorLine = (line) => line && line.split(/\s+/).length <= 3 && !/\d/.test(line) && !LINE_RE.test(line);
+      if (matchIdx.length) {
+        const before = nonEmpty[matchIdx[0] - 1];
+        const after = nonEmpty[matchIdx[matchIdx.length - 1] + 1];
+        if (looksLikeOperatorLine(after)) sharedOperator = after.toUpperCase();
+        else if (looksLikeOperatorLine(before)) sharedOperator = before.toUpperCase();
+      }
+
       const eRows = [];
-      nonEmpty.forEach(line => {
+      matchIdx.forEach(i => {
+        const line = nonEmpty[i];
         const m = line.match(LINE_RE);
-        if (!m) return;
         const vessel = m[1].toUpperCase();
         const port = m[2].toUpperCase();
         const day = parseInt(m[3]);
         if (day < 1 || day > 31) return;
         eRows.push({
           id: "q" + Date.now() + Math.random().toString(36).slice(2),
-          operator: lookupOp(vessel), vessel, port, date: `${day} ${curMonth}`, direction: "",
+          operator: sharedOperator || lookupOp(vessel), vessel, port, date: `${day} ${curMonth}`, direction: "",
         });
       });
       if (eRows.length) {
         setQuickRows(p => [...p, ...eRows]); setQuickPaste("");
         const m = eRows.filter(r => !r.operator).length;
-        setQuickParseMsg("✓ " + eRows.length + " position" + (eRows.length !== 1 ? "s" : "") + " parsed — date assumed current month (" + curMonth + "), check before sending" + (m ? "; " + m + " operators not found." : "."));
+        setQuickParseMsg("✓ " + eRows.length + " position" + (eRows.length !== 1 ? "s" : "") + " parsed" + (sharedOperator ? " — operator \"" + sharedOperator + "\" applied to all" : "") + " — date assumed current month (" + curMonth + "), check before sending" + (m ? "; " + m + " operators not found." : "."));
         return;
       }
     }
@@ -1349,6 +1450,23 @@ Any direction`}</pre>
           <div style={{ width: 300, flexShrink: 0, borderLeft: "1px solid " + C.bd, display: "flex", flexDirection: "column", overflow: "hidden", padding: "10px 12px", gap: 6 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em" }}>Add vessels</div>
 
+            <button onClick={() => setPosPasteOpen(o => !o)}
+              style={{ fontSize: 10, fontWeight: 700, padding: "5px 8px", borderRadius: 4, cursor: "pointer", border: "1px solid " + C.bd, background: "transparent", color: ACCENT, fontFamily: "inherit", textAlign: "left" }}>
+              {posPasteOpen ? "▾" : "▸"} Paste positions
+            </button>
+            {posPasteOpen && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <textarea value={posPasteText} onChange={e => setPosPasteText(e.target.value)}
+                  placeholder="Paste positions — any format, e.g. VESSEL – PORT – DATE"
+                  style={{ ...IS, width: "100%", minHeight: 60, resize: "vertical", boxSizing: "border-box", fontFamily: "inherit" }} />
+                <button onClick={parsePositionListPaste} disabled={posPasting}
+                  style={{ fontSize: 10, fontWeight: 700, padding: "5px 8px", borderRadius: 4, cursor: posPasting ? "default" : "pointer", border: "none", background: ACCENT, color: "#fff", fontFamily: "inherit", opacity: posPasting ? 0.6 : 1 }}>
+                  {posPasting ? "Parsing..." : "Parse & add"}
+                </button>
+                {posPasteMsg && <div style={{ fontSize: 9, color: posPasteMsg.startsWith("✓") ? "#43e97b" : "#f5a623" }}>{posPasteMsg}</div>}
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
               {[["all", "All"], ["today", "Today"], ["2d", "2d"], ["7d", "7d"]].map(([k, l]) => (
                 <button key={k} onClick={() => setDateFilter(k)}
@@ -1360,23 +1478,48 @@ Any direction`}</pre>
 
             <div style={{ borderTop: "1px solid " + C.bd, margin: "2px 0" }} />
 
-            {allTags.length > 0 && (
-              <>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-                  {(tagsExpanded ? allTags : Array.from(new Set([...allTags.slice(0, 10), ...tagFilter]))).map(t => (
-                    <button key={t} onClick={() => setTagFilter(p => { const n = new Set(p); n.has(t) ? n.delete(t) : n.add(t); return n; })}
-                      style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3, cursor: "pointer", border: `1px solid ${tagFilter.has(t) ? ACCENT : C.bd}`, background: tagFilter.has(t) ? ACCENT : "transparent", color: tagFilter.has(t) ? "#fff" : C.dim, fontFamily: "inherit" }}>{t}</button>
+            {allTags.length > 0 && (() => {
+              // Best-effort grouping for readability — numbered tags are
+              // unambiguous segments; a known set of compound names are trade
+              // lanes; everything else is treated as a region. Not a fixed
+              // taxonomy — just enough structure to stop the list looking like
+              // a flat wall of pills.
+              const TRADE_WORDS = new Set(["suezagindia","suezindia","usacusgcaribs","agindiaredsea","medblacksea"]);
+              const norm2 = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
+              const categorize = (t) => {
+                if (/^\d+\.\s/.test(t)) return "Segment";
+                if (TRADE_WORDS.has(norm2(t))) return "Trade lane";
+                return "Region";
+              };
+              const groups = { Segment: [], "Trade lane": [], Region: [] };
+              const visible = tagsExpanded ? allTags : Array.from(new Set([...allTags.slice(0, 10), ...tagFilter]));
+              visible.forEach(t => groups[categorize(t)].push(t));
+
+              return (
+                <>
+                  {["Segment", "Region", "Trade lane"].map(groupName => groups[groupName].length > 0 && (
+                    <div key={groupName}>
+                      <div style={{ fontSize: 8, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{groupName}</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 4 }}>
+                        {groups[groupName].map(t => (
+                          <button key={t} onClick={() => setTagFilter(p => { const n = new Set(p); n.has(t) ? n.delete(t) : n.add(t); return n; })}
+                            style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3, cursor: "pointer", border: `1px solid ${tagFilter.has(t) ? ACCENT : C.bd}`, background: tagFilter.has(t) ? ACCENT : "transparent", color: tagFilter.has(t) ? "#fff" : C.dim, fontFamily: "inherit" }}>{t}</button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
-                  {allTags.length > 10 && (
-                    <button onClick={() => setTagsExpanded(e => !e)} style={{ fontSize: 9, fontWeight: 700, color: ACCENT, background: "none", border: "none", cursor: "pointer" }}>
-                      {tagsExpanded ? "▲ show less" : `▼ show all (${allTags.length})`}
-                    </button>
-                  )}
-                  {tagFilter.size > 0 && <button onClick={() => setTagFilter(new Set())} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer" }}>✕ clear</button>}
-                </div>
-                <div style={{ borderTop: "1px solid " + C.bd, margin: "2px 0" }} />
-              </>
-            )}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                    {allTags.length > 10 && (
+                      <button onClick={() => setTagsExpanded(e => !e)} style={{ fontSize: 9, fontWeight: 700, color: ACCENT, background: "none", border: "none", cursor: "pointer" }}>
+                        {tagsExpanded ? "▲ show less" : `▼ show all (${allTags.length})`}
+                      </button>
+                    )}
+                    {tagFilter.size > 0 && <button onClick={() => setTagFilter(new Set())} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer" }}>✕ clear</button>}
+                  </div>
+                  <div style={{ borderTop: "1px solid " + C.bd, margin: "2px 0" }} />
+                </>
+              );
+            })()}
 
             {vesselPool.length > 0 && (
               <button onClick={() => { vesselPool.forEach(v => addFromPool(v)); setQuickParseMsg(""); }}
@@ -1918,13 +2061,22 @@ Any direction`}</pre>
                   {quickRows.map((r, i) => {
                     const iOp = r.operator ? C.tx : "#f5a623";
                     const INP = (col) => ({ background: "transparent", border: "none", borderBottom: "1px solid rgba(58,130,246,0.28)", color: col || C.tx, fontSize: 11, outline: "none", padding: "1px 2px", width: "100%", fontFamily: "inherit", minWidth: 0 });
+                    // Enter jumps to the same column, next row down — same field index across the grid
+                    const jumpDown = (fieldIdx) => (e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      const cells = document.querySelectorAll(".quick-row-input");
+                      const cols = 5; // operator, vessel, port, date, direction
+                      const target = cells[(i + 1) * cols + fieldIdx];
+                      target?.focus();
+                    };
                     return (
                       <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 22px", background: i%2===0?"rgba(255,255,255,0.025)":"transparent", padding: "5px 10px", gap: 6, borderTop: "1px solid rgba(58,130,246,0.1)", alignItems: "center" }}>
-                        <input style={INP(iOp)} value={r.operator} onChange={e => updateQuickRow(r.id, "operator", e.target.value)} placeholder="Type operator..." title={r.operator ? r.operator : "Not found in DB — type it here"} />
-                        <input style={{ ...INP(), fontWeight: 600 }} value={r.vessel} onChange={e => updateQuickRow(r.id, "vessel", e.target.value.toUpperCase())} placeholder="VESSEL" />
-                        <input style={INP()} value={r.port} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} placeholder="PORT" />
-                        <input style={INP()} value={r.date} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} placeholder="DATE" />
-                        <input style={{ ...INP(C.dim) }} value={r.direction} onChange={e => updateQuickRow(r.id, "direction", e.target.value)} placeholder="Any direction / options..." />
+                        <input className="quick-row-input" style={INP(iOp)} value={r.operator} onChange={e => updateQuickRow(r.id, "operator", e.target.value)} onKeyDown={jumpDown(0)} placeholder="Type operator..." title={r.operator ? r.operator : "Not found in DB — type it here"} />
+                        <input className="quick-row-input" style={{ ...INP(), fontWeight: 600 }} value={r.vessel} onChange={e => updateQuickRow(r.id, "vessel", e.target.value.toUpperCase())} onKeyDown={jumpDown(1)} placeholder="VESSEL" />
+                        <input className="quick-row-input" style={INP()} value={r.port} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} onKeyDown={jumpDown(2)} placeholder="PORT" />
+                        <input className="quick-row-input" style={INP()} value={r.date} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} onKeyDown={jumpDown(3)} placeholder="DATE" />
+                        <input className="quick-row-input" style={{ ...INP(C.dim) }} value={r.direction} onChange={e => updateQuickRow(r.id, "direction", e.target.value)} onKeyDown={jumpDown(4)} placeholder="Any direction / options..." />
                         <button onClick={() => deleteQuickRow(r.id)} style={{ background: "none", border: "none", color: "rgba(239,68,68,0.55)", cursor: "pointer", fontSize: 12, padding: 0 }}>✕</button>
                       </div>
                     );
