@@ -750,9 +750,15 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     return match ? vesselOpDb[match] : "";
   }
 
-  function parsePaste() {
+  async function parsePaste() {
     if (!quickPaste.trim()) { setQuickParseMsg("Paste some positions first."); return; }
-    const raw = quickPaste;
+    // Normalize invisible/non-standard characters that different sources
+    // (PDF exports, Numbers/Excel, WhatsApp) sometimes embed — these look
+    // identical to a normal space/newline but silently break regex matching.
+    const raw = quickPaste
+      .replace(/\r\n?/g, "\n")                          // CRLF/CR -> LF
+      .replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, " ")  // NBSP + various Unicode spaces -> regular space
+      .replace(/[\u200B\u200C\u200D\uFEFF]/g, "");        // zero-width chars/BOM -> remove
     const lines = raw.split("\n").map(l => l.trim());
     const nonEmpty = lines.filter(Boolean);
 
@@ -938,7 +944,72 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     }
 
     if (!rows.length) {
-      setQuickParseMsg("No positions detected. Try: VESSEL \u2013 PORT \u2013 DATE on each line, or paste a screenshot instead.");
+      // ── Format E: single line per vessel, space-separated —
+      // "VESSEL (multi-word) PORT DAY", no dashes, no month (day-of-month
+      // only, assumed to mean the current month).
+      const LINE_RE = /^(.+?)\s+([A-Za-z]{2,})\s+(\d{1,2})$/;
+      const MN2 = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+      const curMonth = MN2[new Date().getMonth()];
+      const eRows = [];
+      nonEmpty.forEach(line => {
+        const m = line.match(LINE_RE);
+        if (!m) return;
+        const vessel = m[1].toUpperCase();
+        const port = m[2].toUpperCase();
+        const day = parseInt(m[3]);
+        if (day < 1 || day > 31) return;
+        eRows.push({
+          id: "q" + Date.now() + Math.random().toString(36).slice(2),
+          operator: lookupOp(vessel), vessel, port, date: `${day} ${curMonth}`, direction: "",
+        });
+      });
+      if (eRows.length) {
+        setQuickRows(p => [...p, ...eRows]); setQuickPaste("");
+        const m = eRows.filter(r => !r.operator).length;
+        setQuickParseMsg("✓ " + eRows.length + " position" + (eRows.length !== 1 ? "s" : "") + " parsed — date assumed current month (" + curMonth + "), check before sending" + (m ? "; " + m + " operators not found." : "."));
+        return;
+      }
+    }
+
+    if (!rows.length) {
+      // ── Format F: AI fallback — none of the deterministic formats above
+      // confidently matched. Send the raw text to Claude, which handles
+      // headers, region markers, optional/missing fields, and arbitrary
+      // layouts without needing a bespoke parser for every new source.
+      setQuickImgParsing(true);
+      setQuickParseMsg("No fixed pattern matched — trying AI parsing...");
+      try {
+        const resp = await fetch("/api/parse-positions-text", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: raw }),
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.error || `Server error ${resp.status}`);
+        }
+        const json = await resp.json();
+        const rawText = (json.content?.[0]?.text || "").replace(/```json|```/g, "").trim();
+        let parsed;
+        try { parsed = JSON.parse(rawText); } catch { throw new Error("Could not parse AI response"); }
+        const aiRows = (Array.isArray(parsed) ? parsed : []).filter(r => r.vessel).map(r => ({
+          id: "q" + Date.now() + Math.random().toString(36).slice(2),
+          operator: r.operator || lookupOp(r.vessel), vessel: (r.vessel || "").toUpperCase(),
+          port: (r.port || "").toUpperCase(), date: r.date || "", direction: r.direction || "",
+        }));
+        setQuickImgParsing(false);
+        if (aiRows.length) {
+          setQuickRows(p => [...p, ...aiRows]); setQuickPaste("");
+          const m = aiRows.filter(r => !r.operator).length;
+          setQuickParseMsg("✓ " + aiRows.length + " position" + (aiRows.length !== 1 ? "s" : "") + " parsed by AI — check dates/fields before sending" + (m ? "; " + m + " operators not found." : "."));
+        } else {
+          setQuickParseMsg("AI couldn't find any positions in this text either. Try a screenshot instead, or check the format.");
+        }
+      } catch (err) {
+        console.error("AI positions parse:", err);
+        setQuickImgParsing(false);
+        setQuickParseMsg("AI parsing failed: " + err.message);
+      }
       return;
     }
     rows.forEach(r => { if (!r.operator) r.operator = lookupOp(r.vessel); });
