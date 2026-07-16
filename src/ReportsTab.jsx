@@ -691,6 +691,33 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     } catch {}
   }
 
+  // ── Quick Positions save/load — same "reports" table, so drafts pick up
+  // instantly on any device you're signed into, not just localStorage.
+  const [quickSaveStatus, setQuickSaveStatus] = useState("");
+  async function saveQuickPositions() {
+    setQuickSaveStatus("Saving...");
+    try {
+      await supabase.from("reports").insert([{
+        report_type: "Quick Positions",
+        report_date: new Date().toISOString().split("T")[0],
+        quick_title: quickTitle,
+        quick_rows: quickRows,
+      }]);
+      setQuickSaveStatus("Saved ✓");
+      loadSavedReports();
+    } catch (e) { console.error("saveQuickPositions:", e); setQuickSaveStatus("Save failed"); }
+    setTimeout(() => setQuickSaveStatus(""), 2500);
+  }
+  async function loadQuickPositions(id) {
+    try {
+      const { data } = await supabase.from("reports").select("*").eq("id", id).single();
+      if (!data) return;
+      setQuickTitle(data.quick_title || "Available tonnage");
+      setQuickRows(data.quick_rows || []);
+      setSection("quick");
+    } catch (e) { console.error("loadQuickPositions:", e); }
+  }
+
   const SB = { fontSize: 11, fontWeight: 700, padding: "5px 11px", borderRadius: 5, cursor: "pointer", border: "none", fontFamily: "inherit", whiteSpace: "nowrap" };
   const IS = { background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 11, padding: "5px 8px", outline: "none", fontFamily: "inherit" };
   const avgRate = Object.values(rateGrid).flatMap(r => Object.values(r).filter(v => v)).map(v => parseFloat(v) || 0).reduce((a, b) => a + b, 0) / Math.max(1, Object.values(rateGrid).flatMap(r => Object.values(r).filter(v => v)).length) || 0;
@@ -1124,6 +1151,18 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                 <div style={{ fontSize: 10, color: C.dim, lineHeight: 1.5 }}>{t}</div>
               </div>
             ))}
+            {savedReports.filter(r => r.report_type === "Quick Positions").length > 0 && (
+              <div style={{ borderTop: "1px solid " + C.bd, paddingTop: 8, maxHeight: 160, overflowY: "auto" }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Saved</div>
+                {savedReports.filter(r => r.report_type === "Quick Positions").map(r => (
+                  <div key={r.id} onClick={() => loadQuickPositions(r.id)}
+                    style={{ padding: "5px 7px", borderRadius: 3, background: C.bg3, cursor: "pointer", marginBottom: 3 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: ACCENT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.quick_title || "Available tonnage"}</div>
+                    <div style={{ fontSize: 9, color: C.dim }}>{(r.quick_rows || []).length} rows · {new Date(r.report_date).toLocaleDateString("en-GB")}</div>
+                  </div>
+                ))}
+              </div>
+            )}
             <div style={{ flex: 1 }} />
             <div style={{ paddingTop: 8, borderTop: "1px solid " + C.bd }}>
               <div style={{ fontSize: 9, color: C.faint, marginBottom: 4 }}>Output format:</div>
@@ -1755,6 +1794,11 @@ Any direction`}</pre>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>Quick Positions</span>
               <input value={quickTitle} onChange={e => setQuickTitle(e.target.value)} style={{ ...IS, minWidth: 160 }} placeholder="Available tonnage" />
               <div style={{ flex: 1 }} />
+              {quickSaveStatus && <span style={{ fontSize: 11, color: quickSaveStatus === "Saved ✓" ? "#43e97b" : C.dim }}>{quickSaveStatus}</span>}
+              <button onClick={saveQuickPositions} disabled={!quickRows.length}
+                style={{ ...SB, opacity: quickRows.length ? 1 : 0.4, background: "rgba(63,185,80,0.15)", border: "1px solid rgba(63,185,80,0.45)", color: "#3fb950" }}>
+                Save
+              </button>
               {quickRows.length > 0 && (
                 <button onClick={() => { if (window.confirm("Clear all " + quickRows.length + " rows?")) { setQuickRows([]); setQuickParseMsg(""); } }}
                   style={{ ...SB, background: "transparent", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444" }}>Clear all</button>
