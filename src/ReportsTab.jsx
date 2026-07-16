@@ -37,6 +37,18 @@ function fmtDwt(n) {
   return Number(n).toLocaleString("en-US").replace(/,/g, "\u2009");
 }
 function fmtCoating(s) { return s ? String(s).toUpperCase() : ""; }
+
+// Segment tags that aren't numbered (e.g. "FLEXI", "J19", "MR") but are still
+// genuine segments — these are the exact same values used as group headers
+// in the Position List table itself. Used both for AND/OR filter logic and
+// for the tag-list grouping display, so the two stay consistent.
+const SEGMENT_ALIASES = new Set(["small","cityclass","city","intermediate","inter","j19","flexi","handy","mr","liftert","liftert2","sub10k"]);
+function isSegmentTag(t) {
+  if (/^\d+\.\s/.test(t)) return true;
+  const n = String(t).toLowerCase().replace(/[^a-z0-9]/g, "");
+  return SEGMENT_ALIASES.has(n);
+}
+
 function fmtUSD(val) {
   const n = parseFloat(String(val).replace(/[^0-9.\-]/g, ""));
   return isNaN(n) || !n ? "" : "USD " + Math.round(n).toLocaleString("nb-NO");
@@ -586,13 +598,15 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
           v.superRegion ? v.superRegion : null,
           v.segment ? v.segment : null,
         ].filter(Boolean).map(norm);
-        // Segment tags are the numbered ones ("1. SMALL (<10)", "3. INTERMEDIATE...").
-        // A vessel only ever has ONE segment and ONE region, so selecting a segment
-        // tag and a region tag together should narrow down (AND) — not broaden (OR)
-        // the way multiple tags within the same category naturally do.
+        // Segment tags include both numbered ("1. SMALL (<10)") and unnumbered
+        // aliases ("FLEXI", "J19", "MR", etc — same values used as group
+        // headers in the Position List table). A vessel only ever has ONE
+        // segment and ONE region, so selecting a segment tag and a region tag
+        // together should narrow down (AND) — not broaden (OR) the way
+        // multiple tags within the same category naturally do.
         const active = [...tagFilter];
-        const segmentTags = active.filter(t => /^\d+\.\s/.test(t)).map(norm);
-        const otherTags = active.filter(t => !/^\d+\.\s/.test(t)).map(norm);
+        const segmentTags = active.filter(isSegmentTag).map(norm);
+        const otherTags = active.filter(t => !isSegmentTag(t)).map(norm);
         const matchesAny = (tags) => tags.some(t => vVals.some(vv => vv.includes(t) || t.includes(vv)));
         const segmentOk = segmentTags.length === 0 || matchesAny(segmentTags);
         const otherOk = otherTags.length === 0 || matchesAny(otherTags);
@@ -672,7 +686,13 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     let matched = 0;
     parsedRows.forEach(r => {
       const found = allVessels.find(v => v.vessel?.toUpperCase() === r.vessel);
-      if (found && !reportedNames.has(found.vessel)) { addFromPool(found); matched++; }
+      if (found && !reportedNames.has(found.vessel)) {
+        // Use the vessel's real DWT/segment/etc data, but the freshly-parsed
+        // port/date/comment — the whole point of pasting is to report a new
+        // position, not silently re-add the vessel's old cached position.
+        addFromPool({ ...found, port: r.port || found.port, open_date: r.date || found.open_date, comment: r.direction || found.comment });
+        matched++;
+      }
       else if (!found) {
         importedNames.current.add(r.vessel);
         setReportVessels(p => [...p, {
@@ -1479,15 +1499,15 @@ Any direction`}</pre>
             <div style={{ borderTop: "1px solid " + C.bd, margin: "2px 0" }} />
 
             {allTags.length > 0 && (() => {
-              // Best-effort grouping for readability — numbered tags are
-              // unambiguous segments; a known set of compound names are trade
-              // lanes; everything else is treated as a region. Not a fixed
-              // taxonomy — just enough structure to stop the list looking like
-              // a flat wall of pills.
+              // Best-effort grouping for readability — segment tags (numbered
+              // or aliased) are unambiguous; a known set of compound names are
+              // trade lanes; everything else is treated as a region. Not a
+              // fixed taxonomy — just enough structure to stop the list
+              // looking like a flat wall of pills.
               const TRADE_WORDS = new Set(["suezagindia","suezindia","usacusgcaribs","agindiaredsea","medblacksea"]);
               const norm2 = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
               const categorize = (t) => {
-                if (/^\d+\.\s/.test(t)) return "Segment";
+                if (isSegmentTag(t)) return "Segment";
                 if (TRADE_WORDS.has(norm2(t))) return "Trade lane";
                 return "Region";
               };
