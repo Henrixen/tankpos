@@ -59,12 +59,24 @@ function parseTags(v) {
   const r = Array.isArray(v.tag) ? v.tag : String(v.tag).split(",");
   return r.map(t => String(t).toUpperCase().trim()).filter(Boolean);
 }
-function groupVessels(list, by) {
+const MN_SORT = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+function dateSortKey(str) {
+  if (!str) return 9999;
+  const m = String(str).toUpperCase().match(/(\d{1,2})\s*([A-Z]{3})/);
+  if (!m) return 9999;
+  const day = parseInt(m[1]), mon = MN_SORT.indexOf(m[2]);
+  return mon === -1 ? 9999 : mon * 31 + day;
+}
+
+function groupVessels(list, by, sortByDate) {
   const fn = by === "region"
     ? v => v.superRegion || classifyRegion(v.openPort) || "Other"
     : v => v.segment || "Other";
   const out = {};
   list.forEach(v => { const k = fn(v); if (!out[k]) out[k] = []; out[k].push(v); });
+  if (sortByDate) {
+    Object.keys(out).forEach(k => out[k].sort((a, b) => dateSortKey(a.date) - dateSortKey(b.date)));
+  }
   if (by === "segment") {
     const s = {};
     SEG_ORDER.forEach(k => { if (out[k]) s[k] = out[k]; });
@@ -194,10 +206,10 @@ function VesselRow({ v, localIdx, globalIdx, editing, onEdit, onSave, onDelete,
     color: "#dbe6f5", fontSize: 11, width: "100%", outline: "none",
     padding: "1px 2px", fontFamily: "inherit", minWidth: 0
   };
-  // Alternate: even rows slightly lighter — matches positions tab
+  // Alternate: even rows slightly lighter — matches the real Positions tab colors
   const rowBg = isDragOver
     ? "rgba(58,130,246,0.18)"
-    : localIdx % 2 === 0 ? "rgba(255,255,255,0.028)" : "transparent";
+    : localIdx % 2 === 0 ? "rgba(7,15,28,0.96)" : "rgba(22,37,64,0.82)";
 
   if (editing) return (
     <div style={{ display: "grid", gridTemplateColumns: GRID, background: "rgba(58,130,246,0.1)", color: "#dbe6f5", fontSize: 11, padding: "5px 8px", borderTop: "1px solid rgba(58,130,246,0.16)", alignItems: "center", gap: 2 }}>
@@ -249,6 +261,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     try { return JSON.parse(localStorage.getItem(DRAFT_META_KEY))?.subtitle || "10-22,000 DWT · COATED AND STST"; } catch { return "10-22,000 DWT · COATED AND STST"; }
   });
   const [posGroupBy, setPosGroupBy] = useState("segment");
+  const [sortByDate, setSortByDate] = useState(false);
   const [posDate, setPosDate] = useState(new Date().toISOString().split("T")[0]);
   const [exportStatus, setExportStatus] = useState("");
   const [editingRid, setEditingRid] = useState(null);
@@ -537,7 +550,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   }
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const posGrouped = useMemo(() => groupVessels(reportVessels, posGroupBy), [reportVessels, posGroupBy]);
+  const posGrouped = useMemo(() => groupVessels(reportVessels, posGroupBy, sortByDate), [reportVessels, posGroupBy, sortByDate]);
   const reportedNames = useMemo(() => new Set(reportVessels.map(v => v.vessel)), [reportVessels]);
 
   const openTimingData = useMemo(() => {
@@ -801,6 +814,40 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     };
     setRateGrid(G[type] || {});
   }
+  // Position List save/load — the Position List had a "Saved" display but no
+  // actual way to create a save; saveReport()/loadReport() above only ever
+  // handled Market report fields (commentary/rates/fixtures), never the
+  // vessel list itself.
+  const [posSaveStatus, setPosSaveStatus] = useState("");
+  async function savePositionList() {
+    setPosSaveStatus("Saving...");
+    try {
+      await supabase.from("reports").insert([{
+        report_type: "Position List",
+        report_date: posDate,
+        pos_title: posTitle,
+        pos_subtitle: posSubtitle,
+        pos_vessels: reportVessels,
+      }]);
+      setPosSaveStatus("Saved ✓");
+      loadSavedReports();
+    } catch (e) { console.error("savePositionList:", e); setPosSaveStatus("Save failed"); }
+    setTimeout(() => setPosSaveStatus(""), 2500);
+  }
+  async function loadPositionList(id) {
+    try {
+      const { data } = await supabase.from("reports").select("*").eq("id", id).single();
+      if (!data) return;
+      setPosTitle(data.pos_title || "CHEMS & SPECIALIZED POSITION LIST");
+      setPosSubtitle(data.pos_subtitle || "");
+      setPosDate(data.report_date || posDate);
+      const vessels = data.pos_vessels || [];
+      importedNames.current = new Set(vessels.map(v => v.vessel));
+      setReportVessels(vessels);
+      setSection("poslist");
+    } catch (e) { console.error("loadPositionList:", e); }
+  }
+
   async function saveReport() {
     try { await supabase.from("reports").insert([{ report_type: reportType, report_date: reportDate, commentary, rate_grid: rateGrid, tce_earnings: tceEarnings, fixtures, quotes }]); alert("Saved."); loadSavedReports(); } catch { alert("Save failed."); }
   }
@@ -1263,7 +1310,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       <style>{`@media print{body>*{visibility:hidden;}.pos-print,.pos-print *{visibility:visible;}.pos-print{position:absolute;left:0;top:0;width:100%;}.pos-print-wrap{height:auto!important;overflow:visible!important;}.no-export{display:none!important;}}`}</style>
 
       {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
-      <div style={{ width: 220, minWidth: 220, display: "flex", flexDirection: "column", background: C.bg2, borderRight: "1px solid " + C.bd, overflow: "hidden" }}>
+      <div style={{ width: 170, minWidth: 170, display: "flex", flexDirection: "column", background: C.bg2, borderRight: "1px solid " + C.bd, overflow: "hidden" }}>
         <div style={{ display: "flex", borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
           {[["poslist", "Positions"], ["market", "Market"]].map(([k, l]) => (
             <button key={k} onClick={() => setSection(k === "poslist" && section === "quick" ? "quick" : k)}
@@ -1275,12 +1322,11 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
           ))}
         </div>
         {(section === "poslist" || section === "quick") && (
-          <div style={{ display: "flex", gap: 4, padding: "6px 8px", borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
+          <div style={{ padding: "8px 10px", borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
             {[["poslist", "Position List"], ["quick", "Quick"]].map(([k, l]) => (
               <button key={k} onClick={() => setSection(k)}
-                style={{ flex: 1, padding: "5px 4px", fontSize: 10, fontWeight: 700, cursor: "pointer", borderRadius: 4,
-                  border: "1px solid " + (section === k ? ACCENT : C.bd), background: section === k ? "rgba(58,130,246,0.12)" : "transparent",
-                  color: section === k ? ACCENT : C.dim, fontFamily: "inherit" }}>
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 10px", marginBottom: 4, borderRadius: 5, cursor: "pointer", fontSize: 12, fontWeight: section === k ? 700 : 400,
+                  border: `1px solid ${section === k ? ACCENT : C.bd}`, background: section === k ? "rgba(58,130,246,0.1)" : "transparent", color: section === k ? ACCENT : C.dim, fontFamily: "inherit" }}>
                 {l}
               </button>
             ))}
@@ -1297,14 +1343,21 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
           <div style={{ flex: 1 }} />
 
           {/* Saved + Clear at bottom */}
-          <div style={{ flexShrink: 0, borderTop: "1px solid " + C.bd }}>
+          <div style={{ flexShrink: 0, borderTop: "1px solid " + C.bd, padding: "8px 10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+              <button onClick={savePositionList}
+                style={{ flex: 1, padding: "7px", fontSize: 11, fontWeight: 700, cursor: "pointer", borderRadius: 5, border: "1px solid rgba(63,185,80,0.45)", background: "rgba(63,185,80,0.1)", color: "#3fb950", fontFamily: "inherit" }}>
+                Save
+              </button>
+              {posSaveStatus && <span style={{ fontSize: 10, color: posSaveStatus === "Saved ✓" ? "#43e97b" : C.dim }}>{posSaveStatus}</span>}
+            </div>
             {savedReports.filter(r => r.report_type === "Position List").length > 0 && (
-              <div style={{ padding: "8px 10px", maxHeight: 110, overflowY: "auto" }}>
+              <div style={{ maxHeight: 110, overflowY: "auto" }}>
                 <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Saved</div>
                 {savedReports.filter(r => r.report_type === "Position List").map(r => (
-                  <div key={r.id} onClick={() => loadReport(r.id)} style={{ padding: "4px 7px", borderRadius: 3, background: C.bg3, cursor: "pointer", marginBottom: 3 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: ACCENT }}>Position List</div>
-                    <div style={{ fontSize: 10, color: C.dim }}>{new Date(r.report_date).toLocaleDateString("en-GB")}</div>
+                  <div key={r.id} onClick={() => loadPositionList(r.id)} style={{ padding: "4px 7px", borderRadius: 3, background: C.bg3, cursor: "pointer", marginBottom: 3 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: ACCENT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.pos_title || "Position List"}</div>
+                    <div style={{ fontSize: 10, color: C.dim }}>{(r.pos_vessels || []).length} vessels · {new Date(r.report_date).toLocaleDateString("en-GB")}</div>
                   </div>
                 ))}
               </div>
@@ -1396,6 +1449,10 @@ Any direction`}</pre>
                 <button key={k} onClick={() => setPosGroupBy(k)}
                   style={{ ...SB, border: `1px solid ${posGroupBy === k ? ACCENT : C.bd}`, background: posGroupBy === k ? ACCENT : "transparent", color: posGroupBy === k ? "#fff" : C.dim }}>{l}</button>
               ))}
+              <button onClick={() => setSortByDate(s => !s)}
+                style={{ ...SB, border: `1px solid ${sortByDate ? ACCENT : C.bd}`, background: sortByDate ? ACCENT : "transparent", color: sortByDate ? "#fff" : C.dim }}>
+                {sortByDate ? "✓ " : ""}Sort by date ↑
+              </button>
             </div>
             <div style={{ flex: 1 }} />
             {exportStatus && <span style={{ fontSize: 10, color: C.dim, maxWidth: 220 }}>{exportStatus}</span>}
@@ -1501,11 +1558,14 @@ Any direction`}</pre>
                   {allVessels.length === 0 ? "Select vessels on Positions tab" : "No vessels match your search/tags"}
                 </div>
               ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", fontSize: 10 }}>
+                  <colgroup>
+                    <col style={{ width: "32%" }} /><col style={{ width: "14%" }} /><col style={{ width: "16%" }} /><col style={{ width: "20%" }} /><col style={{ width: "14%" }} /><col style={{ width: "4%" }} />
+                  </colgroup>
                   <thead>
                     <tr style={{ position: "sticky", top: 0, background: C.bg2 }}>
                       {["Vessel", "DWT", "Open date", "Open port", "Updated", ""].map(h => (
-                        <th key={h} style={{ padding: "5px 8px", textAlign: "left", fontSize: 9, fontWeight: 700, color: C.dim, textTransform: "uppercase", borderBottom: "1px solid " + C.bd }}>{h}</th>
+                        <th key={h} style={{ padding: "5px 6px", textAlign: "left", fontSize: 9, fontWeight: 700, color: C.dim, textTransform: "uppercase", borderBottom: "1px solid " + C.bd, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -1515,12 +1575,12 @@ Any direction`}</pre>
                         style={{ cursor: "pointer", background: i % 2 === 0 ? "rgba(7,15,28,0.96)" : "rgba(22,37,64,0.82)" }}
                         onMouseEnter={e => e.currentTarget.style.background = "rgba(58,130,246,0.14)"}
                         onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "rgba(7,15,28,0.96)" : "rgba(22,37,64,0.82)"}>
-                        <td style={{ padding: "5px 8px", fontWeight: 600, color: C.tx, whiteSpace: "nowrap" }}>{v.vessel}</td>
-                        <td style={{ padding: "5px 8px", color: C.faint, whiteSpace: "nowrap" }}>{v.dwt ? fmtDwt(v.dwt) : ""}</td>
-                        <td style={{ padding: "5px 8px", color: C.faint, whiteSpace: "nowrap" }}>{v.date || ""}</td>
-                        <td style={{ padding: "5px 8px", color: C.faint, whiteSpace: "nowrap" }}>{v.openPort || ""}</td>
-                        <td style={{ padding: "5px 8px", color: C.faint, whiteSpace: "nowrap" }}>{v.updated_at ? new Date(v.updated_at).toLocaleDateString("en-GB") : ""}</td>
-                        <td style={{ padding: "5px 8px" }}><span style={{ fontSize: 15, color: ACCENT, fontWeight: 700 }}>+</span></td>
+                        <td style={{ padding: "5px 6px", fontWeight: 600, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel}</td>
+                        <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.dwt ? fmtDwt(v.dwt) : ""}</td>
+                        <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.date || ""}</td>
+                        <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.openPort || ""}</td>
+                        <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.updated_at ? new Date(v.updated_at).toLocaleDateString("en-GB") : ""}</td>
+                        <td style={{ padding: "5px 6px" }}><span style={{ fontSize: 14, color: ACCENT, fontWeight: 700 }}>+</span></td>
                       </tr>
                     ))}
                   </tbody>
