@@ -2298,61 +2298,66 @@ Any direction`}</pre>
             </div>
 
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-              {/* Step 1 */}
-              <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px" }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT, marginBottom: 6 }}>Step 1 — Paste positions</div>
-                <textarea value={quickPaste}
-                  onChange={e => { setQuickPaste(e.target.value); setQuickParseMsg(""); }}
-                  onPaste={handleImagePaste}
-                  placeholder="Paste text from WhatsApp or email, OR paste a screenshot directly (Ctrl/Cmd+V).\n\nText example:\n*MAERSK TANKERS*\nERIKA SCHULTE - GRANGEMOUTH - 6 JUL\nFURE VEN - THAMES - 6 JUL\n\nOperators auto-matched from your vessel database."
-                  style={{ width: "100%", minHeight: 120, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 11, padding: 9, outline: "none", resize: "vertical", fontFamily: "monospace", lineHeight: 1.6, boxSizing: "border-box", opacity: quickImgParsing ? 0.5 : 1 }} />
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                  <button onClick={parsePaste} disabled={quickImgParsing} style={{ ...SB, background: ACCENT, color: "#fff", border: "none", opacity: quickImgParsing ? 0.5 : 1 }}>Parse &amp; add rows</button>
-                  {quickPaste.trim() && <button onClick={() => { setQuickPaste(""); setQuickParseMsg(""); }} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Clear paste</button>}
-                  <button onClick={addQuickRow} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }} title="Add a blank row to fill in manually">+ Add row manually</button>
-                  {quickImgParsing && <span style={{ fontSize: 11, color: ACCENT }}>⏳ {quickParseMsg}</span>}
-                  {!quickImgParsing && quickParseMsg && <span style={{ fontSize: 11, color: quickParseMsg.startsWith("✓") ? "#43e97b" : "#f5a623" }}>{quickParseMsg}</span>}
+              {/* Step 1 (25%) + Step 2 (75%) side by side */}
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                {/* Step 1 */}
+                <div style={{ flex: "0 0 25%", minWidth: 220, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT, marginBottom: 6 }}>Step 1 — Paste positions</div>
+                  <textarea value={quickPaste}
+                    onChange={e => { setQuickPaste(e.target.value); setQuickParseMsg(""); }}
+                    onPaste={handleImagePaste}
+                    placeholder="Paste text from WhatsApp or email, OR paste a screenshot directly (Ctrl/Cmd+V).\n\nText example:\n*MAERSK TANKERS*\nERIKA SCHULTE - GRANGEMOUTH - 6 JUL\nFURE VEN - THAMES - 6 JUL\n\nOperators auto-matched from your vessel database."
+                    style={{ width: "100%", minHeight: 200, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 11, padding: 9, outline: "none", resize: "vertical", fontFamily: "monospace", lineHeight: 1.6, boxSizing: "border-box", opacity: quickImgParsing ? 0.5 : 1 }} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                    <button onClick={parsePaste} disabled={quickImgParsing} style={{ ...SB, background: ACCENT, color: "#fff", border: "none", opacity: quickImgParsing ? 0.5 : 1 }}>Parse &amp; add rows</button>
+                    {quickPaste.trim() && <button onClick={() => { setQuickPaste(""); setQuickParseMsg(""); }} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Clear paste</button>}
+                    <button onClick={addQuickRow} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }} title="Add a blank row to fill in manually">+ Add row manually</button>
+                    {quickImgParsing && <span style={{ fontSize: 11, color: ACCENT }}>⏳ {quickParseMsg}</span>}
+                    {!quickImgParsing && quickParseMsg && <span style={{ fontSize: 11, color: quickParseMsg.startsWith("✓") ? "#43e97b" : "#f5a623" }}>{quickParseMsg}</span>}
+                  </div>
+                  <div style={{ fontSize: 9, color: C.faint, marginTop: 5 }}>
+                    💡 Works with text paste AND screenshot paste — just Ctrl/Cmd+V with an image in clipboard
+                  </div>
                 </div>
-                <div style={{ fontSize: 9, color: C.faint, marginTop: 5 }}>
-                  💡 Works with text paste AND screenshot paste — just Ctrl/Cmd+V with an image in clipboard
-                </div>
-              </div>
 
-              {/* Step 2: Edit */}
-              {quickRows.length > 0 && (
-                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, overflow: "hidden" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", borderBottom: "1px solid " + C.bd }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT }}>Step 2 — Check &amp; edit ({quickRows.length} row{quickRows.length !== 1 ? "s" : ""}) — <span style={{ fontWeight: 400, color: C.faint }}>orange = operator not yet matched</span></div>
-                    <button onClick={addQuickRow} style={{ fontSize: 10, color: ACCENT, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>+ Add row</button>
+                {/* Step 2: Edit */}
+                {quickRows.length > 0 && (
+                  <div style={{ flex: "1 1 75%", minWidth: 0, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: 520 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT }}>Step 2 — Check &amp; edit ({quickRows.length} row{quickRows.length !== 1 ? "s" : ""}) — <span style={{ fontWeight: 400, color: C.faint }}>orange = operator not yet matched</span></div>
+                      <button onClick={addQuickRow} style={{ fontSize: 10, color: ACCENT, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>+ Add row</button>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 22px", background: ACCENT, color: "#fff", fontSize: 10, fontWeight: 700, padding: "5px 10px", gap: 6, flexShrink: 0 }}>
+                      <div>OPERATOR</div><div>VESSEL</div><div>PORT</div><div>DATE</div><div>DIRECTION (optional)</div><div></div>
+                    </div>
+                    <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+                      {quickRows.map((r, i) => {
+                        const iOp = r.operator ? C.tx : "#f5a623";
+                        const INP = (col) => ({ background: "transparent", border: "none", borderBottom: "1px solid rgba(58,130,246,0.28)", color: col || C.tx, fontSize: 11, outline: "none", padding: "1px 2px", width: "100%", fontFamily: "inherit", minWidth: 0 });
+                        // Enter jumps to the same column, next row down — same field index across the grid
+                        const jumpDown = (fieldIdx) => (e) => {
+                          if (e.key !== "Enter") return;
+                          e.preventDefault();
+                          const cells = document.querySelectorAll(".quick-row-input");
+                          const cols = 5; // operator, vessel, port, date, direction
+                          const target = cells[(i + 1) * cols + fieldIdx];
+                          target?.focus();
+                        };
+                        return (
+                          <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 22px", background: i%2===0?"rgba(255,255,255,0.025)":"transparent", padding: "5px 10px", gap: 6, borderTop: "1px solid rgba(58,130,246,0.1)", alignItems: "center" }}>
+                            <input className="quick-row-input" style={INP(iOp)} value={r.operator} onChange={e => updateQuickRow(r.id, "operator", e.target.value)} onKeyDown={jumpDown(0)} placeholder="Type operator..." title={r.operator ? r.operator : "Not found in DB — type it here"} />
+                            <input className="quick-row-input" style={{ ...INP(), fontWeight: 600 }} value={r.vessel} onChange={e => updateQuickRow(r.id, "vessel", e.target.value.toUpperCase())} onKeyDown={jumpDown(1)} placeholder="VESSEL" />
+                            <input className="quick-row-input" style={INP()} value={r.port} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} onKeyDown={jumpDown(2)} placeholder="PORT" />
+                            <input className="quick-row-input" style={INP()} value={r.date} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} onKeyDown={jumpDown(3)} placeholder="DATE" />
+                            <input className="quick-row-input" style={{ ...INP(C.dim) }} value={r.direction} onChange={e => updateQuickRow(r.id, "direction", e.target.value)} onKeyDown={jumpDown(4)} placeholder="Any direction / options..." />
+                            <button onClick={() => deleteQuickRow(r.id)} style={{ background: "none", border: "none", color: "rgba(239,68,68,0.55)", cursor: "pointer", fontSize: 12, padding: 0 }}>✕</button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 22px", background: ACCENT, color: "#fff", fontSize: 10, fontWeight: 700, padding: "5px 10px", gap: 6 }}>
-                    <div>OPERATOR</div><div>VESSEL</div><div>PORT</div><div>DATE</div><div>DIRECTION (optional)</div><div></div>
-                  </div>
-                  {quickRows.map((r, i) => {
-                    const iOp = r.operator ? C.tx : "#f5a623";
-                    const INP = (col) => ({ background: "transparent", border: "none", borderBottom: "1px solid rgba(58,130,246,0.28)", color: col || C.tx, fontSize: 11, outline: "none", padding: "1px 2px", width: "100%", fontFamily: "inherit", minWidth: 0 });
-                    // Enter jumps to the same column, next row down — same field index across the grid
-                    const jumpDown = (fieldIdx) => (e) => {
-                      if (e.key !== "Enter") return;
-                      e.preventDefault();
-                      const cells = document.querySelectorAll(".quick-row-input");
-                      const cols = 5; // operator, vessel, port, date, direction
-                      const target = cells[(i + 1) * cols + fieldIdx];
-                      target?.focus();
-                    };
-                    return (
-                      <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 22px", background: i%2===0?"rgba(255,255,255,0.025)":"transparent", padding: "5px 10px", gap: 6, borderTop: "1px solid rgba(58,130,246,0.1)", alignItems: "center" }}>
-                        <input className="quick-row-input" style={INP(iOp)} value={r.operator} onChange={e => updateQuickRow(r.id, "operator", e.target.value)} onKeyDown={jumpDown(0)} placeholder="Type operator..." title={r.operator ? r.operator : "Not found in DB — type it here"} />
-                        <input className="quick-row-input" style={{ ...INP(), fontWeight: 600 }} value={r.vessel} onChange={e => updateQuickRow(r.id, "vessel", e.target.value.toUpperCase())} onKeyDown={jumpDown(1)} placeholder="VESSEL" />
-                        <input className="quick-row-input" style={INP()} value={r.port} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} onKeyDown={jumpDown(2)} placeholder="PORT" />
-                        <input className="quick-row-input" style={INP()} value={r.date} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} onKeyDown={jumpDown(3)} placeholder="DATE" />
-                        <input className="quick-row-input" style={{ ...INP(C.dim) }} value={r.direction} onChange={e => updateQuickRow(r.id, "direction", e.target.value)} onKeyDown={jumpDown(4)} placeholder="Any direction / options..." />
-                        <button onClick={() => deleteQuickRow(r.id)} style={{ background: "none", border: "none", color: "rgba(239,68,68,0.55)", cursor: "pointer", fontSize: 12, padding: 0 }}>✕</button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Step 3: Preview + Copy */}
               {quickRows.length > 0 && (
