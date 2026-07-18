@@ -12,7 +12,7 @@ const DRAFT_KEY = "tankpos_poslist_v4";
 const DRAFT_META_KEY = "tankpos_poslist_meta_v4";
 
 // Compact column pixel widths — no wrapping, comment truncates with hover
-const CW = { vessel:148, dwt:62, built:48, coating:66, open:54, port:86, comment:108, operator:128, del:22 };
+const CW = { vessel:148, dwt:62, built:48, coating:66, open:54, port:86, comment:114, operator:128, del:28 };
 const HEADS = ["VESSEL","DWT","BUILT","COATING","OPEN","PORT","COMMENT","OPERATOR",""];
 const GRID = Object.values(CW).map(w=>w+"px").join(" ");
 
@@ -740,9 +740,12 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if (editingRid === rid) setEditingRid(null);
   }
   function saveEdit(rid, vals) { setReportVessels(p => p.map(v => v._rid === rid ? { ...v, ...vals } : v)); setEditingRid(null); }
-  function addManualVessel() {
+  function addManualVessel(bucket) {
     const rid = "manual_" + Date.now();
-    setReportVessels(p => [...p, { vessel: "", dwt: "", built: "", coating: "", date: "", openPort: "", comment: "", operator: "", segment: "", superRegion: "", _rid: rid }]);
+    const preset = bucket
+      ? (posGroupBy === "region" ? { superRegion: bucket } : { segment: bucket })
+      : {};
+    setReportVessels(p => [...p, { vessel: "", dwt: "", built: "", coating: "", date: "", openPort: "", comment: "", operator: "", segment: "", superRegion: "", ...preset, _rid: rid }]);
     setEditingRid(rid);
   }
   function clearAll() {
@@ -1498,7 +1501,11 @@ Any direction`}</pre>
                   {/* Rows grouped */}
                   {Object.entries(posGrouped).map(([bucket, rows]) => (
                     <div key={bucket}>
-                      <div style={{ background: "rgba(88,166,255,0.14)", color: "#9fc4f0", fontSize: 11, fontWeight: 700, padding: "5px 8px", letterSpacing: 0.5, textTransform: "uppercase", borderTop: "1px solid rgba(88,166,255,0.25)", borderBottom: "1px solid rgba(88,166,255,0.25)" }}>{bucket}</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(88,166,255,0.14)", borderTop: "1px solid rgba(88,166,255,0.25)", borderBottom: "1px solid rgba(88,166,255,0.25)" }}>
+                        <span style={{ color: "#9fc4f0", fontSize: 11, fontWeight: 700, padding: "5px 8px", letterSpacing: 0.5, textTransform: "uppercase" }}>{bucket}</span>
+                        <button onClick={() => addManualVessel(bucket)} className="no-export" title={`Add a vessel to ${bucket}`}
+                          style={{ background: "none", border: "none", color: "#9fc4f0", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: "0 8px", lineHeight: 1 }}>+</button>
+                      </div>
                       {rows.map((v, localIdx) => {
                         const globalIdx = reportVessels.findIndex(r => r._rid === v._rid);
                         return (
@@ -1566,7 +1573,7 @@ Any direction`}</pre>
                   </thead>
                   <tbody>
                     {vesselPool.map((v, i) => (
-                      <tr key={v.vessel} onClick={() => addFromPool(v)} className="pool-row"
+                      <tr key={(v.imo_no || v.vessel) + "_" + i} onClick={() => addFromPool(v)} className="pool-row"
                         style={{ cursor: "pointer", background: i % 2 === 0 ? "rgba(255,255,255,0.03)" : "transparent" }}>
                         <td style={{ padding: "5px 6px", fontWeight: 600, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel}</td>
                         <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.dwt ? fmtDwt(v.dwt) : ""}</td>
