@@ -12,9 +12,12 @@ const DRAFT_KEY = "tankpos_poslist_v4";
 const DRAFT_META_KEY = "tankpos_poslist_meta_v4";
 
 // Compact column pixel widths — no wrapping, comment truncates with hover
-const CW = { vessel:148, dwt:62, built:48, coating:66, open:54, port:86, comment:114, operator:128, del:28 };
+const CW = { vessel:148, dwt:62, built:48, coating:66, open:54, port:86, comment:104, operator:122, del:28 };
 const HEADS = ["VESSEL","DWT","BUILT","COATING","OPEN","PORT","COMMENT","OPERATOR",""];
-const GRID = Object.values(CW).map(w=>w+"px").join(" ");
+// fr units instead of fixed px — always fills 100% of the row exactly,
+// regardless of padding/gap math, instead of needing to hand-tune pixel
+// sums every time a wrapper's padding changes.
+const GRID = Object.values(CW).map(w=>w+"fr").join(" ");
 
 // UMD script-tag loader — avoids Vite URL import failures
 let _htiP = null;
@@ -212,7 +215,7 @@ function VesselRow({ v, localIdx, globalIdx, editing, onEdit, onSave, onDelete,
     : localIdx % 2 === 0 ? "rgba(255,255,255,0.03)" : "transparent";
 
   if (editing) return (
-    <div style={{ display: "grid", gridTemplateColumns: GRID, background: "rgba(58,130,246,0.1)", color: "#dbe6f5", fontSize: 11, padding: "5px 8px", borderTop: "1px solid rgba(58,130,246,0.16)", alignItems: "center", gap: 2 }}>
+    <div style={{ display: "grid", gridTemplateColumns: GRID, width: "100%", boxSizing: "border-box", background: "rgba(58,130,246,0.1)", color: "#dbe6f5", fontSize: 11, padding: "5px 8px", borderTop: "1px solid rgba(58,130,246,0.16)", alignItems: "center", gap: 2 }}>
       <input style={INP} value={vals.vessel || ""} onChange={e => upd("vessel", e.target.value)} autoFocus />
       <input style={INP} value={vals.dwt || ""} onChange={e => upd("dwt", e.target.value)} />
       <input style={INP} value={vals.built || ""} onChange={e => upd("built", e.target.value)} />
@@ -230,7 +233,7 @@ function VesselRow({ v, localIdx, globalIdx, editing, onEdit, onSave, onDelete,
     <div
       draggable onDragStart={onDragStart} onDragEnter={onDragEnter} onDragEnd={onDragEnd}
       onDragOver={e => e.preventDefault()} onClick={onEdit} title="Click to edit · drag to reorder"
-      style={{ display: "grid", gridTemplateColumns: GRID, background: rowBg, color: "#dbe6f5", fontSize: 11, padding: "4px 8px", borderTop: "1px solid rgba(58,130,246,0.1)", cursor: "pointer", alignItems: "center", gap: 2, userSelect: "none" }}
+      style={{ display: "grid", gridTemplateColumns: GRID, width: "100%", boxSizing: "border-box", background: rowBg, color: "#dbe6f5", fontSize: 11, padding: "4px 8px", borderTop: "1px solid rgba(58,130,246,0.1)", cursor: "pointer", alignItems: "center", gap: 2, userSelect: "none" }}
     >
       <div style={{ ...CELL, fontWeight: 600 }}>{v.vessel}</div>
       <div style={CELL}>{fmtDwt(v.dwt)}</div>
@@ -1470,7 +1473,7 @@ Any direction`}</pre>
           {/* Scrollable report area */}
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto", padding: 12 }}>
             {/* Captured node — entire report */}
-            <div ref={previewRef} className="pos-print" style={{ background: "#070f1c", fontFamily: "Inter,system-ui,sans-serif", width: 750 }}>
+            <div ref={previewRef} className="pos-print" style={{ background: "#070f1c", fontFamily: "Inter,system-ui,sans-serif", width: 750, border: "1px solid rgba(88,166,255,0.2)", borderRadius: 8, overflow: "hidden" }}>
               {/* Date bar */}
               <div style={{ background: "#0c1e3d", padding: "7px 14px", textAlign: "right" }}>
                 <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>{new Date(posDate).toLocaleDateString("en-GB")}</span>
@@ -1488,14 +1491,14 @@ Any direction`}</pre>
               </div>
 
               {/* Table */}
-              <div style={{ padding: "8px 6px 2px" }}>
+              <div style={{ padding: "8px 0 4px" }}>
                 {reportVessels.length === 0 ? (
                   <div style={{ padding: 28, textAlign: "center", color: "rgba(219,230,245,0.3)", fontSize: 12 }}>
                     No vessels — add from the left panel.
                   </div>
                 ) : <>
                   {/* Column headers */}
-                  <div style={{ display: "grid", gridTemplateColumns: GRID, background: ACCENT, color: "#fff", fontSize: 10, fontWeight: 700, padding: "5px 8px", gap: 2 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: GRID, width: "100%", boxSizing: "border-box", background: ACCENT, color: "#fff", fontSize: 10, fontWeight: 700, padding: "5px 8px", gap: 2 }}>
                     {HEADS.map((h, i) => <div key={i} style={{ overflow: "hidden", whiteSpace: "nowrap" }}>{h}</div>)}
                   </div>
                   {/* Rows grouped */}
