@@ -113,7 +113,7 @@ function defaultRegionGroups() {
   // Seeded directly from constants.js's REGION_MAP — your existing port
   // lists, pre-loaded so Settings opens already populated instead of empty.
   return [
-    {id:"wcuk", label:"WCUK", category:"region", aliases:["Belfast","Cork","Dublin","Milford Haven","Liverpool","Clyde","Mersey","Glasgow","Avonmouth","Bristol","Swansea","Barrow","Stanlow","Clydebank","Fawley","Plymouth"]},
+    {id:"wcuk", label:"WCUK", category:"region", aliases:["Belfast","Cork","Dublin","Milford Haven","Liverpool","Clyde","Mersey","Tranmere","Glasgow","Avonmouth","Bristol","Swansea","Barrow","Stanlow","Clydebank","Fawley","Plymouth"]},
     {id:"ecuk", label:"ECUK", category:"region", aliases:["Thames","Humber","Immingham","Teesport","Tees","Teesside","Tyne","Sunderland","Middlesbrough","Grangemouth","Forth","Leith","Dundee","Medway","Wilton","Braefoot Bay","BB","Bbay"]},
     {id:"canal", label:"Canal", category:"region", aliases:["Rotterdam","ARA","Amsterdam","Antwerp","Ghent","Flushing","Le Havre","Dunkirk","Rouen","Hamburg","Brunsbuttel","Wilhelmshaven","Bremerhaven","Bremen","Zeebrugge","Brest","Calais","Dieppe"]},
     {id:"biscay", label:"Biscay", category:"region", aliases:["Bordeaux","BDX","Nantes","La Pallice","Bayonne","Bilbao","Santander","Le Verdon","Donges","Montoir","Gijon","Ferrol","Brest"]},
