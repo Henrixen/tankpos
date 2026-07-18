@@ -100,8 +100,33 @@ function defaultGroups() {
 }
 function saveGroups(groups) { localStorage.setItem(STORAGE_KEY, JSON.stringify(groups)); }
 
+// ─── Region Filter Groups — same pattern as Cargo Filter Groups above ────────
+const REGION_STORAGE_KEY = "signal_region_filter_groups";
+const REGION_CATEGORIES = [
+  { id:"region", label:"Region", field:"openPort", hint:"Matches the vessel's open port field" },
+];
+function loadRegionGroups() {
+  try { const raw=localStorage.getItem(REGION_STORAGE_KEY); return raw?JSON.parse(raw):defaultRegionGroups(); }
+  catch { return defaultRegionGroups(); }
+}
+function defaultRegionGroups() {
+  // Seeded from the previously-hardcoded region list — aliases start empty
+  // (or with just the label) since the real port lists lived in constants.js;
+  // fill them in here to make each region actually match ports.
+  return [
+    {id:"wcuk",   label:"WCUK",   category:"region", aliases:["WCUK"]},
+    {id:"ecuk",   label:"ECUK",   category:"region", aliases:["ECUK"]},
+    {id:"canal",  label:"Canal",  category:"region", aliases:["Canal"]},
+    {id:"biscay", label:"Biscay", category:"region", aliases:["Biscay"]},
+    {id:"skaw",   label:"Skaw",   category:"region", aliases:["Skaw"]},
+    {id:"baltic", label:"Baltic", category:"region", aliases:["Baltic"]},
+    {id:"med",    label:"Med",    category:"region", aliases:["Med","Mediterranean"]},
+  ];
+}
+function saveRegionGroups(groups) { localStorage.setItem(REGION_STORAGE_KEY, JSON.stringify(groups)); }
+
 // Single filter-group row, styled like a Tag Management row
-function GroupRow({g,editing,onStartEdit,onSaveEdit,onCancelEdit,onDelete,editLabel,setEditLabel,editAliases,setEditAliases,editCategory,setEditCategory}){
+function GroupRow({g,editing,onStartEdit,onSaveEdit,onCancelEdit,onDelete,editLabel,setEditLabel,editAliases,setEditAliases,editCategory,setEditCategory,categories,defaultCategory}){
   const isEditing=editing===g.id;
   if(isEditing){
     return(
@@ -111,12 +136,14 @@ function GroupRow({g,editing,onStartEdit,onSaveEdit,onCancelEdit,onDelete,editLa
             <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Label</div>
             <input value={editLabel} onChange={e=>setEditLabel(e.target.value)} style={inp} placeholder="Button label"/>
           </div>
-          <div style={{flex:"0 0 160px"}}>
-            <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Category</div>
-            <select value={editCategory} onChange={e=>setEditCategory(e.target.value)} style={sel}>
-              {CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
-            </select>
-          </div>
+          {categories.length>1&&(
+            <div style={{flex:"0 0 160px"}}>
+              <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Category</div>
+              <select value={editCategory} onChange={e=>setEditCategory(e.target.value)} style={sel}>
+                {categories.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
+              </select>
+            </div>
+          )}
         </div>
         <div>
           <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Aliases (comma-separated)</div>
@@ -176,6 +203,29 @@ export default function SettingsTab() {
   const usedCats=[...new Set(groups.map(g=>g.category||"grade"))];
   const cats=CATEGORIES.filter(c=>usedCats.includes(c.id));
 
+  // Region groups — same add/edit/delete pattern as cargo groups
+  const [regionGroups, setRegionGroups] = useState(loadRegionGroups);
+  useEffect(()=>{ saveRegionGroups(regionGroups); },[regionGroups]);
+  const [regionEditing, setRegionEditing] = useState(null);
+  const [regionEditLabel, setRegionEditLabel] = useState("");
+  const [regionEditAliases, setRegionEditAliases] = useState("");
+  const [regionNewLabel, setRegionNewLabel] = useState("");
+  const [regionNewAliases, setRegionNewAliases] = useState("");
+
+  function startRegionEdit(g){setRegionEditing(g.id);setRegionEditLabel(g.label);setRegionEditAliases(g.aliases.join(", "));}
+  function saveRegionEdit(){
+    setRegionGroups(prev=>prev.map(g=>g.id===regionEditing?{...g,label:regionEditLabel.trim(),aliases:regionEditAliases.split(",").map(s=>s.trim()).filter(Boolean)}:g));
+    setRegionEditing(null);
+  }
+  function delRegion(id,label){
+    if(window.confirm(`Delete region "${label}"?`)) setRegionGroups(prev=>prev.filter(g=>g.id!==id));
+  }
+  function addRegionGroup(){
+    if(!regionNewLabel.trim())return;
+    setRegionGroups(prev=>[...prev,{id:"rgn_"+Date.now(),label:regionNewLabel.trim(),category:"region",aliases:regionNewAliases.split(",").map(s=>s.trim()).filter(Boolean)}]);
+    setRegionNewLabel("");setRegionNewAliases("");
+  }
+
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px",fontFamily:"Inter,sans-serif"}}>
       <SectionCard title="Inter UKC Pool" subtitle="Operators and DWT range used by the Inter UKC filter.">
@@ -200,6 +250,7 @@ export default function SettingsTab() {
                     editLabel={editLabel} setEditLabel={setEditLabel}
                     editAliases={editAliases} setEditAliases={setEditAliases}
                     editCategory={editCategory} setEditCategory={setEditCategory}
+                    categories={CATEGORIES}
                   />
                 ))}
               </div>
@@ -237,6 +288,57 @@ export default function SettingsTab() {
             {groups.map(g=>(
               <span key={g.id} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:5,border:"1px solid rgba(88,166,255,0.3)",background:"rgba(88,166,255,0.1)",color:"#c8deff",fontFamily:"inherit"}}>{g.label}</span>
             ))}
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Region Filter Groups" subtitle="Each group creates a Region filter button in the Positions report. Aliases are matched against the vessel's open port.">
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {regionGroups.map(g=>(
+                <GroupRow key={g.id} g={g}
+                  editing={regionEditing}
+                  onStartEdit={()=>startRegionEdit(g)}
+                  onSaveEdit={saveRegionEdit}
+                  onCancelEdit={()=>setRegionEditing(null)}
+                  onDelete={()=>delRegion(g.id,g.label)}
+                  editLabel={regionEditLabel} setEditLabel={setRegionEditLabel}
+                  editAliases={regionEditAliases} setEditAliases={setRegionEditAliases}
+                  editCategory="region" setEditCategory={()=>{}}
+                  categories={REGION_CATEGORIES}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Add new region */}
+          <div style={{display:"flex",flexDirection:"column",gap:8,padding:"8px",background:C.bg2,borderRadius:6,border:"1px solid "+C.bd2}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>+ Add new region</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
+              <div style={{flex:"0 0 150px"}}>
+                <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Region label</div>
+                <input value={regionNewLabel} onChange={e=>setRegionNewLabel(e.target.value)} style={inp} placeholder="e.g. WC US"/>
+              </div>
+              <div style={{flex:1,minWidth:200}}>
+                <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Aliases (comma-separated port names/keywords)</div>
+                <input value={regionNewAliases} onChange={e=>setRegionNewAliases(e.target.value)} style={inp} placeholder="e.g. Los Angeles, Long Beach, Oakland"
+                  onKeyDown={e=>e.key==="Enter"&&addRegionGroup()}/>
+              </div>
+              <button onClick={addRegionGroup} style={{fontSize:12,fontWeight:600,padding:"6px 14px",borderRadius:5,border:"1px solid rgba(88,166,255,0.5)",background:"rgba(88,166,255,0.15)",color:"#9ec5ff",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Add region</button>
+            </div>
+          </div>
+
+          <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",paddingTop:8,borderTop:"1px solid "+C.bd2}}>
+            <button onClick={()=>{if(window.confirm("Reset all region groups to defaults? This removes any custom regions/aliases you added.")) setRegionGroups(defaultRegionGroups());}}
+              style={{fontSize:11,fontWeight:600,padding:"4px 12px",borderRadius:5,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit"}}>Reset to defaults</button>
+            <span style={{fontSize:11,color:C.faint}}>Preview:</span>
+            {regionGroups.map(g=>(
+              <span key={g.id} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:5,border:"1px solid rgba(88,166,255,0.3)",background:"rgba(88,166,255,0.1)",color:"#c8deff",fontFamily:"inherit"}}>{g.label}</span>
+            ))}
+          </div>
+          <div style={{fontSize:10,color:C.faint,fontStyle:"italic"}}>
+            Note: like Cargo Filter Groups, this is stored on this device only (not synced via Supabase) — set it up again on other devices if you use more than one.
           </div>
         </div>
       </SectionCard>
