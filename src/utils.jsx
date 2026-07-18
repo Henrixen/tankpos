@@ -200,8 +200,20 @@ export function classifyRegion(portName) {
   if (!n) return null;
   const direct = Object.keys(REGION_MAP).find(r => r.toLowerCase() === n);
   if (direct) return direct;
+  // Substring matching is inherently risky (a short keyword like "we" or
+  // "china" abbreviations can accidentally appear inside an unrelated port
+  // name). Require both sides to be reasonably long before allowing a
+  // substring match — short strings only match via the exact first-word
+  // check below, not fuzzy substring matching.
+  const MIN_SUBSTR_LEN = 4;
   for (const [region, ports] of Object.entries(REGION_MAP)) {
-    if (ports.some(p => p && (n.includes(p) || p.includes(n) || n.split(/[\s/+,]/)[0]===p))) return region;
+    if (ports.some(p => {
+      if (!p) return false;
+      const firstWord = n.split(/[\s/+,]/)[0];
+      if (firstWord === p) return true;
+      if (p.length < MIN_SUBSTR_LEN || n.length < MIN_SUBSTR_LEN) return false;
+      return n.includes(p) || p.includes(n);
+    })) return region;
   }
   return null;
 }
