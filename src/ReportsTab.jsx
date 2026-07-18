@@ -260,9 +260,16 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   // Pool filters
   const [tagFilter, setTagFilter] = useState(new Set());
-  const [tagsExpanded, setTagsExpanded] = useState(false);
+  const [regionFilter, setRegionFilter] = useState(new Set());       // WCUK/ECUK/Canal/Biscay/Skaw/Baltic/Med — derived from openPort
+  const [superRegionFilter, setSuperRegionFilter] = useState(new Set()); // Africa/Atlantic/Med/NWE/etc — v.superRegion
+  const [segmentFilter, setSegmentFilter] = useState(new Set());     // Sub 10k/City/Inter/J19/Flexi/Handy/MR — v.segment
+  const [dwtFilter, setDwtFilter] = useState(new Set());
+  const [dwtRange, setDwtRange] = useState({ min: "", max: "" });
+  const [builtFilter, setBuiltFilter] = useState(new Set());
+  const [builtRange, setBuiltRange] = useState({ min: "", max: "" });
   const [dateFilter, setDateFilter] = useState("all");
   const [poolSearch, setPoolSearch] = useState("");
+  const [tagsExpanded, setTagsExpanded] = useState(false);
   const [posPasteText, setPosPasteText] = useState("");
   const [posPasteOpen, setPosPasteOpen] = useState(false);
   const [posPasting, setPosPasting] = useState(false);
@@ -582,35 +589,44 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   const vesselPool = useMemo(() => {
     const now = new Date();
+    const inRange = (val, range) => {
+      const n = parseFloat(val);
+      if (isNaN(n)) return false;
+      if (range.min !== "" && n < parseFloat(range.min)) return false;
+      if (range.max !== "" && n > parseFloat(range.max)) return false;
+      return true;
+    };
+    const DWT_BUCKETS = { "<10": [0,10000], "10-15": [10000,15000], "15-20": [15000,20000], "20-30": [20000,30000], "30-40": [30000,40000], ">40": [40000,Infinity] };
+    const BUILT_BUCKETS = { "<2005": [0,2004], "2005-10": [2005,2010], "2010-15": [2010,2015], "2015-20": [2015,2020], ">2020": [2021,9999] };
+
     return allVessels.filter(v => {
       if (reportedNames.has(v.vessel)) return false;
       if (poolSearch && !(
         v.vessel?.toLowerCase().includes(poolSearch.toLowerCase()) ||
         v.operator?.toLowerCase().includes(poolSearch.toLowerCase())
       )) return false;
+
       if (tagFilter.size > 0) {
-        // Match against manual tag, superRegion, or segment — normalized and
-        // substring-based, since filter labels (e.g. "2. CITYCLASS (10-15)")
-        // rarely match a vessel's raw segment string ("Cityclass") exactly.
-        const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-        const vVals = [
-          ...parseTags(v),
-          v.superRegion ? v.superRegion : null,
-          v.segment ? v.segment : null,
-        ].filter(Boolean).map(norm);
-        // Segment tags include both numbered ("1. SMALL (<10)") and unnumbered
-        // aliases ("FLEXI", "J19", "MR", etc — same values used as group
-        // headers in the Position List table). A vessel only ever has ONE
-        // segment and ONE region, so selecting a segment tag and a region tag
-        // together should narrow down (AND) — not broaden (OR) the way
-        // multiple tags within the same category naturally do.
-        const active = [...tagFilter];
-        const segmentTags = active.filter(isSegmentTag).map(norm);
-        const otherTags = active.filter(t => !isSegmentTag(t)).map(norm);
-        const matchesAny = (tags) => tags.some(t => vVals.some(vv => vv.includes(t) || t.includes(vv)));
-        const segmentOk = segmentTags.length === 0 || matchesAny(segmentTags);
-        const otherOk = otherTags.length === 0 || matchesAny(otherTags);
-        if (!segmentOk || !otherOk) return false;
+        const vTags = parseTags(v).map(t => t.toUpperCase());
+        if (![...tagFilter].some(t => vTags.includes(t.toUpperCase()))) return false;
+      }
+      if (segmentFilter.size > 0 && !segmentFilter.has(v.segment)) return false;
+      if (superRegionFilter.size > 0 && !superRegionFilter.has(v.superRegion)) return false;
+      if (regionFilter.size > 0) {
+        const r = classifyRegion(v.openPort);
+        if (![...regionFilter].includes(r)) return false;
+      }
+      if (dwtFilter.size > 0 || dwtRange.min !== "" || dwtRange.max !== "") {
+        const dwt = parseFloat(v.dwt);
+        const inBucket = [...dwtFilter].some(b => { const [lo,hi] = DWT_BUCKETS[b]; return dwt >= lo && dwt < hi; });
+        const inCustomRange = (dwtRange.min !== "" || dwtRange.max !== "") ? inRange(v.dwt, dwtRange) : false;
+        if (!inBucket && !inCustomRange) return false;
+      }
+      if (builtFilter.size > 0 || builtRange.min !== "" || builtRange.max !== "") {
+        const built = parseFloat(v.built);
+        const inBucket = [...builtFilter].some(b => { const [lo,hi] = BUILT_BUCKETS[b]; return built >= lo && built <= hi; });
+        const inCustomRange = (builtRange.min !== "" || builtRange.max !== "") ? inRange(v.built, builtRange) : false;
+        if (!inBucket && !inCustomRange) return false;
       }
       if (dateFilter !== "all" && v.updated_at) {
         const diff = (now - new Date(v.updated_at)) / 86400000;
@@ -620,7 +636,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       }
       return true;
     });
-  }, [allVessels, reportedNames, tagFilter, poolSearch, dateFilter]);
+  }, [allVessels, reportedNames, tagFilter, segmentFilter, superRegionFilter, regionFilter, dwtFilter, dwtRange, builtFilter, builtRange, poolSearch, dateFilter]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
   function addFromPool(v) {
@@ -1467,7 +1483,7 @@ Any direction`}</pre>
           </div>
 
           {/* ── Vessel pool table — fills the space between the report preview and the controls sidebar ── */}
-          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", borderLeft: "1px solid " + C.bd, overflow: "hidden" }}>
+          <div style={{ flex: "0 1 480px", maxWidth: 480, minWidth: 0, display: "flex", flexDirection: "column", borderLeft: "1px solid " + C.bd, overflow: "hidden" }}>
             <div style={{ padding: "8px 12px", borderBottom: "1px solid " + C.bd, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               <span style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em" }}>
                 {vesselPool.length} vessel{vesselPool.length !== 1 ? "s" : ""} match{vesselPool.length === 1 ? "es" : ""}
@@ -1496,9 +1512,9 @@ Any direction`}</pre>
                   <tbody>
                     {vesselPool.map((v, i) => (
                       <tr key={v.vessel} onClick={() => addFromPool(v)}
-                        style={{ cursor: "pointer", background: i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent" }}
-                        onMouseEnter={e => e.currentTarget.style.background = "rgba(58,130,246,0.08)"}
-                        onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent"}>
+                        style={{ cursor: "pointer", background: i % 2 === 0 ? "rgba(7,15,28,0.96)" : "rgba(22,37,64,0.82)" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "rgba(58,130,246,0.14)"}
+                        onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "rgba(7,15,28,0.96)" : "rgba(22,37,64,0.82)"}>
                         <td style={{ padding: "5px 8px", fontWeight: 600, color: C.tx, whiteSpace: "nowrap" }}>{v.vessel}</td>
                         <td style={{ padding: "5px 8px", color: C.faint, whiteSpace: "nowrap" }}>{v.dwt ? fmtDwt(v.dwt) : ""}</td>
                         <td style={{ padding: "5px 8px", color: C.faint, whiteSpace: "nowrap" }}>{v.date || ""}</td>
@@ -1513,8 +1529,8 @@ Any direction`}</pre>
             </div>
           </div>
 
-          {/* ── Controls — paste, date filter, search, tags (always expanded now there's room) ── */}
-          <div style={{ width: 260, flexShrink: 0, borderLeft: "1px solid " + C.bd, display: "flex", flexDirection: "column", overflowY: "auto", padding: "10px 12px", gap: 6 }}>
+          {/* ── Controls — paste, then the same category structure as the Positions tab filter panel ── */}
+          <div style={{ width: 280, flexShrink: 0, borderLeft: "1px solid " + C.bd, display: "flex", flexDirection: "column", overflowY: "auto", padding: "10px 12px", gap: 8 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em" }}>Add vessels</div>
 
             <button onClick={() => setPosPasteOpen(o => !o)}
@@ -1534,49 +1550,75 @@ Any direction`}</pre>
               </div>
             )}
 
-            <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-              {[["all", "All"], ["today", "Today"], ["2d", "2d"], ["7d", "7d"]].map(([k, l]) => (
-                <button key={k} onClick={() => setDateFilter(k)}
-                  style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 3, cursor: "pointer", border: `1px solid ${dateFilter === k ? ACCENT : C.bd}`, background: dateFilter === k ? ACCENT : "transparent", color: dateFilter === k ? "#fff" : C.dim, fontFamily: "inherit" }}>{l}</button>
-              ))}
-            </div>
             <input value={poolSearch} onChange={e => setPoolSearch(e.target.value)} placeholder="Search vessel or operator..."
               style={{ ...IS, width: "100%", boxSizing: "border-box" }} />
 
             <div style={{ borderTop: "1px solid " + C.bd, margin: "2px 0" }} />
 
-            {allTags.length > 0 && (() => {
-              // Best-effort grouping for readability — segment tags (numbered
-              // or aliased) are unambiguous; a known set of compound names are
-              // trade lanes; everything else is treated as a region. Not a
-              // fixed taxonomy — just enough structure to stop the list
-              // looking like a flat wall of pills.
-              const TRADE_WORDS = new Set(["suezagindia","suezindia","usacusgcaribs","agindiaredsea","medblacksea"]);
-              const norm2 = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
-              const categorize = (t) => {
-                if (isSegmentTag(t)) return "Segment";
-                if (TRADE_WORDS.has(norm2(t))) return "Trade lane";
-                return "Region";
-              };
-              const groups = { Segment: [], "Trade lane": [], Region: [] };
-              allTags.forEach(t => groups[categorize(t)].push(t));
+            {/* Same category structure/colors as the Positions tab filter panel — stacked vertically here since this sidebar is narrower than that full-width grid */}
+            {(() => {
+              const RCOL = ({ label, col, children }) => (
+                <div style={{ marginBottom: 4 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: col, textTransform: "uppercase", letterSpacing: "0.1em", paddingBottom: 3, borderBottom: "1px solid " + C.bd, marginBottom: 4 }}>{label}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>{children}</div>
+                </div>
+              );
+              const RB = ({ active, onClick, children }) => (
+                <button onClick={onClick} style={{ fontSize: 10, fontWeight: 600, padding: "3px 7px", borderRadius: 3, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                  border: "1px solid " + (active ? C.blue : "rgba(120,160,220,0.35)"), background: active ? "rgba(88,166,255,.22)" : C.bg3, color: active ? "#d9ecff" : "#9fc3f5" }}>
+                  {children}
+                </button>
+              );
+              const toggleIn = (setter) => (val) => setter(prev => { const n = new Set(prev); n.has(val) ? n.delete(val) : n.add(val); return n; });
+
+              const usedTags = [...new Set(allVessels.map(v => (v.tag || "").trim()).filter(Boolean))].sort();
+              const usedSegments = [...new Set(allVessels.map(v => v.segment).filter(Boolean))]
+                .sort((a, b) => ["Sub 10k","City","Inter","J19","Flexi","Handy","MR"].indexOf(a) - ["Sub 10k","City","Inter","J19","Flexi","Handy","MR"].indexOf(b));
+              const usedSuperRegions = [...new Set(allVessels.map(v => v.superRegion).filter(Boolean))].sort();
 
               return (
                 <>
-                  {["Segment", "Region", "Trade lane"].map(groupName => groups[groupName].length > 0 && (
-                    <div key={groupName}>
-                      <div style={{ fontSize: 8, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{groupName}</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 4 }}>
-                        {groups[groupName].map(t => (
-                          <button key={t} onClick={() => setTagFilter(p => { const n = new Set(p); n.has(t) ? n.delete(t) : n.add(t); return n; })}
-                            style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3, cursor: "pointer", border: `1px solid ${tagFilter.has(t) ? ACCENT : C.bd}`, background: tagFilter.has(t) ? ACCENT : "transparent", color: tagFilter.has(t) ? "#fff" : C.dim, fontFamily: "inherit" }}>{t}</button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                  {tagFilter.size > 0 && (
-                    <button onClick={() => setTagFilter(new Set())} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer", textAlign: "left" }}>✕ clear tags</button>
+                  {usedTags.length > 0 && (
+                    <RCOL label="Tags" col="#79c0ff">
+                      {usedTags.map(t => (<RB key={t} active={tagFilter.has(t)} onClick={() => toggleIn(setTagFilter)(t)}>{t.toUpperCase()}</RB>))}
+                      {tagFilter.size > 0 && <RB active={false} onClick={() => setTagFilter(new Set())}><span style={{ color: C.red }}>✕</span></RB>}
+                    </RCOL>
                   )}
+                  <RCOL label="Updated" col={C.blue}>
+                    {[["all","All"],["today","Today"],["2d","2d"],["7d","7d"]].map(([v,l]) => (
+                      <RB key={v} active={dateFilter===v} onClick={() => setDateFilter(v)}>{l}</RB>
+                    ))}
+                  </RCOL>
+                  <RCOL label="Region" col="#7dd3fc">
+                    {["WCUK","ECUK","Canal","Biscay","Skaw","Baltic","Med"].map(r => (
+                      <RB key={r} active={regionFilter.has(r)} onClick={() => toggleIn(setRegionFilter)(r)}>{r}</RB>
+                    ))}
+                    {regionFilter.size > 0 && <RB active={false} onClick={() => setRegionFilter(new Set())}><span style={{ color: C.red }}>✕</span></RB>}
+                  </RCOL>
+                  {usedSuperRegions.length > 0 && (
+                    <RCOL label="S.Region" col={C.purple || "#c792ea"}>
+                      {usedSuperRegions.map(r => (<RB key={r} active={superRegionFilter.has(r)} onClick={() => toggleIn(setSuperRegionFilter)(r)}>{r}</RB>))}
+                      {superRegionFilter.size > 0 && <RB active={false} onClick={() => setSuperRegionFilter(new Set())}><span style={{ color: C.red }}>✕</span></RB>}
+                    </RCOL>
+                  )}
+                  {usedSegments.length > 0 && (
+                    <RCOL label="Segment" col={C.green}>
+                      {usedSegments.map(s => (<RB key={s} active={segmentFilter.has(s)} onClick={() => toggleIn(setSegmentFilter)(s)}>{s}</RB>))}
+                      {segmentFilter.size > 0 && <RB active={false} onClick={() => setSegmentFilter(new Set())}><span style={{ color: C.red }}>✕</span></RB>}
+                    </RCOL>
+                  )}
+                  <RCOL label="DWT" col="#f59e0b">
+                    {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l]) => (
+                      <RB key={v} active={dwtFilter.has(v)} onClick={() => toggleIn(setDwtFilter)(v)}>{l}</RB>
+                    ))}
+                    {(dwtFilter.size > 0) && <RB active={false} onClick={() => { setDwtFilter(new Set()); setDwtRange({min:"",max:""}); }}><span style={{ color: C.red }}>✕</span></RB>}
+                  </RCOL>
+                  <RCOL label="Built" col="#94a3b8">
+                    {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l]) => (
+                      <RB key={v} active={builtFilter.has(v)} onClick={() => toggleIn(setBuiltFilter)(v)}>{l}</RB>
+                    ))}
+                    {(builtFilter.size > 0) && <RB active={false} onClick={() => { setBuiltFilter(new Set()); setBuiltRange({min:"",max:""}); }}><span style={{ color: C.red }}>✕</span></RB>}
+                  </RCOL>
                 </>
               );
             })()}
