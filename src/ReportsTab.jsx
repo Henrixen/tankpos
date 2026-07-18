@@ -206,10 +206,10 @@ function VesselRow({ v, localIdx, globalIdx, editing, onEdit, onSave, onDelete,
     color: "#dbe6f5", fontSize: 11, width: "100%", outline: "none",
     padding: "1px 2px", fontFamily: "inherit", minWidth: 0
   };
-  // Alternate: even rows slightly lighter — matches the real Positions tab colors
+  // Alternate: even rows slightly lighter — subtle, not the harsh navy/black split
   const rowBg = isDragOver
     ? "rgba(58,130,246,0.18)"
-    : localIdx % 2 === 0 ? "rgba(7,15,28,0.96)" : "rgba(22,37,64,0.82)";
+    : localIdx % 2 === 0 ? "rgba(255,255,255,0.03)" : "transparent";
 
   if (editing) return (
     <div style={{ display: "grid", gridTemplateColumns: GRID, background: "rgba(58,130,246,0.1)", color: "#dbe6f5", fontSize: 11, padding: "5px 8px", borderTop: "1px solid rgba(58,130,246,0.16)", alignItems: "center", gap: 2 }}>
@@ -740,6 +740,11 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if (editingRid === rid) setEditingRid(null);
   }
   function saveEdit(rid, vals) { setReportVessels(p => p.map(v => v._rid === rid ? { ...v, ...vals } : v)); setEditingRid(null); }
+  function addManualVessel() {
+    const rid = "manual_" + Date.now();
+    setReportVessels(p => [...p, { vessel: "", dwt: "", built: "", coating: "", date: "", openPort: "", comment: "", operator: "", segment: "", superRegion: "", _rid: rid }]);
+    setEditingRid(rid);
+  }
   function clearAll() {
     if (!window.confirm(`Remove all ${reportVessels.length} vessels from this position list?`)) return;
     importedNames.current = new Set(); setReportVessels([]);
@@ -1307,7 +1312,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   return (
     <div style={{ display: "flex", width: "100%", height: "100%", background: C.bg, fontFamily: "Inter,system-ui,sans-serif", overflow: "hidden" }}>
-      <style>{`@media print{body>*{visibility:hidden;}.pos-print,.pos-print *{visibility:visible;}.pos-print{position:absolute;left:0;top:0;width:100%;}.pos-print-wrap{height:auto!important;overflow:visible!important;}.no-export{display:none!important;}}`}</style>
+      <style>{`@media print{body>*{visibility:hidden;}.pos-print,.pos-print *{visibility:visible;}.pos-print{position:absolute;left:0;top:0;width:100%;}.pos-print-wrap{height:auto!important;overflow:visible!important;}.no-export{display:none!important;}}.pool-row:hover{background:rgba(58,130,246,0.14)!important;}`}</style>
 
       {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
       <div style={{ width: 170, minWidth: 170, display: "flex", flexDirection: "column", background: C.bg2, borderRight: "1px solid " + C.bd, overflow: "hidden" }}>
@@ -1342,35 +1347,18 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
           <div style={{ flex: 1 }} />
 
-          {/* Saved + Clear at bottom */}
-          <div style={{ flexShrink: 0, borderTop: "1px solid " + C.bd, padding: "8px 10px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-              <button onClick={savePositionList}
-                style={{ flex: 1, padding: "7px", fontSize: 11, fontWeight: 700, cursor: "pointer", borderRadius: 5, border: "1px solid rgba(63,185,80,0.45)", background: "rgba(63,185,80,0.1)", color: "#3fb950", fontFamily: "inherit" }}>
-                Save
-              </button>
-              {posSaveStatus && <span style={{ fontSize: 10, color: posSaveStatus === "Saved ✓" ? "#43e97b" : C.dim }}>{posSaveStatus}</span>}
+          {/* Saved list — Save/Clear buttons now live in the top toolbar */}
+          {savedReports.filter(r => r.report_type === "Position List").length > 0 && (
+            <div style={{ flexShrink: 0, borderTop: "1px solid " + C.bd, padding: "8px 10px", maxHeight: 160, overflowY: "auto" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Saved</div>
+              {savedReports.filter(r => r.report_type === "Position List").map(r => (
+                <div key={r.id} onClick={() => loadPositionList(r.id)} style={{ padding: "4px 7px", borderRadius: 3, background: C.bg3, cursor: "pointer", marginBottom: 3 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: ACCENT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.pos_title || "Position List"}</div>
+                  <div style={{ fontSize: 10, color: C.dim }}>{(r.pos_vessels || []).length} vessels · {new Date(r.report_date).toLocaleDateString("en-GB")}</div>
+                </div>
+              ))}
             </div>
-            {savedReports.filter(r => r.report_type === "Position List").length > 0 && (
-              <div style={{ maxHeight: 110, overflowY: "auto" }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Saved</div>
-                {savedReports.filter(r => r.report_type === "Position List").map(r => (
-                  <div key={r.id} onClick={() => loadPositionList(r.id)} style={{ padding: "4px 7px", borderRadius: 3, background: C.bg3, cursor: "pointer", marginBottom: 3 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: ACCENT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.pos_title || "Position List"}</div>
-                    <div style={{ fontSize: 10, color: C.dim }}>{(r.pos_vessels || []).length} vessels · {new Date(r.report_date).toLocaleDateString("en-GB")}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {reportVessels.length > 0 && (
-              <div style={{ padding: "8px 10px" }}>
-                <button onClick={clearAll}
-                  style={{ width: "100%", padding: "7px", fontSize: 11, fontWeight: 700, cursor: "pointer", borderRadius: 5, border: "1px solid rgba(239,68,68,0.45)", background: "rgba(239,68,68,0.08)", color: "#ef4444", fontFamily: "inherit" }}>
-                  Clear all vessels
-                </button>
-              </div>
-            )}
-          </div>
+          )}
           </div>
         )}
 
@@ -1453,9 +1441,16 @@ Any direction`}</pre>
                 style={{ ...SB, border: `1px solid ${sortByDate ? ACCENT : C.bd}`, background: sortByDate ? ACCENT : "transparent", color: sortByDate ? "#fff" : C.dim }}>
                 {sortByDate ? "✓ " : ""}Sort by date ↑
               </button>
+              <button onClick={addManualVessel} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: ACCENT }}>+ Add manual row</button>
             </div>
             <div style={{ flex: 1 }} />
+            {posSaveStatus && <span style={{ fontSize: 10, color: posSaveStatus === "Saved ✓" ? "#43e97b" : C.dim }}>{posSaveStatus}</span>}
             {exportStatus && <span style={{ fontSize: 10, color: C.dim, maxWidth: 220 }}>{exportStatus}</span>}
+            {reportVessels.length > 0 && (
+              <button onClick={() => { if (window.confirm(`Remove all ${reportVessels.length} vessels from this position list?`)) clearAll(); }}
+                style={{ ...SB, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.45)", color: "#ef4444" }}>Clear all</button>
+            )}
+            <button onClick={savePositionList} style={{ ...SB, background: "rgba(63,185,80,0.1)", border: "1px solid rgba(63,185,80,0.45)", color: "#3fb950" }}>Save</button>
             <button onClick={handleCopyEmail} style={{ ...SB, background: "rgba(245,166,35,0.12)", border: "1px solid rgba(245,166,35,0.45)", color: "#f5a623" }}>Copy for Email</button>
             <button onClick={handleDownloadPng} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Download PNG</button>
             <button onClick={() => window.print()} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Print / PDF</button>
@@ -1503,7 +1498,7 @@ Any direction`}</pre>
                   {/* Rows grouped */}
                   {Object.entries(posGrouped).map(([bucket, rows]) => (
                     <div key={bucket}>
-                      <div style={{ background: "#0c1e3d", color: "#dbe6f5", fontSize: 11, fontWeight: 700, padding: "4px 8px", letterSpacing: 0.3 }}>{bucket}</div>
+                      <div style={{ background: "rgba(88,166,255,0.14)", color: "#9fc4f0", fontSize: 11, fontWeight: 700, padding: "5px 8px", letterSpacing: 0.5, textTransform: "uppercase", borderTop: "1px solid rgba(88,166,255,0.25)", borderBottom: "1px solid rgba(88,166,255,0.25)" }}>{bucket}</div>
                       {rows.map((v, localIdx) => {
                         const globalIdx = reportVessels.findIndex(r => r._rid === v._rid);
                         return (
@@ -1571,10 +1566,8 @@ Any direction`}</pre>
                   </thead>
                   <tbody>
                     {vesselPool.map((v, i) => (
-                      <tr key={v.vessel} onClick={() => addFromPool(v)}
-                        style={{ cursor: "pointer", background: i % 2 === 0 ? "rgba(7,15,28,0.96)" : "rgba(22,37,64,0.82)" }}
-                        onMouseEnter={e => e.currentTarget.style.background = "rgba(58,130,246,0.14)"}
-                        onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "rgba(7,15,28,0.96)" : "rgba(22,37,64,0.82)"}>
+                      <tr key={v.vessel} onClick={() => addFromPool(v)} className="pool-row"
+                        style={{ cursor: "pointer", background: i % 2 === 0 ? "rgba(255,255,255,0.03)" : "transparent" }}>
                         <td style={{ padding: "5px 6px", fontWeight: 600, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel}</td>
                         <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.dwt ? fmtDwt(v.dwt) : ""}</td>
                         <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.date || ""}</td>
