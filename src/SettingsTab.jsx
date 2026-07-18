@@ -160,7 +160,7 @@ function GroupRow({g,editing,onStartEdit,onSaveEdit,onCancelEdit,onDelete,editLa
       <span style={{width:120,flexShrink:0,fontSize:12,fontWeight:600,color:"rgba(210,225,245,0.85)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.label}</span>
       <div style={{width:1,height:18,background:C.bd2,flexShrink:0}}/>
       <div style={{flex:1,display:"flex",flexWrap:"wrap",gap:4}}>
-        {g.aliases.map(a=>(
+        {[...g.aliases].sort((a,b)=>a.localeCompare(b)).map(a=>(
           <span key={a} style={{background:"rgba(88,166,255,0.10)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:4,padding:"2px 7px",fontSize:11,color:"rgba(180,210,250,0.7)"}}>{a}</span>
         ))}
         {g.aliases.length===0&&<span style={{color:C.faint,fontStyle:"italic",fontSize:11}}>no aliases</span>}
