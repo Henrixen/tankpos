@@ -110,17 +110,16 @@ function loadRegionGroups() {
   catch { return defaultRegionGroups(); }
 }
 function defaultRegionGroups() {
-  // Seeded from the previously-hardcoded region list — aliases start empty
-  // (or with just the label) since the real port lists lived in constants.js;
-  // fill them in here to make each region actually match ports.
+  // Seeded directly from constants.js's REGION_MAP — your existing port
+  // lists, pre-loaded so Settings opens already populated instead of empty.
   return [
-    {id:"wcuk",   label:"WCUK",   category:"region", aliases:["WCUK"]},
-    {id:"ecuk",   label:"ECUK",   category:"region", aliases:["ECUK"]},
-    {id:"canal",  label:"Canal",  category:"region", aliases:["Canal"]},
-    {id:"biscay", label:"Biscay", category:"region", aliases:["Biscay"]},
-    {id:"skaw",   label:"Skaw",   category:"region", aliases:["Skaw"]},
-    {id:"baltic", label:"Baltic", category:"region", aliases:["Baltic"]},
-    {id:"med",    label:"Med",    category:"region", aliases:["Med","Mediterranean"]},
+    {id:"wcuk", label:"WCUK", category:"region", aliases:["Belfast","Cork","Dublin","Milford Haven","Liverpool","Clyde","Mersey","Glasgow","Avonmouth","Bristol","Swansea","Barrow","Stanlow","Clydebank","Fawley","Plymouth"]},
+    {id:"ecuk", label:"ECUK", category:"region", aliases:["Thames","Humber","Immingham","Teesport","Tees","Teesside","Tyne","Sunderland","Middlesbrough","Grangemouth","Forth","Leith","Dundee","Medway","Wilton","Braefoot Bay","BB","Bbay"]},
+    {id:"canal", label:"Canal", category:"region", aliases:["Rotterdam","ARA","Amsterdam","Antwerp","Ghent","Flushing","Le Havre","Dunkirk","Rouen","Hamburg","Brunsbuttel","Wilhelmshaven","Bremerhaven","Bremen","Zeebrugge","Brest","Calais","Dieppe"]},
+    {id:"biscay", label:"Biscay", category:"region", aliases:["Bordeaux","BDX","Nantes","La Pallice","Bayonne","Bilbao","Santander","Le Verdon","Donges","Montoir","Gijon","Ferrol","Brest"]},
+    {id:"skaw", label:"Skaw", category:"region", aliases:["Gothenburg","Goteborg","Oslo","Stavanger","Mongstad","Sture","Kalundborg","Fredericia","Copenhagen","Malmo","Helsingborg","Flensburg","Kiel","Aarhus","Esbjerg","Aalborg","Sarroch"]},
+    {id:"baltic", label:"Baltic", category:"region", aliases:["Gdansk","Gdynia","Klaipeda","Ventspils","Riga","Tallinn","Helsinki","Naantali","Porvoo","Kotka","Stockholm","Nynashamn","Karlshamn","Lulea","Oulu","Baltiysk","Stettin","Szczecin"]},
+    {id:"med", label:"Med", category:"region", aliases:["Gibraltar","Algeciras","Ceuta","Barcelona","Tarragona","Valencia","Cartagena","Alicante","Almeria","Malaga","Huelva","Cadiz","Sines","Leixoes","Setubal","Lisbon","Marseille","FOS","Lavera","Port Jerome","Genoa","Savona","Livorno","La Spezia","Trieste","Venice","Ravenna","Porto Marghera","Naples","Napoli","Augusta","Milazzo","Messina","Sicily","Palermo","Catania","Cagliari","Porto Torres","Civitavecchia","Brindisi","Taranto","Bari","Ancona","Split","Rijeka","Piraeus","Athens","Thessaloniki","Kavala","Alexandroupolis","Constanta","Odessa","Novorossiysk","Tuapse","Batumi","Trabzon","Samsun","Izmit","Aliaga","Izmir","Canakkale","Istanbul","Marmara","Bandirma","Mudanya","Derince","Gebze","N Spain","Spain Med","Adriatic","Wmed","W Med","Span MED","E Med","E.Med","Levant","Malta","Tunis","Tunisia","La Goulette","Bizerte","Sfax","Porto Empedocle"]},
   ];
 }
 function saveRegionGroups(groups) { localStorage.setItem(REGION_STORAGE_KEY, JSON.stringify(groups)); }
