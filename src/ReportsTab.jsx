@@ -732,7 +732,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       if (reportedNames.has(v.vessel)) return false;
       if (poolSearch && !(
         v.vessel?.toLowerCase().includes(poolSearch.toLowerCase()) ||
-        v.operator?.toLowerCase().includes(poolSearch.toLowerCase())
+        v.operator?.toLowerCase().includes(poolSearch.toLowerCase()) ||
+        v.openPort?.toLowerCase().includes(poolSearch.toLowerCase())
       )) return false;
 
       if (tagFilter.size > 0) {
@@ -1735,7 +1736,7 @@ Any direction`}</pre>
               </div>
             )}
 
-            <input value={poolSearch} onChange={e => setPoolSearch(e.target.value)} placeholder="Search vessel or operator..."
+            <input value={poolSearch} onChange={e => setPoolSearch(e.target.value)} placeholder="Search vessel, operator, or port..."
               style={{ ...IS, width: "100%", boxSizing: "border-box" }} />
 
             <div style={{ borderTop: "1px solid " + C.bd, margin: "2px 0" }} />
