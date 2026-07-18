@@ -71,9 +71,11 @@ function dateSortKey(str) {
   return mon === -1 ? 9999 : mon * 31 + day;
 }
 
-function groupVessels(list, by, sortByDate) {
+function groupVessels(list, by, sortByDate, regionMode, matchCustomRegion) {
   const fn = by === "region"
-    ? v => v.superRegion || classifyRegion(v.openPort) || "Other"
+    ? (regionMode === "region"
+        ? v => (matchCustomRegion && matchCustomRegion(v.openPort)) || classifyRegion(v.openPort) || "Other"
+        : v => v.superRegion || (matchCustomRegion && matchCustomRegion(v.openPort)) || classifyRegion(v.openPort) || "Other")
     : v => v.segment || "Other";
   const out = {};
   list.forEach(v => { const k = fn(v); if (!out[k]) out[k] = []; out[k].push(v); });
@@ -264,6 +266,42 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     try { return JSON.parse(localStorage.getItem(DRAFT_META_KEY))?.subtitle || "10-22,000 DWT · COATED AND STST"; } catch { return "10-22,000 DWT · COATED AND STST"; }
   });
   const [posGroupBy, setPosGroupBy] = useState("segment");
+  const [regionMode, setRegionMode] = useState("superRegion"); // "superRegion" | "region"
+
+  // Custom Region Filter Groups from Settings (localStorage — same key,
+  // no import coupling needed). Falls back to the original hardcoded list
+  // if nothing's been configured yet.
+  const [customRegionGroups] = useState(() => {
+    try {
+      const raw = localStorage.getItem("signal_region_filter_groups");
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return [
+      { id: "wcuk", label: "WCUK", aliases: ["WCUK"] },
+      { id: "ecuk", label: "ECUK", aliases: ["ECUK"] },
+      { id: "canal", label: "Canal", aliases: ["Canal"] },
+      { id: "biscay", label: "Biscay", aliases: ["Biscay"] },
+      { id: "skaw", label: "Skaw", aliases: ["Skaw"] },
+      { id: "baltic", label: "Baltic", aliases: ["Baltic"] },
+      { id: "med", label: "Med", aliases: ["Med", "Mediterranean"] },
+    ];
+  });
+  // Same safe-substring-match rule as classifyRegion's fix — short aliases
+  // only match exactly, longer ones can match as a substring either way.
+  function matchCustomRegion(openPort) {
+    if (!openPort) return null;
+    const n = String(openPort).toLowerCase().trim();
+    if (!n) return null;
+    for (const g of customRegionGroups) {
+      for (const a of g.aliases) {
+        const p = String(a).toLowerCase().trim();
+        if (!p) continue;
+        if (n === p) return g.label;
+        if (p.length >= 4 && n.length >= 4 && (n.includes(p) || p.includes(n))) return g.label;
+      }
+    }
+    return null;
+  }
   const [sortByDate, setSortByDate] = useState(false);
   const [posDate, setPosDate] = useState(new Date().toISOString().split("T")[0]);
   const [exportStatus, setExportStatus] = useState("");
@@ -415,16 +453,27 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       setPosFixHistoryLoading(true);
       try {
         const since = new Date(); since.setDate(since.getDate() - 84);
+        // No SQL segment filter here — TankPos.jsx renames segment values for
+        // display (SEGMENT_RENAME), so what's on reportVessels may not match
+        // the raw DB value exactly. Fetch the date-windowed set and match
+        // segments client-side with normalized substring comparison instead.
         const { data, error } = await supabase
           .from("positions_latest")
           .select("updated_at, open_date, segment")
           .gte("updated_at", since.toISOString())
-          .in("segment", segments)
-          .not("open_date", "is", null);
+          .not("open_date", "is", null)
+          .limit(3000);
         if (cancelled) return;
         if (error || !data?.length) { setPosFixHistory([]); setPosFixHistoryLoading(false); return; }
+        const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const wantedSegs = segments.map(norm);
+        const matches = data.filter(row => {
+          const rs = norm(row.segment);
+          return rs && wantedSegs.some(w => rs.includes(w) || w.includes(rs));
+        });
+        if (!matches.length) { setPosFixHistory([]); setPosFixHistoryLoading(false); return; }
         const weeks = {};
-        data.forEach(row => {
+        matches.forEach(row => {
           if (!row.updated_at) return;
           const d = new Date(row.updated_at);
           const ws = new Date(d); ws.setDate(d.getDate() - d.getDay());
@@ -602,7 +651,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   }
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const posGrouped = useMemo(() => groupVessels(reportVessels, posGroupBy, sortByDate), [reportVessels, posGroupBy, sortByDate]);
+  const posGrouped = useMemo(() => groupVessels(reportVessels, posGroupBy, sortByDate, regionMode, matchCustomRegion), [reportVessels, posGroupBy, sortByDate, regionMode, customRegionGroups]);
   const reportedNames = useMemo(() => new Set(reportVessels.map(v => v.vessel)), [reportVessels]);
 
   const openTimingData = useMemo(() => {
@@ -693,7 +742,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       if (segmentFilter.size > 0 && !segmentFilter.has(v.segment)) return false;
       if (superRegionFilter.size > 0 && !superRegionFilter.has(v.superRegion)) return false;
       if (regionFilter.size > 0) {
-        const r = classifyRegion(v.openPort);
+        const r = matchCustomRegion(v.openPort) || classifyRegion(v.openPort);
         if (![...regionFilter].includes(r)) return false;
       }
       if (dwtFilter.size > 0 || dwtRange.min !== "" || dwtRange.max !== "") {
@@ -1507,6 +1556,15 @@ Any direction`}</pre>
                 <button key={k} onClick={() => setPosGroupBy(k)}
                   style={{ ...SB, border: `1px solid ${posGroupBy === k ? ACCENT : C.bd}`, background: posGroupBy === k ? ACCENT : "transparent", color: posGroupBy === k ? "#fff" : C.dim }}>{l}</button>
               ))}
+              {posGroupBy === "region" && (
+                <>
+                  <span style={{ fontSize: 10, color: C.faint, alignSelf: "center", marginLeft: 2 }}>using</span>
+                  {[["superRegion", "S.Region"], ["region", "Region"]].map(([k, l]) => (
+                    <button key={k} onClick={() => setRegionMode(k)}
+                      style={{ ...SB, fontSize: 10, border: `1px solid ${regionMode === k ? "#c792ea" : C.bd}`, background: regionMode === k ? "rgba(199,146,234,0.15)" : "transparent", color: regionMode === k ? "#c792ea" : C.dim }}>{l}</button>
+                  ))}
+                </>
+              )}
               <button onClick={() => setSortByDate(s => !s)}
                 style={{ ...SB, border: `1px solid ${sortByDate ? ACCENT : C.bd}`, background: sortByDate ? ACCENT : "transparent", color: sortByDate ? "#fff" : C.dim }}>
                 {sortByDate ? "✓ " : ""}Sort by date ↑
@@ -1717,8 +1775,8 @@ Any direction`}</pre>
                     ))}
                   </RCOL>
                   <RCOL label="Region" col="#7dd3fc">
-                    {["WCUK","ECUK","Canal","Biscay","Skaw","Baltic","Med"].map(r => (
-                      <RB key={r} active={regionFilter.has(r)} onClick={() => toggleIn(setRegionFilter)(r)}>{r}</RB>
+                    {customRegionGroups.map(g => (
+                      <RB key={g.id} active={regionFilter.has(g.label)} onClick={() => toggleIn(setRegionFilter)(g.label)}>{g.label}</RB>
                     ))}
                     {regionFilter.size > 0 && <RB active={false} onClick={() => setRegionFilter(new Set())}><span style={{ color: C.red }}>✕</span></RB>}
                   </RCOL>
@@ -1738,13 +1796,21 @@ Any direction`}</pre>
                     {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l]) => (
                       <RB key={v} active={dwtFilter.has(v)} onClick={() => toggleIn(setDwtFilter)(v)}>{l}</RB>
                     ))}
-                    {(dwtFilter.size > 0) && <RB active={false} onClick={() => { setDwtFilter(new Set()); setDwtRange({min:"",max:""}); }}><span style={{ color: C.red }}>✕</span></RB>}
+                    <input value={dwtRange.min} onChange={e => setDwtRange(r => ({ ...r, min: e.target.value }))} placeholder="from"
+                      style={{ width: 52, fontSize: 10, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 3, color: C.tx, padding: "3px 5px", outline: "none", fontFamily: "inherit" }} />
+                    <input value={dwtRange.max} onChange={e => setDwtRange(r => ({ ...r, max: e.target.value }))} placeholder="to"
+                      style={{ width: 52, fontSize: 10, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 3, color: C.tx, padding: "3px 5px", outline: "none", fontFamily: "inherit" }} />
+                    {(dwtFilter.size > 0 || dwtRange.min || dwtRange.max) && <RB active={false} onClick={() => { setDwtFilter(new Set()); setDwtRange({min:"",max:""}); }}><span style={{ color: C.red }}>✕</span></RB>}
                   </RCOL>
                   <RCOL label="Built" col="#94a3b8">
                     {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l]) => (
                       <RB key={v} active={builtFilter.has(v)} onClick={() => toggleIn(setBuiltFilter)(v)}>{l}</RB>
                     ))}
-                    {(builtFilter.size > 0) && <RB active={false} onClick={() => { setBuiltFilter(new Set()); setBuiltRange({min:"",max:""}); }}><span style={{ color: C.red }}>✕</span></RB>}
+                    <input value={builtRange.min} onChange={e => setBuiltRange(r => ({ ...r, min: e.target.value }))} placeholder="from"
+                      style={{ width: 52, fontSize: 10, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 3, color: C.tx, padding: "3px 5px", outline: "none", fontFamily: "inherit" }} />
+                    <input value={builtRange.max} onChange={e => setBuiltRange(r => ({ ...r, max: e.target.value }))} placeholder="to"
+                      style={{ width: 52, fontSize: 10, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 3, color: C.tx, padding: "3px 5px", outline: "none", fontFamily: "inherit" }} />
+                    {(builtFilter.size > 0 || builtRange.min || builtRange.max) && <RB active={false} onClick={() => { setBuiltFilter(new Set()); setBuiltRange({min:"",max:""}); }}><span style={{ color: C.red }}>✕</span></RB>}
                   </RCOL>
                 </>
               );
