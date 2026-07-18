@@ -690,13 +690,13 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         // Use the vessel's real DWT/segment/etc data, but the freshly-parsed
         // port/date/comment — the whole point of pasting is to report a new
         // position, not silently re-add the vessel's old cached position.
-        addFromPool({ ...found, port: r.port || found.port, open_date: r.date || found.open_date, comment: r.direction || found.comment });
+        addFromPool({ ...found, openPort: r.port || found.openPort, date: r.date || found.date, comment: r.direction || found.comment });
         matched++;
       }
       else if (!found) {
         importedNames.current.add(r.vessel);
         setReportVessels(p => [...p, {
-          vessel: r.vessel, port: r.port, open_date: r.date, comment: r.direction,
+          vessel: r.vessel, openPort: r.port, date: r.date, comment: r.direction,
           operator: lookupOp ? lookupOp(r.vessel) : "", segment: "", dwt: null, superRegion: "",
           _rid: r.vessel + "_" + Date.now() + Math.random().toString(36).slice(2),
         }]);
@@ -1466,8 +1466,55 @@ Any direction`}</pre>
             </div>
           </div>
 
-          {/* ── Add Vessels — moved here to the right of the report, next to all that empty space ── */}
-          <div style={{ width: 300, flexShrink: 0, borderLeft: "1px solid " + C.bd, display: "flex", flexDirection: "column", overflow: "hidden", padding: "10px 12px", gap: 6 }}>
+          {/* ── Vessel pool table — fills the space between the report preview and the controls sidebar ── */}
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", borderLeft: "1px solid " + C.bd, overflow: "hidden" }}>
+            <div style={{ padding: "8px 12px", borderBottom: "1px solid " + C.bd, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                {vesselPool.length} vessel{vesselPool.length !== 1 ? "s" : ""} match{vesselPool.length === 1 ? "es" : ""}
+              </span>
+              {vesselPool.length > 0 && (
+                <button onClick={() => { vesselPool.forEach(v => addFromPool(v)); }}
+                  style={{ fontSize: 10, fontWeight: 700, padding: "5px 10px", borderRadius: 4, cursor: "pointer", border: `1px solid ${ACCENT}`, background: `${ACCENT}22`, color: ACCENT, fontFamily: "inherit" }}>
+                  Import all ({vesselPool.length})
+                </button>
+              )}
+            </div>
+            <div key={poolSearch + "|" + [...tagFilter].sort().join(",") + "|" + dateFilter} style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+              {vesselPool.length === 0 ? (
+                <div style={{ padding: "24px 0", textAlign: "center", color: C.faint, fontSize: 11 }}>
+                  {allVessels.length === 0 ? "Select vessels on Positions tab" : "No vessels match your search/tags"}
+                </div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <thead>
+                    <tr style={{ position: "sticky", top: 0, background: C.bg2 }}>
+                      {["Vessel", "DWT", "Open date", "Open port", "Updated", ""].map(h => (
+                        <th key={h} style={{ padding: "5px 8px", textAlign: "left", fontSize: 9, fontWeight: 700, color: C.dim, textTransform: "uppercase", borderBottom: "1px solid " + C.bd }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vesselPool.map((v, i) => (
+                      <tr key={v.vessel} onClick={() => addFromPool(v)}
+                        style={{ cursor: "pointer", background: i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "rgba(58,130,246,0.08)"}
+                        onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent"}>
+                        <td style={{ padding: "5px 8px", fontWeight: 600, color: C.tx, whiteSpace: "nowrap" }}>{v.vessel}</td>
+                        <td style={{ padding: "5px 8px", color: C.faint, whiteSpace: "nowrap" }}>{v.dwt ? fmtDwt(v.dwt) : ""}</td>
+                        <td style={{ padding: "5px 8px", color: C.faint, whiteSpace: "nowrap" }}>{v.date || ""}</td>
+                        <td style={{ padding: "5px 8px", color: C.faint, whiteSpace: "nowrap" }}>{v.openPort || ""}</td>
+                        <td style={{ padding: "5px 8px", color: C.faint, whiteSpace: "nowrap" }}>{v.updated_at ? new Date(v.updated_at).toLocaleDateString("en-GB") : ""}</td>
+                        <td style={{ padding: "5px 8px" }}><span style={{ fontSize: 15, color: ACCENT, fontWeight: 700 }}>+</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          {/* ── Controls — paste, date filter, search, tags (always expanded now there's room) ── */}
+          <div style={{ width: 260, flexShrink: 0, borderLeft: "1px solid " + C.bd, display: "flex", flexDirection: "column", overflowY: "auto", padding: "10px 12px", gap: 6 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em" }}>Add vessels</div>
 
             <button onClick={() => setPosPasteOpen(o => !o)}
@@ -1493,7 +1540,7 @@ Any direction`}</pre>
                   style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 3, cursor: "pointer", border: `1px solid ${dateFilter === k ? ACCENT : C.bd}`, background: dateFilter === k ? ACCENT : "transparent", color: dateFilter === k ? "#fff" : C.dim, fontFamily: "inherit" }}>{l}</button>
               ))}
             </div>
-            <input value={poolSearch} onChange={e => setPoolSearch(e.target.value)} placeholder="Search vessel..."
+            <input value={poolSearch} onChange={e => setPoolSearch(e.target.value)} placeholder="Search vessel or operator..."
               style={{ ...IS, width: "100%", boxSizing: "border-box" }} />
 
             <div style={{ borderTop: "1px solid " + C.bd, margin: "2px 0" }} />
@@ -1512,8 +1559,7 @@ Any direction`}</pre>
                 return "Region";
               };
               const groups = { Segment: [], "Trade lane": [], Region: [] };
-              const visible = tagsExpanded ? allTags : Array.from(new Set([...allTags.slice(0, 10), ...tagFilter]));
-              visible.forEach(t => groups[categorize(t)].push(t));
+              allTags.forEach(t => groups[categorize(t)].push(t));
 
               return (
                 <>
@@ -1528,44 +1574,12 @@ Any direction`}</pre>
                       </div>
                     </div>
                   ))}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-                    {allTags.length > 10 && (
-                      <button onClick={() => setTagsExpanded(e => !e)} style={{ fontSize: 9, fontWeight: 700, color: ACCENT, background: "none", border: "none", cursor: "pointer" }}>
-                        {tagsExpanded ? "▲ show less" : `▼ show all (${allTags.length})`}
-                      </button>
-                    )}
-                    {tagFilter.size > 0 && <button onClick={() => setTagFilter(new Set())} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer" }}>✕ clear</button>}
-                  </div>
-                  <div style={{ borderTop: "1px solid " + C.bd, margin: "2px 0" }} />
+                  {tagFilter.size > 0 && (
+                    <button onClick={() => setTagFilter(new Set())} style={{ fontSize: 9, color: C.red, background: "none", border: "none", cursor: "pointer", textAlign: "left" }}>✕ clear tags</button>
+                  )}
                 </>
               );
             })()}
-
-            {vesselPool.length > 0 && (
-              <button onClick={() => { vesselPool.forEach(v => addFromPool(v)); setQuickParseMsg(""); }}
-                style={{ fontSize: 10, fontWeight: 700, padding: "5px 8px", borderRadius: 4, cursor: "pointer", border: `1px solid ${ACCENT}`, background: `${ACCENT}22`, color: ACCENT, fontFamily: "inherit" }}>
-                Import all ({vesselPool.length})
-              </button>
-            )}
-
-            <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-              {vesselPool.length === 0 ? (
-                <div style={{ padding: "12px 0", textAlign: "center", color: C.faint, fontSize: 10 }}>
-                  {allVessels.length === 0 ? "Select vessels on Positions tab" : "No vessels match filters"}
-                </div>
-              ) : vesselPool.map(v => (
-                <div key={v.vessel} onClick={() => addFromPool(v)}
-                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 7px", borderRadius: 4, background: C.bg3, cursor: "pointer", border: "1px solid transparent", flexShrink: 0 }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = ACCENT}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel}</div>
-                    <div style={{ fontSize: 9, color: C.faint }}>{v.segment || ""}{v.dwt ? ` · ${fmtDwt(v.dwt)}` : ""}{parseTags(v).length ? ` · ${parseTags(v).join(", ")}` : ""}</div>
-                  </div>
-                  <span style={{ fontSize: 15, color: ACCENT, fontWeight: 700, lineHeight: 1, flexShrink: 0, marginLeft: 4 }}>+</span>
-                </div>
-              ))}
-            </div>
           </div>
 
           </div>
