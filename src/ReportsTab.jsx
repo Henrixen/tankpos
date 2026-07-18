@@ -293,6 +293,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   // Fixing window history (Supabase)
   const [fixHistory, setFixHistory] = useState([]);
+  const [posFixHistory, setPosFixHistory] = useState([]);
+  const [posFixHistoryLoading, setPosFixHistoryLoading] = useState(false);
 
   // Market report
   const [reportType, setReportType] = useState("");
@@ -400,6 +402,53 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     }
     fetchFixHistory();
   }, []);
+
+  // Position List's own fixing window — scoped to whatever segments are
+  // actually in the list (not the Market report's hardcoded Intermediate/
+  // UKC-NWE filter, which rarely matches a real, varied position list).
+  useEffect(() => {
+    if (section !== "poslist" || !reportVessels.length) { setPosFixHistory([]); return; }
+    const segments = [...new Set(reportVessels.map(v => v.segment).filter(Boolean))];
+    if (!segments.length) { setPosFixHistory([]); return; }
+    let cancelled = false;
+    async function fetchPosFixHistory() {
+      setPosFixHistoryLoading(true);
+      try {
+        const since = new Date(); since.setDate(since.getDate() - 84);
+        const { data, error } = await supabase
+          .from("positions_latest")
+          .select("updated_at, open_date, segment")
+          .gte("updated_at", since.toISOString())
+          .in("segment", segments)
+          .not("open_date", "is", null);
+        if (cancelled) return;
+        if (error || !data?.length) { setPosFixHistory([]); setPosFixHistoryLoading(false); return; }
+        const weeks = {};
+        data.forEach(row => {
+          if (!row.updated_at) return;
+          const d = new Date(row.updated_at);
+          const ws = new Date(d); ws.setDate(d.getDate() - d.getDay());
+          const key = ws.toISOString().slice(0, 10);
+          if (!weeks[key]) weeks[key] = { ships: 0, totalDays: 0, cnt: 0 };
+          weeks[key].ships++;
+          if (row.open_date) {
+            const days = Math.round((new Date(row.open_date) - d) / 86400000);
+            if (days >= 0 && days <= 60) { weeks[key].totalDays += days; weeks[key].cnt++; }
+          }
+        });
+        setPosFixHistory(Object.entries(weeks)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([key, v]) => ({
+            label: new Date(key).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }),
+            ships: v.ships,
+            avgWindow: v.cnt > 0 ? Math.round(v.totalDays / v.cnt) : 0
+          })));
+      } catch (e) { console.error("posFixHistory:", e); }
+      if (!cancelled) setPosFixHistoryLoading(false);
+    }
+    fetchPosFixHistory();
+    return () => { cancelled = true; };
+  }, [reportVessels, section]);
 
   // Load the shared vessel profile (same one used in TCECalculator) so
   // benchmark-route TCE figures stay consistent across the app.
@@ -560,7 +609,22 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     const B = {}; const today = new Date();
     const ORDER = ["PPT", "1-7d", "7-14d", "14-21d", "21-30d", "30d+"];
     reportVessels.forEach(v => {
-      const days = v.date ? Math.round((new Date(v.date) - today) / 86400000) : null;
+      // v.date is "D MMM" (e.g. "18 Mar") with no year — new Date() can't
+      // parse that reliably, so build the date manually using the current
+      // year, rolling to next year if it'd otherwise land far in the past.
+      let days = null;
+      if (v.date) {
+        const m = String(v.date).match(/(\d{1,2})\s*([A-Za-z]{3})/);
+        if (m) {
+          const day = parseInt(m[1]);
+          const mon = MN_SORT.indexOf(m[2].toUpperCase());
+          if (mon !== -1) {
+            let d = new Date(today.getFullYear(), mon, day);
+            if ((today - d) / 86400000 > 60) d = new Date(today.getFullYear() + 1, mon, day);
+            days = Math.round((d - today) / 86400000);
+          }
+        }
+      }
       const k = days === null || days < 1 ? "PPT" : days <= 7 ? "1-7d" : days <= 14 ? "7-14d" : days <= 21 ? "14-21d" : days <= 30 ? "21-30d" : "30d+";
       B[k] = (B[k] || 0) + 1;
     });
@@ -644,8 +708,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         const inCustomRange = (builtRange.min !== "" || builtRange.max !== "") ? inRange(v.built, builtRange) : false;
         if (!inBucket && !inCustomRange) return false;
       }
-      if (dateFilter !== "all" && v.updated_at) {
-        const diff = (now - new Date(v.updated_at)) / 86400000;
+      if (dateFilter !== "all" && v.updatedAt) {
+        const diff = (now - new Date(v.updatedAt)) / 86400000;
         if (dateFilter === "today" && diff > 1) return false;
         if (dateFilter === "2d" && diff > 2) return false;
         if (dateFilter === "7d" && diff > 7) return false;
@@ -1470,10 +1534,10 @@ Any direction`}</pre>
           {/* Report preview (left) + Add Vessels panel (right) */}
           <div style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
 
-          {/* Scrollable report area */}
-          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto", padding: 12 }}>
+          {/* Scrollable report area — sized to its content, not stretched, so the vessel table sits right next to it with no gap */}
+          <div style={{ flex: "0 0 auto", minHeight: 0, overflowY: "auto", overflowX: "auto", padding: 12 }}>
             {/* Captured node — entire report */}
-            <div ref={previewRef} className="pos-print" style={{ background: "#070f1c", fontFamily: "Inter,system-ui,sans-serif", width: 750, border: "1px solid rgba(88,166,255,0.2)", borderRadius: 8, overflow: "hidden" }}>
+            <div ref={previewRef} className="pos-print" style={{ background: "#070f1c", fontFamily: "Inter,system-ui,sans-serif", width: 820, border: "1px solid rgba(88,166,255,0.2)", borderRadius: 8, overflow: "hidden" }}>
               {/* Date bar */}
               <div style={{ background: "#0c1e3d", padding: "7px 14px", textAlign: "right" }}>
                 <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>{new Date(posDate).toLocaleDateString("en-GB")}</span>
@@ -1537,7 +1601,7 @@ Any direction`}</pre>
                     <BarLineChart data={openTimingData} barKey="count" title="Open timing" barLabel="Ships" accent={ACCENT} />
                   </div>
                   <div style={{ background: "#0c1729", border: "1px solid rgba(58,130,246,0.12)", padding: "8px 10px" }}>
-                    <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" title="Fixing window history" barLabel="Ships" lineLabel="Avg days" accent={ACCENT} loading={fixHistoryLoading} />
+                    <BarLineChart data={posFixHistory} barKey="ships" lineKey="avgWindow" title="Fixing window history (segments in this list)" barLabel="Ships" lineLabel="Avg days" accent={ACCENT} loading={posFixHistoryLoading} />
                   </div>
                 </div>
               )}
@@ -1545,7 +1609,7 @@ Any direction`}</pre>
           </div>
 
           {/* ── Vessel pool table — fills the space between the report preview and the controls sidebar ── */}
-          <div style={{ flex: "0 1 480px", maxWidth: 480, minWidth: 0, display: "flex", flexDirection: "column", borderLeft: "1px solid " + C.bd, overflow: "hidden" }}>
+          <div style={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", borderLeft: "1px solid " + C.bd, overflow: "hidden" }}>
             <div style={{ padding: "8px 12px", borderBottom: "1px solid " + C.bd, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               <span style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em" }}>
                 {vesselPool.length} vessel{vesselPool.length !== 1 ? "s" : ""} match{vesselPool.length === 1 ? "es" : ""}
@@ -1576,13 +1640,13 @@ Any direction`}</pre>
                   </thead>
                   <tbody>
                     {vesselPool.map((v, i) => (
-                      <tr key={(v.imo_no || v.vessel) + "_" + i} onClick={() => addFromPool(v)} className="pool-row"
+                      <tr key={(v.imoNo || v.vessel) + "_" + i} onClick={() => addFromPool(v)} className="pool-row"
                         style={{ cursor: "pointer", background: i % 2 === 0 ? "rgba(255,255,255,0.03)" : "transparent" }}>
                         <td style={{ padding: "5px 6px", fontWeight: 600, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel}</td>
                         <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.dwt ? fmtDwt(v.dwt) : ""}</td>
                         <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.date || ""}</td>
                         <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.openPort || ""}</td>
-                        <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.updated_at ? new Date(v.updated_at).toLocaleDateString("en-GB") : ""}</td>
+                        <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.updatedAt ? new Date(v.updatedAt).toLocaleDateString("en-GB") : ""}</td>
                         <td style={{ padding: "5px 6px" }}><span style={{ fontSize: 14, color: ACCENT, fontWeight: 700 }}>+</span></td>
                       </tr>
                     ))}
