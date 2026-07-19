@@ -287,7 +287,7 @@ function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
   }
 
   const thS={padding:"4px 5px",fontSize:12,fontWeight:700,color:C.faint,background:C.bg,textAlign:"center",whiteSpace:"nowrap",borderBottom:"1px solid "+C.bd2};
-  const tdR={fontSize:12,padding:"1px 2px",borderBottom:"1px solid "+C.bg,verticalAlign:"middle"};
+  const tdR={fontSize:12,padding:"1px 2px",borderBottom:"1px solid "+C.bg,verticalAlign:"middle",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"};
 
   // RCell is defined outside this component (see above)
 
@@ -313,10 +313,10 @@ function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
         </div>
         <table style={{borderCollapse:"collapse",width:"100%"}}>
           <thead><tr>
-            <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
+            <th style={{...thS,textAlign:"left",width:"35%"}}>Route</th>
             <th style={{...thS,width:"15%",color:"#79c0ff"}}>Rate ($ lsum)</th>
             <th style={{...thS,width:"15%",color:C.green}}>TCE $/day</th>
-            <th style={{...thS,width:"40%",textAlign:"left"}}><span>Comment</span></th>
+            <th style={{...thS,width:"30%",textAlign:"left"}}><span>Comment</span></th>
           </tr></thead>
           <tbody>
             {euRoutes.map((rt,i)=>(
@@ -342,9 +342,9 @@ function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
           </div>
           <table style={{borderCollapse:"collapse",width:"100%"}}>
             <thead><tr>
-              <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
-              {RATE_SIZES.map(sz=>(<th key={sz} style={{...thS,width:"11.67%"}}>{sz}</th>))}
-              <th style={{...thS,width:"40%",textAlign:"left"}}>Comment</th>
+              <th style={{...thS,textAlign:"left",width:"35%"}}>Route</th>
+              {RATE_SIZES.map(sz=>(<th key={sz} style={{...thS,width:"9%"}}>{sz}</th>))}
+              <th style={{...thS,width:"30%",textAlign:"left"}}>Comment</th>
             </tr></thead>
             <tbody>
               {rg.routes.map((rt,rtIdx)=>(
