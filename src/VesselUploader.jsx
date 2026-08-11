@@ -304,6 +304,13 @@ export default function VesselUploader() {
 
     if (errors === 0) {
       setStatus({ type:"ok", msg:`✓ ${total} vessels upserted into ${table} successfully.${removeMsg}` });
+      const { error: metaError } = await supabase.from("upload_meta").upsert({
+        table_name: table,
+        file_name: fileName,
+        uploaded_at: new Date().toISOString(),
+        row_count: total,
+      }, { onConflict: "table_name" });
+      if (metaError) console.error("upload_meta write error:", metaError);
     } else {
       setStatus({ type:"warn", msg:`Completed with ${errors} batch error(s). Check console for details.${removeMsg}` });
     }
