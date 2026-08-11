@@ -37,6 +37,13 @@ function fmtMonth(d){
   return d.toLocaleDateString("en-GB",{month:"short",year:"numeric"});
 }
 
+function fmtUpdatedAt(iso){
+  if(!iso) return "";
+  const d=new Date(iso);
+  if(isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})+" "+d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+}
+
 // Barton newbuild placeholder names are prefixed "ZZNB " until a real name
 // is assigned — strip it for display only, underlying data stays intact.
 function dispName(v){
@@ -97,6 +104,16 @@ export default function NewbuildsTab(){
   const [pendingDel,setPendingDel]=useState(null);
   const [editingVessel,setEditingVessel]=useState(null); // {imo, vessel, note, tag}
   const [copyStatus,setCopyStatus]=useState(null);
+  const [lastUpdated,setLastUpdated]=useState(null); // {file_name, uploaded_at, row_count}
+
+  useEffect(()=>{
+    async function fetchMeta(){
+      const { data, error } = await supabase.from("upload_meta").select("*").eq("table_name","vessels_newbuilds").maybeSingle();
+      if(error){ console.error("upload_meta fetch error:", error); return; }
+      setLastUpdated(data||null);
+    }
+    fetchMeta();
+  },[]);
 
   useEffect(()=>{
     async function fetchNB(){
@@ -324,6 +341,14 @@ export default function NewbuildsTab(){
             <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>Sum DWT</div>
           </div>
         </div>
+
+        {lastUpdated&&(
+          <div style={{flex:"0 0 auto",display:"flex",flexDirection:"column",justifyContent:"center",gap:2,background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"10px 16px"}}>
+            <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>Last updated</div>
+            <div style={{fontSize:12,color:C.tx,fontWeight:600}}>{fmtUpdatedAt(lastUpdated.uploaded_at)}</div>
+            <div style={{fontSize:11,color:"rgba(120,160,220,0.75)"}} title={lastUpdated.file_name}>{lastUpdated.file_name||"—"}</div>
+          </div>
+        )}
       </div>
 
       <div style={{display:"flex",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
