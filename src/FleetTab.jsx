@@ -3,15 +3,15 @@ import { supabase } from "./supabaseclient";
 import { C } from "./constants";
 import { fmtN } from "./utils";
 
-// ─── DWT → segment breakpoints (identical to FW_SEGMENTS in PositionsHelpers.jsx,
-// duplicated locally to keep this tab self-contained) ──────────────────────────
+// ─── DWT → segment breakpoints — matches Barton's own classification as used
+// in NewbuildsTab.jsx (NB_SEGMENTS), not the unrelated Fixing Window buckets ──
 const FLEET_SEGMENTS = [
-  { key:"sub10", label:"Sub 10k", color:"#58a6ff", dwt:[0,      10000] },
-  { key:"city",  label:"City",    color:"#4ade80", dwt:[10001,  14500] },
-  { key:"inter", label:"Inter",   color:"#f778ba", dwt:[14501,  22000] },
-  { key:"flexi", label:"Flexi",   color:"#ea9a00", dwt:[22001,  28000] },
-  { key:"handy", label:"Handy",   color:"#a78bfa", dwt:[28001,  39000] },
-  { key:"mr",    label:"MR",      color:"#22d3ee", dwt:[39001,  60000] },
+  { key:"small", label:"Small (<14)",   color:"#58a6ff", dwt:[0,      14000] },
+  { key:"inter", label:"Inter (14-19)", color:"#4ade80", dwt:[14001,  19000] },
+  { key:"j19",   label:"J19 (19-23)",   color:"#f778ba", dwt:[19001,  23000] },
+  { key:"flexi", label:"Flexi (23-30)", color:"#ea9a00", dwt:[23001,  30000] },
+  { key:"handy", label:"Handy (30-40)", color:"#a78bfa", dwt:[30001,  40000] },
+  { key:"mr",    label:"MR (>40)",      color:"#22d3ee", dwt:[40001,  999999] },
 ];
 function segmentOf(dwt) {
   if (!dwt || dwt < 500) return null;
@@ -29,6 +29,13 @@ const IMO_COLORS = { "IMO 1":"#ff6b6b", "IMO 2":"#58a6ff", "IMO 3":"#4ade80" };
 
 const CUR_YEAR = new Date().getFullYear();
 const ageOf = built => built ? CUR_YEAR - built : null;
+
+function fmtUpdatedAt(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})+" "+d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+}
 
 const SELECT_COLS = "vessel,imo,dwt,loa,beam,draft,cbm,coating,built,flag,imo_type,operator,owner,ice_class,fuel_type,tanks,segs,other_data,tier_name,comments,last_ex_name,country_build";
 
@@ -115,6 +122,7 @@ export default function FleetTab() {
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null); // {file_name, uploaded_at, row_count}
 
   const [search, setSearch] = useState("");
   const [scopes, setScopes] = useState(() => new Set(["vessel"]));
@@ -151,6 +159,15 @@ export default function FleetTab() {
   }, [loaded, loading]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    async function fetchMeta() {
+      const { data, error } = await supabase.from("upload_meta").select("*").eq("table_name","vessels_db").maybeSingle();
+      if (error) { console.error("upload_meta fetch error:", error); return; }
+      setLastUpdated(data || null);
+    }
+    fetchMeta();
+  }, []);
 
   const enriched = useMemo(() => rows.map(r => ({
     ...r,
@@ -326,6 +343,11 @@ export default function FleetTab() {
             </span>
           )}
           <div style={{ marginLeft:"auto", display:"flex", gap:14, alignItems:"center" }}>
+            {lastUpdated && (
+              <span style={{ fontSize:11, color:C.faint, borderRight:"1px solid "+C.bd, paddingRight:14 }} title={lastUpdated.file_name||""}>
+                Updated {fmtUpdatedAt(lastUpdated.uploaded_at)} · {lastUpdated.file_name||"—"}
+              </span>
+            )}
             <span style={{ fontSize:12, color:C.faint }}>Ships <b style={{ color:C.tx, fontSize:15 }}>{stats.count}</b></span>
             <span style={{ fontSize:12, color:C.faint }}>Avg age <b style={{ color:C.amber, fontSize:15 }}>{stats.avgAge!=null?stats.avgAge.toFixed(1):"—"}</b></span>
           </div>
