@@ -4,14 +4,16 @@ import { C } from "./constants";
 import { fmtN } from "./utils";
 
 // ─── DWT → segment breakpoints — matches Barton's own classification as used
-// in NewbuildsTab.jsx (NB_SEGMENTS), not the unrelated Fixing Window buckets ──
+// in NewbuildsTab.jsx, extended with Sub 10k/City split per the app's
+// standard Sub 10k → City → Inter → J19 → Flexi → Handy → MR convention ──
 const FLEET_SEGMENTS = [
-  { key:"small", label:"Small (<14)",   color:"#58a6ff", dwt:[0,      14000] },
-  { key:"inter", label:"Inter (14-19)", color:"#4ade80", dwt:[14001,  19000] },
-  { key:"j19",   label:"J19 (19-23)",   color:"#f778ba", dwt:[19001,  23000] },
-  { key:"flexi", label:"Flexi (23-30)", color:"#ea9a00", dwt:[23001,  30000] },
-  { key:"handy", label:"Handy (30-40)", color:"#a78bfa", dwt:[30001,  40000] },
-  { key:"mr",    label:"MR (>40)",      color:"#22d3ee", dwt:[40001,  999999] },
+  { key:"sub10", label:"Sub 10k (<10)",  color:"#38bdf8", dwt:[0,      9999]  },
+  { key:"city",  label:"City (10-14)",   color:"#58a6ff", dwt:[10000,  14000] },
+  { key:"inter", label:"Inter (14-19)",  color:"#4ade80", dwt:[14001,  19000] },
+  { key:"j19",   label:"J19 (19-23)",    color:"#f778ba", dwt:[19001,  23000] },
+  { key:"flexi", label:"Flexi (23-30)",  color:"#ea9a00", dwt:[23001,  30000] },
+  { key:"handy", label:"Handy (30-40)",  color:"#a78bfa", dwt:[30001,  40000] },
+  { key:"mr",    label:"MR (>40)",       color:"#22d3ee", dwt:[40001,  999999]},
 ];
 function segmentOf(dwt) {
   if (!dwt || dwt < 500) return null;
@@ -29,6 +31,16 @@ const IMO_COLORS = { "IMO 1":"#ff6b6b", "IMO 2":"#58a6ff", "IMO 3":"#4ade80" };
 
 const CUR_YEAR = new Date().getFullYear();
 const ageOf = built => built ? CUR_YEAR - built : null;
+
+// Postgres `numeric` columns come back from PostgREST as strings (to avoid
+// float precision loss), which silently breaks `+=` (string concatenation
+// instead of addition) anywhere we sum/compare them.
+const NUM_FIELDS = ["dwt","cbm","loa","beam","draft","tanks","segs","built"];
+function toNum(v) {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return isFinite(n) ? n : null;
+}
 
 function fmtUpdatedAt(iso) {
   if (!iso) return "";
@@ -49,6 +61,8 @@ const CHIP = (active, col="#58a6ff") => ({
   fontFamily:"inherit", whiteSpace:"nowrap",
 });
 const LABEL = { fontSize:10, color:C.faint, textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:700 };
+const NUM_INPUT = { width:72, background:C.bg3, border:"1px solid "+C.bd, borderRadius:5, color:C.tx,
+  fontFamily:"inherit", fontSize:12, padding:"5px 8px", outline:"none" };
 
 function Bar({ label, value, max, color, sub }) {
   const pct = max > 0 ? Math.max(2, (value / max) * 100) : 0;
@@ -129,6 +143,10 @@ export default function FleetTab() {
   const [coatingFilter, setCoatingFilter] = useState(() => new Set());
   const [segmentFilter, setSegmentFilter] = useState(() => new Set());
   const [iceFilter, setIceFilter] = useState(() => new Set());
+  const [dwtFrom, setDwtFrom] = useState("");
+  const [dwtTo, setDwtTo] = useState("");
+  const [builtFrom, setBuiltFrom] = useState("");
+  const [builtTo, setBuiltTo] = useState("");
 
   const [sort, setSort] = useState({ key:"vessel", dir:"asc" });
   const [expandedSeg, setExpandedSeg] = useState(() => new Set());
@@ -169,21 +187,32 @@ export default function FleetTab() {
     fetchMeta();
   }, []);
 
-  const enriched = useMemo(() => rows.map(r => ({
-    ...r,
-    age: ageOf(r.built),
-    segment: segmentOf(r.dwt),
-  })), [rows]);
+  // Postgres `numeric` columns come back from PostgREST as strings (to avoid
+  // float precision loss), which silently breaks `+=` (string concatenation
+  // instead of addition) anywhere we sum/compare them. Normalized in `enriched`.
+  const enriched = useMemo(() => rows.map(r => {
+    const norm = { ...r };
+    NUM_FIELDS.forEach(f => { norm[f] = toNum(r[f]); });
+    return { ...norm, age: ageOf(norm.built), segment: segmentOf(norm.dwt) };
+  }), [rows]);
 
   const coatingList = useMemo(() => [...new Set(enriched.map(r=>r.coating).filter(Boolean))].sort(), [enriched]);
   const iceList = useMemo(() => [...new Set(enriched.map(r=>r.ice_class).filter(Boolean))].sort(), [enriched]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
+    const dFrom = dwtFrom !== "" ? Number(dwtFrom) : null;
+    const dTo   = dwtTo   !== "" ? Number(dwtTo)   : null;
+    const bFrom = builtFrom !== "" ? Number(builtFrom) : null;
+    const bTo   = builtTo   !== "" ? Number(builtTo)   : null;
     return enriched.filter(r => {
       if (coatingFilter.size && !coatingFilter.has(r.coating)) return false;
       if (segmentFilter.size && !(r.segment && segmentFilter.has(r.segment.key))) return false;
       if (iceFilter.size && !iceFilter.has(r.ice_class)) return false;
+      if (dFrom != null && (r.dwt == null || r.dwt < dFrom)) return false;
+      if (dTo   != null && (r.dwt == null || r.dwt > dTo))   return false;
+      if (bFrom != null && (r.built == null || r.built < bFrom)) return false;
+      if (bTo   != null && (r.built == null || r.built > bTo))   return false;
       if (!term) return true;
       const fields = [];
       if (scopes.has("vessel"))   fields.push(r.vessel);
@@ -194,7 +223,7 @@ export default function FleetTab() {
       if (!fields.length) fields.push(r.vessel, r.operator, r.owner);
       return fields.some(f => f && String(f).toLowerCase().includes(term));
     });
-  }, [enriched, search, scopes, coatingFilter, segmentFilter, iceFilter]);
+  }, [enriched, search, scopes, coatingFilter, segmentFilter, iceFilter, dwtFrom, dwtTo, builtFrom, builtTo]);
 
   const sorted = useMemo(() => {
     const { key, dir } = sort;
@@ -372,6 +401,22 @@ export default function FleetTab() {
             <button style={{ ...CHIP(true,"#ff6b6b"), marginLeft:"auto" }}
               onClick={()=>{ setCoatingFilter(new Set()); setSegmentFilter(new Set()); setIceFilter(new Set()); }}>
               ✕ Clear filters
+            </button>
+          )}
+        </div>
+
+        <div style={{ display:"flex", gap:16, flexWrap:"wrap", alignItems:"center" }}>
+          <span style={LABEL}>DWT</span>
+          <input type="number" placeholder="From" value={dwtFrom} onChange={e=>setDwtFrom(e.target.value)} style={NUM_INPUT}/>
+          <span style={{ color:C.faint, fontSize:11 }}>–</span>
+          <input type="number" placeholder="To" value={dwtTo} onChange={e=>setDwtTo(e.target.value)} style={NUM_INPUT}/>
+          <span style={{ ...LABEL, marginLeft:14 }}>Built</span>
+          <input type="number" placeholder="From" value={builtFrom} onChange={e=>setBuiltFrom(e.target.value)} style={NUM_INPUT}/>
+          <span style={{ color:C.faint, fontSize:11 }}>–</span>
+          <input type="number" placeholder="To" value={builtTo} onChange={e=>setBuiltTo(e.target.value)} style={NUM_INPUT}/>
+          {(dwtFrom||dwtTo||builtFrom||builtTo) && (
+            <button style={CHIP(true,"#ff6b6b")} onClick={()=>{ setDwtFrom(""); setDwtTo(""); setBuiltFrom(""); setBuiltTo(""); }}>
+              ✕ Clear range
             </button>
           )}
         </div>
