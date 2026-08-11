@@ -114,6 +114,7 @@ export default function FleetTab() {
   const [rows, setRows] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   const [search, setSearch] = useState("");
   const [scopes, setScopes] = useState(() => new Set(["vessel"]));
@@ -130,10 +131,15 @@ export default function FleetTab() {
   const load = useCallback(async () => {
     if (loaded || loading) return;
     setLoading(true);
+    setLoadError(null);
     let all = [], from = 0; const pageSize = 1000;
     while (true) {
       const { data, error } = await supabase.from("vessels_db").select(SELECT_COLS).range(from, from+pageSize-1);
-      if (error) { console.error("FleetTab load error:", error); break; }
+      if (error) {
+        console.error("FleetTab load error:", error);
+        setLoadError(error.message || "Failed to load fleet data.");
+        break;
+      }
       if (!data || !data.length) break;
       all = [...all, ...data];
       if (data.length < pageSize) break;
@@ -313,6 +319,12 @@ export default function FleetTab() {
             <button key={k} style={CHIP(scopes.has(k))} onClick={()=>toggleSet(setScopes,k)}>{label}</button>
           ))}
           {loading && <span style={{ fontSize:11, color:C.faint }}>Loading fleet…</span>}
+          {loadError && (
+            <span style={{ fontSize:11, color:C.red, display:"flex", alignItems:"center", gap:8 }}>
+              ⚠ {loadError}
+              <button style={CHIP(true,"#ff6b6b")} onClick={()=>{ setLoaded(false); load(); }}>Retry</button>
+            </span>
+          )}
           <div style={{ marginLeft:"auto", display:"flex", gap:14, alignItems:"center" }}>
             <span style={{ fontSize:12, color:C.faint }}>Ships <b style={{ color:C.tx, fontSize:15 }}>{stats.count}</b></span>
             <span style={{ fontSize:12, color:C.faint }}>Avg age <b style={{ color:C.amber, fontSize:15 }}>{stats.avgAge!=null?stats.avgAge.toFixed(1):"—"}</b></span>
