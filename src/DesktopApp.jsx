@@ -34,6 +34,7 @@ const VesselPopout   = React.lazy(()=>import("./VesselPopout"));
 const ClientsTab     = React.lazy(()=>import("./ClientsTab"));
 const VesselUploader = React.lazy(()=>import("./VesselUploader"));
 const NewbuildsTab   = React.lazy(()=>import("./NewbuildsTab"));
+const FleetTab       = React.lazy(()=>import("./FleetTab"));
 
 const TabFallback = ()=>null;
 
@@ -1610,6 +1611,7 @@ const filtV=useMemo(()=>{
             ["cal","Calendar",0,"#4fc3f7"],
             ["settings","Settings",0,"#94a3b8"],
             ["vessels","Fleet DB",0,"#38bdf8"],
+            ["fleet","Fleet",0,"#2dd4bf"],
             ["newbuilds","Newbuilds",0,"#fbbf24"],
           ].filter(([id])=>!guestMode||GUEST_TABS.includes(id)).map(([id,label,count,col])=>{
             const active=tab===id;
@@ -2811,6 +2813,9 @@ const filtV=useMemo(()=>{
         {tab==="cal"&&<Suspense fallback={<TabFallback/>}><CalendarTab/></Suspense>}
         {tab==="vessels"&&(
           <Suspense fallback={<TabFallback/>}><VesselUploader/></Suspense>
+        )}
+        {tab==="fleet"&&(
+          <Suspense fallback={<TabFallback/>}><FleetTab/></Suspense>
         )}
         {tab==="newbuilds"&&(
           <Suspense fallback={<TabFallback/>}><NewbuildsTab/></Suspense>
