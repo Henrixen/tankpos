@@ -10,6 +10,14 @@ const COATING_COLS = [
   ["Zinc",       "Zinc"],
 ];
 
+// Barton splits IMO chemical type across 3 columns (IMO 1/IMO 2/IMO 3), each
+// holding the CBM under that class — same shape as the coating columns above.
+const IMO_COLS = [
+  ["IMO 1", "IMO 1"],
+  ["IMO 2", "IMO 2"],
+  ["IMO 3", "IMO 3"],
+];
+
 // Barton workbook tab names are fixed — only the filename changes month to
 // month. Mode → sheet name mapping so the uploader always reads the right
 // tab without relying on filename text.
@@ -46,6 +54,23 @@ function deriveCoating(row) {
     .filter(([, v]) => v > 0)
     .sort((a, b) => b[1] - a[1])[0];
   return best ? best[0] : "";
+}
+
+function deriveImoType(row) {
+  const best = IMO_COLS.map(([col, label]) => [label, cleanNum(row[col] || 0)])
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])[0];
+  return best ? best[0] : "";
+}
+
+// Like cleanNum but keeps decimals — needed for Draft (e.g. 5.8, 6.11).
+function cleanFloat(v) {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "number") return isFinite(v) ? v : null;
+  try {
+    const n = parseFloat(String(v).replace(/[\s\xa0]/g, "").replace(",", "."));
+    return isFinite(n) ? n : null;
+  } catch { return null; }
 }
 
 function cleanDate(v) {
@@ -120,13 +145,16 @@ function rowToRecord(row, isNB) {
     other_data:String(row["Other Data"]    || "").trim() || null,
     tier_name: String(row["Tier Name"]     || "").trim() || null,
     comments:  String(row["Comments"]      || "").trim() || null,
+    draft:        cleanFloat(row["Draft"]),
+    imo_type:     deriveImoType(row) || null,
+    last_ex_name: String(row["Last Ex Name"]     || "").trim() || null,
+    country_build:String(row["Country of Build"] || "").trim() || null,
   };
   if (isNB) {
     rec.delivery_date = toISODate(row["Dld"]         || null);
     rec.nb_contract   = toISODate(row["NB Contract"] || null);
-    rec.yard          = String(row["Yard"]             || "").trim() || null;
-    rec.yard_no       = String(row["YdNo"]             || "").trim() || null;
-    rec.country_build = String(row["Country of Build"] || "").trim() || null;
+    rec.yard          = String(row["Yard"] || "").trim() || null;
+    rec.yard_no       = String(row["YdNo"] || "").trim() || null;
   }
   return rec;
 }
