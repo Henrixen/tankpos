@@ -295,7 +295,12 @@ export default function VesselUploader() {
         if (error) { console.error(error); errors++; }
       }
       if (withoutIMO.length) {
-        const { error } = await supabase.from(table).upsert(withoutIMO, { onConflict: "vessel" });
+        // No reliable unique key for IMO-less vessels (names aren't globally
+        // unique), so these are plain inserts rather than an upsert. Rare in
+        // practice — most commercial tankers carry an IMO — but re-uploading
+        // may create duplicate rows for the few that don't. Acceptable
+        // trade-off; can be cleaned up manually if it becomes an issue.
+        const { error } = await supabase.from(table).insert(withoutIMO);
         if (error) { console.error(error); errors++; }
       }
       done = Math.min(i + BATCH, total);
