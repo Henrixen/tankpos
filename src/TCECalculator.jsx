@@ -6,6 +6,30 @@ const TCE_STORE_KEY = "tankpos-tce-defaults-v1";
 async function loadTCEDefaults(){try{const r=await window.storage.get(TCE_STORE_KEY,true);return r?JSON.parse(r.value):null;}catch(_){return null;}}
 async function saveTCEDefaults(d){try{await window.storage.set(TCE_STORE_KEY,JSON.stringify(d),true);}catch(_){}}
 
+// Shared card style so every panel on this tab matches the Fleet tab's look —
+// same border-radius, border, and background across Distance Table, Bunker,
+// Calculator, and Benchmark Routes.
+const CARD = { background:C.bg2, border:"1px solid "+C.bd, borderRadius:10, overflow:"hidden" };
+
+// Formatted numeric input: shows "25 000" (nb-NO spacing) when not focused,
+// raw digits while typing/editing. Used everywhere freight/PDA/ETS/bunker
+// numbers appear so they're readable at a glance.
+function FmtInput({ value, onChange, width=90, placeholder="", fontSize=12, fontWeight=400, border, color, style }) {
+  const numeric = value !== "" && value != null && !isNaN(Number(String(value).replace(/\s/g,"")));
+  const display = numeric ? Number(String(value).replace(/\s/g,"")).toLocaleString("nb-NO") : value;
+  return (
+    <input
+      value={display}
+      onChange={e => onChange(e.target.value.replace(/[^\d.\-]/g,""))}
+      onFocus={e=>{ e.target.value = String(value??"").replace(/\s/g,""); }}
+      onBlur={e=>{ const n = parseFloat(e.target.value.replace(/[^0-9.\-]/g,"")); onChange(!isNaN(n)?String(n):""); }}
+      placeholder={placeholder}
+      style={{ width, background:C.bg3, border:border||"1px solid "+C.bd, borderRadius:4, color:color||C.tx,
+        fontFamily:"inherit", fontSize, fontWeight, padding:"3px 6px", outline:"none", textAlign:"right", boxSizing:"border-box", ...style }}
+    />
+  );
+}
+
 // UKC intermediate benchmark routes — used by BenchmarkRoutes below and by
 // ReportsTab's Benchmark Rates table. "from"/"to" are lookupDist() keys.
 const BENCHMARK_ROUTES = [
@@ -207,6 +231,21 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
     setTimeout(() => setStatus(null), 2000);
   }
 
+  async function saveAll() {
+    const savable = rows.filter(r => r.freight);
+    if (!savable.length) return;
+    setStatus(`Saving ${savable.length}…`);
+    const payload = savable.map(row => ({
+      route_key: row.key, label: row.label, freight: numD(row.freight), tce: row.tce,
+      nm_ballast: numD(row.nmBallast), nm_laden: numD(row.nmLaden), nm_repo: numD(row.nmRepo),
+      pda_load: numD(row.pdaLoad), pda_disch: numD(row.pdaDisch), eu_ets: numD(row.euEts),
+      speed: numD(row.speed), cons: numD(row.cons), updated_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from("tce_routes").upsert(payload, { onConflict: "route_key" });
+    setStatus(error ? "Save all failed" : `Saved ${savable.length} ✓`);
+    setTimeout(() => setStatus(null), 2000);
+  }
+
   async function deleteRow(row) {
     await supabase.from("tce_routes").delete().eq("route_key", row.key);
     setRows(prev => prev.filter(r => r.key !== row.key));
@@ -216,8 +255,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   const miniInp = (row, field, label, width = 54) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
       <span style={{ fontSize: 9, color: C.faint, textTransform: "uppercase" }}>{label}</span>
-      <input value={row[field]} onChange={e => updateField(row.key, field, e.target.value)}
-        style={{ width, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontSize: 12, padding: "3px 6px", outline: "none", fontFamily: "inherit", textAlign: "right" }} />
+      <FmtInput value={row[field]} onChange={val => updateField(row.key, field, val)} width={width} fontSize={12}/>
     </div>
   );
 
@@ -258,11 +296,13 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   }
 
   return (
-    <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:8, overflow:"hidden" }}>
+    <div style={CARD}>
       <div style={{ padding:"8px 12px", background:C.bg3, borderBottom:"1px solid "+C.bd2, fontSize:12, fontWeight:700, color:C.tx, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <span>📍 Benchmark Routes</span>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
           {status && <span style={{ fontSize:11, color:C.green, fontWeight:600 }}>{status}</span>}
+          <button onClick={saveAll} title="Save every route with a freight entered"
+            style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:4, border:"1px solid rgba(63,185,80,0.4)", background:"rgba(63,185,80,0.12)", color:C.green, cursor:"pointer", fontFamily:"inherit" }}>💾 Save all</button>
           <button onClick={addLeg} title="Add a custom route"
             style={{ fontSize:13, fontWeight:700, padding:"1px 8px", borderRadius:4, border:"1px solid "+C.bd, background:"transparent", color:C.blue, cursor:"pointer", fontFamily:"inherit" }}>+ Add leg</button>
         </div>
@@ -280,8 +320,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
               </button>
               <input value={r.label} onChange={e=>updateField(r.key,"label",e.target.value)} placeholder="Route name"
                 style={{ flex:"1 1 140px", minWidth:100, background:"transparent", border:"none", borderBottom:"1px solid "+C.bd, color:C.tx, fontSize:12, fontWeight:700, padding:"2px 0", outline:"none", fontFamily:"inherit" }}/>
-              <input value={r.freight} onChange={e=>updateField(r.key,"freight",e.target.value)} placeholder="Freight USD"
-                style={{ width:100, background:C.bg3, border:"1px solid "+C.bd, borderRadius:4, color:C.tx, fontSize:12, padding:"4px 6px", outline:"none", fontFamily:"inherit", textAlign:"right" }}/>
+              <FmtInput value={r.freight} onChange={val=>updateField(r.key,"freight",val)} width={100} placeholder="Freight USD" fontSize={12}/>
               <div style={{ fontSize:13, fontWeight:800, color: r.tce!=null ? (r.tce>=0?C.green:C.red) : C.faint, minWidth:90, textAlign:"right" }}>
                 {r.tce!=null ? "$"+r.tce.toLocaleString("nb-NO")+"/d" : "—"}
               </div>
@@ -302,8 +341,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
                     <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
                       <span style={{ fontSize:9, color:C.faint, textTransform:"uppercase" }}>EU ETS</span>
                       <div style={{ display:"flex", gap:3 }}>
-                        <input value={r.euEts} onChange={e=>updateField(r.key,"euEts",e.target.value)}
-                          style={{ width:54, background:C.bg3, border:"1px solid "+C.bd, borderRadius:4, color:C.tx, fontSize:12, padding:"3px 6px", outline:"none", fontFamily:"inherit", textAlign:"right" }} />
+                        <FmtInput value={r.euEts} onChange={val=>updateField(r.key,"euEts",val)} width={54} fontSize={12}/>
                         <button onClick={()=>setEtsPopout(p=>p===r.key?null:r.key)}
                           style={{ fontSize:9, padding:"0 5px", borderRadius:4, border:"1px solid "+C.bd, background:"transparent", color:C.blue, cursor:"pointer", fontFamily:"inherit" }}>calc</button>
                       </div>
@@ -513,26 +551,31 @@ function TCECalculator(){
 
   return(
     <div>
-      {/* Mode tabs */}
-      <div style={{display:"flex",borderBottom:"1px solid "+C.bd2,marginBottom:14}}>
-        {[["freight","⚡ TCE Calculator"],["tce","🎯 TCE Target"]].map(([m,l])=>(
-          <button key={m} onClick={()=>{setMode(m);setResult(null);}}
-            style={{padding:"8px 20px",border:"none",background:"transparent",cursor:"pointer",
-              fontFamily:"inherit",fontWeight:700,fontSize:12,
-              color:mode===m?C.blue:C.dim,
-              borderBottom:"2px solid "+(mode===m?C.blue:"transparent")}}>
-            {l}
-          </button>
-        ))}
+      {/* Mode tabs + settings gear (moved here so it doesn't throw off column alignment below) */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid "+C.bd2,marginBottom:14}}>
+        <div style={{display:"flex"}}>
+          {[["freight","⚡ TCE Calculator"],["tce","🎯 TCE Target"]].map(([m,l])=>(
+            <button key={m} onClick={()=>{setMode(m);setResult(null);}}
+              style={{padding:"8px 20px",border:"none",background:"transparent",cursor:"pointer",
+                fontFamily:"inherit",fontWeight:700,fontSize:12,
+                color:mode===m?C.blue:C.dim,
+                borderBottom:"2px solid "+(mode===m?C.blue:"transparent")}}>
+              {l}
+            </button>
+          ))}
+        </div>
+        <button onClick={()=>setStdVarsOpen(true)} title="Standard Variables"
+          style={{margin:"0 4px 6px 0",background:"transparent",border:"1px solid "+C.bd,borderRadius:6,color:C.faint,cursor:"pointer",fontSize:14,padding:"5px 10px"}}>
+          ⚙ Standard Variables
+        </button>
       </div>
 
-      <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"stretch",marginBottom:14,maxWidth:920}}>
-        <div style={{flex:"1 1 380px",minWidth:300}}><DistanceTable/></div>
-        <div style={{flex:"1 1 300px",minWidth:280,background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"10px 14px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"stretch",marginBottom:16}}>
+        <div style={CARD}><DistanceTable/></div>
+        <div style={{...CARD,padding:"14px 16px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
           <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Bunker (MGO) $/mt</div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <input value={sharedBunker} onChange={e=>updateSharedBunker(e.target.value)}
-              style={{width:90,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontSize:13,fontWeight:700,padding:"6px 8px",outline:"none",fontFamily:"inherit",textAlign:"right"}}/>
+            <FmtInput value={sharedBunker} onChange={updateSharedBunker} width={90} fontSize={13} fontWeight={700}/>
             <button onClick={syncBunkerFromPBT}
               style={{fontSize:11,fontWeight:700,padding:"6px 12px",borderRadius:5,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(88,166,255,0.12)",color:"#58a6ff",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
               ↻ Sync from PBT
@@ -542,16 +585,10 @@ function TCECalculator(){
         </div>
       </div>
 
-      <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-start",maxWidth:920}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"start"}}>
 
-        {/* ── Standard Variables trigger — opens as a popout, sits left of the calculator ── */}
-        <button onClick={()=>setStdVarsOpen(true)} title="Standard Variables"
-          style={{flex:"0 0 40px",height:40,alignSelf:"flex-start",background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,color:C.faint,cursor:"pointer",fontSize:16}}>
-          ⚙
-        </button>
-
-        {/* ── LEFT: Voyage Inputs (narrowed now the middle column is gone) ── */}
-        <div style={{flex:"1 1 300px",maxWidth:420,minWidth:280,background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
+        {/* ── LEFT: Voyage Inputs ── */}
+        <div style={CARD}>
           <div style={{padding:"8px 12px",background:C.bg3,borderBottom:"1px solid "+C.bd2,fontSize:12,fontWeight:700,color:C.tx}}>
             {mode==="freight"?"Enter freight → get TCE":"Enter target TCE → get required freight"}
           </div>
@@ -644,8 +681,8 @@ function TCECalculator(){
           </div>
         </div>
 
-        {/* ── Benchmark Routes — next to the calculator ── */}
-        <div style={{flex:"1 1 380px",maxWidth:460,minWidth:320}}>
+        {/* ── Benchmark Routes ── */}
+        <div>
           <BenchmarkRoutes defaults={defaults} sharedBunker={sharedBunker} updateSharedBunker={updateSharedBunker}/>
         </div>
 
