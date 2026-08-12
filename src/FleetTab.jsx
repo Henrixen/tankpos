@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { supabase } from "./supabaseclient";
 import { C } from "./constants";
 import { fmtN } from "./utils";
@@ -50,6 +50,7 @@ function fmtUpdatedAt(iso) {
 }
 
 const SELECT_COLS = "vessel,imo,dwt,loa,beam,draft,cbm,coating,built,flag,imo_type,operator,owner,ice_class,fuel_type,tanks,segs,other_data,tier_name,comments,last_ex_name,country_build";
+const PAGE_SIZE = 100;
 
 // ─── small UI atoms ─────────────────────────────────────────────────────────
 const CARD = { background:C.bg2, border:"1px solid "+C.bd, borderRadius:10, padding:"14px 16px" };
@@ -64,11 +65,15 @@ const LABEL = { fontSize:10, color:C.faint, textTransform:"uppercase", letterSpa
 const NUM_INPUT = { width:72, background:C.bg3, border:"1px solid "+C.bd, borderRadius:5, color:C.tx,
   fontFamily:"inherit", fontSize:12, padding:"5px 8px", outline:"none" };
 
-function Bar({ label, value, max, color, sub }) {
+function Bar({ label, value, max, color, sub, active, onClick }) {
   const pct = max > 0 ? Math.max(2, (value / max) * 100) : 0;
   return (
-    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
-      <div style={{ width:96, fontSize:11, color:C.dim, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }} title={label}>{label}</div>
+    <div
+      style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6, cursor: onClick?"pointer":"default",
+        opacity: onClick && active===false ? 0.45 : 1 }}
+      onClick={onClick}
+    >
+      <div style={{ width:96, fontSize:11, color: active?color:C.dim, fontWeight: active?700:400, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }} title={label}>{label}</div>
       <div style={{ flex:1, height:14, background:C.bg3, borderRadius:3, overflow:"hidden" }}>
         <div style={{ width:pct+"%", height:"100%", background:color, borderRadius:3 }}/>
       </div>
@@ -77,7 +82,7 @@ function Bar({ label, value, max, color, sub }) {
   );
 }
 
-function Donut({ segments, size=140 }) {
+function Donut({ segments, size=140, onSliceClick, activeSet }) {
   const total = segments.reduce((a,s)=>a+s.value,0) || 1;
   const r = size/2 - 12, cx = size/2, cy = size/2, circ = 2*Math.PI*r;
   let offset = 0;
@@ -87,9 +92,13 @@ function Donut({ segments, size=140 }) {
       {segments.map((s,i) => {
         const frac = s.value/total;
         const dash = frac*circ;
+        const dimmed = activeSet && activeSet.size>0 && !activeSet.has(s.label);
         const el = (
           <circle key={i} cx={cx} cy={cy} r={r} fill="none" stroke={s.color} strokeWidth={20}
             strokeDasharray={`${dash} ${circ-dash}`} strokeDashoffset={-offset}
+            strokeOpacity={dimmed?0.3:1}
+            style={{ cursor: onSliceClick?"pointer":"default" }}
+            onClick={onSliceClick ? ()=>onSliceClick(s.label) : undefined}
             transform={`rotate(-90 ${cx} ${cy})`}/>
         );
         offset += dash;
@@ -101,7 +110,7 @@ function Donut({ segments, size=140 }) {
   );
 }
 
-function YearHistogram({ rows, height=140 }) {
+function YearHistogram({ rows, height=140, onYearClick, activeYears }) {
   const byYear = {};
   rows.forEach(r => { if (r.built) byYear[r.built] = (byYear[r.built]||0)+1; });
   const years = Object.keys(byYear).map(Number).sort((a,b)=>a-b);
@@ -117,9 +126,11 @@ function YearHistogram({ rows, height=140 }) {
           const v = byYear[y]||0;
           const barH = max>0 ? (v/max)*height : 0;
           const x = i*14;
+          const active = activeYears && activeYears.has(y);
+          const dimmed = activeYears && activeYears.size>0 && !active;
           return (
-            <g key={y}>
-              <rect x={x+2} y={height-barH} width={10} height={barH} fill="#58a6ff" rx={1}/>
+            <g key={y} style={{ cursor: onYearClick && v>0 ? "pointer":"default" }} onClick={v>0 && onYearClick ? ()=>onYearClick(y) : undefined}>
+              <rect x={x+2} y={height-barH} width={10} height={barH} fill={active?"#f5a623":"#58a6ff"} opacity={dimmed?0.35:1} rx={1}/>
               {v>0 && <text x={x+7} y={height-barH-3} fontSize={8} fill={C.dim} textAnchor="middle">{v}</text>}
               {(y%5===0) && <text x={x+7} y={height+14} fontSize={8} fill={C.faint} textAnchor="middle">{y}</text>}
             </g>
@@ -138,11 +149,24 @@ export default function FleetTab() {
   const [loadError, setLoadError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null); // {file_name, uploaded_at, row_count}
 
+  // Search box updates instantly for typing feel, but the value actually used
+  // for filtering is debounced — avoids re-filtering/re-sorting/re-rendering
+  // 5000+ rows on every keystroke, which was the main source of lag.
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 200);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
   const [scopes, setScopes] = useState(() => new Set(["vessel"]));
   const [coatingFilter, setCoatingFilter] = useState(() => new Set());
   const [segmentFilter, setSegmentFilter] = useState(() => new Set());
   const [iceFilter, setIceFilter] = useState(() => new Set());
+  const [imoTypeFilter, setImoTypeFilter] = useState(() => new Set());
+  const [yearFilter, setYearFilter] = useState(() => new Set());
+  const [ownerFilter, setOwnerFilter] = useState(() => new Set());
+  const [operatorFilter, setOperatorFilter] = useState(() => new Set());
   const [dwtFrom, setDwtFrom] = useState("");
   const [dwtTo, setDwtTo] = useState("");
   const [builtFrom, setBuiltFrom] = useState("");
@@ -150,9 +174,9 @@ export default function FleetTab() {
 
   const [sort, setSort] = useState({ key:"vessel", dir:"asc" });
   const [expandedSeg, setExpandedSeg] = useState(() => new Set());
-  const [expandedOwner, setExpandedOwner] = useState(null);
   const [ownerSort, setOwnerSort] = useState({ key:"ships", dir:"desc" });
   const [operatorSort, setOperatorSort] = useState({ key:"ships", dir:"desc" });
+  const [page, setPage] = useState(1);
 
   const load = useCallback(async () => {
     if (loaded || loading) return;
@@ -199,8 +223,11 @@ export default function FleetTab() {
   const coatingList = useMemo(() => [...new Set(enriched.map(r=>r.coating).filter(Boolean))].sort(), [enriched]);
   const iceList = useMemo(() => [...new Set(enriched.map(r=>r.ice_class).filter(Boolean))].sort(), [enriched]);
 
+  // Comma-separated search terms ("stena, maersk, hafnia") — a row matches
+  // if ANY term matches ANY selected scope field.
+  const searchTerms = useMemo(() => search.split(",").map(t=>t.trim().toLowerCase()).filter(Boolean), [search]);
+
   const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
     const dFrom = dwtFrom !== "" ? Number(dwtFrom) : null;
     const dTo   = dwtTo   !== "" ? Number(dwtTo)   : null;
     const bFrom = builtFrom !== "" ? Number(builtFrom) : null;
@@ -209,11 +236,15 @@ export default function FleetTab() {
       if (coatingFilter.size && !coatingFilter.has(r.coating)) return false;
       if (segmentFilter.size && !(r.segment && segmentFilter.has(r.segment.key))) return false;
       if (iceFilter.size && !iceFilter.has(r.ice_class)) return false;
+      if (imoTypeFilter.size && !imoTypeFilter.has(r.imo_type)) return false;
+      if (yearFilter.size && !yearFilter.has(r.built)) return false;
+      if (ownerFilter.size && !ownerFilter.has(r.owner)) return false;
+      if (operatorFilter.size && !operatorFilter.has(r.operator)) return false;
       if (dFrom != null && (r.dwt == null || r.dwt < dFrom)) return false;
       if (dTo   != null && (r.dwt == null || r.dwt > dTo))   return false;
       if (bFrom != null && (r.built == null || r.built < bFrom)) return false;
       if (bTo   != null && (r.built == null || r.built > bTo))   return false;
-      if (!term) return true;
+      if (!searchTerms.length) return true;
       const fields = [];
       if (scopes.has("vessel"))   fields.push(r.vessel);
       if (scopes.has("operator")) fields.push(r.operator);
@@ -221,9 +252,13 @@ export default function FleetTab() {
       if (scopes.has("country"))  fields.push(r.country_build);
       if (scopes.has("notes"))    fields.push(r.comments, r.other_data);
       if (!fields.length) fields.push(r.vessel, r.operator, r.owner);
-      return fields.some(f => f && String(f).toLowerCase().includes(term));
+      const lowerFields = fields.filter(Boolean).map(f=>String(f).toLowerCase());
+      return searchTerms.some(term => lowerFields.some(f => f.includes(term)));
     });
-  }, [enriched, search, scopes, coatingFilter, segmentFilter, iceFilter, dwtFrom, dwtTo, builtFrom, builtTo]);
+  }, [enriched, searchTerms, scopes, coatingFilter, segmentFilter, iceFilter, imoTypeFilter, yearFilter, ownerFilter, operatorFilter, dwtFrom, dwtTo, builtFrom, builtTo]);
+
+  // Reset to page 1 whenever the filtered set changes shape (new search/filter)
+  useEffect(() => { setPage(1); }, [searchTerms, coatingFilter, segmentFilter, iceFilter, imoTypeFilter, yearFilter, ownerFilter, operatorFilter, dwtFrom, dwtTo, builtFrom, builtTo, sort]);
 
   const sorted = useMemo(() => {
     const { key, dir } = sort;
@@ -240,11 +275,23 @@ export default function FleetTab() {
     });
   }, [filtered, sort]);
 
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const pageRows = useMemo(() => {
+    const start = (page-1)*PAGE_SIZE;
+    return sorted.slice(start, start+PAGE_SIZE);
+  }, [sorted, page]);
+
   function toggleSort(key) {
     setSort(s => s.key === key ? { key, dir: s.dir==="asc"?"desc":"asc" } : { key, dir:"asc" });
   }
   function toggleSet(setter, val) {
     setter(prev => { const n = new Set(prev); n.has(val) ? n.delete(val) : n.add(val); return n; });
+  }
+
+  const anyFilterActive = coatingFilter.size||segmentFilter.size||iceFilter.size||imoTypeFilter.size||yearFilter.size||ownerFilter.size||operatorFilter.size;
+  function clearAllFilters() {
+    setCoatingFilter(new Set()); setSegmentFilter(new Set()); setIceFilter(new Set());
+    setImoTypeFilter(new Set()); setYearFilter(new Set()); setOwnerFilter(new Set()); setOperatorFilter(new Set());
   }
 
   // ── stats ──────────────────────────────────────────────────────────────
@@ -276,28 +323,33 @@ export default function FleetTab() {
   }, [filtered]);
 
   // ── segment / age-profile table ───────────────────────────────────────
+  function statBlock(ages) {
+    const avgAge = ages.length ? ages.reduce((a,b)=>a+b,0)/ages.length : null;
+    const n15 = ages.filter(a=>a>15).length, n20 = ages.filter(a=>a>20).length, n25 = ages.filter(a=>a>25).length;
+    const n = ages.length || 0;
+    return { avgAge, n15, n20, n25, r15: n?n15/n:0, r20: n?n20/n:0, r25: n?n25/n:0 };
+  }
+
   const segStats = useMemo(() => {
     return FLEET_SEGMENTS.map(seg => {
       const segRows = filtered.filter(r => r.segment?.key === seg.key);
-      const ages = segRows.map(r=>r.age).filter(a=>a!=null);
-      const avgAge = ages.length ? ages.reduce((a,b)=>a+b,0)/ages.length : null;
-      const n15 = ages.filter(a=>a>15).length, n20 = ages.filter(a=>a>20).length, n25 = ages.filter(a=>a>25).length;
+      const base = statBlock(segRows.map(r=>r.age).filter(a=>a!=null));
       const byCoating = {};
-      segRows.forEach(r => { if (r.coating) byCoating[r.coating] = (byCoating[r.coating]||0)+1; });
-      return {
-        ...seg, ships: segRows.length, avgAge, n15, n20, n25,
-        r15: segRows.length ? n15/segRows.length : 0,
-        r20: segRows.length ? n20/segRows.length : 0,
-        r25: segRows.length ? n25/segRows.length : 0,
-        coatings: Object.entries(byCoating).sort((a,b)=>b[1]-a[1]),
-      };
+      segRows.forEach(r => {
+        if (!r.coating) return;
+        (byCoating[r.coating] ||= []).push(r);
+      });
+      const coatings = Object.entries(byCoating)
+        .map(([name, crows]) => ({ name, ships: crows.length, ...statBlock(crows.map(r=>r.age).filter(a=>a!=null)) }))
+        .sort((a,b)=>b.ships-a.ships);
+      return { ...seg, ships: segRows.length, ...base, coatings };
     }).filter(s => s.ships > 0);
   }, [filtered]);
 
   // ── owner / operator roll-ups ─────────────────────────────────────────
-  function rollUp(rows, keyField) {
+  function rollUp(list, keyField) {
     const m = {};
-    rows.forEach(r => {
+    list.forEach(r => {
       const k = r[keyField]; if (!k) return;
       if (!m[k]) m[k] = { name:k, ships:0, dwt:0, ages:[], n15:0, n20:0, n25:0 };
       const g = m[k];
@@ -356,10 +408,10 @@ export default function FleetTab() {
       <div style={{ ...CARD, display:"flex", flexDirection:"column", gap:10 }}>
         <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
           <input
-            value={search} onChange={e=>setSearch(e.target.value)}
-            placeholder="🔍 Search fleet…"
+            value={searchInput} onChange={e=>setSearchInput(e.target.value)}
+            placeholder="🔍 Search fleet… (comma-separate: stena, maersk, hafnia)"
             style={{ background:C.bg3, border:"1px solid "+C.bd, borderRadius:6, color:C.tx, fontFamily:"inherit",
-              fontSize:13, padding:"8px 12px", outline:"none", minWidth:240, flex:"0 1 320px" }}
+              fontSize:13, padding:"8px 12px", outline:"none", minWidth:280, flex:"0 1 380px" }}
           />
           {SCOPE_OPTS.map(([k,label]) => (
             <button key={k} style={CHIP(scopes.has(k))} onClick={()=>toggleSet(setScopes,k)}>{label}</button>
@@ -397,9 +449,8 @@ export default function FleetTab() {
               <button key={i} style={CHIP(iceFilter.has(i))} onClick={()=>toggleSet(setIceFilter,i)}>{i}</button>
             ))}
           </>}
-          {(coatingFilter.size||segmentFilter.size||iceFilter.size) > 0 && (
-            <button style={{ ...CHIP(true,"#ff6b6b"), marginLeft:"auto" }}
-              onClick={()=>{ setCoatingFilter(new Set()); setSegmentFilter(new Set()); setIceFilter(new Set()); }}>
+          {(anyFilterActive) > 0 && (
+            <button style={{ ...CHIP(true,"#ff6b6b"), marginLeft:"auto" }} onClick={clearAllFilters}>
               ✕ Clear filters
             </button>
           )}
@@ -419,18 +470,31 @@ export default function FleetTab() {
               ✕ Clear range
             </button>
           )}
+          {(ownerFilter.size>0 || operatorFilter.size>0) && (
+            <>
+              <span style={{ ...LABEL, marginLeft:14 }}>Selected</span>
+              {[...ownerFilter].map(o => (
+                <button key={"o-"+o} style={CHIP(true,"#4fc3f7")} onClick={()=>toggleSet(setOwnerFilter,o)}>{o} ✕</button>
+              ))}
+              {[...operatorFilter].map(o => (
+                <button key={"p-"+o} style={CHIP(true,"#c084fc")} onClick={()=>toggleSet(setOperatorFilter,o)}>{o} ✕</button>
+              ))}
+            </>
+          )}
         </div>
       </div>
 
       {/* ── charts row ── */}
       <div style={{ display:"grid", gridTemplateColumns:"minmax(220px,280px) minmax(220px,280px) 1fr", gap:16 }}>
         <div style={CARD}>
-          <div style={LABEL}>Coating</div>
+          <div style={LABEL}>Coating <span style={{ fontWeight:400, textTransform:"none", letterSpacing:0 }}>(click to filter)</span></div>
           <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:8 }}>
-            <Donut segments={coatingDonut}/>
+            <Donut segments={coatingDonut} onSliceClick={label=>toggleSet(setCoatingFilter,label)} activeSet={coatingFilter}/>
             <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
               {coatingDonut.map(s => (
-                <div key={s.label} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:C.dim }}>
+                <div key={s.label} onClick={()=>toggleSet(setCoatingFilter,s.label)}
+                  style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, cursor:"pointer",
+                    color: coatingFilter.has(s.label)?s.color:C.dim, fontWeight: coatingFilter.has(s.label)?700:400 }}>
                   <span style={{ width:9, height:9, borderRadius:2, background:s.color, display:"inline-block" }}/>
                   {s.label} <b style={{ color:C.tx }}>{s.value}</b>
                 </div>
@@ -440,9 +504,12 @@ export default function FleetTab() {
         </div>
 
         <div style={CARD}>
-          <div style={LABEL}>IMO Type</div>
+          <div style={LABEL}>IMO Type <span style={{ fontWeight:400, textTransform:"none", letterSpacing:0 }}>(click to filter)</span></div>
           <div style={{ marginTop:12 }}>
-            {imoBars.map(b => <Bar key={b.label} label={b.label} value={b.value} max={b.max} color={b.color}/>)}
+            {imoBars.map(b => (
+              <Bar key={b.label} label={b.label} value={b.value} max={b.max} color={b.color}
+                active={imoTypeFilter.has(b.label)} onClick={()=>toggleSet(setImoTypeFilter,b.label)}/>
+            ))}
           </div>
           <div style={{ ...LABEL, marginTop:14 }}>Country Built</div>
           <div style={{ marginTop:8 }}>
@@ -452,8 +519,8 @@ export default function FleetTab() {
         </div>
 
         <div style={CARD}>
-          <div style={LABEL}>Built Year</div>
-          <div style={{ marginTop:8 }}><YearHistogram rows={filtered}/></div>
+          <div style={LABEL}>Built Year <span style={{ fontWeight:400, textTransform:"none", letterSpacing:0 }}>(click a bar to filter)</span></div>
+          <div style={{ marginTop:8 }}><YearHistogram rows={filtered} onYearClick={y=>toggleSet(setYearFilter,y)} activeYears={yearFilter}/></div>
         </div>
       </div>
 
@@ -486,11 +553,17 @@ export default function FleetTab() {
                   <td style={{ ...TD_, textAlign:"right" }}>{s.n25}</td>
                   <td style={{ ...TD_, textAlign:"right", color: s.r25>0.15?C.red:C.dim }}>{RATIO_CELL(s.r25)}</td>
                 </tr>
-                {expandedSeg.has(s.key) && s.coatings.map(([cname,cval]) => (
-                  <tr key={cname}>
-                    <td style={{ ...TD_, paddingLeft:26, color:COATING_COLORS[cname]||C.faint }}>{cname}</td>
-                    <td style={{ ...TD_, textAlign:"right" }}>{cval}</td>
-                    <td colSpan={7} style={TD_}/>
+                {expandedSeg.has(s.key) && s.coatings.map(c => (
+                  <tr key={c.name}>
+                    <td style={{ ...TD_, paddingLeft:26, color:COATING_COLORS[c.name]||C.faint }}>{c.name}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{c.ships}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{c.avgAge!=null?c.avgAge.toFixed(1):"—"}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{c.n15}</td>
+                    <td style={{ ...TD_, textAlign:"right", color: c.r15>0.5?C.red:C.dim }}>{RATIO_CELL(c.r15)}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{c.n20}</td>
+                    <td style={{ ...TD_, textAlign:"right", color: c.r20>0.3?C.red:C.dim }}>{RATIO_CELL(c.r20)}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{c.n25}</td>
+                    <td style={{ ...TD_, textAlign:"right", color: c.r25>0.15?C.red:C.dim }}>{RATIO_CELL(c.r25)}</td>
                   </tr>
                 ))}
               </React.Fragment>
@@ -503,11 +576,11 @@ export default function FleetTab() {
       {/* ── owner / operator roll-ups ── */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
         {[
-          ["Owner / Manager", ownerSorted, ownerSort, setOwnerSort],
-          ["Operator", operatorSorted, operatorSort, setOperatorSort],
-        ].map(([title, list, sState, sSet]) => (
+          ["Owner / Manager", ownerSorted, ownerSort, setOwnerSort, ownerFilter, setOwnerFilter],
+          ["Operator", operatorSorted, operatorSort, setOperatorSort, operatorFilter, setOperatorFilter],
+        ].map(([title, list, sState, sSet, activeFilter, setActiveFilter]) => (
           <div key={title} style={{ ...CARD, maxHeight:420, overflow:"auto" }}>
-            <div style={{ ...LABEL, marginBottom:8 }}>{title}</div>
+            <div style={{ ...LABEL, marginBottom:8 }}>{title} <span style={{ fontWeight:400, textTransform:"none", letterSpacing:0 }}>(click a row to filter, click again to remove)</span></div>
             <table style={{ borderCollapse:"collapse", width:"100%" }}>
               <thead><tr>
                 <SortTH label={title==="Owner / Manager"?"Owner":"Operator"} k="name" sortState={sState} onSort={k=>sSet(s=>s.key===k?{key:k,dir:s.dir==="asc"?"desc":"asc"}:{key:k,dir:"asc"})}/>
@@ -518,16 +591,20 @@ export default function FleetTab() {
                 <SortTH label=">20yrs" k="r20" align="right" sortState={sState} onSort={k=>sSet(s=>s.key===k?{key:k,dir:s.dir==="asc"?"desc":"asc"}:{key:k,dir:"desc"})}/>
               </tr></thead>
               <tbody>
-                {list.map(g => (
-                  <tr key={g.name}>
-                    <td style={{ ...TD_, color:C.tx, fontWeight:600, maxWidth:150 }} title={g.name}>{g.name}</td>
-                    <td style={{ ...TD_, textAlign:"right" }}>{g.ships}</td>
-                    <td style={{ ...TD_, textAlign:"right" }}>{fmtN(g.dwt)}</td>
-                    <td style={{ ...TD_, textAlign:"right" }}>{g.avgAge!=null?g.avgAge.toFixed(1):"—"}</td>
-                    <td style={{ ...TD_, textAlign:"right" }}>{RATIO_CELL(g.r15)}</td>
-                    <td style={{ ...TD_, textAlign:"right" }}>{RATIO_CELL(g.r20)}</td>
-                  </tr>
-                ))}
+                {list.map(g => {
+                  const active = activeFilter.has(g.name);
+                  return (
+                    <tr key={g.name} onClick={()=>toggleSet(setActiveFilter,g.name)}
+                      style={{ cursor:"pointer", background: active ? "rgba(88,166,255,0.10)" : "transparent" }}>
+                      <td style={{ ...TD_, color: active?"#58a6ff":C.tx, fontWeight:600, maxWidth:150 }} title={g.name}>{active?"✓ ":""}{g.name}</td>
+                      <td style={{ ...TD_, textAlign:"right" }}>{g.ships}</td>
+                      <td style={{ ...TD_, textAlign:"right" }}>{fmtN(g.dwt)}</td>
+                      <td style={{ ...TD_, textAlign:"right" }}>{g.avgAge!=null?g.avgAge.toFixed(1):"—"}</td>
+                      <td style={{ ...TD_, textAlign:"right" }}>{RATIO_CELL(g.r15)}</td>
+                      <td style={{ ...TD_, textAlign:"right" }}>{RATIO_CELL(g.r20)}</td>
+                    </tr>
+                  );
+                })}
                 {!list.length && <tr><td style={TD_} colSpan={6}>No data</td></tr>}
               </tbody>
             </table>
@@ -539,6 +616,13 @@ export default function FleetTab() {
       <div style={{ ...CARD, padding:0, overflow:"hidden" }}>
         <div style={{ padding:"10px 16px", borderBottom:"1px solid "+C.bd, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <span style={LABEL}>Vessels ({sorted.length})</span>
+          {totalPages > 1 && (
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <button style={CHIP(false)} disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>‹ Prev</button>
+              <span style={{ fontSize:11, color:C.faint }}>Page {page} / {totalPages}</span>
+              <button style={CHIP(false)} disabled={page>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>Next ›</button>
+            </div>
+          )}
         </div>
         <div style={{ overflowX:"auto", maxHeight:600, overflowY:"auto" }}>
           <table style={{ borderCollapse:"collapse", width:"100%" }}>
@@ -565,7 +649,7 @@ export default function FleetTab() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map(r => (
+              {pageRows.map(r => (
                 <tr key={r.imo || r.vessel} style={{ height:30 }}>
                   <td style={{ ...TD_, color:C.tx, fontWeight:600 }} title={r.vessel}>{r.vessel}</td>
                   <td style={{ ...TD_, color:COATING_COLORS[r.coating]||C.dim }}>{r.coating||"—"}</td>
@@ -587,7 +671,7 @@ export default function FleetTab() {
                   <td style={TD_} title={r.owner||""}>{r.owner||"—"}</td>
                 </tr>
               ))}
-              {!sorted.length && !loading && (
+              {!pageRows.length && !loading && (
                 <tr><td style={TD_} colSpan={17}>No vessels match current search/filters.</td></tr>
               )}
             </tbody>
