@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "./supabaseclient";
 import { C } from "./constants";
 import { fmtN } from "./utils";
@@ -49,6 +49,19 @@ function fmtUpdatedAt(iso) {
   return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})+" "+d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
 }
 
+function vesselKey(r) { return r.imo || r.vessel; }
+
+// Debounces a fast-changing value (typing) so expensive downstream recompute
+// (filtering/sorting/re-rendering thousands of rows) only runs once typing pauses.
+function useDebounced(value, delay=250) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
 const SELECT_COLS = "vessel,imo,dwt,loa,beam,draft,cbm,coating,built,flag,imo_type,operator,owner,ice_class,fuel_type,tanks,segs,other_data,tier_name,comments,last_ex_name,country_build";
 const PAGE_SIZE = 100;
 
@@ -62,18 +75,26 @@ const CHIP = (active, col="#58a6ff") => ({
   fontFamily:"inherit", whiteSpace:"nowrap",
 });
 const LABEL = { fontSize:10, color:C.faint, textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:700 };
-const NUM_INPUT = { width:72, background:C.bg3, border:"1px solid "+C.bd, borderRadius:5, color:C.tx,
+const SUBLABEL = { fontWeight:400, textTransform:"none", letterSpacing:0, color:C.faint };
+// type=text + inputMode avoids the browser's number-input spinner arrows entirely.
+const NUM_INPUT = { width:80, background:C.bg3, border:"1px solid "+C.bd, borderRadius:5, color:C.tx,
   fontFamily:"inherit", fontSize:12, padding:"5px 8px", outline:"none" };
+
+function numericOnChange(setter) {
+  return e => {
+    const v = e.target.value.replace(/[^0-9]/g, "");
+    setter(v);
+  };
+}
 
 function Bar({ label, value, max, color, sub, active, onClick }) {
   const pct = max > 0 ? Math.max(2, (value / max) * 100) : 0;
   return (
     <div
-      style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6, cursor: onClick?"pointer":"default",
-        opacity: onClick && active===false ? 0.45 : 1 }}
+      style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6, cursor: onClick?"pointer":"default" }}
       onClick={onClick}
     >
-      <div style={{ width:96, fontSize:11, color: active?color:C.dim, fontWeight: active?700:400, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }} title={label}>{label}</div>
+      <div style={{ width:100, fontSize:11, color: active?color:C.tx, fontWeight: active?700:500, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }} title={label}>{label}</div>
       <div style={{ flex:1, height:14, background:C.bg3, borderRadius:3, overflow:"hidden" }}>
         <div style={{ width:pct+"%", height:"100%", background:color, borderRadius:3 }}/>
       </div>
@@ -110,7 +131,7 @@ function Donut({ segments, size=140, onSliceClick, activeSet }) {
   );
 }
 
-function YearHistogram({ rows, height=140, onYearClick, activeYears }) {
+function YearHistogram({ rows, height=220, onYearClick, activeYears }) {
   const byYear = {};
   rows.forEach(r => { if (r.built) byYear[r.built] = (byYear[r.built]||0)+1; });
   const years = Object.keys(byYear).map(Number).sort((a,b)=>a-b);
@@ -118,27 +139,43 @@ function YearHistogram({ rows, height=140, onYearClick, activeYears }) {
   const minY = years[0], maxY = years[years.length-1];
   const full = []; for (let y=minY; y<=maxY; y++) full.push(y);
   const max = Math.max(...full.map(y=>byYear[y]||0));
-  const w = Math.max(360, full.length*14);
+  const barW = 18;
+  const w = Math.max(600, full.length*barW);
   return (
-    <div style={{ overflowX:"auto" }}>
-      <svg width={w} height={height+24} viewBox={`0 0 ${w} ${height+24}`}>
+    <div style={{ overflowX:"auto", width:"100%" }}>
+      <svg width="100%" height={height+26} viewBox={`0 0 ${w} ${height+26}`} preserveAspectRatio="xMinYMin meet" style={{ minWidth:w }}>
         {full.map((y,i) => {
           const v = byYear[y]||0;
           const barH = max>0 ? (v/max)*height : 0;
-          const x = i*14;
+          const x = i*barW;
           const active = activeYears && activeYears.has(y);
           const dimmed = activeYears && activeYears.size>0 && !active;
           return (
             <g key={y} style={{ cursor: onYearClick && v>0 ? "pointer":"default" }} onClick={v>0 && onYearClick ? ()=>onYearClick(y) : undefined}>
-              <rect x={x+2} y={height-barH} width={10} height={barH} fill={active?"#f5a623":"#58a6ff"} opacity={dimmed?0.35:1} rx={1}/>
-              {v>0 && <text x={x+7} y={height-barH-3} fontSize={8} fill={C.dim} textAnchor="middle">{v}</text>}
-              {(y%5===0) && <text x={x+7} y={height+14} fontSize={8} fill={C.faint} textAnchor="middle">{y}</text>}
+              <rect x={x+3} y={height-barH} width={barW-5} height={barH} fill={active?"#f5a623":"#58a6ff"} opacity={dimmed?0.35:1} rx={1}/>
+              {v>0 && <text x={x+barW/2} y={height-barH-4} fontSize={9} fill={C.dim} textAnchor="middle">{v}</text>}
+              {(y%5===0) && <text x={x+barW/2} y={height+16} fontSize={9} fill={C.faint} textAnchor="middle">{y}</text>}
             </g>
           );
         })}
       </svg>
     </div>
   );
+}
+
+function csvEscape(v) {
+  if (v == null) return "";
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+}
+
+function downloadText(filename, text) {
+  const blob = new Blob([text], { type:"text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ─── main component ─────────────────────────────────────────────────────────
@@ -149,34 +186,35 @@ export default function FleetTab() {
   const [loadError, setLoadError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null); // {file_name, uploaded_at, row_count}
 
-  // Search box updates instantly for typing feel, but the value actually used
-  // for filtering is debounced — avoids re-filtering/re-sorting/re-rendering
-  // 5000+ rows on every keystroke, which was the main source of lag.
   const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  useEffect(() => {
-    const t = setTimeout(() => setSearch(searchInput), 200);
-    return () => clearTimeout(t);
-  }, [searchInput]);
+  const search = useDebounced(searchInput, 200);
 
   const [scopes, setScopes] = useState(() => new Set(["vessel"]));
   const [coatingFilter, setCoatingFilter] = useState(() => new Set());
   const [segmentFilter, setSegmentFilter] = useState(() => new Set());
   const [iceFilter, setIceFilter] = useState(() => new Set());
   const [imoTypeFilter, setImoTypeFilter] = useState(() => new Set());
+  const [countryFilter, setCountryFilter] = useState(() => new Set());
   const [yearFilter, setYearFilter] = useState(() => new Set());
   const [ownerFilter, setOwnerFilter] = useState(() => new Set());
-  const [operatorFilter, setOperatorFilter] = useState(() => new Set());
-  const [dwtFrom, setDwtFrom] = useState("");
-  const [dwtTo, setDwtTo] = useState("");
-  const [builtFrom, setBuiltFrom] = useState("");
-  const [builtTo, setBuiltTo] = useState("");
+
+  const [dwtFromInput, setDwtFromInput] = useState("");
+  const [dwtToInput, setDwtToInput] = useState("");
+  const [builtFromInput, setBuiltFromInput] = useState("");
+  const [builtToInput, setBuiltToInput] = useState("");
+  const dwtFrom = useDebounced(dwtFromInput, 300);
+  const dwtTo = useDebounced(dwtToInput, 300);
+  const builtFrom = useDebounced(builtFromInput, 300);
+  const builtTo = useDebounced(builtToInput, 300);
 
   const [sort, setSort] = useState({ key:"vessel", dir:"asc" });
   const [expandedSeg, setExpandedSeg] = useState(() => new Set());
   const [ownerSort, setOwnerSort] = useState({ key:"ships", dir:"desc" });
-  const [operatorSort, setOperatorSort] = useState({ key:"ships", dir:"desc" });
   const [page, setPage] = useState(1);
+
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState(() => new Set());
+  const [includeStatsInCSV, setIncludeStatsInCSV] = useState(true);
 
   const load = useCallback(async () => {
     if (loaded || loading) return;
@@ -211,9 +249,6 @@ export default function FleetTab() {
     fetchMeta();
   }, []);
 
-  // Postgres `numeric` columns come back from PostgREST as strings (to avoid
-  // float precision loss), which silently breaks `+=` (string concatenation
-  // instead of addition) anywhere we sum/compare them. Normalized in `enriched`.
   const enriched = useMemo(() => rows.map(r => {
     const norm = { ...r };
     NUM_FIELDS.forEach(f => { norm[f] = toNum(r[f]); });
@@ -223,8 +258,6 @@ export default function FleetTab() {
   const coatingList = useMemo(() => [...new Set(enriched.map(r=>r.coating).filter(Boolean))].sort(), [enriched]);
   const iceList = useMemo(() => [...new Set(enriched.map(r=>r.ice_class).filter(Boolean))].sort(), [enriched]);
 
-  // Comma-separated search terms ("stena, maersk, hafnia") — a row matches
-  // if ANY term matches ANY selected scope field.
   const searchTerms = useMemo(() => search.split(",").map(t=>t.trim().toLowerCase()).filter(Boolean), [search]);
 
   const filtered = useMemo(() => {
@@ -237,9 +270,9 @@ export default function FleetTab() {
       if (segmentFilter.size && !(r.segment && segmentFilter.has(r.segment.key))) return false;
       if (iceFilter.size && !iceFilter.has(r.ice_class)) return false;
       if (imoTypeFilter.size && !imoTypeFilter.has(r.imo_type)) return false;
+      if (countryFilter.size && !countryFilter.has(r.country_build)) return false;
       if (yearFilter.size && !yearFilter.has(r.built)) return false;
-      if (ownerFilter.size && !ownerFilter.has(r.owner)) return false;
-      if (operatorFilter.size && !operatorFilter.has(r.operator)) return false;
+      if (ownerFilter.size && !ownerFilter.has(r.owner+"||"+(r.operator||""))) return false;
       if (dFrom != null && (r.dwt == null || r.dwt < dFrom)) return false;
       if (dTo   != null && (r.dwt == null || r.dwt > dTo))   return false;
       if (bFrom != null && (r.built == null || r.built < bFrom)) return false;
@@ -255,10 +288,35 @@ export default function FleetTab() {
       const lowerFields = fields.filter(Boolean).map(f=>String(f).toLowerCase());
       return searchTerms.some(term => lowerFields.some(f => f.includes(term)));
     });
-  }, [enriched, searchTerms, scopes, coatingFilter, segmentFilter, iceFilter, imoTypeFilter, yearFilter, ownerFilter, operatorFilter, dwtFrom, dwtTo, builtFrom, builtTo]);
+  }, [enriched, searchTerms, scopes, coatingFilter, segmentFilter, iceFilter, imoTypeFilter, countryFilter, yearFilter, ownerFilter, dwtFrom, dwtTo, builtFrom, builtTo]);
 
-  // Reset to page 1 whenever the filtered set changes shape (new search/filter)
-  useEffect(() => { setPage(1); }, [searchTerms, coatingFilter, segmentFilter, iceFilter, imoTypeFilter, yearFilter, ownerFilter, operatorFilter, dwtFrom, dwtTo, builtFrom, builtTo, sort]);
+  useEffect(() => { setPage(1); }, [searchTerms, coatingFilter, segmentFilter, iceFilter, imoTypeFilter, countryFilter, yearFilter, ownerFilter, dwtFrom, dwtTo, builtFrom, builtTo, sort]);
+
+  // Selection mode: default-selects everything currently in view, then you deselect.
+  function enterSelectMode() {
+    setSelectedKeys(new Set(filtered.map(vesselKey)));
+    setSelectMode(true);
+  }
+  function exitSelectMode() { setSelectMode(false); }
+  function toggleVesselSelected(key) {
+    setSelectedKeys(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  }
+  function selectAllVisible() { setSelectedKeys(new Set(filtered.map(vesselKey))); }
+  function deselectAllVisible() { setSelectedKeys(new Set()); }
+  function toggleGroupSelected(groupRows, allSelected) {
+    setSelectedKeys(prev => {
+      const n = new Set(prev);
+      groupRows.forEach(r => { const k = vesselKey(r); allSelected ? n.delete(k) : n.add(k); });
+      return n;
+    });
+  }
+
+  // Everything downstream (stats, charts, roll-ups, CSV export) reflects this —
+  // the full filtered set normally, or just what's ticked while in select mode.
+  const effectiveRows = useMemo(() => {
+    if (!selectMode) return filtered;
+    return filtered.filter(r => selectedKeys.has(vesselKey(r)));
+  }, [filtered, selectMode, selectedKeys]);
 
   const sorted = useMemo(() => {
     const { key, dir } = sort;
@@ -288,41 +346,40 @@ export default function FleetTab() {
     setter(prev => { const n = new Set(prev); n.has(val) ? n.delete(val) : n.add(val); return n; });
   }
 
-  const anyFilterActive = coatingFilter.size||segmentFilter.size||iceFilter.size||imoTypeFilter.size||yearFilter.size||ownerFilter.size||operatorFilter.size;
+  const anyFilterActive = coatingFilter.size||segmentFilter.size||iceFilter.size||imoTypeFilter.size||countryFilter.size||yearFilter.size||ownerFilter.size;
   function clearAllFilters() {
     setCoatingFilter(new Set()); setSegmentFilter(new Set()); setIceFilter(new Set());
-    setImoTypeFilter(new Set()); setYearFilter(new Set()); setOwnerFilter(new Set()); setOperatorFilter(new Set());
+    setImoTypeFilter(new Set()); setCountryFilter(new Set()); setYearFilter(new Set()); setOwnerFilter(new Set());
   }
 
-  // ── stats ──────────────────────────────────────────────────────────────
+  // ── stats (all derived from effectiveRows, so selection mode narrows everything) ──
   const stats = useMemo(() => {
-    const ages = filtered.map(r=>r.age).filter(a=>a!=null);
+    const ages = effectiveRows.map(r=>r.age).filter(a=>a!=null);
     const avgAge = ages.length ? ages.reduce((a,b)=>a+b,0)/ages.length : null;
-    return { count: filtered.length, avgAge };
-  }, [filtered]);
+    return { count: effectiveRows.length, avgAge };
+  }, [effectiveRows]);
 
   const coatingDonut = useMemo(() => {
     const m = {};
-    filtered.forEach(r => { if (r.coating) m[r.coating] = (m[r.coating]||0)+1; });
+    effectiveRows.forEach(r => { if (r.coating) m[r.coating] = (m[r.coating]||0)+1; });
     return Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([label,value]) => ({ label, value, color: COATING_COLORS[label] || "#94a3b8" }));
-  }, [filtered]);
+  }, [effectiveRows]);
 
   const imoBars = useMemo(() => {
     const m = { "IMO 1":0, "IMO 2":0, "IMO 3":0 };
-    filtered.forEach(r => { if (r.imo_type && m[r.imo_type] != null) m[r.imo_type]++; });
+    effectiveRows.forEach(r => { if (r.imo_type && m[r.imo_type] != null) m[r.imo_type]++; });
     const max = Math.max(1, ...Object.values(m));
     return Object.entries(m).map(([label,value]) => ({ label, value, max, color: IMO_COLORS[label] }));
-  }, [filtered]);
+  }, [effectiveRows]);
 
   const countryBars = useMemo(() => {
     const m = {};
-    filtered.forEach(r => { if (r.country_build) m[r.country_build] = (m[r.country_build]||0)+1; });
-    const top = Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    effectiveRows.forEach(r => { if (r.country_build) m[r.country_build] = (m[r.country_build]||0)+1; });
+    const top = Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10);
     const max = Math.max(1, ...top.map(([,v])=>v));
     return top.map(([label,value]) => ({ label, value, max }));
-  }, [filtered]);
+  }, [effectiveRows]);
 
-  // ── segment / age-profile table ───────────────────────────────────────
   function statBlock(ages) {
     const avgAge = ages.length ? ages.reduce((a,b)=>a+b,0)/ages.length : null;
     const n15 = ages.filter(a=>a>15).length, n20 = ages.filter(a=>a>20).length, n25 = ages.filter(a=>a>25).length;
@@ -332,28 +389,46 @@ export default function FleetTab() {
 
   const segStats = useMemo(() => {
     return FLEET_SEGMENTS.map(seg => {
-      const segRows = filtered.filter(r => r.segment?.key === seg.key);
+      const segRows = effectiveRows.filter(r => r.segment?.key === seg.key);
       const base = statBlock(segRows.map(r=>r.age).filter(a=>a!=null));
       const byCoating = {};
-      segRows.forEach(r => {
-        if (!r.coating) return;
-        (byCoating[r.coating] ||= []).push(r);
-      });
+      segRows.forEach(r => { if (r.coating) (byCoating[r.coating] ||= []).push(r); });
       const coatings = Object.entries(byCoating)
         .map(([name, crows]) => ({ name, ships: crows.length, ...statBlock(crows.map(r=>r.age).filter(a=>a!=null)) }))
         .sort((a,b)=>b.ships-a.ships);
       return { ...seg, ships: segRows.length, ...base, coatings };
     }).filter(s => s.ships > 0);
-  }, [filtered]);
+  }, [effectiveRows]);
 
-  // ── owner / operator roll-ups ─────────────────────────────────────────
-  function rollUp(list, keyField) {
+  // ── fleet stats summary card ──────────────────────────────────────────
+  const fleetStats = useMemo(() => {
+    const n = effectiveRows.length;
+    const ages = effectiveRows.map(r=>r.age).filter(a=>a!=null);
+    const avgAge = ages.length ? ages.reduce((a,b)=>a+b,0)/ages.length : null;
+    function breakdown(resolver) {
+      const m = {};
+      effectiveRows.forEach(r => { const v = resolver(r); if (!v) return; m[v] = (m[v]||0)+1; });
+      return Object.entries(m).sort((a,b)=>b[1]-a[1]).map(([label,value]) => ({ label, value, share: n?value/n:0 }));
+    }
+    return {
+      count: n, avgAge,
+      imoBreakdown: breakdown(r=>r.imo_type),
+      coatingBreakdown: breakdown(r=>r.coating),
+      iceBreakdown: breakdown(r=>r.ice_class),
+      segmentBreakdown: breakdown(r=>r.segment?.label),
+    };
+  }, [effectiveRows]);
+
+  // ── combined owner+operator roll-up ─────────────────────────────────────
+  function ownerOperatorKey(r) { return (r.owner||"—")+"||"+(r.operator||""); }
+  const combinedRollup = useMemo(() => {
     const m = {};
-    list.forEach(r => {
-      const k = r[keyField]; if (!k) return;
-      if (!m[k]) m[k] = { name:k, ships:0, dwt:0, ages:[], n15:0, n20:0, n25:0 };
-      const g = m[k];
-      g.ships++; g.dwt += r.dwt||0;
+    filtered.forEach(r => {
+      if (!r.owner && !r.operator) return;
+      const key = ownerOperatorKey(r);
+      if (!m[key]) m[key] = { key, owner: r.owner||"—", operator: r.operator||"—", ships:0, dwt:0, ages:[], n15:0, n20:0, n25:0, rows:[] };
+      const g = m[key];
+      g.ships++; g.dwt += r.dwt||0; g.rows.push(r);
       if (r.age != null) {
         g.ages.push(r.age);
         if (r.age>15) g.n15++;
@@ -366,21 +441,49 @@ export default function FleetTab() {
       avgAge: g.ages.length ? g.ages.reduce((a,b)=>a+b,0)/g.ages.length : null,
       r15: g.ships ? g.n15/g.ships : 0, r20: g.ships ? g.n20/g.ships : 0, r25: g.ships ? g.n25/g.ships : 0,
     }));
-  }
-  const ownerRollup = useMemo(() => rollUp(filtered, "owner"), [filtered]);
-  const operatorRollup = useMemo(() => rollUp(filtered, "operator"), [filtered]);
+  }, [filtered]);
 
-  function sortRollup(list, { key, dir }) {
+  const ownerSorted = useMemo(() => {
+    const { key, dir } = ownerSort;
     const mul = dir==="asc"?1:-1;
-    return [...list].sort((a,b) => {
+    return [...combinedRollup].sort((a,b) => {
       let av=a[key], bv=b[key];
       if (typeof av === "string") return (av||"").localeCompare(bv||"") * mul;
       av = av ?? -Infinity; bv = bv ?? -Infinity;
       return (av-bv)*mul;
     });
+  }, [combinedRollup, ownerSort]);
+
+  // ── CSV export ───────────────────────────────────────────────────────
+  function exportCSV() {
+    const cols = [
+      ["vessel","Vessel"],["coating","Coating"],["segment","Segment"],["built","Built"],["age","Age"],
+      ["dwt","DWT"],["cbm","CBM"],["loa","LOA"],["beam","Beam"],["draft","Draft"],["segs","Segs"],
+      ["flag","Flag"],["ice_class","Ice"],["imo_type","IMO Type"],["last_ex_name","Last Ex Name"],
+      ["comments","Notes"],["operator","Operator"],["owner","Owner/Manager"],
+    ];
+    const header = cols.map(([,label])=>csvEscape(label)).join(",");
+    const lines = effectiveRows.map(r => cols.map(([key]) => {
+      const v = key==="segment" ? (r.segment?.label||"") : r[key];
+      return csvEscape(v);
+    }).join(","));
+    let csv = [header, ...lines].join("\n");
+
+    if (includeStatsInCSV) {
+      csv += "\n\nFLEET STATS SUMMARY\n";
+      csv += `Ships,${fleetStats.count}\n`;
+      csv += `Average Age,${fleetStats.avgAge!=null?fleetStats.avgAge.toFixed(1):""}\n`;
+      const section = (title, items) => {
+        csv += `\n${title},Count,Share\n`;
+        items.forEach(b => { csv += `${csvEscape(b.label)},${b.value},${(b.share*100).toFixed(1)}%\n`; });
+      };
+      section("IMO Type", fleetStats.imoBreakdown);
+      section("Coating", fleetStats.coatingBreakdown);
+      section("Ice Class", fleetStats.iceBreakdown);
+      section("Segment", fleetStats.segmentBreakdown);
+    }
+    downloadText(`fleet_export_${new Date().toISOString().slice(0,10)}.csv`, csv);
   }
-  const ownerSorted = useMemo(() => sortRollup(ownerRollup, ownerSort), [ownerRollup, ownerSort]);
-  const operatorSorted = useMemo(() => sortRollup(operatorRollup, operatorSort), [operatorRollup, operatorSort]);
 
   // ── render ──────────────────────────────────────────────────────────────
   const SCOPE_OPTS = [["vessel","Vessel"],["operator","Operator"],["owner","Owner"],["country","Country Built"],["notes","Notes"]];
@@ -407,12 +510,19 @@ export default function FleetTab() {
       {/* ── search + filters ── */}
       <div style={{ ...CARD, display:"flex", flexDirection:"column", gap:10 }}>
         <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
-          <input
-            value={searchInput} onChange={e=>setSearchInput(e.target.value)}
-            placeholder="🔍 Search fleet… (comma-separate: stena, maersk, hafnia)"
-            style={{ background:C.bg3, border:"1px solid "+C.bd, borderRadius:6, color:C.tx, fontFamily:"inherit",
-              fontSize:13, padding:"8px 12px", outline:"none", minWidth:280, flex:"0 1 380px" }}
-          />
+          <div style={{ position:"relative", flex:"0 1 380px", minWidth:280 }}>
+            <input
+              value={searchInput} onChange={e=>setSearchInput(e.target.value)}
+              placeholder="🔍 Search fleet… (comma-separate: stena, maersk, hafnia)"
+              style={{ width:"100%", boxSizing:"border-box", background:C.bg3, border:"1px solid "+C.bd, borderRadius:6, color:C.tx, fontFamily:"inherit",
+                fontSize:13, padding:"8px 30px 8px 12px", outline:"none" }}
+            />
+            {searchInput && (
+              <button onClick={()=>setSearchInput("")}
+                style={{ position:"absolute", right:6, top:"50%", transform:"translateY(-50%)", background:"none", border:"none",
+                  color:C.faint, cursor:"pointer", fontSize:14, padding:"2px 6px", lineHeight:1 }}>✕</button>
+            )}
+          </div>
           {SCOPE_OPTS.map(([k,label]) => (
             <button key={k} style={CHIP(scopes.has(k))} onClick={()=>toggleSet(setScopes,k)}>{label}</button>
           ))}
@@ -449,52 +559,55 @@ export default function FleetTab() {
               <button key={i} style={CHIP(iceFilter.has(i))} onClick={()=>toggleSet(setIceFilter,i)}>{i}</button>
             ))}
           </>}
-          {(anyFilterActive) > 0 && (
-            <button style={{ ...CHIP(true,"#ff6b6b"), marginLeft:"auto" }} onClick={clearAllFilters}>
-              ✕ Clear filters
-            </button>
+          {anyFilterActive > 0 && (
+            <button style={{ ...CHIP(true,"#ff6b6b"), marginLeft:"auto" }} onClick={clearAllFilters}>✕ Clear filters</button>
           )}
         </div>
 
-        <div style={{ display:"flex", gap:16, flexWrap:"wrap", alignItems:"center" }}>
+        <div style={{ display:"flex", gap:14, flexWrap:"wrap", alignItems:"center" }}>
           <span style={LABEL}>DWT</span>
-          <input type="number" placeholder="From" value={dwtFrom} onChange={e=>setDwtFrom(e.target.value)} style={NUM_INPUT}/>
+          <input type="text" inputMode="numeric" placeholder="From" value={dwtFromInput} onChange={numericOnChange(setDwtFromInput)} style={NUM_INPUT}/>
           <span style={{ color:C.faint, fontSize:11 }}>–</span>
-          <input type="number" placeholder="To" value={dwtTo} onChange={e=>setDwtTo(e.target.value)} style={NUM_INPUT}/>
+          <input type="text" inputMode="numeric" placeholder="To" value={dwtToInput} onChange={numericOnChange(setDwtToInput)} style={NUM_INPUT}/>
           <span style={{ ...LABEL, marginLeft:14 }}>Built</span>
-          <input type="number" placeholder="From" value={builtFrom} onChange={e=>setBuiltFrom(e.target.value)} style={NUM_INPUT}/>
+          <input type="text" inputMode="numeric" placeholder="From" value={builtFromInput} onChange={numericOnChange(setBuiltFromInput)} style={NUM_INPUT}/>
           <span style={{ color:C.faint, fontSize:11 }}>–</span>
-          <input type="number" placeholder="To" value={builtTo} onChange={e=>setBuiltTo(e.target.value)} style={NUM_INPUT}/>
-          {(dwtFrom||dwtTo||builtFrom||builtTo) && (
-            <button style={CHIP(true,"#ff6b6b")} onClick={()=>{ setDwtFrom(""); setDwtTo(""); setBuiltFrom(""); setBuiltTo(""); }}>
-              ✕ Clear range
-            </button>
+          <input type="text" inputMode="numeric" placeholder="To" value={builtToInput} onChange={numericOnChange(setBuiltToInput)} style={NUM_INPUT}/>
+          {(dwtFromInput||dwtToInput||builtFromInput||builtToInput) && (
+            <button style={CHIP(true,"#ff6b6b")} onClick={()=>{ setDwtFromInput(""); setDwtToInput(""); setBuiltFromInput(""); setBuiltToInput(""); }}>✕ Clear range</button>
           )}
-          {(ownerFilter.size>0 || operatorFilter.size>0) && (
-            <>
-              <span style={{ ...LABEL, marginLeft:14 }}>Selected</span>
-              {[...ownerFilter].map(o => (
-                <button key={"o-"+o} style={CHIP(true,"#4fc3f7")} onClick={()=>toggleSet(setOwnerFilter,o)}>{o} ✕</button>
-              ))}
-              {[...operatorFilter].map(o => (
-                <button key={"p-"+o} style={CHIP(true,"#c084fc")} onClick={()=>toggleSet(setOperatorFilter,o)}>{o} ✕</button>
-              ))}
-            </>
-          )}
+
+          <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
+            {selectMode ? (
+              <>
+                <span style={{ fontSize:11, color:"#58a6ff", fontWeight:700 }}>{selectedKeys.size} / {filtered.length} selected</span>
+                <button style={CHIP(false)} onClick={selectAllVisible}>Select all</button>
+                <button style={CHIP(false)} onClick={deselectAllVisible}>Deselect all</button>
+                <button style={CHIP(true,"#4ade80")} onClick={exitSelectMode}>✓ Done</button>
+              </>
+            ) : (
+              <button style={CHIP(false,"#58a6ff")} onClick={enterSelectMode}>☑ Select mode</button>
+            )}
+            <button style={CHIP(false,"#4fc3f7")} onClick={exportCSV}>⬇ Export CSV</button>
+            <label style={{ fontSize:11, color:C.faint, display:"flex", alignItems:"center", gap:4, cursor:"pointer" }}>
+              <input type="checkbox" checked={includeStatsInCSV} onChange={e=>setIncludeStatsInCSV(e.target.checked)}/>
+              incl. stats
+            </label>
+          </div>
         </div>
       </div>
 
-      {/* ── charts row ── */}
-      <div style={{ display:"grid", gridTemplateColumns:"minmax(220px,280px) minmax(220px,280px) 1fr", gap:16 }}>
+      {/* ── charts row 1: coating / imo type / country built ── */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:16 }}>
         <div style={CARD}>
-          <div style={LABEL}>Coating <span style={{ fontWeight:400, textTransform:"none", letterSpacing:0 }}>(click to filter)</span></div>
+          <div style={LABEL}>Coating <span style={SUBLABEL}>(click to filter)</span></div>
           <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:8 }}>
             <Donut segments={coatingDonut} onSliceClick={label=>toggleSet(setCoatingFilter,label)} activeSet={coatingFilter}/>
             <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
               {coatingDonut.map(s => (
                 <div key={s.label} onClick={()=>toggleSet(setCoatingFilter,s.label)}
                   style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, cursor:"pointer",
-                    color: coatingFilter.has(s.label)?s.color:C.dim, fontWeight: coatingFilter.has(s.label)?700:400 }}>
+                    color: coatingFilter.has(s.label)?s.color:C.tx, fontWeight: coatingFilter.has(s.label)?700:500 }}>
                   <span style={{ width:9, height:9, borderRadius:2, background:s.color, display:"inline-block" }}/>
                   {s.label} <b style={{ color:C.tx }}>{s.value}</b>
                 </div>
@@ -504,23 +617,32 @@ export default function FleetTab() {
         </div>
 
         <div style={CARD}>
-          <div style={LABEL}>IMO Type <span style={{ fontWeight:400, textTransform:"none", letterSpacing:0 }}>(click to filter)</span></div>
+          <div style={LABEL}>IMO Type <span style={SUBLABEL}>(click to filter)</span></div>
           <div style={{ marginTop:12 }}>
             {imoBars.map(b => (
               <Bar key={b.label} label={b.label} value={b.value} max={b.max} color={b.color}
                 active={imoTypeFilter.has(b.label)} onClick={()=>toggleSet(setImoTypeFilter,b.label)}/>
             ))}
           </div>
-          <div style={{ ...LABEL, marginTop:14 }}>Country Built</div>
-          <div style={{ marginTop:8 }}>
-            {countryBars.map(b => <Bar key={b.label} label={b.label} value={b.value} max={b.max} color="#4fc3f7"/>)}
-            {!countryBars.length && <div style={{ fontSize:11, color:C.faint }}>No data</div>}
-          </div>
         </div>
 
         <div style={CARD}>
-          <div style={LABEL}>Built Year <span style={{ fontWeight:400, textTransform:"none", letterSpacing:0 }}>(click a bar to filter)</span></div>
-          <div style={{ marginTop:8 }}><YearHistogram rows={filtered} onYearClick={y=>toggleSet(setYearFilter,y)} activeYears={yearFilter}/></div>
+          <div style={LABEL}>Country Built <span style={SUBLABEL}>(click to filter)</span></div>
+          <div style={{ marginTop:12 }}>
+            {countryBars.map(b => (
+              <Bar key={b.label} label={b.label} value={b.value} max={b.max} color="#4fc3f7"
+                active={countryFilter.has(b.label)} onClick={()=>toggleSet(setCountryFilter,b.label)}/>
+            ))}
+            {!countryBars.length && <div style={{ fontSize:11, color:C.faint }}>No data</div>}
+          </div>
+        </div>
+      </div>
+
+      {/* ── built year — full width, larger ── */}
+      <div style={CARD}>
+        <div style={LABEL}>Built Year <span style={SUBLABEL}>(click a bar to filter)</span></div>
+        <div style={{ marginTop:10, width:"100%" }}>
+          <YearHistogram rows={effectiveRows} height={220} onYearClick={y=>toggleSet(setYearFilter,y)} activeYears={yearFilter}/>
         </div>
       </div>
 
@@ -573,43 +695,75 @@ export default function FleetTab() {
         </table>
       </div>
 
-      {/* ── owner / operator roll-ups ── */}
+      {/* ── owner/operator combined roll-up + fleet stats summary ── */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-        {[
-          ["Owner / Manager", ownerSorted, ownerSort, setOwnerSort, ownerFilter, setOwnerFilter],
-          ["Operator", operatorSorted, operatorSort, setOperatorSort, operatorFilter, setOperatorFilter],
-        ].map(([title, list, sState, sSet, activeFilter, setActiveFilter]) => (
-          <div key={title} style={{ ...CARD, maxHeight:420, overflow:"auto" }}>
-            <div style={{ ...LABEL, marginBottom:8 }}>{title} <span style={{ fontWeight:400, textTransform:"none", letterSpacing:0 }}>(click a row to filter, click again to remove)</span></div>
-            <table style={{ borderCollapse:"collapse", width:"100%" }}>
-              <thead><tr>
-                <SortTH label={title==="Owner / Manager"?"Owner":"Operator"} k="name" sortState={sState} onSort={k=>sSet(s=>s.key===k?{key:k,dir:s.dir==="asc"?"desc":"asc"}:{key:k,dir:"asc"})}/>
-                <SortTH label="Ships" k="ships" align="right" sortState={sState} onSort={k=>sSet(s=>s.key===k?{key:k,dir:s.dir==="asc"?"desc":"asc"}:{key:k,dir:"desc"})}/>
-                <SortTH label="DWT" k="dwt" align="right" sortState={sState} onSort={k=>sSet(s=>s.key===k?{key:k,dir:s.dir==="asc"?"desc":"asc"}:{key:k,dir:"desc"})}/>
-                <SortTH label="Avg age" k="avgAge" align="right" sortState={sState} onSort={k=>sSet(s=>s.key===k?{key:k,dir:s.dir==="asc"?"desc":"asc"}:{key:k,dir:"asc"})}/>
-                <SortTH label=">15yrs" k="r15" align="right" sortState={sState} onSort={k=>sSet(s=>s.key===k?{key:k,dir:s.dir==="asc"?"desc":"asc"}:{key:k,dir:"desc"})}/>
-                <SortTH label=">20yrs" k="r20" align="right" sortState={sState} onSort={k=>sSet(s=>s.key===k?{key:k,dir:s.dir==="asc"?"desc":"asc"}:{key:k,dir:"desc"})}/>
-              </tr></thead>
-              <tbody>
-                {list.map(g => {
-                  const active = activeFilter.has(g.name);
-                  return (
-                    <tr key={g.name} onClick={()=>toggleSet(setActiveFilter,g.name)}
-                      style={{ cursor:"pointer", background: active ? "rgba(88,166,255,0.10)" : "transparent" }}>
-                      <td style={{ ...TD_, color: active?"#58a6ff":C.tx, fontWeight:600, maxWidth:150 }} title={g.name}>{active?"✓ ":""}{g.name}</td>
-                      <td style={{ ...TD_, textAlign:"right" }}>{g.ships}</td>
-                      <td style={{ ...TD_, textAlign:"right" }}>{fmtN(g.dwt)}</td>
-                      <td style={{ ...TD_, textAlign:"right" }}>{g.avgAge!=null?g.avgAge.toFixed(1):"—"}</td>
-                      <td style={{ ...TD_, textAlign:"right" }}>{RATIO_CELL(g.r15)}</td>
-                      <td style={{ ...TD_, textAlign:"right" }}>{RATIO_CELL(g.r20)}</td>
-                    </tr>
-                  );
-                })}
-                {!list.length && <tr><td style={TD_} colSpan={6}>No data</td></tr>}
-              </tbody>
-            </table>
+        <div style={{ ...CARD, maxHeight:440, overflow:"auto" }}>
+          <div style={{ ...LABEL, marginBottom:8 }}>Owner / Operator <span style={SUBLABEL}>(click a row to filter{selectMode?", checkbox to include/exclude in selection":""})</span></div>
+          <table style={{ borderCollapse:"collapse", width:"100%" }}>
+            <thead><tr>
+              {selectMode && <th style={TH_}></th>}
+              <SortTH label="Owner" k="owner" sortState={ownerSort} onSort={k=>setOwnerSort(s=>s.key===k?{key:k,dir:s.dir==="asc"?"desc":"asc"}:{key:k,dir:"asc"})}/>
+              <SortTH label="Operator" k="operator" sortState={ownerSort} onSort={k=>setOwnerSort(s=>s.key===k?{key:k,dir:s.dir==="asc"?"desc":"asc"}:{key:k,dir:"asc"})}/>
+              <SortTH label="Ships" k="ships" align="right" sortState={ownerSort} onSort={k=>setOwnerSort(s=>s.key===k?{key:k,dir:s.dir==="asc"?"desc":"asc"}:{key:k,dir:"desc"})}/>
+              <SortTH label="DWT" k="dwt" align="right" sortState={ownerSort} onSort={k=>setOwnerSort(s=>s.key===k?{key:k,dir:s.dir==="asc"?"desc":"asc"}:{key:k,dir:"desc"})}/>
+              <SortTH label="Avg age" k="avgAge" align="right" sortState={ownerSort} onSort={k=>setOwnerSort(s=>s.key===k?{key:k,dir:s.dir==="asc"?"desc":"asc"}:{key:k,dir:"asc"})}/>
+              <SortTH label=">15yrs" k="r15" align="right" sortState={ownerSort} onSort={k=>setOwnerSort(s=>s.key===k?{key:k,dir:s.dir==="asc"?"desc":"asc"}:{key:k,dir:"desc"})}/>
+              <SortTH label=">20yrs" k="r20" align="right" sortState={ownerSort} onSort={k=>setOwnerSort(s=>s.key===k?{key:k,dir:s.dir==="asc"?"desc":"asc"}:{key:k,dir:"desc"})}/>
+            </tr></thead>
+            <tbody>
+              {ownerSorted.map(g => {
+                const active = ownerFilter.has(g.key);
+                const groupSelected = g.rows.every(r => selectedKeys.has(vesselKey(r)));
+                return (
+                  <tr key={g.key} style={{ background: active ? "rgba(88,166,255,0.10)" : "transparent" }}>
+                    {selectMode && (
+                      <td style={{ ...TD_, width:24, cursor:"pointer" }} onClick={()=>toggleGroupSelected(g.rows, groupSelected)}>
+                        <input type="checkbox" checked={groupSelected} onChange={()=>toggleGroupSelected(g.rows, groupSelected)}/>
+                      </td>
+                    )}
+                    <td style={{ ...TD_, color: active?"#58a6ff":C.tx, fontWeight:600, maxWidth:140, cursor:"pointer" }} title={g.owner} onClick={()=>toggleSet(setOwnerFilter,g.key)}>{active?"✓ ":""}{g.owner}</td>
+                    <td style={{ ...TD_, maxWidth:140, cursor:"pointer" }} title={g.operator} onClick={()=>toggleSet(setOwnerFilter,g.key)}>{g.operator}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{g.ships}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{fmtN(g.dwt)}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{g.avgAge!=null?g.avgAge.toFixed(1):"—"}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{RATIO_CELL(g.r15)}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{RATIO_CELL(g.r20)}</td>
+                  </tr>
+                );
+              })}
+              {!ownerSorted.length && <tr><td style={TD_} colSpan={7}>No data</td></tr>}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ── fleet stats summary (replaces the old separate operator card) ── */}
+        <div style={{ ...CARD, maxHeight:440, overflow:"auto" }}>
+          <div style={{ ...LABEL, marginBottom:10 }}>Fleet Stats {selectMode && <span style={SUBLABEL}>(reflects current selection)</span>}</div>
+          <div style={{ display:"flex", gap:20, marginBottom:14 }}>
+            <div><div style={{ fontSize:22, fontWeight:800, color:C.tx }}>{fleetStats.count}</div><div style={LABEL}>Ships</div></div>
+            <div><div style={{ fontSize:22, fontWeight:800, color:C.amber }}>{fleetStats.avgAge!=null?fleetStats.avgAge.toFixed(1):"—"}</div><div style={LABEL}>Avg Age</div></div>
           </div>
-        ))}
+
+          {[
+            ["IMO Type", fleetStats.imoBreakdown, IMO_COLORS],
+            ["Coating", fleetStats.coatingBreakdown, COATING_COLORS],
+            ["Ice Class", fleetStats.iceBreakdown, {}],
+            ["Segment", fleetStats.segmentBreakdown, {}],
+          ].map(([title, items, colors]) => (
+            <div key={title} style={{ marginBottom:12 }}>
+              <div style={{ ...LABEL, marginBottom:5 }}>{title}</div>
+              {items.length ? items.map(it => (
+                <div key={it.label} style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, marginBottom:3 }}>
+                  <span style={{ width:110, color: colors[it.label]||C.tx, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={it.label}>{it.label}</span>
+                  <div style={{ flex:1, height:10, background:C.bg3, borderRadius:3, overflow:"hidden" }}>
+                    <div style={{ width:(it.share*100)+"%", height:"100%", background:colors[it.label]||"#58a6ff", borderRadius:3 }}/>
+                  </div>
+                  <span style={{ width:70, textAlign:"right", color:C.dim }}>{it.value} ({(it.share*100).toFixed(0)}%)</span>
+                </div>
+              )) : <div style={{ fontSize:11, color:C.faint }}>No data</div>}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ── full vessel table ── */}
@@ -628,6 +782,7 @@ export default function FleetTab() {
           <table style={{ borderCollapse:"collapse", width:"100%" }}>
             <thead style={{ position:"sticky", top:0, background:C.bg2, zIndex:1 }}>
               <tr>
+                {selectMode && <th style={TH_}></th>}
                 <SortTH label="Vessel" k="vessel" sortState={sort} onSort={toggleSort}/>
                 <SortTH label="Coating" k="coating" sortState={sort} onSort={toggleSort}/>
                 <SortTH label="Segment" k="segment" sortState={sort} onSort={toggleSort}/>
@@ -649,30 +804,39 @@ export default function FleetTab() {
               </tr>
             </thead>
             <tbody>
-              {pageRows.map(r => (
-                <tr key={r.imo || r.vessel} style={{ height:30 }}>
-                  <td style={{ ...TD_, color:C.tx, fontWeight:600 }} title={r.vessel}>{r.vessel}</td>
-                  <td style={{ ...TD_, color:COATING_COLORS[r.coating]||C.dim }}>{r.coating||"—"}</td>
-                  <td style={{ ...TD_, color:r.segment?.color||C.faint }}>{r.segment?.label||"—"}</td>
-                  <td style={{ ...TD_, textAlign:"right" }}>{r.built||"—"}</td>
-                  <td style={{ ...TD_, textAlign:"right" }}>{r.age??"—"}</td>
-                  <td style={{ ...TD_, textAlign:"right" }}>{fmtN(r.dwt)}</td>
-                  <td style={{ ...TD_, textAlign:"right" }}>{fmtN(r.cbm)}</td>
-                  <td style={{ ...TD_, textAlign:"right" }}>{r.loa||"—"}</td>
-                  <td style={{ ...TD_, textAlign:"right" }}>{r.beam||"—"}</td>
-                  <td style={{ ...TD_, textAlign:"right" }}>{r.draft??"—"}</td>
-                  <td style={{ ...TD_, textAlign:"right" }}>{r.segs||"—"}</td>
-                  <td style={TD_}>{r.flag||"—"}</td>
-                  <td style={TD_}>{r.ice_class||"—"}</td>
-                  <td style={{ ...TD_, color:IMO_COLORS[r.imo_type]||C.dim }}>{r.imo_type||"—"}</td>
-                  <td style={TD_} title={r.last_ex_name||""}>{r.last_ex_name||"—"}</td>
-                  <td style={TD_} title={r.comments||""}>{r.comments||"—"}</td>
-                  <td style={TD_} title={r.operator||""}>{r.operator||"—"}</td>
-                  <td style={TD_} title={r.owner||""}>{r.owner||"—"}</td>
-                </tr>
-              ))}
+              {pageRows.map(r => {
+                const key = vesselKey(r);
+                const checked = selectedKeys.has(key);
+                return (
+                  <tr key={key} style={{ height:30, opacity: selectMode && !checked ? 0.4 : 1 }}>
+                    {selectMode && (
+                      <td style={{ ...TD_, width:24, cursor:"pointer" }} onClick={()=>toggleVesselSelected(key)}>
+                        <input type="checkbox" checked={checked} onChange={()=>toggleVesselSelected(key)}/>
+                      </td>
+                    )}
+                    <td style={{ ...TD_, color:C.tx, fontWeight:600 }} title={r.vessel}>{r.vessel}</td>
+                    <td style={{ ...TD_, color:COATING_COLORS[r.coating]||C.dim }}>{r.coating||"—"}</td>
+                    <td style={{ ...TD_, color:r.segment?.color||C.faint }}>{r.segment?.label||"—"}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{r.built||"—"}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{r.age??"—"}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{fmtN(r.dwt)}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{fmtN(r.cbm)}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{r.loa||"—"}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{r.beam||"—"}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{r.draft??"—"}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{r.segs||"—"}</td>
+                    <td style={TD_}>{r.flag||"—"}</td>
+                    <td style={TD_}>{r.ice_class||"—"}</td>
+                    <td style={{ ...TD_, color:IMO_COLORS[r.imo_type]||C.dim }}>{r.imo_type||"—"}</td>
+                    <td style={TD_} title={r.last_ex_name||""}>{r.last_ex_name||"—"}</td>
+                    <td style={TD_} title={r.comments||""}>{r.comments||"—"}</td>
+                    <td style={TD_} title={r.operator||""}>{r.operator||"—"}</td>
+                    <td style={TD_} title={r.owner||""}>{r.owner||"—"}</td>
+                  </tr>
+                );
+              })}
               {!pageRows.length && !loading && (
-                <tr><td style={TD_} colSpan={17}>No vessels match current search/filters.</td></tr>
+                <tr><td style={TD_} colSpan={18}>No vessels match current search/filters.</td></tr>
               )}
             </tbody>
           </table>
