@@ -49,6 +49,25 @@ function cleanNum(v) {
   catch { return 0; }
 }
 
+// Postgres's ON CONFLICT DO UPDATE fails an entire batch (409) if two rows
+// in the same statement share the same conflict key. Barton's export can
+// list a vessel more than once (e.g. across tiers), so collapse duplicates
+// by IMO (keeping the last occurrence — presumably the most complete/latest
+// row) before batching, and likewise by vessel name for the no-IMO rows.
+function dedupeRecords(records) {
+  const byImo = new Map();
+  const noImo = [];
+  for (const r of records) {
+    if (r.imo) byImo.set(r.imo, r); // last occurrence wins
+    else noImo.push(r);
+  }
+  const byVessel = new Map();
+  for (const r of noImo) byVessel.set(r.vessel, r);
+  const deduped = [...byImo.values(), ...byVessel.values()];
+  const removed = records.length - deduped.length;
+  return { deduped, removed };
+}
+
 function deriveCoating(row) {
   const best = COATING_COLS.map(([col, label]) => [label, cleanNum(row[col] || 0)])
     .filter(([, v]) => v > 0)
@@ -214,9 +233,10 @@ export default function VesselUploader() {
           return;
         }
         const parsed = XLSX.utils.sheet_to_json(sheet, { defval:"", raw:true });
-        const records = parsed.map(r => rowToRecord(r, isNB)).filter(r => r.vessel);
+        const rawRecords = parsed.map(r => rowToRecord(r, isNB)).filter(r => r.vessel);
+        const { deduped: records, removed } = dedupeRecords(rawRecords);
         setRows(records);
-        setStatus({ type:"info", msg:`Parsed ${records.length} vessels from "${sheetName}" (${file.name})` });
+        setStatus({ type:"info", msg:`Parsed ${records.length} vessels from "${sheetName}" (${file.name})${removed ? ` — ${removed} duplicate row(s) collapsed` : ""}` });
         checkStale(records, mode);
       } catch (err) {
         console.error(err);
@@ -231,9 +251,10 @@ export default function VesselUploader() {
     const reader = new FileReader();
     reader.onload = ev => {
       const parsed = parseCSV(ev.target.result);
-      const records = parsed.map(r => rowToRecord(r, isNB)).filter(r => r.vessel);
+      const rawRecords = parsed.map(r => rowToRecord(r, isNB)).filter(r => r.vessel);
+      const { deduped: records, removed } = dedupeRecords(rawRecords);
       setRows(records);
-      setStatus({ type:"info", msg:`Parsed ${records.length} vessels from ${file.name}` });
+      setStatus({ type:"info", msg:`Parsed ${records.length} vessels from ${file.name}${removed ? ` — ${removed} duplicate row(s) collapsed` : ""}` });
       checkStale(records, isNB ? "newbuilds" : "fleet");
     };
     reader.readAsText(file, "utf-8");
