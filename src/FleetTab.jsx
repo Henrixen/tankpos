@@ -200,7 +200,9 @@ export default function FleetTab() {
 
   const [dwtFromInput, setDwtFromInput] = useState("");
   const [dwtToInput, setDwtToInput] = useState("");
-  const [builtFromInput, setBuiltFromInput] = useState("");
+  // Vessels built before 1995 aren't relevant to day-to-day work — filtered
+  // out by default, but still adjustable/clearable via the range controls.
+  const [builtFromInput, setBuiltFromInput] = useState("1995");
   const [builtToInput, setBuiltToInput] = useState("");
   const dwtFrom = useDebounced(dwtFromInput, 300);
   const dwtTo = useDebounced(dwtToInput, 300);
@@ -597,8 +599,8 @@ export default function FleetTab() {
         </div>
       </div>
 
-      {/* ── charts row 1: coating / imo type / country built ── */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:16 }}>
+      {/* ── charts row: coating / imo type / country built / built year ── */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 2fr", gap:16 }}>
         <div style={CARD}>
           <div style={LABEL}>Coating <span style={SUBLABEL}>(click to filter)</span></div>
           <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:8 }}>
@@ -636,13 +638,12 @@ export default function FleetTab() {
             {!countryBars.length && <div style={{ fontSize:11, color:C.faint }}>No data</div>}
           </div>
         </div>
-      </div>
 
-      {/* ── built year — full width, larger ── */}
-      <div style={CARD}>
-        <div style={LABEL}>Built Year <span style={SUBLABEL}>(click a bar to filter)</span></div>
-        <div style={{ marginTop:10, width:"100%" }}>
-          <YearHistogram rows={effectiveRows} height={220} onYearClick={y=>toggleSet(setYearFilter,y)} activeYears={yearFilter}/>
+        <div style={CARD}>
+          <div style={LABEL}>Built Year <span style={SUBLABEL}>(click a bar to filter)</span></div>
+          <div style={{ marginTop:10, width:"100%" }}>
+            <YearHistogram rows={effectiveRows} height={220} onYearClick={y=>toggleSet(setYearFilter,y)} activeYears={yearFilter}/>
+          </div>
         </div>
       </div>
 
