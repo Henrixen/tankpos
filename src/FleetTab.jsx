@@ -103,7 +103,7 @@ function Bar({ label, value, max, color, sub, active, onClick }) {
   );
 }
 
-function Donut({ segments, size=140, onSliceClick, activeSet }) {
+function Donut({ segments, size=190, onSliceClick, activeSet }) {
   const total = segments.reduce((a,s)=>a+s.value,0) || 1;
   const r = size/2 - 12, cx = size/2, cy = size/2, circ = 2*Math.PI*r;
   let offset = 0;
@@ -139,26 +139,32 @@ function YearHistogram({ rows, height=220, onYearClick, activeYears }) {
   const minY = years[0], maxY = years[years.length-1];
   const full = []; for (let y=minY; y<=maxY; y++) full.push(y);
   const max = Math.max(...full.map(y=>byYear[y]||0));
-  const barW = 18;
-  const w = Math.max(600, full.length*barW);
   return (
-    <div style={{ overflowX:"auto", width:"100%" }}>
-      <svg width="100%" height={height+26} viewBox={`0 0 ${w} ${height+26}`} preserveAspectRatio="xMinYMin meet" style={{ minWidth:w }}>
-        {full.map((y,i) => {
+    <div style={{ width:"100%" }}>
+      <div style={{ display:"flex", alignItems:"flex-end", gap:2, height }}>
+        {full.map(y => {
           const v = byYear[y]||0;
-          const barH = max>0 ? (v/max)*height : 0;
-          const x = i*barW;
+          const barH = max>0 ? Math.max(v>0?3:0, (v/max)*height) : 0;
           const active = activeYears && activeYears.has(y);
           const dimmed = activeYears && activeYears.size>0 && !active;
           return (
-            <g key={y} style={{ cursor: onYearClick && v>0 ? "pointer":"default" }} onClick={v>0 && onYearClick ? ()=>onYearClick(y) : undefined}>
-              <rect x={x+3} y={height-barH} width={barW-5} height={barH} fill={active?"#f5a623":"#58a6ff"} opacity={dimmed?0.35:1} rx={1}/>
-              {v>0 && <text x={x+barW/2} y={height-barH-4} fontSize={9} fill={C.dim} textAnchor="middle">{v}</text>}
-              {(y%5===0) && <text x={x+barW/2} y={height+16} fontSize={9} fill={C.faint} textAnchor="middle">{y}</text>}
-            </g>
+            <div key={y}
+              onClick={v>0 && onYearClick ? ()=>onYearClick(y) : undefined}
+              style={{ flex:"1 1 0", minWidth:2, height:"100%", display:"flex", flexDirection:"column",
+                justifyContent:"flex-end", alignItems:"center", cursor: onYearClick && v>0 ? "pointer":"default" }}>
+              {v>0 && <div style={{ fontSize:9, color:C.dim, marginBottom:2, whiteSpace:"nowrap" }}>{v}</div>}
+              <div style={{ width:"100%", height:barH, background: active?"#f5a623":"#58a6ff", opacity: dimmed?0.35:1, borderRadius:1 }}/>
+            </div>
           );
         })}
-      </svg>
+      </div>
+      <div style={{ display:"flex", gap:2, marginTop:5 }}>
+        {full.map(y => (
+          <div key={y} style={{ flex:"1 1 0", minWidth:2, textAlign:"center", fontSize:9, color:C.faint }}>
+            {y%5===0 ? y : ""}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -372,6 +378,14 @@ export default function FleetTab() {
     effectiveRows.forEach(r => { if (r.imo_type && m[r.imo_type] != null) m[r.imo_type]++; });
     const max = Math.max(1, ...Object.values(m));
     return Object.entries(m).map(([label,value]) => ({ label, value, max, color: IMO_COLORS[label] }));
+  }, [effectiveRows]);
+
+  const iceBars = useMemo(() => {
+    const m = {};
+    effectiveRows.forEach(r => { if (r.ice_class) m[r.ice_class] = (m[r.ice_class]||0)+1; });
+    const top = Object.entries(m).sort((a,b)=>b[1]-a[1]);
+    const max = Math.max(1, ...top.map(([,v])=>v));
+    return top.map(([label,value]) => ({ label, value, max }));
   }, [effectiveRows]);
 
   const countryBars = useMemo(() => {
@@ -603,9 +617,9 @@ export default function FleetTab() {
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 2fr", gap:16 }}>
         <div style={CARD}>
           <div style={LABEL}>Coating <span style={SUBLABEL}>(click to filter)</span></div>
-          <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:8 }}>
+          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:10, marginTop:8 }}>
             <Donut segments={coatingDonut} onSliceClick={label=>toggleSet(setCoatingFilter,label)} activeSet={coatingFilter}/>
-            <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+            <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", gap:"4px 12px" }}>
               {coatingDonut.map(s => (
                 <div key={s.label} onClick={()=>toggleSet(setCoatingFilter,s.label)}
                   style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, cursor:"pointer",
@@ -625,6 +639,14 @@ export default function FleetTab() {
               <Bar key={b.label} label={b.label} value={b.value} max={b.max} color={b.color}
                 active={imoTypeFilter.has(b.label)} onClick={()=>toggleSet(setImoTypeFilter,b.label)}/>
             ))}
+          </div>
+          <div style={{ ...LABEL, marginTop:16 }}>Ice Class <span style={SUBLABEL}>(click to filter)</span></div>
+          <div style={{ marginTop:10 }}>
+            {iceBars.map(b => (
+              <Bar key={b.label} label={b.label} value={b.value} max={b.max} color="#a78bfa"
+                active={iceFilter.has(b.label)} onClick={()=>toggleSet(setIceFilter,b.label)}/>
+            ))}
+            {!iceBars.length && <div style={{ fontSize:11, color:C.faint }}>No data</div>}
           </div>
         </div>
 
