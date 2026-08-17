@@ -898,6 +898,12 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   // on load, so tags created/colored on one device show correctly on others.
   useEffect(()=>{ pullTagsFromCloud(); },[]);
 
+  // vesselDB was designed as an on-demand load via onLoadVesselDB, but nothing
+  // in this component was actually calling it — meaning manually pasted/parsed
+  // positions never got spec enrichment (DWT/built/coating/etc) because the
+  // lookup table was always empty. Load it once on mount instead.
+  useEffect(()=>{ if(!vesselDBLoaded && !vesselDBLoading && onLoadVesselDB) onLoadVesselDB(); },[]);
+
   // No sessionStorage — PIN required on every load/refresh/new tab
 
   function submitPin(p){
@@ -1799,15 +1805,6 @@ const filtV=useMemo(()=>{
   {/* CENTER: Filters (34%) - same height as PPT */}
   <div style={{flex:1,minWidth:0,height:mobile?"auto":260,display:"flex",flexDirection:"column",gap:8}}>
 
-                    {selVessels.size>0&&(
-                      <button
-                        onClick={()=>setPendingDel({type:"all",id:"__SELECTED__",label:selVessels.size+" vessel"+(selVessels.size!==1?"s":"")})}
-                        style={{fontSize:12,fontWeight:700,padding:"4px 12px",borderRadius:5,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}
-                      >
-                        🗑 Delete ({selVessels.size})
-                      </button>
-                    )}
-
                     {opFilter&&(
                       <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:"rgba(79,195,247,0.08)",border:"1px solid rgba(79,195,247,0.25)",borderRadius:5}}>
                         <span style={{fontSize:12,color:C.blue,fontWeight:700}}>🔍 Filtered: {opFilter}</span>
@@ -1899,10 +1896,20 @@ const filtV=useMemo(()=>{
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
                   <CopyPositionsButton filtV={filtV} fmtDateShort={fmtDateShort}/>
-                  <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());setSelVessels(new Set());setOpFilter(null);}}
-                    style={{fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",border:"1px solid rgba(255,107,107,0.3)",background:"rgba(255,107,107,0.06)",color:"rgba(255,107,107,0.65)"}}>
-                    ✕ Clear all
-                  </button>
+                  {selVessels.size>0&&(
+                    <>
+                      <button
+                        onClick={()=>setPendingDel({type:"all",id:"__SELECTED__",label:selVessels.size+" vessel"+(selVessels.size!==1?"s":"")})}
+                        style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}
+                      >
+                        🗑 Delete ({selVessels.size})
+                      </button>
+                      <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());setSelVessels(new Set());setOpFilter(null);}}
+                        style={{fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",border:"1px solid "+C.bd,background:C.bg2,color:C.tx}}>
+                        ✕ Clear all
+                      </button>
+                    </>
+                  )}
                   {/* Inline add vessel */}
                   <button onClick={()=>setShowAddVessel(v=>!v)}
                     style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
