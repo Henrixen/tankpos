@@ -83,19 +83,45 @@ function fmtDwtFull(raw){
 const COATING_DISPLAY={"STAINLESS STEEL":"STST","MARINELINE":"MARINE","EPOXY":"EPOXY","ZINC":"ZINC"};
 function fmtCoating(c){if(!c)return "";const k=String(c).trim().toUpperCase();return COATING_DISPLAY[k]||c;}
 function getTagList(){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");return[...new Set([...PRESET_TAGS,...c].map(t=>(t||"").toUpperCase()))].sort();}catch{return PRESET_TAGS.slice();}}
-function addCustomTag(t){try{t=(t||"").toUpperCase();const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");if(!c.includes(t))localStorage.setItem("signal_custom_tags",JSON.stringify([...c,t]));}catch{}}
+function addCustomTag(t){try{t=(t||"").toUpperCase();const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");if(!c.includes(t)){const next=[...c,t];localStorage.setItem("signal_custom_tags",JSON.stringify(next));pushTagKey("custom_tags",next);notifyTagsUpdated();}}catch{}}
 function getTagScopes(){try{return JSON.parse(localStorage.getItem("signal_tag_scopes")||"{}");}catch{return{};}}
-function setTagScope(t,scope){try{const s=getTagScopes();if(scope==="both")delete s[t];else s[t]=scope;localStorage.setItem("signal_tag_scopes",JSON.stringify(s));}catch{}}
+function setTagScope(t,scope){try{const s=getTagScopes();if(scope==="both")delete s[t];else s[t]=scope;localStorage.setItem("signal_tag_scopes",JSON.stringify(s));pushTagKey("tag_scopes",s);notifyTagsUpdated();}catch{}}
 function getTagScope(t){return getTagScopes()[t]||"both";}
 function getTagListFor(view){ // view: "cargo" | "position"
   const all=getTagList();
   const scopes=getTagScopes();
   return all.filter(t=>{const s=scopes[t]||"both";return s==="both"||s===view;});
 }
-function removeCustomTag(t){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");localStorage.setItem("signal_custom_tags",JSON.stringify(c.filter(x=>x!==t)));}catch{}}
+function removeCustomTag(t){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");const next=c.filter(x=>x!==t);localStorage.setItem("signal_custom_tags",JSON.stringify(next));pushTagKey("custom_tags",next);notifyTagsUpdated();}catch{}}
 function getTagColors(){try{return JSON.parse(localStorage.getItem("signal_tag_colors")||"{}");} catch{return {};}}
-function setTagColor(t,col){try{const c=getTagColors();c[t]=col;localStorage.setItem("signal_tag_colors",JSON.stringify(c));}catch{}}
+function setTagColor(t,col){try{const c=getTagColors();c[t]=col;localStorage.setItem("signal_tag_colors",JSON.stringify(c));pushTagKey("tag_colors",c);notifyTagsUpdated();}catch{}}
+function removeTagColor(t){try{const c=getTagColors();delete c[t];localStorage.setItem("signal_tag_colors",JSON.stringify(c));pushTagKey("tag_colors",c);notifyTagsUpdated();}catch{}}
 function getTagColor(t){const c=getTagColors();return c[t]||null;}
+
+// ─── Tag catalog sync (Supabase) ───────────────────────────────────────────
+// Tags/colors/scopes were previously localStorage-only, so they diverged
+// between devices (e.g. a tag colored on one machine showed as uncolored on
+// another). localStorage stays as the fast synchronous read cache that all
+// the code above uses, but every mutation now also writes through to
+// Supabase, and `pullTagsFromCloud` (called once on app load) pulls the
+// shared state down and overwrites the local cache so devices converge.
+const TAG_SETTINGS_TABLE="tag_settings";
+function notifyTagsUpdated(){ try{ window.dispatchEvent(new Event("tags-updated")); }catch{} }
+async function pushTagKey(key,value){
+  try{ await supabase.from(TAG_SETTINGS_TABLE).upsert({key,value,updated_at:new Date().toISOString()},{onConflict:"key"}); }
+  catch(e){ console.error("pushTagKey error:",e); }
+}
+async function pullTagsFromCloud(){
+  try{
+    const {data,error}=await supabase.from(TAG_SETTINGS_TABLE).select("key,value");
+    if(error||!data) return;
+    const byKey={}; data.forEach(r=>{byKey[r.key]=r.value;});
+    if(byKey.custom_tags) localStorage.setItem("signal_custom_tags",JSON.stringify(byKey.custom_tags));
+    if(byKey.tag_colors)  localStorage.setItem("signal_tag_colors",JSON.stringify(byKey.tag_colors));
+    if(byKey.tag_scopes)  localStorage.setItem("signal_tag_scopes",JSON.stringify(byKey.tag_scopes));
+    notifyTagsUpdated();
+  }catch(e){ console.error("pullTagsFromCloud error:",e); }
+}
 
 // TagCell — proper component so useState works in renderRow
 const TAG_PALETTE=["#ef4444","#f97316","#eab308","#22c55e","#14b8a6","#3b82f6","#8b5cf6","#ec4899","#f43f5e","#06b6d4"];
@@ -107,6 +133,12 @@ function TagCell({cargoId,tag,onUpdateC}){
   const [pos,setPos]=useState({top:0,left:0});
   const [tagList,setTagList]=useState(()=>getTagListFor("cargo"));
   const [tagColors,setTagColors]=useState(getTagColors);
+
+  useEffect(()=>{
+    const h=()=>{setTagList(getTagListFor("cargo"));setTagColors(getTagColors());};
+    window.addEventListener("tags-updated",h);
+    return ()=>window.removeEventListener("tags-updated",h);
+  },[]);
 
   function openPick(e){
     e.stopPropagation();
@@ -183,6 +215,12 @@ function TagCellV({vesselName,tag,onUpdateV}){
   const [open,setOpen]=useState(false);
   const [tagList,setTagList]=useState(()=>getTagListFor("position"));
   const [tagColors,setTagColors]=useState(getTagColors);
+
+  useEffect(()=>{
+    const h=()=>{setTagList(getTagListFor("position"));setTagColors(getTagColors());};
+    window.addEventListener("tags-updated",h);
+    return ()=>window.removeEventListener("tags-updated",h);
+  },[]);
 
   function openPick(e){
     e.stopPropagation();
@@ -344,6 +382,10 @@ function TagManager(){
   const [editTag,setEditTag]=React.useState(null);
   const [colorPick,setColorPick]=React.useState(null);
   function refresh(){setTags(getTagList());setColors(getTagColors());setScopes(getTagScopes());}
+  React.useEffect(()=>{
+    window.addEventListener("tags-updated",refresh);
+    return ()=>window.removeEventListener("tags-updated",refresh);
+  },[]);
   const isPreset=t=>PRESET_TAGS.includes(t);
   const scopeOpts=[{v:"both",label:"Both"},{v:"cargo",label:"Cargoes"},{v:"position",label:"Positions"}];
   return(
@@ -369,7 +411,7 @@ function TagManager(){
                         <button key={col} onClick={()=>{setTagColor(t,col);setColorPick(null);refresh();}}
                           style={{width:22,height:22,borderRadius:"50%",background:col,border:tCol===col?"2.5px solid white":"2px solid transparent",cursor:"pointer",padding:0}}/>
                       ))}
-                      {tCol&&<button onClick={()=>{const c=getTagColors();delete c[t];localStorage.setItem("signal_tag_colors",JSON.stringify(c));setColorPick(null);refresh();}}
+                      {tCol&&<button onClick={()=>{removeTagColor(t);setColorPick(null);refresh();}}
                         style={{fontSize:9,padding:"2px 6px",borderRadius:4,border:"1px solid rgba(255,107,107,0.4)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit",width:"100%"}}>reset colour</button>}
                     </div>
                   </>
@@ -829,6 +871,10 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [pinInput, setPinInput] = React.useState("");
   const [pinError, setPinError] = React.useState(false);
   const [guestMode, setGuestMode] = React.useState(false);
+
+  // Pull the shared tag catalog (list/colors/scopes) down from Supabase once
+  // on load, so tags created/colored on one device show correctly on others.
+  useEffect(()=>{ pullTagsFromCloud(); },[]);
 
   // No sessionStorage — PIN required on every load/refresh/new tab
 
