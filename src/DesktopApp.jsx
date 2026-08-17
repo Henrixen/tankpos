@@ -83,19 +83,19 @@ function fmtDwtFull(raw){
 const COATING_DISPLAY={"STAINLESS STEEL":"STST","MARINELINE":"MARINE","EPOXY":"EPOXY","ZINC":"ZINC"};
 function fmtCoating(c){if(!c)return "";const k=String(c).trim().toUpperCase();return COATING_DISPLAY[k]||c;}
 function getTagList(){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");return[...new Set([...PRESET_TAGS,...c].map(t=>(t||"").toUpperCase()))].sort();}catch{return PRESET_TAGS.slice();}}
-function addCustomTag(t){try{t=(t||"").toUpperCase();const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");if(!c.includes(t)){const next=[...c,t];localStorage.setItem("signal_custom_tags",JSON.stringify(next));pushTagKey("custom_tags",next);notifyTagsUpdated();}}catch{}}
+function addCustomTag(t){try{t=(t||"").toUpperCase();const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");if(!c.includes(t)){const next=[...c,t];localStorage.setItem("signal_custom_tags",JSON.stringify(next));pushTagKey("custom_tags",next).catch(e=>console.error("tag push failed:",e));notifyTagsUpdated();}}catch{}}
 function getTagScopes(){try{return JSON.parse(localStorage.getItem("signal_tag_scopes")||"{}");}catch{return{};}}
-function setTagScope(t,scope){try{const s=getTagScopes();if(scope==="both")delete s[t];else s[t]=scope;localStorage.setItem("signal_tag_scopes",JSON.stringify(s));pushTagKey("tag_scopes",s);notifyTagsUpdated();}catch{}}
+function setTagScope(t,scope){try{const s=getTagScopes();if(scope==="both")delete s[t];else s[t]=scope;localStorage.setItem("signal_tag_scopes",JSON.stringify(s));pushTagKey("tag_scopes",s).catch(e=>console.error("tag push failed:",e));notifyTagsUpdated();}catch{}}
 function getTagScope(t){return getTagScopes()[t]||"both";}
 function getTagListFor(view){ // view: "cargo" | "position"
   const all=getTagList();
   const scopes=getTagScopes();
   return all.filter(t=>{const s=scopes[t]||"both";return s==="both"||s===view;});
 }
-function removeCustomTag(t){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");const next=c.filter(x=>x!==t);localStorage.setItem("signal_custom_tags",JSON.stringify(next));pushTagKey("custom_tags",next);notifyTagsUpdated();}catch{}}
+function removeCustomTag(t){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");const next=c.filter(x=>x!==t);localStorage.setItem("signal_custom_tags",JSON.stringify(next));pushTagKey("custom_tags",next).catch(e=>console.error("tag push failed:",e));notifyTagsUpdated();}catch{}}
 function getTagColors(){try{return JSON.parse(localStorage.getItem("signal_tag_colors")||"{}");} catch{return {};}}
-function setTagColor(t,col){try{const c=getTagColors();c[t]=col;localStorage.setItem("signal_tag_colors",JSON.stringify(c));pushTagKey("tag_colors",c);notifyTagsUpdated();}catch{}}
-function removeTagColor(t){try{const c=getTagColors();delete c[t];localStorage.setItem("signal_tag_colors",JSON.stringify(c));pushTagKey("tag_colors",c);notifyTagsUpdated();}catch{}}
+function setTagColor(t,col){try{const c=getTagColors();c[t]=col;localStorage.setItem("signal_tag_colors",JSON.stringify(c));pushTagKey("tag_colors",c).catch(e=>console.error("tag push failed:",e));notifyTagsUpdated();}catch{}}
+function removeTagColor(t){try{const c=getTagColors();delete c[t];localStorage.setItem("signal_tag_colors",JSON.stringify(c));pushTagKey("tag_colors",c).catch(e=>console.error("tag push failed:",e));notifyTagsUpdated();}catch{}}
 function getTagColor(t){const c=getTagColors();return c[t]||null;}
 
 // ─── Tag catalog sync (Supabase) ───────────────────────────────────────────
@@ -108,8 +108,8 @@ function getTagColor(t){const c=getTagColors();return c[t]||null;}
 const TAG_SETTINGS_TABLE="tag_settings";
 function notifyTagsUpdated(){ try{ window.dispatchEvent(new Event("tags-updated")); }catch{} }
 async function pushTagKey(key,value){
-  try{ await supabase.from(TAG_SETTINGS_TABLE).upsert({key,value,updated_at:new Date().toISOString()},{onConflict:"key"}); }
-  catch(e){ console.error("pushTagKey error:",e); }
+  const { error } = await supabase.from(TAG_SETTINGS_TABLE).upsert({key,value,updated_at:new Date().toISOString()},{onConflict:"key"});
+  if(error){ console.error("pushTagKey error:",error); throw error; }
 }
 async function pullTagsFromCloud(){
   try{
