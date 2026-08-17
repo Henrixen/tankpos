@@ -29,10 +29,12 @@ export default function TankPos(){
     setVesselDBLoading(true);
     let allRows = [];
     let from = 0;
+    let hadError = false;
     const pageSize = 1000;
     while(true){
-      const {data, error} = await supabase.from("vessels_db").select("vessel,imo,dwt,built,loa,beam,cbm,coating,ice_class,fuel,operator").range(from, from+pageSize-1);
-      if(error || !data || data.length === 0) break;
+      const {data, error} = await supabase.from("vessels_db").select("vessel,imo,dwt,built,loa,beam,cbm,coating,ice_class,fuel_type,operator").range(from, from+pageSize-1);
+      if(error){ console.error("loadVesselDB error:", error); hadError = true; break; }
+      if(!data || data.length === 0) break;
       allRows = [...allRows, ...data];
       if(data.length < pageSize) break;
       from += pageSize;
@@ -46,9 +48,11 @@ export default function TankPos(){
     setVesselDB(map);
     window.vesselDB = map;
     window.vesselDBByIMO = imoMap;
-    setVesselDBLoaded(true);
+    // Only mark as loaded on genuine success — a failed fetch shouldn't
+    // permanently block retries (loadVesselDB no-ops once vesselDBLoaded is true).
+    setVesselDBLoaded(!hadError);
     setVesselDBLoading(false);
-    console.log("vesselDB loaded on demand:", allRows.length);
+    console.log("vesselDB loaded on demand:", allRows.length, hadError?"(with errors)":"");
   }
 
   function onCargoSearch(term){
@@ -195,7 +199,7 @@ export default function TankPos(){
   const POSITION_FIELDS = [
     "vessel_name","operator","open_date","port_name","dwt","build_year",
     "overall_length","beam","cbm","details","file_date","imo_no",
-    "dirty_clean","segment","ice_class","last_3_cargoes",
+    "dirty_clean","segment","ice_class","last_3_cargoes","coating",
     "coating_type_2","super_region","updated_at","source"
   ].join(",");
 
