@@ -199,7 +199,7 @@ export default function TankPos(){
   const POSITION_FIELDS = [
     "vessel_name","operator","open_date","port_name","dwt","build_year",
     "overall_length","beam","cbm","details","file_date","imo_no",
-    "dirty_clean","segment","ice_class","last_3_cargoes","coating",
+    "dirty_clean","segment","ice_class","last_3_cargoes",
     "coating_type_2","super_region","updated_at","source"
   ].join(",");
 
