@@ -381,18 +381,40 @@ function TagManager(){
   const [scopes,setScopes]=React.useState(getTagScopes);
   const [editTag,setEditTag]=React.useState(null);
   const [colorPick,setColorPick]=React.useState(null);
+  const [syncStatus,setSyncStatus]=React.useState(null);
   function refresh(){setTags(getTagList());setColors(getTagColors());setScopes(getTagScopes());}
   React.useEffect(()=>{
     window.addEventListener("tags-updated",refresh);
     return ()=>window.removeEventListener("tags-updated",refresh);
   },[]);
+  async function forceSyncToCloud(){
+    setSyncStatus("Syncing…");
+    try{
+      await Promise.all([
+        pushTagKey("custom_tags", JSON.parse(localStorage.getItem("signal_custom_tags")||"[]")),
+        pushTagKey("tag_colors",  JSON.parse(localStorage.getItem("signal_tag_colors")||"{}")),
+        pushTagKey("tag_scopes",  JSON.parse(localStorage.getItem("signal_tag_scopes")||"{}")),
+      ]);
+      setSyncStatus("Synced ✓");
+    }catch(e){ setSyncStatus("Sync failed"); }
+    setTimeout(()=>setSyncStatus(null),2500);
+  }
   const isPreset=t=>PRESET_TAGS.includes(t);
   const scopeOpts=[{v:"both",label:"Both"},{v:"cargo",label:"Cargoes"},{v:"position",label:"Positions"}];
   return(
     <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:8,padding:"14px 16px",maxWidth:680}}>
-      <div style={{borderBottom:"1px solid rgba(58,130,246,0.14)",paddingBottom:10,marginBottom:12}}>
-        <div style={{fontSize:12,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:4}}>Tag Management</div>
-        <div style={{fontSize:12,color:"rgba(180,200,230,0.45)"}}>Set whether each tag applies to Cargoes, Positions, or Both.</div>
+      <div style={{borderBottom:"1px solid rgba(58,130,246,0.14)",paddingBottom:10,marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+        <div>
+          <div style={{fontSize:12,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:4}}>Tag Management</div>
+          <div style={{fontSize:12,color:"rgba(180,200,230,0.45)"}}>Set whether each tag applies to Cargoes, Positions, or Both.</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          {syncStatus && <span style={{fontSize:11,color:syncStatus.includes("failed")?"#ff6b6b":"#4ade80",fontWeight:600,whiteSpace:"nowrap"}}>{syncStatus}</span>}
+          <button onClick={forceSyncToCloud} title="Push tags/colors/scopes created before cloud sync existed up to Supabase"
+            style={{fontSize:11,fontWeight:700,padding:"5px 10px",borderRadius:5,border:"1px solid rgba(88,166,255,0.35)",background:"rgba(88,166,255,0.1)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+            ☁ Sync to cloud now
+          </button>
+        </div>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:6}}>
         {tags.map(t=>{
