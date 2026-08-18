@@ -417,6 +417,17 @@ export default function TankPos(){
   },[]);
 
   const addVessels = useCallback(async (parsed) => {
+    // If a paste happens before the on-mount vesselDB load has finished,
+    // window.vesselDB can still be empty here — enrichment then silently
+    // fails and null specs get saved permanently. Wait for it rather than
+    // hoping it's already ready (loadVesselDB no-ops if already loaded/loading).
+    if(!vesselDBLoaded){
+      await loadVesselDB();
+      // loadVesselDB no-ops if a load was already in-flight from elsewhere;
+      // give that in-flight load a moment to finish rather than proceeding blind.
+      let waited=0;
+      while(!window.vesselDB && waited<5000){ await new Promise(res=>setTimeout(res,200)); waited+=200; }
+    }
     const vdb = window.vesselDB || vesselDB;
     const nowIso = new Date().toISOString();
     let r = { added: 0, updated: 0, total: 0 };
@@ -492,7 +503,7 @@ export default function TankPos(){
     else console.log("positions saved ok:", rows.length, "rows");
     
     return r;
-  }, [vesselDB, saveV, saveSnapshot]);
+  }, [vesselDB, vesselDBLoaded, saveV, saveSnapshot]);
 
   const addCargoes=useCallback(async(parsed)=>{
     const editorC=localStorage.getItem("signal_user")||"H";
