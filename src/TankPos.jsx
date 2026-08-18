@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabaseclient";
 import { isMobile } from "./constants";
-import { enrichV, normaliseCargo, mergeVessels, toISODate } from "./utils";
+import { enrichV, normaliseCargo, mergeVessels, toISODate, dbLookup } from "./utils";
 import { saveV, saveSnapshot, loadHistory } from "./supabaseHelpers";
 import { v4 as uuidv4 } from 'uuid';
 import DesktopApp from "./DesktopApp";
@@ -462,9 +462,12 @@ export default function TankPos(){
     const rows = parsed.map(v => {
       const ev = enrichV(v, vdb);
       
-      // Spec data is already in v.spec from ParsePanel OR look it up in vesselDB
-      const vesselKey = ev.vessel?.toUpperCase();
-      const dbVessel = vdb[vesselKey?.toLowerCase()];
+      // Spec data is already in v.spec from ParsePanel OR look it up in vesselDB.
+      // Uses the same fuzzy dbLookup enrichV uses internally (not a plain exact
+      // bracket lookup) — otherwise dwt/built/etc can succeed via enrichV's own
+      // fuzzy match while this separate lookup fails on the same vessel due to
+      // a minor name formatting difference, silently dropping coating/spec.
+      const dbVessel = dbLookup(ev.vessel, vdb);
       
       // Priority: use spec from parsed object first, then fallback to vesselDB
       const spec = v.spec || (dbVessel ? {
