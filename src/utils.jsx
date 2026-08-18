@@ -92,6 +92,7 @@ export function enrichV(v, vesselDB) {
     loa:      v.loa      || d.loa      || null,
     beam:     v.beam     || d.beam     || null,
     cbm:      v.cbm      || d.cbm      || null,
+    coating:  v.coating  || d.coating  || null,
     operator: resolvedOp,
     spec: {
       ...v.spec,
@@ -238,12 +239,21 @@ export function calcVoyage(vessel, cargo) {
 }
 
 // ─── Vessel merge ─────────────────────────────────────────────────────────────
-function mKey(inc,keys){if(!inc)return null;const s=inc.toLowerCase().trim();if(keys.has(s))return s;for(const k of keys){const[a,b]=s.length<=k.length?[s.split(" "),k.split(" ")]:[k.split(" "),s.split(" ")];if(a.every(w=>b.includes(w)))return k;}for(const k of keys){if(k.endsWith(s)||s.endsWith(k)||k.startsWith(s)||s.startsWith(k))return k;}return null;}
+// Collapses all whitespace variants (regular spaces, tabs, and non-breaking
+// spaces that commonly sneak in from pasted Outlook/PDF/WhatsApp text) into
+// single plain spaces before comparing vessel names. Without this, a pasted
+// name with e.g. a stray non-breaking space between words won't exact-match
+// an existing entry — and the fuzzy word-matcher below (which only splits on
+// plain spaces) won't catch it either — silently creating a duplicate row
+// instead of updating the real one.
+function normVesselKey(s){ return (s||"").toLowerCase().trim().replace(/\s+/g," "); }
+
+function mKey(inc,keys){if(!inc)return null;const s=normVesselKey(inc);if(keys.has(s))return s;for(const k of keys){const[a,b]=s.length<=k.length?[s.split(" "),k.split(" ")]:[k.split(" "),s.split(" ")];if(a.every(w=>b.includes(w)))return k;}for(const k of keys){if(k.endsWith(s)||s.endsWith(k)||k.startsWith(s)||s.startsWith(k))return k;}return null;}
 
 export function mergeVessels(existing,incoming,vesselDB){
-  const map=new Map(existing.filter(v=>v.vessel).map(v=>[v.vessel.toLowerCase(),v]));
+  const map=new Map(existing.filter(v=>v.vessel).map(v=>[normVesselKey(v.vessel),v]));
   for(const v of incoming){
-    const rk=v.vessel?.toLowerCase().trim();if(!rk)continue;
+    const rk=normVesselKey(v.vessel);if(!rk)continue;
     const mk=mKey(rk,new Set([...map.keys()].filter(Boolean)));const prev=map.get(mk||rk)||{};
     let merged={...prev};
     if(!mk||v.vessel.length>(prev.vessel||"").length)merged.vessel=v.vessel;
@@ -255,7 +265,7 @@ export function mergeVessels(existing,incoming,vesselDB){
       if(k==="spec"&&typeof val==="object"){merged.spec={...(prev.spec||{})};for(const[sk,sv]of Object.entries(val)){if(sv!=null&&sv!=="")merged.spec[sk]=sv;}}
       else merged[k]=val;
     }
-    const canon=(merged.vessel||"").toLowerCase();if(mk&&mk!==canon)map.delete(mk);
+    const canon=normVesselKey(merged.vessel);if(mk&&mk!==canon)map.delete(mk);
     map.set(canon,enrichV(merged,vesselDB));
   }
   return Array.from(map.values());
