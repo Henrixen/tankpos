@@ -612,9 +612,9 @@ function HScrollRow({children,style}){
 // overflow the width — no visible scrollbar).
 function FilterRow({label,col,children}){
   return (
-    <div style={{display:"flex",alignItems:"center",gap:14,padding:"10px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
-      <div style={{width:100,flexShrink:0,fontSize:12,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em"}}>{label}</div>
-      <HScrollRow>{children}</HScrollRow>
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"5px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
+      <div style={{width:80,flexShrink:0,fontSize:10,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em"}}>{label}</div>
+      <HScrollRow style={{gap:6}}>{children}</HScrollRow>
     </div>
   );
 }
@@ -1246,11 +1246,11 @@ const cargoColumns = [
 
   // Larger pill-style chip for the horizontal-row filter redesign
   const fbBig=(on,col)=>({
-    fontSize:13,
-    fontWeight:700,
-    padding:"9px 22px",
-    borderRadius:8,
-    border:"1.5px solid "+(on ? col : "rgba(120,160,220,0.3)"),
+    fontSize:11,
+    fontWeight:600,
+    padding:"3px 9px",
+    borderRadius:4,
+    border:"1px solid "+(on ? col : "rgba(120,160,220,0.3)"),
     background:on ? col+"22" : "transparent",
     color:on ? col : "rgba(180,205,240,0.8)",
     cursor:"pointer",
