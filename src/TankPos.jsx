@@ -513,7 +513,7 @@ export default function TankPos(){
     const stamped=parsed.map((f,i)=>({...normaliseCargo({
       ...f,
       id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
-      updated: new Date().toISOString(),
+      updated: f.updated||new Date().toISOString(),
     }),entered_by:editorC,added:f.added||new Date().toISOString(),changed:null}));
     // Dedup by id and by charterer+load+disch+from
     let added=0;
