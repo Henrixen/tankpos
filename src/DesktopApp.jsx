@@ -80,7 +80,7 @@ function fmtDwtFull(raw){
 }
 
 // Coating display map — keep full value in DB, show short code in UI
-const COATING_DISPLAY={"STAINLESS STEEL":"STST","MARINELINE":"MARINE","EPOXY":"EPOXY","ZINC":"ZINC"};
+const COATING_DISPLAY={"STAINLESS STEEL":"STST","MARINELINE":"ML","EPOXY":"EPOXY","ZINC":"ZINC"};
 function fmtCoating(c){if(!c)return "";const k=String(c).trim().toUpperCase();return COATING_DISPLAY[k]||c;}
 function getTagList(){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");return[...new Set([...PRESET_TAGS,...c].map(t=>(t||"").toUpperCase()))].sort();}catch{return PRESET_TAGS.slice();}}
 function addCustomTag(t){try{t=(t||"").toUpperCase();const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");if(!c.includes(t)){const next=[...c,t];localStorage.setItem("signal_custom_tags",JSON.stringify(next));pushTagKey("custom_tags",next).catch(e=>console.error("tag push failed:",e));notifyTagsUpdated();}}catch{}}
@@ -557,6 +557,90 @@ function COL({label,col,children}){
     <div style={{display:"flex",flexDirection:"column",minWidth:0,overflow:"hidden",height:"100%"}}>
       <div style={{fontSize:9,fontWeight:700,color:col,textTransform:"uppercase",letterSpacing:"0.1em",padding:"0 0 4px 0",borderBottom:"1px solid "+C.bd2,marginBottom:4,whiteSpace:"nowrap",flexShrink:0}}>{label}</div>
       <div style={{display:"flex",flexDirection:"column",gap:1,overflowY:"auto",flex:1,minHeight:0}}>{children}</div>
+    </div>
+  );
+}
+
+// One-time global CSS to hide scrollbars on rows using the hscroll-hide class,
+// while overflow-x:auto still scrolls (native touch drag on iPad/mobile,
+// custom mouse-drag below for desktop).
+function HScrollStyle(){
+  return <style>{`
+    .hscroll-hide{scrollbar-width:none;-ms-overflow-style:none;}
+    .hscroll-hide::-webkit-scrollbar{display:none;}
+  `}</style>;
+}
+
+// Horizontal row with iPhone-style "grab and drag" scrolling for desktop mouse
+// users; touch devices (iPad) get native momentum scroll for free since
+// overflow-x:auto already supports it — no extra code needed for touch.
+function HScrollRow({children,style}){
+  const ref = React.useRef(null);
+  const drag = React.useRef({active:false,startX:0,startScroll:0,moved:false});
+  function onDown(e){
+    const el=ref.current; if(!el) return;
+    drag.current={active:true,startX:e.pageX,startScroll:el.scrollLeft,moved:false};
+  }
+  function onMove(e){
+    if(!drag.current.active) return;
+    const el=ref.current; if(!el) return;
+    const dx=e.pageX-drag.current.startX;
+    if(Math.abs(dx)>3) drag.current.moved=true;
+    el.scrollLeft=drag.current.startScroll-dx;
+  }
+  function endDrag(){ drag.current.active=false; }
+  return (
+    <div
+      ref={ref}
+      className="hscroll-hide"
+      onMouseDown={onDown}
+      onMouseMove={onMove}
+      onMouseUp={endDrag}
+      onMouseLeave={endDrag}
+      // Suppress click-through on chips right after a drag, so dragging
+      // doesn't accidentally toggle whatever chip the cursor lands on.
+      onClickCapture={e=>{ if(drag.current.moved){ e.stopPropagation(); e.preventDefault(); drag.current.moved=false; } }}
+      style={{display:"flex",gap:8,overflowX:"auto",overflowY:"hidden",flex:1,minWidth:0,cursor:"grab",userSelect:"none",WebkitOverflowScrolling:"touch",...style}}
+    >
+      {children}
+    </div>
+  );
+}
+
+// One filter category as a full-width horizontal row: label on the left,
+// chips scrolling horizontally on the right (drag or touch-swipe if they
+// overflow the width — no visible scrollbar).
+function FilterRow({label,col,children}){
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:14,padding:"10px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
+      <div style={{width:100,flexShrink:0,fontSize:12,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em"}}>{label}</div>
+      <HScrollRow>{children}</HScrollRow>
+    </div>
+  );
+}
+
+// Two-tab panel wrapper (used for Fixing Window History/Open-Segments and
+// AIS Map/Regional Snapshot) — frees up horizontal space by combining what
+// used to be two separate side-by-side boxes into one.
+function TabbedPanel({tabs,active,onChange,height=460,children}){
+  const fillParent = height==="100%";
+  return (
+    <div style={{
+      ...(fillParent ? {position:"absolute",inset:0} : {height}),
+      display:"flex",flexDirection:"column",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden"
+    }}>
+      <div style={{display:"flex",flexShrink:0,borderBottom:"1px solid "+C.bd2}}>
+        {tabs.map(t=>(
+          <button key={t} onClick={()=>onChange(t)}
+            style={{flex:1,padding:"7px 10px",fontSize:11,fontWeight:700,fontFamily:"inherit",cursor:"pointer",
+              border:"none",borderBottom:"2px solid "+(active===t?C.blue:"transparent"),
+              background:active===t?"rgba(88,166,255,0.08)":"transparent",
+              color:active===t?C.blue:C.faint}}>
+            {t}
+          </button>
+        ))}
+      </div>
+      <div style={{flex:1,minHeight:0,position:"relative"}}>{children}</div>
     </div>
   );
 }
@@ -1049,6 +1133,8 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   function clearSavedVessels(){setSavedVessels(new Set());localStorage.removeItem("signal_saved_vessels");}
   // Inter UKC config — loaded from localStorage (editable in Settings)
   const [showSavedOnly,setShowSavedOnly]=useState(false);
+  const [fixingPanelTab,setFixingPanelTab]=useState("History");
+  const [aisPanelTab,setAisPanelTab]=useState("Map");
   function getInterUKCConfig(){
     try{return JSON.parse(localStorage.getItem("signal_interukc_config")||"null");}catch{return null;}
   }
@@ -1157,6 +1243,21 @@ const cargoColumns = [
   whiteSpace:"nowrap",
   boxShadow:on ? "0 0 0 1px rgba(88,166,255,.18) inset" : "none"
 });
+
+  // Larger pill-style chip for the horizontal-row filter redesign
+  const fbBig=(on,col)=>({
+    fontSize:13,
+    fontWeight:700,
+    padding:"9px 22px",
+    borderRadius:8,
+    border:"1.5px solid "+(on ? col : "rgba(120,160,220,0.3)"),
+    background:on ? col+"22" : "transparent",
+    color:on ? col : "rgba(180,205,240,0.8)",
+    cursor:"pointer",
+    fontFamily:"inherit",
+    whiteSpace:"nowrap",
+    flexShrink:0,
+  });
 
   // Tag component for vessel specs
   const Tag=({col,children})=><span style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:3,background:col+"18",border:"1px solid "+col+"44",color:col}}>{children}</span>;
@@ -1751,146 +1852,147 @@ const filtV=useMemo(()=>{
   </div>
 
   <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position:"relative" }}>
-    {/* CSS overrides: vivid opaque bar colours for FixingWindow */}
-    <style>{`
-      /* Kill transparency on all bars inside the fixing window container */
-      div[class*="fix"] div[style*="height"][style*="background"],
-      div[class*="Fix"] div[style*="height"][style*="background"],
-      div[class*="window"] div[style*="height"][style*="background"],
-      div[class*="Window"] div[style*="height"][style*="background"] {
-        filter: saturate(2) brightness(1.3) !important;
-        opacity: 1 !important;
-      }
-    `}</style>
-    <Suspense fallback={null}><FixingWindowChart
-      vessels={filtV}
-      filterActive={filtV.length !== vessels.length}
-      tagFilter={cTagFilter||null}
-    /></Suspense>
+    <TabbedPanel tabs={["History","Open Segments"]} active={fixingPanelTab} onChange={setFixingPanelTab} height="100%">
+      {fixingPanelTab==="History" ? (
+        <>
+          {/* CSS overrides: vivid opaque bar colours for FixingWindow */}
+          <style>{`
+            div[class*="fix"] div[style*="height"][style*="background"],
+            div[class*="Fix"] div[style*="height"][style*="background"],
+            div[class*="window"] div[style*="height"][style*="background"],
+            div[class*="Window"] div[style*="height"][style*="background"] {
+              filter: saturate(2) brightness(1.3) !important;
+              opacity: 1 !important;
+            }
+          `}</style>
+          <Suspense fallback={null}><FixingWindowChart
+            vessels={filtV}
+            filterActive={filtV.length !== vessels.length}
+            tagFilter={cTagFilter||null}
+          /></Suspense>
+        </>
+      ) : (
+        <Suspense fallback={null}><OpeningBreakdown
+          vessels={vessels14d.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+          filteredVessels={filtV.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+          bucketFilters={bucketFilters}
+          onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
+          fillHeight={true}
+        /></Suspense>
+      )}
+    </TabbedPanel>
   </div>
 </div>
  
-              {/* CENTER: reserved for the Regional Position Snapshot map (next up) — Rate Matrix moved to Cargoes tab */}
+              {/* CENTER: Filters — redesigned as horizontal scrolling rows (frees up the box
+                  that used to be split between this and the Regional Snapshot placeholder,
+                  since Regional Snapshot is now a tab inside the AIS Map panel on the right) */}
               {!mobile&&(
-                <div style={{width:"34%",height:460,background:C.bg2,border:"1px dashed "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <span style={{fontSize:11,color:C.faint,textAlign:"center",padding:"0 16px"}}>Regional Position Snapshot — coming here next</span>
+                <div style={{width:"34%",height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                  <HScrollStyle/>
+                  {(opFilter||bucketFilters.size>0)&&(
+                    <div style={{flexShrink:0,padding:"8px 12px 0 12px",display:"flex",flexDirection:"column",gap:4}}>
+                      {opFilter&&(
+                        <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:"rgba(79,195,247,0.08)",border:"1px solid rgba(79,195,247,0.25)",borderRadius:5}}>
+                          <span style={{fontSize:12,color:C.blue,fontWeight:700}}>🔍 Filtered: {opFilter}</span>
+                          <button onClick={()=>setOpFilter(null)} style={{background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:12,padding:"0 2px"}}>✕ Clear</button>
+                        </div>
+                      )}
+                      {bucketFilters.size>0&&(
+                        <div style={{fontSize:12,color:C.blue,cursor:"pointer"}} onClick={()=>setBucketFilters(new Set())}>
+                          ✕ Clear segment filter ({[...bucketFilters].join(", ")})
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"4px 12px"}}>
+                    {(()=>{
+                      const Chip=({active,onClick,col,children})=>(
+                        <button onClick={onClick} style={fbBig(active,col)}>{children}</button>
+                      );
+                      return (
+                        <>
+                          {/* Tags */}
+                          <FilterRow label="Tags" col="#79c0ff">
+                            {(()=>{const used=[...new Set(vessels.map(v=>(v.tag||"").trim()).filter(Boolean))].sort();return used.length?used.map(t=>(<Chip key={t} col="#79c0ff" active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t.toUpperCase()}</Chip>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>none</span>;})()}
+                            {posTagFilter.size>0&&<Chip col={C.red} active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}>✕</Chip>}
+                          </FilterRow>
+                          {/* Updated */}
+                          <FilterRow label="Updated" col={C.blue}>
+                            {[["","All"],["today","Today"],["week","This week"],["7d","7 days"],["14d","14 days"],["30d","30 days"]].map(([v,l])=>(<Chip key={v||"all"} col={C.blue} active={updFilter===v&&(v!==""||updFilter==="")} onClick={()=>setUpdFilter(v)}>{l}</Chip>))}
+                          </FilterRow>
+                          {/* Region */}
+                          <FilterRow label="Region" col="#7dd3fc">
+                            {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(<Chip key={f} col="#7dd3fc" active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</Chip>))}
+                          </FilterRow>
+                          {/* S.Region */}
+                          <FilterRow label="S.Region" col={C.purple}>
+                            {superRegionOptions.filter(r=>r!=="ALL").map(r=>{
+                              const toggle=e=>{
+                                if(e.ctrlKey||e.metaKey){setSuperRegionFilter(prev=>{const n=new Set(prev);n.has(r)?n.delete(r):n.add(r);return n;});}
+                                else{setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));}
+                              };
+                              return <Chip key={r} col={C.purple} active={superRegionFilter.has(r)} onClick={toggle}>{r}</Chip>;
+                            })}
+                            {superRegionFilter.size>0&&<Chip col={C.red} active={false} onClick={()=>setSuperRegionFilter(new Set())}>✕</Chip>}
+                          </FilterRow>
+                          {/* Status */}
+                          <FilterRow label="Status" col={C.amber}>
+                            {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<Chip key={f} col={C.amber} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</Chip>))}
+                            {filters.size>0&&<Chip col={C.red} active={false} onClick={()=>setFilters(new Set())}>✕ Clear</Chip>}
+                          </FilterRow>
+                          {/* Inter UKC */}
+                          <FilterRow label="Inter UKC" col="#4fc3f7">
+                            <Chip col="#4fc3f7" active={interUKCActive} onClick={()=>{setInterUKCActive(v=>!v);setPosPage(1);}}>Inter UKC</Chip>
+                            <Chip col="#fbbf24" active={showSavedOnly} onClick={()=>setShowSavedOnly(v=>!v)}>
+                              <span style={{display:"flex",alignItems:"center",gap:6}}>
+                                Saved ({savedVessels.size}) ★
+                                {savedVessels.size>0&&<span onClick={e=>{e.stopPropagation();setPendingDel({type:"clearsaved",label:`all ${savedVessels.size} saved vessels`});}} style={{color:C.red,cursor:"pointer"}}>✕</span>}
+                              </span>
+                            </Chip>
+                            {interUKCActive&&<Chip col={C.red} active={false} onClick={()=>{setInterUKCActive(false);}}>✕ Clear</Chip>}
+                          </FilterRow>
+                          {/* Segment */}
+                          <FilterRow label="Segment" col={C.green}>
+                            {(()=>{const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];return[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort((a,b)=>(ORDER.indexOf(a)===-1?99:ORDER.indexOf(a))-(ORDER.indexOf(b)===-1?99:ORDER.indexOf(b))).map(s=>(<Chip key={s} col={C.green} active={segmentFilter.has(s)} onClick={e=>{if(e.ctrlKey||e.metaKey){setSegmentFilter(prev=>{const n=new Set(prev);n.has(s)?n.delete(s):n.add(s);return n;});}else{setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));setPosPage(1);}}}>{s}</Chip>));})()}
+                            {segmentFilter.size>0&&<Chip col={C.red} active={false} onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}}>✕</Chip>}
+                          </FilterRow>
+                          {/* DWT */}
+                          <FilterRow label="DWT" col="#f59e0b">
+                            {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<Chip key={v} col="#f59e0b" active={dwtFilter.has(v)} onClick={e=>{setDwtFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</Chip>))}
+                            <span style={{flexShrink:0}}><RangeBox minVal={dwtRange.min} maxVal={dwtRange.max} minPh="min" maxPh="max" onMin={v=>{setDwtRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setDwtRange(r=>({...r,max:v}));setPosPage(1);}}/></span>
+                            {(dwtFilter.size>0||dwtRange.min!==""||dwtRange.max!=="")&&<Chip col={C.red} active={false} onClick={()=>{setDwtFilter(new Set());setDwtRange({min:"",max:""});setPosPage(1);}}>✕</Chip>}
+                          </FilterRow>
+                          {/* Built */}
+                          <FilterRow label="Built" col="#94a3b8">
+                            {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<Chip key={v} col="#94a3b8" active={builtFilter.has(v)} onClick={()=>{setBuiltFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</Chip>))}
+                            <span style={{flexShrink:0}}><RangeBox minVal={builtRange.min} maxVal={builtRange.max} minPh="from" maxPh="to" onMin={v=>{setBuiltRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setBuiltRange(r=>({...r,max:v}));setPosPage(1);}}/></span>
+                            {(builtFilter.size>0||builtRange.min!==""||builtRange.max!=="")&&<Chip col={C.red} active={false} onClick={()=>{setBuiltFilter(new Set());setBuiltRange({min:"",max:""});setPosPage(1);}}>✕</Chip>}
+                          </FilterRow>
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
               )}
 
-              {/* RIGHT: AIS Map (34%) */}
+              {/* RIGHT: AIS Map / Regional Position Snapshot (34%) */}
 {!mobile&&(
-  <div style={{width:"34%",height:460}}>
-    <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels} onAisVesselsChange={setAisVesselSet}/></Suspense>
+  <div style={{width:"34%"}}>
+    <TabbedPanel tabs={["Map","Regional Snapshot"]} active={aisPanelTab} onChange={setAisPanelTab} height={460}>
+      {aisPanelTab==="Map" ? (
+        <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels} onAisVesselsChange={setAisVesselSet}/></Suspense>
+      ) : (
+        <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <span style={{fontSize:11,color:C.faint,textAlign:"center",padding:"0 16px"}}>Regional Position Snapshot — coming here next</span>
+        </div>
+      )}
+    </TabbedPanel>
   </div>
 )}
  </div>
             {vessels.length > 0 && (
               <>
-                {/* Second row: PPT + Filters (grid aligned) */}
-<div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row",marginTop:-5}}>
-                  
-  {/* LEFT: PPT Timeline (32%) */}
-  {!mobile&&(
-    <div style={{width:"32%",height:260}}>
-      <Suspense fallback={null}><OpeningBreakdown
-        vessels={vessels14d.filter(v=>vesselsTodayUpdated.has(v.vessel))}
-        filteredVessels={filtV.filter(v=>vesselsTodayUpdated.has(v.vessel))}
-        bucketFilters={bucketFilters}
-        onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
-        fillHeight={false}
-      /></Suspense>
-    </div>
-  )}
-
-  {/* CENTER: Filters (34%) - same height as PPT */}
-  <div style={{flex:1,minWidth:0,height:mobile?"auto":260,display:"flex",flexDirection:"column",gap:8}}>
-
-                    {opFilter&&(
-                      <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:"rgba(79,195,247,0.08)",border:"1px solid rgba(79,195,247,0.25)",borderRadius:5}}>
-                        <span style={{fontSize:12,color:C.blue,fontWeight:700}}>🔍 Filtered: {opFilter}</span>
-                        <button onClick={()=>setOpFilter(null)} style={{background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:12,padding:"0 2px"}}>✕ Clear</button>
-                      </div>
-                    )}
-
-                    {bucketFilters.size>0&&(
-                      <div style={{fontSize:12,color:C.blue,cursor:"pointer"}} onClick={()=>setBucketFilters(new Set())}>
-                        ✕ Clear segment filter ({[...bucketFilters].join(", ")})
-                      </div>
-                    )}
-
-                    {/* UNIFIED FILTER PANEL — 8 scrollable columns */}
-{(()=>{
-  const B=({active,onClick,children})=>(
-    <button onClick={onClick} style={{...fb(active),display:"block",width:"100%",textAlign:"left",padding:"3px 8px",fontSize:11,whiteSpace:"nowrap",flexShrink:0}}>{children}</button>
-  );
-  return(
-    <div style={{display:"grid",gridTemplateColumns:mobile?"repeat(9,minmax(88px,1fr))":"repeat(9,minmax(0,1fr))",gap:mobile?6:10,padding:"8px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,boxSizing:"border-box",flex:1,overflow:mobile?"auto":"hidden",minHeight:0,overflowX:mobile?"auto":"hidden"}}>
-      {/* Tags — manually applied tags on positions (capitalized) */}
-      <COL label="Tags" col="#79c0ff">
-        {(()=>{const used=[...new Set(vessels.map(v=>(v.tag||"").trim()).filter(Boolean))].sort();return used.length?used.map(t=>(<B key={t} active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t.toUpperCase()}</B>)):<span style={{fontSize:10,color:"rgba(140,170,210,0.35)"}}>none</span>;})()}
-        {posTagFilter.size>0&&<B active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
-      </COL>
-      {/* Status */}
-      <COL label="Status" col={C.amber}>
-        {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
-        {filters.size>0&&<B active={false} onClick={()=>setFilters(new Set())}><span style={{color:C.red}}>✕ Clear</span></B>}
-      </COL>
-      {/* Inter UKC */}
-      <COL label="Inter UKC" col="#4fc3f7">
-        <B active={interUKCActive} onClick={()=>{setInterUKCActive(v=>!v);setPosPage(1);}}>
-          <span style={{color:interUKCActive?"#4fc3f7":"rgba(79,195,247,0.65)"}}>Inter UKC</span>
-        </B>
-        <B active={showSavedOnly} onClick={()=>setShowSavedOnly(v=>!v)}>
-          <span style={{display:"flex",alignItems:"center",gap:5,width:"100%"}}>
-            <span>Saved ({savedVessels.size})</span>
-            <span style={{color:"#fbbf24"}}>★</span>
-            {savedVessels.size>0&&<span onClick={e=>{e.stopPropagation();setPendingDel({type:"clearsaved",label:`all ${savedVessels.size} saved vessels`});}} style={{marginLeft:"auto",color:C.red,cursor:"pointer"}}>✕</span>}
-          </span>
-        </B>
-        {interUKCActive&&<B active={false} onClick={()=>{setInterUKCActive(false);}}><span style={{color:C.red}}>✕ Clear</span></B>}
-      </COL>
-      {/* Updated */}
-      <COL label="Updated" col={C.blue}>
-        {[["","All"],["today","Today"],["week","This week"],["7d","7 days"],["14d","14 days"],["30d","30 days"]].map(([v,l])=>(<B key={v||"all"} active={updFilter===v&&(v!==""||updFilter==="")} onClick={()=>setUpdFilter(v)}>{l}</B>))}
-      </COL>
-      {/* Region */}
-      <COL label="Region" col="#7dd3fc">
-        {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
-      </COL>
-      {/* S.Region */}
-      <COL label="S.Region" col={C.purple}>
-        {superRegionOptions.filter(r=>r!=="ALL").map(r=>{
-          const toggle=e=>{
-            if(e.ctrlKey||e.metaKey){setSuperRegionFilter(prev=>{const n=new Set(prev);n.has(r)?n.delete(r):n.add(r);return n;});}
-            else{setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));}
-          };
-          return <B key={r} active={superRegionFilter.has(r)} onClick={toggle}>{r}</B>;
-        })}
-        {superRegionFilter.size>0&&<B active={false} onClick={()=>setSuperRegionFilter(new Set())}><span style={{color:C.red}}>✕</span></B>}
-      </COL>
-      {/* Segment */}
-      <COL label="Segment" col={C.green}>
-        {(()=>{const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];return[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort((a,b)=>(ORDER.indexOf(a)===-1?99:ORDER.indexOf(a))-(ORDER.indexOf(b)===-1?99:ORDER.indexOf(b))).map(s=>(<B key={s} active={segmentFilter.has(s)} onClick={e=>{if(e.ctrlKey||e.metaKey){setSegmentFilter(prev=>{const n=new Set(prev);n.has(s)?n.delete(s):n.add(s);return n;});}else{setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));setPosPage(1);}}}>{s}</B>));})()}
-        {segmentFilter.size>0&&<B active={false} onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
-      </COL>
-      {/* DWT */}
-      <COL label="DWT" col="#f59e0b">
-        {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<B key={v} active={dwtFilter.has(v)} onClick={e=>{setDwtFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
-        <RangeBox minVal={dwtRange.min} maxVal={dwtRange.max} minPh="min" maxPh="max" onMin={v=>{setDwtRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setDwtRange(r=>({...r,max:v}));setPosPage(1);}}/>
-        {(dwtFilter.size>0||dwtRange.min!==""||dwtRange.max!=="")&&<B active={false} onClick={()=>{setDwtFilter(new Set());setDwtRange({min:"",max:""});setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
-      </COL>
-      {/* Built */}
-      <COL label="Built" col="#94a3b8">
-        {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<B key={v} active={builtFilter.has(v)} onClick={()=>{setBuiltFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
-        <RangeBox minVal={builtRange.min} maxVal={builtRange.max} minPh="from" maxPh="to" onMin={v=>{setBuiltRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setBuiltRange(r=>({...r,max:v}));setPosPage(1);}}/>
-        {(builtFilter.size>0||builtRange.min!==""||builtRange.max!=="")&&<B active={false} onClick={()=>{setBuiltFilter(new Set());setBuiltRange({min:"",max:""});setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
-      </COL>
-    </div>
-  );
-})()}</div>
-
-</div>
-
                 {/* MOVED: Fleet count + Export + Search to same row */}
                 <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,flexWrap:"wrap"}}>
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
