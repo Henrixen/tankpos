@@ -549,7 +549,7 @@ function AICreditWidget(){
 }
 
 const INP_INLINE={background:"rgba(8,16,32,0.85)",border:"1px solid rgba(88,166,255,0.25)",borderRadius:4,color:"rgba(200,220,255,0.9)",fontFamily:"Inter,sans-serif",fontSize:11,padding:"5px 8px",outline:"none",width:"100%",boxSizing:"border-box"};
-const rangeInp={background:"rgba(8,16,32,0.85)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:3,color:"rgba(200,220,255,0.9)",fontFamily:"inherit",fontSize:10,padding:"3px 6px",outline:"none",width:"50%",minWidth:0,boxSizing:"border-box",MozAppearance:"textfield"};
+const rangeInp={background:"rgba(8,16,32,0.85)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:3,color:"rgba(200,220,255,0.9)",fontFamily:"inherit",fontSize:10,padding:"3px 6px",outline:"none",width:52,minWidth:0,boxSizing:"border-box",MozAppearance:"textfield"};
 
 // Stable filter column (module-level so children like RangeBox keep focus)
 function COL({label,col,children}){
@@ -615,6 +615,18 @@ function FilterRow({label,col,children}){
     <div style={{display:"flex",alignItems:"center",gap:10,padding:"5px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
       <div style={{width:80,flexShrink:0,fontSize:10,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em"}}>{label}</div>
       <HScrollRow style={{gap:6}}>{children}</HScrollRow>
+    </div>
+  );
+}
+
+// Wrapping variant (no horizontal scroll) — for rows with few enough items
+// that wrapping onto a second line reads better than side-scrolling, like
+// DWT/Built which pair a short chip list with two small range inputs.
+function FilterRowWrap({label,col,children}){
+  return (
+    <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"6px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
+      <div style={{width:80,flexShrink:0,fontSize:10,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em",paddingTop:4}}>{label}</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1,minWidth:0,rowGap:6}}>{children}</div>
     </div>
   );
 }
@@ -1905,7 +1917,7 @@ const filtV=useMemo(()=>{
                       )}
                     </div>
                   )}
-                  <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"4px 12px"}}>
+                  <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"4px 12px",display:"flex",flexDirection:"column",justifyContent:"space-evenly"}}>
                     {(()=>{
                       const Chip=({active,onClick,col,children})=>(
                         <button onClick={onClick} style={fbBig(active,col)}>{children}</button>
@@ -1958,17 +1970,17 @@ const filtV=useMemo(()=>{
                             {segmentFilter.size>0&&<Chip col={C.red} active={false} onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}}>✕</Chip>}
                           </FilterRow>
                           {/* DWT */}
-                          <FilterRow label="DWT" col="#f59e0b">
+                          <FilterRowWrap label="DWT" col="#f59e0b">
                             {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<Chip key={v} col="#f59e0b" active={dwtFilter.has(v)} onClick={e=>{setDwtFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</Chip>))}
-                            <span style={{flexShrink:0}}><RangeBox minVal={dwtRange.min} maxVal={dwtRange.max} minPh="min" maxPh="max" onMin={v=>{setDwtRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setDwtRange(r=>({...r,max:v}));setPosPage(1);}}/></span>
+                            <RangeBox minVal={dwtRange.min} maxVal={dwtRange.max} minPh="min" maxPh="max" onMin={v=>{setDwtRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setDwtRange(r=>({...r,max:v}));setPosPage(1);}}/>
                             {(dwtFilter.size>0||dwtRange.min!==""||dwtRange.max!=="")&&<Chip col={C.red} active={false} onClick={()=>{setDwtFilter(new Set());setDwtRange({min:"",max:""});setPosPage(1);}}>✕</Chip>}
-                          </FilterRow>
+                          </FilterRowWrap>
                           {/* Built */}
-                          <FilterRow label="Built" col="#94a3b8">
+                          <FilterRowWrap label="Built" col="#94a3b8">
                             {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<Chip key={v} col="#94a3b8" active={builtFilter.has(v)} onClick={()=>{setBuiltFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</Chip>))}
-                            <span style={{flexShrink:0}}><RangeBox minVal={builtRange.min} maxVal={builtRange.max} minPh="from" maxPh="to" onMin={v=>{setBuiltRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setBuiltRange(r=>({...r,max:v}));setPosPage(1);}}/></span>
+                            <RangeBox minVal={builtRange.min} maxVal={builtRange.max} minPh="from" maxPh="to" onMin={v=>{setBuiltRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setBuiltRange(r=>({...r,max:v}));setPosPage(1);}}/>
                             {(builtFilter.size>0||builtRange.min!==""||builtRange.max!=="")&&<Chip col={C.red} active={false} onClick={()=>{setBuiltFilter(new Set());setBuiltRange({min:"",max:""});setPosPage(1);}}>✕</Chip>}
-                          </FilterRow>
+                          </FilterRowWrap>
                         </>
                       );
                     })()}
