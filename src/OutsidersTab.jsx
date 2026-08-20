@@ -307,7 +307,7 @@ export default function OutsidersTab({ compact=false }) {
       )}
 
       <div style={{ ...CARD, padding:0, overflow:"hidden" }}>
-        <div style={{ overflowX:"auto", maxHeight: compact?420:3200, overflowY:"auto" }}>
+        <div style={{ overflowX:"auto", ...(compact ? { maxHeight:420, overflowY:"auto" } : {}) }}>
           <table style={{ borderCollapse:"collapse", width:"100%" }}>
             <thead style={{ position:"sticky", top:0, background:C.bg2, zIndex:1 }}>
               <tr>
