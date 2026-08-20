@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { supabase } from "./supabaseclient";
 import { C } from "./constants";
 import { fmtN } from "./utils";
+
+const OutsidersTab = React.lazy(()=>import("./OutsidersTab"));
 
 // ─── DWT → segment breakpoints — matches Barton's own classification as used
 // in NewbuildsTab.jsx, extended with Sub 10k/City split per the app's
@@ -186,6 +188,7 @@ function downloadText(filename, text) {
 
 // ─── main component ─────────────────────────────────────────────────────────
 export default function FleetTab() {
+  const [viewMode, setViewMode] = useState("fleet"); // "fleet" | "outsiders"
   const [rows, setRows] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -201,6 +204,8 @@ export default function FleetTab() {
   const [iceFilter, setIceFilter] = useState(() => new Set());
   const [imoTypeFilter, setImoTypeFilter] = useState(() => new Set());
   const [countryFilter, setCountryFilter] = useState(() => new Set());
+  const [outsiderImos, setOutsiderImos] = useState(() => new Set());
+  const [outsiderOnly, setOutsiderOnly] = useState(false);
   const [yearFilter, setYearFilter] = useState(() => new Set());
   const [ownerFilter, setOwnerFilter] = useState(() => new Set());
 
@@ -249,6 +254,15 @@ export default function FleetTab() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
+    async function fetchOutsiderImos() {
+      const { data, error } = await supabase.from("outsider_vessels").select("imo");
+      if (error) { console.error("outsider_vessels fetch error:", error); return; }
+      setOutsiderImos(new Set((data||[]).map(r=>r.imo)));
+    }
+    fetchOutsiderImos();
+  }, []);
+
+  useEffect(() => {
     async function fetchMeta() {
       const { data, error } = await supabase.from("upload_meta").select("*").eq("table_name","vessels_db").maybeSingle();
       if (error) { console.error("upload_meta fetch error:", error); return; }
@@ -279,6 +293,7 @@ export default function FleetTab() {
       if (iceFilter.size && !iceFilter.has(r.ice_class)) return false;
       if (imoTypeFilter.size && !imoTypeFilter.has(r.imo_type)) return false;
       if (countryFilter.size && !countryFilter.has(r.country_build)) return false;
+      if (outsiderOnly && !outsiderImos.has(r.imo)) return false;
       if (yearFilter.size && !yearFilter.has(r.built)) return false;
       if (ownerFilter.size && !ownerFilter.has(r.owner+"||"+(r.operator||""))) return false;
       if (dFrom != null && (r.dwt == null || r.dwt < dFrom)) return false;
@@ -296,7 +311,7 @@ export default function FleetTab() {
       const lowerFields = fields.filter(Boolean).map(f=>String(f).toLowerCase());
       return searchTerms.some(term => lowerFields.some(f => f.includes(term)));
     });
-  }, [enriched, searchTerms, scopes, coatingFilter, segmentFilter, iceFilter, imoTypeFilter, countryFilter, yearFilter, ownerFilter, dwtFrom, dwtTo, builtFrom, builtTo]);
+  }, [enriched, searchTerms, scopes, coatingFilter, segmentFilter, iceFilter, imoTypeFilter, countryFilter, yearFilter, ownerFilter, dwtFrom, dwtTo, builtFrom, builtTo, outsiderOnly, outsiderImos]);
 
   useEffect(() => { setPage(1); }, [searchTerms, coatingFilter, segmentFilter, iceFilter, imoTypeFilter, countryFilter, yearFilter, ownerFilter, dwtFrom, dwtTo, builtFrom, builtTo, sort]);
 
@@ -354,10 +369,11 @@ export default function FleetTab() {
     setter(prev => { const n = new Set(prev); n.has(val) ? n.delete(val) : n.add(val); return n; });
   }
 
-  const anyFilterActive = coatingFilter.size||segmentFilter.size||iceFilter.size||imoTypeFilter.size||countryFilter.size||yearFilter.size||ownerFilter.size;
+  const anyFilterActive = coatingFilter.size||segmentFilter.size||iceFilter.size||imoTypeFilter.size||countryFilter.size||yearFilter.size||ownerFilter.size||outsiderOnly;
   function clearAllFilters() {
     setCoatingFilter(new Set()); setSegmentFilter(new Set()); setIceFilter(new Set());
     setImoTypeFilter(new Set()); setCountryFilter(new Set()); setYearFilter(new Set()); setOwnerFilter(new Set());
+    setOutsiderOnly(false);
   }
 
   // ── stats (all derived from effectiveRows, so selection mode narrows everything) ──
@@ -523,6 +539,27 @@ export default function FleetTab() {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16, padding:"14px 0 30px" }}>
 
+      {/* ── Fleet / Outsiders toggle ── */}
+      <div style={{ display:"flex", gap:8 }}>
+        <button onClick={()=>setViewMode("fleet")}
+          style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer", fontFamily:"inherit",
+            border:"1px solid "+(viewMode==="fleet"?"#58a6ff88":C.bd), background:viewMode==="fleet"?"#58a6ff22":"transparent",
+            color:viewMode==="fleet"?"#58a6ff":C.faint }}>
+          Fleet
+        </button>
+        <button onClick={()=>setViewMode("outsiders")}
+          style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer", fontFamily:"inherit",
+            border:"1px solid "+(viewMode==="outsiders"?"#f5a62388":C.bd), background:viewMode==="outsiders"?"#f5a62322":"transparent",
+            color:viewMode==="outsiders"?"#f5a623":C.faint }}>
+          🌏 Outsiders
+        </button>
+      </div>
+
+      {viewMode==="outsiders" ? (
+        <Suspense fallback={<div style={{fontSize:12,color:C.faint}}>Loading…</div>}><OutsidersTab/></Suspense>
+      ) : (
+      <>
+
       {/* ── search + filters ── */}
       <div style={{ ...CARD, display:"flex", flexDirection:"column", gap:10 }}>
         <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
@@ -575,6 +612,11 @@ export default function FleetTab() {
               <button key={i} style={CHIP(iceFilter.has(i))} onClick={()=>toggleSet(setIceFilter,i)}>{i}</button>
             ))}
           </>}
+          {outsiderImos.size>0 && (
+            <button style={CHIP(outsiderOnly,"#f5a623")} onClick={()=>setOutsiderOnly(v=>!v)} title="Only show fleet vessels that are also on the outsider list">
+              🌏 Outsider only
+            </button>
+          )}
           {anyFilterActive > 0 && (
             <button style={{ ...CHIP(true,"#ff6b6b"), marginLeft:"auto" }} onClick={clearAllFilters}>✕ Clear filters</button>
           )}
@@ -865,6 +907,8 @@ export default function FleetTab() {
           </table>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
