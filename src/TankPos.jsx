@@ -266,6 +266,33 @@ export default function TankPos(){
     };
   }));
 
+  // positions_latest (the view) is a UNION of manual `positions` and the
+  // external feed. For manually-entered rows it never exposes the real
+  // `coating` column (only external-only coating_type_1/2, hardcoded NULL
+  // for manual rows) and doesn't select tag/entered_by at all — so those
+  // fields would silently vanish on every refetch after a paste, even
+  // though they're saved correctly. Pull them straight from the raw table
+  // instead, same pattern as the vessel_overrides merge below.
+  try {
+    const { data: rawRows } = await supabase.from("positions").select("imo_no,vessel_name,coating,tag,entered_by");
+    if (rawRows && rawRows.length) {
+      const byImo2 = {}, byName2 = {};
+      rawRows.forEach(o => {
+        if (o.imo_no) byImo2[String(o.imo_no)] = o;
+        if (o.vessel_name) byName2[String(o.vessel_name).toUpperCase()] = o;
+      });
+      setVessels(prev => prev.map(v => {
+        const o = (v.imoNo && byImo2[v.imoNo]) || byName2[v.vessel];
+        if (!o) return v;
+        const merged = { ...v };
+        if (o.coating != null && o.coating !== "") merged.coating = o.coating;
+        if (o.tag != null) merged.tag = o.tag;
+        if (o.entered_by != null) merged.entered_by = o.entered_by;
+        return merged;
+      }));
+    }
+  } catch (e) { console.error("raw positions coating/tag merge:", e); }
+
   // Merge in vessel_overrides — manual edits (notes + spec) win over CSV/feed, per field
   try {
     const { data: ovRows } = await supabase.from("vessel_overrides")
