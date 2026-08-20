@@ -276,8 +276,15 @@ export default function OutsidersTab({ compact=false }) {
             {areaOptions.map(a => (
               <button key={a} style={CHIP(areaFilter.has(a))} onClick={()=>toggleArea(a)}>{a}</button>
             ))}
-            <button style={CHIP(reportedOnly,"#4ade80")} onClick={()=>setReportedOnly(v=>!v)}>
-              Reported only
+            <div style={{ width:1, height:20, background:C.bd, margin:"0 4px", flexShrink:0 }}/>
+            <button
+              onClick={()=>setReportedOnly(v=>!v)}
+              style={{
+                fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:5, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap",
+                border:"1.5px solid #4ade80", background: reportedOnly?"#4ade80":"rgba(74,222,128,0.12)",
+                color: reportedOnly?"#0a1a10":"#4ade80",
+              }}>
+              ● Reported only
             </button>
             {(areaFilter.size>0||reportedOnly) && (
               <button style={CHIP(true,"#ff6b6b")} onClick={()=>{setAreaFilter(new Set());setReportedOnly(false);}}>✕ Clear</button>
@@ -300,7 +307,7 @@ export default function OutsidersTab({ compact=false }) {
       )}
 
       <div style={{ ...CARD, padding:0, overflow:"hidden" }}>
-        <div style={{ overflowX:"auto", maxHeight: compact?420:600, overflowY:"auto" }}>
+        <div style={{ overflowX:"auto", maxHeight: compact?420:3200, overflowY:"auto" }}>
           <table style={{ borderCollapse:"collapse", width:"100%" }}>
             <thead style={{ position:"sticky", top:0, background:C.bg2, zIndex:1 }}>
               <tr>
