@@ -35,6 +35,7 @@ const ClientsTab     = React.lazy(()=>import("./ClientsTab"));
 const VesselUploader = React.lazy(()=>import("./VesselUploader"));
 const NewbuildsTab   = React.lazy(()=>import("./NewbuildsTab"));
 const FleetTab       = React.lazy(()=>import("./FleetTab"));
+const OutsidersTab   = React.lazy(()=>import("./OutsidersTab"));
 
 const TabFallback = ()=>null;
 
@@ -1147,6 +1148,7 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [showSavedOnly,setShowSavedOnly]=useState(false);
   const [fixingPanelTab,setFixingPanelTab]=useState("History");
   const [aisPanelTab,setAisPanelTab]=useState("Map");
+  const [posOutsiderView,setPosOutsiderView]=useState(false);
   function getInterUKCConfig(){
     try{return JSON.parse(localStorage.getItem("signal_interukc_config")||"null");}catch{return null;}
   }
@@ -1837,6 +1839,26 @@ const filtV=useMemo(()=>{
         {/* ── POSITIONS ── */}
         {tab==="pos"&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
+
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setPosOutsiderView(false)}
+                style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer", fontFamily:"inherit",
+                  border:"1px solid "+(!posOutsiderView?"#58a6ff88":C.bd), background:!posOutsiderView?"#58a6ff22":"transparent",
+                  color:!posOutsiderView?"#58a6ff":C.faint }}>
+                Positions
+              </button>
+              <button onClick={()=>setPosOutsiderView(true)}
+                style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer", fontFamily:"inherit",
+                  border:"1px solid "+(posOutsiderView?"#f5a62388":C.bd), background:posOutsiderView?"#f5a62322":"transparent",
+                  color:posOutsiderView?"#f5a623":C.faint }}>
+                🌏 Outsiders
+              </button>
+            </div>
+
+            {posOutsiderView ? (
+              <Suspense fallback={<div style={{fontSize:12,color:C.faint}}>Loading…</div>}><OutsidersTab/></Suspense>
+            ) : (
+            <>
           
             {/* ── Top row: Perfect grid ── */}
             <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
@@ -2390,6 +2412,8 @@ const filtV=useMemo(()=>{
                   </div>
                 )}
               </>
+            )}
+            </>
             )}
           </div>
         )}
