@@ -552,6 +552,96 @@ function AICreditWidget(){
 const INP_INLINE={background:"rgba(8,16,32,0.85)",border:"1px solid rgba(88,166,255,0.25)",borderRadius:4,color:"rgba(200,220,255,0.9)",fontFamily:"Inter,sans-serif",fontSize:11,padding:"5px 8px",outline:"none",width:"100%",boxSizing:"border-box"};
 const rangeInp={background:"rgba(8,16,32,0.85)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:3,color:"rgba(200,220,255,0.9)",fontFamily:"inherit",fontSize:10,padding:"3px 6px",outline:"none",width:52,minWidth:0,boxSizing:"border-box",MozAppearance:"textfield"};
 
+// Renders the cargo-count-by-month line chart sized to its actual container
+// pixel dimensions (measured via ResizeObserver) rather than stretching a
+// fixed viewBox with preserveAspectRatio="none" — that approach was causing
+// visible vertical distortion (oval dots, squashed-looking text).
+function CargoMonthChart({ counts, total }){
+  const wrapRef = React.useRef(null);
+  const [size, setSize] = React.useState({ w:520, h:180 });
+  React.useEffect(()=>{
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries=>{
+      const box = entries[0]?.contentRect;
+      if (box && box.width>0 && box.height>0) setSize({ w: box.width, h: box.height });
+    });
+    ro.observe(el);
+    return ()=>ro.disconnect();
+  },[]);
+
+  const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  if(!counts.length) return null;
+  const W=Math.max(counts.length,2);
+  const maxC=Math.max(1,...counts.map(b=>b.count));
+  const SVG_W=size.w, SVG_H=size.h;
+  const PAD={t:20,r:12,b:28,l:36};
+  const iW=Math.max(1,SVG_W-PAD.l-PAD.r);
+  const iH=Math.max(1,SVG_H-PAD.t-PAD.b);
+  const pts=counts.map((bkt,i)=>({
+    x:PAD.l+(W<=1?0:i*(iW/(W-1))),
+    y:PAD.t+iH-(bkt.count/maxC)*iH,
+    ...bkt
+  }));
+  const pathD=pts.map((p,i)=>(i===0?"M":"L")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
+  const areaD=pathD+" L"+pts[pts.length-1].x.toFixed(1)+","+(PAD.t+iH)+" L"+pts[0].x.toFixed(1)+","+(PAD.t+iH)+" Z";
+  const lineLen=pts.reduce((a,p,i)=>i===0?0:a+Math.hypot(p.x-pts[i-1].x,p.y-pts[i-1].y),0);
+  const step=Math.max(1,Math.ceil(W/8));
+  const yearStarts=pts.filter((p,i)=>i>0&&p.year!==pts[i-1].year);
+  const peakIdx=counts.reduce((mx,b,i)=>b.count>counts[mx].count?i:mx,0);
+
+  return(
+    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"10px 12px 8px",display:"flex",flexDirection:"column",gap:4,minWidth:0,boxSizing:"border-box",height:260}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+        <div style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em"}}>Cargoes entered by month</div>
+        <div style={{fontSize:11,color:"rgba(88,166,255,0.7)",fontWeight:700}}>{total.toLocaleString()} total</div>
+      </div>
+      <div ref={wrapRef} style={{flex:1,minHeight:0,width:"100%"}}>
+        <svg width={SVG_W} height={SVG_H} viewBox={"0 0 "+SVG_W+" "+SVG_H} style={{display:"block",overflow:"visible"}}>
+          <defs>
+            <linearGradient id="cgGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.3"/>
+              <stop offset="100%" stopColor="#58a6ff" stopOpacity="0.02"/>
+            </linearGradient>
+            <style>{`
+              @keyframes cgDraw{from{stroke-dashoffset:${lineLen.toFixed(0)}}to{stroke-dashoffset:0}}
+              .cgLine{stroke-dasharray:${lineLen.toFixed(0)};stroke-dashoffset:${lineLen.toFixed(0)};animation:cgDraw 1.6s ease-out forwards;}
+            `}</style>
+          </defs>
+          {[0,0.25,0.5,0.75,1].map(f=>(
+            <g key={f}>
+              <line x1={PAD.l} y1={PAD.t+iH*(1-f)} x2={PAD.l+iW} y2={PAD.t+iH*(1-f)} stroke="rgba(88,130,200,0.1)" strokeWidth="1" strokeDasharray={f===0?"0":"3,4"}/>
+              <text x={PAD.l-5} y={PAD.t+iH*(1-f)+4} textAnchor="end" fontSize="10" fill="rgba(120,160,200,0.45)">{Math.round(maxC*f)}</text>
+            </g>
+          ))}
+          {yearStarts.map(p=>(
+            <g key={p.year}>
+              <line x1={p.x} y1={PAD.t-4} x2={p.x} y2={PAD.t+iH+20} stroke="rgba(88,166,255,0.22)" strokeWidth="1.5" strokeDasharray="4,3"/>
+              <text x={p.x+3} y={PAD.t-6} fontSize="10" fill="rgba(88,166,255,0.5)" fontWeight="700">{p.year}</text>
+            </g>
+          ))}
+          <path d={areaD} fill="url(#cgGrad)"/>
+          <path d={pathD} fill="none" stroke="#58a6ff" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" className="cgLine"/>
+          {pts.map((p,i)=>{
+            const showLabel=i===0||i===pts.length-1||i%step===0;
+            return(
+              <g key={i}>
+                {p.count>0&&<circle cx={p.x} cy={p.y} r={i===peakIdx?4:2.5} fill={i===peakIdx?"#79c0ff":"#58a6ff"} stroke="#0c1729" strokeWidth="1.5"/>}
+                {i===peakIdx&&(
+                  <text x={p.x} y={p.y-9} textAnchor="middle" fontSize="10" fill="#79c0ff" fontWeight="700">{p.count}</text>
+                )}
+                {showLabel&&(
+                  <text x={p.x} y={PAD.t+iH+16} textAnchor="middle" fontSize="10" fill="rgba(120,160,200,0.5)">{MONTHS[p.month]}</text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 // Stable filter column (module-level so children like RangeBox keep focus)
 function COL({label,col,children}){
   return (
@@ -2505,88 +2595,9 @@ const filtV=useMemo(()=>{
 
               {/* Right: Cargo count by month — animated, full history (minimized while Rate Matrix is expanded) */}
               {!matrixExpanded&&!mobile&&(()=>{
-                const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
                 const now=new Date();
-                // Use updated date (entry date) for all cargoes
-                // Use DB-fetched monthly data (full dataset, not just loaded 200)
                 const counts=graphMonthlyData.length>0?graphMonthlyData:[...Array.from({length:3},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-2+i,1);return{year:d.getFullYear(),month:d.getMonth(),count:0};})];
-                if(!counts.length) return null;
-                const W=Math.max(counts.length,2);
-                const maxC=Math.max(1,...counts.map(b=>b.count));
-                const SVG_W=520; const SVG_H=180;
-                const PAD={t:20,r:12,b:28,l:36};
-                const iW=SVG_W-PAD.l-PAD.r;
-                const iH=SVG_H-PAD.t-PAD.b;
-                const pts=counts.map((bkt,i)=>({
-                  x:PAD.l+(W<=1?0:i*(iW/(W-1))),
-                  y:PAD.t+iH-(bkt.count/maxC)*iH,
-                  ...bkt
-                }));
-                const pathD=pts.map((p,i)=>(i===0?"M":"L")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
-                const areaD=pathD+" L"+pts[pts.length-1].x.toFixed(1)+","+(PAD.t+iH)+" L"+pts[0].x.toFixed(1)+","+(PAD.t+iH)+" Z";
-                const lineLen=pts.reduce((a,p,i)=>i===0?0:a+Math.hypot(p.x-pts[i-1].x,p.y-pts[i-1].y),0);
-                // Label step — show ~8 labels max across x-axis
-                const step=Math.max(1,Math.ceil(W/8));
-                // Year separators
-                const yearStarts=pts.filter((p,i)=>i>0&&p.year!==pts[i-1].year);
-                // Peak point
-                const peakIdx=counts.reduce((mx,b,i)=>b.count>counts[mx].count?i:mx,0);
-                return(
-                  <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"10px 12px 8px",display:"flex",flexDirection:"column",gap:4,minWidth:0,boxSizing:"border-box",height:260}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-                      <div style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em"}}>Cargoes entered by month</div>
-                      <div style={{fontSize:11,color:"rgba(88,166,255,0.7)",fontWeight:700}}>{(cargoTotal||cargoes.length).toLocaleString()} total</div>
-                    </div>
-                    <svg viewBox={"0 0 "+SVG_W+" "+SVG_H} preserveAspectRatio="none" style={{width:"100%",flex:1,minHeight:0,overflow:"visible"}}>
-                      <defs>
-                        <linearGradient id="cgGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.3"/>
-                          <stop offset="100%" stopColor="#58a6ff" stopOpacity="0.02"/>
-                        </linearGradient>
-                        <style>{`
-                          @keyframes cgDraw{from{stroke-dashoffset:${lineLen.toFixed(0)}}to{stroke-dashoffset:0}}
-                          .cgLine{stroke-dasharray:${lineLen.toFixed(0)};stroke-dashoffset:${lineLen.toFixed(0)};animation:cgDraw 1.6s ease-out forwards;}
-                        `}</style>
-                      </defs>
-                      {/* Horizontal grid lines + Y labels */}
-                      {[0,0.25,0.5,0.75,1].map(f=>(
-                        <g key={f}>
-                          <line x1={PAD.l} y1={PAD.t+iH*(1-f)} x2={PAD.l+iW} y2={PAD.t+iH*(1-f)} stroke="rgba(88,130,200,0.1)" strokeWidth="1" strokeDasharray={f===0?"0":"3,4"}/>
-                          <text x={PAD.l-5} y={PAD.t+iH*(1-f)+4} textAnchor="end" fontSize="10" fill="rgba(120,160,200,0.45)">{Math.round(maxC*f)}</text>
-                        </g>
-                      ))}
-                      {/* Year separator lines — bold vertical dividers */}
-                      {yearStarts.map(p=>(
-                        <g key={p.year}>
-                          <line x1={p.x} y1={PAD.t-4} x2={p.x} y2={PAD.t+iH+20} stroke="rgba(88,166,255,0.22)" strokeWidth="1.5" strokeDasharray="4,3"/>
-                          <text x={p.x+3} y={PAD.t-6} fontSize="10" fill="rgba(88,166,255,0.5)" fontWeight="700">{p.year}</text>
-                        </g>
-                      ))}
-                      {/* Area fill */}
-                      <path d={areaD} fill="url(#cgGrad)"/>
-                      {/* Animated line */}
-                      <path d={pathD} fill="none" stroke="#58a6ff" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" className="cgLine"/>
-                      {/* Dots, peak label, x-axis month labels */}
-                      {pts.map((p,i)=>{
-                        const showLabel=i===0||i===pts.length-1||i%step===0;
-                        return(
-                          <g key={i}>
-                            {p.count>0&&<circle cx={p.x} cy={p.y} r={i===peakIdx?4:2.5} fill={i===peakIdx?"#79c0ff":"#58a6ff"} stroke="#0c1729" strokeWidth="1.5"/>}
-                            {i===peakIdx&&(
-                              <text x={p.x} y={p.y-9} textAnchor="middle" fontSize="10" fill="#79c0ff" fontWeight="700">{p.count}</text>
-                            )}
-                            {showLabel&&(
-                              <text x={p.x} y={PAD.t+iH+16} textAnchor="middle" fontSize="10"
-                                fill="rgba(120,160,200,0.5)">
-                                {MONTHS[p.month]}
-                              </text>
-                            )}
-                          </g>
-                        );
-                      })}
-                    </svg>
-                  </div>
-                );
+                return <CargoMonthChart counts={counts} total={cargoTotal||cargoes.length}/>;
               })()}
             </div>
             {/* Stats + Copy/CSV/Delete */}
