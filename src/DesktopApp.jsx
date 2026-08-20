@@ -2917,11 +2917,9 @@ const filtV=useMemo(()=>{
         {tab==="clients"&&(
           <Suspense fallback={<TabFallback/>}><ClientsTab/></Suspense>
         )}
-        {tab==="fix"&&(
-          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-            <Suspense fallback={<TabFallback/>}><FixingTab vessels={vessels}/></Suspense>
-          </div>
-        )}
+        <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",display: tab==="fix" ? "block" : "none"}}>
+          <Suspense fallback={<TabFallback/>}><FixingTab vessels={vessels}/></Suspense>
+        </div>
 
         {/* ── TIME CHARTER ── */}
 {tab==="tcv"&&(
