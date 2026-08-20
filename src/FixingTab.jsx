@@ -38,10 +38,21 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
   const editorRef = React.useRef(null);
   const wrapRef = React.useRef(null);
   const [isExpanded, setIsExpanded] = React.useState(false);
+  const [lightboxSrc, setLightboxSrc] = React.useState(null);
   // displayHeight drives the wrapper height via React state — never fight the render cycle
   const [displayHeight, setDisplayHeight] = React.useState(height);
   const savedHeightRef = React.useRef(height);
   const progResizing = React.useRef(false);
+
+  // Click-to-enlarge for pasted images — event delegation on the editor
+  // container so it works for every image regardless of when it was pasted.
+  function handleEditorClick(e){
+    if (e.target && e.target.tagName === "IMG"){
+      e.preventDefault();
+      e.stopPropagation();
+      setLightboxSrc(e.target.getAttribute("src"));
+    }
+  }
 
   // Keep saved height in sync when height prop changes (e.g. from drag-save) while collapsed
   React.useEffect(()=>{
@@ -337,7 +348,7 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
         [data-job-field="${jobId}-${field}"] ol ol{list-style-type:lower-alpha;}
         [data-job-field="${jobId}-${field}"] li{margin:0;padding:0;}
         [data-job-field="${jobId}-${field}"] p{margin:0;}
-        [data-job-field="${jobId}-${field}"] img{max-width:100%;height:auto;border-radius:3px;margin:2px 0;}
+        [data-job-field="${jobId}-${field}"] img{max-width:100%;height:auto;border-radius:3px;margin:2px 0;cursor:zoom-in;}
         [data-job-field="${jobId}-${field}"] table{border-collapse:collapse;width:100%;margin:4px 0;table-layout:fixed;}
         [data-job-field="${jobId}-${field}"] td,[data-job-field="${jobId}-${field}"] th{border:1px solid rgba(88,130,200,0.3);padding:4px 6px;min-width:40px;min-height:24px;height:24px;outline:none;word-break:break-word;vertical-align:top;position:relative;box-sizing:border-box;}
         [data-job-field="${jobId}-${field}"] th{background:rgba(20,40,80,0.5);font-weight:700;}
@@ -369,6 +380,7 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
       <div ref={editorRef} contentEditable suppressContentEditableWarning
         data-job-field={`${jobId}-${field}`}
         onInput={handleInput} onKeyDown={handleKeyDown} onPaste={handlePaste} onMouseDown={handleColResizeMouseDown}
+        onClick={handleEditorClick}
         style={{
           padding:"8px 10px", minHeight:isExpanded?0:Math.max(50,displayHeight-36),
           color, fontFamily:"Inter,system-ui,-apple-system,Segoe UI,sans-serif",
@@ -376,6 +388,22 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
         }}
         data-placeholder={placeholder}
       />
+      {lightboxSrc && (
+        <div onClick={()=>setLightboxSrc(null)}
+          style={{
+            position:"fixed", inset:0, zIndex:10000, background:"rgba(0,0,0,0.85)",
+            display:"flex", alignItems:"center", justifyContent:"center", cursor:"zoom-out", padding:24
+          }}>
+          <img src={lightboxSrc} alt=""
+            style={{ maxWidth:"92vw", maxHeight:"92vh", borderRadius:6, boxShadow:"0 8px 40px rgba(0,0,0,0.6)" }}
+            onClick={e=>e.stopPropagation()}/>
+          <button onClick={()=>setLightboxSrc(null)}
+            style={{
+              position:"fixed", top:18, right:24, fontSize:28, lineHeight:1, background:"none", border:"none",
+              color:"#fff", cursor:"pointer", fontFamily:"inherit"
+            }}>×</button>
+        </div>
+      )}
     </div>
   );
 }
