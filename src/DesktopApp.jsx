@@ -2059,7 +2059,7 @@ const filtV=useMemo(()=>{
                     </button>
                   )}
                   <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{vessels.length}</span></span>
-                  <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtV.length}</span></span>
+                  <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{Math.min(filtV.length, posPage*POS_PAGE_SIZE)}</span></span>
                   <span style={{color:C.faint}}>Selected <span style={{color:"#4fc3f7",fontWeight:700}}>{selVessels.size}</span></span>
                   
                   {/* MOVED SEARCH FIELD HERE */}
