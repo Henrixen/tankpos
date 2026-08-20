@@ -2423,7 +2423,7 @@ const filtV=useMemo(()=>{
             {/* Parse + filter panel + graph */}
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
               {/* Left: OnParse tag selector + ParsePanel */}
-              <div style={{flex:mobile?"1 1 auto":"0 0 25%",display:"flex",flexDirection:"column",gap:4,height:mobile?"auto":300}}>
+              <div style={{flex:mobile?"1 1 auto":"0 0 25%",display:"flex",flexDirection:"column",gap:4,height:mobile?"auto":260}}>
                 {/* ON PARSE tag selector — above Parse & Add */}
                 {(()=>{
                   const usedTags=getTagList();
@@ -2465,7 +2465,7 @@ const filtV=useMemo(()=>{
                   <button onClick={onClick} style={{...fb(active),display:"block",width:"100%",textAlign:"left",padding:"3px 7px",fontSize:11,whiteSpace:"nowrap",color:red?C.red:active?"#d9ecff":"#9fc3f5",borderColor:red?C.red+"55":undefined}}>{children}</button>
                 );
                 return(
-                  <div style={{flex:"0 0 auto",width:mobile?"100%":"25%",display:"flex",flexDirection:"column",gap:0,minHeight:0,height:mobile?"auto":300}}>
+                  <div style={{flex:"0 0 auto",width:mobile?"100%":"25%",display:"flex",flexDirection:"column",gap:0,minHeight:0,height:mobile?"auto":260}}>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,padding:"8px 8px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,overflowY:"auto",flex:1,boxSizing:"border-box"}}>
                       {/* Grade column */}
                       <COL label="Grade" col={C.purple}>
@@ -2498,7 +2498,7 @@ const filtV=useMemo(()=>{
               {!mobile&&(
                 <div style={{flex: matrixExpanded ? "0 0 50%" : "0 0 25%", position:"relative", transition:"flex-basis .18s ease"}}>
                   <Suspense fallback={null}>
-                    <RateMatrixCard collapsedHeight={300} bunkerHeader={<Suspense fallback={null}><BunkerHeader/></Suspense>} onExpandChange={setMatrixExpanded}/>
+                    <RateMatrixCard collapsedHeight={260} bunkerHeader={<Suspense fallback={null}><BunkerHeader/></Suspense>} onExpandChange={setMatrixExpanded}/>
                   </Suspense>
                 </div>
               )}
@@ -2532,12 +2532,12 @@ const filtV=useMemo(()=>{
                 // Peak point
                 const peakIdx=counts.reduce((mx,b,i)=>b.count>counts[mx].count?i:mx,0);
                 return(
-                  <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"10px 12px 8px",display:"flex",flexDirection:"column",gap:4,minWidth:0,boxSizing:"border-box",height:300}}>
+                  <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"10px 12px 8px",display:"flex",flexDirection:"column",gap:4,minWidth:0,boxSizing:"border-box",height:260}}>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
                       <div style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em"}}>Cargoes entered by month</div>
                       <div style={{fontSize:11,color:"rgba(88,166,255,0.7)",fontWeight:700}}>{(cargoTotal||cargoes.length).toLocaleString()} total</div>
                     </div>
-                    <svg viewBox={"0 0 "+SVG_W+" "+SVG_H} style={{width:"100%",flex:1,minHeight:0,overflow:"visible"}}>
+                    <svg viewBox={"0 0 "+SVG_W+" "+SVG_H} preserveAspectRatio="none" style={{width:"100%",flex:1,minHeight:0,overflow:"visible"}}>
                       <defs>
                         <linearGradient id="cgGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.3"/>
