@@ -68,6 +68,8 @@ export default function OutsidersTab({ compact=false }) {
   const [search, setSearch] = useState("");
   const [pendingDelete, setPendingDelete] = useState(null); // {imo, vessel}
   const [showAdd, setShowAdd] = useState(false);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 100;
   const [addForm, setAddForm] = useState({ vessel:"", imo:"", dwt:"", built:"", source_operator:"" });
   const [addStatus, setAddStatus] = useState(null);
 
@@ -104,6 +106,9 @@ export default function OutsidersTab({ compact=false }) {
       return hay.includes(term);
     });
   }, [rows, positions, search]);
+
+  useEffect(() => { setPage(1); }, [search]);
+  const pageRows = useMemo(() => filtered.slice(0, page*PAGE_SIZE), [filtered, page]);
 
   async function updateField(imo, field, value) {
     setRows(prev => prev.map(r => r.imo===imo ? { ...r, [field]: value } : r));
@@ -166,7 +171,7 @@ export default function OutsidersTab({ compact=false }) {
         {loading && <span style={{ fontSize:11, color:C.faint }}>Loading…</span>}
         {loadError && <span style={{ fontSize:11, color:"#ff6b6b" }}>⚠ {loadError}</span>}
         <span style={{ fontSize:12, color:C.faint }}>Total <b style={{ color:C.tx }}>{rows.length}</b></span>
-        <span style={{ fontSize:12, color:C.faint }}>Showing <b style={{ color:C.tx }}>{filtered.length}</b></span>
+        <span style={{ fontSize:12, color:C.faint }}>Showing <b style={{ color:C.tx }}>{pageRows.length}</b></span>
         <span style={{ fontSize:12, color:C.faint }}>
           Currently reporting <b style={{ color:"#4ade80" }}>{rows.filter(r=>positions[r.imo]).length}</b>
         </span>
@@ -208,7 +213,7 @@ export default function OutsidersTab({ compact=false }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(r => {
+              {pageRows.map(r => {
                 const pos = positions[r.imo];
                 return (
                   <tr key={r.imo}>
@@ -229,12 +234,19 @@ export default function OutsidersTab({ compact=false }) {
                   </tr>
                 );
               })}
-              {!filtered.length && !loading && (
+              {!pageRows.length && !loading && (
                 <tr><td style={TD_} colSpan={11}>No vessels match.</td></tr>
               )}
             </tbody>
           </table>
         </div>
+        {filtered.length > pageRows.length && (
+          <div style={{ padding:"10px 16px", borderTop:"1px solid "+C.bd, textAlign:"center" }}>
+            <button onClick={()=>setPage(p=>p+1)} style={BTN(false)}>
+              Show more ({filtered.length - pageRows.length} remaining)
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
