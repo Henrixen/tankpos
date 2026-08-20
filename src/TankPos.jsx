@@ -507,7 +507,7 @@ export default function TankPos(){
       
       return {
   id: uuidv4(),
-  vessel_name: ev.vessel,
+  vessel_name: (ev.vessel||"").toUpperCase().trim().replace(/\s+/g," "),
   operator: ev.operator || null,
   port_name: ev.openPort || null,
   open_date: ev.date || null,
