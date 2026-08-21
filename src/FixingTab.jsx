@@ -135,7 +135,17 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
   function handleInput(){
     onChange(editorRef.current?.innerHTML||"");
     if (alwaysExpanded && editorRef.current) {
-      setDisplayHeight(h => Math.max(h, editorRef.current.scrollHeight + 60));
+      const el = editorRef.current;
+      // Must remove minHeight before measuring scrollHeight, same as
+      // calcExpandedH() above — otherwise scrollHeight reflects the PREVIOUS
+      // displayHeight's own minHeight padding, not the actual content size,
+      // and each keystroke re-inflates height based on the prior inflation
+      // (runaway growth: the box kept expanding with every letter typed).
+      const prevMinHeight = el.style.minHeight;
+      el.style.minHeight = "0";
+      const trueH = Math.max(height, el.scrollHeight + 60);
+      el.style.minHeight = prevMinHeight;
+      setDisplayHeight(trueH);
     }
   }
 
