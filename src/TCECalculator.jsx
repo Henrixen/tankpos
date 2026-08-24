@@ -143,6 +143,7 @@ function routeDefaults(r, defaults) {
     pdaLoad: "0",
     pdaDisch: "0",
     euEts: "0",
+    commission: "5",       // per-route commission %, independent of the Standard Variables default
     speed: String(defaults.speed ?? ""),
     cons: String(defaults.consLaden ?? ""),
     tce: null,
@@ -174,6 +175,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
           pdaLoad: saved.pda_load != null ? String(saved.pda_load) : r.pdaLoad,
           pdaDisch: saved.pda_disch != null ? String(saved.pda_disch) : r.pdaDisch,
           euEts: saved.eu_ets != null ? String(saved.eu_ets) : r.euEts,
+          commission: saved.commission != null ? String(saved.commission) : r.commission,
           speed: saved.speed != null ? String(saved.speed) : r.speed,
           cons: saved.cons != null ? String(saved.cons) : r.cons,
           tce: saved.tce ?? null,
@@ -196,7 +198,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
       consLoad: defaults.consLoad, consDisch: defaults.consDisch, consIdle: defaults.consIdle,
       daysLoad: defaults.daysLoad, noticeLoad: defaults.noticeLoad,
       daysDisch: defaults.daysDisch, noticeDisch: defaults.noticeDisch, daysWaiting: defaults.daysWaiting,
-      bunker: numD(bunkerOverride ?? sharedBunker), commission: defaults.commission, speed: numD(row.speed),
+      bunker: numD(bunkerOverride ?? sharedBunker), commission: numD(row.commission), speed: numD(row.speed),
       canalCost: defaults.canalCost, euEts: numD(row.euEts),
       loadPortCosts: [{ cost: numD(row.pdaLoad) }],
       dischPortCosts: [{ cost: numD(row.pdaDisch) }],
@@ -225,6 +227,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
       route_key: row.key, label: row.label, freight: numD(row.freight), tce: row.tce,
       nm_ballast: numD(row.nmBallast), nm_laden: numD(row.nmLaden), nm_repo: numD(row.nmRepo),
       pda_load: numD(row.pdaLoad), pda_disch: numD(row.pdaDisch), eu_ets: numD(row.euEts),
+      commission: numD(row.commission),
       speed: numD(row.speed), cons: numD(row.cons), updated_at: new Date().toISOString(),
     }, { onConflict: "route_key" });
     setStatus(error ? "Save failed" : "Saved ✓");
@@ -239,6 +242,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
       route_key: row.key, label: row.label, freight: numD(row.freight), tce: row.tce,
       nm_ballast: numD(row.nmBallast), nm_laden: numD(row.nmLaden), nm_repo: numD(row.nmRepo),
       pda_load: numD(row.pdaLoad), pda_disch: numD(row.pdaDisch), eu_ets: numD(row.euEts),
+      commission: numD(row.commission),
       speed: numD(row.speed), cons: numD(row.cons), updated_at: new Date().toISOString(),
     }));
     const { error } = await supabase.from("tce_routes").upsert(payload, { onConflict: "route_key" });
@@ -291,7 +295,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
 
   function addLeg(){
     const key = "custom_" + Date.now();
-    setRows(prev => [...prev, { key, label:"New route", freight:"", nmBallast:"0", nmLaden:"", nmRepo:"0", pdaLoad:"0", pdaDisch:"0", euEts:"0", speed:String(defaults.speed??""), cons:String(defaults.consLaden??""), tce:null }]);
+    setRows(prev => [...prev, { key, label:"New route", freight:"", nmBallast:"0", nmLaden:"", nmRepo:"0", pdaLoad:"0", pdaDisch:"0", euEts:"0", commission:"5", speed:String(defaults.speed??""), cons:String(defaults.consLaden??""), tce:null }]);
     setExpanded(p => ({ ...p, [key]: true }));
   }
 
@@ -348,6 +352,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
                     </div>
                     {etsPopout===r.key && <EtsPopout row={r}/>}
                   </div>
+                  {miniInp(r,"commission","Comm %")}
                   {miniInp(r,"speed","Speed")}
                   {miniInp(r,"cons","Cons")}
                 </div>
