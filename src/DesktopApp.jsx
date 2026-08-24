@@ -1239,6 +1239,7 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [fixingPanelTab,setFixingPanelTab]=useState("History");
   const [aisPanelTab,setAisPanelTab]=useState("Map");
   const [posOutsiderView,setPosOutsiderView]=useState(false);
+  const [outsiderSyncStatus,setOutsiderSyncStatus]=useState(null);
   function getInterUKCConfig(){
     try{return JSON.parse(localStorage.getItem("signal_interukc_config")||"null");}catch{return null;}
   }
@@ -1334,6 +1335,46 @@ const cargoColumns = [
 ];
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
   const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
+  // Vessels tagged "OUTSIDER" that currently have a known open date + port
+  // get added/updated in the static outsider_vessels roster. Live position
+  // tracking after that happens automatically via OutsidersTab's own IMO
+  // join — this just needs to get the vessel identity in.
+  async function syncOutsiderTaggedVessels(){
+    const candidates = vessels.filter(v => (v.tag||"").trim().toUpperCase()==="OUTSIDER" && v.openPort && v.date);
+    if(!candidates.length){ setOutsiderSyncStatus("No OUTSIDER-tagged vessels with a known date + port"); setTimeout(()=>setOutsiderSyncStatus(null),3000); return; }
+    setOutsiderSyncStatus(`Syncing ${candidates.length}…`);
+    const withImo = candidates.filter(v=>v.imoNo);
+    const withoutImo = candidates.filter(v=>!v.imoNo);
+    let failed = 0;
+    if(withImo.length){
+      const payload = withImo.map(v=>({
+        imo: v.imoNo, vessel: v.vessel, dwt: v.dwt||null, built: v.built||null,
+        source_operator: v.operator||null, coating: v.coating||null,
+        updated_at: new Date().toISOString(),
+      }));
+      const { error } = await supabase.from("outsider_vessels").upsert(payload, { onConflict:"imo" });
+      if(error){ console.error(error); failed += withImo.length; }
+    }
+    if(withoutImo.length){
+      // No IMO to upsert against — check existing vessel names first so
+      // re-running this doesn't pile up duplicate rows for the same ship.
+      const { data: existing } = await supabase.from("outsider_vessels").select("vessel").is("imo",null);
+      const existingNames = new Set((existing||[]).map(r=>(r.vessel||"").toUpperCase()));
+      const fresh = withoutImo.filter(v=>!existingNames.has((v.vessel||"").toUpperCase()));
+      if(fresh.length){
+        const payload = fresh.map(v=>({
+          vessel: v.vessel, dwt: v.dwt||null, built: v.built||null,
+          source_operator: v.operator||null, coating: v.coating||null,
+          updated_at: new Date().toISOString(),
+        }));
+        const { error } = await supabase.from("outsider_vessels").insert(payload);
+        if(error){ console.error(error); failed += fresh.length; }
+      }
+    }
+    setOutsiderSyncStatus(failed ? `Done, ${failed} failed — check console` : `✓ Synced ${candidates.length} vessel(s)`);
+    setTimeout(()=>setOutsiderSyncStatus(null),4000);
+  }
+
   const fb=on=>({
   fontSize:11,
   fontWeight:600,
@@ -2040,6 +2081,14 @@ const filtV=useMemo(()=>{
                           <FilterRow label="Tags" col="#79c0ff">
                             {(()=>{const used=[...new Set(vessels.map(v=>(v.tag||"").trim()).filter(Boolean))].sort();return used.length?used.map(t=>(<Chip key={t} col="#79c0ff" active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t.toUpperCase()}</Chip>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>none</span>;})()}
                             {posTagFilter.size>0&&<Chip col={C.red} active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}>✕</Chip>}
+                            {vessels.some(v=>(v.tag||"").trim().toUpperCase()==="OUTSIDER")&&(
+                              <button onClick={syncOutsiderTaggedVessels} title="Adds/updates OUTSIDER-tagged vessels with a known date+port into the static Outsider list"
+                                style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:5, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap",
+                                  border:"1px solid rgba(245,166,35,0.5)", background:"rgba(245,166,35,0.12)", color:"#f5a623" }}>
+                                🌏 Sync OUTSIDER tag → list
+                              </button>
+                            )}
+                            {outsiderSyncStatus&&<span style={{ fontSize:11, color:C.faint }}>{outsiderSyncStatus}</span>}
                           </FilterRow>
                           {/* Updated */}
                           <FilterRow label="Updated" col={C.blue}>
@@ -3036,9 +3085,9 @@ const filtV=useMemo(()=>{
         {tab==="vessels"&&(
           <Suspense fallback={<TabFallback/>}><VesselUploader/></Suspense>
         )}
-        {tab==="fleet"&&(
+        <div style={{display: tab==="fleet" ? "block" : "none"}}>
           <Suspense fallback={<TabFallback/>}><FleetTab/></Suspense>
-        )}
+        </div>
         {tab==="newbuilds"&&(
           <Suspense fallback={<TabFallback/>}><NewbuildsTab/></Suspense>
         )}
