@@ -2461,8 +2461,7 @@ const filtV=useMemo(()=>{
     <>
       {/* SELECT */}
       <td
-        style={{ ...tdCtr, width: 28, padding: "0 2px",
-          ...(mobile ? { position:"sticky", left:0, zIndex:3, background:C.bg } : {}) }}
+        style={{ ...tdCtr, width: 28, padding: "0 2px" }}
         onClick={e => {
           e.stopPropagation();
           setSelVessels(p => {
@@ -2488,7 +2487,7 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i-1, "comment")}
   onDown={() => focusCell(i+1, "operator")}
   onUp={() => focusCell(i-1, "operator")}
-  style={mobile?{minWidth:MOBILE_OPERATOR_W,maxWidth:MOBILE_OPERATOR_W,whiteSpace:"nowrap",position:"sticky",left:MOBILE_SELECT_W,zIndex:3,background:C.bg}:undefined}
+  style={mobile?{minWidth:MOBILE_OPERATOR_W,maxWidth:MOBILE_OPERATOR_W,whiteSpace:"nowrap"}:undefined}
 />
 
       {/* VESSEL */}
@@ -2503,7 +2502,7 @@ const filtV=useMemo(()=>{
         onShiftTab={() => focusCell(i, "operator")}
         onDown={() => focusCell(i+1, "vessel")}
         onUp={() => focusCell(i-1, "vessel")}
-        style={mobile?{minWidth:MOBILE_VESSEL_W,maxWidth:MOBILE_VESSEL_W,whiteSpace:"nowrap",position:"sticky",left:MOBILE_SELECT_W+MOBILE_OPERATOR_W,zIndex:3,background:C.bg,boxShadow:"2px 0 4px rgba(0,0,0,0.3)"}:undefined}
+        style={mobile?{minWidth:MOBILE_VESSEL_W,maxWidth:MOBILE_VESSEL_W,whiteSpace:"nowrap"}:undefined}
       />
 
       <td style={{padding:"2px 3px",textAlign:"center",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)"}} title={aisVesselSet.has((v.vessel||"").toUpperCase().trim())?"AIS data available":"No AIS data"}>
@@ -2572,31 +2571,35 @@ const filtV=useMemo(()=>{
 />
 
       {/* UPDATED */}
-      <td style={{ ...tdCtr, color: C.faint }}>
-        {v.updatedAt ? new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
-      </td>
+      {!mobile && (
+        <td style={{ ...tdCtr, color: C.faint }}>
+          {v.updatedAt ? new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
+        </td>
+      )}
 
       {/* WHO ENTERED badge + SAVE star */}
-      <td style={{...tdCtr,width:32,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
-        <div style={{display:"flex",alignItems:"center",gap:2}}>
-        <button onClick={()=>toggleSavedVessel(v.vessel)}
-          title={savedVessels.has(v.vessel)?"Remove from saved":"Save for later"}
-          style={{background:"none",border:"none",cursor:"pointer",fontSize:15,padding:"1px",
-            color:savedVessels.has(v.vessel)?"#fbbf24":"rgba(120,160,200,0.15)",lineHeight:1}}>
-          {savedVessels.has(v.vessel)?"⭐":"☆"}
-        </button>
-        {(v.entered_by==="H"||v.entered_by==="L")&&(
-          <span title={v.entered_by==="H"?"Entered by Henriksen":"Entered by Løken"}
-            style={{display:"inline-flex",alignItems:"center",justifyContent:"center",
-              width:14,height:14,borderRadius:"50%",fontSize:8,fontWeight:700,lineHeight:1,
-              background:v.entered_by==="H"?"rgba(88,166,255,0.25)":"rgba(74,222,128,0.25)",
-              color:v.entered_by==="H"?"#79c0ff":"#4ade80",
-              border:"1px solid "+(v.entered_by==="H"?"rgba(88,166,255,0.5)":"rgba(74,222,128,0.5)")}}>
-            {v.entered_by}
-          </span>
-        )}
-        </div>
-      </td>
+      {!mobile && (
+        <td style={{...tdCtr,width:32,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
+          <div style={{display:"flex",alignItems:"center",gap:2}}>
+          <button onClick={()=>toggleSavedVessel(v.vessel)}
+            title={savedVessels.has(v.vessel)?"Remove from saved":"Save for later"}
+            style={{background:"none",border:"none",cursor:"pointer",fontSize:15,padding:"1px",
+              color:savedVessels.has(v.vessel)?"#fbbf24":"rgba(120,160,200,0.15)",lineHeight:1}}>
+            {savedVessels.has(v.vessel)?"⭐":"☆"}
+          </button>
+          {(v.entered_by==="H"||v.entered_by==="L")&&(
+            <span title={v.entered_by==="H"?"Entered by Henriksen":"Entered by Løken"}
+              style={{display:"inline-flex",alignItems:"center",justifyContent:"center",
+                width:14,height:14,borderRadius:"50%",fontSize:8,fontWeight:700,lineHeight:1,
+                background:v.entered_by==="H"?"rgba(88,166,255,0.25)":"rgba(74,222,128,0.25)",
+                color:v.entered_by==="H"?"#79c0ff":"#4ade80",
+                border:"1px solid "+(v.entered_by==="H"?"rgba(88,166,255,0.5)":"rgba(74,222,128,0.5)")}}>
+              {v.entered_by}
+            </span>
+          )}
+          </div>
+        </td>
+      )}
       <TagCellV vesselName={v.vessel} tag={v.tag} onUpdateV={onUpdateV}/>
       {/* DELETE */}
       <td style={{ ...tdCtr, width: 24, minWidth: 24, maxWidth: 24, padding: "0 2px" }} onClick={e=>e.stopPropagation()}>
