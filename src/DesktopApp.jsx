@@ -1286,6 +1286,32 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [aisPanelTab,setAisPanelTab]=useState("Map");
   const [posOutsiderView,setPosOutsiderView]=useState(false);
   const [outsiderSyncStatus,setOutsiderSyncStatus]=useState(null);
+
+  // Landscape mobile: hide the header on scroll-down to reclaim vertical
+  // space (landscape has very little to spare), show it again on scroll-up
+  // or once you're back near the top.
+  const [headerHidden,setHeaderHidden]=useState(false);
+  const [isLandscape,setIsLandscape]=useState(false);
+  const lastScrollY=useRef(0);
+  useEffect(()=>{
+    function checkOrientation(){ setIsLandscape(window.matchMedia("(orientation: landscape)").matches); }
+    checkOrientation();
+    window.addEventListener("resize",checkOrientation);
+    window.addEventListener("orientationchange",checkOrientation);
+    return ()=>{ window.removeEventListener("resize",checkOrientation); window.removeEventListener("orientationchange",checkOrientation); };
+  },[]);
+  useEffect(()=>{
+    if(!mobile||!isLandscape){ setHeaderHidden(false); return; }
+    function onScroll(){
+      const y=window.scrollY;
+      if(y<=10) setHeaderHidden(false);
+      else if(y>lastScrollY.current+5) setHeaderHidden(true);
+      else if(y<lastScrollY.current-5) setHeaderHidden(false);
+      lastScrollY.current=y;
+    }
+    window.addEventListener("scroll",onScroll,{passive:true});
+    return ()=>window.removeEventListener("scroll",onScroll);
+  },[mobile,isLandscape]);
   function getInterUKCConfig(){
     try{return JSON.parse(localStorage.getItem("signal_interukc_config")||"null");}catch{return null;}
   }
@@ -1914,11 +1940,18 @@ const filtV=useMemo(()=>{
           <button onClick={()=>setPendingDel(null)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,padding:"5px 14px",cursor:"pointer",fontSize:12}}>Cancel</button>
         </div>
       )}
+      {headerHidden && (
+        <div onClick={()=>setHeaderHidden(false)}
+          style={{ position:"fixed", top:0, left:0, right:0, height:10, zIndex:201, cursor:"pointer",
+            background:"rgba(58,130,246,0.15)", borderBottom:"1px solid rgba(58,130,246,0.25)" }}/>
+      )}
       {/* ── APP HEADER ── */}
       <div style={{
         background:"linear-gradient(135deg, #070f1c 0%, #0c1a32 50%, #081426 100%)",
         borderBottom:"1px solid rgba(58,130,246,0.18)",
         position:"sticky",top:0,zIndex:200,
+        transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
+        transition:"transform 0.25s ease",
       }}>
         {/* Top bar: brand + Ask AI + Intel Vault + utilities */}
         <div style={{display:"flex",alignItems:"center",gap:mobile?6:12,padding:mobile?"8px 12px 0":"10px 20px 0"}}>
@@ -2461,7 +2494,8 @@ const filtV=useMemo(()=>{
     <>
       {/* SELECT */}
       <td
-        style={{ ...tdCtr, width: 28, padding: "0 2px" }}
+        style={{ ...tdCtr, width: 28, padding: "0 2px",
+          ...(mobile ? { position:"sticky", left:0, zIndex:3, background:C.bg2 } : {}) }}
         onClick={e => {
           e.stopPropagation();
           setSelVessels(p => {
@@ -2487,7 +2521,7 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i-1, "comment")}
   onDown={() => focusCell(i+1, "operator")}
   onUp={() => focusCell(i-1, "operator")}
-  style={mobile?{minWidth:MOBILE_OPERATOR_W,maxWidth:MOBILE_OPERATOR_W,whiteSpace:"nowrap"}:undefined}
+  style={mobile?{minWidth:MOBILE_OPERATOR_W,maxWidth:MOBILE_OPERATOR_W,whiteSpace:"nowrap",position:"sticky",left:MOBILE_SELECT_W,zIndex:3,background:C.bg2}:undefined}
 />
 
       {/* VESSEL */}
@@ -2502,7 +2536,7 @@ const filtV=useMemo(()=>{
         onShiftTab={() => focusCell(i, "operator")}
         onDown={() => focusCell(i+1, "vessel")}
         onUp={() => focusCell(i-1, "vessel")}
-        style={mobile?{minWidth:MOBILE_VESSEL_W,maxWidth:MOBILE_VESSEL_W,whiteSpace:"nowrap"}:undefined}
+        style={mobile?{minWidth:MOBILE_VESSEL_W,maxWidth:MOBILE_VESSEL_W,whiteSpace:"nowrap",position:"sticky",left:MOBILE_SELECT_W+MOBILE_OPERATOR_W,zIndex:3,background:C.bg2,boxShadow:"2px 0 5px rgba(0,0,0,0.35)"}:undefined}
       />
 
       <td style={{padding:"2px 3px",textAlign:"center",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)"}} title={aisVesselSet.has((v.vessel||"").toUpperCase().trim())?"AIS data available":"No AIS data"}>
