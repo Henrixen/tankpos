@@ -1731,20 +1731,20 @@ const filtV=useMemo(()=>{
   // Mobile-specific columns: fixed (not user-resizable) widths so the sticky
   // offsets below are reliable, LOA/Beam/CBM dropped to save width — those
   // are the columns Haakon uses least for a quick scan on a phone.
-  const MOBILE_SELECT_W = 32, MOBILE_OPERATOR_W = 84, MOBILE_VESSEL_W = 112;
+  const MOBILE_SELECT_W = 26, MOBILE_OPERATOR_W = 62, MOBILE_VESSEL_W = 96;
   const posColumnsMobile = [
     posColumns[0], // select — width 32, matches MOBILE_SELECT_W
-    { key:"operator", sortKey:"operator", label:"Operator", width:MOBILE_OPERATOR_W },
-    { key:"vessel",   sortKey:"vessel",   label:"Vessel",   width:MOBILE_VESSEL_W },
-    { key:"ais",      label:"",           align:"center",   width:16 },
-    { key:"built",    sortKey:"built",    label:"Built",    align:"left", width:44 },
-    { key:"dwt",      sortKey:"dwt",      label:"DWT",      align:"left", width:56 },
-    { key:"coating",  sortKey:"coating",  label:"Coat",     width:52 },
-    { key:"date",     sortKey:"date",     label:"Date",     align:"center", width:52 },
-    { key:"openPort", sortKey:"openPort", label:"Port",     width:96 },
-    { key:"comment",  sortKey:"comment",  label:"Comment",  width:110 },
-    { key:"tag",      label:"Tag",        align:"center",   width:60 },
-    { key:"delete",   label:"",           align:"center",   width:24 },
+    { key:"operator", sortKey:"operator", label:"Op",      width:MOBILE_OPERATOR_W },
+    { key:"vessel",   sortKey:"vessel",   label:"Vessel",  width:MOBILE_VESSEL_W },
+    { key:"ais",      label:"",           align:"center",  width:14 },
+    { key:"built",    sortKey:"built",    label:"Blt",     align:"left", width:36 },
+    { key:"dwt",      sortKey:"dwt",      label:"DWT",     align:"left", width:48 },
+    { key:"coating",  sortKey:"coating",  label:"Coat",    width:44 },
+    { key:"date",     sortKey:"date",     label:"Date",    align:"center", width:44 },
+    { key:"openPort", sortKey:"openPort", label:"Port",    width:80 },
+    { key:"comment",  sortKey:"comment",  label:"Comment", width:90 },
+    { key:"tag",      label:"Tag",        align:"center",  width:50 },
+    { key:"delete",   label:"",           align:"center",  width:22 },
   ];
 
   // Reset page when filters change
@@ -2746,7 +2746,8 @@ const filtV=useMemo(()=>{
         {/* ── CARGOES ── */}
         {tab==="cargo"&&(
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {/* Parse + filter panel + graph */}
+            {/* Parse + filter panel + graph (desktop) */}
+            {!mobile && (
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
               {/* Left: OnParse tag selector + ParsePanel */}
               <div style={{flex:mobile?"1 1 auto":"0 0 25%",display:"flex",flexDirection:"column",gap:4,height:mobile?"auto":260}}>
@@ -2836,6 +2837,78 @@ const filtV=useMemo(()=>{
                 return <CargoMonthChart counts={counts} total={cargoTotal||cargoes.length}/>;
               })()}
             </div>
+            )}
+
+            {/* Mobile: Parse + Filters collapsed into tappable bars */}
+            {mobile && (
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                <MobileCollapse title="📋 Paste cargo" color="#faa356">
+                  {(()=>{
+                    const usedTags=getTagList();
+                    return(
+                      <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:5,padding:"5px 8px",display:"flex",alignItems:"center",flexWrap:"wrap",gap:4,marginBottom:8}}>
+                        <span style={{fontSize:9,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.1em",marginRight:2}}>Tag on parse</span>
+                        {usedTags.map(t=>(
+                          <button key={t} onClick={()=>setPendingParseTag(v=>v===t?"":t)} style={fb(pendingParseTag===t)}>{t}</button>
+                        ))}
+                        {pendingParseTag&&<button onClick={()=>setPendingParseTag("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕ {pendingParseTag}</button>}
+                      </div>
+                    );
+                  })()}
+                  <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels}
+                    onAddCargoes={async(parsed)=>{
+                      const user=localStorage.getItem("signal_user")||"H";
+                      const withMeta=parsed.map(c=>({...c,entered_by:user,tag:pendingParseTag?pendingParseTag:c.tag||""}));
+                      const result=await onAddCargoes(withMeta);
+                      if(pendingParseTag)setPendingParseTag("");
+                      return result;
+                    }}
+                    lockedMode="cargo" vesselDB={{}}/>
+                </MobileCollapse>
+
+                <MobileCollapse title="🏷️ Grade / Period / Tag Filters" color="#f472b6">
+                  {(()=>{
+                    let allGroups=[];
+                    try{const raw=localStorage.getItem("signal_cargo_filter_groups");allGroups=raw?JSON.parse(raw):[];}catch{}
+                    const gradeGroups=allGroups.filter(g=>(g.category||"grade")==="grade");
+                    const showRaw=gradeGroups.length===0;
+                    const rawGrades=showRaw?[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort().slice(0,20):[];
+                    const usedTags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
+                    const B=({active,onClick,children,red})=>(
+                      <button onClick={onClick} style={{...fb(active),padding:"6px 10px",fontSize:12,color:red?C.red:active?"#d9ecff":"#9fc3f5",borderColor:red?C.red+"55":undefined}}>{children}</button>
+                    );
+                    return(
+                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                        <COL label="Grade" col={C.purple}>
+                          {showRaw
+                            ?rawGrades.map(g=><B key={g} active={cGradeFilter===g} onClick={()=>setCGradeFilter(v=>v===g?"":g)}>{g}</B>)
+                            :gradeGroups.map(grp=><B key={grp.id} active={cGradeFilter===grp.id} onClick={()=>setCGradeFilter(v=>v===grp.id?"":grp.id)}>{grp.label}</B>)
+                          }
+                          {cGradeFilter&&gradeGroups.some(g=>g.id===cGradeFilter)&&<B active={false} red onClick={()=>setCGradeFilter("")}>✕ Clear</B>}
+                        </COL>
+                        <COL label="Period" col="#94a3b8">
+                          {[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([v,l])=>(
+                            <B key={v||"all"} active={cTimeFilter===v} onClick={()=>setCTimeFilter(v)}>{l}</B>
+                          ))}
+                        </COL>
+                        <COL label="Tag" col="#f472b6">
+                          {usedTags.map(t=>(
+                            <B key={t} active={cTagFilter===t} onClick={()=>setCTagFilter(v=>v===t?"":t)}>{t}</B>
+                          ))}
+                          {cTagFilter&&<B active={false} red onClick={()=>setCTagFilter("")}>✕ Clear</B>}
+                        </COL>
+                        {(cGradeFilter||cFilter!=="ALL"||cTimeFilter||cTagFilter)&&(
+                          <button onClick={()=>{setCGradeFilter("");setCFilter("ALL");setCTimeFilter("");setCTagFilter("");}}
+                            style={{...fb(false),color:C.red,borderColor:C.red+"55",padding:"6px 10px",fontSize:12,alignSelf:"flex-start"}}>
+                            ✕ Clear all filters
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </MobileCollapse>
+              </div>
+            )}
             {/* Stats + Copy/CSV/Delete */}
             <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,flexWrap:"wrap"}}>
               <button onClick={()=>setShowAddCargo(v=>!v)}
