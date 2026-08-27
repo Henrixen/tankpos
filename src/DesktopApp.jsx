@@ -1286,6 +1286,26 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [aisPanelTab,setAisPanelTab]=useState("Map");
   const [posOutsiderView,setPosOutsiderView]=useState(false);
   const [outsiderSyncStatus,setOutsiderSyncStatus]=useState(null);
+  function getInterUKCConfig(){
+    try{return JSON.parse(localStorage.getItem("signal_interukc_config")||"null");}catch{return null;}
+  }
+  const defaultInterUKCConfig={
+    dwtMin:15,dwtMax:21,
+    owners:["Stenersen","Furetank","Carl F","Maersk","Harren","Navix","Donso","Relet"],
+    reletsFrom:["Exxon","Shell","Circle K","Essar","Total","CSS SA"],
+  };
+  function applyInterUKCFilter(){
+    const cfg=getInterUKCConfig()||defaultInterUKCConfig;
+    setDwtFilter("15-20");
+    setInterUKCActive(true);
+    setShowSavedOnly(false);
+    setPosPage(1);
+  }
+  const [interUKCActive,setInterUKCActive]=useState(false);
+  const [restoreMsg,setRestoreMsg]=useState("");
+  const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
+  // Use mobile state from TankPos (reactive, with manual override) — must be before colWidths
+  const mobile = mobileProp !== undefined ? mobileProp : isMobile();
 
   // Landscape mobile: hide the header on scroll-down to reclaim vertical
   // space (landscape has very little to spare), show it again on scroll-up
@@ -1312,26 +1332,6 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
     window.addEventListener("scroll",onScroll,{passive:true});
     return ()=>window.removeEventListener("scroll",onScroll);
   },[mobile,isLandscape]);
-  function getInterUKCConfig(){
-    try{return JSON.parse(localStorage.getItem("signal_interukc_config")||"null");}catch{return null;}
-  }
-  const defaultInterUKCConfig={
-    dwtMin:15,dwtMax:21,
-    owners:["Stenersen","Furetank","Carl F","Maersk","Harren","Navix","Donso","Relet"],
-    reletsFrom:["Exxon","Shell","Circle K","Essar","Total","CSS SA"],
-  };
-  function applyInterUKCFilter(){
-    const cfg=getInterUKCConfig()||defaultInterUKCConfig;
-    setDwtFilter("15-20");
-    setInterUKCActive(true);
-    setShowSavedOnly(false);
-    setPosPage(1);
-  }
-  const [interUKCActive,setInterUKCActive]=useState(false);
-  const [restoreMsg,setRestoreMsg]=useState("");
-  const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
-  // Use mobile state from TankPos (reactive, with manual override) — must be before colWidths
-  const mobile = mobileProp !== undefined ? mobileProp : isMobile();
 
   const [colWidthsV,setColWidthsV]=useState(()=>mobile?{
   Operator:null,Vessel:null,Built:null,DWT:null,Coating:null,LOA:null,Beam:null,CBM:null,Date:null,OpenPort:null,Comment:null,FileDate:null,Spec:null
