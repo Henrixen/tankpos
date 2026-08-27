@@ -34,6 +34,26 @@ function cycleJobField(jobId, currentField, backwards=false){
 
 // RichEditor — height is tracked in state (displayHeight) so React renders stay in sync.
 // onToggleExpand(expanded, savedH, expandedH) lets the parent sync siblings.
+// One-line tappable header that expands to full content below it — local
+// copy matching the one in DesktopApp.jsx (kept separate deliberately, since
+// this file is lazy-loaded independently and importing across the two would
+// risk a circular dependency).
+function MobileCollapse({ title, color="#58a6ff", defaultOpen=false, children }){
+  const [open, setOpen] = React.useState(defaultOpen);
+  return (
+    <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:7, overflow:"hidden" }}>
+      <button onClick={()=>setOpen(o=>!o)}
+        style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between",
+          padding:"10px 12px", background:"transparent", border:"none", cursor:"pointer", fontFamily:"inherit",
+          minHeight:44, boxSizing:"border-box" }}>
+        <span style={{ fontSize:13, fontWeight:700, color }}>{title}</span>
+        <span style={{ fontSize:12, color:C.faint }}>{open?"▾":"▸"}</span>
+      </button>
+      {open && <div style={{ padding:"0 10px 10px" }}>{children}</div>}
+    </div>
+  );
+}
+
 function RichEditor({ jobId, field, title, titleRight, value, onChange, onResizeSave, height=120, placeholder="", color=C.tx, onToggleExpand=null, alwaysExpanded=false, expandState=null, fillHeight=false }){
   const editorRef = React.useRef(null);
   const wrapRef = React.useRef(null);
@@ -498,7 +518,7 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
             letterSpacing:"0.04em"
           }}>{total} cargo{total!==1?"es":""}</span>
           <div style={{display:"flex",gap:3,alignItems:"center"}}>
-            {[["OPEN","#60a5fa"],["WORKING","#f59e0b"],["SUBS","#a78bfa"],["FIXED","#34d399"],["WDWF","#94a3b8"]].map(([s,col])=>counts[s]>0&&(
+            {!mobile && [["OPEN","#60a5fa"],["WORKING","#f59e0b"],["SUBS","#a78bfa"],["FIXED","#34d399"],["WDWF","#94a3b8"]].map(([s,col])=>counts[s]>0&&(
               <span key={s} title={`${counts[s]} ${s}`} style={{
                 fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,
                 background:col+"22",color:col,border:"1px solid "+col+"44",
@@ -780,7 +800,7 @@ function FixingTab({vessels}){
               </div>
             )}
             {/* Status filter */}
-            <div style={{display:"flex",gap:3}}>
+            <div style={{display:"flex",gap:3,flexWrap:mobile?"wrap":"nowrap"}}>
               {["ALL",...JOB_STATUS].map(s=>(
                 <button key={s} onClick={()=>setStatusFilter(s)} style={fb2(statusFilter===s,JOB_STATUS_COL[s])}>{s}</button>
               ))}
@@ -834,7 +854,31 @@ function FixingTab({vessels}){
           )}
 
           {/* ── LIST VIEW: sortable headers, matched positions/cargoes style ── */}
-          {clientViewMode==="list"&&(
+          {clientViewMode==="list"&&mobile&&(
+            <div style={{border:"1px solid rgba(58,130,246,0.18)",borderRadius:7,overflow:"hidden",marginBottom:2,background:"rgba(7,15,28,0.96)"}}>
+              {charterersList.map((charterer,ri)=>{
+                const allCJobs=jobs.filter(j=>(j.charterer||"")===charterer);
+                const total=allCJobs.length;
+                const glowCol=allCJobs.some(j=>j.status==="SUBS")?C.purple:allCJobs.some(j=>j.status==="OPEN"||j.status==="WORKING")?C.amber:null;
+                const isJobOpen=expandedJob===charterer;
+                const client=clients.find(c=>c.name===charterer);
+                const rowBg=isJobOpen?"rgba(88,166,255,.10)":ri%2===0?"transparent":"rgba(255,255,255,0.025)";
+                return(
+                  <div key={charterer}
+                    onClick={()=>setExpandedJob(isJobOpen?null:charterer)}
+                    style={{display:"flex",alignItems:"center",gap:8,padding:"12px 12px",background:rowBg,cursor:"pointer",
+                      borderLeft:glowCol&&!isJobOpen?"3px solid "+glowCol+"99":"3px solid transparent",
+                      borderBottom:"1px solid rgba(58,130,246,0.07)"}}>
+                    {glowCol&&<span style={{width:6,height:6,borderRadius:"50%",background:glowCol,flexShrink:0}}/>}
+                    <span style={{flex:1,fontSize:13,fontWeight:600,color:isJobOpen?"#79c0ff":"rgba(200,220,255,0.85)"}}>{charterer||"—"}</span>
+                    <span style={{fontSize:11,color:C.faint,fontWeight:600}}>{total} cargo{total!==1?"es":""}</span>
+                    <span style={{fontSize:11,color:isJobOpen?"#58a6ff":"rgba(120,160,220,0.4)"}}>{isJobOpen?"▲":"▼"}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {clientViewMode==="list"&&!mobile&&(
             <div style={{border:"1px solid rgba(58,130,246,0.18)",borderRadius:7,overflow:"hidden",marginBottom:2,background:"rgba(7,15,28,0.96)"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                 <thead>
@@ -1092,7 +1136,61 @@ function FixingTab({vessels}){
                         function handleSyncToggle(expanded, savedH, expandedH){
                           setJobExpandStates(prev=>({...prev,[job.id]:{expanded,savedH,expandedH,key:Date.now()+""}}));
                         }
-                        return(
+                        return mobile ? (
+                          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                            {client && (
+                              <MobileCollapse title="👤 Client Notes" color="#c792ea">
+                                <RichEditor
+                                  jobId={"client-"+client.id} field="clientnotes"
+                                  title="" value={client.notes||""}
+                                  placeholder="Client notes…"
+                                  height={140}
+                                  alwaysExpanded={true}
+                                  onChange={val=>updateClient(client.id,{notes:val})}
+                                  onResizeSave={h=>updateClient(client.id,{notes_height:h})}/>
+                              </MobileCollapse>
+                            )}
+                            <div>
+                              <RichEditor jobId={job.id} field="cargo_details" title="Cargo"
+                                value={job.cargo_details||""} placeholder="Cargo details…"
+                                height={80}
+                                onChange={val=>updateJob(job.id,{cargo_details:val})}
+                                onResizeSave={h=>updateJobHeight(job.id,"cargo_details",h)}/>
+                            </div>
+                            <div style={{display:"flex",gap:8,alignItems:"stretch"}}>
+                              <div style={{flex:1,minWidth:0}}>
+                                <RichEditor jobId={job.id} field="notes" title="Guidance"
+                                  value={job.notes||""} placeholder="Notes & guidance…"
+                                  height={160}
+                                  onChange={val=>updateJob(job.id,{notes:val})}
+                                  onResizeSave={h=>updateJobHeight(job.id,"notes",h)}/>
+                              </div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <RichEditor jobId={job.id} field="indications" title="Indications"
+                                  value={job.indications||""} placeholder="Indications…"
+                                  height={160}
+                                  onChange={val=>updateJob(job.id,{indications:val})}
+                                  onResizeSave={h=>updateJobHeight(job.id,"indications",h)}/>
+                              </div>
+                            </div>
+                            <div style={{borderTop:"1px solid "+C.bd2,paddingTop:8}}>
+                              <RichEditor jobId={job.id} field="subs_fixed"
+                                title={job.status==="FIXED"?"✓ Fixed":job.status==="SUBS"?"On Subs":"Subs / Fixed"}
+                                titleRight={
+                                  <div style={{display:"flex",alignItems:"center",gap:3,flexWrap:"wrap"}}>
+                                    {JOB_STATUS.map(s=>(
+                                      <button key={s} onClick={()=>updateJob(job.id,{status:s})}
+                                        style={{fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,border:"1px solid "+(job.status===s?JOB_STATUS_COL[s]:C.bd),background:job.status===s?JOB_STATUS_COL[s]+"33":"transparent",color:job.status===s?JOB_STATUS_COL[s]:C.faint,cursor:"pointer",fontFamily:"inherit"}}>{s}</button>
+                                    ))}
+                                  </div>
+                                }
+                                value={job.subs_fixed||""} placeholder="Subs / fixed…"
+                                height={job.ui_heights?.subs_fixed||100}
+                                onChange={val=>updateJob(job.id,{subs_fixed:val})}
+                                onResizeSave={h=>updateJobHeight(job.id,"subs_fixed",h)}/>
+                            </div>
+                          </div>
+                        ) : (
                       <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
                         {/* Left column: top 3 editors + subs/fixed below */}
                         <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:8}}>
