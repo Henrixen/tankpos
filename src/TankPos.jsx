@@ -2,12 +2,11 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabaseclient";
 import { isMobile } from "./constants";
-import { enrichV, normaliseCargo, mergeVessels, toISODate, dbLookup } from "./utils";
+import { enrichV, normaliseCargo, mergeVessels, toISODate } from "./utils";
 import { saveV, saveSnapshot, loadHistory } from "./supabaseHelpers";
 import { v4 as uuidv4 } from 'uuid';
 import DesktopApp from "./DesktopApp";
 import { fetchWithCache } from "./offlineCache";
-import OfflineIndicator from "./OfflineIndicator";
 
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
@@ -29,12 +28,10 @@ export default function TankPos(){
     setVesselDBLoading(true);
     let allRows = [];
     let from = 0;
-    let hadError = false;
     const pageSize = 1000;
     while(true){
-      const {data, error} = await supabase.from("vessels_db").select("vessel,imo,dwt,built,loa,beam,cbm,coating,ice_class,fuel_type,operator").range(from, from+pageSize-1);
-      if(error){ console.error("loadVesselDB error:", error); hadError = true; break; }
-      if(!data || data.length === 0) break;
+      const {data, error} = await supabase.from("vessels_db").select("vessel,imo,dwt,built,loa,beam,cbm,coating,ice_class,fuel,operator").range(from, from+pageSize-1);
+      if(error || !data || data.length === 0) break;
       allRows = [...allRows, ...data];
       if(data.length < pageSize) break;
       from += pageSize;
@@ -48,11 +45,9 @@ export default function TankPos(){
     setVesselDB(map);
     window.vesselDB = map;
     window.vesselDBByIMO = imoMap;
-    // Only mark as loaded on genuine success — a failed fetch shouldn't
-    // permanently block retries (loadVesselDB no-ops once vesselDBLoaded is true).
-    setVesselDBLoaded(!hadError);
+    setVesselDBLoaded(true);
     setVesselDBLoading(false);
-    console.log("vesselDB loaded on demand:", allRows.length, hadError?"(with errors)":"");
+    console.log("vesselDB loaded on demand:", allRows.length);
   }
 
   function onCargoSearch(term){
@@ -266,33 +261,6 @@ export default function TankPos(){
     };
   }));
 
-  // positions_latest (the view) is a UNION of manual `positions` and the
-  // external feed. For manually-entered rows it never exposes the real
-  // `coating` column (only external-only coating_type_1/2, hardcoded NULL
-  // for manual rows) and doesn't select tag/entered_by at all — so those
-  // fields would silently vanish on every refetch after a paste, even
-  // though they're saved correctly. Pull them straight from the raw table
-  // instead, same pattern as the vessel_overrides merge below.
-  try {
-    const { data: rawRows } = await supabase.from("positions").select("imo_no,vessel_name,coating,tag,entered_by");
-    if (rawRows && rawRows.length) {
-      const byImo2 = {}, byName2 = {};
-      rawRows.forEach(o => {
-        if (o.imo_no) byImo2[String(o.imo_no)] = o;
-        if (o.vessel_name) byName2[String(o.vessel_name).toUpperCase()] = o;
-      });
-      setVessels(prev => prev.map(v => {
-        const o = (v.imoNo && byImo2[v.imoNo]) || byName2[v.vessel];
-        if (!o) return v;
-        const merged = { ...v };
-        if (o.coating != null && o.coating !== "") merged.coating = o.coating;
-        if (o.tag != null) merged.tag = o.tag;
-        if (o.entered_by != null) merged.entered_by = o.entered_by;
-        return merged;
-      }));
-    }
-  } catch (e) { console.error("raw positions coating/tag merge:", e); }
-
   // Merge in vessel_overrides — manual edits (notes + spec) win over CSV/feed, per field
   try {
     const { data: ovRows } = await supabase.from("vessel_overrides")
@@ -444,17 +412,6 @@ export default function TankPos(){
   },[]);
 
   const addVessels = useCallback(async (parsed) => {
-    // If a paste happens before the on-mount vesselDB load has finished,
-    // window.vesselDB can still be empty here — enrichment then silently
-    // fails and null specs get saved permanently. Wait for it rather than
-    // hoping it's already ready (loadVesselDB no-ops if already loaded/loading).
-    if(!vesselDBLoaded){
-      await loadVesselDB();
-      // loadVesselDB no-ops if a load was already in-flight from elsewhere;
-      // give that in-flight load a moment to finish rather than proceeding blind.
-      let waited=0;
-      while(!window.vesselDB && waited<5000){ await new Promise(res=>setTimeout(res,200)); waited+=200; }
-    }
     const vdb = window.vesselDB || vesselDB;
     const nowIso = new Date().toISOString();
     let r = { added: 0, updated: 0, total: 0 };
@@ -489,12 +446,9 @@ export default function TankPos(){
     const rows = parsed.map(v => {
       const ev = enrichV(v, vdb);
       
-      // Spec data is already in v.spec from ParsePanel OR look it up in vesselDB.
-      // Uses the same fuzzy dbLookup enrichV uses internally (not a plain exact
-      // bracket lookup) — otherwise dwt/built/etc can succeed via enrichV's own
-      // fuzzy match while this separate lookup fails on the same vessel due to
-      // a minor name formatting difference, silently dropping coating/spec.
-      const dbVessel = dbLookup(ev.vessel, vdb);
+      // Spec data is already in v.spec from ParsePanel OR look it up in vesselDB
+      const vesselKey = ev.vessel?.toUpperCase();
+      const dbVessel = vdb[vesselKey?.toLowerCase()];
       
       // Priority: use spec from parsed object first, then fallback to vesselDB
       const spec = v.spec || (dbVessel ? {
@@ -507,7 +461,7 @@ export default function TankPos(){
       
       return {
   id: uuidv4(),
-  vessel_name: (ev.vessel||"").toUpperCase().trim().replace(/\s+/g," "),
+  vessel_name: ev.vessel,
   operator: ev.operator || null,
   port_name: ev.openPort || null,
   open_date: ev.date || null,
@@ -533,14 +487,14 @@ export default function TankPos(){
     else console.log("positions saved ok:", rows.length, "rows");
     
     return r;
-  }, [vesselDB, vesselDBLoaded, saveV, saveSnapshot]);
+  }, [vesselDB, saveV, saveSnapshot]);
 
   const addCargoes=useCallback(async(parsed)=>{
     const editorC=localStorage.getItem("signal_user")||"H";
     const stamped=parsed.map((f,i)=>({...normaliseCargo({
       ...f,
       id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
-      updated: f.updated||new Date().toISOString(),
+      updated: new Date().toISOString(),
     }),entered_by:editorC,added:f.added||new Date().toISOString(),changed:null}));
     // Dedup by id and by charterer+load+disch+from
     let added=0;
@@ -628,7 +582,6 @@ export default function TankPos(){
   const props={vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
   return (
     <>
-      <OfflineIndicator cacheKey="positions" />
       <DesktopApp {...props}/>
     </>
   );
