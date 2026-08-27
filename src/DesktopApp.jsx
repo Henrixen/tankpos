@@ -725,6 +725,26 @@ function FilterRowWrap({label,col,children}){
 // Two-tab panel wrapper (used for Fixing Window History/Open-Segments and
 // AIS Map/Regional Snapshot) — frees up horizontal space by combining what
 // used to be two separate side-by-side boxes into one.
+// One-line tappable header that expands to full content below it — used to
+// give mobile access to sections (Parse, Filters, Fixing Window, Map) that
+// are normally laid out side-by-side on desktop but don't fit that way on a
+// phone/iPad width.
+function MobileCollapse({ title, color="#58a6ff", defaultOpen=false, children }){
+  const [open, setOpen] = React.useState(defaultOpen);
+  return (
+    <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:7, overflow:"hidden" }}>
+      <button onClick={()=>setOpen(o=>!o)}
+        style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between",
+          padding:"10px 12px", background:"transparent", border:"none", cursor:"pointer", fontFamily:"inherit",
+          minHeight:44, boxSizing:"border-box" }}>
+        <span style={{ fontSize:13, fontWeight:700, color }}>{title}</span>
+        <span style={{ fontSize:12, color:C.faint }}>{open?"▾":"▸"}</span>
+      </button>
+      {open && <div style={{ padding:"0 10px 10px" }}>{children}</div>}
+    </div>
+  );
+}
+
 function TabbedPanel({tabs,active,onChange,height=460,children}){
   const fillParent = height==="100%";
   return (
@@ -1068,6 +1088,32 @@ function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
       )}
     </>
   );
+}
+
+// Catches render errors in tab content so a crash in one tab (e.g. a
+// component suspending unexpectedly) shows a recoverable message instead of
+// taking the whole app down to a black screen.
+class TabErrorBoundary extends React.Component {
+  constructor(props){ super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error){ return { error }; }
+  componentDidCatch(error, info){ console.error("Tab render error:", error, info); }
+  render(){
+    if (this.state.error) {
+      return (
+        <div style={{ padding:40, textAlign:"center", color:C.dim }}>
+          <div style={{ fontSize:14, marginBottom:10 }}>⚠ Something went wrong rendering this tab.</div>
+          <div style={{ fontSize:12, color:C.faint, marginBottom:16 }}>{String(this.state.error?.message||this.state.error)}</div>
+          <button onClick={()=>this.setState({error:null})}
+            style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer",
+              border:"1px solid "+C.bd, background:C.bg2, color:C.tx, fontFamily:"inherit" }}>
+            Try again
+          </button>
+          <span style={{ marginLeft:8, fontSize:12, color:C.faint }}>or reload the page if this keeps happening</span>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
@@ -1682,6 +1728,25 @@ const filtV=useMemo(()=>{
   { key: "delete", label: "", align: "center", width: 24 },
 ];
 
+  // Mobile-specific columns: fixed (not user-resizable) widths so the sticky
+  // offsets below are reliable, LOA/Beam/CBM dropped to save width — those
+  // are the columns Haakon uses least for a quick scan on a phone.
+  const MOBILE_SELECT_W = 32, MOBILE_OPERATOR_W = 84, MOBILE_VESSEL_W = 112;
+  const posColumnsMobile = [
+    posColumns[0], // select — width 32, matches MOBILE_SELECT_W
+    { key:"operator", sortKey:"operator", label:"Operator", width:MOBILE_OPERATOR_W },
+    { key:"vessel",   sortKey:"vessel",   label:"Vessel",   width:MOBILE_VESSEL_W },
+    { key:"ais",      label:"",           align:"center",   width:16 },
+    { key:"built",    sortKey:"built",    label:"Built",    align:"left", width:44 },
+    { key:"dwt",      sortKey:"dwt",      label:"DWT",      align:"left", width:56 },
+    { key:"coating",  sortKey:"coating",  label:"Coat",     width:52 },
+    { key:"date",     sortKey:"date",     label:"Date",     align:"center", width:52 },
+    { key:"openPort", sortKey:"openPort", label:"Port",     width:96 },
+    { key:"comment",  sortKey:"comment",  label:"Comment",  width:110 },
+    { key:"tag",      label:"Tag",        align:"center",   width:60 },
+    { key:"delete",   label:"",           align:"center",   width:24 },
+  ];
+
   // Reset page when filters change
   useEffect(()=>{setPosPage(1);},[vessels,filters,search,sortK,opFilter,bucketFilters,updFilter,posFileDaysBack,superRegionFilter]);
 
@@ -1936,14 +2001,15 @@ const filtV=useMemo(()=>{
           ].filter(([id])=>!guestMode||GUEST_TABS.includes(id)).map(([id,label,count,col])=>{
             const active=tab===id;
             return(
-              <button key={id} onClick={()=>{setTab(id);setBucketFilters(new Set());}}
-                style={{position:"relative",display:"flex",alignItems:"center",gap:6,
-                  padding:mobile?"12px 12px":"10px 16px",
+              <button key={id} onClick={()=>{React.startTransition(()=>{setTab(id);setBucketFilters(new Set());});}}
+                style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+                  padding:mobile?"0 12px":"10px 16px",
                   background:"transparent",border:"none",
                   borderBottom:"2px solid "+(active?col:"transparent"),
                   cursor:"pointer",fontFamily:"inherit",flexShrink:0,
                   transition:"border-color 0.15s,color 0.15s",marginBottom:-1,
-                  minHeight:mobile?44:undefined,
+                  height:mobile?44:undefined,
+                  boxSizing:"border-box",
                   WebkitTapHighlightColor:"transparent",
                 }}>
                 <span style={{fontSize:mobile?13:12,fontWeight:active?700:500,
@@ -1966,6 +2032,7 @@ const filtV=useMemo(()=>{
         </div>
       </div>
       <div style={{padding:mobile?"8px 8px":"12px 20px",maxWidth:1900,margin:"0 auto"}}>
+      <TabErrorBoundary>
 
         {/* ── POSITIONS ── */}
         {tab==="pos"&&(
@@ -1990,8 +2057,9 @@ const filtV=useMemo(()=>{
               <Suspense fallback={<div style={{fontSize:12,color:C.faint}}>Loading…</div>}><OutsidersTab/></Suspense>
             ) : (
             <>
-          
-            {/* ── Top row: Perfect grid ── */}
+
+            {/* ── Top row: Perfect grid (desktop) ── */}
+            {!mobile && (
             <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
               
               {/* LEFT: Parse + Fixing (32%) */}
@@ -2164,6 +2232,121 @@ const filtV=useMemo(()=>{
   </div>
 )}
  </div>
+            )}
+
+            {/* ── Mobile: same sections, collapsed into one-line tappable bars ── */}
+            {mobile && (
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                <MobileCollapse title="📋 Paste positions" color="#58a6ff">
+                  <ParsePanel
+                    vessels={vessels}
+                    onAddVessels={onAddVessels}
+                    onAddCargoes={onAddCargoes}
+                    lockedMode="pos"
+                    vesselDB={{}}
+                  />
+                </MobileCollapse>
+
+                <MobileCollapse title="📈 Fixing Window / Segments" color="#c792ea">
+                  <div style={{ height:340, position:"relative" }}>
+                    <TabbedPanel tabs={["History","Open Segments"]} active={fixingPanelTab} onChange={setFixingPanelTab} height="100%">
+                      {fixingPanelTab==="History" ? (
+                        <>
+                          <style>{`
+                            div[class*="fix"] div[style*="height"][style*="background"],
+                            div[class*="Fix"] div[style*="height"][style*="background"],
+                            div[class*="window"] div[style*="height"][style*="background"],
+                            div[class*="Window"] div[style*="height"][style*="background"] {
+                              filter: saturate(2) brightness(1.3) !important;
+                              opacity: 1 !important;
+                            }
+                          `}</style>
+                          <Suspense fallback={null}><FixingWindowChart
+                            vessels={filtV}
+                            filterActive={filtV.length !== vessels.length}
+                            tagFilter={cTagFilter||null}
+                          /></Suspense>
+                        </>
+                      ) : (
+                        <Suspense fallback={null}><OpeningBreakdown
+                          vessels={vessels14d.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+                          filteredVessels={filtV.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+                          bucketFilters={bucketFilters}
+                          onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
+                          fillHeight={true}
+                        /></Suspense>
+                      )}
+                    </TabbedPanel>
+                  </div>
+                </MobileCollapse>
+
+                <MobileCollapse title="🏷️ Tags & Filters" color="#f5a623">
+                  <HScrollStyle/>
+                  {(opFilter||bucketFilters.size>0)&&(
+                    <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
+                      {opFilter&&(
+                        <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:"rgba(79,195,247,0.08)",border:"1px solid rgba(79,195,247,0.25)",borderRadius:5}}>
+                          <span style={{fontSize:12,color:C.blue,fontWeight:700}}>🔍 Filtered: {opFilter}</span>
+                          <button onClick={()=>setOpFilter(null)} style={{background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:12,padding:"0 2px"}}>✕ Clear</button>
+                        </div>
+                      )}
+                      {bucketFilters.size>0&&(
+                        <div style={{fontSize:12,color:C.blue,cursor:"pointer"}} onClick={()=>setBucketFilters(new Set())}>
+                          ✕ Clear segment filter ({[...bucketFilters].join(", ")})
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {(()=>{
+                    const B=({active,onClick,children})=>(
+                      <button onClick={onClick} style={{...fb(active),padding:"6px 10px",fontSize:12}}>{children}</button>
+                    );
+                    return (
+                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                        <COL label="Tags" col="#79c0ff">
+                          {(()=>{const used=[...new Set(vessels.map(v=>(v.tag||"").trim()).filter(Boolean))].sort();return used.length?used.map(t=>(<B key={t} active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t.toUpperCase()}</B>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>none</span>;})()}
+                          {posTagFilter.size>0&&<B active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
+                        </COL>
+                        <COL label="Status" col={C.amber}>
+                          {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
+                          {filters.size>0&&<B active={false} onClick={()=>setFilters(new Set())}><span style={{color:C.red}}>✕ Clear</span></B>}
+                        </COL>
+                        <COL label="Region" col="#7dd3fc">
+                          {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
+                        </COL>
+                        <COL label="S.Region" col={C.purple}>
+                          {superRegionOptions.filter(r=>r!=="ALL").map(r=>{
+                            const toggle=()=>setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));
+                            return <B key={r} active={superRegionFilter.has(r)} onClick={toggle}>{r}</B>;
+                          })}
+                          {superRegionFilter.size>0&&<B active={false} onClick={()=>setSuperRegionFilter(new Set())}><span style={{color:C.red}}>✕</span></B>}
+                        </COL>
+                        <COL label="Segment" col={C.green}>
+                          {(()=>{const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];return[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort((a,b)=>(ORDER.indexOf(a)===-1?99:ORDER.indexOf(a))-(ORDER.indexOf(b)===-1?99:ORDER.indexOf(b))).map(s=>(<B key={s} active={segmentFilter.has(s)} onClick={()=>{setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));setPosPage(1);}}>{s}</B>));})()}
+                          {segmentFilter.size>0&&<B active={false} onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
+                        </COL>
+                        <COL label="Inter UKC / Saved" col="#4fc3f7">
+                          <B active={interUKCActive} onClick={()=>{setInterUKCActive(v=>!v);setPosPage(1);}}>Inter UKC</B>
+                          <B active={showSavedOnly} onClick={()=>setShowSavedOnly(v=>!v)}>Saved ({savedVessels.size}) ★</B>
+                        </COL>
+                        <COL label="DWT" col="#f59e0b">
+                          {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<B key={v} active={dwtFilter.has(v)} onClick={()=>{setDwtFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
+                        </COL>
+                        <COL label="Built" col="#94a3b8">
+                          {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<B key={v} active={builtFilter.has(v)} onClick={()=>{setBuiltFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
+                        </COL>
+                      </div>
+                    );
+                  })()}
+                </MobileCollapse>
+
+                <MobileCollapse title="🗺️ AIS Map" color="#4ade80">
+                  <div style={{ height:340, position:"relative" }}>
+                    <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels} onAisVesselsChange={setAisVesselSet}/></Suspense>
+                  </div>
+                </MobileCollapse>
+              </div>
+            )}
             {vessels.length > 0 && (
               <>
                 {/* MOVED: Fleet count + Export + Search to same row */}
@@ -2193,7 +2376,7 @@ const filtV=useMemo(()=>{
                     {showAddVessel?"✕ Cancel":"+ Add vessel"}
                   </button>
                   {selVessels.size>0&&(
-                    <button onClick={()=>setTab("reports")} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                    <button onClick={()=>React.startTransition(()=>setTab("reports"))} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                       📋 To Report ({selVessels.size})
                     </button>
                   )}
@@ -2253,7 +2436,7 @@ const filtV=useMemo(()=>{
                       .pos-table td, .pos-table td>*{overflow:visible!important;text-overflow:unset!important;white-space:nowrap!important;max-width:none!important;}
                     `}</style>}
                     <MatrixTable
-  columns={posColumns}
+  columns={mobile ? posColumnsMobile : posColumns}
   data={filtV.slice(0, posPage * POS_PAGE_SIZE)}
   keyField="vessel"
   selectedKey={sel}
@@ -2278,7 +2461,8 @@ const filtV=useMemo(()=>{
     <>
       {/* SELECT */}
       <td
-        style={{ ...tdCtr, width: 28, padding: "0 2px" }}
+        style={{ ...tdCtr, width: 28, padding: "0 2px",
+          ...(mobile ? { position:"sticky", left:0, zIndex:3, background:C.bg } : {}) }}
         onClick={e => {
           e.stopPropagation();
           setSelVessels(p => {
@@ -2288,7 +2472,7 @@ const filtV=useMemo(()=>{
           });
         }}
       >
-        <span style={{ fontSize: 12, color: selVessels.has(v.vessel) ? "#4fc3f7" : C.faint }}>
+        <span style={{ fontSize: mobile?16:12, color: selVessels.has(v.vessel) ? "#4fc3f7" : C.faint }}>
           {selVessels.has(v.vessel) ? "[✓]" : "[ ]"}
         </span>
       </td>
@@ -2304,7 +2488,7 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i-1, "comment")}
   onDown={() => focusCell(i+1, "operator")}
   onUp={() => focusCell(i-1, "operator")}
-  style={mobile?{minWidth:120,whiteSpace:"nowrap"}:undefined}
+  style={mobile?{minWidth:MOBILE_OPERATOR_W,maxWidth:MOBILE_OPERATOR_W,whiteSpace:"nowrap",position:"sticky",left:MOBILE_SELECT_W,zIndex:3,background:C.bg}:undefined}
 />
 
       {/* VESSEL */}
@@ -2319,7 +2503,7 @@ const filtV=useMemo(()=>{
         onShiftTab={() => focusCell(i, "operator")}
         onDown={() => focusCell(i+1, "vessel")}
         onUp={() => focusCell(i-1, "vessel")}
-        style={mobile?{minWidth:130,whiteSpace:"nowrap"}:undefined}
+        style={mobile?{minWidth:MOBILE_VESSEL_W,maxWidth:MOBILE_VESSEL_W,whiteSpace:"nowrap",position:"sticky",left:MOBILE_SELECT_W+MOBILE_OPERATOR_W,zIndex:3,background:C.bg,boxShadow:"2px 0 4px rgba(0,0,0,0.3)"}:undefined}
       />
 
       <td style={{padding:"2px 3px",textAlign:"center",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)"}} title={aisVesselSet.has((v.vessel||"").toUpperCase().trim())?"AIS data available":"No AIS data"}>
@@ -2330,9 +2514,9 @@ const filtV=useMemo(()=>{
       <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.built || ""}</td>
       <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtDwtFull(v.dwt)}</td>
       <td style={{ ...tdTxt, color: C.dim }} title={v.coating||""}>{fmtCoating(v.coating)}</td>
-      <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.loa || ""}</td>
-      <td style={{ ...tdNum, color: C.dim }}>{v.beam || ""}</td>
-      <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtN(v.cbm)}</td>
+      {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.loa || ""}</td>}
+      {!mobile && <td style={{ ...tdNum, color: C.dim }}>{v.beam || ""}</td>}
+      {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtN(v.cbm)}</td>}
 
       {/* DATE */}
       <EC
@@ -2685,7 +2869,7 @@ const filtV=useMemo(()=>{
                 }}
               /></Suspense>
               {selCargoes.size>0&&(
-                <button onClick={()=>setTab("reports")} style={{fontSize:11,fontWeight:600,padding:"2px 9px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                <button onClick={()=>React.startTransition(()=>setTab("reports"))} style={{fontSize:11,fontWeight:600,padding:"2px 9px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                   📋 To Report ({selCargoes.size})
                 </button>
               )}
@@ -3101,6 +3285,7 @@ const filtV=useMemo(()=>{
         )}
         {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={Array.from(selCargoes)}/></Suspense></div>}
         {tab==="map"&&<Suspense fallback={<TabFallback/>}><FreightMapTab/></Suspense>}
+      </TabErrorBoundary>
       </div>
 
       {/* Vessel Popout — also feeds the AIS map so clicking a vessel shows its route */}
