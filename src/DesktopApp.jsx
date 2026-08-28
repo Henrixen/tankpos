@@ -733,7 +733,7 @@ function MobileCollapse({ title, color="#58a6ff", defaultOpen=false, children })
   const [open, setOpen] = React.useState(defaultOpen);
   return (
     <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:7, overflow:"hidden" }}>
-      <button onClick={()=>setOpen(o=>!o)}
+      <button onClick={()=>React.startTransition(()=>setOpen(o=>!o))}
         style={{ width:"100%", display:"flex", alignItems:"center", gap:8, justifyContent:"space-between",
           padding:"10px 12px", background:"transparent", border:"none", cursor:"pointer", fontFamily:"inherit",
           minHeight:44, boxSizing:"border-box" }}>
@@ -1760,20 +1760,20 @@ const filtV=useMemo(()=>{
   // Mobile-specific columns: fixed (not user-resizable) widths so the sticky
   // offsets below are reliable, LOA/Beam/CBM dropped to save width — those
   // are the columns Haakon uses least for a quick scan on a phone.
-  const MOBILE_SELECT_W = 20, MOBILE_OPERATOR_W = 60, MOBILE_VESSEL_W = 78;
+  const MOBILE_SELECT_W = 18, MOBILE_OPERATOR_W = 46, MOBILE_VESSEL_W = 64;
   const posColumnsMobile = [
-    posColumns[0], // select — width 32, matches MOBILE_SELECT_W
+    { ...posColumns[0], width: MOBILE_SELECT_W },
     { key:"operator", sortKey:"operator", label:"Operator", width:MOBILE_OPERATOR_W },
     { key:"vessel",   sortKey:"vessel",   label:"Vessel",   width:MOBILE_VESSEL_W },
-    { key:"ais",      label:"",           align:"center",  width:14 },
-    { key:"built",    sortKey:"built",    label:"Blt",     align:"left", width:36 },
-    { key:"dwt",      sortKey:"dwt",      label:"DWT",     align:"left", width:48 },
-    { key:"coating",  sortKey:"coating",  label:"Coat",    width:44 },
-    { key:"date",     sortKey:"date",     label:"Date",    align:"center", width:44 },
-    { key:"openPort", sortKey:"openPort", label:"Port",    width:80 },
-    { key:"comment",  sortKey:"comment",  label:"Comment", width:90 },
-    { key:"tag",      label:"Tag",        align:"center",  width:50 },
-    { key:"delete",   label:"",           align:"center",  width:22 },
+    { key:"ais",      label:"",           align:"center",  width:10 },
+    { key:"built",    sortKey:"built",    label:"Blt",     align:"left", width:30 },
+    { key:"dwt",      sortKey:"dwt",      label:"DWT",     align:"left", width:40 },
+    { key:"coating",  sortKey:"coating",  label:"Coat",    width:36 },
+    { key:"date",     sortKey:"date",     label:"Date",    align:"center", width:36 },
+    { key:"openPort", sortKey:"openPort", label:"Port",    width:64 },
+    { key:"comment",  sortKey:"comment",  label:"Comment", width:70 },
+    { key:"tag",      label:"Tag",        align:"center",  width:40 },
+    { key:"delete",   label:"",           align:"center",  width:18 },
   ];
 
   // Reset page when filters change
@@ -2075,17 +2075,17 @@ const filtV=useMemo(()=>{
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
 
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>setPosOutsiderView(false)}
+              <button onClick={()=>React.startTransition(()=>setPosOutsiderView(false))}
                 style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer", fontFamily:"inherit",
                   border:"1px solid "+(!posOutsiderView?"#58a6ff88":C.bd), background:!posOutsiderView?"#58a6ff22":"transparent",
                   color:!posOutsiderView?"#58a6ff":C.faint }}>
                 Positions
               </button>
-              <button onClick={()=>setPosOutsiderView(true)}
+              <button onClick={()=>React.startTransition(()=>setPosOutsiderView(true))}
                 style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer", fontFamily:"inherit",
                   border:"1px solid "+(posOutsiderView?"#f5a62388":C.bd), background:posOutsiderView?"#f5a62322":"transparent",
                   color:posOutsiderView?"#f5a623":C.faint }}>
-                🌏 Outsiders
+                Outsiders
               </button>
             </div>
 
@@ -2497,7 +2497,7 @@ const filtV=useMemo(()=>{
     <>
       {/* SELECT */}
       <td
-        style={{ ...tdCtr, width: 28, padding: "0 2px" }}
+        style={{ ...tdCtr, width: mobile?MOBILE_SELECT_W:28, maxWidth: mobile?MOBILE_SELECT_W:28, padding: "0 1px" }}
         onClick={e => {
           e.stopPropagation();
           setSelVessels(p => {
@@ -2507,7 +2507,7 @@ const filtV=useMemo(()=>{
           });
         }}
       >
-        <span style={{ fontSize: mobile?16:12, color: selVessels.has(v.vessel) ? "#4fc3f7" : C.faint }}>
+        <span style={{ fontSize: mobile?14:12, color: selVessels.has(v.vessel) ? "#4fc3f7" : C.faint }}>
           {selVessels.has(v.vessel) ? "[✓]" : "[ ]"}
         </span>
       </td>
@@ -2523,7 +2523,7 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i-1, "comment")}
   onDown={() => focusCell(i+1, "operator")}
   onUp={() => focusCell(i-1, "operator")}
-  style={mobile?{minWidth:MOBILE_OPERATOR_W,maxWidth:MOBILE_OPERATOR_W,whiteSpace:"nowrap"}:undefined}
+  style={mobile?{minWidth:MOBILE_OPERATOR_W,maxWidth:MOBILE_OPERATOR_W,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",borderBottom:"1px solid rgba(255,255,255,0.035)"}:undefined}
 />
 
       {/* VESSEL */}
@@ -2538,7 +2538,7 @@ const filtV=useMemo(()=>{
         onShiftTab={() => focusCell(i, "operator")}
         onDown={() => focusCell(i+1, "vessel")}
         onUp={() => focusCell(i-1, "vessel")}
-        style={mobile?{minWidth:MOBILE_VESSEL_W,maxWidth:MOBILE_VESSEL_W,whiteSpace:"nowrap"}:undefined}
+        style={mobile?{minWidth:MOBILE_VESSEL_W,maxWidth:MOBILE_VESSEL_W,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",borderBottom:"1px solid rgba(255,255,255,0.035)"}:undefined}
       />
 
       <td style={{padding:"2px 3px",textAlign:"center",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)"}} title={aisVesselSet.has((v.vessel||"").toUpperCase().trim())?"AIS data available":"No AIS data"}>
@@ -2546,9 +2546,9 @@ const filtV=useMemo(()=>{
           background:aisVesselSet.has((v.vessel||"").toUpperCase().trim())?"#4ade80":"rgba(120,160,220,0.15)"}}/>
       </td>
 
-      <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.built || ""}</td>
-      <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtDwtFull(v.dwt)}</td>
-      <td style={{ ...tdTxt, color: C.dim }} title={v.coating||""}>{fmtCoating(v.coating)}</td>
+      <td style={{ ...tdNum, textAlign:"left", color: C.dim, ...(mobile?{maxWidth:30,overflow:"hidden"}:{}) }}>{v.built || ""}</td>
+      <td style={{ ...tdNum, textAlign:"left", color: C.dim, ...(mobile?{maxWidth:40,overflow:"hidden"}:{}) }}>{fmtDwtFull(v.dwt)}</td>
+      <td style={{ ...tdTxt, color: C.dim, ...(mobile?{maxWidth:36,overflow:"hidden"}:{}) }} title={v.coating||""}>{fmtCoating(v.coating)}</td>
       {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.loa || ""}</td>}
       {!mobile && <td style={{ ...tdNum, color: C.dim }}>{v.beam || ""}</td>}
       {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtN(v.cbm)}</td>}
@@ -2579,6 +2579,7 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i, "vessel")}
   onDown={() => focusCell(i+1, "date")}
   onUp={() => focusCell(i-1, "date")}
+  style={mobile?{borderBottom:"1px solid rgba(255,255,255,0.035)"}:undefined}
 />
       {/* PORT */}
       <EC
@@ -2591,6 +2592,7 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i, "date")}
   onDown={() => focusCell(i+1, "port")}
   onUp={() => focusCell(i-1, "port")}
+  style={mobile?{borderBottom:"1px solid rgba(255,255,255,0.035)"}:undefined}
 />
 
       {/* COMMENT */}
@@ -2604,6 +2606,7 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i, "port")}
   onDown={() => focusCell(i+1, "comment")}
   onUp={() => focusCell(i-1, "comment")}
+  style={mobile?{borderBottom:"1px solid rgba(255,255,255,0.035)"}:undefined}
 />
 
       {/* UPDATED */}
