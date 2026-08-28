@@ -42,7 +42,7 @@ function MobileCollapse({ title, color="#58a6ff", defaultOpen=false, children })
   const [open, setOpen] = React.useState(defaultOpen);
   return (
     <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:7, overflow:"hidden" }}>
-      <button onClick={()=>setOpen(o=>!o)}
+      <button onClick={()=>React.startTransition(()=>setOpen(o=>!o))}
         style={{ width:"100%", display:"flex", alignItems:"center", gap:8, justifyContent:"space-between",
           padding:"10px 12px", background:"transparent", border:"none", cursor:"pointer", fontFamily:"inherit",
           minHeight:44, boxSizing:"border-box" }}>
@@ -557,7 +557,7 @@ function MultiSelectDropdown({options,selected,onChange,placeholder,color}){
         <span style={{fontSize:9,flexShrink:0,color:"rgba(120,160,220,0.4)"}}>▾</span>
       </div>
       {open&&(
-        <div style={{position:"absolute",top:"100%",left:0,zIndex:9999,background:C.bg2,border:"1px solid rgba(88,166,255,0.3)",borderRadius:5,padding:"4px 0",minWidth:"100%",boxShadow:"0 6px 20px rgba(0,0,0,0.6)",maxHeight:200,overflowY:"auto"}}>
+        <div style={{position:"absolute",top:"100%",left:0,zIndex:9999,background:C.bg2,border:"1px solid rgba(88,166,255,0.3)",borderRadius:5,padding:"4px 0",minWidth:"100%",boxShadow:"0 6px 20px rgba(0,0,0,0.6)"}}>
           {options.map(o=>(
             <label key={o} style={{display:"flex",alignItems:"center",gap:6,padding:"3px 8px",cursor:"pointer",color:sel.includes(o)?color:"rgba(180,210,255,0.65)",fontSize:11,userSelect:"none"}}
               onClick={e=>e.stopPropagation()}>
@@ -624,6 +624,7 @@ function FixingTab({vessels}){
   const [editingClient,setEditingClient]=useState(null);
   const [showNewClient,setShowNewClient]=useState(false);
   const [showOwnerDir,setShowOwnerDir]=useState(false);
+  const [expandedOwnerId,setExpandedOwnerId]=useState(null);
   const [statusFilter,setStatusFilter]=useState("ALL");
   const [clientFilter,setClientFilter]=useState("ALL");
   const [newClient,setNewClient]=useState({id:"",name:"",coverage:"",notes:""});
@@ -1351,48 +1352,49 @@ function FixingTab({vessels}){
                 }).sort((a,b)=>(a.company||"").localeCompare(b.company||""));
                 if(!filtered.length)return <div style={{fontSize:11,color:C.faint,fontStyle:"italic"}}>No entries.</div>;
                 return(
-                  <div style={{border:"1px solid rgba(58,130,246,0.18)",borderRadius:6,overflow:"hidden",background:"rgba(7,15,28,0.96)"}}>
-                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,tableLayout:"fixed"}}>
-                      <thead>
-                        <tr style={{background:"rgba(20,30,50,0.92)"}}>
-                          <th style={{padding:"4px 6px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.14)",width:"28%"}}>Company</th>
-                          <th style={{padding:"4px 6px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.14)",width:"12%"}}>PIC</th>
-                          <th style={{padding:"4px 6px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.14)",width:"25%"}}>Seg</th>
-                          <th style={{padding:"4px 6px",textAlign:"left",fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.55)",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.14)",width:"25%"}}>Trade</th>
-                          <th style={{padding:"4px 4px",borderBottom:"1px solid rgba(58,130,246,0.14)",width:"10%"}}/>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filtered.map((o,ri)=>{
-                          const segs=o.segments||(o.segment?[o.segment]:[]);
-                          const trs=o.trades||(o.trade?[o.trade]:[]);
-                          return(
-                            <tr key={o.id} style={{background:ri%2===0?"transparent":"rgba(255,255,255,0.02)"}}>
-                              <td style={{padding:"2px 4px",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
-                                <div style={{display:"flex",alignItems:"center",gap:2}}>
-                                  <OwnerNoteButton ownerId={o.id} note={o.comment||""} onSave={v=>updateOwnerEntry(o.id,"comment",v)}/>
-                                  <input value={o.company||""} onChange={e=>updateOwnerEntry(o.id,"company",e.target.value)}
-                                    style={{background:"transparent",border:"none",outline:"none",color:"#79c0ff",fontFamily:"inherit",fontSize:11,width:"100%",minWidth:40}}/>
-                                </div>
-                              </td>
-                              <td style={{padding:"2px 4px",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
-                                <input value={o.pic||""} onChange={e=>updateOwnerEntry(o.id,"pic",e.target.value)}
-                                  style={{background:"transparent",border:"none",outline:"none",color:"#43e97b",fontFamily:"inherit",fontSize:11,width:"100%"}}/>
-                              </td>
-                              <td style={{padding:"1px 3px",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
+                  <div style={{border:"1px solid "+C.bd,borderRadius:6,overflow:"hidden",background:C.bg2}}>
+                    {filtered.map((o,ri)=>{
+                      const segs=o.segments||(o.segment?[o.segment]:[]);
+                      const trs=o.trades||(o.trade?[o.trade]:[]);
+                      const isOpen=expandedOwnerId===o.id;
+                      return(
+                        <div key={o.id} style={{borderBottom:ri<filtered.length-1?"1px solid "+C.bd2:"none"}}>
+                          <div onClick={()=>setExpandedOwnerId(isOpen?null:o.id)}
+                            style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",cursor:"pointer",
+                              background:isOpen?"rgba(88,166,255,0.08)":"transparent"}}>
+                            <span style={{fontSize:10,color:isOpen?"#58a6ff":C.faint,transform:isOpen?"rotate(90deg)":"none",transition:"transform 0.15s",flexShrink:0}}>▸</span>
+                            <OwnerNoteButton ownerId={o.id} note={o.comment||""} onSave={v=>updateOwnerEntry(o.id,"comment",v)}/>
+                            <span style={{flex:1,fontSize:12,fontWeight:600,color:isOpen?"#79c0ff":C.tx}}>{o.company||"—"}</span>
+                            {segs.length>0&&<span style={{fontSize:10,color:"rgba(88,166,255,0.55)"}}>{segs.length} seg</span>}
+                            {trs.length>0&&<span style={{fontSize:10,color:"rgba(250,163,86,0.55)"}}>{trs.length} trade</span>}
+                            <button onClick={e=>{e.stopPropagation();removeOwnerEntry(o.id);}}
+                              style={{background:"none",border:"none",color:"rgba(255,107,107,0.45)",cursor:"pointer",fontSize:11,padding:0}}>✕</button>
+                          </div>
+                          {isOpen&&(
+                            <div style={{padding:"8px 12px 12px 30px",display:"flex",flexDirection:"column",gap:8,background:"rgba(88,166,255,0.03)"}}>
+                              <div>
+                                <div style={{fontSize:9,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>Company</div>
+                                <input value={o.company||""} onChange={e=>updateOwnerEntry(o.id,"company",e.target.value)} placeholder="—"
+                                  style={{...inpS,width:"100%",padding:"4px 8px",fontSize:12,color:"#79c0ff",fontWeight:600}}/>
+                              </div>
+                              <div>
+                                <div style={{fontSize:9,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>PIC</div>
+                                <input value={o.pic||""} onChange={e=>updateOwnerEntry(o.id,"pic",e.target.value)} placeholder="—"
+                                  style={{...inpS,width:"100%",padding:"4px 8px",fontSize:12,color:"#43e97b"}}/>
+                              </div>
+                              <div>
+                                <div style={{fontSize:9,fontWeight:700,color:"rgba(88,166,255,0.7)",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>Segment</div>
                                 <MultiSelectDropdown options={SEGMENTS} selected={segs} onChange={v=>updateOwnerEntry(o.id,"segments",v)} placeholder="—" color="rgba(88,166,255,0.8)"/>
-                              </td>
-                              <td style={{padding:"1px 3px",borderBottom:"1px solid rgba(255,255,255,0.035)"}}>
+                              </div>
+                              <div>
+                                <div style={{fontSize:9,fontWeight:700,color:"rgba(250,163,86,0.7)",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>Trade</div>
                                 <MultiSelectDropdown options={TRADES} selected={trs} onChange={v=>updateOwnerEntry(o.id,"trades",v)} placeholder="—" color="rgba(250,163,86,0.75)"/>
-                              </td>
-                              <td style={{padding:"2px 4px",borderBottom:"1px solid rgba(255,255,255,0.035)",textAlign:"center"}}>
-                                <button onClick={()=>removeOwnerEntry(o.id)} style={{background:"none",border:"none",color:"rgba(255,107,107,0.5)",cursor:"pointer",fontSize:11,padding:0}}>✕</button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })()}
