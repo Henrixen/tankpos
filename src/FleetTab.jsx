@@ -541,17 +541,17 @@ export default function FleetTab() {
 
       {/* ── Fleet / Outsiders toggle ── */}
       <div style={{ display:"flex", gap:8 }}>
-        <button onClick={()=>setViewMode("fleet")}
+        <button onClick={()=>React.startTransition(()=>setViewMode("fleet"))}
           style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer", fontFamily:"inherit",
             border:"1px solid "+(viewMode==="fleet"?"#58a6ff88":C.bd), background:viewMode==="fleet"?"#58a6ff22":"transparent",
             color:viewMode==="fleet"?"#58a6ff":C.faint }}>
           Fleet
         </button>
-        <button onClick={()=>setViewMode("outsiders")}
+        <button onClick={()=>React.startTransition(()=>setViewMode("outsiders"))}
           style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer", fontFamily:"inherit",
             border:"1px solid "+(viewMode==="outsiders"?"#f5a62388":C.bd), background:viewMode==="outsiders"?"#f5a62322":"transparent",
             color:viewMode==="outsiders"?"#f5a623":C.faint }}>
-          🌏 Outsiders
+          Outsiders
         </button>
       </div>
 
@@ -589,7 +589,10 @@ export default function FleetTab() {
           <div style={{ marginLeft:"auto", display:"flex", gap:14, alignItems:"center" }}>
             {lastUpdated && (
               <span style={{ fontSize:11, color:C.faint, borderRight:"1px solid "+C.bd, paddingRight:14 }} title={lastUpdated.file_name||""}>
-                Updated {fmtUpdatedAt(lastUpdated.uploaded_at)} · {lastUpdated.file_name||"—"}
+                {lastUpdated.source_modified_at && (
+                  <>File dated {fmtUpdatedAt(lastUpdated.source_modified_at)} · </>
+                )}
+                Uploaded {fmtUpdatedAt(lastUpdated.uploaded_at)} · {lastUpdated.file_name||"—"}
               </span>
             )}
             <span style={{ fontSize:12, color:C.faint }}>Ships <b style={{ color:C.tx, fontSize:15 }}>{stats.count}</b></span>
