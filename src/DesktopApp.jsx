@@ -734,11 +734,14 @@ function MobileCollapse({ title, color="#58a6ff", defaultOpen=false, children })
   return (
     <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:7, overflow:"hidden" }}>
       <button onClick={()=>setOpen(o=>!o)}
-        style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between",
+        style={{ width:"100%", display:"flex", alignItems:"center", gap:8, justifyContent:"space-between",
           padding:"10px 12px", background:"transparent", border:"none", cursor:"pointer", fontFamily:"inherit",
           minHeight:44, boxSizing:"border-box" }}>
-        <span style={{ fontSize:13, fontWeight:700, color }}>{title}</span>
-        <span style={{ fontSize:12, color:C.faint }}>{open?"▾":"▸"}</span>
+        <span style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ width:6, height:6, borderRadius:"50%", background:color, flexShrink:0 }}/>
+          <span style={{ fontSize:12, fontWeight:700, color, textTransform:"uppercase", letterSpacing:"0.05em" }}>{title}</span>
+        </span>
+        <span style={{ fontSize:10, color:C.faint, transform:open?"rotate(90deg)":"none", transition:"transform 0.15s" }}>▸</span>
       </button>
       {open && <div style={{ padding:"0 10px 10px" }}>{children}</div>}
     </div>
@@ -1757,11 +1760,11 @@ const filtV=useMemo(()=>{
   // Mobile-specific columns: fixed (not user-resizable) widths so the sticky
   // offsets below are reliable, LOA/Beam/CBM dropped to save width — those
   // are the columns Haakon uses least for a quick scan on a phone.
-  const MOBILE_SELECT_W = 26, MOBILE_OPERATOR_W = 62, MOBILE_VESSEL_W = 96;
+  const MOBILE_SELECT_W = 20, MOBILE_OPERATOR_W = 60, MOBILE_VESSEL_W = 78;
   const posColumnsMobile = [
     posColumns[0], // select — width 32, matches MOBILE_SELECT_W
-    { key:"operator", sortKey:"operator", label:"Op",      width:MOBILE_OPERATOR_W },
-    { key:"vessel",   sortKey:"vessel",   label:"Vessel",  width:MOBILE_VESSEL_W },
+    { key:"operator", sortKey:"operator", label:"Operator", width:MOBILE_OPERATOR_W },
+    { key:"vessel",   sortKey:"vessel",   label:"Vessel",   width:MOBILE_VESSEL_W },
     { key:"ais",      label:"",           align:"center",  width:14 },
     { key:"built",    sortKey:"built",    label:"Blt",     align:"left", width:36 },
     { key:"dwt",      sortKey:"dwt",      label:"DWT",     align:"left", width:48 },
@@ -2270,7 +2273,7 @@ const filtV=useMemo(()=>{
             {/* ── Mobile: same sections, collapsed into one-line tappable bars ── */}
             {mobile && (
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                <MobileCollapse title="📋 Paste positions" color="#58a6ff">
+                <MobileCollapse title="Paste positions" color="#58a6ff">
                   <ParsePanel
                     vessels={vessels}
                     onAddVessels={onAddVessels}
@@ -2280,7 +2283,7 @@ const filtV=useMemo(()=>{
                   />
                 </MobileCollapse>
 
-                <MobileCollapse title="📈 Fixing Window / Segments" color="#c792ea">
+                <MobileCollapse title="Fixing Window / Segments" color="#c792ea">
                   <div style={{ height:340, position:"relative" }}>
                     <TabbedPanel tabs={["History","Open Segments"]} active={fixingPanelTab} onChange={setFixingPanelTab} height="100%">
                       {fixingPanelTab==="History" ? (
@@ -2313,7 +2316,7 @@ const filtV=useMemo(()=>{
                   </div>
                 </MobileCollapse>
 
-                <MobileCollapse title="🏷️ Tags & Filters" color="#f5a623">
+                <MobileCollapse title="Tags & Filters" color="#f5a623">
                   <HScrollStyle/>
                   {(opFilter||bucketFilters.size>0)&&(
                     <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
@@ -2373,7 +2376,7 @@ const filtV=useMemo(()=>{
                   })()}
                 </MobileCollapse>
 
-                <MobileCollapse title="🗺️ AIS Map" color="#4ade80">
+                <MobileCollapse title="AIS Map" color="#4ade80">
                   <div style={{ height:340, position:"relative" }}>
                     <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels} onAisVesselsChange={setAisVesselSet}/></Suspense>
                   </div>
@@ -2494,8 +2497,7 @@ const filtV=useMemo(()=>{
     <>
       {/* SELECT */}
       <td
-        style={{ ...tdCtr, width: 28, padding: "0 2px",
-          ...(mobile ? { position:"sticky", left:0, zIndex:3, background:C.bg2 } : {}) }}
+        style={{ ...tdCtr, width: 28, padding: "0 2px" }}
         onClick={e => {
           e.stopPropagation();
           setSelVessels(p => {
@@ -2521,7 +2523,7 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i-1, "comment")}
   onDown={() => focusCell(i+1, "operator")}
   onUp={() => focusCell(i-1, "operator")}
-  style={mobile?{minWidth:MOBILE_OPERATOR_W,maxWidth:MOBILE_OPERATOR_W,whiteSpace:"nowrap",position:"sticky",left:MOBILE_SELECT_W,zIndex:3,background:C.bg2}:undefined}
+  style={mobile?{minWidth:MOBILE_OPERATOR_W,maxWidth:MOBILE_OPERATOR_W,whiteSpace:"nowrap"}:undefined}
 />
 
       {/* VESSEL */}
@@ -2536,7 +2538,7 @@ const filtV=useMemo(()=>{
         onShiftTab={() => focusCell(i, "operator")}
         onDown={() => focusCell(i+1, "vessel")}
         onUp={() => focusCell(i-1, "vessel")}
-        style={mobile?{minWidth:MOBILE_VESSEL_W,maxWidth:MOBILE_VESSEL_W,whiteSpace:"nowrap",position:"sticky",left:MOBILE_SELECT_W+MOBILE_OPERATOR_W,zIndex:3,background:C.bg2,boxShadow:"2px 0 5px rgba(0,0,0,0.35)"}:undefined}
+        style={mobile?{minWidth:MOBILE_VESSEL_W,maxWidth:MOBILE_VESSEL_W,whiteSpace:"nowrap"}:undefined}
       />
 
       <td style={{padding:"2px 3px",textAlign:"center",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)"}} title={aisVesselSet.has((v.vessel||"").toUpperCase().trim())?"AIS data available":"No AIS data"}>
@@ -2876,7 +2878,7 @@ const filtV=useMemo(()=>{
             {/* Mobile: Parse + Filters collapsed into tappable bars */}
             {mobile && (
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                <MobileCollapse title="📋 Paste cargo" color="#faa356">
+                <MobileCollapse title="Paste cargo" color="#faa356">
                   {(()=>{
                     const usedTags=getTagList();
                     return(
@@ -2900,7 +2902,7 @@ const filtV=useMemo(()=>{
                     lockedMode="cargo" vesselDB={{}}/>
                 </MobileCollapse>
 
-                <MobileCollapse title="🏷️ Grade / Period / Tag Filters" color="#f472b6">
+                <MobileCollapse title="Grade / Period / Tag Filters" color="#f472b6">
                   {(()=>{
                     let allGroups=[];
                     try{const raw=localStorage.getItem("signal_cargo_filter_groups");allGroups=raw?JSON.parse(raw):[];}catch{}
