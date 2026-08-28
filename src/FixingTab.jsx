@@ -43,11 +43,14 @@ function MobileCollapse({ title, color="#58a6ff", defaultOpen=false, children })
   return (
     <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:7, overflow:"hidden" }}>
       <button onClick={()=>setOpen(o=>!o)}
-        style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between",
+        style={{ width:"100%", display:"flex", alignItems:"center", gap:8, justifyContent:"space-between",
           padding:"10px 12px", background:"transparent", border:"none", cursor:"pointer", fontFamily:"inherit",
           minHeight:44, boxSizing:"border-box" }}>
-        <span style={{ fontSize:13, fontWeight:700, color }}>{title}</span>
-        <span style={{ fontSize:12, color:C.faint }}>{open?"▾":"▸"}</span>
+        <span style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ width:6, height:6, borderRadius:"50%", background:color, flexShrink:0 }}/>
+          <span style={{ fontSize:12, fontWeight:700, color, textTransform:"uppercase", letterSpacing:"0.05em" }}>{title}</span>
+        </span>
+        <span style={{ fontSize:10, color:C.faint, transform:open?"rotate(90deg)":"none", transition:"transform 0.15s" }}>▸</span>
       </button>
       {open && <div style={{ padding:"0 10px 10px" }}>{children}</div>}
     </div>
@@ -1139,7 +1142,7 @@ function FixingTab({vessels}){
                         return mobile ? (
                           <div style={{display:"flex",flexDirection:"column",gap:8}}>
                             {client && (
-                              <MobileCollapse title="👤 Client Notes" color="#c792ea">
+                              <MobileCollapse title="Client Notes" color="#c792ea">
                                 <RichEditor
                                   jobId={"client-"+client.id} field="clientnotes"
                                   title="" value={client.notes||""}
@@ -1157,21 +1160,17 @@ function FixingTab({vessels}){
                                 onChange={val=>updateJob(job.id,{cargo_details:val})}
                                 onResizeSave={h=>updateJobHeight(job.id,"cargo_details",h)}/>
                             </div>
-                            <div style={{display:"flex",gap:8,alignItems:"stretch"}}>
-                              <div style={{flex:1,minWidth:0}}>
-                                <RichEditor jobId={job.id} field="notes" title="Guidance"
-                                  value={job.notes||""} placeholder="Notes & guidance…"
-                                  height={160}
-                                  onChange={val=>updateJob(job.id,{notes:val})}
-                                  onResizeSave={h=>updateJobHeight(job.id,"notes",h)}/>
-                              </div>
-                              <div style={{flex:1,minWidth:0}}>
-                                <RichEditor jobId={job.id} field="indications" title="Indications"
-                                  value={job.indications||""} placeholder="Indications…"
-                                  height={160}
-                                  onChange={val=>updateJob(job.id,{indications:val})}
-                                  onResizeSave={h=>updateJobHeight(job.id,"indications",h)}/>
-                              </div>
+                            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                              <RichEditor jobId={job.id} field="notes" title="Guidance"
+                                value={job.notes||""} placeholder="Notes & guidance…"
+                                height={140}
+                                onChange={val=>updateJob(job.id,{notes:val})}
+                                onResizeSave={h=>updateJobHeight(job.id,"notes",h)}/>
+                              <RichEditor jobId={job.id} field="indications" title="Indications"
+                                value={job.indications||""} placeholder="Indications…"
+                                height={140}
+                                onChange={val=>updateJob(job.id,{indications:val})}
+                                onResizeSave={h=>updateJobHeight(job.id,"indications",h)}/>
                             </div>
                             <div style={{borderTop:"1px solid "+C.bd2,paddingTop:8}}>
                               <RichEditor jobId={job.id} field="subs_fixed"
