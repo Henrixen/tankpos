@@ -34,7 +34,7 @@ const newer = (a,b) => {
   return ta >= tb;
 };
 
-function EditCell({ value, onSave, placeholder="—", width=140, bold=false }) {
+function EditCell({ value, onSave, placeholder="—", width=140, bold=false, color=null }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value || "");
   const ref = React.useRef(null);
@@ -56,7 +56,7 @@ function EditCell({ value, onSave, placeholder="—", width=140, bold=false }) {
   }
   return (
     <div onClick={()=>{ setDraft(value||""); setEditing(true); }}
-      style={{ ...CELL_COMMON, cursor:"pointer", color: value?(bold?C.tx:C.dim):C.faint, fontWeight: bold?600:400, minWidth:width, border:"1px solid transparent" }}
+      style={{ ...CELL_COMMON, cursor:"pointer", color: value?(color||(bold?C.tx:C.dim)):C.faint, fontWeight:bold?600:400, minWidth:width, border:"1px solid transparent" }}
       title="Click to edit">
       {value || placeholder}
     </div>
@@ -128,7 +128,6 @@ export default function OutsidersTab({ compact=false }) {
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({ vessel:"", imo:"", dwt:"", built:"", source_operator:"" });
   const [addStatus, setAddStatus] = useState(null);
-  const [sort, setSort] = useState({ key:"vessel", dir:"asc" });
   const [page, setPage] = useState(1);
   const [linkStatus, setLinkStatus] = useState(null);
   const PAGE_SIZE = 100;
@@ -141,8 +140,9 @@ export default function OutsidersTab({ compact=false }) {
     for (const raw of input||[]) {
       const nameKey = normName(raw.vessel);
       const imo = normIMO(raw.imo);
-      const fallbackKey = imo ? `IMO:${imo}` : `ROW:${JSON.stringify(raw)}`;
-      const key = nameKey || fallbackKey;
+      // IMO is the real vessel identity. Name is only a fallback when IMO is absent,
+      // so two ships with the same name but different IMO remain separate.
+      const key = imo ? `IMO:${imo}` : `NAME:${nameKey||JSON.stringify(raw)}`;
 
       const row = {
         ...raw,
@@ -170,6 +170,7 @@ export default function OutsidersTab({ compact=false }) {
         dwt: primary.dwt || secondary.dwt || null,
         built: primary.built || secondary.built || null,
         source_operator: primary.source_operator || secondary.source_operator || null,
+        controlled_by: primary.controlled_by || secondary.controlled_by || null,
         pic: primary.pic || secondary.pic || null,
         notes: primary.notes || secondary.notes || null,
         manual_area: primary.manual_area || secondary.manual_area || null,
@@ -188,7 +189,7 @@ export default function OutsidersTab({ compact=false }) {
     try {
       dbRows = await fetchInChunks(
         "vessels_db",
-        "imo,vessel,dwt,built,operator",
+        "*",
         "vessel",
         names
       );
@@ -202,6 +203,17 @@ export default function OutsidersTab({ compact=false }) {
       if(k && !dbByName[k]) dbByName[k]=v;
     });
 
+    function fleetOwner(db){
+      if(!db) return null;
+      return db.owner
+        || db.registered_owner
+        || db.owner_name
+        || db.commercial_owner
+        || db.group_owner
+        || db.shipowner
+        || null;
+    }
+
     return roster.map(r=>{
       const db = dbByName[normName(r.vessel)];
       return {
@@ -210,6 +222,7 @@ export default function OutsidersTab({ compact=false }) {
         dwt: r.dwt || db?.dwt || null,
         built: r.built || db?.built || null,
         source_operator: r.source_operator || db?.operator || null,
+        owner: fleetOwner(db),
       };
     });
   }
@@ -244,6 +257,7 @@ export default function OutsidersTab({ compact=false }) {
           dwt: r.dwt||null,
           built: r.built||null,
           source_operator: r.source_operator||null,
+          controlled_by: r.controlled_by||null,
           pic: r.pic||null,
           notes: r.notes||null,
           manual_area: r.manual_area||null,
@@ -368,7 +382,7 @@ export default function OutsidersTab({ compact=false }) {
       if (!terms.length) return true;
 
       const hay = [
-        r.vessel, r.imo, r.source_operator, r.pic, r.notes,
+        r.vessel, r.imo, r.source_operator, r.owner, r.controlled_by, r.pic, r.notes,
         r.port, r.area, r.openDate, r.lastReported
       ].filter(Boolean).join(" ").toLowerCase();
 
@@ -377,28 +391,19 @@ export default function OutsidersTab({ compact=false }) {
     });
   }, [enriched, search, areaFilter, reportedOnly]);
 
+  // Always sort by newest live report first. Unreported vessels follow,
+  // with vessel name as a stable secondary sort.
   const sorted = useMemo(() => {
-    const { key, dir } = sort;
-    const mul = dir==="asc" ? 1 : -1;
     return [...filtered].sort((a,b) => {
-      let av = a[key], bv = b[key];
-      if (typeof av === "string" || typeof bv === "string") {
-        av = (av||"").toString().toLowerCase();
-        bv = (bv||"").toString().toLowerCase();
-        return av < bv ? -mul : av > bv ? mul : 0;
-      }
-      av = av ?? -Infinity;
-      bv = bv ?? -Infinity;
-      return (av-bv)*mul;
+      const at = a.lastReported ? new Date(a.lastReported).getTime() : 0;
+      const bt = b.lastReported ? new Date(b.lastReported).getTime() : 0;
+      if (bt !== at) return bt - at;
+      return String(a.vessel||"").localeCompare(String(b.vessel||""));
     });
-  }, [filtered, sort]);
+  }, [filtered]);
 
-  useEffect(() => { setPage(1); }, [search, areaFilter, reportedOnly, sort]);
+  useEffect(() => { setPage(1); }, [search, areaFilter, reportedOnly]);
   const pageRows = useMemo(() => sorted.slice(0, page*PAGE_SIZE), [sorted, page]);
-
-  function toggleSort(key) {
-    setSort(s => s.key===key ? { key, dir:s.dir==="asc"?"desc":"asc" } : { key, dir:"asc" });
-  }
   function toggleArea(a) {
     setAreaFilter(prev => {
       const n = new Set(prev);
@@ -562,11 +567,10 @@ export default function OutsidersTab({ compact=false }) {
     return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
   }
 
-  function SortTH({label,k,align}) {
-    const active=sort.key===k;
+  function SortTH({label,align}) {
     return (
-      <th style={{...TH_,textAlign:align||"left"}} onClick={()=>toggleSort(k)}>
-        {label}{active?(sort.dir==="asc"?" ▲":" ▼"):""}
+      <th style={{...TH_,textAlign:align||"left",cursor:"default"}}>
+        {label}
       </th>
     );
   }
@@ -585,12 +589,21 @@ export default function OutsidersTab({ compact=false }) {
 
       <div style={{...CARD,display:"flex",flexDirection:"column",gap:10}}>
         <div style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:10}}>
-          <input
-            value={search}
-            onChange={e=>setSearch(e.target.value)}
-            placeholder="Search outsiders…"
-            style={{...INPUT,minWidth:220,flex:"0 1 300px"}}
-          />
+          <div style={{position:"relative",minWidth:220,flex:"0 1 300px"}}>
+            <input
+              value={search}
+              onChange={e=>setSearch(e.target.value)}
+              placeholder="Search outsiders…"
+              style={{...INPUT,width:"100%",boxSizing:"border-box",paddingRight:30}}
+            />
+            {search&&(
+              <button onClick={()=>setSearch("")} title="Clear search"
+                style={{position:"absolute",right:7,top:"50%",transform:"translateY(-50%)",
+                  width:17,height:17,borderRadius:"50%",border:"none",background:"rgba(120,160,220,0.16)",
+                  color:C.faint,cursor:"pointer",fontSize:10,lineHeight:1,padding:0,
+                  display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            )}
+          </div>
 
           {loading&&<span style={{fontSize:11,color:C.faint}}>Refreshing…</span>}
           {loadError&&<span style={{fontSize:11,color:"#ff6b6b"}}>{loadError}</span>}
@@ -633,7 +646,7 @@ export default function OutsidersTab({ compact=false }) {
                 background:reportedOnly?"#4ade80":"rgba(74,222,128,0.12)",
                 color:reportedOnly?"#0a1a10":"#4ade80",
               }}>
-              ● Reported only
+              ● Show Reported
             </button>
 
             {(areaFilter.size>0||reportedOnly)&&(
@@ -660,7 +673,7 @@ export default function OutsidersTab({ compact=false }) {
           <input placeholder="Built" value={addForm.built}
             onChange={e=>setAddForm(f=>({...f,built:e.target.value.replace(/[^0-9]/g,"")}))}
             style={{...INPUT,width:80}}/>
-          <input placeholder="Source operator" value={addForm.source_operator}
+          <input placeholder="Source" value={addForm.source_operator}
             onChange={e=>setAddForm(f=>({...f,source_operator:e.target.value}))}
             style={{...INPUT,width:160}}/>
 
@@ -684,8 +697,10 @@ export default function OutsidersTab({ compact=false }) {
                 <SortTH label="IMO" k="imo"/>
                 <SortTH label="DWT" k="dwt" align="right"/>
                 <SortTH label="Built" k="built" align="right"/>
-                <SortTH label="Source Operator" k="source_operator"/>
-                <SortTH label="Controlled By" k="pic"/>
+                <SortTH label="Source"/>
+                <SortTH label="Owner"/>
+                <SortTH label="Controlled By"/>
+                <SortTH label="PIC"/>
                 <th style={TH_}>Notes</th>
                 <SortTH label="Current Area" k="area"/>
                 <SortTH label="Open Port" k="port"/>
@@ -707,10 +722,14 @@ export default function OutsidersTab({ compact=false }) {
                   <td style={{...TD_,textAlign:"right"}}>{r.dwt?fmtN(r.dwt):"—"}</td>
                   <td style={{...TD_,textAlign:"right"}}>{r.built||"—"}</td>
                   <td style={TD_}>
-                    <EditCell value={r.source_operator} onSave={v=>updateField(r,"source_operator",v)} width={160}/>
+                    <EditCell value={r.source_operator} onSave={v=>updateField(r,"source_operator",v)} width={135}/>
+                  </td>
+                  <td style={{...TD_,color:"rgba(190,215,245,0.78)"}}>{r.owner||"—"}</td>
+                  <td style={TD_}>
+                    <EditCell value={r.controlled_by} onSave={v=>updateField(r,"controlled_by",v)} placeholder="click to set" width={130}/>
                   </td>
                   <td style={TD_}>
-                    <EditCell value={r.pic} onSave={v=>updateField(r,"pic",v)} placeholder="click to set"/>
+                    <EditCell value={r.pic} onSave={v=>updateField(r,"pic",v)} placeholder="click to set" width={100}/>
                   </td>
                   <td style={TD_}>
                     <EditCell value={r.notes} onSave={v=>updateField(r,"notes",v)} placeholder="—" width={160}/>
@@ -718,10 +737,10 @@ export default function OutsidersTab({ compact=false }) {
                   <td style={TD_}>
                     <SelectCell value={r.area} options={areaOptions} onSave={v=>updateField(r,"manual_area",v)}/>
                   </td>
-                  <td style={TD_}>
-                    <EditCell value={r.port} onSave={v=>updateField(r,"manual_port",v)} width={140}/>
+                  <td style={{...TD_,color:"#79c0ff"}}>
+                    <EditCell value={r.port} onSave={v=>updateField(r,"manual_port",v)} width={140} color="#79c0ff"/>
                   </td>
-                  <td style={TD_}>{fmtOpenDate(r.openDate)}</td>
+                  <td style={{...TD_,color:"#79c0ff",fontWeight:600}}>{fmtOpenDate(r.openDate)}</td>
                   <td style={{...TD_,color:r.reporting?"#4ade80":C.faint}}>
                     {r.reporting?fmtUpdated(r.lastReported):"—"}
                   </td>
@@ -736,7 +755,7 @@ export default function OutsidersTab({ compact=false }) {
               ))}
 
               {!pageRows.length&&!loading&&(
-                <tr><td style={TD_} colSpan={12}>No vessels match.</td></tr>
+                <tr><td style={TD_} colSpan={14}>No vessels match.</td></tr>
               )}
             </tbody>
           </table>
