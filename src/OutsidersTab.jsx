@@ -21,16 +21,26 @@ const CHIP = (active,col="#f5a623") => ({
 const INPUT = { background:C.bg3, border:"1px solid "+C.bd, borderRadius:5, color:C.tx, fontFamily:"inherit",
   fontSize:12, padding:"5px 8px", outline:"none" };
 
-// Both the display state and the editing input share identical box-sizing/
-// height/padding so swapping between them doesn't shift the row height —
-// that was causing the table to jump around when tapping a cell.
 const CELL_COMMON = { fontSize:12, fontFamily:"inherit", boxSizing:"border-box", height:22, lineHeight:"16px", padding:"2px 4px", borderRadius:3 };
+
+const normName = s => String(s||"").trim().replace(/\s+/g," ").toUpperCase();
+const normIMO  = v => {
+  const s = String(v??"").replace(/\D/g,"");
+  return s || "";
+};
+const newer = (a,b) => {
+  const ta = a ? new Date(a).getTime() : 0;
+  const tb = b ? new Date(b).getTime() : 0;
+  return ta >= tb;
+};
 
 function EditCell({ value, onSave, placeholder="—", width=140, bold=false }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value || "");
   const ref = React.useRef(null);
   useEffect(() => { if (editing) { ref.current?.focus(); ref.current?.select(); } }, [editing]);
+  useEffect(() => { if (!editing) setDraft(value||""); }, [value, editing]);
+
   function commit() {
     setEditing(false);
     const t = (draft||"").trim();
@@ -53,8 +63,6 @@ function EditCell({ value, onSave, placeholder="—", width=140, bold=false }) {
   );
 }
 
-// Strict dropdown — only allows picking from already-known values (used for
-// Current Area so it can't drift into free-text variants of the same place).
 function SelectCell({ value, options, onSave, width=140 }) {
   const [editing, setEditing] = useState(false);
   if (editing) {
@@ -92,9 +100,25 @@ function ConfirmModal({ message, onConfirm, onCancel }) {
   );
 }
 
+// Supabase .in() URLs become unwieldy with a large roster.
+// Query in modest chunks while still keeping the number of requests low.
+async function fetchInChunks(table, select, column, values, chunkSize=120) {
+  const clean = [...new Set(values.filter(Boolean))];
+  if (!clean.length) return [];
+  const out = [];
+  for (let i=0; i<clean.length; i+=chunkSize) {
+    const chunk = clean.slice(i,i+chunkSize);
+    const {data,error} = await supabase.from(table).select(select).in(column,chunk);
+    if (error) throw error;
+    if (data?.length) out.push(...data);
+  }
+  return out;
+}
+
 export default function OutsidersTab({ compact=false }) {
   const [rows, setRows] = useState([]);
-  const [positions, setPositions] = useState({}); // imo -> position row
+  const [positionsByIMO, setPositionsByIMO] = useState({});
+  const [positionsByName, setPositionsByName] = useState({});
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [search, setSearch] = useState("");
@@ -106,56 +130,250 @@ export default function OutsidersTab({ compact=false }) {
   const [addStatus, setAddStatus] = useState(null);
   const [sort, setSort] = useState({ key:"vessel", dir:"asc" });
   const [page, setPage] = useState(1);
+  const [linkStatus, setLinkStatus] = useState(null);
   const PAGE_SIZE = 100;
+
+  // Collapse duplicate static rows before React ever sees them.
+  // The vessel name is the roster identity; IMO is the preferred live-data identity.
+  function canonicaliseRoster(input) {
+    const byName = new Map();
+
+    for (const raw of input||[]) {
+      const nameKey = normName(raw.vessel);
+      const imo = normIMO(raw.imo);
+      const fallbackKey = imo ? `IMO:${imo}` : `ROW:${JSON.stringify(raw)}`;
+      const key = nameKey || fallbackKey;
+
+      const row = {
+        ...raw,
+        imo: imo || null,
+        _nameKey: nameKey,
+      };
+
+      const prev = byName.get(key);
+      if (!prev) {
+        byName.set(key,row);
+        continue;
+      }
+
+      // Prefer the record that has an IMO; otherwise prefer newest static edit.
+      const primary =
+        (!prev.imo && row.imo) ? row :
+        (prev.imo && !row.imo) ? prev :
+        newer(row.updated_at,prev.updated_at) ? row : prev;
+      const secondary = primary===row ? prev : row;
+
+      byName.set(key,{
+        ...secondary,
+        ...primary,
+        imo: primary.imo || secondary.imo || null,
+        dwt: primary.dwt || secondary.dwt || null,
+        built: primary.built || secondary.built || null,
+        source_operator: primary.source_operator || secondary.source_operator || null,
+        pic: primary.pic || secondary.pic || null,
+        notes: primary.notes || secondary.notes || null,
+        manual_area: primary.manual_area || secondary.manual_area || null,
+        manual_port: primary.manual_port || secondary.manual_port || null,
+        _nameKey: nameKey,
+      });
+    }
+
+    return [...byName.values()];
+  }
+
+  // Resolve missing IMO/spec details from vessels_db by vessel name.
+  async function resolveRoster(roster) {
+    const names = roster.map(r=>r.vessel).filter(Boolean);
+    let dbRows = [];
+    try {
+      dbRows = await fetchInChunks(
+        "vessels_db",
+        "imo,vessel,dwt,built,operator",
+        "vessel",
+        names
+      );
+    } catch (e) {
+      console.warn("outsiders vessels_db lookup:",e);
+    }
+
+    const dbByName = {};
+    dbRows.forEach(v=>{
+      const k=normName(v.vessel);
+      if(k && !dbByName[k]) dbByName[k]=v;
+    });
+
+    return roster.map(r=>{
+      const db = dbByName[normName(r.vessel)];
+      return {
+        ...r,
+        imo: normIMO(r.imo) || normIMO(db?.imo) || null,
+        dwt: r.dwt || db?.dwt || null,
+        built: r.built || db?.built || null,
+        source_operator: r.source_operator || db?.operator || null,
+      };
+    });
+  }
+
+  // Repair the static roster quietly:
+  // - null-IMO duplicate rows for a vessel are removed
+  // - the canonical record is upserted by IMO
+  // This means a vessel only needs to be added to outsider_vessels once.
+  async function persistResolvedLinks(before, after) {
+    const oldByName = {};
+    before.forEach(r=>{ oldByName[normName(r.vessel)] = r; });
+
+    const repaired = after.filter(r=>{
+      const old = oldByName[normName(r.vessel)];
+      return r.imo && (!old?.imo || normIMO(old.imo)!==normIMO(r.imo));
+    });
+
+    if (!repaired.length) return 0;
+
+    let count = 0;
+    for (const r of repaired) {
+      try {
+        // Remove obsolete null-IMO duplicates for the same named vessel first.
+        await supabase.from("outsider_vessels")
+          .delete()
+          .is("imo",null)
+          .ilike("vessel",r.vessel);
+
+        const payload = {
+          imo: r.imo,
+          vessel: r.vessel,
+          dwt: r.dwt||null,
+          built: r.built||null,
+          source_operator: r.source_operator||null,
+          pic: r.pic||null,
+          notes: r.notes||null,
+          manual_area: r.manual_area||null,
+          manual_port: r.manual_port||null,
+          updated_at: r.updated_at || new Date().toISOString(),
+        };
+        const {error} = await supabase.from("outsider_vessels")
+          .upsert(payload,{onConflict:"imo"});
+        if (!error) count++;
+        else console.warn("outsider auto-link upsert:",error);
+      } catch(e) {
+        console.warn("outsider auto-link:",e);
+      }
+    }
+    return count;
+  }
+
+  async function fetchLivePositions(roster) {
+    const imos = roster.map(r=>normIMO(r.imo)).filter(Boolean);
+    const names = roster.map(r=>r.vessel).filter(Boolean);
+
+    let pData = [];
+    try {
+      const [byImo,byName] = await Promise.all([
+        fetchInChunks(
+          "positions_latest",
+          "imo_no,vessel_name,port_name,open_date,updated_at,super_region",
+          "imo_no",
+          imos
+        ),
+        // Name fallback is essential for roster rows whose IMO cannot yet be resolved.
+        fetchInChunks(
+          "positions_latest",
+          "imo_no,vessel_name,port_name,open_date,updated_at,super_region",
+          "vessel_name",
+          names
+        )
+      ]);
+      pData = [...byImo,...byName];
+    } catch(e) {
+      console.error("outsider live positions:",e);
+      throw e;
+    }
+
+    const byIMO = {};
+    const byName = {};
+
+    for (const p of pData) {
+      const imo = normIMO(p.imo_no);
+      const name = normName(p.vessel_name);
+
+      if (imo && (!byIMO[imo] || newer(p.updated_at,byIMO[imo].updated_at))) byIMO[imo]=p;
+      if (name && (!byName[name] || newer(p.updated_at,byName[name].updated_at))) byName[name]=p;
+    }
+
+    setPositionsByIMO(byIMO);
+    setPositionsByName(byName);
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
-    const { data: oData, error: oErr } = await supabase.from("outsider_vessels").select("*").order("vessel");
-    if (oErr) { console.error(oErr); setLoadError(oErr.message); setLoading(false); return; }
-    setRows(oData || []);
+    setLinkStatus(null);
 
-    const imos = (oData||[]).map(r=>r.imo).filter(Boolean);
-    if (imos.length) {
-      const { data: pData, error: pErr } = await supabase
-        .from("positions_latest")
-        .select("imo_no,vessel_name,port_name,open_date,updated_at,super_region")
-        .in("imo_no", imos);
-      if (pErr) { console.error(pErr); }
-      const map = {};
-      (pData||[]).forEach(p => { if (p.imo_no) map[p.imo_no] = p; });
-      setPositions(map);
+    try {
+      const { data:oData, error:oErr } = await supabase
+        .from("outsider_vessels")
+        .select("*")
+        .order("vessel");
+
+      if (oErr) throw oErr;
+
+      const canonical = canonicaliseRoster(oData||[]);
+      const resolved = await resolveRoster(canonical);
+
+      setRows(resolved);
+      await fetchLivePositions(resolved);
+
+      // Auto-persist any IMO found in vessels_db for formerly name-only rows.
+      persistResolvedLinks(canonical,resolved).then(n=>{
+        if(n>0) setLinkStatus(`Linked ${n} missing IMO${n===1?"":"s"}`);
+      });
+    } catch(e) {
+      console.error(e);
+      setLoadError(e.message||String(e));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  // Merge each roster row with its live position match once, so every other
-  // computation (search, filter, sort, display) works off one clean shape.
-  const enriched = useMemo(() => rows.map(r => {
-    const pos = positions[r.imo];
+  const enriched = useMemo(() => rows.map((r,index) => {
+    const imo = normIMO(r.imo);
+    const nameKey = normName(r.vessel);
+    const pos = (imo && positionsByIMO[imo]) || positionsByName[nameKey] || null;
+
+    // If live data contains the IMO and the roster didn't, use it immediately
+    // in the UI even before the background repair finishes.
+    const liveIMO = normIMO(pos?.imo_no);
+
     return {
       ...r,
+      imo: imo || liveIMO || null,
+      _rowKey: `${imo||liveIMO||"NOIMO"}:${nameKey||index}`,
       area: r.manual_area || pos?.super_region || null,
       port: r.manual_port || pos?.port_name || null,
       openDate: pos?.open_date || null,
       lastReported: pos?.updated_at || null,
       reporting: !!pos,
     };
-  }), [rows, positions]);
+  }), [rows, positionsByIMO, positionsByName]);
 
   const areaOptions = useMemo(() => [...new Set(enriched.map(r=>r.area).filter(Boolean))].sort(), [enriched]);
 
   const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+
     return enriched.filter(r => {
       if (areaFilter.size && !areaFilter.has(r.area)) return false;
-      if (reportedOnly && !r.reporting && !r.area && !r.port) return false;
-      if (!term) return true;
-      const hay = [r.vessel, r.imo, r.source_operator, r.pic, r.notes, r.port, r.area]
-        .filter(Boolean).join(" ").toLowerCase();
-      return hay.includes(term);
+      if (reportedOnly && !r.reporting) return false;
+      if (!terms.length) return true;
+
+      const hay = [
+        r.vessel, r.imo, r.source_operator, r.pic, r.notes,
+        r.port, r.area, r.openDate, r.lastReported
+      ].filter(Boolean).join(" ").toLowerCase();
+
+      // Multiple words are ANDed, so "lisbo med" must match both.
+      return terms.every(t=>hay.includes(t));
     });
   }, [enriched, search, areaFilter, reportedOnly]);
 
@@ -165,10 +383,12 @@ export default function OutsidersTab({ compact=false }) {
     return [...filtered].sort((a,b) => {
       let av = a[key], bv = b[key];
       if (typeof av === "string" || typeof bv === "string") {
-        av = (av||"").toString().toLowerCase(); bv = (bv||"").toString().toLowerCase();
+        av = (av||"").toString().toLowerCase();
+        bv = (bv||"").toString().toLowerCase();
         return av < bv ? -mul : av > bv ? mul : 0;
       }
-      av = av ?? -Infinity; bv = bv ?? -Infinity;
+      av = av ?? -Infinity;
+      bv = bv ?? -Infinity;
       return (av-bv)*mul;
     });
   }, [filtered, sort]);
@@ -177,43 +397,154 @@ export default function OutsidersTab({ compact=false }) {
   const pageRows = useMemo(() => sorted.slice(0, page*PAGE_SIZE), [sorted, page]);
 
   function toggleSort(key) {
-    setSort(s => s.key===key ? { key, dir: s.dir==="asc"?"desc":"asc" } : { key, dir:"asc" });
+    setSort(s => s.key===key ? { key, dir:s.dir==="asc"?"desc":"asc" } : { key, dir:"asc" });
   }
   function toggleArea(a) {
-    setAreaFilter(prev => { const n = new Set(prev); n.has(a) ? n.delete(a) : n.add(a); return n; });
+    setAreaFilter(prev => {
+      const n = new Set(prev);
+      n.has(a) ? n.delete(a) : n.add(a);
+      return n;
+    });
   }
 
-  async function updateField(imo, field, value) {
-    setRows(prev => prev.map(r => r.imo===imo ? { ...r, [field]: value } : r));
-    const { error } = await supabase.from("outsider_vessels").update({ [field]: value, updated_at: new Date().toISOString() }).eq("imo", imo);
-    if (error) console.error("update error:", error);
+  // Updates/deletes work with or without IMO.
+  function rowTarget(r) {
+    const imo = normIMO(r.imo);
+    if (imo) return {type:"imo",value:imo};
+    return {type:"name",value:r.vessel};
+  }
+
+  async function updateField(row, field, value) {
+    const target = rowTarget(row);
+
+    setRows(prev=>prev.map(r=>{
+      const same = target.type==="imo"
+        ? normIMO(r.imo)===target.value
+        : normName(r.vessel)===normName(target.value);
+      return same ? {...r,[field]:value} : r;
+    }));
+
+    let q = supabase.from("outsider_vessels")
+      .update({[field]:value||null,updated_at:new Date().toISOString()});
+
+    q = target.type==="imo"
+      ? q.eq("imo",target.value)
+      : q.is("imo",null).ilike("vessel",target.value);
+
+    const {error}=await q;
+    if(error){
+      console.error("outsider update:",error);
+      load();
+    }
   }
 
   async function confirmDelete() {
     if (!pendingDelete) return;
-    const { imo } = pendingDelete;
-    setRows(prev => prev.filter(r => r.imo !== imo));
+    const target = rowTarget(pendingDelete);
+
+    setRows(prev=>prev.filter(r=>{
+      return target.type==="imo"
+        ? normIMO(r.imo)!==target.value
+        : normName(r.vessel)!==normName(target.value);
+    }));
     setPendingDelete(null);
-    const { error } = await supabase.from("outsider_vessels").delete().eq("imo", imo);
-    if (error) console.error("delete error:", error);
+
+    let q = supabase.from("outsider_vessels").delete();
+    q = target.type==="imo"
+      ? q.eq("imo",target.value)
+      : q.is("imo",null).ilike("vessel",target.value);
+
+    const {error}=await q;
+    if(error){
+      console.error("outsider delete:",error);
+      load();
+    }
+  }
+
+  // Name is the only required field. If IMO is blank, try to resolve it
+  // from vessels_db and positions_latest automatically.
+  async function resolveOneByName(vessel) {
+    const name = vessel.trim();
+    if(!name) return null;
+
+    const {data:dbData} = await supabase.from("vessels_db")
+      .select("imo,vessel,dwt,built,operator")
+      .ilike("vessel",name)
+      .limit(1);
+
+    const db = dbData?.[0];
+    if (db) return {
+      imo:normIMO(db.imo)||null,
+      dwt:db.dwt||null,
+      built:db.built||null,
+      source_operator:db.operator||null,
+    };
+
+    const {data:pData} = await supabase.from("positions_latest")
+      .select("imo_no,vessel_name")
+      .ilike("vessel_name",name)
+      .limit(1);
+
+    const p = pData?.[0];
+    return p ? {imo:normIMO(p.imo_no)||null} : null;
   }
 
   async function submitAdd() {
-    const imo = addForm.imo.trim();
     const vessel = addForm.vessel.trim();
-    if (!imo || !vessel) { setAddStatus("Vessel name and IMO are required"); return; }
-    setAddStatus("Adding…");
+    if (!vessel) {
+      setAddStatus("Vessel name is required");
+      return;
+    }
+
+    setAddStatus("Checking vessel…");
+
+    let lookup = null;
+    try { lookup = await resolveOneByName(vessel); } catch(e) { console.warn(e); }
+
+    const imo = normIMO(addForm.imo) || normIMO(lookup?.imo) || null;
     const payload = {
-      imo, vessel,
-      dwt: addForm.dwt ? Number(addForm.dwt) : null,
-      built: addForm.built ? Number(addForm.built) : null,
-      source_operator: addForm.source_operator.trim() || null,
-      updated_at: new Date().toISOString(),
+      vessel,
+      imo,
+      dwt:addForm.dwt ? Number(addForm.dwt) : lookup?.dwt || null,
+      built:addForm.built ? Number(addForm.built) : lookup?.built || null,
+      source_operator:addForm.source_operator.trim() || lookup?.source_operator || null,
+      updated_at:new Date().toISOString(),
     };
-    const { error } = await supabase.from("outsider_vessels").upsert(payload, { onConflict:"imo" });
-    if (error) { setAddStatus("Failed: "+error.message); return; }
+
+    let error = null;
+
+    if (imo) {
+      ({error} = await supabase.from("outsider_vessels").upsert(payload,{onConflict:"imo"}));
+      if(!error) {
+        // Remove any old name-only copy.
+        await supabase.from("outsider_vessels")
+          .delete()
+          .is("imo",null)
+          .ilike("vessel",vessel);
+      }
+    } else {
+      // Prevent duplicate static name-only rows.
+      const {data:existing,error:findErr} = await supabase.from("outsider_vessels")
+        .select("vessel,imo")
+        .ilike("vessel",vessel)
+        .limit(1);
+
+      if(findErr) error=findErr;
+      else if(existing?.length) {
+        setAddStatus("Already in outsider list");
+        return;
+      } else {
+        ({error}=await supabase.from("outsider_vessels").insert(payload));
+      }
+    }
+
+    if(error) {
+      setAddStatus("Failed: "+error.message);
+      return;
+    }
+
     setAddStatus(null);
-    setAddForm({ vessel:"", imo:"", dwt:"", built:"", source_operator:"" });
+    setAddForm({vessel:"",imo:"",dwt:"",built:"",source_operator:""});
     setShowAdd(false);
     load();
   }
@@ -231,85 +562,123 @@ export default function OutsidersTab({ compact=false }) {
     return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
   }
 
-  function SortTH({ label, k, align }) {
-    const active = sort.key === k;
+  function SortTH({label,k,align}) {
+    const active=sort.key===k;
     return (
-      <th style={{ ...TH_, textAlign: align||"left" }} onClick={()=>toggleSort(k)}>
-        {label}{active ? (sort.dir==="asc" ? " ▲" : " ▼") : ""}
+      <th style={{...TH_,textAlign:align||"left"}} onClick={()=>toggleSort(k)}>
+        {label}{active?(sort.dir==="asc"?" ▲":" ▼"):""}
       </th>
     );
   }
 
+  const reportingCount = enriched.filter(r=>r.reporting).length;
+
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-      {pendingDelete && (
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {pendingDelete&&(
         <ConfirmModal
-          message={`Remove "${pendingDelete.vessel}" from the outsider list? This can't be undone.`}
+          message={`Remove "${pendingDelete.vessel}" from the outsider list?`}
           onConfirm={confirmDelete}
           onCancel={()=>setPendingDelete(null)}
         />
       )}
 
-      <div style={{ ...CARD, display:"flex", flexDirection:"column", gap:10 }}>
-        <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", gap:10 }}>
+      <div style={{...CARD,display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:10}}>
           <input
-            value={search} onChange={e=>setSearch(e.target.value)}
-            placeholder="🔍 Search outsiders…"
-            style={{ ...INPUT, minWidth:220, flex:"0 1 300px" }}
+            value={search}
+            onChange={e=>setSearch(e.target.value)}
+            placeholder="Search outsiders…"
+            style={{...INPUT,minWidth:220,flex:"0 1 300px"}}
           />
-          {loading && <span style={{ fontSize:11, color:C.faint }}>Loading…</span>}
-          {loadError && <span style={{ fontSize:11, color:"#ff6b6b" }}>⚠ {loadError}</span>}
-          <span style={{ fontSize:12, color:C.faint }}>Total <b style={{ color:C.tx }}>{rows.length}</b></span>
-          <span style={{ fontSize:12, color:C.faint }}>Showing <b style={{ color:C.tx }}>{pageRows.length}</b></span>
-          <span style={{ fontSize:12, color:C.faint }}>
-            Currently reporting <b style={{ color:"#4ade80" }}>{rows.filter(r=>positions[r.imo]).length}</b>
+
+          {loading&&<span style={{fontSize:11,color:C.faint}}>Refreshing…</span>}
+          {loadError&&<span style={{fontSize:11,color:"#ff6b6b"}}>{loadError}</span>}
+          {linkStatus&&<span style={{fontSize:11,color:"#4ade80"}}>{linkStatus}</span>}
+
+          <span style={{fontSize:12,color:C.faint}}>
+            Total <b style={{color:C.tx}}>{enriched.length}</b>
           </span>
-          <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
+          <span style={{fontSize:12,color:C.faint}}>
+            Showing <b style={{color:C.tx}}>{pageRows.length}</b>
+          </span>
+          <span style={{fontSize:12,color:C.faint}}>
+            Currently reporting <b style={{color:"#4ade80"}}>{reportingCount}</b>
+          </span>
+
+          <div style={{marginLeft:"auto",display:"flex",gap:8}}>
             <button style={BTN(showAdd,"#4ade80")} onClick={()=>setShowAdd(v=>!v)}>+ Add vessel</button>
-            <button style={BTN(false)} onClick={load}>↻ Refresh</button>
+            <button style={BTN(false)} onClick={load}>Refresh</button>
           </div>
         </div>
 
-        {areaOptions.length > 0 && (
-          <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", gap:8 }}>
-            <span style={{ fontSize:10, fontWeight:800, color:"#f5a623", textTransform:"uppercase", letterSpacing:"0.05em" }}>Current Area</span>
-            {areaOptions.map(a => (
+        {areaOptions.length>0&&(
+          <div style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:8}}>
+            <span style={{fontSize:10,fontWeight:800,color:"#f5a623",textTransform:"uppercase",letterSpacing:"0.05em"}}>
+              Current Area
+            </span>
+
+            {areaOptions.map(a=>(
               <button key={a} style={CHIP(areaFilter.has(a))} onClick={()=>toggleArea(a)}>{a}</button>
             ))}
-            <div style={{ width:1, height:20, background:C.bd, margin:"0 4px", flexShrink:0 }}/>
+
+            <div style={{width:1,height:20,background:C.bd,margin:"0 4px",flexShrink:0}}/>
+
             <button
               onClick={()=>setReportedOnly(v=>!v)}
               style={{
-                fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:5, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap",
-                border:"1.5px solid #4ade80", background: reportedOnly?"#4ade80":"rgba(74,222,128,0.12)",
-                color: reportedOnly?"#0a1a10":"#4ade80",
+                fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:5,cursor:"pointer",
+                fontFamily:"inherit",whiteSpace:"nowrap",
+                border:"1.5px solid #4ade80",
+                background:reportedOnly?"#4ade80":"rgba(74,222,128,0.12)",
+                color:reportedOnly?"#0a1a10":"#4ade80",
               }}>
               ● Reported only
             </button>
-            {(areaFilter.size>0||reportedOnly) && (
-              <button style={CHIP(true,"#ff6b6b")} onClick={()=>{setAreaFilter(new Set());setReportedOnly(false);}}>✕ Clear</button>
+
+            {(areaFilter.size>0||reportedOnly)&&(
+              <button style={CHIP(true,"#ff6b6b")}
+                onClick={()=>{setAreaFilter(new Set());setReportedOnly(false);}}>
+                ✕ Clear
+              </button>
             )}
           </div>
         )}
       </div>
 
-      {showAdd && (
-        <div style={{ ...CARD, display:"flex", flexWrap:"wrap", gap:8, alignItems:"center" }}>
-          <input placeholder="Vessel name *" value={addForm.vessel} onChange={e=>setAddForm(f=>({...f,vessel:e.target.value}))} style={{...INPUT,width:180}}/>
-          <input placeholder="IMO *" value={addForm.imo} onChange={e=>setAddForm(f=>({...f,imo:e.target.value.replace(/[^0-9]/g,"")}))} style={{...INPUT,width:110}}/>
-          <input placeholder="DWT" value={addForm.dwt} onChange={e=>setAddForm(f=>({...f,dwt:e.target.value.replace(/[^0-9]/g,"")}))} style={{...INPUT,width:90}}/>
-          <input placeholder="Built" value={addForm.built} onChange={e=>setAddForm(f=>({...f,built:e.target.value.replace(/[^0-9]/g,"")}))} style={{...INPUT,width:80}}/>
-          <input placeholder="Source operator" value={addForm.source_operator} onChange={e=>setAddForm(f=>({...f,source_operator:e.target.value}))} style={{...INPUT,width:160}}/>
+      {showAdd&&(
+        <div style={{...CARD,display:"flex",flexWrap:"wrap",gap:8,alignItems:"center"}}>
+          <input placeholder="Vessel name *" value={addForm.vessel}
+            onChange={e=>setAddForm(f=>({...f,vessel:e.target.value}))}
+            style={{...INPUT,width:180}}/>
+          <input placeholder="IMO (auto if blank)" value={addForm.imo}
+            onChange={e=>setAddForm(f=>({...f,imo:e.target.value.replace(/[^0-9]/g,"")}))}
+            style={{...INPUT,width:135}}/>
+          <input placeholder="DWT" value={addForm.dwt}
+            onChange={e=>setAddForm(f=>({...f,dwt:e.target.value.replace(/[^0-9]/g,"")}))}
+            style={{...INPUT,width:90}}/>
+          <input placeholder="Built" value={addForm.built}
+            onChange={e=>setAddForm(f=>({...f,built:e.target.value.replace(/[^0-9]/g,"")}))}
+            style={{...INPUT,width:80}}/>
+          <input placeholder="Source operator" value={addForm.source_operator}
+            onChange={e=>setAddForm(f=>({...f,source_operator:e.target.value}))}
+            style={{...INPUT,width:160}}/>
+
           <button style={BTN(true,"#4ade80")} onClick={submitAdd}>Save</button>
           <button style={BTN(false)} onClick={()=>{setShowAdd(false);setAddStatus(null);}}>Cancel</button>
-          {addStatus && <span style={{ fontSize:11, color: addStatus.startsWith("Failed")?"#ff6b6b":C.faint }}>{addStatus}</span>}
+
+          {addStatus&&(
+            <span style={{fontSize:11,color:addStatus.startsWith("Failed")?"#ff6b6b":C.faint}}>
+              {addStatus}
+            </span>
+          )}
         </div>
       )}
 
-      <div style={{ ...CARD, padding:0, overflow:"hidden" }}>
-        <div style={{ overflowX:"auto", ...(compact ? { maxHeight:420, overflowY:"auto" } : {}) }}>
-          <table style={{ borderCollapse:"collapse", width:"100%" }}>
-            <thead style={{ position:"sticky", top:0, background:C.bg2, zIndex:1 }}>
+      <div style={{...CARD,padding:0,overflow:"hidden"}}>
+        <div style={{overflowX:"auto",...(compact?{maxHeight:420,overflowY:"auto"}:{})}}>
+          <table style={{borderCollapse:"collapse",width:"100%"}}>
+            <thead style={{position:"sticky",top:0,background:C.bg2,zIndex:1}}>
               <tr>
                 <SortTH label="Vessel" k="vessel"/>
                 <SortTH label="IMO" k="imo"/>
@@ -325,36 +694,58 @@ export default function OutsidersTab({ compact=false }) {
                 <th style={TH_}></th>
               </tr>
             </thead>
+
             <tbody>
-              {pageRows.map(r => (
-                <tr key={r.imo}>
-                  <td style={TD_}><EditCell value={r.vessel} onSave={v=>updateField(r.imo,"vessel",v)} bold width={140}/></td>
-                  <td style={TD_}>{r.imo}</td>
-                  <td style={{ ...TD_, textAlign:"right" }}>{r.dwt?fmtN(r.dwt):"—"}</td>
-                  <td style={{ ...TD_, textAlign:"right" }}>{r.built||"—"}</td>
-                  <td style={TD_}><EditCell value={r.source_operator} onSave={v=>updateField(r.imo,"source_operator",v)} width={160}/></td>
-                  <td style={TD_}><EditCell value={r.pic} onSave={v=>updateField(r.imo,"pic",v)} placeholder="click to set"/></td>
-                  <td style={TD_}><EditCell value={r.notes} onSave={v=>updateField(r.imo,"notes",v)} placeholder="—" width={160}/></td>
-                  <td style={TD_}><SelectCell value={r.area} options={areaOptions} onSave={v=>updateField(r.imo,"manual_area",v)}/></td>
-                  <td style={TD_}><EditCell value={r.port} onSave={v=>updateField(r.imo,"manual_port",v)} width={140}/></td>
+              {pageRows.map(r=>(
+                <tr key={r._rowKey}>
+                  <td style={TD_}>
+                    <EditCell value={r.vessel} onSave={v=>updateField(r,"vessel",v)} bold width={140}/>
+                  </td>
+                  <td style={{...TD_,color:r.imo?C.dim:"rgba(245,166,35,0.75)"}}>
+                    {r.imo||"—"}
+                  </td>
+                  <td style={{...TD_,textAlign:"right"}}>{r.dwt?fmtN(r.dwt):"—"}</td>
+                  <td style={{...TD_,textAlign:"right"}}>{r.built||"—"}</td>
+                  <td style={TD_}>
+                    <EditCell value={r.source_operator} onSave={v=>updateField(r,"source_operator",v)} width={160}/>
+                  </td>
+                  <td style={TD_}>
+                    <EditCell value={r.pic} onSave={v=>updateField(r,"pic",v)} placeholder="click to set"/>
+                  </td>
+                  <td style={TD_}>
+                    <EditCell value={r.notes} onSave={v=>updateField(r,"notes",v)} placeholder="—" width={160}/>
+                  </td>
+                  <td style={TD_}>
+                    <SelectCell value={r.area} options={areaOptions} onSave={v=>updateField(r,"manual_area",v)}/>
+                  </td>
+                  <td style={TD_}>
+                    <EditCell value={r.port} onSave={v=>updateField(r,"manual_port",v)} width={140}/>
+                  </td>
                   <td style={TD_}>{fmtOpenDate(r.openDate)}</td>
-                  <td style={TD_}>{r.reporting ? fmtUpdated(r.lastReported) : "—"}</td>
-                  <td style={{ ...TD_, textAlign:"center" }}>
-                    <button onClick={()=>setPendingDelete({imo:r.imo,vessel:r.vessel})}
-                      style={{ background:"none", border:"none", color:"#ff6b6b", cursor:"pointer", fontSize:13, padding:"2px 6px" }}>✕</button>
+                  <td style={{...TD_,color:r.reporting?"#4ade80":C.faint}}>
+                    {r.reporting?fmtUpdated(r.lastReported):"—"}
+                  </td>
+                  <td style={{...TD_,textAlign:"center"}}>
+                    <button
+                      onClick={()=>setPendingDelete(r)}
+                      style={{background:"none",border:"none",color:"#ff6b6b",cursor:"pointer",fontSize:13,padding:"2px 6px"}}>
+                      ✕
+                    </button>
                   </td>
                 </tr>
               ))}
-              {!pageRows.length && !loading && (
+
+              {!pageRows.length&&!loading&&(
                 <tr><td style={TD_} colSpan={12}>No vessels match.</td></tr>
               )}
             </tbody>
           </table>
         </div>
-        {sorted.length > pageRows.length && (
-          <div style={{ padding:"10px 16px", borderTop:"1px solid "+C.bd, textAlign:"center" }}>
+
+        {sorted.length>pageRows.length&&(
+          <div style={{padding:"10px 16px",borderTop:"1px solid "+C.bd,textAlign:"center"}}>
             <button onClick={()=>setPage(p=>p+1)} style={BTN(false)}>
-              Show more ({sorted.length - pageRows.length} remaining)
+              Show more ({sorted.length-pageRows.length} remaining)
             </button>
           </div>
         )}
