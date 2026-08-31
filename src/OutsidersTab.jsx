@@ -169,12 +169,14 @@ export default function OutsidersTab({ compact=false }) {
         imo: primary.imo || secondary.imo || null,
         dwt: primary.dwt || secondary.dwt || null,
         built: primary.built || secondary.built || null,
+        coating: primary.coating || secondary.coating || null,
         source_operator: primary.source_operator || secondary.source_operator || null,
         controlled_by: primary.controlled_by || secondary.controlled_by || null,
         pic: primary.pic || secondary.pic || null,
         notes: primary.notes || secondary.notes || null,
         manual_area: primary.manual_area || secondary.manual_area || null,
         manual_port: primary.manual_port || secondary.manual_port || null,
+        manual_open_date: primary.manual_open_date || secondary.manual_open_date || null,
         _nameKey: nameKey,
       });
     }
@@ -262,6 +264,7 @@ export default function OutsidersTab({ compact=false }) {
           notes: r.notes||null,
           manual_area: r.manual_area||null,
           manual_port: r.manual_port||null,
+          manual_open_date: r.manual_open_date||null,
           updated_at: r.updated_at || new Date().toISOString(),
         };
         // Do not rely on an IMO UNIQUE constraint: older outsider_vessels
@@ -383,7 +386,10 @@ export default function OutsidersTab({ compact=false }) {
       _rowKey: `${imo||liveIMO||"NOIMO"}:${nameKey||index}`,
       area: r.manual_area || pos?.super_region || null,
       port: r.manual_port || pos?.port_name || null,
-      openDate: pos?.open_date || null,
+      // A manual Open Date is allowed for static outsiders, but as soon as
+      // positions_latest has an Open Date it automatically takes precedence.
+      openDate: pos?.open_date || r.manual_open_date || null,
+      openDateIsLive: !!pos?.open_date,
       lastReported: pos?.updated_at || null,
       reporting: !!pos,
     };
@@ -400,8 +406,8 @@ export default function OutsidersTab({ compact=false }) {
       if (!terms.length) return true;
 
       const hay = [
-        r.vessel, r.imo, r.source_operator, r.owner, r.controlled_by, r.pic, r.notes,
-        r.port, r.area, r.openDate, r.lastReported
+        r.vessel, r.imo, r.coating, r.source_operator, r.owner, r.controlled_by, r.pic, r.notes,
+        r.port, r.area, r.openDate, r.manual_open_date, r.lastReported
       ].filter(Boolean).join(" ").toLowerCase();
 
       // Multiple words are ANDed, so "lisbo med" must match both.
@@ -733,7 +739,8 @@ export default function OutsidersTab({ compact=false }) {
                 <SortTH label="Vessel" k="vessel"/>
                 <SortTH label="IMO" k="imo"/>
                 <SortTH label="DWT" k="dwt" align="right"/>
-                <SortTH label="Built" k="built" align="right"/>
+                <SortTH label="Built" align="right"/>
+                <SortTH label="Coating"/>
                 <SortTH label="Source"/>
                 <SortTH label="Owner"/>
                 <SortTH label="Controlled By"/>
@@ -759,6 +766,9 @@ export default function OutsidersTab({ compact=false }) {
                   <td style={{...TD_,textAlign:"right"}}>{r.dwt?fmtN(r.dwt):"—"}</td>
                   <td style={{...TD_,textAlign:"right"}}>{r.built||"—"}</td>
                   <td style={TD_}>
+                    <EditCell value={r.coating} onSave={v=>updateField(r,"coating",v)} placeholder="—" width={90}/>
+                  </td>
+                  <td style={TD_}>
                     <EditCell value={r.source_operator} onSave={v=>updateField(r,"source_operator",v)} width={135}/>
                   </td>
                   <td style={{...TD_,color:"rgba(190,215,245,0.78)"}}>{r.owner||"—"}</td>
@@ -777,7 +787,16 @@ export default function OutsidersTab({ compact=false }) {
                   <td style={{...TD_,color:"#79c0ff"}}>
                     <EditCell value={r.port} onSave={v=>updateField(r,"manual_port",v)} width={140} color="#79c0ff"/>
                   </td>
-                  <td style={{...TD_,color:"#79c0ff",fontWeight:600}}>{fmtOpenDate(r.openDate)}</td>
+                  <td style={{...TD_,color:"#79c0ff",fontWeight:600}}
+                    title={r.openDateIsLive ? "Live Open Date from Positions — overrides manual date" : "Manual Open Date — click to edit"}>
+                    <EditCell
+                      value={r.openDateIsLive ? fmtOpenDate(r.openDate) : (r.manual_open_date || "")}
+                      onSave={v=>updateField(r,"manual_open_date",v)}
+                      placeholder="click to set"
+                      width={90}
+                      color="#79c0ff"
+                    />
+                  </td>
                   <td style={{...TD_,color:r.reporting?"#4ade80":C.faint}}>
                     {r.reporting?fmtUpdated(r.lastReported):"—"}
                   </td>
@@ -792,7 +811,7 @@ export default function OutsidersTab({ compact=false }) {
               ))}
 
               {!pageRows.length&&!loading&&(
-                <tr><td style={TD_} colSpan={14}>No vessels match.</td></tr>
+                <tr><td style={TD_} colSpan={15}>No vessels match.</td></tr>
               )}
             </tbody>
           </table>
