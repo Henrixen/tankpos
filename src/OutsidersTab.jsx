@@ -743,8 +743,8 @@ export default function OutsidersTab({ compact=false }) {
                 <SortTH label="Coating"/>
                 <SortTH label="Source"/>
                 <SortTH label="Owner"/>
-                <SortTH label="Controlled By"/>
-                <SortTH label="PIC"/>
+                <th style={{...TH_,width:88,minWidth:88,maxWidth:88}}>Controlled By</th>
+                <th style={{...TH_,width:68,minWidth:68,maxWidth:68}}>PIC</th>
                 <th style={TH_}>Notes</th>
                 <SortTH label="Current Area" k="area"/>
                 <SortTH label="Open Port" k="port"/>
@@ -769,14 +769,14 @@ export default function OutsidersTab({ compact=false }) {
                     <EditCell value={r.coating} onSave={v=>updateField(r,"coating",v)} placeholder="—" width={90}/>
                   </td>
                   <td style={TD_}>
-                    <EditCell value={r.source_operator} onSave={v=>updateField(r,"source_operator",v)} width={135}/>
+                    <EditCell value={r.source_operator} onSave={v=>updateField(r,"source_operator",v)} width={112}/>
                   </td>
                   <td style={{...TD_,color:"rgba(190,215,245,0.78)"}}>{r.owner||"—"}</td>
-                  <td style={TD_}>
-                    <EditCell value={r.controlled_by} onSave={v=>updateField(r,"controlled_by",v)} placeholder="click to set" width={130}/>
+                  <td style={{...TD_,width:88,minWidth:88,maxWidth:88,overflow:"hidden"}}>
+                    <EditCell value={r.controlled_by} onSave={v=>updateField(r,"controlled_by",v)} placeholder="set" width={82}/>
                   </td>
-                  <td style={TD_}>
-                    <EditCell value={r.pic} onSave={v=>updateField(r,"pic",v)} placeholder="click to set" width={100}/>
+                  <td style={{...TD_,width:68,minWidth:68,maxWidth:68,overflow:"hidden"}}>
+                    <EditCell value={r.pic} onSave={v=>updateField(r,"pic",v)} placeholder="set" width={62}/>
                   </td>
                   <td style={TD_}>
                     <EditCell value={r.notes} onSave={v=>updateField(r,"notes",v)} placeholder="—" width={160}/>
