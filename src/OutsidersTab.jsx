@@ -264,10 +264,28 @@ export default function OutsidersTab({ compact=false }) {
           manual_port: r.manual_port||null,
           updated_at: r.updated_at || new Date().toISOString(),
         };
-        const {error} = await supabase.from("outsider_vessels")
-          .upsert(payload,{onConflict:"imo"});
+        // Do not rely on an IMO UNIQUE constraint: older outsider_vessels
+        // tables may not have one. Update if the IMO exists, otherwise insert.
+        const {data:existingByImo,error:findErr} = await supabase
+          .from("outsider_vessels")
+          .select("imo")
+          .eq("imo",r.imo)
+          .limit(1);
+
+        let error = findErr;
+        if(!error){
+          if(existingByImo?.length){
+            ({error} = await supabase.from("outsider_vessels")
+              .update(payload)
+              .eq("imo",r.imo));
+          } else {
+            ({error} = await supabase.from("outsider_vessels")
+              .insert(payload));
+          }
+        }
+
         if (!error) count++;
-        else console.warn("outsider auto-link upsert:",error);
+        else console.warn("outsider auto-link save:",error);
       } catch(e) {
         console.warn("outsider auto-link:",e);
       }
@@ -519,7 +537,26 @@ export default function OutsidersTab({ compact=false }) {
     let error = null;
 
     if (imo) {
-      ({error} = await supabase.from("outsider_vessels").upsert(payload,{onConflict:"imo"}));
+      // Older outsider_vessels schemas do not necessarily have a UNIQUE
+      // constraint on IMO. Therefore use explicit find -> update/insert
+      // instead of upsert(...,{onConflict:"imo"}).
+      const {data:existingByImo,error:findErr} = await supabase
+        .from("outsider_vessels")
+        .select("imo")
+        .eq("imo",imo)
+        .limit(1);
+
+      if(findErr) {
+        error=findErr;
+      } else if(existingByImo?.length) {
+        ({error} = await supabase.from("outsider_vessels")
+          .update(payload)
+          .eq("imo",imo));
+      } else {
+        ({error} = await supabase.from("outsider_vessels")
+          .insert(payload));
+      }
+
       if(!error) {
         // Remove any old name-only copy.
         await supabase.from("outsider_vessels")
