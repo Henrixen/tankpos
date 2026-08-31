@@ -733,15 +733,12 @@ function MobileCollapse({ title, color="#58a6ff", defaultOpen=false, children })
   const [open, setOpen] = React.useState(defaultOpen);
   return (
     <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:7, overflow:"hidden" }}>
-      <button onClick={()=>React.startTransition(()=>setOpen(o=>!o))}
-        style={{ width:"100%", display:"flex", alignItems:"center", gap:8, justifyContent:"space-between",
+      <button onClick={()=>setOpen(o=>!o)}
+        style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between",
           padding:"10px 12px", background:"transparent", border:"none", cursor:"pointer", fontFamily:"inherit",
           minHeight:44, boxSizing:"border-box" }}>
-        <span style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <span style={{ width:6, height:6, borderRadius:"50%", background:color, flexShrink:0 }}/>
-          <span style={{ fontSize:12, fontWeight:700, color, textTransform:"uppercase", letterSpacing:"0.05em" }}>{title}</span>
-        </span>
-        <span style={{ fontSize:10, color:C.faint, transform:open?"rotate(90deg)":"none", transition:"transform 0.15s" }}>▸</span>
+        <span style={{ fontSize:13, fontWeight:700, color }}>{title}</span>
+        <span style={{ fontSize:12, color:C.faint }}>{open?"▾":"▸"}</span>
       </button>
       {open && <div style={{ padding:"0 10px 10px" }}>{children}</div>}
     </div>
@@ -1339,7 +1336,7 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [colWidthsV,setColWidthsV]=useState(()=>mobile?{
   Operator:null,Vessel:null,Built:null,DWT:null,Coating:null,LOA:null,Beam:null,CBM:null,Date:null,OpenPort:null,Comment:null,FileDate:null,Spec:null
   }:{
-  Operator:190,Vessel:175,Built:60,DWT:72,Coating:78,LOA:62,Beam:56,CBM:78,Date:88,OpenPort:155,Comment:140,FileDate:88,Spec:72
+  Operator:150,Vessel:145,Built:60,DWT:72,Coating:78,LOA:62,Beam:56,CBM:78,Date:88,OpenPort:155,Comment:140,FileDate:88,Spec:72
   });
   const [colWidthsC,setColWidthsC]=useState(()=>mobile?{
   Status:55,Vessel:null,Charterer:null,Cargo:null,Qty:null,Load:null,Disch:null,LaycanStart:null,LaycanEnd:null,Freight:null,Comment:null,Updated:null
@@ -1414,6 +1411,91 @@ const cargoColumns = [
   // get added/updated in the static outsider_vessels roster. Live position
   // tracking after that happens automatically via OutsidersTab's own IMO
   // join — this just needs to get the vessel identity in.
+  async function addSelectedToOutsiders(){
+    const selected = vessels.filter(v=>selVessels.has(v.vessel));
+    if(!selected.length) return;
+
+    setOutsiderSyncStatus(`Adding ${selected.length} to Outsiders…`);
+    let added=0, updated=0, failed=0;
+
+    for(const v of selected){
+      const imo = v.imoNo ? String(v.imoNo).trim() : null;
+      const payload = {
+        imo,
+        vessel: v.vessel || null,
+        dwt: v.dwt ? Math.round(Number(String(v.dwt).replace(/[^\d.]/g,""))) || null : null,
+        built: v.built ? parseInt(v.built) || null : null,
+        source_operator: v.operator || null,
+        coating: v.coating || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      try{
+        let existing=null;
+        let findErr=null;
+
+        // IMO is the primary identity. If somehow missing, fall back to the
+        // vessel name so a manually entered position can still be followed.
+        if(imo){
+          const res=await supabase.from("outsider_vessels")
+            .select("imo,vessel")
+            .eq("imo",imo)
+            .limit(1);
+          existing=res.data?.[0]||null;
+          findErr=res.error;
+        } else {
+          const res=await supabase.from("outsider_vessels")
+            .select("imo,vessel")
+            .ilike("vessel",v.vessel)
+            .limit(1);
+          existing=res.data?.[0]||null;
+          findErr=res.error;
+        }
+
+        if(findErr) throw findErr;
+
+        let error=null;
+        if(existing){
+          if(imo){
+            ({error}=await supabase.from("outsider_vessels")
+              .update(payload)
+              .eq("imo",imo));
+          } else {
+            ({error}=await supabase.from("outsider_vessels")
+              .update(payload)
+              .is("imo",null)
+              .ilike("vessel",v.vessel));
+          }
+          if(!error) updated++;
+        } else {
+          ({error}=await supabase.from("outsider_vessels").insert(payload));
+          if(!error) added++;
+        }
+
+        if(error) throw error;
+
+        // If this vessel previously existed only as a name-only row and we
+        // now know its IMO, remove the obsolete name-only copy.
+        if(imo){
+          await supabase.from("outsider_vessels")
+            .delete()
+            .is("imo",null)
+            .ilike("vessel",v.vessel);
+        }
+      }catch(e){
+        failed++;
+        console.error("Add to Outsiders failed:",v.vessel,e);
+      }
+    }
+
+    if(failed){
+      setOutsiderSyncStatus(`Outsiders: ${added} added, ${updated} already there/updated, ${failed} failed`);
+    }else{
+      setOutsiderSyncStatus(`✓ Outsiders: ${added} added, ${updated} already there/updated`);
+    }
+    setTimeout(()=>setOutsiderSyncStatus(null),4500);
+  }
+
   async function syncOutsiderTaggedVessels(){
     const candidates = vessels.filter(v => (v.tag||"").trim().toUpperCase()==="OUTSIDER" && v.openPort && v.date);
     if(!candidates.length){ setOutsiderSyncStatus("No OUTSIDER-tagged vessels with a known date + port"); setTimeout(()=>setOutsiderSyncStatus(null),3000); return; }
@@ -1422,13 +1504,20 @@ const cargoColumns = [
     const withoutImo = candidates.filter(v=>!v.imoNo);
     let failed = 0;
     if(withImo.length){
-      const payload = withImo.map(v=>({
-        imo: v.imoNo, vessel: v.vessel, dwt: v.dwt||null, built: v.built||null,
-        source_operator: v.operator||null, coating: v.coating||null,
-        updated_at: new Date().toISOString(),
-      }));
-      const { error } = await supabase.from("outsider_vessels").upsert(payload, { onConflict:"imo" });
-      if(error){ console.error(error); failed += withImo.length; }
+      for(const v of withImo){
+        const payload={
+          imo:String(v.imoNo), vessel:v.vessel, dwt:v.dwt||null, built:v.built||null,
+          source_operator:v.operator||null, coating:v.coating||null,
+          updated_at:new Date().toISOString(),
+        };
+        const {data:existing,error:findErr}=await supabase.from("outsider_vessels")
+          .select("imo").eq("imo",String(v.imoNo)).limit(1);
+        if(findErr){ console.error(findErr); failed++; continue; }
+        const res=existing?.length
+          ? await supabase.from("outsider_vessels").update(payload).eq("imo",String(v.imoNo))
+          : await supabase.from("outsider_vessels").insert(payload);
+        if(res.error){ console.error(res.error); failed++; }
+      }
     }
     if(withoutImo.length){
       // No IMO to upsert against — check existing vessel names first so
@@ -1737,7 +1826,7 @@ const filtV=useMemo(()=>{
       </div>
     ), 
     align: "center", 
-    width: 32 
+    width: 24 
   },
   { key: "operator",  sortKey:"operator",  label: "Operator",  width: colWidthsV.Operator },
   { key: "vessel",    sortKey:"vessel",    label: "Vessel",    width: colWidthsV.Vessel },
@@ -1760,20 +1849,20 @@ const filtV=useMemo(()=>{
   // Mobile-specific columns: fixed (not user-resizable) widths so the sticky
   // offsets below are reliable, LOA/Beam/CBM dropped to save width — those
   // are the columns Haakon uses least for a quick scan on a phone.
-  const MOBILE_SELECT_W = 18, MOBILE_OPERATOR_W = 46, MOBILE_VESSEL_W = 64;
+  const MOBILE_SELECT_W = 24, MOBILE_OPERATOR_W = 84, MOBILE_VESSEL_W = 84;
   const posColumnsMobile = [
-    { ...posColumns[0], width: MOBILE_SELECT_W },
-    { key:"operator", sortKey:"operator", label:"Operator", width:MOBILE_OPERATOR_W },
-    { key:"vessel",   sortKey:"vessel",   label:"Vessel",   width:MOBILE_VESSEL_W },
-    { key:"ais",      label:"",           align:"center",  width:10 },
-    { key:"built",    sortKey:"built",    label:"Blt",     align:"left", width:30 },
-    { key:"dwt",      sortKey:"dwt",      label:"DWT",     align:"left", width:40 },
-    { key:"coating",  sortKey:"coating",  label:"Coat",    width:36 },
-    { key:"date",     sortKey:"date",     label:"Date",    align:"center", width:36 },
-    { key:"openPort", sortKey:"openPort", label:"Port",    width:64 },
-    { key:"comment",  sortKey:"comment",  label:"Comment", width:70 },
-    { key:"tag",      label:"Tag",        align:"center",  width:40 },
-    { key:"delete",   label:"",           align:"center",  width:18 },
+    posColumns[0], // select — compact, scrolls with the table
+    { key:"operator", sortKey:"operator", label:"Op",      width:MOBILE_OPERATOR_W },
+    { key:"vessel",   sortKey:"vessel",   label:"Vessel",  width:MOBILE_VESSEL_W },
+    { key:"ais",      label:"",           align:"center",  width:14 },
+    { key:"built",    sortKey:"built",    label:"Blt",     align:"left", width:36 },
+    { key:"dwt",      sortKey:"dwt",      label:"DWT",     align:"left", width:48 },
+    { key:"coating",  sortKey:"coating",  label:"Coat",    width:44 },
+    { key:"date",     sortKey:"date",     label:"Date",    align:"center", width:44 },
+    { key:"openPort", sortKey:"openPort", label:"Port",    width:80 },
+    { key:"comment",  sortKey:"comment",  label:"Comment", width:90 },
+    { key:"tag",      label:"Tag",        align:"center",  width:50 },
+    { key:"delete",   label:"",           align:"center",  width:22 },
   ];
 
   // Reset page when filters change
@@ -2075,17 +2164,17 @@ const filtV=useMemo(()=>{
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
 
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>React.startTransition(()=>setPosOutsiderView(false))}
+              <button onClick={()=>setPosOutsiderView(false)}
                 style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer", fontFamily:"inherit",
                   border:"1px solid "+(!posOutsiderView?"#58a6ff88":C.bd), background:!posOutsiderView?"#58a6ff22":"transparent",
                   color:!posOutsiderView?"#58a6ff":C.faint }}>
                 Positions
               </button>
-              <button onClick={()=>React.startTransition(()=>setPosOutsiderView(true))}
+              <button onClick={()=>setPosOutsiderView(true)}
                 style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer", fontFamily:"inherit",
                   border:"1px solid "+(posOutsiderView?"#f5a62388":C.bd), background:posOutsiderView?"#f5a62322":"transparent",
                   color:posOutsiderView?"#f5a623":C.faint }}>
-                Outsiders
+                🌏 Outsiders
               </button>
             </div>
 
@@ -2273,7 +2362,7 @@ const filtV=useMemo(()=>{
             {/* ── Mobile: same sections, collapsed into one-line tappable bars ── */}
             {mobile && (
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                <MobileCollapse title="Paste positions" color="#58a6ff">
+                <MobileCollapse title="📋 Paste positions" color="#58a6ff">
                   <ParsePanel
                     vessels={vessels}
                     onAddVessels={onAddVessels}
@@ -2283,7 +2372,7 @@ const filtV=useMemo(()=>{
                   />
                 </MobileCollapse>
 
-                <MobileCollapse title="Fixing Window / Segments" color="#c792ea">
+                <MobileCollapse title="📈 Fixing Window / Segments" color="#c792ea">
                   <div style={{ height:340, position:"relative" }}>
                     <TabbedPanel tabs={["History","Open Segments"]} active={fixingPanelTab} onChange={setFixingPanelTab} height="100%">
                       {fixingPanelTab==="History" ? (
@@ -2316,7 +2405,7 @@ const filtV=useMemo(()=>{
                   </div>
                 </MobileCollapse>
 
-                <MobileCollapse title="Tags & Filters" color="#f5a623">
+                <MobileCollapse title="🏷️ Tags & Filters" color="#f5a623">
                   <HScrollStyle/>
                   {(opFilter||bucketFilters.size>0)&&(
                     <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
@@ -2376,7 +2465,7 @@ const filtV=useMemo(()=>{
                   })()}
                 </MobileCollapse>
 
-                <MobileCollapse title="AIS Map" color="#4ade80">
+                <MobileCollapse title="🗺️ AIS Map" color="#4ade80">
                   <div style={{ height:340, position:"relative" }}>
                     <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels} onAisVesselsChange={setAisVesselSet}/></Suspense>
                   </div>
@@ -2412,10 +2501,18 @@ const filtV=useMemo(()=>{
                     {showAddVessel?"✕ Cancel":"+ Add vessel"}
                   </button>
                   {selVessels.size>0&&(
+                    <button onClick={addSelectedToOutsiders}
+                      title="Keep selected vessel(s) permanently in the Outsiders roster"
+                      style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(245,166,35,0.55)",background:"rgba(245,166,35,.12)",color:"#f5a623",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                      + To Outsiders ({selVessels.size})
+                    </button>
+                  )}
+                  {selVessels.size>0&&(
                     <button onClick={()=>React.startTransition(()=>setTab("reports"))} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                       📋 To Report ({selVessels.size})
                     </button>
                   )}
+                  {outsiderSyncStatus&&<span style={{fontSize:11,color:outsiderSyncStatus.startsWith("✓")?"#43e97b":C.faint,whiteSpace:"nowrap"}}>{outsiderSyncStatus}</span>}
                   <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{vessels.length}</span></span>
                   <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{Math.min(filtV.length, posPage*POS_PAGE_SIZE)}</span></span>
                   <span style={{color:C.faint}}>Selected <span style={{color:"#4fc3f7",fontWeight:700}}>{selVessels.size}</span></span>
@@ -2470,6 +2567,7 @@ const filtV=useMemo(()=>{
                   <div style={{...tableWrap,minWidth:mobile?"1400px":undefined}} className={mobile?"pos-table":undefined}>
                     {mobile&&<style>{`
                       .pos-table td, .pos-table td>*{overflow:visible!important;text-overflow:unset!important;white-space:nowrap!important;max-width:none!important;}
+                      .pos-table th, .pos-table td{position:static!important;left:auto!important;right:auto!important;box-shadow:none!important;}
                     `}</style>}
                     <MatrixTable
   columns={mobile ? posColumnsMobile : posColumns}
@@ -2497,7 +2595,7 @@ const filtV=useMemo(()=>{
     <>
       {/* SELECT */}
       <td
-        style={{ ...tdCtr, width: mobile?MOBILE_SELECT_W:28, maxWidth: mobile?MOBILE_SELECT_W:28, padding: "0 1px" }}
+        style={{ ...tdCtr, width: 24, minWidth:24, maxWidth:24, padding: "0 1px" }}
         onClick={e => {
           e.stopPropagation();
           setSelVessels(p => {
@@ -2507,7 +2605,7 @@ const filtV=useMemo(()=>{
           });
         }}
       >
-        <span style={{ fontSize: mobile?14:12, color: selVessels.has(v.vessel) ? "#4fc3f7" : C.faint }}>
+        <span style={{ fontSize: mobile?13:12, color: selVessels.has(v.vessel) ? "#4fc3f7" : C.faint }}>
           {selVessels.has(v.vessel) ? "[✓]" : "[ ]"}
         </span>
       </td>
@@ -2523,7 +2621,7 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i-1, "comment")}
   onDown={() => focusCell(i+1, "operator")}
   onUp={() => focusCell(i-1, "operator")}
-  style={mobile?{minWidth:MOBILE_OPERATOR_W,maxWidth:MOBILE_OPERATOR_W,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",borderBottom:"1px solid rgba(255,255,255,0.035)"}:undefined}
+  style={mobile?{minWidth:MOBILE_OPERATOR_W,maxWidth:MOBILE_OPERATOR_W,whiteSpace:"nowrap"}:undefined}
 />
 
       {/* VESSEL */}
@@ -2538,7 +2636,7 @@ const filtV=useMemo(()=>{
         onShiftTab={() => focusCell(i, "operator")}
         onDown={() => focusCell(i+1, "vessel")}
         onUp={() => focusCell(i-1, "vessel")}
-        style={mobile?{minWidth:MOBILE_VESSEL_W,maxWidth:MOBILE_VESSEL_W,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",borderBottom:"1px solid rgba(255,255,255,0.035)"}:undefined}
+        style={mobile?{minWidth:MOBILE_VESSEL_W,maxWidth:MOBILE_VESSEL_W,whiteSpace:"nowrap"}:undefined}
       />
 
       <td style={{padding:"2px 3px",textAlign:"center",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)"}} title={aisVesselSet.has((v.vessel||"").toUpperCase().trim())?"AIS data available":"No AIS data"}>
@@ -2546,9 +2644,9 @@ const filtV=useMemo(()=>{
           background:aisVesselSet.has((v.vessel||"").toUpperCase().trim())?"#4ade80":"rgba(120,160,220,0.15)"}}/>
       </td>
 
-      <td style={{ ...tdNum, textAlign:"left", color: C.dim, ...(mobile?{maxWidth:30,overflow:"hidden"}:{}) }}>{v.built || ""}</td>
-      <td style={{ ...tdNum, textAlign:"left", color: C.dim, ...(mobile?{maxWidth:40,overflow:"hidden"}:{}) }}>{fmtDwtFull(v.dwt)}</td>
-      <td style={{ ...tdTxt, color: C.dim, ...(mobile?{maxWidth:36,overflow:"hidden"}:{}) }} title={v.coating||""}>{fmtCoating(v.coating)}</td>
+      <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.built || ""}</td>
+      <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtDwtFull(v.dwt)}</td>
+      <td style={{ ...tdTxt, color: C.dim }} title={v.coating||""}>{fmtCoating(v.coating)}</td>
       {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.loa || ""}</td>}
       {!mobile && <td style={{ ...tdNum, color: C.dim }}>{v.beam || ""}</td>}
       {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtN(v.cbm)}</td>}
@@ -2579,7 +2677,6 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i, "vessel")}
   onDown={() => focusCell(i+1, "date")}
   onUp={() => focusCell(i-1, "date")}
-  style={mobile?{borderBottom:"1px solid rgba(255,255,255,0.035)"}:undefined}
 />
       {/* PORT */}
       <EC
@@ -2592,7 +2689,6 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i, "date")}
   onDown={() => focusCell(i+1, "port")}
   onUp={() => focusCell(i-1, "port")}
-  style={mobile?{borderBottom:"1px solid rgba(255,255,255,0.035)"}:undefined}
 />
 
       {/* COMMENT */}
@@ -2606,7 +2702,6 @@ const filtV=useMemo(()=>{
   onShiftTab={() => focusCell(i, "port")}
   onDown={() => focusCell(i+1, "comment")}
   onUp={() => focusCell(i-1, "comment")}
-  style={mobile?{borderBottom:"1px solid rgba(255,255,255,0.035)"}:undefined}
 />
 
       {/* UPDATED */}
@@ -2881,7 +2976,7 @@ const filtV=useMemo(()=>{
             {/* Mobile: Parse + Filters collapsed into tappable bars */}
             {mobile && (
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                <MobileCollapse title="Paste cargo" color="#faa356">
+                <MobileCollapse title="📋 Paste cargo" color="#faa356">
                   {(()=>{
                     const usedTags=getTagList();
                     return(
@@ -2905,7 +3000,7 @@ const filtV=useMemo(()=>{
                     lockedMode="cargo" vesselDB={{}}/>
                 </MobileCollapse>
 
-                <MobileCollapse title="Grade / Period / Tag Filters" color="#f472b6">
+                <MobileCollapse title="🏷️ Grade / Period / Tag Filters" color="#f472b6">
                   {(()=>{
                     let allGroups=[];
                     try{const raw=localStorage.getItem("signal_cargo_filter_groups");allGroups=raw?JSON.parse(raw):[];}catch{}
