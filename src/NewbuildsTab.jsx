@@ -134,7 +134,7 @@ function PieCard({title,subtitle,data,onSliceClick,activeLabel}){
     return(
       <div style={{flex:"1 1 0",minWidth:0,height:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:7,padding:"8px 10px",boxSizing:"border-box"}}>
         <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{title}</div>
-        <div style={{fontSize:9,color:C.faint,marginTop:1}}>{subtitle}</div>
+        <div style={{fontSize:10,color:C.faint,marginTop:1}}>{subtitle}</div>
         <div style={{fontSize:11,color:C.faint,padding:"18px 0",textAlign:"center"}}>No data</div>
       </div>
     );
@@ -152,18 +152,18 @@ function PieCard({title,subtitle,data,onSliceClick,activeLabel}){
   return(
     <div style={{flex:"1 1 0",minWidth:0,height:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:7,padding:"8px 10px",boxSizing:"border-box"}}>
       <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{title}</div>
-      <div style={{fontSize:9,color:C.faint,marginTop:1}}>{subtitle}</div>
+      <div style={{fontSize:10,color:C.faint,marginTop:1}}>{subtitle}</div>
 
-      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginTop:6,minHeight:118}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:6,minHeight:142}}>
         <div
           title="Click a colour/legend item to filter"
           style={{
-            width:108,height:108,borderRadius:"50%",
+            width:132,height:132,borderRadius:"50%",
             background:`conic-gradient(${stops})`,
             position:"relative",flexShrink:0
           }}>
           <div style={{
-            position:"absolute",inset:25,borderRadius:"50%",background:C.bg3,
+            position:"absolute",inset:30,borderRadius:"50%",background:C.bg3,
             display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
             pointerEvents:"none"
           }}>
@@ -175,12 +175,12 @@ function PieCard({title,subtitle,data,onSliceClick,activeLabel}){
           {onSliceClick && slices.map((x,i)=>{
             const mid=(x.from+x.to)/2;
             const ang=(mid/100)*Math.PI*2-Math.PI/2;
-            const cx=54+Math.cos(ang)*42, cy=54+Math.sin(ang)*42;
+            const cx=66+Math.cos(ang)*50, cy=66+Math.sin(ang)*50;
             return(
               <button key={x.label+"hit"} onClick={()=>onSliceClick(x.label)}
                 title={`${x.label}: ${x.value}`}
                 style={{
-                  position:"absolute",left:cx-10,top:cy-10,width:20,height:20,
+                  position:"absolute",left:cx-11,top:cy-11,width:22,height:22,
                   border:"none",borderRadius:"50%",background:"transparent",
                   cursor:"pointer",padding:0
                 }}/>
@@ -188,15 +188,15 @@ function PieCard({title,subtitle,data,onSliceClick,activeLabel}){
           })}
         </div>
 
-        <div style={{display:"flex",flexDirection:"column",gap:3,minWidth:0,flex:1,maxWidth:260}}>
+        <div style={{display:"flex",flexDirection:"column",gap:3,minWidth:0,flex:1,maxWidth:220}}>
           {slices.slice(0,9).map((x,i)=>{
             const active=activeLabel===x.label;
             return(
               <button key={x.label+"_"+i} onClick={()=>onSliceClick?.(x.label)}
                 style={{
-                  display:"flex",alignItems:"center",gap:5,fontSize:9,minWidth:0,
+                  display:"flex",alignItems:"center",gap:5,fontSize:10,minWidth:0,
                   border:"none",background:active?"rgba(88,166,255,0.10)":"transparent",
-                  borderRadius:3,padding:"2px 3px",cursor:onSliceClick?"pointer":"default",
+                  borderRadius:3,padding:"2px 2px",cursor:onSliceClick?"pointer":"default",
                   fontFamily:"inherit",textAlign:"left"
                 }}>
                 <span style={{width:7,height:7,borderRadius:"50%",background:x.color,flexShrink:0,opacity:activeLabel&&!active?0.35:1}}/>
@@ -460,6 +460,23 @@ export default function NewbuildsTab(){
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
+  function handleExportUpcomingCSV(list){
+    if(!list.length) return;
+    const headers=["Vessel","DWT","Coating","Delivery","Operator","Yard","Comment","Source"];
+    const rows=list.map(u=>[
+      dispName(u.vessel),u.dwt||"",u.coating||"",u.delivery||"",u.operator||"",u.yard||"",u.comment||"",u.source||""
+    ]);
+    const csv=[headers,...rows]
+      .map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(","))
+      .join("\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download=`newbuild_upcoming_deliveries_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  }
+
 
   // ── Derived data ──────────────────────────────────────────────────────
   const enriched=useMemo(()=>newbuilds.map(n=>({...n,_seg:segmentFor(Number(n.dwt)||0)})),[newbuilds]);
@@ -743,11 +760,11 @@ export default function NewbuildsTab(){
       </div>
 
 
-      <div style={{display:"flex",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
+      <div style={{display:"flex",gap:12,alignItems:"stretch",flexWrap:"wrap"}}>
 
         {/* ── Left: compact Paste / Pasted tabs ── */}
-        <div style={{flex:"0 0 320px",minWidth:280}}>
-          <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
+        <div style={{flex:"0 0 320px",minWidth:280,display:"flex"}}>
+          <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden",width:"100%",height:"100%",display:"flex",flexDirection:"column"}}>
             <div style={{display:"flex",borderBottom:"1px solid "+C.bd}}>
               {[["paste","Paste"],["list",`Pasted (${positions.length})`]].map(([k,label])=>(
                 <button key={k} onClick={()=>setPasteTab(k)}
@@ -763,11 +780,11 @@ export default function NewbuildsTab(){
             </div>
 
             {pasteTab==="paste" ? (
-              <div style={{padding:"8px 10px"}}>
+              <div style={{padding:"8px 10px",flex:1,display:"flex",flexDirection:"column"}}>
                 <div style={{fontSize:9,color:C.faint,marginBottom:5}}>
                   Paste broker chatter / positions. Details can be edited later in the Pasted tab.
                 </div>
-                <div style={{maxHeight:155,overflow:"hidden"}}>
+                <div style={{flex:1,minHeight:0,overflow:"hidden"}}>
                   <React.Suspense fallback={<div style={{fontSize:11,color:C.faint}}>Loading…</div>}>
                     <ParsePanel
                       vessels={[]}
@@ -819,7 +836,7 @@ export default function NewbuildsTab(){
         {/* ── Right ── */}
         <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:10}}>
 
-          <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.8fr) minmax(280px,1fr)",gap:10,alignItems:"stretch"}}>
+          <div style={{display:"grid",gridTemplateColumns:"minmax(0,3fr) minmax(300px,2fr)",gap:10,alignItems:"stretch"}}>
             <SectionCard title="Segment Breakdown" subtitle="Click segment to filter · expand to show coating">
               <div style={{overflowX:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -868,10 +885,11 @@ export default function NewbuildsTab(){
             <SectionCard title="Delivery Profile" subtitle="Next 24 months · reflects current filters">
               <div style={{height:178,display:"flex",alignItems:"stretch",gap:3,paddingTop:6}}>
                 {deliveryTimeline.map((m,i)=>(
-                  <div key={m.key} title={`${m.label}: ${m.count} ship${m.count===1?"":"s"}`}
-                    style={{flex:"1 1 0",minWidth:0,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center"}}>
-                    {m.count>0&&<div style={{fontSize:8,color:C.faint,marginBottom:2}}>{m.count}</div>}
-                    <div style={{width:"72%",minWidth:3,height:`${Math.max(m.count?4:1,(m.count/deliveryMax)*128)}px`,background:m.count?"#58a6ff":"rgba(88,166,255,.10)",borderRadius:"2px 2px 0 0"}}/>
+                  <div key={m.key} title={`${m.label}: ${m.count} ship${m.count===1?"":"s"} · click to filter`}
+                    onClick={()=>setMonthFilter(prev=>prev===m.key?null:m.key)}
+                    style={{flex:"1 1 0",minWidth:0,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",cursor:"pointer",opacity:monthFilter&&monthFilter!==m.key?0.35:1}}>
+                    {m.count>0&&<div style={{fontSize:8,color:"#ffffff",fontWeight:700,marginBottom:2}}>{m.count}</div>}
+                    <div style={{width:"72%",minWidth:3,height:`${Math.max(m.count?4:1,(m.count/deliveryMax)*128)}px`,background:monthFilter===m.key?"#79c0ff":m.count?"#58a6ff":"rgba(88,166,255,.10)",borderRadius:"2px 2px 0 0"}}/>
                     <div style={{height:26,paddingTop:4,fontSize:8,color:C.faint,whiteSpace:"nowrap",transform:i%3===0?"rotate(-45deg)":"none",transformOrigin:"top center"}}>{i%3===0?m.label:""}</div>
                   </div>
                 ))}
@@ -882,7 +900,7 @@ export default function NewbuildsTab(){
       </div>
 
       <SectionCard title="Orderbook Mix" subtitle="Click any colour or legend item to filter">
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,height:150}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,alignItems:"stretch"}}>
               <PieCard title="Segments" subtitle="Number of ships" data={chartSegmentData}
                 activeLabel={segFilter ? NB_SEGMENTS.find(x=>x.key===segFilter)?.label : null}
                 onSliceClick={label=>{const seg=NB_SEGMENTS.find(x=>x.label===label);setSegFilter(prev=>prev===seg?.key?null:(seg?.key||null));}}/>
@@ -980,7 +998,8 @@ export default function NewbuildsTab(){
             title="Upcoming Deliveries"
             subtitle="Barton schedule + manually pasted positions, merged by date"
             right={
-              <div style={{display:"flex",gap:4}}>
+              <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                <button onClick={()=>handleExportUpcomingCSV(upcoming)} style={{...BTN_SM,padding:"3px 9px",fontSize:10}}>⬇ Export CSV</button>
                 {[1,3,6,12].map(m=>(
                   <button
                     key={m}
