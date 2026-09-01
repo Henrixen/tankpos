@@ -154,16 +154,16 @@ function PieCard({title,subtitle,data,onSliceClick,activeLabel}){
       <div style={{fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.75)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{title}</div>
       <div style={{fontSize:10,color:C.faint,marginTop:1}}>{subtitle}</div>
 
-      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:4,minHeight:160}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:4,minHeight:180}}>
         <div
           title="Click a colour/legend item to filter"
           style={{
-            width:154,height:154,borderRadius:"50%",
+            width:174,height:174,borderRadius:"50%",
             background:`conic-gradient(${stops})`,
             position:"relative",flexShrink:0
           }}>
           <div style={{
-            position:"absolute",inset:34,borderRadius:"50%",background:C.bg3,
+            position:"absolute",inset:38,borderRadius:"50%",background:C.bg3,
             display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
             pointerEvents:"none"
           }}>
@@ -171,24 +171,34 @@ function PieCard({title,subtitle,data,onSliceClick,activeLabel}){
             <div style={{fontSize:8,color:C.faint,textTransform:"uppercase"}}>ships</div>
           </div>
 
-          {/* Transparent hit slices over the CSS donut */}
-          {onSliceClick && slices.map((x,i)=>{
-            const mid=(x.from+x.to)/2;
-            const ang=(mid/100)*Math.PI*2-Math.PI/2;
-            const cx=77+Math.cos(ang)*59, cy=77+Math.sin(ang)*59;
-            return(
-              <button key={x.label+"hit"} onClick={()=>onSliceClick(x.label)}
-                title={`${x.label}: ${x.value}`}
-                style={{
-                  position:"absolute",left:cx-11,top:cy-11,width:22,height:22,
-                  border:"none",borderRadius:"50%",background:"transparent",
-                  cursor:"pointer",padding:0
-                }}/>
-            );
-          })}
+          {/* Full-ring clickable overlay: any point on a coloured slice filters */}
+          {onSliceClick&&(
+            <svg viewBox="0 0 174 174" style={{position:"absolute",inset:0,width:"100%",height:"100%",transform:"rotate(-90deg)"}}>
+              {(()=>{
+                const total=clean.reduce((a,x)=>a+Number(x.value||0),0)||1;
+                const r=68, cx=87, cy=87, circ=2*Math.PI*r;
+                let offset=0;
+                return slices.map((x,i)=>{
+                  const dash=(Number(x.value)/total)*circ;
+                  const el=(
+                    <circle key={x.label} cx={cx} cy={cy} r={r} fill="none"
+                      stroke="transparent" strokeWidth="34"
+                      strokeDasharray={`${dash} ${circ-dash}`}
+                      strokeDashoffset={-offset}
+                      style={{cursor:"pointer"}}
+                      onClick={()=>onSliceClick(x.label)}>
+                      <title>{`${x.label}: ${x.value}`}</title>
+                    </circle>
+                  );
+                  offset+=dash;
+                  return el;
+                });
+              })()}
+            </svg>
+          )}
         </div>
 
-        <div style={{display:"flex",flexDirection:"column",gap:3,minWidth:0,flex:1,maxWidth:185}}>
+        <div style={{display:"flex",flexDirection:"column",gap:3,minWidth:0,flex:1,maxWidth:175}}>
           {slices.slice(0,9).map((x,i)=>{
             const active=activeLabel===x.label;
             return(
@@ -697,7 +707,7 @@ export default function NewbuildsTab(){
         const md=new Date(d.getFullYear(),d.getMonth()+m,1);
         months.push(monthKey(md));
       }
-      quarters.push({key,label:`Q${q} ${String(d.getFullYear()).slice(-2)}`,count:0,months});
+      quarters.push({key,label:`Q${q}`,year:String(d.getFullYear()),count:0,months});
     }
     filtered.forEach(n=>{
       if(!n.delivery_date) return;
@@ -898,15 +908,18 @@ export default function NewbuildsTab(){
               </div>
             </SectionCard>
 
-            <SectionCard title="Delivery Profile" subtitle="Next 8 quarters · reflects current filters">
+            <SectionCard title="Delivery Profile" subtitle="Next 8 quarters">
               <div style={{height:210,display:"flex",alignItems:"stretch",gap:8,padding:"8px 6px 0"}}>
                 {deliveryTimeline.map(q=>(
-                  <div key={q.key} title={`${q.label}: ${q.count} ship${q.count===1?"":"s"} · click to filter`}
+                  <div key={q.key} title={`${q.label} ${q.year}: ${q.count} ship${q.count===1?"":"s"} · click to filter`}
                     onClick={()=>setQuarterFilter(prev=>prev===q.key?null:q.key)}
                     style={{flex:"1 1 0",minWidth:0,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",cursor:"pointer",opacity:quarterFilter&&quarterFilter!==q.key?0.35:1}}>
                     {q.count>0&&<div style={{fontSize:10,color:"#ffffff",fontWeight:400,marginBottom:3}}>{q.count}</div>}
                     <div style={{width:"68%",minWidth:8,height:`${Math.max(q.count?8:2,(q.count/deliveryMax)*158)}px`,background:quarterFilter===q.key?"#79c0ff":q.count?"#58a6ff":"rgba(88,166,255,.10)",borderRadius:"3px 3px 0 0"}}/>
-                    <div style={{height:24,paddingTop:5,fontSize:10,color:"#ffffff",fontWeight:400,whiteSpace:"nowrap"}}>{q.label}</div>
+                    <div style={{height:30,paddingTop:5,fontSize:10,color:"#ffffff",fontWeight:400,whiteSpace:"nowrap",textAlign:"center",lineHeight:1.1}}>
+                      <div>{q.label}</div>
+                      <div style={{fontWeight:700,fontSize:10,marginTop:2}}>{q.year}</div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -931,12 +944,23 @@ export default function NewbuildsTab(){
           {/* ── Shared filters ── */}
           <SectionCard title="Filters">
             <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-              <input
-                value={search}
-                onChange={e=>setSearch(e.target.value)}
-                placeholder="Search vessel/operator/yard…"
-                style={{...inp,width:200}}
-              />
+              <div style={{position:"relative",width:200}}>
+                <input
+                  value={search}
+                  onChange={e=>setSearch(e.target.value)}
+                  placeholder="Search vessel/operator/yard…"
+                  style={{...inp,width:"100%",paddingRight:28}}
+                />
+                {search&&(
+                  <button onClick={()=>setSearch("")} title="Clear search"
+                    style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",
+                      width:16,height:16,border:"none",borderRadius:"50%",
+                      background:"rgba(120,160,220,0.10)",color:C.faint,cursor:"pointer",
+                      fontSize:10,lineHeight:1,padding:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    ×
+                  </button>
+                )}
+              </div>
 
               <select
                 value={coatingFilter||""}
@@ -1013,8 +1037,9 @@ export default function NewbuildsTab(){
           <SectionCard
             title="Upcoming Deliveries"
             right={
-              <div style={{display:"flex",gap:5,alignItems:"center"}}>
+              <div style={{display:"flex",gap:7,alignItems:"center"}}>
                 <button onClick={()=>handleExportUpcomingCSV(upcoming)} style={{...BTN_SM,padding:"3px 9px",fontSize:10}}>⬇ Export CSV</button>
+                <div style={{width:1,height:20,background:C.bd,margin:"0 3px"}}/>
                 {[1,3,6,12].map(m=>(
                   <button
                     key={m}
