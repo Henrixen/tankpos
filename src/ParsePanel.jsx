@@ -4,7 +4,7 @@ import { C } from "./constants";
 import { loadImg, normaliseQty, rollOpenDateForward } from "./utils";
 import { apiCall, ocrImage, parsePos, parseCargo } from "./api";
 
-function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vesselDB = {}}) {
+function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vesselDB = {},compactToolbar=false}) {
   const [posDate, setPosDate] = useState(() => {const d=new Date();return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();});
   const [mode,setMode]=useState(lockedMode||"pos");
   const [text,setText]=useState("");const [img,setImg]=useState(null);
@@ -153,11 +153,25 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
         placeholder={mode==="pos"?"Paste positions or Ctrl+V screenshot…":"Paste cargo fixtures or Ctrl+V screenshot…"}
         style={{width:"100%",minHeight:130,background:C.bg2,border:"none",color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
         <div style={{padding:"5px 8px",borderTop:"1px solid "+C.bd2,display:"flex",gap:5,alignItems:"center"}}>
-        <button onClick={go} disabled={busy} style={{flex:1,background:busy?"rgba(88,166,255,0.08)":"rgba(88,166,255,0.14)",border:"1px solid "+(busy?"rgba(88,166,255,0.2)":"rgba(88,166,255,0.5)"),borderRadius:5,color:busy?"rgba(88,166,255,0.45)":"#a8d4ff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px 0",cursor:busy?"default":"pointer",letterSpacing:"0.04em",transition:"all 0.15s"}}>
+        <button onClick={go} disabled={busy} style={{
+          flex:1,
+          minWidth:compactToolbar?112:0,
+          background:busy?"rgba(88,166,255,0.08)":"rgba(88,166,255,0.14)",
+          border:"1px solid "+(busy?"rgba(88,166,255,0.2)":"rgba(88,166,255,0.5)"),
+          borderRadius:5,
+          color:busy?"rgba(88,166,255,0.45)":"#a8d4ff",
+          fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px 8px",
+          cursor:busy?"default":"pointer",letterSpacing:"0.04em",transition:"all 0.15s",
+          whiteSpace:"nowrap",lineHeight:1.15
+        }}>
           {busy?"⟳ Processing…":"▶ Parse & Add"}
         </button>
-        <button onClick={()=>fRef.current?.click()} title="Upload image / screenshot" style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 10px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>🖼</button>
-        {(mode==="pos"||mode==="cargo")&&<input type="text" value={posDate} onChange={e=>setPosDate(e.target.value)} placeholder="DD/MM/YYYY" title={mode==="pos"?"Date of this position list":"Date of this cargo list"} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:3,color:C.dim,fontFamily:"inherit",fontSize:12,padding:"2px 5px",outline:"none",width:118,flexShrink:0}}/>}
+
+        {!compactToolbar&&(
+          <button onClick={()=>fRef.current?.click()} title="Upload image / screenshot" style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 10px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>🖼</button>
+        )}
+
+        {(mode==="pos"||mode==="cargo")&&<input type="text" value={posDate} onChange={e=>setPosDate(e.target.value)} placeholder="DD/MM/YYYY" title={mode==="pos"?"Date of this position list":"Date of this cargo list"} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:3,color:C.dim,fontFamily:"inherit",fontSize:compactToolbar?11:12,padding:"2px 5px",outline:"none",width:compactToolbar?88:118,flexShrink:0}}/>}
         <button onClick={()=>xlsRef.current?.click()} title="Upload Excel / CSV" style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 8px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>📊</button>
         <input ref={fRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
         <input ref={xlsRef} type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}} onChange={e=>handleXls(e.target.files?.[0])}/>
