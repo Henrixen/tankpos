@@ -125,54 +125,115 @@ function SectionCard({title,subtitle,right,children}){
 
 const PIE_COLORS=["#58a6ff","#4ade80","#f778ba","#ea9a00","#a78bfa","#22d3ee","#f59e0b","#fb7185","#2dd4bf","#94a3b8"];
 
-function PieCard({title,subtitle,data}){
+function PieCard({title,subtitle,data,onSliceClick,activeLabel}){
   const clean=(data||[]).filter(x=>Number(x.value)>0);
   const total=clean.reduce((a,x)=>a+Number(x.value||0),0);
 
   if(!total){
     return(
-      <div style={{flex:"1 1 230px",minWidth:220,background:C.bg3,border:"1px solid "+C.bd,borderRadius:7,padding:"10px 12px"}}>
-        <div style={{fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{title}</div>
-        <div style={{fontSize:10,color:C.faint,marginTop:2}}>{subtitle}</div>
-        <div style={{fontSize:11,color:C.faint,padding:"24px 0",textAlign:"center"}}>No data</div>
+      <div style={{flex:"1 1 0",minWidth:0,height:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:7,padding:"8px 10px",boxSizing:"border-box"}}>
+        <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{title}</div>
+        <div style={{fontSize:9,color:C.faint,marginTop:1}}>{subtitle}</div>
+        <div style={{fontSize:11,color:C.faint,padding:"18px 0",textAlign:"center"}}>No data</div>
       </div>
     );
   }
 
   let acc=0;
-  const stops=clean.map((x,i)=>{
+  const slices=clean.map((x,i)=>{
     const from=acc/total*100;
     acc+=Number(x.value);
     const to=acc/total*100;
-    return `${PIE_COLORS[i%PIE_COLORS.length]} ${from}% ${to}%`;
-  }).join(",");
+    return {...x,from,to,color:PIE_COLORS[i%PIE_COLORS.length]};
+  });
+  const stops=slices.map(x=>`${x.color} ${x.from}% ${x.to}%`).join(",");
 
   return(
-    <div style={{flex:"1 1 250px",minWidth:230,background:C.bg3,border:"1px solid "+C.bd,borderRadius:7,padding:"10px 12px"}}>
-      <div style={{fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{title}</div>
-      <div style={{fontSize:10,color:C.faint,marginTop:2}}>{subtitle}</div>
+    <div style={{flex:"1 1 0",minWidth:0,height:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:7,padding:"8px 10px",boxSizing:"border-box"}}>
+      <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{title}</div>
+      <div style={{fontSize:9,color:C.faint,marginTop:1}}>{subtitle}</div>
 
-      <div style={{display:"flex",alignItems:"center",gap:14,marginTop:10}}>
-        <div style={{width:104,height:104,borderRadius:"50%",background:`conic-gradient(${stops})`,position:"relative",flexShrink:0}}>
-          <div style={{position:"absolute",inset:23,borderRadius:"50%",background:C.bg3,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginTop:6,minHeight:118}}>
+        <div
+          title="Click a colour/legend item to filter"
+          style={{
+            width:108,height:108,borderRadius:"50%",
+            background:`conic-gradient(${stops})`,
+            position:"relative",flexShrink:0
+          }}>
+          <div style={{
+            position:"absolute",inset:25,borderRadius:"50%",background:C.bg3,
+            display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+            pointerEvents:"none"
+          }}>
             <div style={{fontSize:17,fontWeight:800,color:C.tx}}>{total}</div>
             <div style={{fontSize:8,color:C.faint,textTransform:"uppercase"}}>ships</div>
           </div>
+
+          {/* Transparent hit slices over the CSS donut */}
+          {onSliceClick && slices.map((x,i)=>{
+            const mid=(x.from+x.to)/2;
+            const ang=(mid/100)*Math.PI*2-Math.PI/2;
+            const cx=54+Math.cos(ang)*42, cy=54+Math.sin(ang)*42;
+            return(
+              <button key={x.label+"hit"} onClick={()=>onSliceClick(x.label)}
+                title={`${x.label}: ${x.value}`}
+                style={{
+                  position:"absolute",left:cx-10,top:cy-10,width:20,height:20,
+                  border:"none",borderRadius:"50%",background:"transparent",
+                  cursor:"pointer",padding:0
+                }}/>
+            );
+          })}
         </div>
 
-        <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:0,flex:1}}>
-          {clean.slice(0,9).map((x,i)=>(
-            <div key={x.label+"_"+i} style={{display:"flex",alignItems:"center",gap:5,fontSize:10,minWidth:0}}>
-              <span style={{width:7,height:7,borderRadius:"50%",background:PIE_COLORS[i%PIE_COLORS.length],flexShrink:0}}/>
-              <span title={x.label} style={{color:"rgba(190,215,245,0.72)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>
-                {x.label}
-              </span>
-              <span style={{color:C.tx,fontWeight:700,flexShrink:0}}>{x.value}</span>
-            </div>
-          ))}
+        <div style={{display:"flex",flexDirection:"column",gap:3,minWidth:0,flex:1,maxWidth:260}}>
+          {slices.slice(0,9).map((x,i)=>{
+            const active=activeLabel===x.label;
+            return(
+              <button key={x.label+"_"+i} onClick={()=>onSliceClick?.(x.label)}
+                style={{
+                  display:"flex",alignItems:"center",gap:5,fontSize:9,minWidth:0,
+                  border:"none",background:active?"rgba(88,166,255,0.10)":"transparent",
+                  borderRadius:3,padding:"2px 3px",cursor:onSliceClick?"pointer":"default",
+                  fontFamily:"inherit",textAlign:"left"
+                }}>
+                <span style={{width:7,height:7,borderRadius:"50%",background:x.color,flexShrink:0,opacity:activeLabel&&!active?0.35:1}}/>
+                <span title={x.label} style={{color:active?"#79c0ff":"rgba(190,215,245,0.72)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,fontWeight:active?700:500}}>
+                  {x.label}
+                </span>
+                <span style={{color:C.tx,fontWeight:700,flexShrink:0}}>{x.value}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
+  );
+}
+
+function EditableCell({value,onSave,placeholder="—",width=100,color=null}){
+  const [editing,setEditing]=useState(false);
+  const [draft,setDraft]=useState("");
+  if(editing){
+    return(
+      <input autoFocus value={draft}
+        onChange={e=>setDraft(e.target.value)}
+        onBlur={()=>{setEditing(false);if(draft!==String(value??""))onSave?.(draft);}}
+        onKeyDown={e=>{
+          if(e.key==="Enter"){e.preventDefault();e.currentTarget.blur();}
+          if(e.key==="Escape"){setEditing(false);}
+        }}
+        style={{...inp,width,background:C.bg,border:"1px solid rgba(88,166,255,0.45)",padding:"2px 5px"}}
+      />
+    );
+  }
+  return(
+    <span onClick={()=>{setDraft(value??"");setEditing(true);}}
+      title="Click to edit"
+      style={{display:"inline-block",minWidth:width,color:color||(value?C.dim:C.faint),cursor:"text",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",verticalAlign:"middle"}}>
+      {value||placeholder}
+    </span>
   );
 }
 
@@ -183,6 +244,7 @@ export default function NewbuildsTab(){
   const [segFilter,setSegFilter]=useState(null);
   const [countryFilter,setCountryFilter]=useState(null);
   const [coatingFilter,setCoatingFilter]=useState(null);
+  const [ownerFilter,setOwnerFilter]=useState(null);
   const [dwtMin,setDwtMin]=useState("");
   const [dwtMax,setDwtMax]=useState("");
   const [monthFilter,setMonthFilter]=useState(null);
@@ -192,6 +254,9 @@ export default function NewbuildsTab(){
   const [editingVessel,setEditingVessel]=useState(null);
   const [copyStatus,setCopyStatus]=useState(null);
   const [lastUpdated,setLastUpdated]=useState(null);
+  const [pasteTab,setPasteTab]=useState("paste"); // paste | list
+  const [existingFleet,setExistingFleet]=useState([]);
+  const [shipComments,setShipComments]=useState({}); // stableKey -> comment
 
   useEffect(()=>{
     async function fetchMeta(){
@@ -204,6 +269,40 @@ export default function NewbuildsTab(){
       setLastUpdated(data||null);
     }
     fetchMeta();
+  },[]);
+
+  useEffect(()=>{
+    async function fetchExistingFleet(){
+      let all=[], from=0, pageSize=1000;
+      while(true){
+        const {data,error}=await supabase.from("vessels_db")
+          .select("imo,vessel,dwt,built")
+          .gte("built",2000)
+          .range(from,from+pageSize-1);
+        if(error){console.error("existing fleet ratio fetch error:",error);break;}
+        if(!data?.length) break;
+        all=[...all,...data];
+        if(data.length<pageSize) break;
+        from+=pageSize;
+      }
+      setExistingFleet(all);
+    }
+    fetchExistingFleet();
+  },[]);
+
+  useEffect(()=>{
+    async function fetchShipComments(){
+      const {data,error}=await supabase.from("newbuilds_notes").select("vessel_key,comment");
+      if(error){
+        // The page still works before the one-time SQL migration is run.
+        console.warn("newbuilds_notes fetch:",error.message);
+        return;
+      }
+      const map={};
+      (data||[]).forEach(r=>{if(r.vessel_key)map[r.vessel_key]=r.comment||"";});
+      setShipComments(map);
+    }
+    fetchShipComments();
   },[]);
 
   useEffect(()=>{
@@ -240,6 +339,9 @@ export default function NewbuildsTab(){
       port_name:(p.openPort||"").trim()||null,
       open_date:(p.date||"").trim()||null,
       comment:(p.comment||"").trim()||null,
+      dwt:p.dwt?Number(p.dwt)||null:null,
+      coating:(p.coating||"").trim()||null,
+      yard:(p.yard||"").trim()||null,
       updated_at:nowIso,
     })).filter(r=>r.vessel_name);
 
@@ -253,6 +355,34 @@ export default function NewbuildsTab(){
     await fetchPositions();
     return {added:rows.length,updated:0,total:positions.length+rows.length};
   },[positions.length]);
+
+  async function updateManualPosition(id,field,value){
+    setPositions(prev=>prev.map(p=>p.id===id?{...p,[field]:value}:p));
+    const {error}=await supabase.from("newbuilds_positions")
+      .update({[field]:value||null,updated_at:new Date().toISOString()})
+      .eq("id",id);
+    if(error) console.error("manual newbuild update:",error);
+  }
+
+  function stableShipKey(n){
+    if(n.imo) return `IMO:${String(n.imo).trim()}`;
+    return `VESSEL:${String(n.vessel||"").trim().toUpperCase()}|DWT:${Number(n.dwt)||0}`;
+  }
+
+  async function saveShipComment(n,value){
+    const vessel_key=stableShipKey(n);
+    setShipComments(prev=>({...prev,[vessel_key]:value}));
+    const payload={
+      vessel_key,
+      imo:n.imo||null,
+      vessel:n.vessel||null,
+      dwt:Number(n.dwt)||null,
+      comment:value||null,
+      updated_at:new Date().toISOString(),
+    };
+    const {error}=await supabase.from("newbuilds_notes").upsert(payload,{onConflict:"vessel_key"});
+    if(error) console.error("newbuild comment save:",error);
+  }
 
   async function deletePosition(id){
     await supabase.from("newbuilds_positions").delete().eq("id",id);
@@ -336,6 +466,7 @@ export default function NewbuildsTab(){
     if(segFilter && n._seg?.key!==segFilter) return false;
     if(countryFilter && n.country_build!==countryFilter) return false;
     if(coatingFilter && n.coating!==coatingFilter) return false;
+    if(ownerFilter && (n.owner||"Unknown")!==ownerFilter) return false;
 
     const dwt=Number(n.dwt)||0;
     if(dwtMin!=="" && dwt<Number(dwtMin)) return false;
@@ -354,7 +485,7 @@ export default function NewbuildsTab(){
       if(!hay.includes(t)) return false;
     }
     return true;
-  }),[enriched,segFilter,countryFilter,coatingFilter,dwtMin,dwtMax,monthFilter,search]);
+  }),[enriched,segFilter,countryFilter,coatingFilter,ownerFilter,dwtMin,dwtMax,monthFilter,search]);
 
   const countries=useMemo(()=>{
     const counts={};
@@ -381,7 +512,7 @@ export default function NewbuildsTab(){
   },[enriched]);
 
   const filtersActive=!!(
-    segFilter||countryFilter||coatingFilter||
+    segFilter||countryFilter||coatingFilter||ownerFilter||
     dwtMin!==""||dwtMax!==""||monthFilter||search
   );
 
@@ -389,6 +520,7 @@ export default function NewbuildsTab(){
     setSegFilter(null);
     setCountryFilter(null);
     setCoatingFilter(null);
+    setOwnerFilter(null);
     setDwtMin("");
     setDwtMax("");
     setMonthFilter(null);
@@ -405,6 +537,18 @@ export default function NewbuildsTab(){
     });
     return counts;
   },[enriched]);
+
+
+  const existingSegCounts=useMemo(()=>{
+    const counts={};
+    NB_SEGMENTS.forEach(seg=>counts[seg.key]=0);
+    existingFleet.forEach(r=>{
+      if(Number(r.built)<2000) return;
+      const seg=segmentFor(Number(r.dwt)||0);
+      if(seg) counts[seg.key]=(counts[seg.key]||0)+1;
+    });
+    return counts;
+  },[existingFleet]);
 
   // Chart 1 = all segments by ship count.
   // Charts 2/3 = coating and owner for the clicked segment (or all segments if none clicked).
@@ -460,22 +604,26 @@ export default function NewbuildsTab(){
       })
       .map(n=>({
         source:"barton",
+        imo:n.imo,
         vessel:n.vessel,
         operator:n.operator,
         yard:n.yard,
         dwt:n.dwt,
         coating:n.coating,
         delivery:n.delivery_date,
+        comment:shipComments[stableShipKey(n)]||"",
       }));
 
     const fromManual=positions.map(p=>({
       source:"manual",
       vessel:p.vessel_name,
       operator:p.operator,
-      yard:null,
-      dwt:null,
-      coating:null,
+      yard:p.yard||null,
+      dwt:p.dwt||null,
+      coating:p.coating||null,
       delivery:p.open_date,
+      comment:p.comment||"",
+      port_name:p.port_name||null,
       id:p.id,
     }));
 
@@ -519,7 +667,7 @@ export default function NewbuildsTab(){
 
       {/* ── Top summary row ── */}
       <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-        <div style={{flex:"0 0 auto",display:"flex",gap:16,alignItems:"center",background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"10px 16px"}}>
+        <div style={{flex:"0 0 320px",minWidth:280,boxSizing:"border-box",display:"flex",gap:16,alignItems:"center",background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"10px 12px"}}>
           <div>
             <div style={{fontSize:20,fontWeight:700,color:"#79c0ff"}}>{totalShips}</div>
             <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>Ships on order</div>
@@ -550,49 +698,114 @@ export default function NewbuildsTab(){
         )}
       </div>
 
+
+      {/* ── Full-width clickable orderbook mix ── */}
+      <SectionCard
+        title="Orderbook Mix"
+        subtitle={
+          segFilter
+            ? `${selectedSegLabel}: coating and owner breakdown · click colours to filter`
+            : "Click any colour/legend item to filter the orderbook"
+        }>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,height:150}}>
+          <PieCard
+            title="Segments"
+            subtitle="Number of ships"
+            data={chartSegmentData}
+            activeLabel={segFilter ? NB_SEGMENTS.find(x=>x.key===segFilter)?.label.replace(/^\d+\.\s*/,"") : null}
+            onSliceClick={label=>{
+              const seg=NB_SEGMENTS.find(x=>x.label.replace(/^\d+\.\s*/,"")===label);
+              setSegFilter(prev=>prev===seg?.key?null:(seg?.key||null));
+            }}
+          />
+          <PieCard
+            title="Coating"
+            subtitle={selectedSegLabel}
+            data={chartCoatingData}
+            activeLabel={coatingFilter}
+            onSliceClick={label=>setCoatingFilter(prev=>prev===label?null:label)}
+          />
+          <PieCard
+            title="Owner"
+            subtitle={`${selectedSegLabel} · top owners`}
+            data={chartOwnerData}
+            activeLabel={ownerFilter}
+            onSliceClick={label=>setOwnerFilter(prev=>prev===label?null:label)}
+          />
+        </div>
+      </SectionCard>
+
       <div style={{display:"flex",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
 
-        {/* ── Left: Paste positions ── */}
-        <div style={{flex:"0 0 320px",minWidth:280,display:"flex",flexDirection:"column",gap:8}}>
-          <SectionCard
-            title="Paste Newbuild Positions"
-            subtitle="Broker chatter on newbuilds open in Asia — feeds the delivery list below">
-            <React.Suspense fallback={<div style={{fontSize:11,color:C.faint}}>Loading…</div>}>
-              <ParsePanel
-                vessels={[]}
-                cargoes={[]}
-                onAddVessels={addNewbuildPositions}
-                lockedMode="pos"
-                vesselDB={{}}
-              />
-            </React.Suspense>
-          </SectionCard>
-
-          {positions.length>0&&(
-            <SectionCard title="Pasted Positions" subtitle={`${positions.length} entries`}>
-              <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:300,overflowY:"auto"}}>
-                {positions.map(p=>(
-                  <div key={p.id} style={{
-                    display:"flex",alignItems:"center",gap:6,padding:"5px 7px",
-                    background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,fontSize:11
+        {/* ── Left: compact Paste / Pasted tabs ── */}
+        <div style={{flex:"0 0 320px",minWidth:280}}>
+          <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
+            <div style={{display:"flex",borderBottom:"1px solid "+C.bd}}>
+              {[["paste","Paste"],["list",`Pasted (${positions.length})`]].map(([k,label])=>(
+                <button key={k} onClick={()=>setPasteTab(k)}
+                  style={{
+                    flex:1,border:"none",borderBottom:"2px solid "+(pasteTab===k?"#58a6ff":"transparent"),
+                    background:pasteTab===k?"rgba(88,166,255,0.08)":"transparent",
+                    color:pasteTab===k?"#79c0ff":C.faint,fontSize:10,fontWeight:700,
+                    padding:"7px 8px",cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",letterSpacing:"0.05em"
                   }}>
-                    <span style={{fontWeight:700,color:"#79c0ff",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                      {p.vessel_name}
-                    </span>
-                    <span style={{color:C.faint,whiteSpace:"nowrap"}}>{p.open_date||"—"}</span>
-                    <span style={{color:"rgba(160,200,255,0.5)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:80}}>
-                      {p.port_name||""}
-                    </span>
-                    <button
-                      onClick={()=>setPendingDel(p)}
-                      style={{background:"none",border:"none",color:"rgba(255,107,107,0.5)",cursor:"pointer",fontSize:11,padding:0,flexShrink:0}}>
-                      ✕
-                    </button>
-                  </div>
-                ))}
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {pasteTab==="paste" ? (
+              <div style={{padding:"8px 10px"}}>
+                <div style={{fontSize:9,color:C.faint,marginBottom:5}}>
+                  Paste broker chatter / positions. Details can be edited later in the Pasted tab.
+                </div>
+                <div style={{maxHeight:155,overflow:"hidden"}}>
+                  <React.Suspense fallback={<div style={{fontSize:11,color:C.faint}}>Loading…</div>}>
+                    <ParsePanel
+                      vessels={[]}
+                      cargoes={[]}
+                      onAddVessels={addNewbuildPositions}
+                      lockedMode="pos"
+                      vesselDB={{}}
+                    />
+                  </React.Suspense>
+                </div>
               </div>
-            </SectionCard>
-          )}
+            ) : (
+              <div style={{padding:"7px 8px",maxHeight:235,overflow:"auto"}}>
+                {positions.length===0 ? (
+                  <div style={{padding:12,fontSize:11,color:C.faint,textAlign:"center"}}>No pasted positions.</div>
+                ) : (
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
+                    <thead>
+                      <tr>{["Vessel","DWT","Date","Port",""].map(h=><th key={h} style={{padding:"3px 4px",textAlign:"left",color:C.faint,fontSize:8,textTransform:"uppercase",borderBottom:"1px solid "+C.bd}}>{h}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {positions.map(p=>(
+                        <tr key={p.id}>
+                          <td style={{padding:"3px 4px",borderBottom:"1px solid "+C.bd2}}>
+                            <EditableCell value={p.vessel_name} onSave={v=>updateManualPosition(p.id,"vessel_name",v)} width={82} color="#79c0ff"/>
+                          </td>
+                          <td style={{padding:"3px 4px",borderBottom:"1px solid "+C.bd2}}>
+                            <EditableCell value={p.dwt} onSave={v=>updateManualPosition(p.id,"dwt",v?Number(v):null)} width={45}/>
+                          </td>
+                          <td style={{padding:"3px 4px",borderBottom:"1px solid "+C.bd2}}>
+                            <EditableCell value={p.open_date} onSave={v=>updateManualPosition(p.id,"open_date",v)} width={60}/>
+                          </td>
+                          <td style={{padding:"3px 4px",borderBottom:"1px solid "+C.bd2}}>
+                            <EditableCell value={p.port_name} onSave={v=>updateManualPosition(p.id,"port_name",v)} width={55}/>
+                          </td>
+                          <td style={{padding:"3px 4px",borderBottom:"1px solid "+C.bd2}}>
+                            <button onClick={()=>setPendingDel(p)} style={{background:"none",border:"none",color:"rgba(255,107,107,0.55)",cursor:"pointer",fontSize:10}}>✕</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── Right ── */}
@@ -603,7 +816,7 @@ export default function NewbuildsTab(){
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                 <thead>
                   <tr style={{background:"rgba(8,18,38,0.9)"}}>
-                    {["Segment","Ships","Sum DWT"].map(h=>(
+                    {["Segment","Ships","Sum DWT","Existing Fleet >2000","NB / Existing"].map(h=>(
                       <th key={h} style={{
                         padding:"5px 9px",textAlign:"left",fontSize:10,fontWeight:700,
                         color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.06em",
@@ -621,25 +834,16 @@ export default function NewbuildsTab(){
                       <td style={{padding:"5px 9px",fontWeight:700,color:seg.color}}>{seg.label}</td>
                       <td style={{padding:"5px 9px",color:"rgba(200,220,255,0.8)"}}>{segCounts[seg.key]?.ships||0}</td>
                       <td style={{padding:"5px 9px",color:"rgba(200,220,255,0.8)"}}>{fmtN(segCounts[seg.key]?.dwt||0)}</td>
+                      <td style={{padding:"5px 9px",color:"rgba(200,220,255,0.7)"}}>{existingSegCounts[seg.key]||0}</td>
+                      <td style={{padding:"5px 9px",color:"#79c0ff",fontWeight:700}}>
+                        {existingSegCounts[seg.key]
+                          ? ((segCounts[seg.key]?.ships||0)/(existingSegCounts[seg.key]||1)*100).toFixed(0)+"%"
+                          : "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          </SectionCard>
-
-          {/* ── Pie charts ── */}
-          <SectionCard
-            title="Orderbook Mix"
-            subtitle={
-              segFilter
-                ? `${selectedSegLabel}: coating and owner breakdown · click another segment above to change`
-                : "Segment share across full orderbook · coating and owner currently show all segments"
-            }>
-            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-              <PieCard title="Segments" subtitle="Number of ships" data={chartSegmentData}/>
-              <PieCard title="Coating" subtitle={selectedSegLabel} data={chartCoatingData}/>
-              <PieCard title="Owner" subtitle={`${selectedSegLabel} · top owners`} data={chartOwnerData}/>
             </div>
           </SectionCard>
 
@@ -689,6 +893,13 @@ export default function NewbuildsTab(){
                 <option value="">All countries</option>
                 {countries.map(([country,n])=><option key={country} value={country}>{country} ({n})</option>)}
               </select>
+
+              {ownerFilter&&(
+                <button onClick={()=>setOwnerFilter(null)}
+                  style={{...inp,width:"auto",cursor:"pointer",color:"#79c0ff",background:"rgba(88,166,255,0.10)"}}>
+                  Owner: {ownerFilter} ✕
+                </button>
+              )}
 
               <select
                 value={monthFilter||""}
@@ -749,7 +960,7 @@ export default function NewbuildsTab(){
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                   <thead>
                     <tr style={{background:"rgba(8,18,38,0.9)"}}>
-                      {["Vessel","DWT","Coating","Delivery","Operator","Yard",""].map(h=>(
+                      {["Vessel","DWT","Coating","Delivery","Operator","Yard","Comment",""].map(h=>(
                         <th key={h} style={{
                           padding:"5px 9px",textAlign:"left",fontSize:10,fontWeight:700,
                           color:"rgba(120,160,220,0.5)",textTransform:"uppercase",
@@ -767,37 +978,53 @@ export default function NewbuildsTab(){
                         style={{background:u.source==="manual"?"rgba(167,139,250,0.06)":i%2===0?"rgba(7,15,28,0.5)":"transparent"}}>
 
                         <td style={{padding:"5px 9px",fontWeight:700,color:u.source==="manual"?"#a78bfa":"#79c0ff",whiteSpace:"nowrap"}}>
-                          {dispName(u.vessel)}
+                          {u.source==="manual"
+                            ? <EditableCell value={u.vessel} onSave={v=>updateManualPosition(u.id,"vessel_name",v)} width={110} color="#a78bfa"/>
+                            : dispName(u.vessel)}
                           {u.source==="manual"&&(
                             <span style={{fontSize:9,marginLeft:5,color:"rgba(167,139,250,0.6)",fontWeight:400}}>manual</span>
                           )}
                         </td>
 
                         <td style={{padding:"5px 9px",color:C.faint,whiteSpace:"nowrap"}}>
-                          {u.dwt?fmtN(u.dwt):"—"}
+                          {u.source==="manual"
+                            ? <EditableCell value={u.dwt} onSave={v=>updateManualPosition(u.id,"dwt",v?Number(v):null)} width={60}/>
+                            : (u.dwt?fmtN(u.dwt):"—")}
                         </td>
 
                         <td style={{padding:"5px 9px",color:C.faint,whiteSpace:"nowrap"}}>
-                          {u.coating||"—"}
+                          {u.source==="manual"
+                            ? <EditableCell value={u.coating} onSave={v=>updateManualPosition(u.id,"coating",v)} width={72}/>
+                            : (u.coating||"—")}
                         </td>
 
                         <td style={{padding:"5px 9px",color:"rgba(160,200,255,0.7)",whiteSpace:"nowrap"}}>
-                          {u.delivery
-                            ? (parseFlexibleDate(u.delivery)?fmtMonth(parseFlexibleDate(u.delivery)):u.delivery)
-                            : "—"}
+                          {u.source==="manual"
+                            ? <EditableCell value={u.delivery} onSave={v=>updateManualPosition(u.id,"open_date",v)} width={72} color="#79c0ff"/>
+                            : (u.delivery?(parseFlexibleDate(u.delivery)?fmtMonth(parseFlexibleDate(u.delivery)):u.delivery):"—")}
                         </td>
 
                         <td style={{padding:"5px 9px",color:"rgba(200,220,255,0.7)",whiteSpace:"nowrap"}}>
-                          {u.operator||"—"}
+                          {u.source==="manual"
+                            ? <EditableCell value={u.operator} onSave={v=>updateManualPosition(u.id,"operator",v)} width={105}/>
+                            : (u.operator||"—")}
                         </td>
 
-                        <td
-                          title={u.yard||""}
-                          style={{
-                            padding:"5px 9px",color:C.faint,whiteSpace:"nowrap",
-                            maxWidth:170,overflow:"hidden",textOverflow:"ellipsis"
-                          }}>
-                          {u.yard||"—"}
+                        <td style={{padding:"5px 9px",color:C.faint,whiteSpace:"nowrap",maxWidth:170,overflow:"hidden",textOverflow:"ellipsis"}}>
+                          {u.source==="manual"
+                            ? <EditableCell value={u.yard} onSave={v=>updateManualPosition(u.id,"yard",v)} width={105}/>
+                            : (u.yard||"—")}
+                        </td>
+
+                        <td style={{padding:"5px 9px",whiteSpace:"nowrap"}}>
+                          <EditableCell
+                            value={u.comment}
+                            onSave={v=>u.source==="manual"
+                              ? updateManualPosition(u.id,"comment",v)
+                              : saveShipComment(u,v)}
+                            placeholder="add comment"
+                            width={130}
+                          />
                         </td>
 
                         <td style={{padding:"5px 9px"}}>
