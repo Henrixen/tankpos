@@ -133,7 +133,7 @@ function PieCard({title,subtitle,data,onSliceClick,activeLabel}){
   if(!total){
     return(
       <div style={{flex:"1 1 0",minWidth:0,height:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:7,padding:"8px 10px",boxSizing:"border-box"}}>
-        <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{title}</div>
+        <div style={{fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.75)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{title}</div>
         <div style={{fontSize:10,color:C.faint,marginTop:1}}>{subtitle}</div>
         <div style={{fontSize:11,color:C.faint,padding:"18px 0",textAlign:"center"}}>No data</div>
       </div>
@@ -151,23 +151,23 @@ function PieCard({title,subtitle,data,onSliceClick,activeLabel}){
 
   return(
     <div style={{flex:"1 1 0",minWidth:0,height:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:7,padding:"8px 10px",boxSizing:"border-box"}}>
-      <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{title}</div>
+      <div style={{fontSize:11,fontWeight:700,color:"rgba(120,160,220,0.75)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{title}</div>
       <div style={{fontSize:10,color:C.faint,marginTop:1}}>{subtitle}</div>
 
-      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:6,minHeight:142}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:4,minHeight:160}}>
         <div
           title="Click a colour/legend item to filter"
           style={{
-            width:132,height:132,borderRadius:"50%",
+            width:154,height:154,borderRadius:"50%",
             background:`conic-gradient(${stops})`,
             position:"relative",flexShrink:0
           }}>
           <div style={{
-            position:"absolute",inset:30,borderRadius:"50%",background:C.bg3,
+            position:"absolute",inset:34,borderRadius:"50%",background:C.bg3,
             display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
             pointerEvents:"none"
           }}>
-            <div style={{fontSize:17,fontWeight:800,color:C.tx}}>{total}</div>
+            <div style={{fontSize:20,fontWeight:800,color:C.tx}}>{total}</div>
             <div style={{fontSize:8,color:C.faint,textTransform:"uppercase"}}>ships</div>
           </div>
 
@@ -175,7 +175,7 @@ function PieCard({title,subtitle,data,onSliceClick,activeLabel}){
           {onSliceClick && slices.map((x,i)=>{
             const mid=(x.from+x.to)/2;
             const ang=(mid/100)*Math.PI*2-Math.PI/2;
-            const cx=66+Math.cos(ang)*50, cy=66+Math.sin(ang)*50;
+            const cx=77+Math.cos(ang)*59, cy=77+Math.sin(ang)*59;
             return(
               <button key={x.label+"hit"} onClick={()=>onSliceClick(x.label)}
                 title={`${x.label}: ${x.value}`}
@@ -188,13 +188,13 @@ function PieCard({title,subtitle,data,onSliceClick,activeLabel}){
           })}
         </div>
 
-        <div style={{display:"flex",flexDirection:"column",gap:3,minWidth:0,flex:1,maxWidth:220}}>
+        <div style={{display:"flex",flexDirection:"column",gap:3,minWidth:0,flex:1,maxWidth:185}}>
           {slices.slice(0,9).map((x,i)=>{
             const active=activeLabel===x.label;
             return(
               <button key={x.label+"_"+i} onClick={()=>onSliceClick?.(x.label)}
                 style={{
-                  display:"flex",alignItems:"center",gap:5,fontSize:10,minWidth:0,
+                  display:"flex",alignItems:"center",gap:5,fontSize:11,minWidth:0,
                   border:"none",background:active?"rgba(88,166,255,0.10)":"transparent",
                   borderRadius:3,padding:"2px 2px",cursor:onSliceClick?"pointer":"default",
                   fontFamily:"inherit",textAlign:"left"
@@ -250,6 +250,7 @@ export default function NewbuildsTab(){
   const [dwtMin,setDwtMin]=useState("");
   const [dwtMax,setDwtMax]=useState("");
   const [monthFilter,setMonthFilter]=useState(null);
+  const [quarterFilter,setQuarterFilter]=useState(null);
   const [search,setSearch]=useState("");
   const [monthsAhead,setMonthsAhead]=useState(3);
   const [pendingDel,setPendingDel]=useState(null);
@@ -496,6 +497,13 @@ export default function NewbuildsTab(){
       const d=new Date(n.delivery_date);
       if(isNaN(d.getTime())||monthKey(d)!==monthFilter) return false;
     }
+    if(quarterFilter){
+      if(!n.delivery_date) return false;
+      const d=new Date(n.delivery_date);
+      if(isNaN(d.getTime())) return false;
+      const qKey=`${d.getFullYear()}-Q${Math.floor(d.getMonth()/3)+1}`;
+      if(qKey!==quarterFilter) return false;
+    }
 
     if(search.trim()){
       const t=search.trim().toLowerCase();
@@ -504,7 +512,7 @@ export default function NewbuildsTab(){
       if(!hay.includes(t)) return false;
     }
     return true;
-  }),[enriched,segFilter,countryFilter,coatingFilter,ownerFilter,dwtMin,dwtMax,monthFilter,search]);
+  }),[enriched,segFilter,countryFilter,coatingFilter,ownerFilter,dwtMin,dwtMax,monthFilter,quarterFilter,search]);
 
   const countries=useMemo(()=>{
     const counts={};
@@ -532,7 +540,7 @@ export default function NewbuildsTab(){
 
   const filtersActive=!!(
     segFilter||countryFilter||coatingFilter||ownerFilter||
-    dwtMin!==""||dwtMax!==""||monthFilter||search
+    dwtMin!==""||dwtMax!==""||monthFilter||quarterFilter||search
   );
 
   function resetFilters(){
@@ -543,6 +551,7 @@ export default function NewbuildsTab(){
     setDwtMin("");
     setDwtMax("");
     setMonthFilter(null);
+    setQuarterFilter(null);
     setSearch("");
   }
 
@@ -676,22 +685,29 @@ export default function NewbuildsTab(){
 
   const deliveryTimeline=useMemo(()=>{
     const now=new Date();
-    const start=new Date(now.getFullYear(),now.getMonth(),1);
-    const months=[];
-    for(let i=0;i<24;i++){
-      const d=new Date(start.getFullYear(),start.getMonth()+i,1);
-      const key=monthKey(d);
-      months.push({key,label:d.toLocaleDateString("en-GB",{month:"short",year:"2-digit"}),count:0});
+    const currentQuarter=Math.floor(now.getMonth()/3);
+    const start=new Date(now.getFullYear(),currentQuarter*3,1);
+    const quarters=[];
+    for(let i=0;i<8;i++){
+      const d=new Date(start.getFullYear(),start.getMonth()+i*3,1);
+      const q=Math.floor(d.getMonth()/3)+1;
+      const key=`${d.getFullYear()}-Q${q}`;
+      const months=[];
+      for(let m=0;m<3;m++){
+        const md=new Date(d.getFullYear(),d.getMonth()+m,1);
+        months.push(monthKey(md));
+      }
+      quarters.push({key,label:`Q${q} ${String(d.getFullYear()).slice(-2)}`,count:0,months});
     }
-    const map=Object.fromEntries(months.map(m=>[m.key,m]));
     filtered.forEach(n=>{
       if(!n.delivery_date) return;
       const d=new Date(n.delivery_date);
       if(isNaN(d.getTime())) return;
-      const key=monthKey(d);
-      if(map[key]) map[key].count++;
+      const mk=monthKey(d);
+      const q=quarters.find(x=>x.months.includes(mk));
+      if(q) q.count++;
     });
-    return months;
+    return quarters;
   },[filtered]);
   const deliveryMax=Math.max(1,...deliveryTimeline.map(x=>x.count));
 
@@ -858,7 +874,7 @@ export default function NewbuildsTab(){
                         <tr style={{background:segFilter===seg.key?"rgba(88,166,255,0.1)":"transparent"}}>
                           <td style={{padding:"5px 9px",fontWeight:700,color:seg.color,whiteSpace:"nowrap"}}>
                             <button onClick={e=>{e.stopPropagation();setExpandedSeg(prev=>{const n=new Set(prev);n.has(seg.key)?n.delete(seg.key):n.add(seg.key);return n;});}}
-                              style={{background:"none",border:"none",color:seg.color,cursor:"pointer",padding:"0 5px 0 0",fontSize:10}}>{open?"▾":"▸"}</button>
+                              style={{background:"none",border:"none",color:seg.color,cursor:"pointer",padding:"0 5px 0 0",fontSize:13,lineHeight:1,fontWeight:700}}>{open?"▾":"▸"}</button>
                             <span onClick={()=>setSegFilter(f=>f===seg.key?null:seg.key)} style={{cursor:"pointer"}}>{seg.label}</span>
                           </td>
                           <td onClick={()=>setSegFilter(f=>f===seg.key?null:seg.key)} style={{padding:"5px 9px",textAlign:"right",color:"rgba(200,220,255,0.8)",cursor:"pointer"}}>{nbShips}</td>
@@ -868,11 +884,11 @@ export default function NewbuildsTab(){
                         </tr>
                         {open&&(segmentCoatingStats[seg.key]||[]).map(c=>(
                           <tr key={seg.key+"-"+c.coating} style={{background:"rgba(8,18,38,0.35)"}}>
-                            <td style={{padding:"4px 9px 4px 28px",color:C.faint,fontSize:11}}>{c.coating}</td>
-                            <td style={{padding:"4px 9px",textAlign:"right",color:C.faint,fontSize:11}}>{c.ships}</td>
-                            <td style={{padding:"4px 9px",textAlign:"right",color:C.faint,fontSize:11}}>{c.fleet}</td>
+                            <td style={{padding:"4px 9px 4px 28px",color:"rgba(232,238,246,0.86)",fontSize:11}}>{c.coating}</td>
+                            <td style={{padding:"4px 9px",textAlign:"right",color:"rgba(232,238,246,0.80)",fontSize:11}}>{c.ships}</td>
+                            <td style={{padding:"4px 9px",textAlign:"right",color:"rgba(232,238,246,0.76)",fontSize:11}}>{c.fleet}</td>
                             <td style={{padding:"4px 9px",textAlign:"right",color:"rgba(121,192,255,.75)",fontSize:11}}>{c.ratio!=null?(c.ratio*100).toFixed(0)+"%":"—"}</td>
-                            <td style={{padding:"4px 9px",textAlign:"right",color:C.faint,fontSize:11}}>{fmtN(c.dwt)}</td>
+                            <td style={{padding:"4px 9px",textAlign:"right",color:"rgba(232,238,246,0.76)",fontSize:11}}>{fmtN(c.dwt)}</td>
                           </tr>
                         ))}
                       </React.Fragment>;
@@ -882,15 +898,15 @@ export default function NewbuildsTab(){
               </div>
             </SectionCard>
 
-            <SectionCard title="Delivery Profile" subtitle="Next 24 months · reflects current filters">
-              <div style={{height:178,display:"flex",alignItems:"stretch",gap:3,paddingTop:6}}>
-                {deliveryTimeline.map((m,i)=>(
-                  <div key={m.key} title={`${m.label}: ${m.count} ship${m.count===1?"":"s"} · click to filter`}
-                    onClick={()=>setMonthFilter(prev=>prev===m.key?null:m.key)}
-                    style={{flex:"1 1 0",minWidth:0,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",cursor:"pointer",opacity:monthFilter&&monthFilter!==m.key?0.35:1}}>
-                    {m.count>0&&<div style={{fontSize:8,color:"#ffffff",fontWeight:700,marginBottom:2}}>{m.count}</div>}
-                    <div style={{width:"72%",minWidth:3,height:`${Math.max(m.count?4:1,(m.count/deliveryMax)*128)}px`,background:monthFilter===m.key?"#79c0ff":m.count?"#58a6ff":"rgba(88,166,255,.10)",borderRadius:"2px 2px 0 0"}}/>
-                    <div style={{height:26,paddingTop:4,fontSize:8,color:C.faint,whiteSpace:"nowrap",transform:i%3===0?"rotate(-45deg)":"none",transformOrigin:"top center"}}>{i%3===0?m.label:""}</div>
+            <SectionCard title="Delivery Profile" subtitle="Next 8 quarters · reflects current filters">
+              <div style={{height:210,display:"flex",alignItems:"stretch",gap:8,padding:"8px 6px 0"}}>
+                {deliveryTimeline.map(q=>(
+                  <div key={q.key} title={`${q.label}: ${q.count} ship${q.count===1?"":"s"} · click to filter`}
+                    onClick={()=>setQuarterFilter(prev=>prev===q.key?null:q.key)}
+                    style={{flex:"1 1 0",minWidth:0,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",cursor:"pointer",opacity:quarterFilter&&quarterFilter!==q.key?0.35:1}}>
+                    {q.count>0&&<div style={{fontSize:10,color:"#ffffff",fontWeight:400,marginBottom:3}}>{q.count}</div>}
+                    <div style={{width:"68%",minWidth:8,height:`${Math.max(q.count?8:2,(q.count/deliveryMax)*158)}px`,background:quarterFilter===q.key?"#79c0ff":q.count?"#58a6ff":"rgba(88,166,255,.10)",borderRadius:"3px 3px 0 0"}}/>
+                    <div style={{height:24,paddingTop:5,fontSize:10,color:"#ffffff",fontWeight:400,whiteSpace:"nowrap"}}>{q.label}</div>
                   </div>
                 ))}
               </div>
@@ -899,7 +915,7 @@ export default function NewbuildsTab(){
         </div>
       </div>
 
-      <SectionCard title="Orderbook Mix" subtitle="Click any colour or legend item to filter">
+      <SectionCard title="Orderbook Mix">
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,alignItems:"stretch"}}>
               <PieCard title="Segments" subtitle="Number of ships" data={chartSegmentData}
                 activeLabel={segFilter ? NB_SEGMENTS.find(x=>x.key===segFilter)?.label : null}
@@ -913,7 +929,7 @@ export default function NewbuildsTab(){
 
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
           {/* ── Shared filters ── */}
-          <SectionCard title="Filters" subtitle="Applies to Upcoming Deliveries and Full Orderbook below">
+          <SectionCard title="Filters">
             <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
               <input
                 value={search}
@@ -996,7 +1012,6 @@ export default function NewbuildsTab(){
           {/* ── Upcoming Deliveries ── */}
           <SectionCard
             title="Upcoming Deliveries"
-            subtitle="Barton schedule + manually pasted positions, merged by date"
             right={
               <div style={{display:"flex",gap:5,alignItems:"center"}}>
                 <button onClick={()=>handleExportUpcomingCSV(upcoming)} style={{...BTN_SM,padding:"3px 9px",fontSize:10}}>⬇ Export CSV</button>
