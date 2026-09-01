@@ -223,27 +223,65 @@ function PieCard({title,subtitle,data,onSliceClick,activeLabel}){
   );
 }
 
-function EditableCell({value,onSave,placeholder="—",width=100,color=null}){
+function EditableCell({value,onSave,placeholder="—",width=100,color=null,displayValue=null}){
   const [editing,setEditing]=useState(false);
   const [draft,setDraft]=useState("");
+  const editId=React.useRef(`nb-edit-${Math.random().toString(36).slice(2)}`);
+
+  function commit(nextDraft=draft){
+    const before=String(value??"");
+    const after=String(nextDraft??"");
+    setEditing(false);
+    if(after!==before) onSave?.(after);
+  }
+
+  function moveCell(direction){
+    const currentId=editId.current;
+    setTimeout(()=>{
+      const cells=Array.from(document.querySelectorAll('[data-nb-editable="1"]'));
+      const idx=cells.findIndex(el=>el.getAttribute("data-nb-edit-id")===currentId);
+      if(idx<0) return;
+      const target=cells[idx+direction];
+      if(target){
+        target.click();
+        target.scrollIntoView?.({block:"nearest",inline:"nearest"});
+      }
+    },25);
+  }
+
   if(editing){
     return(
       <input autoFocus value={draft}
         onChange={e=>setDraft(e.target.value)}
-        onBlur={()=>{setEditing(false);if(draft!==String(value??""))onSave?.(draft);}}
+        onBlur={()=>commit()}
         onKeyDown={e=>{
-          if(e.key==="Enter"){e.preventDefault();e.currentTarget.blur();}
-          if(e.key==="Escape"){setEditing(false);}
+          if(e.key==="Enter"){e.preventDefault();commit();}
+          if(e.key==="Escape"){e.preventDefault();setEditing(false);}
+          if(e.key==="Tab"){
+            e.preventDefault();
+            const dir=e.shiftKey?-1:1;
+            commit();
+            moveCell(dir);
+          }
         }}
         style={{...inp,width,background:C.bg,border:"1px solid rgba(88,166,255,0.45)",padding:"2px 5px"}}
       />
     );
   }
+
+  const shown=displayValue!==null&&displayValue!==undefined ? displayValue : value;
   return(
-    <span onClick={()=>{setDraft(value??"");setEditing(true);}}
+    <span
+      data-nb-editable="1"
+      data-nb-edit-id={editId.current}
+      onClick={()=>{setDraft(value??"");setEditing(true);}}
       title="Click to edit"
-      style={{display:"inline-block",minWidth:width,color:color||(value?C.dim:C.faint),cursor:"text",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",verticalAlign:"middle"}}>
-      {value||placeholder}
+      style={{
+        display:"inline-block",minWidth:width,color:color||(value?C.dim:C.faint),
+        cursor:"text",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
+        verticalAlign:"middle"
+      }}>
+      {shown||placeholder}
     </span>
   );
 }
@@ -817,6 +855,7 @@ export default function NewbuildsTab(){
                       cargoes={[]}
                       onAddVessels={addNewbuildPositions}
                       lockedMode="pos"
+                      compactToolbar
                       vesselDB={{}}
                     />
                   </React.Suspense>
@@ -838,7 +877,12 @@ export default function NewbuildsTab(){
                             <EditableCell value={p.vessel_name} onSave={v=>updateManualPosition(p.id,"vessel_name",v)} width={82} color="#79c0ff"/>
                           </td>
                           <td style={{padding:"3px 4px",borderBottom:"1px solid "+C.bd2}}>
-                            <EditableCell value={p.dwt} onSave={v=>updateManualPosition(p.id,"dwt",v?Number(v):null)} width={45}/>
+                            <EditableCell
+                              value={p.dwt}
+                              displayValue={p.dwt?fmtN(p.dwt):""}
+                              onSave={v=>updateManualPosition(p.id,"dwt",v?Number(String(v).replace(/,/g,"")):null)}
+                              width={52}
+                            />
                           </td>
                           <td style={{padding:"3px 4px",borderBottom:"1px solid "+C.bd2}}>
                             <EditableCell value={p.open_date} onSave={v=>updateManualPosition(p.id,"open_date",v)} width={60}/>
@@ -1094,7 +1138,12 @@ export default function NewbuildsTab(){
 
                         <td style={{padding:"5px 9px",color:C.faint,whiteSpace:"nowrap"}}>
                           {u.source==="manual"
-                            ? <EditableCell value={u.dwt} onSave={v=>updateManualPosition(u.id,"dwt",v?Number(v):null)} width={60}/>
+                            ? <EditableCell
+                              value={u.dwt}
+                              displayValue={u.dwt?fmtN(u.dwt):""}
+                              onSave={v=>updateManualPosition(u.id,"dwt",v?Number(String(v).replace(/,/g,"")):null)}
+                              width={68}
+                            />
                             : (u.dwt?fmtN(u.dwt):"—")}
                         </td>
 
