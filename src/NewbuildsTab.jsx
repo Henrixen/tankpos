@@ -6,12 +6,13 @@ const ParsePanel = React.lazy(()=>import("./ParsePanel"));
 
 // DWT segment buckets matching the Barton "Segs" convention
 const NB_SEGMENTS = [
-  { key:"small",  label:"1. Small (<14)",     color:"#58a6ff", dwt:[0,      14000] },
-  { key:"inter",  label:"2. Inter (14-19)",    color:"#4ade80", dwt:[14001,  19000] },
-  { key:"j19",    label:"3. J19 (19-23)",      color:"#f778ba", dwt:[19001,  23000] },
-  { key:"flexi",  label:"4. Flexi (23-30)",    color:"#ea9a00", dwt:[23001,  30000] },
-  { key:"handy",  label:"5. Handy (30-40)",    color:"#a78bfa", dwt:[30001,  40000] },
-  { key:"mr",     label:"6. MR (>40)",         color:"#22d3ee", dwt:[40001,  999999] },
+  { key:"sub10", label:"Sub 10k (<10)", color:"#38bdf8", dwt:[0,      9999]   },
+  { key:"city",  label:"City (10-14)",  color:"#58a6ff", dwt:[10000, 14000]  },
+  { key:"inter", label:"Inter (14-19)", color:"#4ade80", dwt:[14001, 19000]  },
+  { key:"j19",   label:"J19 (19-23)",   color:"#f778ba", dwt:[19001, 23000]  },
+  { key:"flexi", label:"Flexi (23-30)", color:"#ea9a00", dwt:[23001, 30000]  },
+  { key:"handy", label:"Handy (30-40)", color:"#a78bfa", dwt:[30001, 40000]  },
+  { key:"mr",    label:"MR (>40)",      color:"#22d3ee", dwt:[40001, 999999] },
 ];
 
 function segmentFor(dwt){
@@ -242,6 +243,7 @@ export default function NewbuildsTab(){
   const [loading,setLoading]=useState(true);
   const [positions,setPositions]=useState([]);
   const [segFilter,setSegFilter]=useState(null);
+  const [expandedSeg,setExpandedSeg]=useState(()=>new Set());
   const [countryFilter,setCountryFilter]=useState(null);
   const [coatingFilter,setCoatingFilter]=useState(null);
   const [ownerFilter,setOwnerFilter]=useState(null);
@@ -276,8 +278,8 @@ export default function NewbuildsTab(){
       let all=[], from=0, pageSize=1000;
       while(true){
         const {data,error}=await supabase.from("vessels_db")
-          .select("imo,vessel,dwt,built")
-          .gte("built",2000)
+          .select("imo,vessel,dwt,built,coating")
+          .gt("built",2000)
           .range(from,from+pageSize-1);
         if(error){console.error("existing fleet ratio fetch error:",error);break;}
         if(!data?.length) break;
@@ -543,12 +545,33 @@ export default function NewbuildsTab(){
     const counts={};
     NB_SEGMENTS.forEach(seg=>counts[seg.key]=0);
     existingFleet.forEach(r=>{
-      if(Number(r.built)<2000) return;
+      if(Number(r.built)<=2000) return;
       const seg=segmentFor(Number(r.dwt)||0);
       if(seg) counts[seg.key]=(counts[seg.key]||0)+1;
     });
     return counts;
   },[existingFleet]);
+
+  const segmentCoatingStats=useMemo(()=>{
+    const result={};
+    NB_SEGMENTS.forEach(seg=>{
+      const nbRows=enriched.filter(n=>n._seg?.key===seg.key);
+      const fleetRows=existingFleet.filter(r=>Number(r.built)>2000 && segmentFor(Number(r.dwt)||0)?.key===seg.key);
+      const names=[...new Set([...nbRows.map(r=>r.coating||"Unknown"),...fleetRows.map(r=>r.coating||"Unknown")])];
+      result[seg.key]=names.map(coating=>{
+        const nb=nbRows.filter(r=>(r.coating||"Unknown")===coating);
+        const fleet=fleetRows.filter(r=>(r.coating||"Unknown")===coating);
+        return {
+          coating,
+          ships:nb.length,
+          fleet:fleet.length,
+          ratio:fleet.length ? nb.length/fleet.length : null,
+          dwt:nb.reduce((a,r)=>a+(Number(r.dwt)||0),0),
+        };
+      }).filter(x=>x.ships||x.fleet).sort((a,b)=>b.ships-a.ships);
+    });
+    return result;
+  },[enriched,existingFleet]);
 
   // Chart 1 = all segments by ship count.
   // Charts 2/3 = coating and owner for the clicked segment (or all segments if none clicked).
@@ -559,7 +582,7 @@ export default function NewbuildsTab(){
 
   const chartSegmentData=useMemo(
     ()=>NB_SEGMENTS.map(seg=>({
-      label:seg.label.replace(/^\d+\.\s*/,""),
+      label:seg.label,
       value:enriched.filter(n=>n._seg?.key===seg.key).length,
     })).filter(x=>x.value>0),
     [enriched]
@@ -590,7 +613,7 @@ export default function NewbuildsTab(){
   },[chartBase]);
 
   const selectedSegLabel=segFilter
-    ? (NB_SEGMENTS.find(x=>x.key===segFilter)?.label.replace(/^\d+\.\s*/,"")||"Selected segment")
+    ? (NB_SEGMENTS.find(x=>x.key===segFilter)?.label||"Selected segment")
     : "All segments";
 
   const cutoff=useMemo(()=>monthsFromNow(monthsAhead),[monthsAhead]);
@@ -633,6 +656,27 @@ export default function NewbuildsTab(){
       return da-db;
     });
   },[filtered,positions,cutoff]);
+
+  const deliveryTimeline=useMemo(()=>{
+    const now=new Date();
+    const start=new Date(now.getFullYear(),now.getMonth(),1);
+    const months=[];
+    for(let i=0;i<24;i++){
+      const d=new Date(start.getFullYear(),start.getMonth()+i,1);
+      const key=monthKey(d);
+      months.push({key,label:d.toLocaleDateString("en-GB",{month:"short",year:"2-digit"}),count:0});
+    }
+    const map=Object.fromEntries(months.map(m=>[m.key,m]));
+    filtered.forEach(n=>{
+      if(!n.delivery_date) return;
+      const d=new Date(n.delivery_date);
+      if(isNaN(d.getTime())) return;
+      const key=monthKey(d);
+      if(map[key]) map[key].count++;
+    });
+    return months;
+  },[filtered]);
+  const deliveryMax=Math.max(1,...deliveryTimeline.map(x=>x.count));
 
   const totalShips=enriched.length;
   const totalDWT=enriched.reduce((a,n)=>a+(Number(n.dwt)||0),0);
@@ -698,42 +742,6 @@ export default function NewbuildsTab(){
         )}
       </div>
 
-
-      {/* ── Full-width clickable orderbook mix ── */}
-      <SectionCard
-        title="Orderbook Mix"
-        subtitle={
-          segFilter
-            ? `${selectedSegLabel}: coating and owner breakdown · click colours to filter`
-            : "Click any colour/legend item to filter the orderbook"
-        }>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,height:150}}>
-          <PieCard
-            title="Segments"
-            subtitle="Number of ships"
-            data={chartSegmentData}
-            activeLabel={segFilter ? NB_SEGMENTS.find(x=>x.key===segFilter)?.label.replace(/^\d+\.\s*/,"") : null}
-            onSliceClick={label=>{
-              const seg=NB_SEGMENTS.find(x=>x.label.replace(/^\d+\.\s*/,"")===label);
-              setSegFilter(prev=>prev===seg?.key?null:(seg?.key||null));
-            }}
-          />
-          <PieCard
-            title="Coating"
-            subtitle={selectedSegLabel}
-            data={chartCoatingData}
-            activeLabel={coatingFilter}
-            onSliceClick={label=>setCoatingFilter(prev=>prev===label?null:label)}
-          />
-          <PieCard
-            title="Owner"
-            subtitle={`${selectedSegLabel} · top owners`}
-            data={chartOwnerData}
-            activeLabel={ownerFilter}
-            onSliceClick={label=>setOwnerFilter(prev=>prev===label?null:label)}
-          />
-        </div>
-      </SectionCard>
 
       <div style={{display:"flex",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
 
@@ -811,42 +819,81 @@ export default function NewbuildsTab(){
         {/* ── Right ── */}
         <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:10}}>
 
-          <SectionCard title="Segment Breakdown" subtitle="Across full Barton newbuild orderbook — click a row to filter">
-            <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                <thead>
-                  <tr style={{background:"rgba(8,18,38,0.9)"}}>
-                    {["Segment","Ships","Sum DWT","Existing Fleet >2000","NB / Existing"].map(h=>(
-                      <th key={h} style={{
-                        padding:"5px 9px",textAlign:"left",fontSize:10,fontWeight:700,
-                        color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.06em",
-                        borderBottom:"1px solid rgba(58,130,246,0.12)"
-                      }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {NB_SEGMENTS.map(seg=>(
-                    <tr
-                      key={seg.key}
-                      onClick={()=>setSegFilter(f=>f===seg.key?null:seg.key)}
-                      style={{cursor:"pointer",background:segFilter===seg.key?"rgba(88,166,255,0.1)":"transparent"}}>
-                      <td style={{padding:"5px 9px",fontWeight:700,color:seg.color}}>{seg.label}</td>
-                      <td style={{padding:"5px 9px",color:"rgba(200,220,255,0.8)"}}>{segCounts[seg.key]?.ships||0}</td>
-                      <td style={{padding:"5px 9px",color:"rgba(200,220,255,0.8)"}}>{fmtN(segCounts[seg.key]?.dwt||0)}</td>
-                      <td style={{padding:"5px 9px",color:"rgba(200,220,255,0.7)"}}>{existingSegCounts[seg.key]||0}</td>
-                      <td style={{padding:"5px 9px",color:"#79c0ff",fontWeight:700}}>
-                        {existingSegCounts[seg.key]
-                          ? ((segCounts[seg.key]?.ships||0)/(existingSegCounts[seg.key]||1)*100).toFixed(0)+"%"
-                          : "—"}
-                      </td>
+          <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.8fr) minmax(280px,1fr)",gap:10,alignItems:"stretch"}}>
+            <SectionCard title="Segment Breakdown" subtitle="Click segment to filter · expand to show coating">
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                  <thead>
+                    <tr style={{background:"rgba(8,18,38,0.9)"}}>
+                      {[
+                        ["Segment","left"],["Ships","right"],["Existing Fleet","right"],["NB Ratio","right"],["Sum DWT","right"]
+                      ].map(([h,a])=>(
+                        <th key={h} style={{padding:"5px 9px",textAlign:a,fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.12)",whiteSpace:"nowrap"}}>{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </SectionCard>
+                  </thead>
+                  <tbody>
+                    {NB_SEGMENTS.map(seg=>{
+                      const open=expandedSeg.has(seg.key);
+                      const nbShips=segCounts[seg.key]?.ships||0;
+                      const fleetShips=existingSegCounts[seg.key]||0;
+                      return <React.Fragment key={seg.key}>
+                        <tr style={{background:segFilter===seg.key?"rgba(88,166,255,0.1)":"transparent"}}>
+                          <td style={{padding:"5px 9px",fontWeight:700,color:seg.color,whiteSpace:"nowrap"}}>
+                            <button onClick={e=>{e.stopPropagation();setExpandedSeg(prev=>{const n=new Set(prev);n.has(seg.key)?n.delete(seg.key):n.add(seg.key);return n;});}}
+                              style={{background:"none",border:"none",color:seg.color,cursor:"pointer",padding:"0 5px 0 0",fontSize:10}}>{open?"▾":"▸"}</button>
+                            <span onClick={()=>setSegFilter(f=>f===seg.key?null:seg.key)} style={{cursor:"pointer"}}>{seg.label}</span>
+                          </td>
+                          <td onClick={()=>setSegFilter(f=>f===seg.key?null:seg.key)} style={{padding:"5px 9px",textAlign:"right",color:"rgba(200,220,255,0.8)",cursor:"pointer"}}>{nbShips}</td>
+                          <td style={{padding:"5px 9px",textAlign:"right",color:"rgba(200,220,255,0.7)"}}>{fleetShips}</td>
+                          <td style={{padding:"5px 9px",textAlign:"right",color:"#79c0ff",fontWeight:700}}>{fleetShips?((nbShips/fleetShips)*100).toFixed(0)+"%":"—"}</td>
+                          <td style={{padding:"5px 9px",textAlign:"right",color:"rgba(200,220,255,0.8)"}}>{fmtN(segCounts[seg.key]?.dwt||0)}</td>
+                        </tr>
+                        {open&&(segmentCoatingStats[seg.key]||[]).map(c=>(
+                          <tr key={seg.key+"-"+c.coating} style={{background:"rgba(8,18,38,0.35)"}}>
+                            <td style={{padding:"4px 9px 4px 28px",color:C.faint,fontSize:11}}>{c.coating}</td>
+                            <td style={{padding:"4px 9px",textAlign:"right",color:C.faint,fontSize:11}}>{c.ships}</td>
+                            <td style={{padding:"4px 9px",textAlign:"right",color:C.faint,fontSize:11}}>{c.fleet}</td>
+                            <td style={{padding:"4px 9px",textAlign:"right",color:"rgba(121,192,255,.75)",fontSize:11}}>{c.ratio!=null?(c.ratio*100).toFixed(0)+"%":"—"}</td>
+                            <td style={{padding:"4px 9px",textAlign:"right",color:C.faint,fontSize:11}}>{fmtN(c.dwt)}</td>
+                          </tr>
+                        ))}
+                      </React.Fragment>;
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </SectionCard>
 
+            <SectionCard title="Delivery Profile" subtitle="Next 24 months · reflects current filters">
+              <div style={{height:178,display:"flex",alignItems:"stretch",gap:3,paddingTop:6}}>
+                {deliveryTimeline.map((m,i)=>(
+                  <div key={m.key} title={`${m.label}: ${m.count} ship${m.count===1?"":"s"}`}
+                    style={{flex:"1 1 0",minWidth:0,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center"}}>
+                    {m.count>0&&<div style={{fontSize:8,color:C.faint,marginBottom:2}}>{m.count}</div>}
+                    <div style={{width:"72%",minWidth:3,height:`${Math.max(m.count?4:1,(m.count/deliveryMax)*128)}px`,background:m.count?"#58a6ff":"rgba(88,166,255,.10)",borderRadius:"2px 2px 0 0"}}/>
+                    <div style={{height:26,paddingTop:4,fontSize:8,color:C.faint,whiteSpace:"nowrap",transform:i%3===0?"rotate(-45deg)":"none",transformOrigin:"top center"}}>{i%3===0?m.label:""}</div>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          </div>
+        </div>
+      </div>
+
+      <SectionCard title="Orderbook Mix" subtitle="Click any colour or legend item to filter">
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,height:150}}>
+              <PieCard title="Segments" subtitle="Number of ships" data={chartSegmentData}
+                activeLabel={segFilter ? NB_SEGMENTS.find(x=>x.key===segFilter)?.label : null}
+                onSliceClick={label=>{const seg=NB_SEGMENTS.find(x=>x.label===label);setSegFilter(prev=>prev===seg?.key?null:(seg?.key||null));}}/>
+              <PieCard title="Coating" subtitle={selectedSegLabel} data={chartCoatingData} activeLabel={coatingFilter}
+                onSliceClick={label=>setCoatingFilter(prev=>prev===label?null:label)}/>
+              <PieCard title="Owner" subtitle={`${selectedSegLabel} · top owners`} data={chartOwnerData} activeLabel={ownerFilter}
+                onSliceClick={label=>setOwnerFilter(prev=>prev===label?null:label)}/>
+            </div>
+      </SectionCard>
+
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
           {/* ── Shared filters ── */}
           <SectionCard title="Filters" subtitle="Applies to Upcoming Deliveries and Full Orderbook below">
             <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
@@ -868,19 +915,19 @@ export default function NewbuildsTab(){
               <div style={{display:"flex",alignItems:"center",gap:4}}>
                 <span style={{fontSize:10,color:C.faint,textTransform:"uppercase"}}>DWT</span>
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   value={dwtMin}
-                  onChange={e=>setDwtMin(e.target.value)}
+                  onChange={e=>setDwtMin(e.target.value.replace(/[^0-9]/g,""))}
                   placeholder="From"
                   style={{...inp,width:82}}
                 />
                 <span style={{fontSize:10,color:C.faint}}>–</span>
                 <input
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   value={dwtMax}
-                  onChange={e=>setDwtMax(e.target.value)}
+                  onChange={e=>setDwtMax(e.target.value.replace(/[^0-9]/g,""))}
                   placeholder="To"
                   style={{...inp,width:82}}
                 />
@@ -1147,7 +1194,6 @@ export default function NewbuildsTab(){
               </div>
             )}
           </SectionCard>
-        </div>
       </div>
 
       {/* ── Note/tag editor modal ── */}
