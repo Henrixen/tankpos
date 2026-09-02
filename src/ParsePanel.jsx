@@ -4,7 +4,7 @@ import { C } from "./constants";
 import { loadImg, normaliseQty, rollOpenDateForward } from "./utils";
 import { apiCall, ocrImage, parsePos, parseCargo } from "./api";
 
-function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vesselDB = {},compactToolbar=false}) {
+function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vesselDB = {},compactToolbar=false,selectedParseTags=[]}) {
   const [posDate, setPosDate] = useState(() => {const d=new Date();return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();});
   const [mode,setMode]=useState(lockedMode||"pos");
   const [text,setText]=useState("");const [img,setImg]=useState(null);
@@ -66,7 +66,8 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
           const cUpdated=fnd(["updated date","updated","date updated","last updated"]);
           const rawUpd=r[cUpdated];
           const addedAt=rawUpd instanceof Date?rawUpd.toISOString():rawUpd?new Date(rawUpd).toISOString()||new Date().toISOString():new Date().toISOString();
-          return {id:"xls-"+Date.now()+"-"+idx+"-"+Math.random().toString(36).slice(2,5),charterer:String(r[cCharterer]||"").trim(),vessel,qty:fmtQ(r[cQty]),cargo:String(r[cProduct]||"").trim().toUpperCase(),load:String(r[cLoad]||"").trim(),disch:String(r[cDisch]||"").trim(),from:ls,to:le,freight:String(r[cFreight]||"").trim(),comment:String(r[cComment]||"").trim(),status,updated:addedAt};
+          const tags=[...new Set((selectedParseTags||[]).filter(Boolean))];
+          return {id:"xls-"+Date.now()+"-"+idx+"-"+Math.random().toString(36).slice(2,5),charterer:String(r[cCharterer]||"").trim(),vessel,qty:fmtQ(r[cQty]),cargo:String(r[cProduct]||"").trim().toUpperCase(),load:String(r[cLoad]||"").trim(),disch:String(r[cDisch]||"").trim(),from:ls,to:le,freight:String(r[cFreight]||"").trim(),comment:String(r[cComment]||"").trim(),status,updated:addedAt,...(tags.length?{tags,tag:tags.join(", ")}:{})};
         }).filter(r=>r.charterer||r.vessel||r.load);
         if(!parsed.length){setStatus({t:"error",m:"No cargo rows found. Check column headers."});return;}
         const lk=onAddCargoes(parsed);
@@ -133,7 +134,15 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
       }else{
         const p=await parseCargo(text||"(img)",img,known);if(!p?.length){setStatus({t:"error",m:"No fixture data found."});return;}
         const [dd,mm,yyyy]=posDate.split("/");const ts=(dd&&mm&&yyyy)?new Date(`${yyyy}-${mm}-${dd}`).toISOString():new Date().toISOString();
-        const stamped=p.map(v=>({...v,updated:ts}));
+        const stamped=p.map(v=>{
+          const parserTags = Array.isArray(v.tags) ? v.tags : (v.tag ? [v.tag] : []);
+          const tags = [...new Set([...parserTags, ...(selectedParseTags || [])].filter(Boolean))];
+          return {
+            ...v,
+            updated:ts,
+            ...(tags.length ? { tags, tag: tags.join(", ") } : {})
+          };
+        });
         const lk=onAddCargoes(stamped);setText("");setImg(null);
         setStatus({t:"success",m:"✓ "+p.length+" fixture(s)"+(lk?", "+lk+" pos updated":"")});
       }
