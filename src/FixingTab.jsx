@@ -640,6 +640,7 @@ function FixingTab({vessels}){
   const [clientSort,setClientSort]=useState("name"); // "name"|"open"|"subs"|"working"|"fixed"
   const [editingClientName,setEditingClientName]=useState(null); // id of client being renamed
   const [notePopout,setNotePopout]=useState(null); // charterer name for popout // "matrix" | "list"
+  const [clientNotesExpanded,setClientNotesExpanded]=useState({}); // { [charterer]: boolean }
   // Sync expand state for each job's 3 top editors: { [jobId]: {expanded, savedH, expandedH, key} }
   const [jobExpandStates,setJobExpandStates]=useState({});
 
@@ -651,8 +652,20 @@ function FixingTab({vessels}){
   },[]);
 
   async function saveOwnerDir(dir){ setOwners(dir); await supabase.from("dashboard").upsert({key:"owner-directory",value:JSON.stringify(dir)},{onConflict:"key"}); }
-  function addOwnerEntry(){ const id="od_"+Date.now()+"_"+Math.random().toString(36).slice(2,5); saveOwnerDir([...owners,{...newOwnerEntry,id}]); setNewOwnerEntry({id:"",company:"",segments:[],trades:[],pic:"",comment:""}); }
+  function addOwnerEntry(){
+    if(!newOwnerEntry.company.trim())return;
+    const id="od_"+Date.now()+"_"+Math.random().toString(36).slice(2,5);
+    saveOwnerDir([...owners,{...newOwnerEntry,company:newOwnerEntry.company.trim(),id}]);
+    setNewOwnerEntry({id:"",company:"",segments:[],trades:[],pic:"",comment:""});
+  }
   function updateOwnerEntry(id,field,val){ saveOwnerDir(owners.map(o=>o.id===id?{...o,[field]:val}:o)); }
+  function updateOwnerCompany(company,changes){
+    saveOwnerDir(owners.map(o=>(o.company||"").trim().toLowerCase()===(company||"").trim().toLowerCase()?{...o,...changes}:o));
+  }
+  function addOwnerPic(company,segments=[]){
+    const id="od_"+Date.now()+"_"+Math.random().toString(36).slice(2,5);
+    saveOwnerDir([...owners,{id,company,segments:[...segments],trades:[],pic:"",comment:""}]);
+  }
   function removeOwnerEntry(id){ setPendingDelOwner(id); }
   function confirmRemoveOwnerEntry(){ if(!pendingDelOwner)return; saveOwnerDir(owners.filter(o=>o.id!==pendingDelOwner)); setPendingDelOwner(null); }
 
@@ -1023,6 +1036,48 @@ function FixingTab({vessels}){
                   <button onClick={()=>setExpandedJob(null)}
                     style={{background:"none",border:"none",color:C.faint,fontSize:10,cursor:"pointer",padding:0,fontFamily:"inherit",fontWeight:600}}>▲ close</button>
                 </div>
+
+                {/* Client notes — one shared expandable box per client, above all cargoes */}
+                {(()=>{
+                  const client=clients.find(c=>c.name===charterer);
+                  if(!client)return null;
+                  const notesOpen=!!clientNotesExpanded[charterer];
+                  return(
+                    <div style={{borderBottom:"1px solid "+C.bd2,background:"rgba(88,166,255,0.025)"}}>
+                      <button
+                        onClick={()=>setClientNotesExpanded(p=>({...p,[charterer]:!p[charterer]}))}
+                        style={{
+                          width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 12px",
+                          background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit",textAlign:"left"
+                        }}>
+                        <span style={{fontSize:14,color:notesOpen?"#79c0ff":C.faint,fontWeight:800,lineHeight:1}}>
+                          {notesOpen?"▾":"▸"}
+                        </span>
+                        <span style={{fontSize:10,fontWeight:800,color:notesOpen?"#79c0ff":C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>
+                          Client Notes
+                        </span>
+                        {!notesOpen&&client.notes&&(
+                          <span style={{fontSize:10,color:"rgba(150,185,225,0.45)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>
+                            {stripHtml(client.notes).replace(/\s+/g," ").trim()}
+                          </span>
+                        )}
+                      </button>
+                      {notesOpen&&(
+                        <div style={{padding:"0 12px 10px"}}>
+                          <RichEditor
+                            jobId={"client-"+client.id} field="clientnotes"
+                            title="Client Notes"
+                            value={client.notes||""}
+                            placeholder="Client notes…"
+                            height={Math.max(130,client.notes_height||130)}
+                            onChange={val=>updateClient(client.id,{notes:val})}
+                            onResizeSave={h=>updateClient(client.id,{notes_height:h})}/>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {chartererJobs.length===0&&(
                   <div style={{padding:"32px",textAlign:"center",color:C.faint,fontSize:12}}>No cargoes yet — click <strong style={{color:"#79c0ff"}}>+ cargo</strong> to add one.</div>
                 )}
@@ -1142,18 +1197,6 @@ function FixingTab({vessels}){
                         }
                         return mobile ? (
                           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                            {client && (
-                              <MobileCollapse title="Client Notes" color="#c792ea">
-                                <RichEditor
-                                  jobId={"client-"+client.id} field="clientnotes"
-                                  title="" value={client.notes||""}
-                                  placeholder="Client notes…"
-                                  height={140}
-                                  alwaysExpanded={true}
-                                  onChange={val=>updateClient(client.id,{notes:val})}
-                                  onResizeSave={h=>updateClient(client.id,{notes_height:h})}/>
-                              </MobileCollapse>
-                            )}
                             <div>
                               <RichEditor jobId={job.id} field="cargo_details" title="Cargo"
                                 value={job.cargo_details||""} placeholder="Cargo details…"
@@ -1195,7 +1238,7 @@ function FixingTab({vessels}){
                         {/* Left column: top 3 editors + subs/fixed below */}
                         <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:8}}>
                         <div style={{display:"flex",gap:8,alignItems:"stretch"}}>
-                          <div style={{flex:"0 0 14%",minWidth:110,display:"flex",flexDirection:"column"}}>
+                          <div style={{flex:"0 0 18%",minWidth:130,display:"flex",flexDirection:"column"}}>
                             <RichEditor jobId={job.id} field="cargo_details" title="Cargo"
                               value={job.cargo_details||""} placeholder="Cargo details…"
                               height={syncH}
@@ -1205,7 +1248,7 @@ function FixingTab({vessels}){
                               onToggleExpand={handleSyncToggle}
                               expandState={syncExpand?.key && syncExpand}/>
                           </div>
-                          <div style={{flex:"0 0 22%",minWidth:0,display:"flex",flexDirection:"column"}}>
+                          <div style={{flex:"0 0 29%",minWidth:0,display:"flex",flexDirection:"column"}}>
                             <RichEditor jobId={job.id} field="notes" title="Notes & Guidance"
                               value={job.notes||""} placeholder="Notes & guidance…"
                               height={syncH}
@@ -1273,20 +1316,6 @@ function FixingTab({vessels}){
                             onResizeSave={h=>updateJobHeight(job.id,"subs_fixed",h)}/>
                         </div>
                         </div>{/* end left column */}
-                        {/* Right column: Client Notes spanning full height */}
-                        {client&&(
-                          <div style={{flex:"0 0 200px",minWidth:170,alignSelf:"stretch",display:"flex",flexDirection:"column"}}>
-                            <RichEditor
-                              jobId={"client-"+client.id} field="clientnotes"
-                              title="Client Notes"
-                              value={client.notes||""}
-                              placeholder="Client notes…"
-                              height={syncH}
-                              alwaysExpanded={true}
-                              onChange={val=>updateClient(client.id,{notes:val})}
-                              onResizeSave={h=>updateClient(client.id,{notes_height:h})}/>
-                          </div>
-                        )}
                       </div>
                         );
                       })()}
@@ -1333,63 +1362,128 @@ function FixingTab({vessels}){
                     style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,border:"1px solid "+(ownerTradeFilter===t?C.amber:C.bd),background:ownerTradeFilter===t?"rgba(255,209,102,.2)":"transparent",color:ownerTradeFilter===t?C.amber:C.faint,cursor:"pointer",fontFamily:"inherit"}}>{t}</button>
                 ))}
               </div>
-              {/* Add row — with multi-select */}
-              <div style={{display:"grid",gridTemplateColumns:"130px 56px 1fr 1fr auto",gap:3,alignItems:"center"}}>
+              {/* Add company / first PIC */}
+              <div style={{display:"grid",gridTemplateColumns:"135px 1fr 90px 1fr auto",gap:3,alignItems:"center"}}>
                 <input value={newOwnerEntry.company} onChange={e=>setNewOwnerEntry(p=>({...p,company:e.target.value}))} placeholder="Company" style={{...inpS,padding:"2px 4px",fontSize:11}}/>
+                <MultiSelectDropdown options={SEGMENTS} selected={newOwnerEntry.segments||[]} onChange={v=>setNewOwnerEntry(p=>({...p,segments:v}))} placeholder="Segment…" color="rgba(88,166,255,0.8)"/>
                 <input value={newOwnerEntry.pic} onChange={e=>setNewOwnerEntry(p=>({...p,pic:e.target.value}))} placeholder="PIC" style={{...inpS,padding:"2px 4px",fontSize:11}}/>
-                <MultiSelectDropdown options={SEGMENTS} selected={newOwnerEntry.segments||[]} onChange={v=>setNewOwnerEntry(p=>({...p,segments:v}))} placeholder="Seg…" color="rgba(88,166,255,0.8)"/>
                 <MultiSelectDropdown options={TRADES} selected={newOwnerEntry.trades||[]} onChange={v=>setNewOwnerEntry(p=>({...p,trades:v}))} placeholder="Trade…" color="rgba(250,163,86,0.75)"/>
                 <button onClick={addOwnerEntry} style={{background:"rgba(88,166,255,.18)",border:"1px solid rgba(88,166,255,.4)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:11,padding:"3px 7px",cursor:"pointer",whiteSpace:"nowrap"}}>+ Add</button>
               </div>
               {(()=>{
-                const filtered=owners.filter(o=>{
-                  const segs=o.segments||(o.segment?[o.segment]:[]);
-                  const trs=o.trades||(o.trade?[o.trade]:[]);
-                  if(ownerSegFilter&&!segs.includes(ownerSegFilter))return false;
-                  if(ownerTradeFilter&&!trs.includes(ownerTradeFilter))return false;
-                  if(ownerDirSearch){const t=ownerDirSearch.toLowerCase();if(![o.company,o.pic,...segs,...trs,o.comment].filter(Boolean).join(" ").toLowerCase().includes(t))return false;}
+                const companyMap=new Map();
+                owners.forEach(o=>{
+                  const name=(o.company||"").trim()||"—";
+                  const key=name.toLowerCase();
+                  if(!companyMap.has(key))companyMap.set(key,{key,name,rows:[]});
+                  companyMap.get(key).rows.push(o);
+                });
+
+                const companies=[...companyMap.values()].map(g=>{
+                  const segments=[...new Set(g.rows.flatMap(o=>o.segments||(o.segment?[o.segment]:[])))];
+                  const trades=[...new Set(g.rows.flatMap(o=>o.trades||(o.trade?[o.trade]:[])))];
+                  return {...g,segments,trades};
+                }).filter(g=>{
+                  if(ownerSegFilter&&!g.segments.includes(ownerSegFilter))return false;
+                  if(ownerTradeFilter&&!g.trades.includes(ownerTradeFilter))return false;
+                  if(ownerDirSearch){
+                    const t=ownerDirSearch.toLowerCase();
+                    const hay=[
+                      g.name,...g.segments,...g.trades,
+                      ...g.rows.flatMap(o=>[o.pic,o.comment])
+                    ].filter(Boolean).join(" ").toLowerCase();
+                    if(!hay.includes(t))return false;
+                  }
                   return true;
-                }).sort((a,b)=>(a.company||"").localeCompare(b.company||""));
-                if(!filtered.length)return <div style={{fontSize:11,color:C.faint,fontStyle:"italic"}}>No entries.</div>;
+                }).sort((a,b)=>a.name.localeCompare(b.name));
+
+                if(!companies.length)return <div style={{fontSize:11,color:C.faint,fontStyle:"italic"}}>No entries.</div>;
+
                 return(
                   <div style={{border:"1px solid "+C.bd,borderRadius:6,overflow:"hidden",background:C.bg2}}>
-                    {filtered.map((o,ri)=>{
-                      const segs=o.segments||(o.segment?[o.segment]:[]);
-                      const trs=o.trades||(o.trade?[o.trade]:[]);
-                      const isOpen=expandedOwnerId===o.id;
+                    {companies.map((g,gi)=>{
+                      const groupId="company:"+g.key;
+                      const isOpen=expandedOwnerId===groupId;
                       return(
-                        <div key={o.id} style={{borderBottom:ri<filtered.length-1?"1px solid "+C.bd2:"none"}}>
-                          <div onClick={()=>setExpandedOwnerId(isOpen?null:o.id)}
-                            style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",cursor:"pointer",
-                              background:isOpen?"rgba(88,166,255,0.08)":"transparent"}}>
-                            <span style={{fontSize:10,color:isOpen?"#58a6ff":C.faint,transform:isOpen?"rotate(90deg)":"none",transition:"transform 0.15s",flexShrink:0}}>▸</span>
-                            <OwnerNoteButton ownerId={o.id} note={o.comment||""} onSave={v=>updateOwnerEntry(o.id,"comment",v)}/>
-                            <span style={{flex:1,fontSize:12,fontWeight:600,color:isOpen?"#79c0ff":C.tx}}>{o.company||"—"}</span>
-                            {segs.length>0&&<span style={{fontSize:10,color:"rgba(88,166,255,0.55)"}}>{segs.length} seg</span>}
-                            {trs.length>0&&<span style={{fontSize:10,color:"rgba(250,163,86,0.55)"}}>{trs.length} trade</span>}
-                            <button onClick={e=>{e.stopPropagation();removeOwnerEntry(o.id);}}
-                              style={{background:"none",border:"none",color:"rgba(255,107,107,0.45)",cursor:"pointer",fontSize:11,padding:0}}>✕</button>
+                        <div key={g.key} style={{borderBottom:gi<companies.length-1?"1px solid "+C.bd2:"none"}}>
+                          <div onClick={()=>setExpandedOwnerId(isOpen?null:groupId)}
+                            style={{
+                              display:"flex",alignItems:"center",gap:8,padding:"8px 10px",cursor:"pointer",
+                              background:isOpen?"rgba(88,166,255,0.08)":"transparent"
+                            }}>
+                            <span style={{
+                              width:18,fontSize:17,fontWeight:900,lineHeight:1,color:isOpen?"#79c0ff":"rgba(150,190,235,0.55)",
+                              transform:isOpen?"rotate(90deg)":"none",transition:"transform 0.12s",flexShrink:0
+                            }}>▸</span>
+                            <span style={{flex:1,fontSize:12,fontWeight:650,color:isOpen?"#79c0ff":C.tx}}>{g.name}</span>
+                            {g.segments.length>0&&<span style={{fontSize:10,color:"rgba(88,166,255,0.55)"}}>{g.segments.length} seg</span>}
+                            {g.rows.filter(r=>(r.pic||"").trim()).length>0&&(
+                              <span style={{fontSize:10,color:"rgba(67,233,123,0.55)"}}>
+                                {g.rows.filter(r=>(r.pic||"").trim()).length} PIC
+                              </span>
+                            )}
                           </div>
+
                           {isOpen&&(
-                            <div style={{padding:"8px 12px 12px 30px",display:"flex",flexDirection:"column",gap:8,background:"rgba(88,166,255,0.03)"}}>
-                              <div>
-                                <div style={{fontSize:9,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>Company</div>
-                                <input value={o.company||""} onChange={e=>updateOwnerEntry(o.id,"company",e.target.value)} placeholder="—"
-                                  style={{...inpS,width:"100%",padding:"4px 8px",fontSize:12,color:"#79c0ff",fontWeight:600}}/>
+                            <div style={{padding:"9px 10px 11px 36px",background:"rgba(88,166,255,0.025)"}}>
+                              {/* Company-level edit: name + segments only */}
+                              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                                <button onClick={e=>{
+                                  e.stopPropagation();
+                                  const next=window.prompt("Company name",g.name);
+                                  if(next&&next.trim()&&next.trim()!==g.name)updateOwnerCompany(g.name,{company:next.trim()});
+                                }} style={{
+                                  fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,
+                                  border:"1px solid rgba(88,166,255,0.25)",background:"rgba(88,166,255,0.08)",
+                                  color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"
+                                }}>Edit company</button>
+                                <div style={{flex:1}}>
+                                  <MultiSelectDropdown
+                                    options={SEGMENTS}
+                                    selected={g.segments}
+                                    onChange={v=>updateOwnerCompany(g.name,{segments:v})}
+                                    placeholder="Segments…"
+                                    color="rgba(88,166,255,0.8)"/>
+                                </div>
                               </div>
-                              <div>
-                                <div style={{fontSize:9,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>PIC</div>
-                                <input value={o.pic||""} onChange={e=>updateOwnerEntry(o.id,"pic",e.target.value)} placeholder="—"
-                                  style={{...inpS,width:"100%",padding:"4px 8px",fontSize:12,color:"#43e97b"}}/>
+
+                              {/* Quick-edit PIC table — no extra edit/save buttons */}
+                              <div style={{display:"grid",gridTemplateColumns:"minmax(105px,0.9fr) minmax(130px,1.1fr) minmax(145px,1.4fr)",gap:3,alignItems:"center",marginBottom:3}}>
+                                <div style={{fontSize:9,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>PIC</div>
+                                <div style={{fontSize:9,fontWeight:800,color:"rgba(250,163,86,0.7)",textTransform:"uppercase",letterSpacing:"0.06em"}}>Trade</div>
+                                <div style={{fontSize:9,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>Notes</div>
                               </div>
-                              <div>
-                                <div style={{fontSize:9,fontWeight:700,color:"rgba(88,166,255,0.7)",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>Segment</div>
-                                <MultiSelectDropdown options={SEGMENTS} selected={segs} onChange={v=>updateOwnerEntry(o.id,"segments",v)} placeholder="—" color="rgba(88,166,255,0.8)"/>
+
+                              <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                                {g.rows.map(o=>{
+                                  const trs=o.trades||(o.trade?[o.trade]:[]);
+                                  return(
+                                    <div key={o.id} style={{display:"grid",gridTemplateColumns:"minmax(105px,0.9fr) minmax(130px,1.1fr) minmax(145px,1.4fr)",gap:3,alignItems:"center"}}>
+                                      <input value={o.pic||""}
+                                        onChange={e=>updateOwnerEntry(o.id,"pic",e.target.value)}
+                                        placeholder="PIC"
+                                        style={{...inpS,width:"100%",padding:"3px 5px",fontSize:11,color:"#cfe9ff"}}/>
+                                      <MultiSelectDropdown
+                                        options={TRADES}
+                                        selected={trs}
+                                        onChange={v=>updateOwnerEntry(o.id,"trades",v)}
+                                        placeholder="Trade…"
+                                        color="rgba(250,163,86,0.78)"/>
+                                      <input value={o.comment||""}
+                                        onChange={e=>updateOwnerEntry(o.id,"comment",e.target.value)}
+                                        placeholder="Notes…"
+                                        style={{...inpS,width:"100%",padding:"3px 5px",fontSize:11,color:"rgba(200,220,245,0.78)"}}/>
+                                    </div>
+                                  );
+                                })}
                               </div>
-                              <div>
-                                <div style={{fontSize:9,fontWeight:700,color:"rgba(250,163,86,0.7)",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>Trade</div>
-                                <MultiSelectDropdown options={TRADES} selected={trs} onChange={v=>updateOwnerEntry(o.id,"trades",v)} placeholder="—" color="rgba(250,163,86,0.75)"/>
-                              </div>
+
+                              <button onClick={()=>addOwnerPic(g.name,g.segments)}
+                                style={{
+                                  marginTop:7,fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:4,
+                                  border:"1px solid rgba(88,166,255,0.22)",background:"rgba(88,166,255,0.07)",
+                                  color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"
+                                }}>+ PIC</button>
                             </div>
                           )}
                         </div>
