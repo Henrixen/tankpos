@@ -222,32 +222,79 @@ function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
     setRateRoutes(next);saveRoutes(euRoutes,next);
   }
 
+  // Save both route fields in one parent update. This avoids a re-render
+  // between FROM and TO while tabbing, which would otherwise remount the
+  // inline RouteLabel component and auto-focus FROM again.
+  function updateRoutePair(section,rgIdx,rtIdx,fromVal,toVal){
+    if(section==="eu"){
+      const next=euRoutes.map((r,idx)=>idx===rtIdx?{...r,from:fromVal,to:toVal}:r);
+      setEuRoutes(next);
+      saveRoutes(next,rateRoutes);
+    }else{
+      const next=rateRoutes.map((rg,ri)=>ri!==rgIdx?rg:{
+        ...rg,
+        routes:rg.routes.map((r,rti)=>rti!==rtIdx?r:{...r,from:fromVal,to:toVal})
+      });
+      setRateRoutes(next);
+      saveRoutes(euRoutes,next);
+    }
+  }
+
   function RouteLabel({section,rgIdx,rtIdx,from,to}){
     const key=section+"-"+rgIdx+"-"+rtIdx;
     const isEdit=editingRoute===key;
     const fromRef=useRef(null);
     const toRef=useRef(null);
-    const saveField=(field,val)=>{
-      section==="eu"?updateEuRoute(rtIdx,field,val):updateRgRoute(rgIdx,rtIdx,field,val);
-    };
+
+    function commitPair(){
+      const fromVal=fromRef.current?.value ?? from;
+      const toVal=toRef.current?.value ?? to;
+      updateRoutePair(section,rgIdx,rtIdx,fromVal,toVal);
+    }
+
     if(isEdit){
       return(
         <span style={{display:"inline-flex",gap:2,alignItems:"center"}}>
           <input ref={fromRef} autoFocus defaultValue={from}
-            onBlur={e=>{saveField("from",e.target.value);if(e.relatedTarget!==toRef.current)setEditingRoute(null);}}
+            onBlur={e=>{
+              // Native Tab FROM -> TO: do not save/re-render while focus
+              // is moving inside the pair.
+              if(e.relatedTarget===toRef.current)return;
+              commitPair();
+              setEditingRoute(null);
+            }}
             onKeyDown={e=>{
-              if(e.key==="Enter"){e.preventDefault();saveField("from",e.target.value);setEditingRoute(null);}
-              if(e.key==="Escape"){e.preventDefault();setEditingRoute(null);}
-              // Keep native Tab behaviour so focus moves FROM -> TO.
+              if(e.key==="Enter"){
+                e.preventDefault();
+                commitPair();
+                setEditingRoute(null);
+              }
+              if(e.key==="Escape"){
+                e.preventDefault();
+                setEditingRoute(null);
+              }
+              // Tab is deliberately not prevented.
             }}
             style={{width:52,background:C.bg3,border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"0 3px",outline:"none"}}/>
           <span style={{color:C.faint,fontSize:12}}>→</span>
           <input ref={toRef} defaultValue={to}
-            onBlur={e=>{saveField("to",e.target.value);if(e.relatedTarget!==fromRef.current)setEditingRoute(null);}}
+            onBlur={e=>{
+              // Native Shift+Tab TO -> FROM: stay in edit mode.
+              if(e.relatedTarget===fromRef.current)return;
+              commitPair();
+              setEditingRoute(null);
+            }}
             onKeyDown={e=>{
-              if(e.key==="Enter"){e.preventDefault();saveField("to",e.target.value);setEditingRoute(null);}
-              if(e.key==="Escape"){e.preventDefault();setEditingRoute(null);}
-              // Keep native Shift+Tab behaviour so focus moves TO -> FROM.
+              if(e.key==="Enter"){
+                e.preventDefault();
+                commitPair();
+                setEditingRoute(null);
+              }
+              if(e.key==="Escape"){
+                e.preventDefault();
+                setEditingRoute(null);
+              }
+              // Tab / Shift+Tab use normal browser focus order.
             }}
             style={{width:52,background:C.bg3,border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"0 3px",outline:"none"}}/>
         </span>
