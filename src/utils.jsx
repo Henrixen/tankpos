@@ -286,7 +286,68 @@ export const normaliseQty = q => {
 };
 
 export const fmtN = n => { if(!n && n!==0) return ""; const v=Number(String(n).replace(/,/g,"")); if(isNaN(v)) return String(n); if(v>=1000) return Math.round(v/1000)+"k"; return String(v); };
-export const fmtFreight = s => { if(!s) return s; return String(s).trim().replace(/\s+/g," "); };
+
+// ─── Freight normaliser ──────────────────────────────────────────────────────
+// Standardises plain numeric freight input while preserving already formatted
+// or non-USD freight such as WS 185 / RNR.
+export function normaliseFreight(value){
+  if(value === null || value === undefined) return "";
+  let raw = String(value).trim().replace(/\s+/g," ");
+  if(!raw) return "";
+
+  // Already formatted / non-plain-numeric freight: preserve as entered.
+  if(/^USD\s+/i.test(raw) || /^WS\b/i.test(raw) || /^RNR\b/i.test(raw)) return raw;
+
+  // 240k / 272.5k / 272,5k => USD 240K LS / USD 272,5K LS
+  const kMatch = raw.match(/^(\d+(?:[.,]\d+)?)\s*k$/i);
+  if(kMatch){
+    const amount = Number(kMatch[1].replace(",","."));
+    if(Number.isFinite(amount)){
+      const shown = Number.isInteger(amount)
+        ? String(amount)
+        : String(Math.round(amount*1000)/1000).replace(".",",");
+      return `USD ${shown}K LS`;
+    }
+  }
+
+  raw = raw.replace(/^\$\s*/,"").trim();
+  if(/[A-Za-z]/.test(raw)) return String(value).trim();
+
+  let n = null;
+
+  // 240,000 / 1,240,000 = thousands separators
+  if(/^\d{1,3}(,\d{3})+$/.test(raw)){
+    n = Number(raw.replace(/,/g,""));
+  }
+  // 240 000 / 1 240 000 = thousands separators
+  else if(/^\d{1,3}( \d{3})+$/.test(raw)){
+    n = Number(raw.replace(/ /g,""));
+  }
+  // 115,5 / 115.5 = decimal
+  else if(/^\d+[,.]\d{1,2}$/.test(raw)){
+    n = Number(raw.replace(",","."));
+  }
+  // 240000 / 115
+  else if(/^\d+$/.test(raw)){
+    n = Number(raw);
+  }
+
+  if(!Number.isFinite(n)) return String(value).trim();
+
+  if(n <= 999){
+    const shown = Number.isInteger(n)
+      ? String(n)
+      : String(Math.round(n*1000)/1000).replace(".",",");
+    return `USD ${shown} PMT`;
+  }
+
+  const k = n / 1000;
+  const shown = Number.isInteger(k)
+    ? String(k)
+    : String(Math.round(k*1000)/1000).replace(".",",");
+  return `USD ${shown}K LS`;
+}
+export const fmtFreight = s => normaliseFreight(s);
 
 export const toTCase = s => {
   if(!s) return s;
@@ -322,7 +383,7 @@ export function normaliseCargo(c){
     disch:     c.disch     || "",
     from:      fmtDate(c.from),
     to:        fmtDate(c.to),
-    freight:   c.freight   || "",
+    freight:   normaliseFreight(c.freight),
     comment:   c.comment   || "",
     updated:   c.updated   || "",
     tag:       c.tag       || "",
