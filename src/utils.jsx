@@ -92,7 +92,6 @@ export function enrichV(v, vesselDB) {
     loa:      v.loa      || d.loa      || null,
     beam:     v.beam     || d.beam     || null,
     cbm:      v.cbm      || d.cbm      || null,
-    coating:  v.coating  || d.coating  || null,
     operator: resolvedOp,
     spec: {
       ...v.spec,
@@ -201,20 +200,8 @@ export function classifyRegion(portName) {
   if (!n) return null;
   const direct = Object.keys(REGION_MAP).find(r => r.toLowerCase() === n);
   if (direct) return direct;
-  // Substring matching is inherently risky (a short keyword like "we" or
-  // "china" abbreviations can accidentally appear inside an unrelated port
-  // name). Require both sides to be reasonably long before allowing a
-  // substring match — short strings only match via the exact first-word
-  // check below, not fuzzy substring matching.
-  const MIN_SUBSTR_LEN = 4;
   for (const [region, ports] of Object.entries(REGION_MAP)) {
-    if (ports.some(p => {
-      if (!p) return false;
-      const firstWord = n.split(/[\s/+,]/)[0];
-      if (firstWord === p) return true;
-      if (p.length < MIN_SUBSTR_LEN || n.length < MIN_SUBSTR_LEN) return false;
-      return n.includes(p) || p.includes(n);
-    })) return region;
+    if (ports.some(p => p && (n.includes(p) || p.includes(n) || n.split(/[\s/+,]/)[0]===p))) return region;
   }
   return null;
 }
@@ -239,21 +226,12 @@ export function calcVoyage(vessel, cargo) {
 }
 
 // ─── Vessel merge ─────────────────────────────────────────────────────────────
-// Collapses all whitespace variants (regular spaces, tabs, and non-breaking
-// spaces that commonly sneak in from pasted Outlook/PDF/WhatsApp text) into
-// single plain spaces before comparing vessel names. Without this, a pasted
-// name with e.g. a stray non-breaking space between words won't exact-match
-// an existing entry — and the fuzzy word-matcher below (which only splits on
-// plain spaces) won't catch it either — silently creating a duplicate row
-// instead of updating the real one.
-function normVesselKey(s){ return (s||"").toLowerCase().trim().replace(/\s+/g," "); }
-
-function mKey(inc,keys){if(!inc)return null;const s=normVesselKey(inc);if(keys.has(s))return s;for(const k of keys){const[a,b]=s.length<=k.length?[s.split(" "),k.split(" ")]:[k.split(" "),s.split(" ")];if(a.every(w=>b.includes(w)))return k;}for(const k of keys){if(k.endsWith(s)||s.endsWith(k)||k.startsWith(s)||s.startsWith(k))return k;}return null;}
+function mKey(inc,keys){if(!inc)return null;const s=inc.toLowerCase().trim();if(keys.has(s))return s;for(const k of keys){const[a,b]=s.length<=k.length?[s.split(" "),k.split(" ")]:[k.split(" "),s.split(" ")];if(a.every(w=>b.includes(w)))return k;}for(const k of keys){if(k.endsWith(s)||s.endsWith(k)||k.startsWith(s)||s.startsWith(k))return k;}return null;}
 
 export function mergeVessels(existing,incoming,vesselDB){
-  const map=new Map(existing.filter(v=>v.vessel).map(v=>[normVesselKey(v.vessel),v]));
+  const map=new Map(existing.filter(v=>v.vessel).map(v=>[v.vessel.toLowerCase(),v]));
   for(const v of incoming){
-    const rk=normVesselKey(v.vessel);if(!rk)continue;
+    const rk=v.vessel?.toLowerCase().trim();if(!rk)continue;
     const mk=mKey(rk,new Set([...map.keys()].filter(Boolean)));const prev=map.get(mk||rk)||{};
     let merged={...prev};
     if(!mk||v.vessel.length>(prev.vessel||"").length)merged.vessel=v.vessel;
@@ -265,7 +243,7 @@ export function mergeVessels(existing,incoming,vesselDB){
       if(k==="spec"&&typeof val==="object"){merged.spec={...(prev.spec||{})};for(const[sk,sv]of Object.entries(val)){if(sv!=null&&sv!=="")merged.spec[sk]=sv;}}
       else merged[k]=val;
     }
-    const canon=normVesselKey(merged.vessel);if(mk&&mk!==canon)map.delete(mk);
+    const canon=(merged.vessel||"").toLowerCase();if(mk&&mk!==canon)map.delete(mk);
     map.set(canon,enrichV(merged,vesselDB));
   }
   return Array.from(map.values());
@@ -286,68 +264,13 @@ export const normaliseQty = q => {
 };
 
 export const fmtN = n => { if(!n && n!==0) return ""; const v=Number(String(n).replace(/,/g,"")); if(isNaN(v)) return String(n); if(v>=1000) return Math.round(v/1000)+"k"; return String(v); };
-
-// ─── Freight normaliser ──────────────────────────────────────────────────────
-// Standardises plain numeric freight input while preserving already formatted
-// or non-USD freight such as WS 185 / RNR.
-export function normaliseFreight(value){
-  if(value === null || value === undefined) return "";
-  let raw = String(value).trim().replace(/\s+/g," ");
-  if(!raw) return "";
-
-  // Already formatted / non-plain-numeric freight: preserve as entered.
-  if(/^USD\s+/i.test(raw) || /^WS\b/i.test(raw) || /^RNR\b/i.test(raw)) return raw;
-
-  // 240k / 272.5k / 272,5k => USD 240K LS / USD 272,5K LS
-  const kMatch = raw.match(/^(\d+(?:[.,]\d+)?)\s*k$/i);
-  if(kMatch){
-    const amount = Number(kMatch[1].replace(",","."));
-    if(Number.isFinite(amount)){
-      const shown = Number.isInteger(amount)
-        ? String(amount)
-        : String(Math.round(amount*1000)/1000).replace(".",",");
-      return `USD ${shown}K LS`;
-    }
-  }
-
-  raw = raw.replace(/^\$\s*/,"").trim();
-  if(/[A-Za-z]/.test(raw)) return String(value).trim();
-
-  let n = null;
-
-  // 240,000 / 1,240,000 = thousands separators
-  if(/^\d{1,3}(,\d{3})+$/.test(raw)){
-    n = Number(raw.replace(/,/g,""));
-  }
-  // 240 000 / 1 240 000 = thousands separators
-  else if(/^\d{1,3}( \d{3})+$/.test(raw)){
-    n = Number(raw.replace(/ /g,""));
-  }
-  // 115,5 / 115.5 = decimal
-  else if(/^\d+[,.]\d{1,2}$/.test(raw)){
-    n = Number(raw.replace(",","."));
-  }
-  // 240000 / 115
-  else if(/^\d+$/.test(raw)){
-    n = Number(raw);
-  }
-
-  if(!Number.isFinite(n)) return String(value).trim();
-
-  if(n <= 999){
-    const shown = Number.isInteger(n)
-      ? String(n)
-      : String(Math.round(n*1000)/1000).replace(".",",");
-    return `USD ${shown} PMT`;
-  }
-
-  const k = n / 1000;
-  const shown = Number.isInteger(k)
-    ? String(k)
-    : String(Math.round(k*1000)/1000).replace(".",",");
-  return `USD ${shown}K LS`;
-}
-export const fmtFreight = s => normaliseFreight(s);
+export const fmtFreight = s => {
+  if(!s) return s;
+  return String(s)
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/(\d)\.(\d)/g, "$1,$2");
+};
 
 export const toTCase = s => {
   if(!s) return s;
@@ -383,10 +306,9 @@ export function normaliseCargo(c){
     disch:     c.disch     || "",
     from:      fmtDate(c.from),
     to:        fmtDate(c.to),
-    freight:   normaliseFreight(c.freight),
+    freight:   c.freight   || "",
     comment:   c.comment   || "",
     updated:   c.updated   || "",
-    tag:       c.tag       || "",
   };
 }
 
