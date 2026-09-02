@@ -264,13 +264,68 @@ export const normaliseQty = q => {
 };
 
 export const fmtN = n => { if(!n && n!==0) return ""; const v=Number(String(n).replace(/,/g,"")); if(isNaN(v)) return String(n); if(v>=1000) return Math.round(v/1000)+"k"; return String(v); };
-export const fmtFreight = s => {
-  if(!s) return s;
-  return String(s)
-    .trim()
-    .replace(/\s+/g, " ")
-    .replace(/(\d)\.(\d)/g, "$1,$2");
-};
+
+// Freight normaliser. Only changes clear numeric freight formats;
+// special text such as RNR, COA, LPS, PDPR, EUR, ranges and comments is left alone.
+export function normaliseFreight(value){
+  if(value === null || value === undefined) return "";
+
+  const original = String(value).trim();
+  if(!original) return "";
+  const s = original.replace(/\s+/g, " ");
+
+  const shown = n => {
+    const rounded = Math.round(Number(n) * 1000) / 1000;
+    return String(rounded).replace(".", ",");
+  };
+
+  // PMT, optionally preserving a port ratio such as 2/1.
+  let m = s.match(/^(?:\$\s*|USD\s+)(\d+(?:[.,]\d+)?)\s+PMT(?:\s+(\d+\/\d+))?$/i);
+  if(m){
+    const n = Number(m[1].replace(",", "."));
+    if(Number.isFinite(n)) return `USD ${shown(n)} PMT${m[2] ? ` ${m[2]}` : ""}`;
+  }
+
+  // Explicit K = lumpsum. Accepts 250k, $250K, USD 250k ls, L/S and LSUM.
+  m = s.match(/^(?:\$\s*|USD\s+)?(\d+(?:[.,]\d+)?)\s*K(?:\s*(?:LS|L\/S|LSUM))?$/i);
+  if(m){
+    const n = Number(m[1].replace(",", "."));
+    if(Number.isFinite(n)) return `USD ${shown(n)}K LS`;
+  }
+
+  // Explicit M = lumpsum.
+  m = s.match(/^(?:\$\s*|USD\s+)?(\d+(?:[.,]\d+)?)\s*M(?:\s*(?:LS|L\/S|LSUM))?$/i);
+  if(m){
+    const n = Number(m[1].replace(",", "."));
+    if(Number.isFinite(n)) return `USD ${shown(n)}M LS`;
+  }
+
+  // Currency amount with comma thousands. Keep sub-100k values untouched
+  // because they may be demurrage rather than freight.
+  m = s.match(/^(?:\$\s*|USD\s+)(\d{1,3}(?:,\d{3})+)$/i);
+  if(m){
+    const n = Number(m[1].replace(/,/g, ""));
+    if(Number.isFinite(n) && n >= 100000){
+      if(n >= 1000000) return `USD ${shown(n / 1000000)}M LS`;
+      return `USD ${shown(n / 1000)}K LS`;
+    }
+    return original;
+  }
+
+  // Bare numeric input: <=999 = PMT; >=1000 = lumpsum.
+  if(/^\d+$/.test(s)){
+    const n = Number(s);
+    if(Number.isFinite(n)){
+      if(n <= 999) return `USD ${shown(n)} PMT`;
+      if(n >= 1000000) return `USD ${shown(n / 1000000)}M LS`;
+      return `USD ${shown(n / 1000)}K LS`;
+    }
+  }
+
+  return original;
+}
+
+export const fmtFreight = s => normaliseFreight(s);
 
 export const toTCase = s => {
   if(!s) return s;
@@ -306,7 +361,7 @@ export function normaliseCargo(c){
     disch:     c.disch     || "",
     from:      fmtDate(c.from),
     to:        fmtDate(c.to),
-    freight:   c.freight   || "",
+    freight:   normaliseFreight(c.freight),
     comment:   c.comment   || "",
     updated:   c.updated   || "",
   };
