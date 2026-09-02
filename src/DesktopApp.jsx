@@ -1963,30 +1963,79 @@ const filtV=useMemo(()=>{
       `}</style>}
       {/* ── PIN overlay — rendered on top, app loads underneath ── */}
       {!unlocked&&(
-        <div style={{position:"fixed",inset:0,zIndex:99999,background:"#060e1c",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,system-ui,sans-serif"}}>
-          <div style={{background:"rgba(10,20,42,0.95)",border:"1px solid rgba(58,130,246,0.25)",borderRadius:14,padding:"44px 48px",textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.6)",minWidth:300}}>
-            <div style={{fontSize:20,fontWeight:800,color:"#e8f2ff",letterSpacing:"0.02em",marginBottom:6}}>
-              <span>Broker </span><span style={{color:"#43e97b"}}>Dashboard</span>
+        <div style={{
+          position:"fixed",inset:0,zIndex:99999,overflow:"hidden",
+          background:"radial-gradient(circle at 20% 18%,rgba(50,120,255,.12),transparent 32%),radial-gradient(circle at 80% 78%,rgba(67,233,123,.07),transparent 35%),linear-gradient(135deg,#04101d 0%,#071426 48%,#05111f 100%)",
+          display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,system-ui,sans-serif"
+        }}>
+          <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true"
+            style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}}>
+            <defs>
+              <linearGradient id="loginRoute" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.03"/>
+                <stop offset="45%" stopColor="#58a6ff" stopOpacity="0.42"/>
+                <stop offset="100%" stopColor="#43e97b" stopOpacity="0.10"/>
+              </linearGradient>
+              <pattern id="loginGrid" width="44" height="44" patternUnits="userSpaceOnUse">
+                <path d="M44 0H0V44" fill="none" stroke="#58a6ff" strokeOpacity="0.05" strokeWidth="0.7"/>
+              </pattern>
+              <filter id="loginGlow"><feGaussianBlur stdDeviation="2.6"/></filter>
+            </defs>
+            <rect width="1600" height="900" fill="url(#loginGrid)" opacity="0.55"/>
+            <g fill="none" stroke="#7aa8da" strokeOpacity="0.10" strokeWidth="1.2">
+              <path d="M120 315 C225 245 330 255 410 320 C475 374 470 440 414 515 C370 575 330 625 292 700"/>
+              <path d="M515 280 C590 225 680 225 747 270 C805 310 807 365 772 410 C733 458 692 486 658 545"/>
+              <path d="M765 295 C850 230 960 220 1042 262 C1110 298 1153 345 1188 405 C1128 425 1070 430 1022 465 C978 496 953 535 915 575"/>
+              <path d="M1080 575 C1148 535 1222 538 1278 580 C1310 605 1312 645 1292 674 C1240 700 1188 696 1140 672"/>
+            </g>
+            <g fill="none" strokeLinecap="round">
+              <path d="M980 315 C885 365 804 410 716 458 C627 506 533 520 427 500" stroke="url(#loginRoute)" strokeWidth="1.9"/>
+              <path d="M1090 405 C997 414 914 438 836 478 C760 518 683 558 596 578" stroke="#43e97b" strokeOpacity="0.17" strokeWidth="1.25"/>
+              <path d="M428 500 C360 474 293 455 220 463" stroke="#58a6ff" strokeOpacity="0.14" strokeWidth="1.05"/>
+            </g>
+            <g>
+              {[[427,500,"#58a6ff"],[716,458,"#58a6ff"],[980,315,"#43e97b"],[836,478,"#43e97b"],[596,578,"#58a6ff"]].map(([cx,cy,col],i)=>(
+                <g key={i}>
+                  <circle cx={cx} cy={cy} r="3.2" fill={col} opacity="0.9"/>
+                  <circle cx={cx} cy={cy} r="8" fill="none" stroke={col} strokeOpacity="0.18"/>
+                </g>
+              ))}
+            </g>
+          </svg>
+
+          <div style={{
+            position:"relative",width:460,maxWidth:"calc(100vw - 32px)",
+            background:"linear-gradient(180deg,rgba(9,24,46,.94),rgba(6,17,34,.96))",
+            border:"1px solid rgba(88,166,255,.28)",borderRadius:18,padding:"34px 38px 28px",
+            boxShadow:"0 24px 80px rgba(0,0,0,.58),inset 0 1px 0 rgba(255,255,255,.03)",
+            backdropFilter:"blur(18px)",WebkitBackdropFilter:"blur(18px)"
+          }}>
+            <div style={{textAlign:"center",marginBottom:24}}>
+              <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.22em",textTransform:"uppercase",color:"rgba(125,178,240,.48)",marginBottom:7}}>
+                Tanker Intelligence Platform
+              </div>
+              <div style={{display:"flex",justifyContent:"center",alignItems:"baseline",gap:7}}>
+                <span style={{fontSize:25,fontWeight:800,color:"#eef6ff"}}>Broker</span>
+                <span style={{fontSize:25,fontWeight:800,color:"#43e97b"}}>Dashboard</span>
+              </div>
+              <div style={{fontSize:11,color:"rgba(135,170,215,.42)",marginTop:8,letterSpacing:"0.10em",textTransform:"uppercase"}}>
+                {guestMode?"Guest access":"Secure access"}
+              </div>
             </div>
-            <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",marginBottom:32,letterSpacing:"0.08em",textTransform:"uppercase"}}>
-              {guestMode?"Guest access":"Enter PIN"}
-            </div>
-            <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:24}}>
+
+            <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:22}}>
               {[0,1,2,3].map(i=>(
                 <div key={i} style={{
-                  width:44,height:54,borderRadius:8,
-                  background:pinInput.length>i?"rgba(88,166,255,0.18)":"rgba(8,18,38,0.8)",
-                  border:"1px solid "+(pinError?"rgba(255,107,107,0.6)":pinInput.length>i?"rgba(88,166,255,0.5)":"rgba(58,130,246,0.2)"),
+                  width:52,height:58,borderRadius:10,
+                  background:pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",
+                  border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.56)":"rgba(88,166,255,.18)"),
                   display:"flex",alignItems:"center",justifyContent:"center",
-                  fontSize:24,color:"#79c0ff",transition:"all 0.15s",
-                  transform:pinError?"translateX(4px)":"none",
-                  boxShadow:pinInput.length>i?"0 0 12px rgba(88,166,255,0.2)":"none"
-                }}>
-                  {pinInput.length>i?"●":""}
-                </div>
+                  fontSize:20,color:"#79c0ff",transition:"all .16s"
+                }}>{pinInput.length>i?"●":""}</div>
               ))}
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,maxWidth:200,margin:"0 auto"}}>
+
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:9,maxWidth:260,margin:"0 auto"}}>
               {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=>(
                 <button key={i} disabled={d===""}
                   onClick={()=>{
@@ -1997,18 +2046,24 @@ const filtV=useMemo(()=>{
                     if(next.length===4) submitPin(next);
                   }}
                   style={{
-                    height:48,borderRadius:8,border:"1px solid rgba(58,130,246,0.18)",
-                    background:d===""?"transparent":"rgba(14,28,58,0.8)",
-                    color:d===""?"transparent":"rgba(160,200,255,0.85)",
-                    fontSize:18,fontWeight:600,cursor:d===""?"default":"pointer",
-                    fontFamily:"inherit",transition:"background 0.1s",
-                    visibility:d===""?"hidden":"visible"
-                  }}>
-                  {d}
-                </button>
+                    height:50,borderRadius:9,
+                    border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.17)"),
+                    background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.76),rgba(10,27,53,.8))",
+                    color:d===""?"transparent":"rgba(184,216,255,.88)",
+                    fontSize:17,fontWeight:650,cursor:d===""?"default":"pointer",
+                    fontFamily:"inherit",visibility:d===""?"hidden":"visible"
+                  }}>{d}</button>
               ))}
             </div>
-            {pinError&&<div style={{marginTop:16,fontSize:11,color:"rgba(255,107,107,0.8)",letterSpacing:"0.06em"}}>Incorrect code</div>}
+
+            <div style={{height:22,marginTop:14,textAlign:"center"}}>
+              {pinError&&<span style={{fontSize:11,color:"rgba(255,107,107,.9)",letterSpacing:"0.05em"}}>Incorrect code</span>}
+            </div>
+
+            <div style={{borderTop:"1px solid rgba(88,166,255,.10)",marginTop:3,paddingTop:16,textAlign:"center",
+              fontSize:9,fontWeight:700,color:"rgba(120,160,220,.34)",letterSpacing:"0.12em",textTransform:"uppercase"}}>
+              Positions&nbsp;&nbsp;·&nbsp;&nbsp;Cargoes&nbsp;&nbsp;·&nbsp;&nbsp;Freight&nbsp;&nbsp;·&nbsp;&nbsp;Fleet Intelligence
+            </div>
           </div>
         </div>
       )}
