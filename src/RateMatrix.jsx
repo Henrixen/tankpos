@@ -225,17 +225,30 @@ function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
   function RouteLabel({section,rgIdx,rtIdx,from,to}){
     const key=section+"-"+rgIdx+"-"+rtIdx;
     const isEdit=editingRoute===key;
+    const fromRef=useRef(null);
+    const toRef=useRef(null);
+    const saveField=(field,val)=>{
+      section==="eu"?updateEuRoute(rtIdx,field,val):updateRgRoute(rgIdx,rtIdx,field,val);
+    };
     if(isEdit){
       return(
         <span style={{display:"inline-flex",gap:2,alignItems:"center"}}>
-          <input autoFocus defaultValue={from}
-            onBlur={e=>{section==="eu"?updateEuRoute(rtIdx,"from",e.target.value):updateRgRoute(rgIdx,rtIdx,"from",e.target.value);setEditingRoute(null);}}
-            onKeyDown={e=>{if(e.key==="Tab"||e.key==="Enter"){e.preventDefault();const v=e.target.value;section==="eu"?updateEuRoute(rtIdx,"from",v):updateRgRoute(rgIdx,rtIdx,"from",v);e.target.blur();}if(e.key==="Escape")setEditingRoute(null);}}
+          <input ref={fromRef} autoFocus defaultValue={from}
+            onBlur={e=>{saveField("from",e.target.value);if(e.relatedTarget!==toRef.current)setEditingRoute(null);}}
+            onKeyDown={e=>{
+              if(e.key==="Enter"){e.preventDefault();saveField("from",e.target.value);setEditingRoute(null);}
+              if(e.key==="Escape"){e.preventDefault();setEditingRoute(null);}
+              // Keep native Tab behaviour so focus moves FROM -> TO.
+            }}
             style={{width:52,background:C.bg3,border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"0 3px",outline:"none"}}/>
           <span style={{color:C.faint,fontSize:12}}>→</span>
-          <input defaultValue={to}
-            onBlur={e=>{section==="eu"?updateEuRoute(rtIdx,"to",e.target.value):updateRgRoute(rgIdx,rtIdx,"to",e.target.value);setEditingRoute(null);}}
-            onKeyDown={e=>{if(e.key==="Enter"||e.key==="Escape"){section==="eu"?updateEuRoute(rtIdx,"to",e.target.value):updateRgRoute(rgIdx,rtIdx,"to",e.target.value);setEditingRoute(null);}}}
+          <input ref={toRef} defaultValue={to}
+            onBlur={e=>{saveField("to",e.target.value);if(e.relatedTarget!==fromRef.current)setEditingRoute(null);}}
+            onKeyDown={e=>{
+              if(e.key==="Enter"){e.preventDefault();saveField("to",e.target.value);setEditingRoute(null);}
+              if(e.key==="Escape"){e.preventDefault();setEditingRoute(null);}
+              // Keep native Shift+Tab behaviour so focus moves TO -> FROM.
+            }}
             style={{width:52,background:C.bg3,border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"0 3px",outline:"none"}}/>
         </span>
       );
