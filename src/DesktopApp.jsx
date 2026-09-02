@@ -1127,6 +1127,33 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [pinError, setPinError] = React.useState(false);
   const [guestMode, setGuestMode] = React.useState(false);
 
+  // Login-screen live feeds. Fail quietly so the PIN screen always remains usable.
+  const [loginMarkets,setLoginMarkets]=React.useState({
+    brent:null,mgoAra:null,mgoSingapore:null,mgoUsg:null,updatedAt:null
+  });
+  const [loginNews,setLoginNews]=React.useState([]);
+  const [loginFeedLoading,setLoginFeedLoading]=React.useState(true);
+
+  React.useEffect(()=>{
+    if(unlocked)return;
+    let alive=true;
+    const loadLoginFeeds=async()=>{
+      try{
+        const [mktRes,newsRes]=await Promise.allSettled([
+          fetch("/api/login-market",{cache:"no-store"}).then(r=>r.ok?r.json():null),
+          fetch("/api/login-news",{cache:"no-store"}).then(r=>r.ok?r.json():null)
+        ]);
+        if(!alive)return;
+        if(mktRes.status==="fulfilled"&&mktRes.value)setLoginMarkets(v=>({...v,...mktRes.value}));
+        if(newsRes.status==="fulfilled"&&Array.isArray(newsRes.value?.items))setLoginNews(newsRes.value.items.slice(0,5));
+      }catch(_){}
+      finally{if(alive)setLoginFeedLoading(false);}
+    };
+    loadLoginFeeds();
+    const timer=setInterval(loadLoginFeeds,10*60*1000);
+    return()=>{alive=false;clearInterval(timer);};
+  },[unlocked]);
+
   // Pull the shared tag catalog (list/colors/scopes) down from Supabase once
   // on load, so tags created/colored on one device show correctly on others.
   useEffect(()=>{ pullTagsFromCloud(); },[]);
@@ -1965,11 +1992,11 @@ const filtV=useMemo(()=>{
       {!unlocked&&(
         <div style={{
           position:"fixed",inset:0,zIndex:99999,overflow:"hidden",
-          background:"radial-gradient(circle at 20% 18%,rgba(50,120,255,.12),transparent 32%),radial-gradient(circle at 80% 78%,rgba(67,233,123,.07),transparent 35%),linear-gradient(135deg,#04101d 0%,#071426 48%,#05111f 100%)",
+          background:"linear-gradient(rgba(3,12,25,.88),rgba(3,12,25,.94)),url('/login-tanker-bg.png') center/cover no-repeat",
           display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,system-ui,sans-serif"
         }}>
           <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true"
-            style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}}>
+            style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",opacity:0.08}}>
             <defs>
               <linearGradient id="loginRoute" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.03"/>
@@ -2004,10 +2031,53 @@ const filtV=useMemo(()=>{
           </svg>
 
           <div style={{
-            position:"relative",width:460,maxWidth:"calc(100vw - 32px)",
+            position:"absolute",right:"clamp(18px,4vw,64px)",top:"50%",transform:"translateY(-50%)",
+            width:310,padding:"16px 17px",borderRadius:12,zIndex:1,
+            background:"rgba(4,16,33,.58)",border:"1px solid rgba(88,166,255,.12)",
+            backdropFilter:"blur(10px)",color:"#dcecff"
+          }}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}>
+              <div style={{fontSize:9,fontWeight:800,letterSpacing:".14em",color:"#58a6ff"}}>LATEST SHIPPING NEWS</div>
+              <div style={{fontSize:8,color:"rgba(175,205,240,.35)"}}>{loginFeedLoading?"UPDATING":"RSS"}</div>
+            </div>
+            {(loginNews.length?loginNews:[
+              {title:"Latest tanker and shipping headlines will appear here",source:"RSS feed"},
+              {title:"Feed refreshes automatically every 10 minutes",source:"Live"}
+            ]).slice(0,5).map((n,i)=><a key={i} href={n.link||undefined} target={n.link?"_blank":undefined} rel="noreferrer"
+              style={{display:"block",textDecoration:"none",color:"inherit",padding:"9px 0",borderTop:i?"1px solid rgba(88,166,255,.08)":"none"}}>
+              <div style={{fontSize:10.5,fontWeight:650,lineHeight:1.35,color:"rgba(225,239,255,.88)"}}>{n.title}</div>
+              <div style={{fontSize:8.5,marginTop:4,color:"rgba(125,178,240,.46)"}}>
+                {n.source||"Shipping"}{n.published?"  ·  "+n.published:""}
+              </div>
+            </a>)}
+          </div>
+
+          <div style={{
+            position:"absolute",left:"50%",bottom:34,transform:"translateX(-50%)",zIndex:3,
+            display:"grid",gridTemplateColumns:"repeat(4,minmax(115px,1fr))",
+            minWidth:"min(650px,calc(100vw - 36px))",
+            border:"1px solid rgba(88,166,255,.11)",borderRadius:10,overflow:"hidden",
+            background:"rgba(4,16,33,.58)",backdropFilter:"blur(7px)"
+          }}>
+            {[
+              ["BRENT",loginMarkets.brent,"USD/BBL"],
+              ["MGO ARA",loginMarkets.mgoAra,"USD/MT"],
+              ["MGO SINGAPORE",loginMarkets.mgoSingapore,"USD/MT"],
+              ["MGO USG",loginMarkets.mgoUsg,"USD/MT"]
+            ].map(([label,val,unit],i)=><div key={label} style={{padding:"9px 12px",textAlign:"center",borderLeft:i?"1px solid rgba(88,166,255,.08)":"none"}}>
+              <div style={{fontSize:8,fontWeight:800,letterSpacing:".12em",color:"rgba(125,178,240,.54)"}}>{label}</div>
+              <div style={{fontSize:15,fontWeight:800,color:val!=null?"#eef6ff":"rgba(225,239,255,.30)",marginTop:2}}>
+                {val!=null?(typeof val==="number"?val.toLocaleString(undefined,{maximumFractionDigits:2}):val):"—"}
+              </div>
+              <div style={{fontSize:7.5,color:"rgba(125,178,240,.30)"}}>{unit}</div>
+            </div>)}
+          </div>
+
+          <div style={{
+            position:"relative",zIndex:2,width:410,maxWidth:"calc(100vw - 32px)",
             background:"linear-gradient(180deg,rgba(9,24,46,.94),rgba(6,17,34,.96))",
-            border:"1px solid rgba(88,166,255,.28)",borderRadius:18,padding:"34px 38px 28px",
-            boxShadow:"0 24px 80px rgba(0,0,0,.58),inset 0 1px 0 rgba(255,255,255,.03)",
+            border:"1px solid rgba(88,166,255,.18)",borderRadius:16,padding:"30px 34px 26px",
+            boxShadow:"0 20px 60px rgba(0,0,0,.44)",
             backdropFilter:"blur(18px)",WebkitBackdropFilter:"blur(18px)"
           }}>
             <div style={{textAlign:"center",marginBottom:24}}>
