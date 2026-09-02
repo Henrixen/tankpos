@@ -398,9 +398,14 @@ function mean(arr) {
   return v.length ? v.reduce((a,b) => a+b, 0) / v.length : null;
 }
 
+// Keep fixing-window history in memory across Positions tab unmount/remount.
+// Keyed by lookback so switching Cargoes <-> Positions does not refetch Supabase.
+const FW_HISTORY_CACHE = new Map();
+
 function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
-  const [rows, setRows] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
+  const initialCachedRows = FW_HISTORY_CACHE.get(14);
+  const [rows, setRows] = React.useState(() => initialCachedRows || []);
+  const [loading, setLoading] = React.useState(() => !initialCachedRows);
   const [activeSeg, setActiveSeg] = React.useState(new Set(FW_SEGMENTS.map(s => s.key)));
   const [hover, setHover] = React.useState(null);          // {x,y,week,items:[{seg,val}]}
   const [brush, setBrush] = React.useState(null);          // {x0,x1} pixel drag
@@ -424,9 +429,19 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
     return () => ro.disconnect();
   }, []);
 
-  // Fetch 12 weeks from positions_external using last_update_spotship as time axis
+  // Fetch fixing-window history only when this lookback has not already been
+  // loaded during the current app session. The module-level cache survives
+  // Positions tab unmount/remount, so Cargoes -> Positions does not refetch.
   useEffect(() => {
     let alive = true;
+
+    const cached = FW_HISTORY_CACHE.get(lookback);
+    if (cached) {
+      setRows(cached);
+      setLoading(false);
+      return () => { alive = false; };
+    }
+
     (async () => {
       setLoading(true);
       const since = new Date();
@@ -445,16 +460,22 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
           .not("last_update_spotship", "is", null)
           .order("last_update_spotship", { ascending: false })
           .range(from, from + PAGE - 1);
-        if (error) { console.error("FixingWindowChart fetch error:", error); break; }
+        if (error) {
+          console.error("FixingWindowChart fetch error:", error);
+          if (alive) setLoading(false);
+          return;
+        }
         all = all.concat(data || []);
         if (!data || data.length < PAGE) done = true;
         else from += PAGE;
         if (from > 80000) done = true; // safety cap
       }
       if (!alive) return;
+      FW_HISTORY_CACHE.set(lookback, all);
       setRows(all);
       setLoading(false);
     })();
+
     return () => { alive = false; };
   }, [lookback]);
 
