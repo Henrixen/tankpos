@@ -2041,8 +2041,7 @@ const filtV=useMemo(()=>{
               <div style={{fontSize:8,color:"rgba(175,205,240,.35)"}}>{loginFeedLoading?"UPDATING":"RSS"}</div>
             </div>
             {(loginNews.length?loginNews:[
-              {title:"Latest tanker and shipping headlines will appear here",source:"RSS feed"},
-              {title:"Feed refreshes automatically every 10 minutes",source:"Live"}
+              {title:"Loading latest tanker & shipping headlines…",source:"Live feed"}
             ]).slice(0,5).map((n,i)=><a key={i} href={n.link||undefined} target={n.link?"_blank":undefined} rel="noreferrer"
               style={{display:"block",textDecoration:"none",color:"inherit",padding:"9px 0",borderTop:i?"1px solid rgba(88,166,255,.08)":"none"}}>
               <div style={{fontSize:10.5,fontWeight:650,lineHeight:1.35,color:"rgba(225,239,255,.88)"}}>{n.title}</div>
@@ -2053,7 +2052,7 @@ const filtV=useMemo(()=>{
           </div>
 
           <div style={{
-            position:"absolute",left:"50%",bottom:34,transform:"translateX(-50%)",zIndex:3,
+            position:"absolute",left:"50%",bottom:78,transform:"translateX(-50%)",zIndex:3,
             display:"grid",gridTemplateColumns:"repeat(4,minmax(115px,1fr))",
             minWidth:"min(650px,calc(100vw - 36px))",
             border:"1px solid rgba(88,166,255,.11)",borderRadius:10,overflow:"hidden",
@@ -2061,15 +2060,15 @@ const filtV=useMemo(()=>{
           }}>
             {[
               ["BRENT",loginMarkets.brent,"USD/BBL"],
+              ["MGO USG",loginMarkets.mgoUsg,"USD/MT"],
               ["MGO ARA",loginMarkets.mgoAra,"USD/MT"],
-              ["MGO SINGAPORE",loginMarkets.mgoSingapore,"USD/MT"],
-              ["MGO USG",loginMarkets.mgoUsg,"USD/MT"]
+              ["MGO SPORE",loginMarkets.mgoSingapore,"USD/MT"]
             ].map(([label,val,unit],i)=><div key={label} style={{padding:"9px 12px",textAlign:"center",borderLeft:i?"1px solid rgba(88,166,255,.08)":"none"}}>
-              <div style={{fontSize:8,fontWeight:800,letterSpacing:".12em",color:"rgba(125,178,240,.54)"}}>{label}</div>
-              <div style={{fontSize:15,fontWeight:800,color:val!=null?"#eef6ff":"rgba(225,239,255,.30)",marginTop:2}}>
+              <div style={{fontSize:10.5,fontWeight:850,letterSpacing:".10em",color:"rgba(125,178,240,.54)"}}>{label}</div>
+              <div style={{fontSize:18,fontWeight:850,color:val!=null?"#eef6ff":"rgba(225,239,255,.30)",marginTop:2}}>
                 {val!=null?(typeof val==="number"?val.toLocaleString(undefined,{maximumFractionDigits:2}):val):"—"}
               </div>
-              <div style={{fontSize:7.5,color:"rgba(125,178,240,.30)"}}>{unit}</div>
+              <div style={{fontSize:8.5,color:"rgba(125,178,240,.34)"}}>{unit}</div>
             </div>)}
           </div>
 
