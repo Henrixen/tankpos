@@ -1319,6 +1319,9 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [cSortK,setCsortK]=useState("updated");
   const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
   const [selVessels,setSelVessels]=useState(()=>new Set());
+  const [bulkPosTagOpen,setBulkPosTagOpen]=useState(false);
+  const [bulkPosTagPos,setBulkPosTagPos]=useState({top:0,left:0});
+  const bulkPosTagBtnRef=React.useRef(null);
   const [history,setHistory]=useState([]);
   useEffect(()=>{loadHistory().then(setHistory);},[vessels]);
   const [intelItems,setIntelItems]=useState([]);
@@ -1469,6 +1472,24 @@ const cargoColumns = [
   // get added/updated in the static outsider_vessels roster. Live position
   // tracking after that happens automatically via OutsidersTab's own IMO
   // join — this just needs to get the vessel identity in.
+  function openBulkPositionTags(){
+    if(!selVessels.size)return;
+    if(bulkPosTagBtnRef.current){
+      const r=bulkPosTagBtnRef.current.getBoundingClientRect();
+      const popW=180;
+      let left=r.left;
+      if(left+popW>window.innerWidth-8)left=Math.max(8,r.right-popW);
+      setBulkPosTagPos({top:r.bottom+4,left});
+    }
+    setBulkPosTagOpen(v=>!v);
+  }
+
+  async function applyTagToSelectedVessels(tag){
+    const names=[...selVessels];
+    await Promise.all(names.map(name=>Promise.resolve(onUpdateV(name,"tag",tag))));
+    setBulkPosTagOpen(false);
+  }
+
   async function addSelectedToOutsiders(){
     const selected = vessels.filter(v=>selVessels.has(v.vessel));
     if(!selected.length) return;
@@ -2673,6 +2694,13 @@ const filtV=useMemo(()=>{
                     {showAddVessel?"✕ Cancel":"+ Add vessel"}
                   </button>
                   {selVessels.size>0&&(
+                    <button ref={bulkPosTagBtnRef} onClick={openBulkPositionTags}
+                      title="Add a tag to all selected vessels"
+                      style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(88,166,255,0.48)",background:"rgba(88,166,255,.12)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                      + Tag ({selVessels.size})
+                    </button>
+                  )}
+                  {selVessels.size>0&&(
                     <button onClick={addSelectedToOutsiders}
                       title="Keep selected vessel(s) permanently in the Outsiders roster"
                       style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(245,166,35,0.55)",background:"rgba(245,166,35,.12)",color:"#f5a623",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
@@ -2690,7 +2718,7 @@ const filtV=useMemo(()=>{
                   <span style={{color:C.faint}}>Selected <span style={{color:"#4fc3f7",fontWeight:700}}>{selVessels.size}</span></span>
                   
                   {/* MOVED SEARCH FIELD HERE */}
-                  <div style={{position:"relative",marginLeft:"auto",display:"flex",alignItems:"center",gap:4,minWidth:240,flex:"1 1 320px"}}>
+                  <div style={{position:"relative",marginLeft:"auto",display:"flex",alignItems:"center",gap:4,width:270,minWidth:270,maxWidth:270,flex:"0 0 270px"}}>
                     <input
                       value={search}
                       onChange={e=>setSearch(e.target.value)}
@@ -2720,6 +2748,43 @@ const filtV=useMemo(()=>{
                     {sortD>0?"▲":"▼"}
                   </button>
                 </div>
+
+                {bulkPosTagOpen&&(
+                  <>
+                    <div style={{position:"fixed",inset:0,zIndex:19990}} onClick={()=>setBulkPosTagOpen(false)}/>
+                    <div style={{
+                      position:"fixed",top:bulkPosTagPos.top,left:bulkPosTagPos.left,zIndex:19999,
+                      width:180,maxHeight:`calc(100vh - ${bulkPosTagPos.top+10}px)`,overflowY:"auto",
+                      background:"#0a1628",border:"1px solid rgba(88,166,255,0.34)",borderRadius:7,
+                      padding:6,boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
+                      display:"flex",flexDirection:"column",gap:3
+                    }}>
+                      <div style={{fontSize:9,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",padding:"2px 3px 5px"}}>
+                        Tag {selVessels.size} selected
+                      </div>
+                      {getTagListFor("position").map(t=>{
+                        const col=getTagColor(t);
+                        return(
+                          <button key={t} onClick={()=>applyTagToSelectedVessels(t)}
+                            style={{
+                              fontSize:11,padding:"4px 8px",borderRadius:3,textAlign:"left",
+                              cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
+                              border:"1px solid "+(col?col+"55":"rgba(88,166,255,0.12)"),
+                              background:"transparent",color:col||"rgba(160,200,255,0.75)"
+                            }}>
+                            {col&&<span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:col,marginRight:5,verticalAlign:"middle"}}/>}
+                            {t}
+                          </button>
+                        );
+                      })}
+                      <button onClick={()=>applyTagToSelectedVessels("")}
+                        style={{fontSize:10,padding:"4px 8px",borderRadius:3,textAlign:"left",cursor:"pointer",fontFamily:"inherit",
+                          border:"1px solid rgba(255,107,107,0.25)",background:"transparent",color:"rgba(255,107,107,0.62)",marginTop:2}}>
+                        ✕ Clear tag
+                      </button>
+                    </div>
+                  </>
+                )}
 
                 {/* Vessel Table + Side panel row */}
                 <div ref={(el)=>{window.__posRow=el;}} style={{display:"flex",gap:10,alignItems:"flex-start",position:"relative"}}>
@@ -2936,7 +3001,7 @@ const filtV=useMemo(()=>{
                   {selV&&(
                     <div data-pos-vessel-panel style={{
                       width:310,flex:"0 0 310px",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,
-                      overflow:"hidden",position:"sticky",top:8,zIndex:20,maxHeight:"calc(100vh - 120px)",
+                      overflow:"hidden",position:"sticky",top:112,zIndex:40,maxHeight:"calc(100vh - 128px)",
                       display:"flex",flexDirection:"column",boxShadow:"-12px 12px 34px rgba(0,0,0,0.40)",
                       animation:"posDrawerIn .24s cubic-bezier(.16,.8,.24,1)"
                     }}>
