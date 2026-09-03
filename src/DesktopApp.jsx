@@ -231,13 +231,10 @@ function TagCellV({vesselName,tag,onUpdateV}){
     setTagColors(getTagColors());
     if(btnRef.current){
       const r=btnRef.current.getBoundingClientRect();
-      const popW=175;
-      const popH=Math.min(380,Math.max(210,getTagListFor("position").length*30+80));
-      let left=r.right-popW;
-      if(left<8)left=8;
-      if(left+popW>window.innerWidth-8)left=window.innerWidth-popW-8;
-      let top=r.bottom+5;
-      if(top+popH>window.innerHeight-8)top=Math.max(8,r.top-popH-5);
+      const popW=180;
+      let left=r.left;
+      if(left+popW>window.innerWidth-8)left=Math.max(8,r.right-popW);
+      const top=Math.min(window.innerHeight-80,r.bottom+4);
       setPos({top,left});
     }
     setOpen(v=>!v);
@@ -275,8 +272,8 @@ function TagCellV({vesselName,tag,onUpdateV}){
             position:"fixed",top:pos.top,left:pos.left,zIndex:19999,
             background:"#0a1628",border:"1px solid rgba(88,166,255,0.34)",borderRadius:7,
             padding:"6px",boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
-            display:"flex",flexDirection:"column",gap:3,minWidth:165,
-            maxHeight:"min(380px,calc(100vh - 16px))",overflowY:"auto"
+            display:"flex",flexDirection:"column",gap:3,width:180,
+            maxHeight:`calc(100vh - ${pos.top+10}px)`,overflowY:"auto",overflowX:"hidden"
           }}>
             {cur&&(
               <button onClick={()=>{onUpdateV(vesselName,"tag","");setOpen(false);}}
@@ -1890,16 +1887,16 @@ const filtV=useMemo(()=>{
           }
         }}
         style={{ cursor: "pointer", userSelect: "none" }}
-        title="Click to toggle all"
+        title="Mark all / none"
       >
         <div style={{ fontSize: 11, color: filtV.length > 0 && filtV.every(v => selVessels.has(v.vessel)) ? "#4fc3f7" : C.faint }}>
           {filtV.length > 0 && filtV.every(v => selVessels.has(v.vessel)) ? "[✓]" : "[ ]"}
         </div>
-        <div style={{ fontSize: 8, color: C.faint, marginTop: 2 }}>All</div>
+        <div style={{ fontSize: 8, color: C.faint, marginTop: 1, whiteSpace:"nowrap" }}>ALL</div>
       </div>
     ), 
     align: "center", 
-    width: 24 
+    width: 40 
   },
   { key: "operator",  sortKey:"operator",  label: "Operator",  width: colWidthsV.Operator },
   { key: "vessel",    sortKey:"vessel",    label: "Vessel",    width: colWidthsV.Vessel },
@@ -2645,7 +2642,12 @@ const filtV=useMemo(()=>{
             {vessels.length > 0 && (
               <>
                 {/* MOVED: Fleet count + Export + Search to same row */}
-                <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,flexWrap:"wrap"}}>
+                <div style={{
+                  display:"flex",alignItems:"center",gap:8,padding:"6px 10px",
+                  background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,
+                  flexWrap:"nowrap",minHeight:38,boxSizing:"border-box",
+                  overflowX:"auto",overflowY:"hidden",scrollbarWidth:"thin"
+                }}>
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
                   <CopyPositionsButton filtV={filtV} fmtDateShort={fmtDateShort}/>
@@ -2688,7 +2690,7 @@ const filtV=useMemo(()=>{
                   <span style={{color:C.faint}}>Selected <span style={{color:"#4fc3f7",fontWeight:700}}>{selVessels.size}</span></span>
                   
                   {/* MOVED SEARCH FIELD HERE */}
-                  <div style={{position:"relative",marginLeft:"auto",display:"flex",alignItems:"center",gap:4,minWidth:300}}>
+                  <div style={{position:"relative",marginLeft:"auto",display:"flex",alignItems:"center",gap:4,minWidth:240,flex:"1 1 320px"}}>
                     <input
                       value={search}
                       onChange={e=>setSearch(e.target.value)}
@@ -2769,7 +2771,7 @@ const filtV=useMemo(()=>{
     <>
       {/* SELECT */}
       <td
-        style={{ ...tdCtr, width: 24, minWidth:24, maxWidth:24, padding: "0 1px" }}
+        style={{ ...tdCtr, width: 40, minWidth:40, maxWidth:40, padding: "0 2px" }}
         onClick={e => {
           e.stopPropagation();
           setSelVessels(p => {
@@ -2928,13 +2930,15 @@ const filtV=useMemo(()=>{
 />
                   </div>
 
+                </div>{/* end pos-table-wrap */}
+
                   {/* Right-hand vessel detail drawer — stays inside the positions layout */}
                   {selV&&(
                     <div data-pos-vessel-panel style={{
-                      width:300,flex:"0 0 300px",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,
-                      overflow:"hidden",position:"sticky",top:56,zIndex:20,maxHeight:"calc(100vh - 78px)",
-                      display:"flex",flexDirection:"column",boxShadow:"-10px 14px 38px rgba(0,0,0,0.45)",
-                      animation:"posDrawerIn .22s cubic-bezier(.2,.75,.25,1)"
+                      width:310,flex:"0 0 310px",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,
+                      overflow:"hidden",position:"sticky",top:8,zIndex:20,maxHeight:"calc(100vh - 120px)",
+                      display:"flex",flexDirection:"column",boxShadow:"-12px 12px 34px rgba(0,0,0,0.40)",
+                      animation:"posDrawerIn .24s cubic-bezier(.16,.8,.24,1)"
                     }}>
                       <style>{`
                         @keyframes posDrawerIn{
@@ -3033,8 +3037,7 @@ const filtV=useMemo(()=>{
                       </div>
                     </div>
                   )}
-                </div>
-                </div>
+                </div>{/* end vessel table + drawer row */}
 
                 {displayPosRows.length > posPage * POS_PAGE_SIZE && (
                   <div style={{textAlign:"center",padding:"12px 0"}}>
