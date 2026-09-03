@@ -216,6 +216,8 @@ function TagCellV({vesselName,tag,onUpdateV}){
   const [open,setOpen]=useState(false);
   const [tagList,setTagList]=useState(()=>getTagListFor("position"));
   const [tagColors,setTagColors]=useState(getTagColors);
+  const btnRef=React.useRef(null);
+  const [pos,setPos]=useState({top:0,left:0});
 
   useEffect(()=>{
     const h=()=>{setTagList(getTagListFor("position"));setTagColors(getTagColors());};
@@ -227,53 +229,85 @@ function TagCellV({vesselName,tag,onUpdateV}){
     e.stopPropagation();
     setTagList(getTagListFor("position"));
     setTagColors(getTagColors());
+    if(btnRef.current){
+      const r=btnRef.current.getBoundingClientRect();
+      const popW=175;
+      const popH=Math.min(380,Math.max(210,getTagListFor("position").length*30+80));
+      let left=r.right-popW;
+      if(left<8)left=8;
+      if(left+popW>window.innerWidth-8)left=window.innerWidth-popW-8;
+      let top=r.bottom+5;
+      if(top+popH>window.innerHeight-8)top=Math.max(8,r.top-popH-5);
+      setPos({top,left});
+    }
     setOpen(v=>!v);
   }
   function pick(t){onUpdateV(vesselName,"tag",t);setOpen(false);}
-  function addNew(val){const t=val.trim();if(!t)return;addCustomTag(t);onUpdateV(vesselName,"tag",t);setTagList(getTagListFor("position"));setOpen(false);}
+  function addNew(val){
+    const t=val.trim();
+    if(!t)return;
+    addCustomTag(t);
+    onUpdateV(vesselName,"tag",t);
+    setTagList(getTagListFor("position"));
+    setOpen(false);
+  }
+
   const cur=tag||"";
   const curCol=cur?getTagColor(cur):null;
+
   return(
-    <td style={{padding:"2px 4px",verticalAlign:"middle",textAlign:"center",borderBottom:"1px solid rgba(255,255,255,0.035)",position:"relative"}} onClick={e=>e.stopPropagation()}>
-      <button onClick={openPick}
-        style={{background:curCol?curCol+"22":cur?"rgba(88,166,255,0.15)":"transparent",
-          border:"1px solid "+(curCol||( cur?"rgba(88,166,255,0.4)":"rgba(88,166,255,0.12)")),
-          borderRadius:3,color:curCol||( cur?"#79c0ff":"rgba(120,160,220,0.25)"),
+    <td style={{padding:"2px 4px",verticalAlign:"middle",textAlign:"center",borderBottom:"1px solid rgba(255,255,255,0.035)"}} onClick={e=>e.stopPropagation()}>
+      <button ref={btnRef} onClick={openPick}
+        style={{
+          background:curCol?curCol+"22":cur?"rgba(88,166,255,0.15)":"transparent",
+          border:"1px solid "+(curCol||(cur?"rgba(88,166,255,0.4)":"rgba(88,166,255,0.12)")),
+          borderRadius:3,color:curCol||(cur?"#79c0ff":"rgba(120,160,220,0.25)"),
           fontSize:10,fontWeight:cur?700:400,padding:"1px 5px",cursor:"pointer",
-          fontFamily:"inherit",whiteSpace:"nowrap",maxWidth:76,overflow:"hidden",textOverflow:"ellipsis"}}>
+          fontFamily:"inherit",whiteSpace:"nowrap",maxWidth:76,overflow:"hidden",textOverflow:"ellipsis"
+        }}>
         {cur?cur.toUpperCase():"＋"}
       </button>
+
       {open&&(
         <>
-          <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
-          <div style={{position:"absolute",top:"calc(100% + 4px)",right:0,zIndex:9999,background:"#0a1628",
-            border:"1px solid rgba(88,166,255,0.3)",borderRadius:7,padding:"6px",
-            boxShadow:"0 8px 28px rgba(0,0,0,0.7)",display:"flex",flexDirection:"column",gap:2,minWidth:150}}>
-            {cur&&<button onClick={()=>{onUpdateV(vesselName,"tag","");setOpen(false);}}
-              style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",
-                background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",
-                fontFamily:"inherit",textAlign:"left",marginBottom:2}}>✕ clear</button>}
+          <div style={{position:"fixed",inset:0,zIndex:19990}} onClick={()=>setOpen(false)}/>
+          <div style={{
+            position:"fixed",top:pos.top,left:pos.left,zIndex:19999,
+            background:"#0a1628",border:"1px solid rgba(88,166,255,0.34)",borderRadius:7,
+            padding:"6px",boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
+            display:"flex",flexDirection:"column",gap:3,minWidth:165,
+            maxHeight:"min(380px,calc(100vh - 16px))",overflowY:"auto"
+          }}>
+            {cur&&(
+              <button onClick={()=>{onUpdateV(vesselName,"tag","");setOpen(false);}}
+                style={{fontSize:10,padding:"3px 7px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",
+                  background:"transparent",color:"rgba(255,107,107,0.65)",cursor:"pointer",
+                  fontFamily:"inherit",textAlign:"left",marginBottom:2}}>✕ clear</button>
+            )}
             {tagList.map(t=>{
               const tCol=tagColors[t]||null;
               return(
                 <button key={t} onClick={()=>pick(t)}
-                  style={{fontSize:11,padding:"3px 8px",borderRadius:3,textAlign:"left",cursor:"pointer",fontFamily:"inherit",
+                  style={{
+                    fontSize:11,padding:"4px 8px",borderRadius:3,textAlign:"left",
+                    cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
                     border:"1px solid "+(cur===t?(tCol||"rgba(88,166,255,0.5)"):(tCol?tCol+"55":"rgba(88,166,255,0.12)")),
                     background:cur===t?(tCol?tCol+"33":"rgba(88,166,255,0.2)"):"transparent",
-                    color:cur===t?(tCol||"#79c0ff"):(tCol||"rgba(160,200,255,0.7)"),
-                    fontWeight:cur===t?700:400}}>
+                    color:cur===t?(tCol||"#79c0ff"):(tCol||"rgba(160,200,255,0.75)"),
+                    fontWeight:cur===t?700:400
+                  }}>
                   {tCol&&<span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:tCol,marginRight:5,verticalAlign:"middle"}}/>}
                   {t}
                 </button>
               );
             })}
             <input placeholder="New tag + Enter"
-              onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){addNew(e.target.value);e.target.value="";}if(e.key==="Escape")setOpen(false);}}
-              style={{fontSize:10,padding:"3px 5px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none",marginTop:4}}/>
-            <div style={{fontSize:9,color:"rgba(88,166,255,0.3)",marginTop:3,textAlign:"center",cursor:"pointer"}}
-              onClick={()=>setOpen(false)}>
-              Manage tags in Settings →
-            </div>
+              onKeyDown={e=>{
+                if(e.key==="Enter"&&e.target.value.trim()){addNew(e.target.value);e.target.value="";}
+                if(e.key==="Escape")setOpen(false);
+              }}
+              style={{fontSize:10,padding:"4px 6px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",
+                background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none",marginTop:3}}/>
           </div>
         </>
       )}
@@ -1829,6 +1863,18 @@ const filtV=useMemo(()=>{
   savedVessels,
 ]);
 
+  // One visible row per vessel. Duplicate vessel names were producing duplicate
+  // React keys in MatrixTable, which could leave stale rows behind after searching.
+  const displayPosRows=useMemo(()=>{
+    const seen=new Set();
+    return filtV.filter(v=>{
+      const key=String(v.vessel||"").trim().toUpperCase();
+      if(!key||seen.has(key))return false;
+      seen.add(key);
+      return true;
+    });
+  },[filtV]);
+
   const posColumns = [
   { 
     key: "select", 
@@ -1906,27 +1952,26 @@ const filtV=useMemo(()=>{
       return !isNaN(d) && d>=cutoff;
     });
   },[vessels]);
+  React.useEffect(()=>{
+    if(sel && !displayPosRows.some(v=>v.vessel===sel)){
+      setSel(null);
+      setSelectedAISVessels([]);
+    }
+  },[displayPosRows,sel]);
+
   const selV=sel?vessels.find(v=>v.vessel===sel):null;
-  const [panelBox,setPanelBox]=useState({left:0,top:120});
-  useEffect(()=>{
+  React.useEffect(()=>{
     if(!selV)return;
-    let raf=null;
-    const update=()=>{
-      raf=null;
-      const row=window.__posRow;
-      if(!row)return;
-      const tbl=row.querySelector("table");
-      const rect=(tbl||row).getBoundingClientRect();
-      const left=Math.min(rect.right+12, window.innerWidth-272);
-      const top=Math.max(70, Math.min(rect.top, window.innerHeight-200));
-      setPanelBox({left:Math.max(8,left),top});
+    const closeOnOutside=(e)=>{
+      if(e.target.closest?.("[data-pos-vessel-panel]"))return;
+      if(e.target.closest?.(".pos-table-wrap"))return;
+      setSel(null);
+      setSelectedAISVessels([]);
     };
-    const onScrollResize=()=>{ if(raf==null) raf=requestAnimationFrame(update); };
-    update();
-    window.addEventListener("scroll",onScrollResize,true);
-    window.addEventListener("resize",onScrollResize);
-    return()=>{window.removeEventListener("scroll",onScrollResize,true);window.removeEventListener("resize",onScrollResize);if(raf)cancelAnimationFrame(raf);};
+    document.addEventListener("mousedown",closeOnOutside);
+    return()=>document.removeEventListener("mousedown",closeOnOutside);
   },[selV]);
+
   const selFixes=sel?cargoes.filter(c=>c.vessel&&c.vessel.toLowerCase()===sel.toLowerCase()):[];
   const cTokens=cSearch.trim().toLowerCase().split(",").map(g=>g.trim().split(/\s+/).filter(Boolean)).filter(g=>g.length);
   const filtC=useMemo(()=>{
@@ -2041,7 +2086,8 @@ const filtV=useMemo(()=>{
               <div style={{fontSize:8,color:"rgba(175,205,240,.35)"}}>{loginFeedLoading?"UPDATING":"RSS"}</div>
             </div>
             {(loginNews.length?loginNews:[
-              {title:"Loading latest tanker & shipping headlines…",source:"Live feed"}
+              {title:"Latest tanker and shipping headlines will appear here",source:"RSS feed"},
+              {title:"Feed refreshes automatically every 10 minutes",source:"Live"}
             ]).slice(0,5).map((n,i)=><a key={i} href={n.link||undefined} target={n.link?"_blank":undefined} rel="noreferrer"
               style={{display:"block",textDecoration:"none",color:"inherit",padding:"9px 0",borderTop:i?"1px solid rgba(88,166,255,.08)":"none"}}>
               <div style={{fontSize:10.5,fontWeight:650,lineHeight:1.35,color:"rgba(225,239,255,.88)"}}>{n.title}</div>
@@ -2638,7 +2684,7 @@ const filtV=useMemo(()=>{
                   )}
                   {outsiderSyncStatus&&<span style={{fontSize:11,color:outsiderSyncStatus.startsWith("✓")?"#43e97b":C.faint,whiteSpace:"nowrap"}}>{outsiderSyncStatus}</span>}
                   <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{vessels.length}</span></span>
-                  <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{Math.min(filtV.length, posPage*POS_PAGE_SIZE)}</span></span>
+                  <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{Math.min(displayPosRows.length, posPage*POS_PAGE_SIZE)}</span></span>
                   <span style={{color:C.faint}}>Selected <span style={{color:"#4fc3f7",fontWeight:700}}>{selVessels.size}</span></span>
                   
                   {/* MOVED SEARCH FIELD HERE */}
@@ -2676,7 +2722,10 @@ const filtV=useMemo(()=>{
                 {/* Vessel Table + Side panel row */}
                 <div ref={(el)=>{window.__posRow=el;}} style={{display:"flex",gap:10,alignItems:"flex-start",position:"relative"}}>
                 {/* Vessel Table */}
-                <div className="pos-table-wrap" style={{width:"100%",flex:1,minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch"}}
+                <div className="pos-table-wrap" style={{
+                  width:"100%",flex:1,minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch",
+                  transition:"flex-basis .22s ease,width .22s ease"
+                }}
                   onClick={e=>{
                     const th=e.target.closest("th");
                     if(!th) return;
@@ -2694,8 +2743,9 @@ const filtV=useMemo(()=>{
                       .pos-table th, .pos-table td{position:static!important;left:auto!important;right:auto!important;box-shadow:none!important;}
                     `}</style>}
                     <MatrixTable
+  key={`positions-${search}-${displayPosRows.length}-${sortK}-${sortD}-${posPage}-${[...filters].join("|")}-${[...posTagFilter].join("|")}`}
   columns={mobile ? posColumnsMobile : posColumns}
-  data={filtV.slice(0, posPage * POS_PAGE_SIZE)}
+  data={displayPosRows.slice(0, posPage * POS_PAGE_SIZE)}
   keyField="vessel"
   selectedKey={sel}
   onRowClick={(row) => {
@@ -2878,15 +2928,26 @@ const filtV=useMemo(()=>{
 />
                   </div>
 
-                  {/* Side panel — fixed, tracks table right-edge via rAF (smooth, no drift) */}
+                  {/* Right-hand vessel detail drawer — stays inside the positions layout */}
                   {selV&&(
-                    <div style={{width:260,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",position:"fixed",left:panelBox.left,top:panelBox.top,zIndex:1000,maxHeight:"calc(100vh - 90px)",display:"flex",flexDirection:"column",boxShadow:"0 16px 50px rgba(0,0,0,0.7)"}}>
+                    <div data-pos-vessel-panel style={{
+                      width:300,flex:"0 0 300px",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,
+                      overflow:"hidden",position:"sticky",top:56,zIndex:20,maxHeight:"calc(100vh - 78px)",
+                      display:"flex",flexDirection:"column",boxShadow:"-10px 14px 38px rgba(0,0,0,0.45)",
+                      animation:"posDrawerIn .22s cubic-bezier(.2,.75,.25,1)"
+                    }}>
+                      <style>{`
+                        @keyframes posDrawerIn{
+                          from{opacity:0;transform:translateX(24px) scale(.985)}
+                          to{opacity:1;transform:translateX(0) scale(1)}
+                        }
+                      `}</style>
                       <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
                         <div>
                           <div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>
                           <div style={{fontSize:12,color:C.purple}}>{selV.operator||""}</div>
                         </div>
-                        <button onClick={()=>setSel(null)} style={{background:"none",border:"none",color:C.dim,fontSize:14,cursor:"pointer"}}>✕</button>
+                        <button onClick={()=>{setSel(null);setSelectedAISVessels([]);}} style={{background:"none",border:"none",color:C.dim,fontSize:14,cursor:"pointer"}}>✕</button>
                       </div>
 
                       <div style={{padding:"8px 12px",overflowY:"auto",flex:1}}>
@@ -2975,7 +3036,7 @@ const filtV=useMemo(()=>{
                 </div>
                 </div>
 
-                {filtV.length > posPage * POS_PAGE_SIZE && (
+                {displayPosRows.length > posPage * POS_PAGE_SIZE && (
                   <div style={{textAlign:"center",padding:"12px 0"}}>
                     <button
                       onClick={() => setPosPage(p => p + 1)}
