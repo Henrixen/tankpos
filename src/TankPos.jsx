@@ -264,7 +264,7 @@ export default function TankPos(){
   // Merge in vessel_overrides — manual edits (notes + spec) win over CSV/feed, per field
   try {
     const { data: ovRows } = await supabase.from("vessel_overrides")
-      .select("imo_no,vessel_name,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo,tag");
+      .select("imo_no,vessel_name,operator,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo,tag");
     if (ovRows && ovRows.length) {
       const byImo = {}, byName = {};
       ovRows.forEach(o => {
@@ -276,6 +276,7 @@ export default function TankPos(){
         if (!o) return v;
         const merged = { ...v };
         // top-level fields: only apply override when non-null (manual wins)
+        if (o.operator != null)merged.operator= o.operator;
         if (o.note != null)    merged.notes   = o.note;
         if (o.coating != null) merged.coating = o.coating;
         if (o.loa != null)     merged.loa     = o.loa;
@@ -343,9 +344,10 @@ export default function TankPos(){
     return next;
   });
 
-  // Vessel-spec + notes persist in vessel_overrides (manual wins, survives CSV/feed updates).
+  // Manual vessel overrides persist in vessel_overrides and win over CSV/feed updates.
   // Map popout field -> override column.
   const OVERRIDE_COLS = {
+    operator: "operator",
     notes: "note",
     coating: "coating",
     loa: "loa",
