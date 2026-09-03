@@ -381,7 +381,12 @@ function RichEditor({ jobId, field, title, titleRight, value, onChange, onResize
         [data-job-field="${jobId}-${field}"] ol ol{list-style-type:lower-alpha;}
         [data-job-field="${jobId}-${field}"] li{margin:0;padding:0;}
         [data-job-field="${jobId}-${field}"] p{margin:0;}
-        [data-job-field="${jobId}-${field}"] img{max-width:100%;height:auto;border-radius:3px;margin:2px 0;cursor:zoom-in;}
+        [data-job-field="${jobId}-${field}"] img{
+          max-width:${field==="clientnotes"?"180px":"100%"};
+          max-height:${field==="clientnotes"?"110px":"none"};
+          width:${field==="clientnotes"?"auto":"auto"};
+          height:auto;object-fit:cover;border-radius:4px;margin:3px 4px 3px 0;cursor:zoom-in;
+        }
         [data-job-field="${jobId}-${field}"] table{border-collapse:collapse;width:100%;margin:4px 0;table-layout:fixed;}
         [data-job-field="${jobId}-${field}"] td,[data-job-field="${jobId}-${field}"] th{border:1px solid rgba(88,130,200,0.3);padding:4px 6px;min-width:40px;min-height:24px;height:24px;outline:none;word-break:break-word;vertical-align:top;position:relative;box-sizing:border-box;}
         [data-job-field="${jobId}-${field}"] th{background:rgba(20,40,80,0.5);font-weight:700;}
@@ -641,6 +646,35 @@ function FixingTab({vessels}){
   const [editingClientName,setEditingClientName]=useState(null); // id of client being renamed
   const [notePopout,setNotePopout]=useState(null); // charterer name for popout // "matrix" | "list"
   const [clientNotesExpanded,setClientNotesExpanded]=useState({}); // { [charterer]: boolean }
+  const [fixingSegments,setFixingSegments]=useState(()=>{
+    try{
+      const v=JSON.parse(localStorage.getItem("signal_fixing_segments")||"null");
+      return Array.isArray(v)&&v.length?v:SEGMENTS;
+    }catch(_){return SEGMENTS;}
+  });
+  const [fixingTrades,setFixingTrades]=useState(()=>{
+    try{
+      const v=JSON.parse(localStorage.getItem("signal_fixing_trades")||"null");
+      return Array.isArray(v)&&v.length?v:TRADES;
+    }catch(_){return TRADES;}
+  });
+
+  useEffect(()=>{
+    const syncFixingLists=()=>{
+      try{
+        const seg=JSON.parse(localStorage.getItem("signal_fixing_segments")||"null");
+        const tr=JSON.parse(localStorage.getItem("signal_fixing_trades")||"null");
+        setFixingSegments(Array.isArray(seg)&&seg.length?seg:SEGMENTS);
+        setFixingTrades(Array.isArray(tr)&&tr.length?tr:TRADES);
+      }catch(_){}
+    };
+    window.addEventListener("storage",syncFixingLists);
+    window.addEventListener("signal-fixing-lists-changed",syncFixingLists);
+    return()=>{
+      window.removeEventListener("storage",syncFixingLists);
+      window.removeEventListener("signal-fixing-lists-changed",syncFixingLists);
+    };
+  },[]);
   // Sync expand state for each job's 3 top editors: { [jobId]: {expanded, savedH, expandedH, key} }
   const [jobExpandStates,setJobExpandStates]=useState({});
 
@@ -1069,7 +1103,7 @@ function FixingTab({vessels}){
                             title="Client Notes"
                             value={client.notes||""}
                             placeholder="Client notes…"
-                            height={Math.max(130,client.notes_height||130)}
+                            height={Math.max(260,client.notes_height||260)}
                             onChange={val=>updateClient(client.id,{notes:val})}
                             onResizeSave={h=>updateClient(client.id,{notes_height:h})}/>
                         </div>
@@ -1265,12 +1299,12 @@ function FixingTab({vessels}){
                                   <select tabIndex={-1} value={job.segment||""} onChange={e=>updateJob(job.id,{segment:e.target.value})}
                                     style={{...inpS,padding:"1px 6px",fontSize:10,height:22,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,appearance:"none"}}>
                                     <option value="">Seg...</option>
-                                    {SEGMENTS.map(s=><option key={s} value={s}>{s}</option>)}
+                                    {fixingSegments.map(s=><option key={s} value={s}>{s}</option>)}
                                   </select>
                                   <select tabIndex={-1} value={job.trade||""} onChange={e=>updateJob(job.id,{trade:e.target.value})}
                                     style={{...inpS,padding:"1px 6px",fontSize:10,height:22,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,appearance:"none"}}>
                                     <option value="">Trade...</option>
-                                    {TRADES.map(t=><option key={t} value={t}>{t}</option>)}
+                                    {fixingTrades.map(t=><option key={t} value={t}>{t}</option>)}
                                   </select>
                                   <button tabIndex={-1}
                                     onClick={()=>{
@@ -1351,13 +1385,13 @@ function FixingTab({vessels}){
               `}</style>
               <input value={ownerDirSearch||""} onChange={e=>setOwnerDirSearch(e.target.value)} placeholder="Search owners…" style={{...inpS,width:"100%",padding:"3px 7px",fontSize:11}}/>
               <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-                {SEGMENTS.map(s=>(
+                {fixingSegments.map(s=>(
                   <button key={s} onClick={()=>setOwnerSegFilter(f=>f===s?null:s)}
                     style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,border:"1px solid "+(ownerSegFilter===s?C.blue:C.bd),background:ownerSegFilter===s?"rgba(88,166,255,.2)":"transparent",color:ownerSegFilter===s?C.blue:C.faint,cursor:"pointer",fontFamily:"inherit"}}>{s}</button>
                 ))}
               </div>
               <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-                {TRADES.map(t=>(
+                {fixingTrades.map(t=>(
                   <button key={t} onClick={()=>setOwnerTradeFilter(f=>f===t?null:t)}
                     style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,border:"1px solid "+(ownerTradeFilter===t?C.amber:C.bd),background:ownerTradeFilter===t?"rgba(255,209,102,.2)":"transparent",color:ownerTradeFilter===t?C.amber:C.faint,cursor:"pointer",fontFamily:"inherit"}}>{t}</button>
                 ))}
@@ -1365,9 +1399,9 @@ function FixingTab({vessels}){
               {/* Add company / first PIC */}
               <div style={{display:"grid",gridTemplateColumns:"135px 1fr 90px 1fr auto",gap:3,alignItems:"center"}}>
                 <input value={newOwnerEntry.company} onChange={e=>setNewOwnerEntry(p=>({...p,company:e.target.value}))} placeholder="Company" style={{...inpS,padding:"2px 4px",fontSize:11}}/>
-                <MultiSelectDropdown options={SEGMENTS} selected={newOwnerEntry.segments||[]} onChange={v=>setNewOwnerEntry(p=>({...p,segments:v}))} placeholder="Segment…" color="rgba(88,166,255,0.8)"/>
+                <MultiSelectDropdown options={fixingSegments} selected={newOwnerEntry.segments||[]} onChange={v=>setNewOwnerEntry(p=>({...p,segments:v}))} placeholder="Segment…" color="rgba(88,166,255,0.8)"/>
                 <input value={newOwnerEntry.pic} onChange={e=>setNewOwnerEntry(p=>({...p,pic:e.target.value}))} placeholder="PIC" style={{...inpS,padding:"2px 4px",fontSize:11}}/>
-                <MultiSelectDropdown options={TRADES} selected={newOwnerEntry.trades||[]} onChange={v=>setNewOwnerEntry(p=>({...p,trades:v}))} placeholder="Trade…" color="rgba(250,163,86,0.75)"/>
+                <MultiSelectDropdown options={fixingTrades} selected={newOwnerEntry.trades||[]} onChange={v=>setNewOwnerEntry(p=>({...p,trades:v}))} placeholder="Trade…" color="rgba(250,163,86,0.75)"/>
                 <button onClick={addOwnerEntry} style={{background:"rgba(88,166,255,.18)",border:"1px solid rgba(88,166,255,.4)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:11,padding:"3px 7px",cursor:"pointer",whiteSpace:"nowrap"}}>+ Add</button>
               </div>
               {(()=>{
@@ -1426,20 +1460,25 @@ function FixingTab({vessels}){
 
                           {isOpen&&(
                             <div style={{padding:"9px 10px 11px 36px",background:"rgba(88,166,255,0.025)"}}>
-                              {/* Company-level edit: name + segments only */}
+                              {/* Company name is edited directly. Segment choices come from Settings. */}
                               <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-                                <button onClick={e=>{
-                                  e.stopPropagation();
-                                  const next=window.prompt("Company name",g.name);
-                                  if(next&&next.trim()&&next.trim()!==g.name)updateOwnerCompany(g.name,{company:next.trim()});
-                                }} style={{
-                                  fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,
-                                  border:"1px solid rgba(88,166,255,0.25)",background:"rgba(88,166,255,0.08)",
-                                  color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"
-                                }}>Edit company</button>
+                                <input
+                                  defaultValue={g.name}
+                                  onBlur={e=>{
+                                    const next=e.target.value.trim();
+                                    if(next&&next!==g.name)updateOwnerCompany(g.name,{company:next});
+                                  }}
+                                  onKeyDown={e=>{
+                                    if(e.key==="Enter")e.currentTarget.blur();
+                                    if(e.key==="Escape"){e.currentTarget.value=g.name;e.currentTarget.blur();}
+                                  }}
+                                  style={{
+                                    ...inpS,flex:"0 0 42%",minWidth:120,padding:"3px 6px",fontSize:11,
+                                    color:"#79c0ff",fontWeight:700,background:"rgba(5,16,34,0.5)"
+                                  }}/>
                                 <div style={{flex:1}}>
                                   <MultiSelectDropdown
-                                    options={SEGMENTS}
+                                    options={fixingSegments}
                                     selected={g.segments}
                                     onChange={v=>updateOwnerCompany(g.name,{segments:v})}
                                     placeholder="Segments…"
@@ -1464,7 +1503,7 @@ function FixingTab({vessels}){
                                         placeholder="PIC"
                                         style={{...inpS,width:"100%",padding:"3px 5px",fontSize:11,color:"#cfe9ff"}}/>
                                       <MultiSelectDropdown
-                                        options={TRADES}
+                                        options={fixingTrades}
                                         selected={trs}
                                         onChange={v=>updateOwnerEntry(o.id,"trades",v)}
                                         placeholder="Trade…"
