@@ -73,6 +73,44 @@ function InterUKCEditor(){
   );
 }
 
+const FIXING_SEGMENTS_KEY = "signal_fixing_segments";
+const FIXING_TRADES_KEY = "signal_fixing_trades";
+const DEFAULT_FIXING_SEGMENTS = ["Sub 10k","City","Inter","J19","Flexi","Handy","MR","Parcel"];
+const DEFAULT_FIXING_TRADELANES = ["UKC","Med","EU Feast","AG","TA West","Ex US","Asia"];
+
+function loadStringList(key,defaults){
+  try{
+    const raw=JSON.parse(localStorage.getItem(key)||"null");
+    return Array.isArray(raw)&&raw.length?raw:defaults;
+  }catch{return defaults;}
+}
+function FixingListEditor({storageKey,defaults,placeholder}){
+  const [items,setItems]=useState(()=>loadStringList(storageKey,defaults));
+  const [draft,setDraft]=useState("");
+  function save(next){
+    const clean=[...new Set(next.map(x=>String(x||"").trim()).filter(Boolean))];
+    setItems(clean);
+    localStorage.setItem(storageKey,JSON.stringify(clean));
+    window.dispatchEvent(new Event("signal-fixing-lists-changed"));
+  }
+  return <div>
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+      {items.map((item,i)=><div key={item+"-"+i} style={{display:"flex",alignItems:"center",gap:3,background:C.bg2,border:"1px solid "+C.bd2,borderRadius:6,padding:"3px 5px"}}>
+        <input value={item} onChange={e=>{const n=[...items];n[i]=e.target.value;setItems(n);}}
+          onBlur={()=>save(items)} onKeyDown={e=>e.key==="Enter"&&e.currentTarget.blur()}
+          style={{background:"transparent",border:"none",outline:"none",color:"rgba(180,210,250,.85)",fontFamily:"inherit",fontSize:11,fontWeight:600,width:Math.max(48,item.length*7+10)}}/>
+        <button onClick={()=>save(items.filter((_,x)=>x!==i))} style={{background:"none",border:"none",color:"rgba(255,107,107,.45)",cursor:"pointer",padding:"0 2px",fontSize:10}}>×</button>
+      </div>)}
+    </div>
+    <div style={{display:"flex",gap:6}}>
+      <input value={draft} onChange={e=>setDraft(e.target.value)} placeholder={placeholder} style={inp}
+        onKeyDown={e=>{if(e.key==="Enter"&&draft.trim()){save([...items,draft.trim()]);setDraft("");}}}/>
+      <button onClick={()=>{if(draft.trim()){save([...items,draft.trim()]);setDraft("");}}}
+        style={{fontSize:11,fontWeight:700,padding:"5px 10px",borderRadius:5,border:"1px solid rgba(88,166,255,.4)",background:"rgba(88,166,255,.12)",color:"#9ec5ff",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>+ Add</button>
+    </div>
+  </div>;
+}
+
 const STORAGE_KEY = "signal_cargo_filter_groups";
 
 const CATEGORIES = [
@@ -227,6 +265,19 @@ export default function SettingsTab() {
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px",fontFamily:"Inter,sans-serif"}}>
+      <SectionCard title="Fixing">
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:7}}>Segments</div>
+            <FixingListEditor storageKey={FIXING_SEGMENTS_KEY} defaults={DEFAULT_FIXING_SEGMENTS} placeholder="Add segment…"/>
+          </div>
+          <div style={{paddingTop:12,borderTop:"1px solid "+C.bd2}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:7}}>Tradelanes</div>
+            <FixingListEditor storageKey={FIXING_TRADES_KEY} defaults={DEFAULT_FIXING_TRADELANES} placeholder="Add tradelane…"/>
+          </div>
+        </div>
+      </SectionCard>
+
       <SectionCard title="Inter UKC Pool" subtitle="Operators and DWT range used by the Inter UKC filter.">
         <InterUKCEditor/>
       </SectionCard>
