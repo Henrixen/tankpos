@@ -1658,6 +1658,38 @@ const cargoColumns = [
   el?.click();
 }
 
+  // When a vessel name is manually corrected, immediately re-resolve that
+  // vessel against the already-loaded vessels_db and refresh the visible
+  // specs. Example: TRITON -> STEN TRITON. This deliberately does not
+  // overwrite operator/comment/open position data from the pasted position.
+  async function renameVesselAndRefreshSpecs(oldName, rawNewName){
+    const newName=String(rawNewName||"").trim().toUpperCase();
+    if(!newName||newName===String(oldName||"").trim().toUpperCase()) return;
+
+    // Rename first so spec overrides are stored against the corrected vessel
+    // name rather than the shortened/incorrect pasted name.
+    if(onRenameV) await Promise.resolve(onRenameV(oldName,newName));
+
+    const db=(window.vesselDB||{});
+    const d=db[newName.toLowerCase().trim()];
+    if(!d||!onUpdateV) return;
+
+    const specUpdates=[
+      ["built",d.built],
+      ["dwt",d.dwt],
+      ["coating",d.coating],
+      ["loa",d.loa],
+      ["beam",d.beam],
+      ["cbm",d.cbm],
+      ["spec.iceClass",d.ice_class],
+      ["spec.fuel",d.fuel],
+    ].filter(([,value])=>value!==null&&value!==undefined&&String(value).trim()!=="");
+
+    for(const [field,value] of specUpdates){
+      await Promise.resolve(onUpdateV(newName,field,value));
+    }
+  }
+
   // Multi-token search across all text fields
   const tokens=search.trim().toLowerCase().split(/\s+/).filter(Boolean);
   function matchesSearch(v){
@@ -2871,7 +2903,7 @@ const filtV=useMemo(()=>{
         color={ppt ? "#a8e6a3" : "#79c0ff"}
         bold={true}
         placeholder="Vessel"
-        onSave={val=>onRenameV&&onRenameV(v.vessel,val?.toUpperCase()||v.vessel)}
+        onSave={val=>renameVesselAndRefreshSpecs(v.vessel,val)}
         data-cell={`${i}-vessel`}
         onTab={() => focusCell(i, "date")}
         onShiftTab={() => focusCell(i, "operator")}
