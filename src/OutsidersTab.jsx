@@ -386,10 +386,10 @@ export default function OutsidersTab({ compact=false }) {
       _rowKey: `${imo||liveIMO||"NOIMO"}:${nameKey||index}`,
       area: r.manual_area || pos?.super_region || null,
       port: r.manual_port || pos?.port_name || null,
-      // A manual Open Date is allowed for static outsiders, but as soon as
-      // positions_latest has an Open Date it automatically takes precedence.
-      openDate: pos?.open_date || r.manual_open_date || null,
-      openDateIsLive: !!pos?.open_date,
+      // Manual Open Date is an explicit override and must survive live position refreshes.
+      // Fall back to positions_latest only when no manual date has been set.
+      openDate: r.manual_open_date || pos?.open_date || null,
+      openDateIsLive: !r.manual_open_date && !!pos?.open_date,
       lastReported: pos?.updated_at || null,
       reporting: !!pos,
     };
@@ -671,7 +671,7 @@ export default function OutsidersTab({ compact=false }) {
         {areaOptions.length>0&&(
           <div style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:8}}>
             <span style={{fontSize:10,fontWeight:800,color:"#f5a623",textTransform:"uppercase",letterSpacing:"0.05em"}}>
-              Current Area
+              AREA
             </span>
 
             {areaOptions.map(a=>(
@@ -746,7 +746,7 @@ export default function OutsidersTab({ compact=false }) {
                 <th style={{...TH_,width:88,minWidth:88,maxWidth:88}}>Controlled By</th>
                 <th style={{...TH_,width:68,minWidth:68,maxWidth:68}}>PIC</th>
                 <th style={TH_}>Notes</th>
-                <SortTH label="Current Area" k="area"/>
+                <SortTH label="AREA" k="area"/>
                 <SortTH label="Open Port" k="port"/>
                 <SortTH label="Open Date" k="openDate"/>
                 <SortTH label="Last Reported" k="lastReported"/>
@@ -788,9 +788,9 @@ export default function OutsidersTab({ compact=false }) {
                     <EditCell value={r.port} onSave={v=>updateField(r,"manual_port",v)} width={140} color="#79c0ff"/>
                   </td>
                   <td style={{...TD_,color:"#79c0ff",fontWeight:600}}
-                    title={r.openDateIsLive ? "Live Open Date from Positions — overrides manual date" : "Manual Open Date — click to edit"}>
+                    title={r.manual_open_date ? "Manual Open Date override — click to edit" : r.openDateIsLive ? "Live Open Date — click to create a manual override" : "Open Date — click to set"}>
                     <EditCell
-                      value={r.openDateIsLive ? fmtOpenDate(r.openDate) : (r.manual_open_date || "")}
+                      value={r.manual_open_date || (r.openDateIsLive ? fmtOpenDate(r.openDate) : "")}
                       onSave={v=>updateField(r,"manual_open_date",v)}
                       placeholder="click to set"
                       width={90}
