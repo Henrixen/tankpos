@@ -303,13 +303,70 @@ export default function TankPos(){
     setCargoes(prev=>[...prev,...data.map(r=>({...normaliseCargo(r),entered_by:r.entered_by,added:r.added,changed:r.changed}))]);
   }
 
-  const renameV=useCallback((oldName,newName)=>{
-    if(!newName||!newName.trim()||newName.trim().toUpperCase()===oldName)return;
+  const renameV=useCallback(async(oldName,newName)=>{
+    if(!newName||!newName.trim()) return;
+
+    const oldKey=String(oldName||"").trim().toUpperCase();
     const n=newName.trim().toUpperCase();
-    setVessels(prev=>{const next=prev.map(v=>v.vessel===oldName?{...v,vessel:n,updatedAt:new Date().toISOString()}:v);saveV(next);return next;});
-    setCargoes(prev=>prev.map(c=>c.vessel===oldName?{...c,vessel:n}:c));
-    setSel(n);
-  },[]);
+    if(n===oldKey) return;
+
+    // Re-resolve the renamed vessel against vessels_db. This is important for
+    // short/manual names such as TRITON -> STEN TRITON: as soon as the full
+    // vessel name is entered we immediately repopulate the static vessel specs.
+    const vdb=window.vesselDB||vesselDB||{};
+    const dbRec=vdb[n.toLowerCase().trim()]||null;
+    const nowIso=new Date().toISOString();
+
+    setVessels(prev=>{
+      const next=prev.map(v=>{
+        if(String(v.vessel||"").trim().toUpperCase()!==oldKey) return v;
+
+        const base={...v,vessel:n,updatedAt:nowIso};
+        if(!dbRec) return base;
+
+        return {
+          ...base,
+          imoNo: dbRec.imo!=null ? String(dbRec.imo) : base.imoNo,
+          built: dbRec.built || base.built || null,
+          dwt: dbRec.dwt || base.dwt || null,
+          loa: dbRec.loa || base.loa || null,
+          beam: dbRec.beam || base.beam || null,
+          cbm: dbRec.cbm || base.cbm || null,
+          coating: dbRec.coating || base.coating || null,
+          // Keep the pasted position operator when present; use vessels_db only
+          // as a fallback. Open port/date/comment are intentionally untouched.
+          operator: base.operator || dbRec.operator || "",
+          spec: {
+            ...(base.spec||{}),
+            iceClass: dbRec.ice_class || base.spec?.iceClass || null,
+            fuel: dbRec.fuel || base.spec?.fuel || null,
+          }
+        };
+      });
+      saveV(next);
+      return next;
+    });
+
+    // Keep cargo fixture vessel references consistent with the rename.
+    setCargoes(prev=>prev.map(c=>
+      String(c.vessel||"").trim().toUpperCase()===oldKey ? {...c,vessel:n} : c
+    ));
+
+    // Persist the renamed manually-added position so it does not revert after
+    // the next positions refresh. Do not write vessel specs here; the UI can
+    // always re-enrich them from vessels_db.
+    try{
+      const {error}=await supabase.from("positions")
+        .update({vessel_name:n,updated_at:nowIso})
+        .ilike("vessel_name",oldName);
+      if(error) console.error("renameV positions update:",error);
+    }catch(e){
+      console.error("renameV positions update:",e);
+    }
+
+    // IMPORTANT: do not call setSel() here. Selection state belongs to
+    // DesktopApp; TankPos has no setSel, which caused the ReferenceError.
+  },[vesselDB]);
 
   const updateV = useCallback(async(name, field, value) => {
   setVessels(prev => {
