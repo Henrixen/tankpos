@@ -317,12 +317,22 @@ export default function TankPos(){
     const dbRec=vdb[n.toLowerCase().trim()]||null;
     const nowIso=new Date().toISOString();
 
+    // Capture the operator we should persist with the renamed position.
+    // Prefer the operator already on the pasted/current row; if that is blank,
+    // fall back to vessels_db. Without persisting this, the UI can look correct
+    // until refresh but positions_latest may then select a renamed DB row whose
+    // operator is null.
+    const currentRow=vessels.find(v=>String(v.vessel||"").trim().toUpperCase()===oldKey);
+    const resolvedOperator=currentRow?.operator || dbRec?.operator || null;
+
     setVessels(prev=>{
       const next=prev.map(v=>{
         if(String(v.vessel||"").trim().toUpperCase()!==oldKey) return v;
 
         const base={...v,vessel:n,updatedAt:nowIso};
-        if(!dbRec) return base;
+        if(!dbRec){
+          return {...base, operator: base.operator || resolvedOperator || ""};
+        }
 
         return {
           ...base,
@@ -333,9 +343,7 @@ export default function TankPos(){
           beam: dbRec.beam || base.beam || null,
           cbm: dbRec.cbm || base.cbm || null,
           coating: dbRec.coating || base.coating || null,
-          // Keep the pasted position operator when present; use vessels_db only
-          // as a fallback. Open port/date/comment are intentionally untouched.
-          operator: base.operator || dbRec.operator || "",
+          operator: base.operator || resolvedOperator || dbRec.operator || "",
           spec: {
             ...(base.spec||{}),
             iceClass: dbRec.ice_class || base.spec?.iceClass || null,
@@ -356,8 +364,17 @@ export default function TankPos(){
     // the next positions refresh. Do not write vessel specs here; the UI can
     // always re-enrich them from vessels_db.
     try{
+      const renamePayload={
+        vessel_name:n,
+        updated_at:nowIso,
+      };
+      // Persist operator together with the renamed vessel. This prevents a
+      // refresh from showing a blank operator when positions_latest resolves
+      // to a renamed/manual row that previously had operator = null.
+      if(resolvedOperator) renamePayload.operator=resolvedOperator;
+
       const {error}=await supabase.from("positions")
-        .update({vessel_name:n,updated_at:nowIso})
+        .update(renamePayload)
         .ilike("vessel_name",oldName);
       if(error) console.error("renameV positions update:",error);
     }catch(e){
