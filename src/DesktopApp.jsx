@@ -1170,13 +1170,6 @@ class TabErrorBoundary extends React.Component {
 }
 
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
-  const [navConfig,setNavConfig]=useState(navLoad);
-  useEffect(()=>{const h=e=>setNavConfig(navNorm(e.detail||navLoad()));window.addEventListener("navigation-config-updated",h);(async()=>{try{const {data}=await supabase.from("tag_settings").select("value").eq("key",NAV_CLOUD_KEY).maybeSingle();if(data?.value){const n=navNorm(data.value);setNavConfig(n);try{localStorage.setItem(NAV_KEY,JSON.stringify(n));}catch{}}}catch{}})();return()=>window.removeEventListener("navigation-config-updated",h)},[]);
-  const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
-  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||GUEST_TABS.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode]);
-  const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
-  const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set())});
-
   // ── PIN config ───────────────────────────────────────────────────────────
   const MASTER_PIN = "4524"; // ← your PIN → full access
   const GUEST_PIN  = "0250"; // ← colleague's PIN → positions + cargoes only
@@ -1277,6 +1270,29 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [opFilter,setOpFilter]=useState(null);
   const [updFilter,setUpdFilter]=useState(""); // "" | "today" | "week"
   const [bucketFilters,setBucketFilters]=useState(new Set()); // set of active bucket keys
+
+  // Configurable navigation — declared after guestMode/GUEST_TABS/tab/bucketFilters
+  // so all referenced bindings are initialized before these hooks evaluate.
+  const [navConfig,setNavConfig]=useState(navLoad);
+  useEffect(()=>{
+    const h=e=>setNavConfig(navNorm(e.detail||navLoad()));
+    window.addEventListener("navigation-config-updated",h);
+    (async()=>{
+      try{
+        const {data}=await supabase.from("tag_settings").select("value").eq("key",NAV_CLOUD_KEY).maybeSingle();
+        if(data?.value){
+          const n=navNorm(data.value);
+          setNavConfig(n);
+          try{localStorage.setItem(NAV_KEY,JSON.stringify(n));}catch{}
+        }
+      }catch{}
+    })();
+    return()=>window.removeEventListener("navigation-config-updated",h);
+  },[]);
+  const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
+  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||GUEST_TABS.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode]);
+  const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
+  const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set())});
  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
 const [posPage,setPosPage]=useState(1);
 const POS_PAGE_SIZE=100;
