@@ -2172,21 +2172,21 @@ const filtV=useMemo(()=>{
 
           <div style={{
             position:"absolute",right:"clamp(18px,4vw,64px)",top:"50%",transform:"translateY(-50%)",
-            width:310,padding:"16px 17px",borderRadius:12,zIndex:1,
+            width:370,padding:"18px 20px",borderRadius:12,zIndex:1,
             background:"rgba(4,16,33,.58)",border:"1px solid rgba(88,166,255,.12)",
             backdropFilter:"blur(10px)",color:"#dcecff"
           }}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}>
-              <div style={{fontSize:9,fontWeight:800,letterSpacing:".14em",color:"#58a6ff"}}>LATEST SHIPPING NEWS</div>
-              <div style={{fontSize:8,color:"rgba(175,205,240,.35)"}}>{loginFeedLoading?"UPDATING":"RSS"}</div>
+              <div style={{fontSize:11,fontWeight:800,letterSpacing:".14em",color:"#58a6ff"}}>LATEST SHIPPING NEWS</div>
+              <div style={{fontSize:9.5,color:"rgba(175,205,240,.42)"}}>{loginFeedLoading?"UPDATING":"RSS"}</div>
             </div>
             {(loginNews.length?loginNews:[
               {title:"Latest tanker and shipping headlines will appear here",source:"RSS feed"},
               {title:"Feed refreshes automatically every 10 minutes",source:"Live"}
             ]).slice(0,5).map((n,i)=><a key={i} href={n.link||undefined} target={n.link?"_blank":undefined} rel="noreferrer"
-              style={{display:"block",textDecoration:"none",color:"inherit",padding:"9px 0",borderTop:i?"1px solid rgba(88,166,255,.08)":"none"}}>
-              <div style={{fontSize:10.5,fontWeight:650,lineHeight:1.35,color:"rgba(225,239,255,.88)"}}>{n.title}</div>
-              <div style={{fontSize:8.5,marginTop:4,color:"rgba(125,178,240,.46)"}}>
+              style={{display:"block",textDecoration:"none",color:"inherit",padding:"11px 0",borderTop:i?"1px solid rgba(88,166,255,.08)":"none"}}>
+              <div style={{fontSize:13,fontWeight:650,lineHeight:1.42,color:"rgba(235,244,255,.94)"}}>{n.title}</div>
+              <div style={{fontSize:10,marginTop:5,color:"rgba(135,188,248,.58)"}}>
                 {n.source||"Shipping"}{n.published?"  ·  "+n.published:""}
               </div>
             </a>)}
