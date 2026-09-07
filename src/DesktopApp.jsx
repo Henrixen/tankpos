@@ -44,10 +44,10 @@ const NAV_CLOUD_KEY="navigation_config";
 const UI_ZOOM_KEY="signal_ui_zoom";
 const UI_ZOOM_CLOUD_KEY="ui_zoom";
 const NAV_ITEMS=[
- ["pos","Positions","#58a6ff","⌖"],["cargo","Cargoes","#faa356","▤"],["fix","Fixing","#c792ea","✓"],["tcv","Time Charter","#fb923c","◷"],
- ["clients","Clients","#a8e6a3","♙"],["matrix","Matrix","#43e97b","▦"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","⚡"],
- ["dash","Dashboard","#43e97b","▥"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▧"],["map","Freight Map","#10b981","⌁"],
- ["cal","Calendar","#4fc3f7","□"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","◈"],["newbuilds","Newbuilds","#fbbf24","△"]
+ ["pos","Positions","#58a6ff","ship"],["cargo","Cargoes","#faa356","barrel"],["fix","Fixing","#c792ea","check"],["tcv","Time Charter","#fb923c","clock"],
+ ["clients","Clients","#a8e6a3","users"],["matrix","Matrix","#43e97b","grid"],["projects","Projects","#4fc3f7","folder"],["tce","TCE","#faa356","calculator"],
+ ["dash","Dashboard","#43e97b","dashboard"],["notes","Notes","#f472b6","note"],["reports","Reports","#6366f1","report"],["map","Freight Map","#10b981","map"],
+ ["cal","Calendar","#4fc3f7","calendar"],["settings","Settings","#94a3b8","settings"],["vessels","Fleet DB","#38bdf8","database"],["fleet","Fleet","#2dd4bf","fleet"],["newbuilds","Newbuilds","#fbbf24","newbuild"]
 ];
 function navDefault(){return{mode:"classic",collapsed:false,order:NAV_ITEMS.map(x=>x[0]),hidden:[],groups:[
  {id:"market",label:"Market",tabs:["pos","cargo","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
@@ -61,6 +61,31 @@ function navNorm(x){
  return{mode:["classic","grouped","sidebar"].includes(x?.mode)?x.mode:"classic",collapsed:!!x?.collapsed,order,hidden:(x?.hidden||[]).filter(id=>valid.has(id)),groups};
 }
 function navLoad(){try{return navNorm(JSON.parse(localStorage.getItem(NAV_KEY)||"null"));}catch{return navDefault();}}
+
+
+function NavIcon({name,size=17}){
+  const common={width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:1.7,strokeLinecap:"round",strokeLinejoin:"round",ariaHidden:true,style:{display:"block",flexShrink:0}};
+  const paths={
+    ship:<><path d="M4 13.5 6.2 7h11.6l2.2 6.5"/><path d="M3 13.5h18l-2.3 4.2a3.5 3.5 0 0 1-3 1.8H8.3a3.5 3.5 0 0 1-3-1.8L3 13.5Z"/><path d="M9 7V4h6v3"/><path d="M7 21c1.2-.9 2.3-.9 3.5 0 1.2-.9 2.3-.9 3.5 0 1.2-.9 2.3-.9 3.5 0"/></>,
+    barrel:<><ellipse cx="12" cy="5" rx="5.5" ry="2.2"/><path d="M6.5 5v14M17.5 5v14"/><ellipse cx="12" cy="19" rx="5.5" ry="2.2"/><path d="M6.5 9h11M6.5 15h11"/></>,
+    check:<><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12 2.2 2.2 4.8-5"/></>,
+    clock:<><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></>,
+    users:<><circle cx="9" cy="9" r="3"/><path d="M3.5 19c.5-3 2.3-4.7 5.5-4.7s5 1.7 5.5 4.7"/><circle cx="17" cy="10" r="2.2"/><path d="M15.5 15.3c2.8-.4 4.5.8 5 3.2"/></>,
+    grid:<><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></>,
+    folder:<><path d="M3.5 7h6l1.6 2H20a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 20 19H4a1.5 1.5 0 0 1-1.5-1.5v-9A1.5 1.5 0 0 1 4 7Z"/></>,
+    calculator:<><rect x="5" y="3.5" width="14" height="17" rx="2"/><rect x="8" y="6" width="8" height="3" rx=".6"/><path d="M8 13h1M12 13h1M16 13h1M8 16.5h1M12 16.5h1M16 16.5h1"/></>,
+    dashboard:<><rect x="3.5" y="4" width="7" height="7" rx="1"/><rect x="13.5" y="4" width="7" height="4" rx="1"/><rect x="3.5" y="14" width="7" height="6" rx="1"/><rect x="13.5" y="11" width="7" height="9" rx="1"/></>,
+    note:<><path d="M6 3.5h9l3 3V20H6z"/><path d="M15 3.5V7h3M9 11h6M9 14h6M9 17h4"/></>,
+    report:<><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></>,
+    map:<><path d="m4 6 5-2 6 2 5-2v14l-5 2-6-2-5 2z"/><path d="M9 4v14M15 6v14"/></>,
+    calendar:<><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 9h16M8 13h2M13 13h2M8 16h2M13 16h2"/></>,
+    settings:<><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></>,
+    database:<><ellipse cx="12" cy="5.5" rx="6.5" ry="2.5"/><path d="M5.5 5.5v6c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5v-6M5.5 11.5v6c0 1.4 2.9 2.5 6.5 2.5s6.5-1.1 6.5-2.5v-6"/></>,
+    fleet:<><path d="M3.5 16h17l-2 3H6z"/><path d="M6 16l1.5-5h9l1.5 5M9 11V7h6v4"/><path d="M5 21h14"/></>,
+    newbuild:<><path d="M4 18h16M6 18V9l6-4 6 4v9M9 18v-5h6v5"/><path d="M12 2v3M10.5 3.5h3"/></>
+  };
+  return <svg {...common}>{paths[name]||paths.grid}</svg>;
+}
 
 
 
@@ -2388,13 +2413,13 @@ const filtV=useMemo(()=>{
           <div style={{display:"flex",padding:"0 20px",height:34,alignItems:"end",gap:4}}>
             {navConfig.groups.filter(g=>g.tabs.some(id=>navIds.includes(id))).map(g=>{const active=g.tabs.includes(tab);return <button key={g.id} onClick={()=>{const id=g.tabs.find(x=>navIds.includes(x));if(id)goNav(id)}} style={{height:34,padding:"0 15px",border:"none",borderBottom:"2px solid "+(active?"#58a6ff":"transparent"),background:"transparent",color:active?"#9ec5ff":"rgba(120,155,210,.5)",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",cursor:"pointer"}}>{g.label}</button>})}
           </div>
-          {(()=>{const g=navConfig.groups.find(x=>x.tabs.includes(tab))||navConfig.groups[0];return g?<div style={{display:"flex",gap:3,padding:"5px 20px 7px",background:"rgba(7,15,29,.35)",overflowX:"auto"}}>{g.tabs.filter(id=>navIds.includes(id)).map(id=>{const m=navMeta[id],active=tab===id;return <button key={id} onClick={()=>goNav(id)} style={{display:"flex",gap:6,alignItems:"center",padding:"5px 10px",borderRadius:5,border:"1px solid "+(active?m.col+"66":"transparent"),background:active?m.col+"12":"transparent",color:active?m.col:"rgba(140,170,215,.55)",cursor:"pointer",fontSize:11}}><span>{m.icon}</span>{m.label}</button>})}</div>:null})()}
+          {(()=>{const g=navConfig.groups.find(x=>x.tabs.includes(tab))||navConfig.groups[0];return g?<div style={{display:"flex",gap:3,padding:"5px 20px 7px",background:"rgba(7,15,29,.35)",overflowX:"auto"}}>{g.tabs.filter(id=>navIds.includes(id)).map(id=>{const m=navMeta[id],active=tab===id;return <button key={id} onClick={()=>goNav(id)} style={{display:"flex",gap:6,alignItems:"center",padding:"5px 10px",borderRadius:5,border:"1px solid "+(active?m.col+"66":"transparent"),background:active?m.col+"12":"transparent",color:active?m.col:"rgba(140,170,215,.55)",cursor:"pointer",fontSize:11}}><NavIcon name={m.icon} size={15}/><span>{m.label}</span></button>})}</div>:null})()}
         </div>}
       </div>
       <div style={{display:"flex",minWidth:0}}>
-        {navConfig.mode==="sidebar"&&!mobile&&<aside style={{width:navConfig.collapsed?52:184,flex:"0 0 auto",borderRight:"1px solid rgba(58,130,246,.14)",background:"rgba(7,15,29,.58)",padding:"8px 6px",height:"calc(100vh - 92px)",position:"sticky",top:92,alignSelf:"flex-start",overflowY:"auto"}}>
+        {navConfig.mode==="sidebar"&&!mobile&&<aside style={{width:navConfig.collapsed?54:194,flex:"0 0 auto",borderRight:"1px solid rgba(58,130,246,.14)",background:"rgba(7,15,29,.58)",padding:"8px 6px",height:"calc(100vh - 92px)",position:"sticky",top:92,alignSelf:"flex-start",overflowY:"auto"}}>
           <button onClick={()=>{const n={...navConfig,collapsed:!navConfig.collapsed};setNavConfig(n);try{localStorage.setItem(NAV_KEY,JSON.stringify(n))}catch{};supabase.from("tag_settings").upsert({key:NAV_CLOUD_KEY,value:n,updated_at:new Date().toISOString()},{onConflict:"key"}).then(()=>{})}} style={{width:"100%",height:28,border:"none",background:"transparent",color:"#6f8fb8",cursor:"pointer",textAlign:navConfig.collapsed?"center":"right"}}>{navConfig.collapsed?"›":"‹"}</button>
-          {navIds.map(id=>{const m=navMeta[id],active=tab===id;return <button key={id} title={navConfig.collapsed?m.label:""} onClick={()=>goNav(id)} style={{width:"100%",height:36,display:"flex",alignItems:"center",justifyContent:navConfig.collapsed?"center":"flex-start",gap:9,padding:navConfig.collapsed?0:"0 9px",margin:"2px 0",borderRadius:6,border:"1px solid "+(active?m.col+"55":"transparent"),borderLeft:"3px solid "+(active?m.col:"transparent"),background:active?m.col+"12":"transparent",color:active?m.col:"rgba(135,165,210,.58)",cursor:"pointer"}}><span style={{width:20,textAlign:"center"}}>{m.icon}</span>{!navConfig.collapsed&&<span style={{fontSize:11,fontWeight:active?700:500}}>{m.label}</span>}</button>})}
+          {navIds.map(id=>{const m=navMeta[id],active=tab===id;return <button key={id} title={navConfig.collapsed?m.label:""} onClick={()=>goNav(id)} style={{width:"100%",height:40,display:"flex",alignItems:"center",justifyContent:navConfig.collapsed?"center":"flex-start",gap:10,padding:navConfig.collapsed?0:"0 10px",margin:"2px 0",borderRadius:6,border:"1px solid "+(active?"rgba(88,166,255,.34)":"transparent"),borderLeft:"3px solid "+(active?"#79c0ff":"transparent"),background:active?"rgba(88,166,255,.10)":"transparent",color:active?"#b9d9ff":"rgba(155,185,225,.72)",cursor:"pointer",fontFamily:"inherit"}}><span style={{width:23,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><NavIcon name={m.icon} size={18}/></span>{!navConfig.collapsed&&<span style={{fontSize:12.5,fontWeight:active?700:550,letterSpacing:".01em"}}>{m.label}</span>}</button>})}
         </aside>}
         <div style={{padding:mobile?"8px 8px":"12px 20px",maxWidth:1900,margin:"0 auto",flex:1,minWidth:0,width:"100%"}}>
       <TabErrorBoundary>
