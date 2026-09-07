@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { C } from "./constants";
+import { supabase } from "./supabaseclient";
 
 const INTERUKC_KEY = "signal_interukc_config";
 const DEFAULT_CONFIG = {
@@ -212,6 +213,68 @@ function GroupRow({g,editing,onStartEdit,onSaveEdit,onCancelEdit,onDelete,editLa
   );
 }
 
+
+const NAV_KEY="signal_navigation_config";
+const NAV_CLOUD_KEY="navigation_config";
+const NAV_ITEMS=[
+ ["pos","Positions","#58a6ff","⌖"],["cargo","Cargoes","#faa356","▤"],["fix","Fixing","#c792ea","✓"],["tcv","Time Charter","#fb923c","◷"],
+ ["clients","Clients","#a8e6a3","♙"],["matrix","Matrix","#43e97b","▦"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","⚡"],
+ ["dash","Dashboard","#43e97b","▥"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▧"],["map","Freight Map","#10b981","⌁"],
+ ["cal","Calendar","#4fc3f7","□"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","◈"],["newbuilds","Newbuilds","#fbbf24","△"]
+];
+function navDefault(){return{mode:"classic",collapsed:false,order:NAV_ITEMS.map(x=>x[0]),hidden:[],groups:[
+ {id:"market",label:"Market",tabs:["pos","cargo","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
+ {id:"tools",label:"Tools",tabs:["projects","tce","map"]},{id:"reporting",label:"Reporting",tabs:["dash","reports"]},
+ {id:"workspace",label:"Workspace",tabs:["clients","notes","cal","settings"]}]};}
+function navNorm(x){
+ const d=navDefault(),valid=new Set(NAV_ITEMS.map(x=>x[0]));
+ const order=(Array.isArray(x?.order)?x.order:[]).filter(id=>valid.has(id));d.order.forEach(id=>{if(!order.includes(id))order.push(id)});
+ const groups=(Array.isArray(x?.groups)?x.groups:d.groups).map((g,i)=>({id:String(g.id||"g"+i),label:String(g.label||"Menu"),tabs:(g.tabs||[]).filter(id=>valid.has(id))}));
+ const used=new Set(groups.flatMap(g=>g.tabs));const missing=order.filter(id=>!used.has(id));if(missing.length){if(!groups.length)groups.push({id:"other",label:"Other",tabs:[]});groups.at(-1).tabs.push(...missing);}
+ return{mode:["classic","grouped","sidebar"].includes(x?.mode)?x.mode:"classic",collapsed:!!x?.collapsed,order,hidden:(x?.hidden||[]).filter(id=>valid.has(id)),groups};
+}
+function navLoad(){try{return navNorm(JSON.parse(localStorage.getItem(NAV_KEY)||"null"));}catch{return navDefault();}}
+
+function NavigationEditor(){
+ const [cfg,setCfg]=useState(navLoad),[status,setStatus]=useState("");
+ const meta=Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,icon}]));
+ useEffect(()=>{(async()=>{try{const {data}=await supabase.from("tag_settings").select("value").eq("key",NAV_CLOUD_KEY).maybeSingle();if(data?.value){const n=navNorm(data.value);setCfg(n);try{localStorage.setItem(NAV_KEY,JSON.stringify(n));}catch{}}}catch{}})()},[]);
+ function save(n){n=navNorm(n);setCfg(n);try{localStorage.setItem(NAV_KEY,JSON.stringify(n));}catch{};window.dispatchEvent(new CustomEvent("navigation-config-updated",{detail:n}));setStatus("Saving…");supabase.from("tag_settings").upsert({key:NAV_CLOUD_KEY,value:n,updated_at:new Date().toISOString()},{onConflict:"key"}).then(({error})=>setStatus(error?"Cloud save failed":"Saved"))}
+ function mv(a,id,dir){a=[...a];const i=a.indexOf(id),j=i+dir;if(i<0||j<0||j>=a.length)return a;[a[i],a[j]]=[a[j],a[i]];return a}
+ function moveTab(id,dir){if(cfg.mode==="grouped"){const gs=cfg.groups.map(g=>({...g,tabs:[...g.tabs]})),g=gs.find(x=>x.tabs.includes(id));if(g){g.tabs=mv(g.tabs,id,dir);save({...cfg,groups:gs})}}else save({...cfg,order:mv(cfg.order,id,dir)})}
+ function moveGroup(id,dir){const gs=[...cfg.groups],i=gs.findIndex(g=>g.id===id),j=i+dir;if(i>=0&&j>=0&&j<gs.length){[gs[i],gs[j]]=[gs[j],gs[i]];save({...cfg,groups:gs})}}
+ function assign(id,gid){const gs=cfg.groups.map(g=>({...g,tabs:g.tabs.filter(x=>x!==id)}));gs.find(g=>g.id===gid)?.tabs.push(id);save({...cfg,groups:gs})}
+ const btn={width:24,height:24,borderRadius:4,border:"1px solid "+C.bd2,background:"transparent",color:"#8fbaff",cursor:"pointer"};
+ return <div style={{display:"flex",flexDirection:"column",gap:12}}>
+  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+   {[["classic","Classic","Single top row"],["grouped","Grouped","Headings + submenu"],["sidebar","Sidebar","Vertical icon menu"]].map(([id,l,sub])=><button key={id} onClick={()=>save({...cfg,mode:id})} style={{padding:"10px",textAlign:"left",borderRadius:7,border:"1px solid "+(cfg.mode===id?"#58a6ff":C.bd2),background:cfg.mode===id?"rgba(88,166,255,.12)":C.bg2,color:C.tx,cursor:"pointer"}}><b>{l}</b><div style={{fontSize:10,color:C.faint,marginTop:3}}>{sub}</div></button>)}
+  </div>
+  {cfg.mode==="grouped"?<div style={{display:"flex",flexDirection:"column",gap:8}}>
+   {cfg.groups.map((g,gi)=><div key={g.id} style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:7,padding:8}}>
+    <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:5}}>
+     <button style={btn} onClick={()=>moveGroup(g.id,-1)}>↑</button><button style={btn} onClick={()=>moveGroup(g.id,1)}>↓</button>
+     <input value={g.label} onChange={e=>save({...cfg,groups:cfg.groups.map(x=>x.id===g.id?{...x,label:e.target.value}:x)})} style={{...inp,flex:1,fontWeight:700}}/>
+     {cfg.groups.length>1&&<button style={{...btn,color:"#ff8080"}} onClick={()=>{if(confirm("Delete this menu heading?")){const rest=cfg.groups.filter(x=>x.id!==g.id).map(x=>({...x,tabs:[...x.tabs]}));rest[0].tabs.push(...g.tabs);save({...cfg,groups:rest})}}}>✕</button>}
+    </div>
+    {g.tabs.map((id,i)=><div key={id} style={{display:"flex",alignItems:"center",gap:7,padding:"4px 2px",borderTop:i?"1px solid rgba(58,130,246,.08)":"none"}}>
+     <span style={{width:18,textAlign:"center"}}>{meta[id]?.icon}</span><span style={{fontSize:11,color:C.tx,flex:1}}>{meta[id]?.label}</span>
+     <select value={g.id} onChange={e=>assign(id,e.target.value)} style={{...sel,width:120,padding:"3px"}}>{cfg.groups.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select>
+     <label style={{fontSize:10,color:C.faint}}><input type="checkbox" checked={!cfg.hidden.includes(id)} onChange={e=>save({...cfg,hidden:e.target.checked?cfg.hidden.filter(x=>x!==id):[...cfg.hidden,id]})}/> Show</label>
+     <button style={btn} onClick={()=>moveTab(id,-1)}>↑</button><button style={btn} onClick={()=>moveTab(id,1)}>↓</button>
+    </div>)}
+   </div>)}
+   <button onClick={()=>save({...cfg,groups:[...cfg.groups,{id:"g"+Date.now(),label:"New Menu",tabs:[]}]})} style={{alignSelf:"flex-start",padding:"5px 10px",borderRadius:5,border:"1px solid #58a6ff66",background:"#58a6ff18",color:"#9ec5ff",cursor:"pointer"}}>+ Add menu heading</button>
+  </div>:<div style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:7,padding:"4px 8px"}}>
+   {cfg.order.map((id,i)=><div key={id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 2px",borderTop:i?"1px solid rgba(58,130,246,.08)":"none"}}>
+    <span style={{width:20,textAlign:"center"}}>{meta[id]?.icon}</span><span style={{fontSize:11,color:C.tx,flex:1}}>{meta[id]?.label}</span>
+    <label style={{fontSize:10,color:C.faint}}><input type="checkbox" checked={!cfg.hidden.includes(id)} onChange={e=>save({...cfg,hidden:e.target.checked?cfg.hidden.filter(x=>x!==id):[...cfg.hidden,id]})}/> Show</label>
+    <button style={btn} onClick={()=>moveTab(id,-1)}>↑</button><button style={btn} onClick={()=>moveTab(id,1)}>↓</button>
+   </div>)}
+  </div>}
+  <div style={{display:"flex",gap:10,alignItems:"center"}}><button onClick={()=>confirm("Reset navigation?")&&save(navDefault())} style={{fontSize:11,padding:"4px 10px",borderRadius:5,border:"1px solid #ff6b6b55",background:"transparent",color:"#ff8b8b",cursor:"pointer"}}>Reset defaults</button><span style={{fontSize:10,color:C.faint}}>{status}</span></div>
+ </div>
+}
+
 export default function SettingsTab() {
   const [groups, setGroups] = useState(loadGroups);
   useEffect(()=>{ saveGroups(groups); },[groups]);
@@ -265,6 +328,8 @@ export default function SettingsTab() {
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px",fontFamily:"Inter,sans-serif"}}>
+      <SectionCard title="Navigation / Menu" subtitle="Choose menu style, order existing tabs, visibility and grouped headings."><NavigationEditor/></SectionCard>
+
       <SectionCard title="Fixing">
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
           <div>
