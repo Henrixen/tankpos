@@ -156,32 +156,42 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   const [expanded, setExpanded] = useState({});
   const [etsPopout, setEtsPopout] = useState(null); // route key currently showing EU ETS calc
   const [pendingDelete, setPendingDelete] = useState(null); // route key awaiting delete confirmation
+  const [exportSel, setExportSel] = useState(()=>new Set()); // routes selected for copy/export
 
   useEffect(() => { loadRows(); }, []);
 
   async function loadRows() {
-    const { data, error } = await supabase.from("tce_routes").select("*");
-    if (!error && data) {
-      setRows(prev => prev.map(r => {
-        const saved = data.find(d => d.route_key === r.key);
-        if (!saved) return r;
-        return {
-          ...r,
-          label: saved.label ?? r.label,
-          freight: String(saved.freight ?? ""),
-          nmBallast: saved.nm_ballast != null ? String(saved.nm_ballast) : r.nmBallast,
-          nmLaden: saved.nm_laden != null ? String(saved.nm_laden) : r.nmLaden,
-          nmRepo: saved.nm_repo != null ? String(saved.nm_repo) : r.nmRepo,
-          pdaLoad: saved.pda_load != null ? String(saved.pda_load) : r.pdaLoad,
-          pdaDisch: saved.pda_disch != null ? String(saved.pda_disch) : r.pdaDisch,
-          euEts: saved.eu_ets != null ? String(saved.eu_ets) : r.euEts,
-          commission: saved.commission != null ? String(saved.commission) : r.commission,
-          speed: saved.speed != null ? String(saved.speed) : r.speed,
-          cons: saved.cons != null ? String(saved.cons) : r.cons,
-          tce: saved.tce ?? null,
-        };
-      }));
-    }
+    const { data, error } = await supabase.from("tce_routes").select("*").order("updated_at",{ascending:true});
+    if (error || !data) return;
+
+    const fromDb = saved => ({
+      key: saved.route_key,
+      label: saved.label ?? "New route",
+      freight: saved.freight != null ? String(saved.freight) : "",
+      nmBallast: saved.nm_ballast != null ? String(saved.nm_ballast) : "0",
+      nmLaden: saved.nm_laden != null ? String(saved.nm_laden) : "",
+      nmRepo: saved.nm_repo != null ? String(saved.nm_repo) : "0",
+      pdaLoad: saved.pda_load != null ? String(saved.pda_load) : "0",
+      pdaDisch: saved.pda_disch != null ? String(saved.pda_disch) : "0",
+      euEts: saved.eu_ets != null ? String(saved.eu_ets) : "0",
+      commission: saved.commission != null ? String(saved.commission) : "5",
+      speed: saved.speed != null ? String(saved.speed) : String(defaults.speed ?? ""),
+      cons: saved.cons != null ? String(saved.cons) : String(defaults.consLaden ?? ""),
+      tce: saved.tce ?? null,
+    });
+
+    const base = BENCHMARK_ROUTES.map(route => {
+      const fallback = routeDefaults(route, defaults);
+      const saved = data.find(d => d.route_key === route.key);
+      return saved ? { ...fallback, ...fromDb(saved), key: route.key } : fallback;
+    });
+
+    // The old loader only mapped DB rows onto BENCHMARK_ROUTES, so custom
+    // "Add leg" rows were saved but disappeared after refresh. Append every
+    // saved route whose key is not one of the built-in benchmark keys.
+    const baseKeys = new Set(BENCHMARK_ROUTES.map(r => r.key));
+    const custom = data.filter(d => !baseKeys.has(d.route_key)).map(fromDb);
+    setRows([...base, ...custom]);
   }
 
   function recalc(row, bunkerOverride) {
@@ -235,7 +245,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   }
 
   async function saveAll() {
-    const savable = rows.filter(r => r.freight);
+    const savable = rows;
     if (!savable.length) return;
     setStatus(`Saving ${savable.length}…`);
     const payload = savable.map(row => ({
@@ -293,6 +303,55 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
     );
   }
 
+
+  function toggleExport(key){
+    setExportSel(prev=>{
+      const next=new Set(prev);
+      next.has(key)?next.delete(key):next.add(key);
+      return next;
+    });
+  }
+
+  function fmtExportFreight(v){
+    const n=numD(v);
+    if(!n)return "";
+    if(n>=1000){
+      const k=Math.round(n/1000);
+      return `USD ${k}K LS`;
+    }
+    return `USD ${Math.round(n)} PMT`;
+  }
+
+  function fmtExportTce(v){
+    if(v==null || !Number.isFinite(Number(v)))return "";
+    // round to nearest USD 500/day, displayed as e.g. 18,5k pd
+    const k=Math.round((Number(v)/1000)*2)/2;
+    const s=(Number.isInteger(k)?String(k):k.toFixed(1)).replace(".",",");
+    return `TCE USD ${s}k pd`;
+  }
+
+  async function exportSelected(){
+    const selected=rows.filter(r=>exportSel.has(r.key));
+    if(!selected.length){setStatus("Select routes to export");setTimeout(()=>setStatus(null),1800);return;}
+    const text=selected.map(r=>{
+      const route=String(r.label||"").trim()
+        .replace(/\s*[–—-]\s*/g," -> ")
+        .replace(/\s*->\s*/g," -> ");
+      const freight=fmtExportFreight(r.freight);
+      const tce=fmtExportTce(r.tce);
+      return [route,freight,tce].filter(Boolean).join(" | ");
+    }).join("\\n");
+
+    try{
+      await navigator.clipboard.writeText(text);
+      setStatus(`Copied ${selected.length} route${selected.length===1?"":"s"} ✓`);
+    }catch(_){
+      window.prompt("Copy benchmark routes:",text);
+      setStatus("Export ready");
+    }
+    setTimeout(()=>setStatus(null),2200);
+  }
+
   function addLeg(){
     const key = "custom_" + Date.now();
     setRows(prev => [...prev, { key, label:"New route", freight:"", nmBallast:"0", nmLaden:"", nmRepo:"0", pdaLoad:"0", pdaDisch:"0", euEts:"0", commission:"5", speed:String(defaults.speed??""), cons:String(defaults.consLaden??""), tce:null }]);
@@ -305,7 +364,11 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
         <span>📍 Benchmark Routes</span>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
           {status && <span style={{ fontSize:11, color:C.green, fontWeight:600 }}>{status}</span>}
-          <button onClick={saveAll} title="Save every route with a freight entered"
+          <button onClick={exportSelected} title="Copy selected routes in market-report format"
+            style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:4, border:"1px solid rgba(88,166,255,0.4)", background:"rgba(88,166,255,0.10)", color:C.blue, cursor:"pointer", fontFamily:"inherit" }}>
+            ⧉ Export ({exportSel.size})
+          </button>
+          <button onClick={saveAll} title="Save all benchmark and custom routes"
             style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:4, border:"1px solid rgba(63,185,80,0.4)", background:"rgba(63,185,80,0.12)", color:C.green, cursor:"pointer", fontFamily:"inherit" }}>💾 Save all</button>
           <button onClick={addLeg} title="Add a custom route"
             style={{ fontSize:13, fontWeight:700, padding:"1px 8px", borderRadius:4, border:"1px solid "+C.bd, background:"transparent", color:C.blue, cursor:"pointer", fontFamily:"inherit" }}>+ Add leg</button>
@@ -322,14 +385,17 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
                 style={{background:"none", border:"none", color:C.faint, cursor:"pointer", fontSize:16, padding:0, width:18}}>
                 {isOpen?"▾":"▸"}
               </button>
+              <input type="checkbox" checked={exportSel.has(r.key)} onChange={()=>toggleExport(r.key)}
+                onClick={e=>e.stopPropagation()} title="Select for export"
+                style={{width:14,height:14,accentColor:"#58a6ff",cursor:"pointer",margin:0}}/>
               <input value={r.label} onChange={e=>updateField(r.key,"label",e.target.value)} placeholder="Route name"
-                style={{ flex:"1 1 140px", minWidth:100, background:"transparent", border:"none", borderBottom:"1px solid "+C.bd, color:C.tx, fontSize:12, fontWeight:700, padding:"2px 0", outline:"none", fontFamily:"inherit" }}/>
+                style={{ flex:"1 1 140px", minWidth:100, background:"transparent", border:"none", color:C.tx, fontSize:12, fontWeight:700, padding:"2px 0", outline:"none", fontFamily:"inherit" }}/>
               <FmtInput value={r.freight} onChange={val=>updateField(r.key,"freight",val)} width={100} placeholder="Freight USD" fontSize={12}/>
               <div style={{ fontSize:13, fontWeight:800, color: r.tce!=null ? (r.tce>=0?C.green:C.red) : C.faint, minWidth:90, textAlign:"right" }}>
                 {r.tce!=null ? "$"+r.tce.toLocaleString("nb-NO")+"/d" : "—"}
               </div>
-              <button onClick={()=>saveRow(r)} disabled={!r.freight}
-                style={{ fontSize:9, fontWeight:700, padding:"4px 8px", borderRadius:4, cursor:r.freight?"pointer":"default", border:"1px solid "+C.bd, background:"transparent", color:C.blue, fontFamily:"inherit", whiteSpace:"nowrap" }}>
+              <button onClick={()=>saveRow(r)}
+                style={{ fontSize:9, fontWeight:700, padding:"4px 8px", borderRadius:4, cursor:"pointer", border:"1px solid "+C.bd, background:"transparent", color:C.blue, fontFamily:"inherit", whiteSpace:"nowrap" }}>
                 Save
               </button>
             </div>
@@ -472,22 +538,46 @@ function TCECalculator(){
 
   function updateSharedBunker(val){ setSharedBunker(val); }
 
-  // Pulls the same last-saved PBT MGO price the Dashboard's bunker panel uses
-  // (Supabase "dashboard" table, key "last-bunker-prices") — no separate live fetch here.
+  // Fetch live PBT prices through the same /api/bunkers endpoint used by
+  // Dashboard, then persist the same shared snapshot in Supabase.
   async function syncBunkerFromPBT(){
-    setPbtStatus("Syncing…");
-    const { data, error } = await supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle();
-    if(error || !data){ setPbtStatus("No PBT data saved yet — refresh it from the Dashboard first"); setTimeout(()=>setPbtStatus(null),3500); return; }
+    setPbtStatus("Fetching live PBT…");
     try{
-      const parsed=JSON.parse(data.value);
-      if(parsed.ARA_MGO){
-        setSharedBunker(String(parsed.ARA_MGO));
-        setPbtStatus(`Synced — ARA MGO $${parsed.ARA_MGO}/mt${parsed.date?` (${parsed.date})`:""}`);
-      } else {
-        setPbtStatus("No MGO price found in saved PBT data");
-      }
-    }catch(_){ setPbtStatus("Sync failed"); }
-    setTimeout(()=>setPbtStatus(null),3500);
+      const res=await fetch("/api/bunkers",{cache:"no-store"});
+      if(!res.ok)throw new Error(`HTTP ${res.status}`);
+      const p=await res.json();
+      if(!p?.ARA_MGO)throw new Error("No ARA MGO returned");
+
+      const newBunkers={
+        date:p.date||new Date().toLocaleDateString("en-GB"),
+        ARA_HSFO:p.ARA_HSFO, ARA_VLSFO:p.ARA_VLSFO, ARA_MGO:p.ARA_MGO,
+        FUJ_HSFO:p.FUJ_HSFO, FUJ_VLSFO:p.FUJ_VLSFO, FUJ_MGO:p.FUJ_MGO,
+        SIN_HSFO:p.SIN_HSFO, SIN_VLSFO:p.SIN_VLSFO, SIN_MGO:p.SIN_MGO,
+      };
+
+      setSharedBunker(String(newBunkers.ARA_MGO));
+      await supabase.from("dashboard").upsert(
+        {key:"last-bunker-prices",value:JSON.stringify(newBunkers)},
+        {onConflict:"key"}
+      );
+      const histKey=`bunker-hist-${String(newBunkers.date).replaceAll("/","-").replaceAll(" ","-")}`;
+      await supabase.from("dashboard").upsert(
+        {key:histKey,value:JSON.stringify(newBunkers)},
+        {onConflict:"key"}
+      );
+      setPbtStatus(`Live PBT — ARA MGO $${newBunkers.ARA_MGO}/mt${newBunkers.date?` (${newBunkers.date})`:""}`);
+    }catch(e){
+      // Fallback to the last saved shared PBT snapshot if live fetch fails.
+      const {data}=await supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle();
+      try{
+        const parsed=data?.value?JSON.parse(data.value):null;
+        if(parsed?.ARA_MGO){
+          setSharedBunker(String(parsed.ARA_MGO));
+          setPbtStatus(`Live fetch failed — using saved PBT $${parsed.ARA_MGO}/mt`);
+        }else setPbtStatus("PBT fetch failed");
+      }catch(_){setPbtStatus("PBT fetch failed");}
+    }
+    setTimeout(()=>setPbtStatus(null),4000);
   }
 
   function sV(k,val){setVars(p=>({...p,[k]:val}));setResult(null);}
@@ -583,10 +673,10 @@ function TCECalculator(){
             <FmtInput value={sharedBunker} onChange={updateSharedBunker} width={90} fontSize={13} fontWeight={700}/>
             <button onClick={syncBunkerFromPBT}
               style={{fontSize:11,fontWeight:700,padding:"6px 12px",borderRadius:5,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(88,166,255,0.12)",color:"#58a6ff",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-              ↻ Sync from PBT
+              ↻ Refresh PBT
             </button>
           </div>
-          <div style={{fontSize:10,color:C.faint,marginTop:6}}>{pbtStatus || "Pulls the same PBT MGO price used on the Dashboard"}</div>
+          <div style={{fontSize:10,color:C.faint,marginTop:6}}>{pbtStatus || "Fetches live PBT ARA MGO and updates the shared Dashboard price"}</div>
         </div>
       </div>
 
