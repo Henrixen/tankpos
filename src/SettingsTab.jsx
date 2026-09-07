@@ -238,6 +238,25 @@ function navLoad(){try{return navNorm(JSON.parse(localStorage.getItem(NAV_KEY)||
 function NavigationEditor(){
  const [cfg,setCfg]=useState(navLoad),[status,setStatus]=useState("");
  const meta=Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,icon}]));
+ const [drag,setDrag]=useState(null);
+ function dropTab(targetId,targetGroupId=null){
+   if(!drag||drag.type!=="tab"||drag.id===targetId){setDrag(null);return;}
+   if(cfg.mode==="grouped"){
+     const gs=cfg.groups.map(g=>({...g,tabs:g.tabs.filter(x=>x!==drag.id)}));
+     const tg=gs.find(g=>g.id===targetGroupId)||gs.find(g=>g.tabs.includes(targetId));
+     if(!tg){setDrag(null);return;}
+     const at=tg.tabs.indexOf(targetId);tg.tabs.splice(at<0?tg.tabs.length:at,0,drag.id);
+     save({...cfg,groups:gs});
+   }else{
+     const a=cfg.order.filter(x=>x!==drag.id);const at=a.indexOf(targetId);a.splice(at<0?a.length:at,0,drag.id);save({...cfg,order:a});
+   }
+   setDrag(null);
+ }
+ function dropGroup(targetId){
+   if(!drag||drag.type!=="group"||drag.id===targetId){setDrag(null);return;}
+   const a=cfg.groups.filter(g=>g.id!==drag.id);const moving=cfg.groups.find(g=>g.id===drag.id);if(!moving){setDrag(null);return;}
+   const at=a.findIndex(g=>g.id===targetId);a.splice(at<0?a.length:at,0,moving);save({...cfg,groups:a});setDrag(null);
+ }
  useEffect(()=>{(async()=>{try{const {data}=await supabase.from("tag_settings").select("value").eq("key",NAV_CLOUD_KEY).maybeSingle();if(data?.value){const n=navNorm(data.value);setCfg(n);try{localStorage.setItem(NAV_KEY,JSON.stringify(n));}catch{}}}catch{}})()},[]);
  function save(n){n=navNorm(n);setCfg(n);try{localStorage.setItem(NAV_KEY,JSON.stringify(n));}catch{};window.dispatchEvent(new CustomEvent("navigation-config-updated",{detail:n}));setStatus("Saving…");supabase.from("tag_settings").upsert({key:NAV_CLOUD_KEY,value:n,updated_at:new Date().toISOString()},{onConflict:"key"}).then(({error})=>setStatus(error?"Cloud save failed":"Saved"))}
  function mv(a,id,dir){a=[...a];const i=a.indexOf(id),j=i+dir;if(i<0||j<0||j>=a.length)return a;[a[i],a[j]]=[a[j],a[i]];return a}
@@ -250,13 +269,15 @@ function NavigationEditor(){
    {[["classic","Classic","Single top row"],["grouped","Grouped","Headings + submenu"],["sidebar","Sidebar","Vertical icon menu"]].map(([id,l,sub])=><button key={id} onClick={()=>save({...cfg,mode:id})} style={{padding:"10px",textAlign:"left",borderRadius:7,border:"1px solid "+(cfg.mode===id?"#58a6ff":C.bd2),background:cfg.mode===id?"rgba(88,166,255,.12)":C.bg2,color:C.tx,cursor:"pointer"}}><b>{l}</b><div style={{fontSize:10,color:C.faint,marginTop:3}}>{sub}</div></button>)}
   </div>
   {cfg.mode==="grouped"?<div style={{display:"flex",flexDirection:"column",gap:8}}>
-   {cfg.groups.map((g,gi)=><div key={g.id} style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:7,padding:8}}>
+   {cfg.groups.map((g,gi)=><div key={g.id} onDragOver={e=>e.preventDefault()} onDrop={()=>dropGroup(g.id)} style={{background:C.bg2,border:"1px solid "+(drag?.type==="group"&&drag.id===g.id?"#58a6ff":C.bd2),borderRadius:7,padding:8}}>
     <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:5}}>
+     <span draggable onDragStart={()=>setDrag({type:"group",id:g.id})} onDragEnd={()=>setDrag(null)} title="Drag menu heading" style={{fontSize:17,color:"rgba(140,180,230,.55)",cursor:"grab",userSelect:"none",letterSpacing:"-2px",width:24,textAlign:"center"}}>☰</span>
      <button style={btn} onClick={()=>moveGroup(g.id,-1)}>↑</button><button style={btn} onClick={()=>moveGroup(g.id,1)}>↓</button>
      <input value={g.label} onChange={e=>save({...cfg,groups:cfg.groups.map(x=>x.id===g.id?{...x,label:e.target.value}:x)})} style={{...inp,flex:1,fontWeight:700}}/>
      {cfg.groups.length>1&&<button style={{...btn,color:"#ff8080"}} onClick={()=>{if(confirm("Delete this menu heading?")){const rest=cfg.groups.filter(x=>x.id!==g.id).map(x=>({...x,tabs:[...x.tabs]}));rest[0].tabs.push(...g.tabs);save({...cfg,groups:rest})}}}>✕</button>}
     </div>
-    {g.tabs.map((id,i)=><div key={id} style={{display:"flex",alignItems:"center",gap:7,padding:"4px 2px",borderTop:i?"1px solid rgba(58,130,246,.08)":"none"}}>
+    {g.tabs.map((id,i)=><div key={id} onDragOver={e=>e.preventDefault()} onDrop={()=>dropTab(id,g.id)} style={{display:"flex",alignItems:"center",gap:7,padding:"4px 2px",borderTop:i?"1px solid rgba(58,130,246,.08)":"none",background:drag?.type==="tab"&&drag.id===id?"rgba(88,166,255,.08)":"transparent"}}>
+     <span draggable onDragStart={()=>setDrag({type:"tab",id})} onDragEnd={()=>setDrag(null)} title="Drag to reorder" style={{fontSize:16,color:"rgba(140,180,230,.48)",cursor:"grab",userSelect:"none",letterSpacing:"-2px",width:22,textAlign:"center"}}>☰</span>
      <span style={{width:18,textAlign:"center"}}>{meta[id]?.icon}</span><span style={{fontSize:11,color:C.tx,flex:1}}>{meta[id]?.label}</span>
      <select value={g.id} onChange={e=>assign(id,e.target.value)} style={{...sel,width:120,padding:"3px"}}>{cfg.groups.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</select>
      <label style={{fontSize:10,color:C.faint}}><input type="checkbox" checked={!cfg.hidden.includes(id)} onChange={e=>save({...cfg,hidden:e.target.checked?cfg.hidden.filter(x=>x!==id):[...cfg.hidden,id]})}/> Show</label>
@@ -265,7 +286,8 @@ function NavigationEditor(){
    </div>)}
    <button onClick={()=>save({...cfg,groups:[...cfg.groups,{id:"g"+Date.now(),label:"New Menu",tabs:[]}]})} style={{alignSelf:"flex-start",padding:"5px 10px",borderRadius:5,border:"1px solid #58a6ff66",background:"#58a6ff18",color:"#9ec5ff",cursor:"pointer"}}>+ Add menu heading</button>
   </div>:<div style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:7,padding:"4px 8px"}}>
-   {cfg.order.map((id,i)=><div key={id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 2px",borderTop:i?"1px solid rgba(58,130,246,.08)":"none"}}>
+   {cfg.order.map((id,i)=><div key={id} onDragOver={e=>e.preventDefault()} onDrop={()=>dropTab(id)} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 2px",borderTop:i?"1px solid rgba(58,130,246,.08)":"none",background:drag?.type==="tab"&&drag.id===id?"rgba(88,166,255,.08)":"transparent"}}>
+    <span draggable onDragStart={()=>setDrag({type:"tab",id})} onDragEnd={()=>setDrag(null)} title="Drag to reorder" style={{fontSize:16,color:"rgba(140,180,230,.48)",cursor:"grab",userSelect:"none",letterSpacing:"-2px",width:22,textAlign:"center"}}>☰</span>
     <span style={{width:20,textAlign:"center"}}>{meta[id]?.icon}</span><span style={{fontSize:11,color:C.tx,flex:1}}>{meta[id]?.label}</span>
     <label style={{fontSize:10,color:C.faint}}><input type="checkbox" checked={!cfg.hidden.includes(id)} onChange={e=>save({...cfg,hidden:e.target.checked?cfg.hidden.filter(x=>x!==id):[...cfg.hidden,id]})}/> Show</label>
     <button style={btn} onClick={()=>moveTab(id,-1)}>↑</button><button style={btn} onClick={()=>moveTab(id,1)}>↓</button>
