@@ -41,6 +41,8 @@ const TabFallback = ()=>null;
 
 const NAV_KEY="signal_navigation_config";
 const NAV_CLOUD_KEY="navigation_config";
+const UI_ZOOM_KEY="signal_ui_zoom";
+const UI_ZOOM_CLOUD_KEY="ui_zoom";
 const NAV_ITEMS=[
  ["pos","Positions","#58a6ff","⌖"],["cargo","Cargoes","#faa356","▤"],["fix","Fixing","#c792ea","✓"],["tcv","Time Charter","#fb923c","◷"],
  ["clients","Clients","#a8e6a3","♙"],["matrix","Matrix","#43e97b","▦"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","⚡"],
@@ -1275,6 +1277,26 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   // so all referenced bindings are initialized before these hooks evaluate.
   const [navConfig,setNavConfig]=useState(navLoad);
   useEffect(()=>{
+    const apply=z=>{
+      const n=Number(z);
+      if([80,90,100,110,120].includes(n)) document.body.style.zoom=n+"%";
+    };
+    try{apply(localStorage.getItem(UI_ZOOM_KEY)||100);}catch{}
+    const h=e=>apply(e.detail);
+    window.addEventListener("ui-zoom-updated",h);
+    (async()=>{
+      try{
+        const {data}=await supabase.from("tag_settings").select("value").eq("key",UI_ZOOM_CLOUD_KEY).maybeSingle();
+        if(data?.value!=null){
+          const z=Number(data.value);
+          apply(z);
+          try{localStorage.setItem(UI_ZOOM_KEY,String(z));}catch{}
+        }
+      }catch{}
+    })();
+    return()=>window.removeEventListener("ui-zoom-updated",h);
+  },[]);
+  useEffect(()=>{
     const h=e=>setNavConfig(navNorm(e.detail||navLoad()));
     window.addEventListener("navigation-config-updated",h);
     (async()=>{
@@ -2172,21 +2194,21 @@ const filtV=useMemo(()=>{
 
           <div style={{
             position:"absolute",right:"clamp(18px,4vw,64px)",top:"50%",transform:"translateY(-50%)",
-            width:370,padding:"18px 20px",borderRadius:12,zIndex:1,
+            width:310,padding:"16px 17px",borderRadius:12,zIndex:1,
             background:"rgba(4,16,33,.58)",border:"1px solid rgba(88,166,255,.12)",
             backdropFilter:"blur(10px)",color:"#dcecff"
           }}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}>
-              <div style={{fontSize:11,fontWeight:800,letterSpacing:".14em",color:"#58a6ff"}}>LATEST SHIPPING NEWS</div>
-              <div style={{fontSize:9.5,color:"rgba(175,205,240,.42)"}}>{loginFeedLoading?"UPDATING":"RSS"}</div>
+              <div style={{fontSize:9,fontWeight:800,letterSpacing:".14em",color:"#58a6ff"}}>LATEST SHIPPING NEWS</div>
+              <div style={{fontSize:8,color:"rgba(175,205,240,.35)"}}>{loginFeedLoading?"UPDATING":"RSS"}</div>
             </div>
             {(loginNews.length?loginNews:[
               {title:"Latest tanker and shipping headlines will appear here",source:"RSS feed"},
               {title:"Feed refreshes automatically every 10 minutes",source:"Live"}
             ]).slice(0,5).map((n,i)=><a key={i} href={n.link||undefined} target={n.link?"_blank":undefined} rel="noreferrer"
-              style={{display:"block",textDecoration:"none",color:"inherit",padding:"11px 0",borderTop:i?"1px solid rgba(88,166,255,.08)":"none"}}>
-              <div style={{fontSize:13,fontWeight:650,lineHeight:1.42,color:"rgba(235,244,255,.94)"}}>{n.title}</div>
-              <div style={{fontSize:10,marginTop:5,color:"rgba(135,188,248,.58)"}}>
+              style={{display:"block",textDecoration:"none",color:"inherit",padding:"9px 0",borderTop:i?"1px solid rgba(88,166,255,.08)":"none"}}>
+              <div style={{fontSize:10.5,fontWeight:650,lineHeight:1.35,color:"rgba(225,239,255,.88)"}}>{n.title}</div>
+              <div style={{fontSize:8.5,marginTop:4,color:"rgba(125,178,240,.46)"}}>
                 {n.source||"Shipping"}{n.published?"  ·  "+n.published:""}
               </div>
             </a>)}
@@ -2370,7 +2392,7 @@ const filtV=useMemo(()=>{
         </div>}
       </div>
       <div style={{display:"flex",minWidth:0}}>
-        {navConfig.mode==="sidebar"&&!mobile&&<aside style={{width:navConfig.collapsed?52:184,flex:"0 0 auto",borderRight:"1px solid rgba(58,130,246,.14)",background:"rgba(7,15,29,.58)",padding:"8px 6px",minHeight:"calc(100vh - 92px)"}}>
+        {navConfig.mode==="sidebar"&&!mobile&&<aside style={{width:navConfig.collapsed?52:184,flex:"0 0 auto",borderRight:"1px solid rgba(58,130,246,.14)",background:"rgba(7,15,29,.58)",padding:"8px 6px",height:"calc(100vh - 92px)",position:"sticky",top:92,alignSelf:"flex-start",overflowY:"auto"}}>
           <button onClick={()=>{const n={...navConfig,collapsed:!navConfig.collapsed};setNavConfig(n);try{localStorage.setItem(NAV_KEY,JSON.stringify(n))}catch{};supabase.from("tag_settings").upsert({key:NAV_CLOUD_KEY,value:n,updated_at:new Date().toISOString()},{onConflict:"key"}).then(()=>{})}} style={{width:"100%",height:28,border:"none",background:"transparent",color:"#6f8fb8",cursor:"pointer",textAlign:navConfig.collapsed?"center":"right"}}>{navConfig.collapsed?"›":"‹"}</button>
           {navIds.map(id=>{const m=navMeta[id],active=tab===id;return <button key={id} title={navConfig.collapsed?m.label:""} onClick={()=>goNav(id)} style={{width:"100%",height:36,display:"flex",alignItems:"center",justifyContent:navConfig.collapsed?"center":"flex-start",gap:9,padding:navConfig.collapsed?0:"0 9px",margin:"2px 0",borderRadius:6,border:"1px solid "+(active?m.col+"55":"transparent"),borderLeft:"3px solid "+(active?m.col:"transparent"),background:active?m.col+"12":"transparent",color:active?m.col:"rgba(135,165,210,.58)",cursor:"pointer"}}><span style={{width:20,textAlign:"center"}}>{m.icon}</span>{!navConfig.collapsed&&<span style={{fontSize:11,fontWeight:active?700:500}}>{m.label}</span>}</button>})}
         </aside>}
