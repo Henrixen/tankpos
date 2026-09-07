@@ -216,6 +216,8 @@ function GroupRow({g,editing,onStartEdit,onSaveEdit,onCancelEdit,onDelete,editLa
 
 const NAV_KEY="signal_navigation_config";
 const NAV_CLOUD_KEY="navigation_config";
+const UI_ZOOM_KEY="signal_ui_zoom";
+const UI_ZOOM_CLOUD_KEY="ui_zoom";
 const NAV_ITEMS=[
  ["pos","Positions","#58a6ff","⌖"],["cargo","Cargoes","#faa356","▤"],["fix","Fixing","#c792ea","✓"],["tcv","Time Charter","#fb923c","◷"],
  ["clients","Clients","#a8e6a3","♙"],["matrix","Matrix","#43e97b","▦"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","⚡"],
@@ -234,6 +236,58 @@ function navNorm(x){
  return{mode:["classic","grouped","sidebar"].includes(x?.mode)?x.mode:"classic",collapsed:!!x?.collapsed,order,hidden:(x?.hidden||[]).filter(id=>valid.has(id)),groups};
 }
 function navLoad(){try{return navNorm(JSON.parse(localStorage.getItem(NAV_KEY)||"null"));}catch{return navDefault();}}
+
+
+function AppScaleControl(){
+  const [zoom,setZoom]=useState(()=>{
+    try{return Number(localStorage.getItem(UI_ZOOM_KEY)||100)||100;}catch{return 100;}
+  });
+  const [status,setStatus]=useState("");
+
+  async function choose(z){
+    setZoom(z);
+    document.body.style.zoom=z+"%";
+    try{localStorage.setItem(UI_ZOOM_KEY,String(z));}catch{}
+    try{window.dispatchEvent(new CustomEvent("ui-zoom-updated",{detail:z}));}catch{}
+    setStatus("Saving…");
+    const {error}=await supabase.from("tag_settings").upsert(
+      {key:UI_ZOOM_CLOUD_KEY,value:z,updated_at:new Date().toISOString()},
+      {onConflict:"key"}
+    );
+    setStatus(error?"Cloud save failed":"Saved");
+    setTimeout(()=>setStatus(""),1600);
+  }
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const {data}=await supabase.from("tag_settings").select("value").eq("key",UI_ZOOM_CLOUD_KEY).maybeSingle();
+        if(data?.value!=null){
+          const z=Number(data.value);
+          if([80,90,100,110,120].includes(z)){
+            setZoom(z);document.body.style.zoom=z+"%";
+            try{localStorage.setItem(UI_ZOOM_KEY,String(z));}catch{}
+          }
+        }
+      }catch{}
+    })();
+  },[]);
+
+  return <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid "+C.bd2}}>
+    <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",marginBottom:7}}>Standard app size</div>
+    <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+      {[80,90,100,110,120].map(z=><button key={z} onClick={()=>choose(z)}
+        style={{fontSize:11,fontWeight:700,padding:"5px 11px",borderRadius:5,cursor:"pointer",fontFamily:"inherit",
+          border:"1px solid "+(zoom===z?"rgba(88,166,255,.65)":C.bd2),
+          background:zoom===z?"rgba(88,166,255,.15)":C.bg2,
+          color:zoom===z?"#9ec5ff":C.faint}}>
+        {z}%
+      </button>)}
+      <span style={{fontSize:10,color:C.faint,marginLeft:4}}>{status}</span>
+    </div>
+    <div style={{fontSize:10,color:C.faint,marginTop:6}}>Saved as the default size and applied automatically on startup.</div>
+  </div>;
+}
 
 function NavigationEditor(){
  const [cfg,setCfg]=useState(navLoad),[status,setStatus]=useState("");
@@ -350,7 +404,7 @@ export default function SettingsTab() {
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px",fontFamily:"Inter,sans-serif"}}>
-      <SectionCard title="Navigation / Menu" subtitle="Choose menu style, order existing tabs, visibility and grouped headings."><NavigationEditor/></SectionCard>
+      <SectionCard title="Navigation / Menu" subtitle="Choose menu style, order existing tabs, visibility and grouped headings."><NavigationEditor/><AppScaleControl/></SectionCard>
 
       <SectionCard title="Fixing">
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
