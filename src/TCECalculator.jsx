@@ -327,7 +327,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
     // round to nearest USD 500/day, displayed as e.g. 18,5k pd
     const k=Math.round((Number(v)/1000)*2)/2;
     const s=(Number.isInteger(k)?String(k):k.toFixed(1)).replace(".",",");
-    return `TCE USD ${s}k pd`;
+    return `USD ${s}k pd`;
   }
 
   async function exportSelected(){
@@ -339,8 +339,11 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
         .replace(/\s*->\s*/g," -> ");
       const freight=fmtExportFreight(r.freight);
       const tce=fmtExportTce(r.tce);
-      return [route,freight,tce].filter(Boolean).join(" | ");
-    }).join("\\n");
+      if(freight && tce) return `${route} ${freight} | ${tce}`;
+      if(freight) return `${route} ${freight}`;
+      if(tce) return `${route} | ${tce}`;
+      return route;
+    }).join("\n");
 
     try{
       await navigator.clipboard.writeText(text);
@@ -385,9 +388,18 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
                 style={{background:"none", border:"none", color:C.faint, cursor:"pointer", fontSize:16, padding:0, width:18}}>
                 {isOpen?"▾":"▸"}
               </button>
-              <input type="checkbox" checked={exportSel.has(r.key)} onChange={()=>toggleExport(r.key)}
-                onClick={e=>e.stopPropagation()} title="Select for export"
-                style={{width:14,height:14,accentColor:"#58a6ff",cursor:"pointer",margin:0}}/>
+              <button type="button" onClick={e=>{e.stopPropagation();toggleExport(r.key);}} title="Select for export"
+                aria-pressed={exportSel.has(r.key)}
+                style={{
+                  width:15,height:15,minWidth:15,padding:0,margin:0,borderRadius:3,cursor:"pointer",
+                  border:"1px solid "+(exportSel.has(r.key)?C.blue:"rgba(88,166,255,0.42)"),
+                  background:exportSel.has(r.key)?C.blue:"rgba(88,166,255,0.06)",
+                  color:exportSel.has(r.key)?"#07111f":"transparent",
+                  display:"inline-flex",alignItems:"center",justifyContent:"center",
+                  fontSize:10,fontWeight:900,lineHeight:1,fontFamily:"inherit"
+                }}>
+                {exportSel.has(r.key)?"✓":""}
+              </button>
               <input value={r.label} onChange={e=>updateField(r.key,"label",e.target.value)} placeholder="Route name"
                 style={{ flex:"1 1 140px", minWidth:100, background:"transparent", border:"none", color:C.tx, fontSize:12, fontWeight:700, padding:"2px 0", outline:"none", fontFamily:"inherit" }}/>
               <FmtInput value={r.freight} onChange={val=>updateField(r.key,"freight",val)} width={100} placeholder="Freight USD" fontSize={12}/>
