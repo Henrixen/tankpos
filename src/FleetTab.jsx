@@ -44,6 +44,12 @@ function toNum(v) {
   return isFinite(n) ? n : null;
 }
 
+function fmtFullNumber(v) {
+  const n = toNum(v);
+  if (n == null) return "—";
+  return Math.round(n).toLocaleString("en-US").replace(/,/g, " ");
+}
+
 function fmtUpdatedAt(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -851,7 +857,9 @@ export default function FleetTab() {
             <thead style={{ position:"sticky", top:0, background:C.bg2, zIndex:1 }}>
               <tr>
                 {selectMode && <th style={TH_}></th>}
-                <SortTH label="Vessel" k="vessel" sortState={sort} onSort={toggleSort}/>
+                <th style={{...TH_,width:150,maxWidth:150}} onClick={()=>toggleSort("vessel")}>
+                  Vessel{sort.key==="vessel" ? (sort.dir==="asc" ? " ▲" : " ▼") : ""}
+                </th>
                 <SortTH label="Coating" k="coating" sortState={sort} onSort={toggleSort}/>
                 <SortTH label="Segment" k="segment" sortState={sort} onSort={toggleSort}/>
                 <SortTH label="Built" k="built" align="right" sortState={sort} onSort={toggleSort}/>
@@ -882,13 +890,13 @@ export default function FleetTab() {
                         <input type="checkbox" checked={checked} onChange={()=>toggleVesselSelected(key)}/>
                       </td>
                     )}
-                    <td style={{ ...TD_, color:C.tx, fontWeight:600 }} title={r.vessel}>{r.vessel}</td>
+                    <td style={{ ...TD_, color:C.tx, fontWeight:600, width:150, maxWidth:150 }} title={r.vessel}>{r.vessel}</td>
                     <td style={{ ...TD_, color:COATING_COLORS[r.coating]||C.dim }}>{r.coating||"—"}</td>
                     <td style={{ ...TD_, color:r.segment?.color||C.faint }}>{r.segment?.label||"—"}</td>
                     <td style={{ ...TD_, textAlign:"right" }}>{r.built||"—"}</td>
                     <td style={{ ...TD_, textAlign:"right" }}>{r.age??"—"}</td>
-                    <td style={{ ...TD_, textAlign:"right" }}>{fmtN(r.dwt)}</td>
-                    <td style={{ ...TD_, textAlign:"right" }}>{fmtN(r.cbm)}</td>
+                    <td style={{ ...TD_, textAlign:"right", minWidth:78 }}>{fmtFullNumber(r.dwt)}</td>
+                    <td style={{ ...TD_, textAlign:"right", minWidth:78 }}>{fmtFullNumber(r.cbm)}</td>
                     <td style={{ ...TD_, textAlign:"right" }}>{r.loa||"—"}</td>
                     <td style={{ ...TD_, textAlign:"right" }}>{r.beam||"—"}</td>
                     <td style={{ ...TD_, textAlign:"right" }}>{r.draft??"—"}</td>
