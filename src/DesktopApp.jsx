@@ -39,6 +39,28 @@ const OutsidersTab   = React.lazy(()=>import("./OutsidersTab"));
 
 const TabFallback = ()=>null;
 
+const NAV_KEY="signal_navigation_config";
+const NAV_CLOUD_KEY="navigation_config";
+const NAV_ITEMS=[
+ ["pos","Positions","#58a6ff","⌖"],["cargo","Cargoes","#faa356","▤"],["fix","Fixing","#c792ea","✓"],["tcv","Time Charter","#fb923c","◷"],
+ ["clients","Clients","#a8e6a3","♙"],["matrix","Matrix","#43e97b","▦"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","⚡"],
+ ["dash","Dashboard","#43e97b","▥"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▧"],["map","Freight Map","#10b981","⌁"],
+ ["cal","Calendar","#4fc3f7","□"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","◈"],["newbuilds","Newbuilds","#fbbf24","△"]
+];
+function navDefault(){return{mode:"classic",collapsed:false,order:NAV_ITEMS.map(x=>x[0]),hidden:[],groups:[
+ {id:"market",label:"Market",tabs:["pos","cargo","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
+ {id:"tools",label:"Tools",tabs:["projects","tce","map"]},{id:"reporting",label:"Reporting",tabs:["dash","reports"]},
+ {id:"workspace",label:"Workspace",tabs:["clients","notes","cal","settings"]}]};}
+function navNorm(x){
+ const d=navDefault(),valid=new Set(NAV_ITEMS.map(x=>x[0]));
+ const order=(Array.isArray(x?.order)?x.order:[]).filter(id=>valid.has(id));d.order.forEach(id=>{if(!order.includes(id))order.push(id)});
+ const groups=(Array.isArray(x?.groups)?x.groups:d.groups).map((g,i)=>({id:String(g.id||"g"+i),label:String(g.label||"Menu"),tabs:(g.tabs||[]).filter(id=>valid.has(id))}));
+ const used=new Set(groups.flatMap(g=>g.tabs));const missing=order.filter(id=>!used.has(id));if(missing.length){if(!groups.length)groups.push({id:"other",label:"Other",tabs:[]});groups.at(-1).tabs.push(...missing);}
+ return{mode:["classic","grouped","sidebar"].includes(x?.mode)?x.mode:"classic",collapsed:!!x?.collapsed,order,hidden:(x?.hidden||[]).filter(id=>valid.has(id)),groups};
+}
+function navLoad(){try{return navNorm(JSON.parse(localStorage.getItem(NAV_KEY)||"null"));}catch{return navDefault();}}
+
+
 
 
 // PanelEC — div-based click-to-edit cell for the vessel popout (EC is <td>-only, breaks in flex)
@@ -1148,6 +1170,13 @@ class TabErrorBoundary extends React.Component {
 }
 
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
+  const [navConfig,setNavConfig]=useState(navLoad);
+  useEffect(()=>{const h=e=>setNavConfig(navNorm(e.detail||navLoad()));window.addEventListener("navigation-config-updated",h);(async()=>{try{const {data}=await supabase.from("tag_settings").select("value").eq("key",NAV_CLOUD_KEY).maybeSingle();if(data?.value){const n=navNorm(data.value);setNavConfig(n);try{localStorage.setItem(NAV_KEY,JSON.stringify(n));}catch{}}}catch{}})();return()=>window.removeEventListener("navigation-config-updated",h)},[]);
+  const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
+  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||GUEST_TABS.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode]);
+  const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
+  const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set())});
+
   // ── PIN config ───────────────────────────────────────────────────────────
   const MASTER_PIN = "4524"; // ← your PIN → full access
   const GUEST_PIN  = "0250"; // ← colleague's PIN → positions + cargoes only
@@ -2313,70 +2342,23 @@ const filtV=useMemo(()=>{
             <SettingsMenu mobile={mobile} onToggleLayout={onToggleLayout} layoutOverride={layoutOverride}/>
           </div>
         </div>
-        {/* Tab navigation row */}
-        <div style={{
-          display:"flex",alignItems:"stretch",
-          padding:mobile?"0 8px":"0 20px",
-          gap:0,
-          overflowX:mobile?"auto":"visible",
-          overflowY:"visible",
-          WebkitOverflowScrolling:"touch",
-          scrollbarWidth:"none",
-          msOverflowStyle:"none",
-          touchAction:mobile?"pan-x":"auto",
-        }}>
-          {[
-            ["pos","Positions",vessels.length,"#58a6ff"],
-            ["cargo","Cargoes",cargoTotal||cargoes.length,"#faa356"],
-            ["fix","Fixing",0,"#c792ea"],
-            ["tcv","Time Charter",0,"#fb923c"],
-            ["clients","Clients",0,"#a8e6a3"],
-            ["matrix","Matrix",0,"#43e97b"],
-            ["projects","Projects",0,"#4fc3f7"],
-            ["tce","TCE",0,"#faa356"],
-            ["dash","Dashboard",0,"#43e97b"],
-            ["notes","Notes",0,"#f472b6"],
-            ["reports","Reports",0,"#6366f1"],
-            ["map","Freight Map",0,"#10b981"],
-            ["cal","Calendar",0,"#4fc3f7"],
-            ["settings","Settings",0,"#94a3b8"],
-            ["vessels","Fleet DB",0,"#38bdf8"],
-            ["fleet","Fleet",0,"#2dd4bf"],
-            ["newbuilds","Newbuilds",0,"#fbbf24"],
-          ].filter(([id])=>!guestMode||GUEST_TABS.includes(id)).map(([id,label,count,col])=>{
-            const active=tab===id;
-            return(
-              <button key={id} onClick={()=>{React.startTransition(()=>{setTab(id);setBucketFilters(new Set());});}}
-                style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"center",gap:6,
-                  padding:mobile?"0 12px":"10px 16px",
-                  background:"transparent",border:"none",
-                  borderBottom:"2px solid "+(active?col:"transparent"),
-                  cursor:"pointer",fontFamily:"inherit",flexShrink:0,
-                  transition:"border-color 0.15s,color 0.15s",marginBottom:-1,
-                  height:mobile?44:undefined,
-                  boxSizing:"border-box",
-                  WebkitTapHighlightColor:"transparent",
-                }}>
-                <span style={{fontSize:mobile?13:12,fontWeight:active?700:500,
-                  color:active?col:"rgba(120,155,210,0.5)",
-                  textTransform:"uppercase",letterSpacing:"0.07em",whiteSpace:"nowrap"}}>
-                  {label}
-                </span>
-                {count>0&&(
-                  <span style={{fontSize:10,fontWeight:700,
-                    color:active?col:"rgba(100,140,200,0.35)",
-                    background:active?col+"18":"transparent",
-                    padding:"0 5px",borderRadius:8,lineHeight:"16px",
-                    border:active?"1px solid "+col+"33":"none"}}>
-                    {count.toLocaleString()}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        {/* Configurable navigation */}
+        {navConfig.mode==="classic"&&<div style={{display:"flex",padding:mobile?"0 8px":"0 20px",overflowX:"auto",scrollbarWidth:"none"}}>
+          {navIds.map(id=>{const m=navMeta[id],active=tab===id,count=navCount(id);return <button key={id} onClick={()=>goNav(id)} style={{display:"flex",alignItems:"center",gap:6,padding:mobile?"0 12px":"10px 16px",height:mobile?44:undefined,background:"transparent",border:"none",borderBottom:"2px solid "+(active?m.col:"transparent"),color:active?m.col:"rgba(120,155,210,.5)",cursor:"pointer",fontSize:12,fontWeight:active?700:500,textTransform:"uppercase",letterSpacing:".07em",whiteSpace:"nowrap"}}>{m.label}{count>0&&<span style={{fontSize:9}}>{count.toLocaleString()}</span>}</button>})}
+        </div>}
+        {navConfig.mode==="grouped"&&<div>
+          <div style={{display:"flex",padding:"0 20px",height:34,alignItems:"end",gap:4}}>
+            {navConfig.groups.filter(g=>g.tabs.some(id=>navIds.includes(id))).map(g=>{const active=g.tabs.includes(tab);return <button key={g.id} onClick={()=>{const id=g.tabs.find(x=>navIds.includes(x));if(id)goNav(id)}} style={{height:34,padding:"0 15px",border:"none",borderBottom:"2px solid "+(active?"#58a6ff":"transparent"),background:"transparent",color:active?"#9ec5ff":"rgba(120,155,210,.5)",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",cursor:"pointer"}}>{g.label}</button>})}
+          </div>
+          {(()=>{const g=navConfig.groups.find(x=>x.tabs.includes(tab))||navConfig.groups[0];return g?<div style={{display:"flex",gap:3,padding:"5px 20px 7px",background:"rgba(7,15,29,.35)",overflowX:"auto"}}>{g.tabs.filter(id=>navIds.includes(id)).map(id=>{const m=navMeta[id],active=tab===id;return <button key={id} onClick={()=>goNav(id)} style={{display:"flex",gap:6,alignItems:"center",padding:"5px 10px",borderRadius:5,border:"1px solid "+(active?m.col+"66":"transparent"),background:active?m.col+"12":"transparent",color:active?m.col:"rgba(140,170,215,.55)",cursor:"pointer",fontSize:11}}><span>{m.icon}</span>{m.label}</button>})}</div>:null})()}
+        </div>}
       </div>
-      <div style={{padding:mobile?"8px 8px":"12px 20px",maxWidth:1900,margin:"0 auto"}}>
+      <div style={{display:"flex",minWidth:0}}>
+        {navConfig.mode==="sidebar"&&!mobile&&<aside style={{width:navConfig.collapsed?52:184,flex:"0 0 auto",borderRight:"1px solid rgba(58,130,246,.14)",background:"rgba(7,15,29,.58)",padding:"8px 6px",minHeight:"calc(100vh - 92px)"}}>
+          <button onClick={()=>{const n={...navConfig,collapsed:!navConfig.collapsed};setNavConfig(n);try{localStorage.setItem(NAV_KEY,JSON.stringify(n))}catch{};supabase.from("tag_settings").upsert({key:NAV_CLOUD_KEY,value:n,updated_at:new Date().toISOString()},{onConflict:"key"}).then(()=>{})}} style={{width:"100%",height:28,border:"none",background:"transparent",color:"#6f8fb8",cursor:"pointer",textAlign:navConfig.collapsed?"center":"right"}}>{navConfig.collapsed?"›":"‹"}</button>
+          {navIds.map(id=>{const m=navMeta[id],active=tab===id;return <button key={id} title={navConfig.collapsed?m.label:""} onClick={()=>goNav(id)} style={{width:"100%",height:36,display:"flex",alignItems:"center",justifyContent:navConfig.collapsed?"center":"flex-start",gap:9,padding:navConfig.collapsed?0:"0 9px",margin:"2px 0",borderRadius:6,border:"1px solid "+(active?m.col+"55":"transparent"),borderLeft:"3px solid "+(active?m.col:"transparent"),background:active?m.col+"12":"transparent",color:active?m.col:"rgba(135,165,210,.58)",cursor:"pointer"}}><span style={{width:20,textAlign:"center"}}>{m.icon}</span>{!navConfig.collapsed&&<span style={{fontSize:11,fontWeight:active?700:500}}>{m.label}</span>}</button>})}
+        </aside>}
+        <div style={{padding:mobile?"8px 8px":"12px 20px",maxWidth:1900,margin:"0 auto",flex:1,minWidth:0,width:"100%"}}>
       <TabErrorBoundary>
 
         {/* ── POSITIONS ── */}
@@ -3781,6 +3763,8 @@ const filtV=useMemo(()=>{
         {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={Array.from(selCargoes)}/></Suspense></div>}
         {tab==="map"&&<Suspense fallback={<TabFallback/>}><FreightMapTab/></Suspense>}
       </TabErrorBoundary>
+      </div>
+
       </div>
 
       {/* Vessel Popout — also feeds the AIS map so clicking a vessel shows its route */}
