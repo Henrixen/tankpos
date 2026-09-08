@@ -168,7 +168,7 @@ function YearHistogram({ rows, height=220, onYearClick, activeYears }) {
               onClick={v>0 && onYearClick ? ()=>onYearClick(y) : undefined}
               style={{ flex:"1 1 0", minWidth:2, height:"100%", display:"flex", flexDirection:"column",
                 justifyContent:"flex-end", alignItems:"center", cursor: onYearClick && v>0 ? "pointer":"default" }}>
-              {v>0 && <div style={{ fontSize:9, color:C.dim, marginBottom:2, whiteSpace:"nowrap" }}>{v}</div>}
+              {v>0 && <div style={{ fontSize:9, color:"#f4f8ff", fontWeight:600, marginBottom:2, whiteSpace:"nowrap" }}>{v}</div>}
               <div style={{ width:"100%", height:barH, background: active?"#f5a623":"#58a6ff", opacity: dimmed?0.35:1, borderRadius:1 }}/>
             </div>
           );
@@ -176,7 +176,7 @@ function YearHistogram({ rows, height=220, onYearClick, activeYears }) {
       </div>
       <div style={{ display:"flex", gap:2, marginTop:5 }}>
         {full.map(y => (
-          <div key={y} style={{ flex:"1 1 0", minWidth:2, textAlign:"center", fontSize:9, color:C.faint }}>
+          <div key={y} style={{ flex:"1 1 0", minWidth:2, textAlign:"center", fontSize:9, color:"#f4f8ff", fontWeight:600 }}>
             {y%5===0 ? y : ""}
           </div>
         ))}
@@ -352,7 +352,14 @@ export default function FleetTab() {
 
   // Everything downstream (stats, charts, roll-ups, CSV export) reflects this —
   // the full filtered set normally, or just what's ticked while in select mode.
-  const effectiveRows = useMemo(() => {
+  // Charts/stats always reflect the current search + filters.
+  // Selecting vessels is only an action/export selection and must NOT
+  // recalculate the charts, otherwise the page height/content jumps.
+  const effectiveRows = filtered;
+
+  // Export/action rows: selected vessels when there is a selection,
+  // otherwise the complete filtered result.
+  const exportRows = useMemo(() => {
     if (!selectedKeys.size) return filtered;
     return filtered.filter(r => selectedKeys.has(vesselKey(r)));
   }, [filtered, selectedKeys]);
@@ -613,24 +620,39 @@ export default function FleetTab() {
       ["comments","Notes"],["operator","Operator"],["owner","Owner/Manager"],
     ];
     const header = cols.map(([,label])=>csvEscape(label)).join(",");
-    const lines = effectiveRows.map(r => cols.map(([key]) => {
+    const lines = exportRows.map(r => cols.map(([key]) => {
       const v = key==="segment" ? (r.segment?.label||"") : r[key];
       return csvEscape(v);
     }).join(","));
     let csv = [header, ...lines].join("\n");
 
     if (includeStatsInCSV) {
+      const exportCount = exportRows.length;
+      const exportAges = exportRows.map(r=>r.age).filter(a=>a!=null);
+      const exportAvgAge = exportAges.length ? exportAges.reduce((a,b)=>a+b,0)/exportAges.length : null;
+      const breakdown = resolver => {
+        const m = {};
+        exportRows.forEach(r => {
+          const v = resolver(r);
+          if (!v) return;
+          m[v] = (m[v]||0)+1;
+        });
+        return Object.entries(m)
+          .sort((a,b)=>b[1]-a[1])
+          .map(([label,value])=>({label,value,share:exportCount?value/exportCount:0}));
+      };
+
       csv += "\n\nFLEET STATS SUMMARY\n";
-      csv += `Ships,${fleetStats.count}\n`;
-      csv += `Average Age,${fleetStats.avgAge!=null?fleetStats.avgAge.toFixed(1):""}\n`;
+      csv += `Ships,${exportCount}\n`;
+      csv += `Average Age,${exportAvgAge!=null?exportAvgAge.toFixed(1):""}\n`;
       const section = (title, items) => {
         csv += `\n${title},Count,Share\n`;
         items.forEach(b => { csv += `${csvEscape(b.label)},${b.value},${(b.share*100).toFixed(1)}%\n`; });
       };
-      section("IMO Type", fleetStats.imoBreakdown);
-      section("Coating", fleetStats.coatingBreakdown);
-      section("Ice Class", fleetStats.iceBreakdown);
-      section("Segment", fleetStats.segmentBreakdown);
+      section("IMO Type", breakdown(r=>r.imo_type));
+      section("Coating", breakdown(r=>r.coating));
+      section("Ice Class", breakdown(r=>r.ice_class));
+      section("Segment", breakdown(r=>r.segment?.label));
     }
     downloadText(`fleet_export_${new Date().toISOString().slice(0,10)}.csv`, csv);
   }
@@ -1075,7 +1097,7 @@ export default function FleetTab() {
 
         {/* ── fleet stats summary (replaces the old separate operator card) ── */}
         <div style={{ ...CARD, maxHeight:440, overflow:"auto" }}>
-          <div style={{ ...LABEL, marginBottom:10 }}>Fleet Stats {selectedKeys.size>0 && <span style={SUBLABEL}>(reflects current selection)</span>}</div>
+          <div style={{ ...LABEL, marginBottom:10 }}>Fleet Stats</div>
           <div style={{ display:"flex", gap:20, marginBottom:14 }}>
             <div><div style={{ fontSize:22, fontWeight:800, color:C.tx }}>{fleetStats.count}</div><div style={LABEL}>Ships</div></div>
             <div><div style={{ fontSize:22, fontWeight:800, color:C.amber }}>{fleetStats.avgAge!=null?fleetStats.avgAge.toFixed(1):"—"}</div><div style={LABEL}>Avg Age</div></div>
