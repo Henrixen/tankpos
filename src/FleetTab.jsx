@@ -75,6 +75,14 @@ const PAGE_SIZE = 100;
 
 // ─── small UI atoms ─────────────────────────────────────────────────────────
 const CARD = { background:C.bg2, border:"1px solid "+C.bd, borderRadius:10, padding:"14px 16px" };
+const THEME_CHECKBOX = {
+  appearance:"none",WebkitAppearance:"none",
+  width:13,height:13,margin:0,borderRadius:3,
+  border:"1px solid rgba(88,166,255,.42)",
+  background:"rgba(7,18,35,.92)",
+  cursor:"pointer",verticalAlign:"middle"
+};
+
 const CHIP = (active, col="#58a6ff") => ({
   fontSize:11, fontWeight:700, padding:"5px 12px", borderRadius:6, cursor:"pointer",
   border:`1px solid ${active?col+"88":C.bd}`,
@@ -965,6 +973,11 @@ export default function FleetTab() {
                 <th style={{...TH_,width:28,cursor:"default"}}>
                   <input
                     type="checkbox"
+                    style={{
+                      ...THEME_CHECKBOX,
+                      background:(pageRows.length>0 && pageRows.every(r=>selectedKeys.has(vesselKey(r))))?"#58a6ff":"rgba(7,18,35,.92)",
+                      boxShadow:(pageRows.length>0 && pageRows.every(r=>selectedKeys.has(vesselKey(r))))?"inset 0 0 0 3px #58a6ff, inset 0 0 0 4px rgba(7,18,35,.92)":"none"
+                    }}
                     checked={pageRows.length>0 && pageRows.every(r=>selectedKeys.has(vesselKey(r)))}
                     onChange={()=>{
                       const allChecked=pageRows.length>0 && pageRows.every(r=>selectedKeys.has(vesselKey(r)));
@@ -1010,7 +1023,12 @@ export default function FleetTab() {
                 return (
                   <tr key={key} style={{ height:30, background:checked?"rgba(88,166,255,0.055)":"transparent" }}>
                     <td style={{ ...TD_, width:28, cursor:"pointer" }} onClick={()=>toggleVesselSelected(key)}>
-                      <input type="checkbox" checked={checked} onChange={()=>toggleVesselSelected(key)}/>
+                      <input type="checkbox" checked={checked} onChange={()=>toggleVesselSelected(key)}
+                        style={{
+                          ...THEME_CHECKBOX,
+                          background:checked?"#58a6ff":"rgba(7,18,35,.92)",
+                          boxShadow:checked?"inset 0 0 0 3px #58a6ff, inset 0 0 0 4px rgba(7,18,35,.92)":"none"
+                        }}/>
                     </td>
                     <td style={{ ...TD_, color:C.tx, fontWeight:600, width:150, maxWidth:150 }} title={r.vessel}>{r.vessel}</td>
                     <td style={{ ...TD_, color:COATING_COLORS[r.coating]||C.dim }}>{r.coating||"—"}</td>
