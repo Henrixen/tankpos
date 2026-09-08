@@ -266,8 +266,8 @@ function TagCellV({vesselName,tag,onUpdateV}){
       );
       const zoom=Number.isFinite(rawZoom)&&rawZoom>0 ? rawZoom : 1;
 
-      const popWVisual=225*zoom;
-      const popHVisual=430*zoom;
+      const popWVisual=190*zoom;
+      const popHVisual=340*zoom;
       const marginVisual=12;
 
       const viewportW=window.innerWidth;
@@ -331,13 +331,13 @@ function TagCellV({vesselName,tag,onUpdateV}){
             position:"fixed",top:pos.top,left:pos.left,right:"auto",zIndex:19999,
             background:"#0a1628",border:"1px solid rgba(88,166,255,0.34)",borderRadius:7,
             padding:"6px",boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
-            display:"flex",flexDirection:"column",gap:5,width:225,
+            display:"flex",flexDirection:"column",gap:3,width:190,
             maxWidth:"calc(100vw - 20px)",
             maxHeight:`calc(100vh - ${pos.top+10}px)`,overflowY:"auto",overflowX:"hidden"
           }}>
             {cur&&(
               <button onClick={()=>{onUpdateV(vesselName,"tag","");setOpen(false);}}
-                style={{fontSize:13,padding:"6px 9px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",
+                style={{fontSize:10.5,padding:"4px 7px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",
                   background:"transparent",color:"rgba(255,107,107,0.65)",cursor:"pointer",
                   fontFamily:"inherit",textAlign:"left",marginBottom:2}}>✕ clear</button>
             )}
@@ -346,14 +346,14 @@ function TagCellV({vesselName,tag,onUpdateV}){
               return(
                 <button key={t} onClick={()=>pick(t)}
                   style={{
-                    fontSize:14,padding:"7px 10px",borderRadius:4,textAlign:"left",
+                    fontSize:11.5,padding:"4px 7px",borderRadius:4,textAlign:"left",
                     cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
                     border:"1px solid "+(cur===t?(tCol||"rgba(88,166,255,0.5)"):(tCol?tCol+"55":"rgba(88,166,255,0.12)")),
                     background:cur===t?(tCol?tCol+"33":"rgba(88,166,255,0.2)"):"transparent",
                     color:cur===t?(tCol||"#79c0ff"):(tCol||"rgba(160,200,255,0.75)"),
                     fontWeight:cur===t?700:400
                   }}>
-                  {tCol&&<span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:tCol,marginRight:5,verticalAlign:"middle"}}/>}
+                  {tCol&&<span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:tCol,marginRight:5,verticalAlign:"middle"}}/>}
                   {t}
                 </button>
               );
@@ -363,7 +363,7 @@ function TagCellV({vesselName,tag,onUpdateV}){
                 if(e.key==="Enter"&&e.target.value.trim()){addNew(e.target.value);e.target.value="";}
                 if(e.key==="Escape")setOpen(false);
               }}
-              style={{fontSize:13,padding:"7px 9px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",
+              style={{fontSize:11,padding:"5px 7px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",
                 background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none",marginTop:3}}/>
           </div>
         </>
