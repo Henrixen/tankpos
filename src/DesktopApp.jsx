@@ -254,22 +254,24 @@ function TagCellV({vesselName,tag,onUpdateV}){
     setTagColors(getTagColors());
     if(btnRef.current){
       const r=btnRef.current.getBoundingClientRect();
-      const popW=180;
-      const margin=8;
+      const popW=210;
+      const margin=10;
+      const vv=window.visualViewport;
+      const viewportLeft=vv?.offsetLeft||0;
+      const viewportTop=vv?.offsetTop||0;
+      const viewportW=vv?.width||document.documentElement.clientWidth||window.innerWidth;
+      const viewportH=vv?.height||document.documentElement.clientHeight||window.innerHeight;
 
-      // Align the popup to the clicked tag/+ button and keep it fully inside
-      // the visible browser viewport. This avoids the popup being pushed off
-      // the right edge by the wide positions table.
+      // Keep the popup inside the actually visible viewport even when the
+      // positions table/body is wider than the screen or browser zoom is used.
       let left=r.left;
-      if(left+popW>window.innerWidth-margin){
-        left=r.right-popW;
-      }
-      left=Math.max(margin,Math.min(left,window.innerWidth-popW-margin));
+      if(left+popW>viewportLeft+viewportW-margin) left=r.right-popW;
+      left=Math.max(viewportLeft+margin,Math.min(left,viewportLeft+viewportW-popW-margin));
 
-      const estimatedH=360;
-      let top=r.bottom+4;
-      if(top+estimatedH>window.innerHeight-margin){
-        top=Math.max(margin,r.top-estimatedH-4);
+      const estimatedH=410;
+      let top=r.bottom+5;
+      if(top+estimatedH>viewportTop+viewportH-margin){
+        top=Math.max(viewportTop+margin,r.top-estimatedH-5);
       }
       setPos({top,left});
     }
@@ -308,13 +310,13 @@ function TagCellV({vesselName,tag,onUpdateV}){
             position:"fixed",top:pos.top,left:pos.left,zIndex:19999,
             background:"#0a1628",border:"1px solid rgba(88,166,255,0.34)",borderRadius:7,
             padding:"6px",boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
-            display:"flex",flexDirection:"column",gap:3,width:180,
-            maxWidth:"calc(100vw - 16px)",
+            display:"flex",flexDirection:"column",gap:4,width:210,
+            maxWidth:"calc(100vw - 20px)",
             maxHeight:`calc(100vh - ${pos.top+10}px)`,overflowY:"auto",overflowX:"hidden"
           }}>
             {cur&&(
               <button onClick={()=>{onUpdateV(vesselName,"tag","");setOpen(false);}}
-                style={{fontSize:10,padding:"3px 7px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",
+                style={{fontSize:12,padding:"5px 8px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",
                   background:"transparent",color:"rgba(255,107,107,0.65)",cursor:"pointer",
                   fontFamily:"inherit",textAlign:"left",marginBottom:2}}>✕ clear</button>
             )}
@@ -323,7 +325,7 @@ function TagCellV({vesselName,tag,onUpdateV}){
               return(
                 <button key={t} onClick={()=>pick(t)}
                   style={{
-                    fontSize:11,padding:"4px 8px",borderRadius:3,textAlign:"left",
+                    fontSize:13,padding:"6px 9px",borderRadius:4,textAlign:"left",
                     cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
                     border:"1px solid "+(cur===t?(tCol||"rgba(88,166,255,0.5)"):(tCol?tCol+"55":"rgba(88,166,255,0.12)")),
                     background:cur===t?(tCol?tCol+"33":"rgba(88,166,255,0.2)"):"transparent",
@@ -340,7 +342,7 @@ function TagCellV({vesselName,tag,onUpdateV}){
                 if(e.key==="Enter"&&e.target.value.trim()){addNew(e.target.value);e.target.value="";}
                 if(e.key==="Escape")setOpen(false);
               }}
-              style={{fontSize:10,padding:"4px 6px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",
+              style={{fontSize:12,padding:"6px 8px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",
                 background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none",marginTop:3}}/>
           </div>
         </>
@@ -1789,23 +1791,31 @@ const filtV=useMemo(()=>{
 
   if(filters.size>0){
     list=list.filter(v=>{
-      if(filters.has("PPT") && !isOpenPPT(v.date)) return false;
-      if(filters.has("HIDE_EMP") && v.openPort==="EMPLOYED") return false;
+      // OR within one filter group, AND between different groups.
+      // Example: (WCUK OR ECUK) AND (PPT OR SUBS) AND selected DWT/tag/etc.
+      const statusKeys=["PPT","SUBS","HIDE_EMP"];
+      const selectedStatus=statusKeys.filter(k=>filters.has(k));
+      if(selectedStatus.length){
+        const statusMatch=selectedStatus.some(k=>{
+          if(k==="PPT") return isOpenPPT(v.date);
+          if(k==="SUBS") return v.openPort==="EMPLOYED";
+          if(k==="HIDE_EMP") return v.openPort!=="EMPLOYED";
+          return false;
+        });
+        if(!statusMatch) return false;
+      }
+
       if(filters.has("NAP") && !(v.comment?.toLowerCase().includes("naph") || v.spec?.lastCargo?.toLowerCase().includes("naph"))) return false;
-      if(filters.has("SUBS") && v.openPort!=="EMPLOYED") return false;
 
       const reg=classifyRegion(v.openPort);
-      // Hardcoded overrides for ports that classifyRegion gets wrong
       const port=(v.openPort||"").toUpperCase();
       const asiaports=["SINGAPORE","MALAYSIA","THAILAND","VIETNAM","CHINA","JAPAN","KOREA","INDIA","PAKISTAN","INDONESIA","PHILIPPINES","TAIWAN","HONGKONG","HONG KONG","FUJAIRAH","UAE","BAHRAIN","KUWAIT","SAUDI","JEDDAH","YANBU","JUBAIL","OMAN","MUSCAT"];
       const isAsia=asiaports.some(p=>port.includes(p));
-      const hasRegionFilter=["WCUK","ECUK","CANAL","BISCAY","BALTIC","SKAW","MED"].some(r=>filters.has(r));
-      if(hasRegionFilter){
-        if(isAsia) return false; // Asian ports never match European region filters
-        if(!reg) return false;
-        for(const r of ["WCUK","ECUK","CANAL","BISCAY","BALTIC","SKAW","MED"]){
-          if(filters.has(r) && reg!==r) return false;
-        }
+      const regionKeys=["WCUK","ECUK","CANAL","BISCAY","BALTIC","SKAW","MED"];
+      const selectedRegions=regionKeys.filter(r=>filters.has(r));
+      if(selectedRegions.length){
+        if(isAsia||!reg) return false;
+        if(!selectedRegions.includes(reg)) return false;
       }
       return true;
     });
@@ -1836,7 +1846,18 @@ const filtV=useMemo(()=>{
     list=list.filter(v=>segmentFilter.has(String(v.segment||"").trim()));
   }
   if(posTagFilter.size>0){
-    list=list.filter(v=>posTagFilter.has((v.tag||"").trim()));
+    // OR inside the TAG filter group:
+    // BASF + LITFERT means BASF OR LITFERT.
+    // Other filter groups are still combined with this group using AND.
+    const selectedTags=new Set([...posTagFilter].map(t=>String(t||"").trim().toUpperCase()));
+    list=list.filter(v=>{
+      const raw=Array.isArray(v.tag)?v.tag.join("|"):String(v.tag||"");
+      const vesselTags=raw
+        .split(/[|,;]+/)
+        .map(t=>t.trim().toUpperCase())
+        .filter(Boolean);
+      return vesselTags.some(t=>selectedTags.has(t));
+    });
   }
   // Custom DWT range (in tonnes). Handles "8K"/raw numbers.
   const parseDwt=(raw)=>{if(raw==null||raw==="")return null;if(typeof raw==="number")return raw;const s=String(raw).trim().toUpperCase().replace(/\s/g,"");if(/^\d+(\.\d+)?K$/.test(s))return parseFloat(s)*1000;const n=parseFloat(s.replace(/[^\d.]/g,""));return isFinite(n)?n:null;};
@@ -2662,7 +2683,7 @@ const filtV=useMemo(()=>{
                     return (
                       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                         <COL label="Tags" col="#79c0ff">
-                          {(()=>{const used=[...new Set(vessels.map(v=>(v.tag||"").trim()).filter(Boolean))].sort();return used.length?used.map(t=>(<B key={t} active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t.toUpperCase()}</B>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>none</span>;})()}
+                          {(()=>{const available=getTagListFor("position");return available.length?available.map(t=>(<B key={t} active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t.toUpperCase()}</B>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>NONE</span>;})()}
                           {posTagFilter.size>0&&<B active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
                         </COL>
                         <COL label="Status" col={C.amber}>
