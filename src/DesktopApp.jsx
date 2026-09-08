@@ -172,9 +172,10 @@ function TagCell({cargoId,tag,onUpdateC}){
       const popW=160; const popH=240;
       // Prefer opening directly below the button, left-aligned
       let left=r.left;
-      if(left+popW>window.innerWidth-8) left=Math.max(4,window.innerWidth-popW-8);
+      if(left+popW>window.innerWidth-8) left=r.right-popW;
+      left=Math.max(8,Math.min(left,window.innerWidth-popW-8));
       let top=r.bottom+4;
-      if(top+popH>window.innerHeight-8) top=Math.max(4,r.top-popH-4);
+      if(top+popH>window.innerHeight-8) top=Math.max(8,r.top-popH-4);
       setPos({top,left});
     }
     setOpen(v=>!v);
@@ -254,9 +255,22 @@ function TagCellV({vesselName,tag,onUpdateV}){
     if(btnRef.current){
       const r=btnRef.current.getBoundingClientRect();
       const popW=180;
+      const margin=8;
+
+      // Align the popup to the clicked tag/+ button and keep it fully inside
+      // the visible browser viewport. This avoids the popup being pushed off
+      // the right edge by the wide positions table.
       let left=r.left;
-      if(left+popW>window.innerWidth-8)left=Math.max(8,r.right-popW);
-      const top=Math.min(window.innerHeight-80,r.bottom+4);
+      if(left+popW>window.innerWidth-margin){
+        left=r.right-popW;
+      }
+      left=Math.max(margin,Math.min(left,window.innerWidth-popW-margin));
+
+      const estimatedH=360;
+      let top=r.bottom+4;
+      if(top+estimatedH>window.innerHeight-margin){
+        top=Math.max(margin,r.top-estimatedH-4);
+      }
       setPos({top,left});
     }
     setOpen(v=>!v);
@@ -295,6 +309,7 @@ function TagCellV({vesselName,tag,onUpdateV}){
             background:"#0a1628",border:"1px solid rgba(88,166,255,0.34)",borderRadius:7,
             padding:"6px",boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
             display:"flex",flexDirection:"column",gap:3,width:180,
+            maxWidth:"calc(100vw - 16px)",
             maxHeight:`calc(100vh - ${pos.top+10}px)`,overflowY:"auto",overflowX:"hidden"
           }}>
             {cur&&(
