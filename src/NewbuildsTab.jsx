@@ -750,7 +750,7 @@ export default function NewbuildsTab(){
       const db=b.delivery?new Date(b.delivery).getTime():0;
       return da-db;
     });
-  },[filtered,positions,cutoff]);
+  },[filtered,positions,cutoff,shipComments]);
 
   const deliveryTimeline=useMemo(()=>{
     const now=new Date();
