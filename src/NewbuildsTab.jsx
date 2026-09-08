@@ -422,7 +422,7 @@ export default function NewbuildsTab(){
 
   async function saveShipComment(n,value){
     const vessel_key=stableShipKey(n);
-    setShipComments(prev=>({...prev,[vessel_key]:value}));
+    const previous=shipComments[vessel_key]||"";
     const payload={
       vessel_key,
       imo:n.imo||null,
@@ -431,8 +431,29 @@ export default function NewbuildsTab(){
       comment:value||null,
       updated_at:new Date().toISOString(),
     };
-    const {error}=await supabase.from("newbuilds_notes").upsert(payload,{onConflict:"vessel_key"});
-    if(error) console.error("newbuild comment save:",error);
+
+    const {data,error,status,statusText}=await supabase
+      .from("newbuilds_notes")
+      .upsert(payload,{onConflict:"vessel_key"})
+      .select("vessel_key,comment")
+      .single();
+
+    if(error){
+      console.error("newbuild comment save failed:",{
+        status,statusText,
+        code:error.code,
+        message:error.message,
+        details:error.details,
+        hint:error.hint,
+        vessel_key,
+      });
+      setShipComments(prev=>({...prev,[vessel_key]:previous}));
+      window.alert(`Comment save failed${status?` (${status})`:""}: ${error.message||"Supabase rejected the write."}`);
+      return false;
+    }
+
+    setShipComments(prev=>({...prev,[vessel_key]:data?.comment??value??""}));
+    return true;
   }
 
   async function deletePosition(id){
