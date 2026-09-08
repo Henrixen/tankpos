@@ -234,6 +234,7 @@ export default function FleetTab() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState(() => new Set());
   const [includeStatsInCSV, setIncludeStatsInCSV] = useState(true);
+  const [outsiderSaveStatus, setOutsiderSaveStatus] = useState(null);
 
   const load = useCallback(async () => {
     if (loaded || loading) return;
@@ -492,6 +493,108 @@ export default function FleetTab() {
     });
   }, [combinedRollup, ownerSort]);
 
+
+  async function addFleetVesselToOutsiders(r) {
+    if (!r) return false;
+    const imo = r.imo ? String(r.imo).trim() : null;
+    const vessel = String(r.vessel || "").trim();
+
+    if (!vessel) return false;
+
+    setOutsiderSaveStatus(`Adding ${vessel}…`);
+
+    const payload = {
+      vessel,
+      imo,
+      dwt: r.dwt != null ? Number(r.dwt) : null,
+      built: r.built != null ? Number(r.built) : null,
+      coating: r.coating || null,
+      source_operator: r.operator || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      let error = null;
+
+      // Do not rely on a UNIQUE constraint on outsider_vessels. Find/update
+      // by IMO when available; otherwise fall back to vessel name.
+      if (imo) {
+        const { data: existing, error: findErr } = await supabase
+          .from("outsider_vessels")
+          .select("imo")
+          .eq("imo", imo)
+          .limit(1);
+
+        if (findErr) throw findErr;
+
+        if (existing?.length) {
+          const res = await supabase
+            .from("outsider_vessels")
+            .update(payload)
+            .eq("imo", imo);
+          error = res.error;
+        } else {
+          const res = await supabase
+            .from("outsider_vessels")
+            .insert(payload);
+          error = res.error;
+        }
+      } else {
+        const { data: existing, error: findErr } = await supabase
+          .from("outsider_vessels")
+          .select("vessel")
+          .ilike("vessel", vessel)
+          .limit(1);
+
+        if (findErr) throw findErr;
+
+        if (existing?.length) {
+          const res = await supabase
+            .from("outsider_vessels")
+            .update(payload)
+            .ilike("vessel", vessel);
+          error = res.error;
+        } else {
+          const res = await supabase
+            .from("outsider_vessels")
+            .insert(payload);
+          error = res.error;
+        }
+      }
+
+      if (error) throw error;
+
+      if (imo) {
+        setOutsiderImos(prev => {
+          const n = new Set(prev);
+          n.add(imo);
+          return n;
+        });
+      }
+
+      setOutsiderSaveStatus(`${vessel} added to Outsiders`);
+      setTimeout(() => setOutsiderSaveStatus(null), 2200);
+      return true;
+    } catch (e) {
+      console.error("Fleet → Outsiders failed:", e);
+      setOutsiderSaveStatus(`Failed to add ${vessel}`);
+      setTimeout(() => setOutsiderSaveStatus(null), 3000);
+      return false;
+    }
+  }
+
+  async function addSelectedFleetToOutsiders() {
+    const chosen = filtered.filter(r => selectedKeys.has(vesselKey(r)));
+    if (!chosen.length) return;
+
+    let added = 0;
+    for (const r of chosen) {
+      if (await addFleetVesselToOutsiders(r)) added++;
+    }
+    setOutsiderSaveStatus(`${added} vessel${added===1?"":"s"} added to Outsiders`);
+    setTimeout(() => setOutsiderSaveStatus(null), 2500);
+  }
+
   // ── CSV export ───────────────────────────────────────────────────────
   function exportCSV() {
     const cols = [
@@ -650,11 +753,13 @@ export default function FleetTab() {
                 <span style={{ fontSize:11, color:"#58a6ff", fontWeight:700 }}>{selectedKeys.size} / {filtered.length} selected</span>
                 <button style={CHIP(false)} onClick={selectAllVisible}>Select all</button>
                 <button style={CHIP(false)} onClick={deselectAllVisible}>Deselect all</button>
+                <button style={CHIP(true,"#f5a623")} onClick={addSelectedFleetToOutsiders}>→ Outsiders ({selectedKeys.size})</button>
                 <button style={CHIP(true,"#4ade80")} onClick={exitSelectMode}>✓ Done</button>
               </>
             ) : (
               <button style={CHIP(false,"#58a6ff")} onClick={enterSelectMode}>☑ Select mode</button>
             )}
+            {outsiderSaveStatus&&<span style={{fontSize:11,color:"#f5a623",fontWeight:700}}>{outsiderSaveStatus}</span>}
             <button style={CHIP(false,"#4fc3f7")} onClick={exportCSV}>⬇ Export CSV</button>
             <label style={{ fontSize:11, color:C.faint, display:"flex", alignItems:"center", gap:4, cursor:"pointer" }}>
               <input type="checkbox" checked={includeStatsInCSV} onChange={e=>setIncludeStatsInCSV(e.target.checked)}/>
@@ -877,6 +982,7 @@ export default function FleetTab() {
                 <SortTH label="Notes" k="comments" sortState={sort} onSort={toggleSort}/>
                 <SortTH label="Operator" k="operator" sortState={sort} onSort={toggleSort}/>
                 <SortTH label="Owner/Manager" k="owner" sortState={sort} onSort={toggleSort}/>
+                <th style={{...TH_,cursor:"default",textAlign:"center"}}>Outsider</th>
               </tr>
             </thead>
             <tbody>
@@ -908,11 +1014,28 @@ export default function FleetTab() {
                     <td style={TD_} title={r.comments||""}>{r.comments||"—"}</td>
                     <td style={TD_} title={r.operator||""}>{r.operator||"—"}</td>
                     <td style={TD_} title={r.owner||""}>{r.owner||"—"}</td>
+                    <td style={{...TD_,textAlign:"center",minWidth:92}}>
+                      {r.imo && outsiderImos.has(String(r.imo)) ? (
+                        <span style={{fontSize:11,fontWeight:700,color:"#f5a623"}}>✓ Outsider</span>
+                      ) : (
+                        <button
+                          onClick={()=>addFleetVesselToOutsiders(r)}
+                          title="Add this vessel to Outsiders"
+                          style={{
+                            fontSize:10,fontWeight:700,padding:"4px 8px",borderRadius:5,
+                            border:"1px solid rgba(245,166,35,.45)",
+                            background:"rgba(245,166,35,.10)",color:"#f5a623",
+                            cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"
+                          }}>
+                          + Outsider
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
               {!pageRows.length && !loading && (
-                <tr><td style={TD_} colSpan={18}>No vessels match current search/filters.</td></tr>
+                <tr><td style={TD_} colSpan={19}>No vessels match current search/filters.</td></tr>
               )}
             </tbody>
           </table>
