@@ -2427,9 +2427,39 @@ const filtV=useMemo(()=>{
         </div>}
       </div>
       <div style={{display:"flex",minWidth:0}}>
-        {navConfig.mode==="sidebar"&&!mobile&&<aside style={{width:navConfig.collapsed?52:184,flex:"0 0 auto",borderRight:"1px solid rgba(58,130,246,.14)",background:"rgba(7,15,29,.58)",padding:"8px 6px",minHeight:"calc(100vh - 92px)"}}>
-          <button onClick={()=>{const n={...navConfig,collapsed:!navConfig.collapsed};setNavConfig(n);try{localStorage.setItem(NAV_KEY,JSON.stringify(n))}catch{};supabase.from("tag_settings").upsert({key:NAV_CLOUD_KEY,value:n,updated_at:new Date().toISOString()},{onConflict:"key"}).then(()=>{})}} style={{width:"100%",height:28,border:"none",background:"transparent",color:"#6f8fb8",cursor:"pointer",textAlign:navConfig.collapsed?"center":"right"}}>{navConfig.collapsed?"›":"‹"}</button>
-          {navIds.map(id=>{const m=navMeta[id],active=tab===id;return <button key={id} title={navConfig.collapsed?m.label:""} onClick={()=>goNav(id)} style={{width:"100%",height:36,display:"flex",alignItems:"center",justifyContent:navConfig.collapsed?"center":"flex-start",gap:9,padding:navConfig.collapsed?0:"0 9px",margin:"2px 0",borderRadius:6,border:"1px solid "+(active?m.col+"55":"transparent"),borderLeft:"3px solid "+(active?m.col:"transparent"),background:active?m.col+"12":"transparent",color:active?m.col:"rgba(135,165,210,.58)",cursor:"pointer"}}><span style={{width:20,textAlign:"center"}}>{m.icon}</span>{!navConfig.collapsed&&<span style={{fontSize:11,fontWeight:active?700:500}}>{m.label}</span>}</button>})}
+        {navConfig.mode==="sidebar"&&!mobile&&<aside style={{
+          width:navConfig.collapsed?58:218,
+          flex:"0 0 auto",
+          borderRight:"1px solid rgba(58,130,246,.18)",
+          background:"linear-gradient(180deg,rgba(7,15,29,.94),rgba(7,15,29,.76))",
+          padding:"10px 8px",
+          minHeight:"calc(100vh - 92px)",
+          boxShadow:"inset -1px 0 0 rgba(88,166,255,.04)"
+        }}>
+          <button onClick={()=>{const n={...navConfig,collapsed:!navConfig.collapsed};setNavConfig(n);try{localStorage.setItem(NAV_KEY,JSON.stringify(n))}catch{};supabase.from("tag_settings").upsert({key:NAV_CLOUD_KEY,value:n,updated_at:new Date().toISOString()},{onConflict:"key"}).then(()=>{})}} style={{
+            width:"100%",height:30,border:"none",background:"transparent",
+            color:"rgba(135,175,225,.6)",cursor:"pointer",
+            textAlign:navConfig.collapsed?"center":"right",
+            padding:"0 8px",fontSize:16,fontFamily:"inherit"
+          }}>{navConfig.collapsed?"›":"‹"}</button>
+          {navIds.map(id=>{const m=navMeta[id],active=tab===id;return <button key={id} title={navConfig.collapsed?m.label:""} onClick={()=>goNav(id)} style={{
+            width:"100%",height:42,display:"flex",alignItems:"center",
+            justifyContent:navConfig.collapsed?"center":"flex-start",
+            gap:11,padding:navConfig.collapsed?0:"0 12px",
+            margin:"3px 0",borderRadius:7,
+            border:"1px solid "+(active?m.col+"66":"rgba(88,166,255,.05)"),
+            borderLeft:"3px solid "+(active?m.col:"transparent"),
+            background:active?m.col+"16":"transparent",
+            color:active?m.col:"rgba(165,195,235,.72)",
+            cursor:"pointer",fontFamily:"inherit",
+            boxShadow:active?"inset 0 0 0 1px "+m.col+"10":"none"
+          }}>
+            <span style={{width:22,textAlign:"center",fontSize:15,opacity:active?1:.8,flexShrink:0}}>{m.icon}</span>
+            {!navConfig.collapsed&&<span style={{
+              fontSize:12.5,fontWeight:active?750:600,
+              letterSpacing:".01em",whiteSpace:"nowrap"
+            }}>{m.label}</span>}
+          </button>})}
         </aside>}
         <div style={{padding:mobile?"8px 8px":"12px 20px",maxWidth:1900,margin:"0 auto",flex:1,minWidth:0,width:"100%"}}>
       <TabErrorBoundary>
