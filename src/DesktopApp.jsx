@@ -254,18 +254,47 @@ function TagCellV({vesselName,tag,onUpdateV}){
     setTagColors(getTagColors());
     if(btnRef.current){
       const r=btnRef.current.getBoundingClientRect();
-      const viewportH=window.visualViewport?.height || window.innerHeight || 800;
-      const popH=430;
-      const margin=12;
 
-      // The TAG column sits at the far right of a wide scrolling table.
-      // Anchor the popup to the RIGHT EDGE OF THE VIEWPORT rather than to the
-      // table's document X coordinate. This keeps it visible even with body
-      // zoom, horizontal table scrolling, or a layout wider than the screen.
-      let top=r.top-8;
-      top=Math.max(margin,Math.min(top,viewportH-popH-margin));
+      // The app's "Font size" control uses CSS `zoom` on <body>.
+      // Fixed-position coordinates are then evaluated in the zoomed body
+      // coordinate system, while getBoundingClientRect() is in visual pixels.
+      // Convert visual coordinates back into the body's CSS coordinate space.
+      const rawZoom=parseFloat(
+        getComputedStyle(document.body).zoom ||
+        document.body.style.zoom ||
+        "1"
+      );
+      const zoom=Number.isFinite(rawZoom)&&rawZoom>0 ? rawZoom : 1;
 
-      setPos({top,right:margin});
+      const popWVisual=225*zoom;
+      const popHVisual=430*zoom;
+      const marginVisual=12;
+
+      const viewportW=window.innerWidth;
+      const viewportH=window.innerHeight;
+
+      // Prefer opening immediately to the LEFT of the clicked +/tag button.
+      // If there is not enough room, open to its right.
+      let leftVisual=r.left-popWVisual-6;
+      if(leftVisual<marginVisual){
+        leftVisual=r.right+6;
+      }
+      leftVisual=Math.max(
+        marginVisual,
+        Math.min(leftVisual,viewportW-popWVisual-marginVisual)
+      );
+
+      // Keep the top close to the clicked row and clamp vertically.
+      let topVisual=r.top-8;
+      topVisual=Math.max(
+        marginVisual,
+        Math.min(topVisual,viewportH-popHVisual-marginVisual)
+      );
+
+      setPos({
+        top:topVisual/zoom,
+        left:leftVisual/zoom
+      });
     }
     setOpen(v=>!v);
   }
@@ -299,7 +328,7 @@ function TagCellV({vesselName,tag,onUpdateV}){
         <>
           <div style={{position:"fixed",inset:0,zIndex:19990}} onClick={()=>setOpen(false)}/>
           <div style={{
-            position:"fixed",top:pos.top,right:pos.right??12,left:"auto",zIndex:19999,
+            position:"fixed",top:pos.top,left:pos.left,right:"auto",zIndex:19999,
             background:"#0a1628",border:"1px solid rgba(88,166,255,0.34)",borderRadius:7,
             padding:"6px",boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
             display:"flex",flexDirection:"column",gap:5,width:225,
