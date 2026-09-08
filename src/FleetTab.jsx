@@ -344,9 +344,9 @@ export default function FleetTab() {
   // Everything downstream (stats, charts, roll-ups, CSV export) reflects this —
   // the full filtered set normally, or just what's ticked while in select mode.
   const effectiveRows = useMemo(() => {
-    if (!selectMode) return filtered;
+    if (!selectedKeys.size) return filtered;
     return filtered.filter(r => selectedKeys.has(vesselKey(r)));
-  }, [filtered, selectMode, selectedKeys]);
+  }, [filtered, selectedKeys]);
 
   const sorted = useMemo(() => {
     const { key, dir } = sort;
@@ -748,19 +748,20 @@ export default function FleetTab() {
           )}
 
           <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
-            {selectMode ? (
+            {selectedKeys.size>0 ? (
               <>
-                <span style={{ fontSize:11, color:"#58a6ff", fontWeight:700 }}>{selectedKeys.size} / {filtered.length} selected</span>
-                <button style={CHIP(false)} onClick={selectAllVisible}>Select all</button>
-                <button style={CHIP(false)} onClick={deselectAllVisible}>Deselect all</button>
-                <button style={CHIP(true,"#f5a623")} onClick={addSelectedFleetToOutsiders}>→ Outsiders ({selectedKeys.size})</button>
-                <button style={CHIP(true,"#4ade80")} onClick={exitSelectMode}>✓ Done</button>
+                <span style={{ fontSize:11, color:"#58a6ff", fontWeight:700 }}>{selectedKeys.size} selected</span>
+                <button style={CHIP(true,"#f5a623")} onClick={addSelectedFleetToOutsiders}>→ Add to Outsiders ({selectedKeys.size})</button>
+                <button style={CHIP(true,"#4fc3f7")} onClick={exportCSV}>⬇ Export CSV ({selectedKeys.size})</button>
+                <button style={CHIP(false)} onClick={deselectAllVisible}>Clear selection</button>
               </>
             ) : (
-              <button style={CHIP(false,"#58a6ff")} onClick={enterSelectMode}>☑ Select mode</button>
+              <>
+                <button style={CHIP(false)} onClick={selectAllVisible}>☑ Select all</button>
+                <button style={CHIP(false,"#4fc3f7")} onClick={exportCSV}>⬇ Export CSV</button>
+              </>
             )}
             {outsiderSaveStatus&&<span style={{fontSize:11,color:"#f5a623",fontWeight:700}}>{outsiderSaveStatus}</span>}
-            <button style={CHIP(false,"#4fc3f7")} onClick={exportCSV}>⬇ Export CSV</button>
             <label style={{ fontSize:11, color:C.faint, display:"flex", alignItems:"center", gap:4, cursor:"pointer" }}>
               <input type="checkbox" checked={includeStatsInCSV} onChange={e=>setIncludeStatsInCSV(e.target.checked)}/>
               incl. stats
@@ -877,7 +878,7 @@ export default function FleetTab() {
       {/* ── owner/operator combined roll-up + fleet stats summary ── */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
         <div style={{ ...CARD, maxHeight:440, overflow:"auto" }}>
-          <div style={{ ...LABEL, marginBottom:8 }}>Owner / Operator <span style={SUBLABEL}>(click a row to filter{selectMode?", checkbox to include/exclude in selection":""})</span></div>
+          <div style={{ ...LABEL, marginBottom:8 }}>Owner / Operator <span style={SUBLABEL}>(click a row to filter)</span></div>
           <table style={{ borderCollapse:"collapse", width:"100%" }}>
             <thead><tr>
               {selectMode && <th style={TH_}></th>}
@@ -917,7 +918,7 @@ export default function FleetTab() {
 
         {/* ── fleet stats summary (replaces the old separate operator card) ── */}
         <div style={{ ...CARD, maxHeight:440, overflow:"auto" }}>
-          <div style={{ ...LABEL, marginBottom:10 }}>Fleet Stats {selectMode && <span style={SUBLABEL}>(reflects current selection)</span>}</div>
+          <div style={{ ...LABEL, marginBottom:10 }}>Fleet Stats {selectedKeys.size>0 && <span style={SUBLABEL}>(reflects current selection)</span>}</div>
           <div style={{ display:"flex", gap:20, marginBottom:14 }}>
             <div><div style={{ fontSize:22, fontWeight:800, color:C.tx }}>{fleetStats.count}</div><div style={LABEL}>Ships</div></div>
             <div><div style={{ fontSize:22, fontWeight:800, color:C.amber }}>{fleetStats.avgAge!=null?fleetStats.avgAge.toFixed(1):"—"}</div><div style={LABEL}>Avg Age</div></div>
@@ -961,7 +962,24 @@ export default function FleetTab() {
           <table style={{ borderCollapse:"collapse", width:"100%" }}>
             <thead style={{ position:"sticky", top:0, background:C.bg2, zIndex:1 }}>
               <tr>
-                {selectMode && <th style={TH_}></th>}
+                <th style={{...TH_,width:28,cursor:"default"}}>
+                  <input
+                    type="checkbox"
+                    checked={pageRows.length>0 && pageRows.every(r=>selectedKeys.has(vesselKey(r)))}
+                    onChange={()=>{
+                      const allChecked=pageRows.length>0 && pageRows.every(r=>selectedKeys.has(vesselKey(r)));
+                      setSelectedKeys(prev=>{
+                        const n=new Set(prev);
+                        pageRows.forEach(r=>{
+                          const k=vesselKey(r);
+                          allChecked?n.delete(k):n.add(k);
+                        });
+                        return n;
+                      });
+                    }}
+                    title="Select/deselect this page"
+                  />
+                </th>
                 <th style={{...TH_,width:150,maxWidth:150}} onClick={()=>toggleSort("vessel")}>
                   Vessel{sort.key==="vessel" ? (sort.dir==="asc" ? " ▲" : " ▼") : ""}
                 </th>
@@ -982,7 +1000,7 @@ export default function FleetTab() {
                 <SortTH label="Notes" k="comments" sortState={sort} onSort={toggleSort}/>
                 <SortTH label="Operator" k="operator" sortState={sort} onSort={toggleSort}/>
                 <SortTH label="Owner/Manager" k="owner" sortState={sort} onSort={toggleSort}/>
-                <th style={{...TH_,cursor:"default",textAlign:"center"}}>Outsider</th>
+                <th style={{...TH_,cursor:"default",textAlign:"center",width:74}}>List</th>
               </tr>
             </thead>
             <tbody>
@@ -990,12 +1008,10 @@ export default function FleetTab() {
                 const key = vesselKey(r);
                 const checked = selectedKeys.has(key);
                 return (
-                  <tr key={key} style={{ height:30, opacity: selectMode && !checked ? 0.4 : 1 }}>
-                    {selectMode && (
-                      <td style={{ ...TD_, width:24, cursor:"pointer" }} onClick={()=>toggleVesselSelected(key)}>
-                        <input type="checkbox" checked={checked} onChange={()=>toggleVesselSelected(key)}/>
-                      </td>
-                    )}
+                  <tr key={key} style={{ height:30, background:checked?"rgba(88,166,255,0.055)":"transparent" }}>
+                    <td style={{ ...TD_, width:28, cursor:"pointer" }} onClick={()=>toggleVesselSelected(key)}>
+                      <input type="checkbox" checked={checked} onChange={()=>toggleVesselSelected(key)}/>
+                    </td>
                     <td style={{ ...TD_, color:C.tx, fontWeight:600, width:150, maxWidth:150 }} title={r.vessel}>{r.vessel}</td>
                     <td style={{ ...TD_, color:COATING_COLORS[r.coating]||C.dim }}>{r.coating||"—"}</td>
                     <td style={{ ...TD_, color:r.segment?.color||C.faint }}>{r.segment?.label||"—"}</td>
@@ -1014,28 +1030,29 @@ export default function FleetTab() {
                     <td style={TD_} title={r.comments||""}>{r.comments||"—"}</td>
                     <td style={TD_} title={r.operator||""}>{r.operator||"—"}</td>
                     <td style={TD_} title={r.owner||""}>{r.owner||"—"}</td>
-                    <td style={{...TD_,textAlign:"center",minWidth:92}}>
+                    <td style={{...TD_,textAlign:"center",minWidth:74}}>
                       {r.imo && outsiderImos.has(String(r.imo)) ? (
-                        <span style={{fontSize:11,fontWeight:700,color:"#f5a623"}}>✓ Outsider</span>
-                      ) : (
-                        <button
-                          onClick={()=>addFleetVesselToOutsiders(r)}
-                          title="Add this vessel to Outsiders"
+                        <span
+                          title="This vessel is on the Outsiders list"
                           style={{
-                            fontSize:10,fontWeight:700,padding:"4px 8px",borderRadius:5,
-                            border:"1px solid rgba(245,166,35,.45)",
-                            background:"rgba(245,166,35,.10)",color:"#f5a623",
-                            cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"
+                            display:"inline-flex",alignItems:"center",gap:5,
+                            fontSize:9.5,fontWeight:800,color:"#f5a623",
+                            border:"1px solid rgba(245,166,35,.35)",
+                            background:"rgba(245,166,35,.08)",
+                            borderRadius:10,padding:"2px 6px"
                           }}>
-                          + Outsider
-                        </button>
+                          <span style={{width:6,height:6,borderRadius:"50%",background:"#f5a623",display:"inline-block"}}/>
+                          OUT
+                        </span>
+                      ) : (
+                        <span title="Not on Outsiders list" style={{width:6,height:6,borderRadius:"50%",background:"rgba(120,160,200,.18)",display:"inline-block"}}/>
                       )}
                     </td>
                   </tr>
                 );
               })}
               {!pageRows.length && !loading && (
-                <tr><td style={TD_} colSpan={19}>No vessels match current search/filters.</td></tr>
+                <tr><td style={TD_} colSpan={20}>No vessels match current search/filters.</td></tr>
               )}
             </tbody>
           </table>
