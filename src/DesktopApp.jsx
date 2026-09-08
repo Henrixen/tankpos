@@ -254,26 +254,18 @@ function TagCellV({vesselName,tag,onUpdateV}){
     setTagColors(getTagColors());
     if(btnRef.current){
       const r=btnRef.current.getBoundingClientRect();
-      const popW=210;
-      const margin=10;
-      const vv=window.visualViewport;
-      const viewportLeft=vv?.offsetLeft||0;
-      const viewportTop=vv?.offsetTop||0;
-      const viewportW=vv?.width||document.documentElement.clientWidth||window.innerWidth;
-      const viewportH=vv?.height||document.documentElement.clientHeight||window.innerHeight;
+      const viewportH=window.visualViewport?.height || window.innerHeight || 800;
+      const popH=430;
+      const margin=12;
 
-      // Keep the popup inside the actually visible viewport even when the
-      // positions table/body is wider than the screen or browser zoom is used.
-      let left=r.left;
-      if(left+popW>viewportLeft+viewportW-margin) left=r.right-popW;
-      left=Math.max(viewportLeft+margin,Math.min(left,viewportLeft+viewportW-popW-margin));
+      // The TAG column sits at the far right of a wide scrolling table.
+      // Anchor the popup to the RIGHT EDGE OF THE VIEWPORT rather than to the
+      // table's document X coordinate. This keeps it visible even with body
+      // zoom, horizontal table scrolling, or a layout wider than the screen.
+      let top=r.top-8;
+      top=Math.max(margin,Math.min(top,viewportH-popH-margin));
 
-      const estimatedH=410;
-      let top=r.bottom+5;
-      if(top+estimatedH>viewportTop+viewportH-margin){
-        top=Math.max(viewportTop+margin,r.top-estimatedH-5);
-      }
-      setPos({top,left});
+      setPos({top,right:margin});
     }
     setOpen(v=>!v);
   }
@@ -307,16 +299,16 @@ function TagCellV({vesselName,tag,onUpdateV}){
         <>
           <div style={{position:"fixed",inset:0,zIndex:19990}} onClick={()=>setOpen(false)}/>
           <div style={{
-            position:"fixed",top:pos.top,left:pos.left,zIndex:19999,
+            position:"fixed",top:pos.top,right:pos.right??12,left:"auto",zIndex:19999,
             background:"#0a1628",border:"1px solid rgba(88,166,255,0.34)",borderRadius:7,
             padding:"6px",boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
-            display:"flex",flexDirection:"column",gap:4,width:210,
+            display:"flex",flexDirection:"column",gap:5,width:225,
             maxWidth:"calc(100vw - 20px)",
             maxHeight:`calc(100vh - ${pos.top+10}px)`,overflowY:"auto",overflowX:"hidden"
           }}>
             {cur&&(
               <button onClick={()=>{onUpdateV(vesselName,"tag","");setOpen(false);}}
-                style={{fontSize:12,padding:"5px 8px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",
+                style={{fontSize:13,padding:"6px 9px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",
                   background:"transparent",color:"rgba(255,107,107,0.65)",cursor:"pointer",
                   fontFamily:"inherit",textAlign:"left",marginBottom:2}}>✕ clear</button>
             )}
@@ -325,7 +317,7 @@ function TagCellV({vesselName,tag,onUpdateV}){
               return(
                 <button key={t} onClick={()=>pick(t)}
                   style={{
-                    fontSize:13,padding:"6px 9px",borderRadius:4,textAlign:"left",
+                    fontSize:14,padding:"7px 10px",borderRadius:4,textAlign:"left",
                     cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
                     border:"1px solid "+(cur===t?(tCol||"rgba(88,166,255,0.5)"):(tCol?tCol+"55":"rgba(88,166,255,0.12)")),
                     background:cur===t?(tCol?tCol+"33":"rgba(88,166,255,0.2)"):"transparent",
@@ -342,7 +334,7 @@ function TagCellV({vesselName,tag,onUpdateV}){
                 if(e.key==="Enter"&&e.target.value.trim()){addNew(e.target.value);e.target.value="";}
                 if(e.key==="Escape")setOpen(false);
               }}
-              style={{fontSize:12,padding:"6px 8px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",
+              style={{fontSize:13,padding:"7px 9px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",
                 background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none",marginTop:3}}/>
           </div>
         </>
