@@ -77,7 +77,7 @@ const PAGE_SIZE = 100;
 const CARD = { background:C.bg2, border:"1px solid "+C.bd, borderRadius:10, padding:"14px 16px" };
 const THEME_CHECKBOX = {
   appearance:"none",WebkitAppearance:"none",
-  width:13,height:13,margin:0,borderRadius:3,
+  width:15,height:15,margin:0,borderRadius:3,
   border:"1px solid rgba(88,166,255,.42)",
   background:"rgba(7,18,35,.92)",
   cursor:"pointer",verticalAlign:"middle"
@@ -236,6 +236,7 @@ export default function FleetTab() {
 
   const [sort, setSort] = useState({ key:"vessel", dir:"asc" });
   const [expandedSeg, setExpandedSeg] = useState(() => new Set());
+  const [segmentAgeOpen, setSegmentAgeOpen] = useState(false);
   const [ownerSort, setOwnerSort] = useState({ key:"ships", dir:"desc" });
   const [page, setPage] = useState(1);
 
@@ -835,9 +836,18 @@ export default function FleetTab() {
       </div>
 
       {/* ── segment / age profile table ── */}
-      <div style={CARD}>
-        <div style={{ ...LABEL, marginBottom:8 }}>Segment — Age profile</div>
-        <table style={{ borderCollapse:"collapse", width:"100%" }}>
+      <div style={{...CARD,padding:segmentAgeOpen?"12px 16px":"9px 16px"}}>
+        <div
+          onClick={()=>setSegmentAgeOpen(v=>!v)}
+          style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",userSelect:"none"}}
+          title={segmentAgeOpen?"Minimize segment age profile":"Expand segment age profile"}>
+          <div style={LABEL}>Segment — Age profile</div>
+          <span style={{fontSize:15,color:"#58a6ff",fontWeight:800,lineHeight:1}}>
+            {segmentAgeOpen?"▾":"▸"}
+          </span>
+        </div>
+        {segmentAgeOpen && <div style={{marginTop:8}}>
+<table style={{ borderCollapse:"collapse", width:"100%" }}>
           <thead><tr>
             <th style={TH_}>Segment</th>
             <th style={{...TH_,textAlign:"right"}}>Ships</th>
@@ -881,6 +891,121 @@ export default function FleetTab() {
             {!segStats.length && <tr><td style={TD_} colSpan={9}>No vessels match current filters.</td></tr>}
           </tbody>
         </table>
+        </div>}
+      </div>
+
+      {/* ── full vessel table ── */}
+      <div style={{ ...CARD, padding:0, overflow:"hidden" }}>
+        <div style={{ padding:"10px 16px", borderBottom:"1px solid "+C.bd, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <span style={LABEL}>Vessels ({sorted.length})</span>
+          {totalPages > 1 && (
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <button style={CHIP(false)} disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>‹ Prev</button>
+              <span style={{ fontSize:11, color:C.faint }}>Page {page} / {totalPages}</span>
+              <button style={CHIP(false)} disabled={page>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>Next ›</button>
+            </div>
+          )}
+        </div>
+        <div style={{ overflowX:"auto", maxHeight:600, overflowY:"auto" }}>
+          <table style={{ borderCollapse:"collapse", width:"100%" }}>
+            <thead style={{ position:"sticky", top:0, background:C.bg2, zIndex:1 }}>
+              <tr>
+                <th style={{...TH_,width:28,cursor:"default"}}>
+                  <input
+                    type="checkbox"
+                    style={{
+                      ...THEME_CHECKBOX,
+                      background:(pageRows.length>0 && pageRows.every(r=>selectedKeys.has(vesselKey(r))))?"#58a6ff":"rgba(7,18,35,.92)",
+                      boxShadow:(pageRows.length>0 && pageRows.every(r=>selectedKeys.has(vesselKey(r))))?"inset 0 0 0 3px #58a6ff, inset 0 0 0 4px rgba(7,18,35,.92)":"none"
+                    }}
+                    checked={pageRows.length>0 && pageRows.every(r=>selectedKeys.has(vesselKey(r)))}
+                    onChange={()=>{
+                      const allChecked=pageRows.length>0 && pageRows.every(r=>selectedKeys.has(vesselKey(r)));
+                      setSelectedKeys(prev=>{
+                        const n=new Set(prev);
+                        pageRows.forEach(r=>{
+                          const k=vesselKey(r);
+                          allChecked?n.delete(k):n.add(k);
+                        });
+                        return n;
+                      });
+                    }}
+                    title="Select/deselect this page"
+                  />
+                </th>
+                <th style={{...TH_,width:150,maxWidth:150}} onClick={()=>toggleSort("vessel")}>
+                  Vessel{sort.key==="vessel" ? (sort.dir==="asc" ? " ▲" : " ▼") : ""}
+                </th>
+                <SortTH label="Coating" k="coating" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="Segment" k="segment" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="Built" k="built" align="right" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="Age" k="age" align="right" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="DWT" k="dwt" align="right" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="CBM" k="cbm" align="right" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="LOA" k="loa" align="right" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="Beam" k="beam" align="right" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="Draft" k="draft" align="right" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="Segs" k="segs" align="right" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="Flag" k="flag" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="Ice" k="ice_class" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="IMO Type" k="imo_type" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="Last Ex Name" k="last_ex_name" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="Notes" k="comments" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="Operator" k="operator" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="Owner/Manager" k="owner" sortState={sort} onSort={toggleSort}/>
+                <th style={{...TH_,cursor:"default",textAlign:"center",width:34}}>Out</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageRows.map(r => {
+                const key = vesselKey(r);
+                const checked = selectedKeys.has(key);
+                return (
+                  <tr key={key} style={{ height:30, background:checked?"rgba(88,166,255,0.055)":"transparent" }}>
+                    <td style={{ ...TD_, width:28, textAlign:"center" }}>
+                      <input type="checkbox" checked={checked} onChange={()=>toggleVesselSelected(key)}
+                        style={{
+                          ...THEME_CHECKBOX,
+                          background:checked?"#58a6ff":"rgba(7,18,35,.92)",
+                          boxShadow:checked?"inset 0 0 0 3px #58a6ff, inset 0 0 0 4px rgba(7,18,35,.92)":"none"
+                        }}/>
+                    </td>
+                    <td style={{ ...TD_, color:C.tx, fontWeight:600, width:150, maxWidth:150 }} title={r.vessel}>{r.vessel}</td>
+                    <td style={{ ...TD_, color:COATING_COLORS[r.coating]||C.dim }}>{r.coating||"—"}</td>
+                    <td style={{ ...TD_, color:r.segment?.color||C.faint }}>{r.segment?.label||"—"}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{r.built||"—"}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{r.age??"—"}</td>
+                    <td style={{ ...TD_, textAlign:"right", minWidth:78 }}>{fmtFullNumber(r.dwt)}</td>
+                    <td style={{ ...TD_, textAlign:"right", minWidth:78 }}>{fmtFullNumber(r.cbm)}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{r.loa||"—"}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{r.beam||"—"}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{r.draft??"—"}</td>
+                    <td style={{ ...TD_, textAlign:"right" }}>{r.segs||"—"}</td>
+                    <td style={TD_}>{r.flag||"—"}</td>
+                    <td style={TD_}>{r.ice_class||"—"}</td>
+                    <td style={{ ...TD_, color:IMO_COLORS[r.imo_type]||C.dim }}>{r.imo_type||"—"}</td>
+                    <td style={TD_} title={r.last_ex_name||""}>{r.last_ex_name||"—"}</td>
+                    <td style={TD_} title={r.comments||""}>{r.comments||"—"}</td>
+                    <td style={TD_} title={r.operator||""}>{r.operator||"—"}</td>
+                    <td style={TD_} title={r.owner||""}>{r.owner||"—"}</td>
+                    <td style={{...TD_,textAlign:"center",minWidth:34,width:34}}>
+                      {r.imo && outsiderImos.has(String(r.imo)) ? (
+                        <span
+                          title="On Outsiders list"
+                          style={{width:8,height:8,borderRadius:"50%",background:"#f5a623",display:"inline-block",
+                            boxShadow:"0 0 0 2px rgba(245,166,35,.10)"}}
+                        />
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!pageRows.length && !loading && (
+                <tr><td style={TD_} colSpan={20}>No vessels match current search/filters.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* ── owner/operator combined roll-up + fleet stats summary ── */}
@@ -954,128 +1079,7 @@ export default function FleetTab() {
         </div>
       </div>
 
-      {/* ── full vessel table ── */}
-      <div style={{ ...CARD, padding:0, overflow:"hidden" }}>
-        <div style={{ padding:"10px 16px", borderBottom:"1px solid "+C.bd, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <span style={LABEL}>Vessels ({sorted.length})</span>
-          {totalPages > 1 && (
-            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <button style={CHIP(false)} disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>‹ Prev</button>
-              <span style={{ fontSize:11, color:C.faint }}>Page {page} / {totalPages}</span>
-              <button style={CHIP(false)} disabled={page>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>Next ›</button>
-            </div>
-          )}
-        </div>
-        <div style={{ overflowX:"auto", maxHeight:600, overflowY:"auto" }}>
-          <table style={{ borderCollapse:"collapse", width:"100%" }}>
-            <thead style={{ position:"sticky", top:0, background:C.bg2, zIndex:1 }}>
-              <tr>
-                <th style={{...TH_,width:28,cursor:"default"}}>
-                  <input
-                    type="checkbox"
-                    style={{
-                      ...THEME_CHECKBOX,
-                      background:(pageRows.length>0 && pageRows.every(r=>selectedKeys.has(vesselKey(r))))?"#58a6ff":"rgba(7,18,35,.92)",
-                      boxShadow:(pageRows.length>0 && pageRows.every(r=>selectedKeys.has(vesselKey(r))))?"inset 0 0 0 3px #58a6ff, inset 0 0 0 4px rgba(7,18,35,.92)":"none"
-                    }}
-                    checked={pageRows.length>0 && pageRows.every(r=>selectedKeys.has(vesselKey(r)))}
-                    onChange={()=>{
-                      const allChecked=pageRows.length>0 && pageRows.every(r=>selectedKeys.has(vesselKey(r)));
-                      setSelectedKeys(prev=>{
-                        const n=new Set(prev);
-                        pageRows.forEach(r=>{
-                          const k=vesselKey(r);
-                          allChecked?n.delete(k):n.add(k);
-                        });
-                        return n;
-                      });
-                    }}
-                    title="Select/deselect this page"
-                  />
-                </th>
-                <th style={{...TH_,width:150,maxWidth:150}} onClick={()=>toggleSort("vessel")}>
-                  Vessel{sort.key==="vessel" ? (sort.dir==="asc" ? " ▲" : " ▼") : ""}
-                </th>
-                <SortTH label="Coating" k="coating" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="Segment" k="segment" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="Built" k="built" align="right" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="Age" k="age" align="right" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="DWT" k="dwt" align="right" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="CBM" k="cbm" align="right" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="LOA" k="loa" align="right" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="Beam" k="beam" align="right" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="Draft" k="draft" align="right" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="Segs" k="segs" align="right" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="Flag" k="flag" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="Ice" k="ice_class" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="IMO Type" k="imo_type" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="Last Ex Name" k="last_ex_name" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="Notes" k="comments" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="Operator" k="operator" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="Owner/Manager" k="owner" sortState={sort} onSort={toggleSort}/>
-                <th style={{...TH_,cursor:"default",textAlign:"center",width:74}}>List</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageRows.map(r => {
-                const key = vesselKey(r);
-                const checked = selectedKeys.has(key);
-                return (
-                  <tr key={key} style={{ height:30, background:checked?"rgba(88,166,255,0.055)":"transparent" }}>
-                    <td style={{ ...TD_, width:28, cursor:"pointer" }} onClick={()=>toggleVesselSelected(key)}>
-                      <input type="checkbox" checked={checked} onChange={()=>toggleVesselSelected(key)}
-                        style={{
-                          ...THEME_CHECKBOX,
-                          background:checked?"#58a6ff":"rgba(7,18,35,.92)",
-                          boxShadow:checked?"inset 0 0 0 3px #58a6ff, inset 0 0 0 4px rgba(7,18,35,.92)":"none"
-                        }}/>
-                    </td>
-                    <td style={{ ...TD_, color:C.tx, fontWeight:600, width:150, maxWidth:150 }} title={r.vessel}>{r.vessel}</td>
-                    <td style={{ ...TD_, color:COATING_COLORS[r.coating]||C.dim }}>{r.coating||"—"}</td>
-                    <td style={{ ...TD_, color:r.segment?.color||C.faint }}>{r.segment?.label||"—"}</td>
-                    <td style={{ ...TD_, textAlign:"right" }}>{r.built||"—"}</td>
-                    <td style={{ ...TD_, textAlign:"right" }}>{r.age??"—"}</td>
-                    <td style={{ ...TD_, textAlign:"right", minWidth:78 }}>{fmtFullNumber(r.dwt)}</td>
-                    <td style={{ ...TD_, textAlign:"right", minWidth:78 }}>{fmtFullNumber(r.cbm)}</td>
-                    <td style={{ ...TD_, textAlign:"right" }}>{r.loa||"—"}</td>
-                    <td style={{ ...TD_, textAlign:"right" }}>{r.beam||"—"}</td>
-                    <td style={{ ...TD_, textAlign:"right" }}>{r.draft??"—"}</td>
-                    <td style={{ ...TD_, textAlign:"right" }}>{r.segs||"—"}</td>
-                    <td style={TD_}>{r.flag||"—"}</td>
-                    <td style={TD_}>{r.ice_class||"—"}</td>
-                    <td style={{ ...TD_, color:IMO_COLORS[r.imo_type]||C.dim }}>{r.imo_type||"—"}</td>
-                    <td style={TD_} title={r.last_ex_name||""}>{r.last_ex_name||"—"}</td>
-                    <td style={TD_} title={r.comments||""}>{r.comments||"—"}</td>
-                    <td style={TD_} title={r.operator||""}>{r.operator||"—"}</td>
-                    <td style={TD_} title={r.owner||""}>{r.owner||"—"}</td>
-                    <td style={{...TD_,textAlign:"center",minWidth:74}}>
-                      {r.imo && outsiderImos.has(String(r.imo)) ? (
-                        <span
-                          title="This vessel is on the Outsiders list"
-                          style={{
-                            display:"inline-flex",alignItems:"center",gap:5,
-                            fontSize:9.5,fontWeight:800,color:"#f5a623",
-                            border:"1px solid rgba(245,166,35,.35)",
-                            background:"rgba(245,166,35,.08)",
-                            borderRadius:10,padding:"2px 6px"
-                          }}>
-                          <span style={{width:6,height:6,borderRadius:"50%",background:"#f5a623",display:"inline-block"}}/>
-                          OUT
-                        </span>
-                      ) : (
-                        <span title="Not on Outsiders list" style={{width:6,height:6,borderRadius:"50%",background:"rgba(120,160,200,.18)",display:"inline-block"}}/>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {!pageRows.length && !loading && (
-                <tr><td style={TD_} colSpan={20}>No vessels match current search/filters.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+
       </>
       )}
     </div>
