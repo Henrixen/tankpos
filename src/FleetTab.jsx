@@ -757,19 +757,43 @@ export default function FleetTab() {
           )}
 
           <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
-            {selectedKeys.size>0 ? (
-              <>
-                <span style={{ fontSize:11, color:"#58a6ff", fontWeight:700 }}>{selectedKeys.size} selected</span>
-                <button style={CHIP(true,"#f5a623")} onClick={addSelectedFleetToOutsiders}>→ Add to Outsiders ({selectedKeys.size})</button>
-                <button style={CHIP(true,"#4fc3f7")} onClick={exportCSV}>⬇ Export CSV ({selectedKeys.size})</button>
-                <button style={CHIP(false)} onClick={deselectAllVisible}>Clear selection</button>
-              </>
-            ) : (
-              <>
-                <button style={CHIP(false)} onClick={selectAllVisible}>☑ Select all</button>
-                <button style={CHIP(false,"#4fc3f7")} onClick={exportCSV}>⬇ Export CSV</button>
-              </>
-            )}
+            <div style={{display:"flex",gap:8,alignItems:"center",minWidth:455,justifyContent:"flex-end"}}>
+              <span style={{
+                fontSize:11,color:"#58a6ff",fontWeight:700,
+                minWidth:64,textAlign:"right",
+                visibility:selectedKeys.size>0?"visible":"hidden"
+              }}>
+                {selectedKeys.size} selected
+              </span>
+
+              <button
+                style={{
+                  ...CHIP(selectedKeys.size>0,"#f5a623"),
+                  minWidth:154,
+                  visibility:selectedKeys.size>0?"visible":"hidden"
+                }}
+                onClick={addSelectedFleetToOutsiders}
+                disabled={!selectedKeys.size}>
+                → Add to Outsiders ({selectedKeys.size})
+              </button>
+
+              <button
+                style={{...CHIP(selectedKeys.size>0,"#4fc3f7"),minWidth:112}}
+                onClick={exportCSV}>
+                ↓ Export CSV{selectedKeys.size>0?` (${selectedKeys.size})`:""}
+              </button>
+
+              <button
+                style={{
+                  ...CHIP(false),
+                  minWidth:100,
+                  visibility:selectedKeys.size>0?"visible":"hidden"
+                }}
+                onClick={deselectAllVisible}
+                disabled={!selectedKeys.size}>
+                Clear selection
+              </button>
+            </div>
             {outsiderSaveStatus&&<span style={{fontSize:11,color:"#f5a623",fontWeight:700}}>{outsiderSaveStatus}</span>}
             <label style={{ fontSize:11, color:C.faint, display:"flex", alignItems:"center", gap:4, cursor:"pointer" }}>
               <input type="checkbox" checked={includeStatsInCSV} onChange={e=>setIncludeStatsInCSV(e.target.checked)}/>
