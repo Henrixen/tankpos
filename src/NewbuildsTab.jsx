@@ -423,12 +423,18 @@ export default function NewbuildsTab(){
   async function saveShipComment(n,value){
     const vessel_key=stableShipKey(n);
     const previous=shipComments[vessel_key]||"";
+    const nextValue=value??"";
+
+    // Optimistic UI update: show the new/deleted comment immediately so the
+    // cell never flashes back to "add comment" while Supabase is saving.
+    setShipComments(prev=>({...prev,[vessel_key]:nextValue}));
+
     const payload={
       vessel_key,
       imo:n.imo||null,
       vessel:n.vessel||null,
       dwt:Number(n.dwt)||null,
-      comment:value||null,
+      comment:nextValue||null,
       updated_at:new Date().toISOString(),
     };
 
@@ -436,7 +442,7 @@ export default function NewbuildsTab(){
       .from("newbuilds_notes")
       .upsert(payload,{onConflict:"vessel_key"})
       .select("vessel_key,comment")
-      .single();
+      .maybeSingle();
 
     if(error){
       console.error("newbuild comment save failed:",{
@@ -445,14 +451,18 @@ export default function NewbuildsTab(){
         message:error.message,
         details:error.details,
         hint:error.hint,
-        vessel_key,
+        vessel_key
       });
+
+      // Revert only if the save actually failed.
       setShipComments(prev=>({...prev,[vessel_key]:previous}));
-      window.alert(`Comment save failed${status?` (${status})`:""}: ${error.message||"Supabase rejected the write."}`);
+      setCommentSaveError(`Comment save failed${error.message?`: ${error.message}`:""}`);
+      setTimeout(()=>setCommentSaveError(null),3500);
       return false;
     }
 
-    setShipComments(prev=>({...prev,[vessel_key]:data?.comment??value??""}));
+    // Keep server-returned value in sync (normally identical to nextValue).
+    setShipComments(prev=>({...prev,[vessel_key]:data?.comment??nextValue}));
     return true;
   }
 
