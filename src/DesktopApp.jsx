@@ -1415,15 +1415,82 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [savedVessels,setSavedVessels]=useState(()=>{
     try{return new Set(JSON.parse(localStorage.getItem("signal_saved_vessels")||"[]"));}catch{return new Set();}
   });
+
+  // Saved/starred positions are tiny settings data. Keep them in Supabase so
+  // they sync across devices and do not depend on localStorage having free
+  // quota. localStorage is only a best-effort cache.
+  useEffect(()=>{
+    let alive=true;
+    (async()=>{
+      try{
+        const {data,error}=await supabase
+          .from("tag_settings")
+          .select("value")
+          .eq("key","saved_vessels")
+          .maybeSingle();
+
+        if(!error && alive && Array.isArray(data?.value)){
+          const next=new Set(data.value);
+          setSavedVessels(next);
+          try{
+            localStorage.setItem("signal_saved_vessels",JSON.stringify([...next]));
+          }catch(e){
+            console.warn("saved vessels local cache unavailable:",e?.name||e);
+          }
+        }
+      }catch(e){
+        console.warn("saved vessels cloud load failed:",e);
+      }
+    })();
+    return()=>{alive=false;};
+  },[]);
+
+  function persistSavedVessels(next){
+    const arr=[...next];
+
+    // Never let a full browser cache break the UI.
+    try{
+      localStorage.setItem("signal_saved_vessels",JSON.stringify(arr));
+    }catch(e){
+      console.warn("saved vessels local cache unavailable:",e?.name||e);
+    }
+
+    supabase
+      .from("tag_settings")
+      .upsert({
+        key:"saved_vessels",
+        value:arr,
+        updated_at:new Date().toISOString()
+      },{onConflict:"key"})
+      .then(({error})=>{
+        if(error) console.error("saved vessels cloud save failed:",error);
+      });
+  }
+
   function toggleSavedVessel(name){
     setSavedVessels(prev=>{
       const next=new Set(prev);
       next.has(name)?next.delete(name):next.add(name);
-      localStorage.setItem("signal_saved_vessels",JSON.stringify([...next]));
+      persistSavedVessels(next);
       return next;
     });
   }
-  function clearSavedVessels(){setSavedVessels(new Set());localStorage.removeItem("signal_saved_vessels");}
+
+  function clearSavedVessels(){
+    const next=new Set();
+    setSavedVessels(next);
+    try{localStorage.removeItem("signal_saved_vessels");}catch{}
+    supabase
+      .from("tag_settings")
+      .upsert({
+        key:"saved_vessels",
+        value:[],
+        updated_at:new Date().toISOString()
+      },{onConflict:"key"})
+      .then(({error})=>{
+        if(error) console.error("saved vessels cloud clear failed:",error);
+      });
+  }
   // Inter UKC config — loaded from localStorage (editable in Settings)
   const [showSavedOnly,setShowSavedOnly]=useState(false);
   const [fixingPanelTab,setFixingPanelTab]=useState("History");
