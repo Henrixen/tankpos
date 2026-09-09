@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { C } from "./constants";
-import { loadImg, normaliseQty, rollOpenDateForward, dbLookup } from "./utils";
+import { loadImg, normaliseQty, rollOpenDateForward, dbLookup, resolveVesselName } from "./utils";
 import { apiCall, ocrImage, parsePos, parseCargo } from "./api";
 
 function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vesselDB = {}}) {
@@ -103,6 +103,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
   const stamped=p.map(v=>{
     const vesselKey = v.vessel?.toUpperCase();
     const dbVessel = dbLookup(v.vessel, vdb);
+    const canonicalVessel = resolveVesselName(v.vessel, vdb);
     
     if (dbVessel) {
       console.log("Found spec for", vesselKey, ":", dbVessel.ice_class, dbVessel.segment);
@@ -110,6 +111,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
     
     return {
       ...v,
+      vessel: canonicalVessel,
       date: v.openPort==="EMPLOYED" ? v.date : rollOpenDateForward(v.date, baseDate),
       updatedAt: ts,
       // Keep coating at top level because Positions/Fleet UI reads v.coating.
