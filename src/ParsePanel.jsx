@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { C } from "./constants";
-import { loadImg, normaliseQty, rollOpenDateForward } from "./utils";
+import { loadImg, normaliseQty, rollOpenDateForward, dbLookup } from "./utils";
 import { apiCall, ocrImage, parsePos, parseCargo } from "./api";
 
-function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vesselDB = {},compactToolbar=false,selectedParseTags=[]}) {
+function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vesselDB = {}}) {
   const [posDate, setPosDate] = useState(() => {const d=new Date();return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();});
   const [mode,setMode]=useState(lockedMode||"pos");
   const [text,setText]=useState("");const [img,setImg]=useState(null);
@@ -66,8 +66,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
           const cUpdated=fnd(["updated date","updated","date updated","last updated"]);
           const rawUpd=r[cUpdated];
           const addedAt=rawUpd instanceof Date?rawUpd.toISOString():rawUpd?new Date(rawUpd).toISOString()||new Date().toISOString():new Date().toISOString();
-          const tags=[...new Set((selectedParseTags||[]).filter(Boolean))];
-          return {id:"xls-"+Date.now()+"-"+idx+"-"+Math.random().toString(36).slice(2,5),charterer:String(r[cCharterer]||"").trim(),vessel,qty:fmtQ(r[cQty]),cargo:String(r[cProduct]||"").trim().toUpperCase(),load:String(r[cLoad]||"").trim(),disch:String(r[cDisch]||"").trim(),from:ls,to:le,freight:String(r[cFreight]||"").trim(),comment:String(r[cComment]||"").trim(),status,updated:addedAt,...(tags.length?{tags,tag:tags.join(", ")}:{})};
+          return {id:"xls-"+Date.now()+"-"+idx+"-"+Math.random().toString(36).slice(2,5),charterer:String(r[cCharterer]||"").trim(),vessel,qty:fmtQ(r[cQty]),cargo:String(r[cProduct]||"").trim().toUpperCase(),load:String(r[cLoad]||"").trim(),disch:String(r[cDisch]||"").trim(),from:ls,to:le,freight:String(r[cFreight]||"").trim(),comment:String(r[cComment]||"").trim(),status,updated:addedAt};
         }).filter(r=>r.charterer||r.vessel||r.load);
         if(!parsed.length){setStatus({t:"error",m:"No cargo rows found. Check column headers."});return;}
         const lk=onAddCargoes(parsed);
@@ -103,7 +102,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
   // Enrich with vesselDB spec data before saving
   const stamped=p.map(v=>{
     const vesselKey = v.vessel?.toUpperCase();
-    const dbVessel = vdb[vesselKey?.toLowerCase()];
+    const dbVessel = dbLookup(v.vessel, vdb);
     
     if (dbVessel) {
       console.log("Found spec for", vesselKey, ":", dbVessel.ice_class, dbVessel.segment);
@@ -113,11 +112,13 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
       ...v,
       date: v.openPort==="EMPLOYED" ? v.date : rollOpenDateForward(v.date, baseDate),
       updatedAt: ts,
+      // Keep coating at top level because Positions/Fleet UI reads v.coating.
+      coating: v.coating || dbVessel?.coating || dbVessel?.coated || null,
       // Add spec data from vesselDB if available
       spec: dbVessel ? {
         iceClass: dbVessel.ice_class || null,
         lastCargo: dbVessel.last_cargo || null,
-        coated: dbVessel.coated || null,
+        coated: dbVessel.coating || dbVessel.coated || null,
         segment: dbVessel.segment || null,
       } : v.spec || null
     };
@@ -134,15 +135,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
       }else{
         const p=await parseCargo(text||"(img)",img,known);if(!p?.length){setStatus({t:"error",m:"No fixture data found."});return;}
         const [dd,mm,yyyy]=posDate.split("/");const ts=(dd&&mm&&yyyy)?new Date(`${yyyy}-${mm}-${dd}`).toISOString():new Date().toISOString();
-        const stamped=p.map(v=>{
-          const parserTags = Array.isArray(v.tags) ? v.tags : (v.tag ? [v.tag] : []);
-          const tags = [...new Set([...parserTags, ...(selectedParseTags || [])].filter(Boolean))];
-          return {
-            ...v,
-            updated:ts,
-            ...(tags.length ? { tags, tag: tags.join(", ") } : {})
-          };
-        });
+        const stamped=p.map(v=>({...v,updated:ts}));
         const lk=onAddCargoes(stamped);setText("");setImg(null);
         setStatus({t:"success",m:"✓ "+p.length+" fixture(s)"+(lk?", "+lk+" pos updated":"")});
       }
@@ -162,25 +155,11 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
         placeholder={mode==="pos"?"Paste positions or Ctrl+V screenshot…":"Paste cargo fixtures or Ctrl+V screenshot…"}
         style={{width:"100%",minHeight:130,background:C.bg2,border:"none",color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
         <div style={{padding:"5px 8px",borderTop:"1px solid "+C.bd2,display:"flex",gap:5,alignItems:"center"}}>
-        <button onClick={go} disabled={busy} style={{
-          flex:1,
-          minWidth:compactToolbar?112:0,
-          background:busy?"rgba(88,166,255,0.08)":"rgba(88,166,255,0.14)",
-          border:"1px solid "+(busy?"rgba(88,166,255,0.2)":"rgba(88,166,255,0.5)"),
-          borderRadius:5,
-          color:busy?"rgba(88,166,255,0.45)":"#a8d4ff",
-          fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px 8px",
-          cursor:busy?"default":"pointer",letterSpacing:"0.04em",transition:"all 0.15s",
-          whiteSpace:"nowrap",lineHeight:1.15
-        }}>
+        <button onClick={go} disabled={busy} style={{flex:1,background:busy?"#1a4a8f":"#1f6feb",border:"none",borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px 0",cursor:busy?"default":"pointer"}}>
           {busy?"⟳ Processing…":"▶ Parse & Add"}
         </button>
-
-        {!compactToolbar&&(
-          <button onClick={()=>fRef.current?.click()} title="Upload image / screenshot" style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 10px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>🖼</button>
-        )}
-
-        {(mode==="pos"||mode==="cargo")&&<input type="text" value={posDate} onChange={e=>setPosDate(e.target.value)} placeholder="DD/MM/YYYY" title={mode==="pos"?"Date of this position list":"Date of this cargo list"} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:3,color:C.dim,fontFamily:"inherit",fontSize:compactToolbar?11:12,padding:"2px 5px",outline:"none",width:compactToolbar?88:118,flexShrink:0}}/>}
+        <button onClick={()=>fRef.current?.click()} title="Upload image / screenshot" style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 10px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>🖼</button>
+        {(mode==="pos"||mode==="cargo")&&<input type="text" value={posDate} onChange={e=>setPosDate(e.target.value)} placeholder="DD/MM/YYYY" title={mode==="pos"?"Date of this position list":"Date of this cargo list"} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:3,color:C.dim,fontFamily:"inherit",fontSize:12,padding:"2px 5px",outline:"none",width:118,flexShrink:0}}/>}
         <button onClick={()=>xlsRef.current?.click()} title="Upload Excel / CSV" style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 8px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>📊</button>
         <input ref={fRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
         <input ref={xlsRef} type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}} onChange={e=>handleXls(e.target.files?.[0])}/>
