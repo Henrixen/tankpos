@@ -55,9 +55,42 @@ export const stripHtml = s => {
   return out.replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&nbsp;/g," ").replace(/&#\d+;/g,"").trim();
 };
 
+// Common Stenersen position-list shorthand.
+// Position lists often omit the "STEN" prefix, while vessels_db stores the
+// canonical full name. Keep this explicit so e.g. BALTIC never accidentally
+// resolves to another vessel containing the same word.
+const STENERSEN_ALIASES = {
+  "ARNOLD":   "STEN ARNOLD",
+  "AURORA":   "STEN AURORA",
+  "BALTIC":   "STEN BALTIC",
+  "BOTHNIA":  "STEN BOTHNIA",
+  "FRIGG":    "STEN FRIGG",
+  "HIDRA":    "STEN HIDRA",
+  "MOSTER":   "STEN MOSTER",
+  "NORDIC":   "STEN NORDIC",
+  "PONTOS":   "STEN PONTOS",
+  "POSEIDON": "STEN POSEIDON",
+  "SKAGEN":   "STEN SKAGEN",
+  "SUOMI":    "STEN SUOMI",
+  "TRITON":   "STEN TRITON",
+};
+
+
 export function dbLookup(name, vesselDB) {
   if (!name || !vesselDB) return null;
-  const k = name.toLowerCase().trim();
+
+  const rawUpper = String(name).toUpperCase().replace(/\s+/g," ").trim();
+  const alias = typeof STENERSEN_ALIASES !== "undefined" ? STENERSEN_ALIASES[rawUpper] : null;
+  if (alias) {
+    const aliasKey = alias.toLowerCase();
+    if (vesselDB[aliasKey]) return vesselDB[aliasKey];
+    const aliasFound = Object.keys(vesselDB).find(dk =>
+      String(dk).toLowerCase().replace(/[.-]/g," ").replace(/\s+/g," ").trim() === aliasKey
+    );
+    if (aliasFound) return vesselDB[aliasFound];
+  }
+
+  const k = String(name).toLowerCase().trim();
   const clean = k.replace(/[.-]/g," ").replace(/\s+/g," ").trim();
   if (vesselDB[clean]) return vesselDB[clean];
   if (vesselDB[k]) return vesselDB[k];
@@ -97,12 +130,53 @@ export function dbLookup(name, vesselDB) {
   return null;
 }
 
+
+export function resolveVesselName(name, vesselDB) {
+  if (!name || !vesselDB) return name;
+
+  const original = String(name).trim();
+  const upper = original.toUpperCase().replace(/\s+/g," ").trim();
+
+  const alias = STENERSEN_ALIASES[upper];
+  if (alias) {
+    const canonicalHit = dbLookup(alias, vesselDB);
+    if (canonicalHit) {
+      return canonicalHit.vessel ? String(canonicalHit.vessel).trim() : alias;
+    }
+  }
+
+  const hit = dbLookup(original, vesselDB);
+  if (!hit) return original;
+
+  // vessels_db rows normally carry the canonical vessel name.
+  if (hit.vessel) return String(hit.vessel).trim();
+
+  // Fallback when vesselDB is keyed by canonical vessel name but the row
+  // itself does not contain a vessel field.
+  const clean = original.toLowerCase().replace(/[.-]/g," ").replace(/\s+/g," ").trim();
+  const matches = Object.keys(vesselDB).filter(dk => {
+    const dclean = String(dk).toLowerCase().replace(/[.-]/g," ").replace(/\s+/g," ").trim();
+    return dclean === clean ||
+           dclean.endsWith(" " + clean) ||
+           dclean.startsWith(clean + " ");
+  });
+
+  if (matches.length === 1) {
+    // Preserve fleet-style capitalization for common STEN aliases.
+    const canonical = matches[0];
+    return canonical.replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  return original;
+}
+
 export function enrichV(v, vesselDB) {
   const d = dbLookup(v.vessel, vesselDB);
   if (!d) return v;
   const resolvedOp = v.operatorManual ? v.operator : (v.operator || d.operator || null);
   return {
     ...v,
+    vessel:   resolveVesselName(v.vessel, vesselDB),
     built:    v.built    || d.built    || null,
     dwt:      (v.dwt&&parseInt(String(v.dwt).replace(/[^0-9]/g,""))>=1000?v.dwt:null) || d.dwt || v.dwt || null,
     loa:      v.loa      || d.loa      || null,
