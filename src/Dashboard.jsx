@@ -14,13 +14,40 @@ const ROUTES = [
 
 const FFA_PERIODS = ["Feb/26","Mar/26","Apr/26","Q1/26","Q2/26","AVE/25"];
 
+const REGION_ORDER = ["NWE / UKC","Baltic","Med / Black Sea","USG / USEC / USAC","Caribs","MEG / WCI / Red Sea","SEA / FEA","Africa","South America","Other"];
+const REGION_COLORS = {
+  "NWE / UKC":"#58a6ff","Baltic":"#ff6b6b","Med / Black Sea":"#fd79a8",
+  "USG / USEC / USAC":"#f5a623","Caribs":"#a78bfa","MEG / WCI / Red Sea":"#22d3ee",
+  "SEA / FEA":"#3fb950","Africa":"#bc8cff","South America":"#ff9f43","Other":"rgba(160,200,255,.45)"
+};
+function parseDashboardDate(s, reference=new Date()){
+  if(!s)return null;
+  const raw=String(s).trim();
+  const m=raw.match(/^(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(?:\s+(\d{2,4}))?$/i);
+  if(m){
+    const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+    let year=m[3]?Number(m[3]):reference.getFullYear(); if(year<100)year+=2000;
+    return new Date(year,months[m[2].toLowerCase()],Number(m[1]));
+  }
+  const d=new Date(raw); return isNaN(d)?null:d;
+}
+function fmtDwtCompact(n){
+  const x=Number(n||0); if(!x)return "—";
+  if(x>=1000000)return (x/1000000).toFixed(x>=10000000?1:2).replace(/\.?0+$/,"")+"m";
+  if(x>=1000)return Math.round(x/1000).toLocaleString("en-US")+"k";
+  return Math.round(x).toLocaleString("en-US");
+}
+function fmtSigned(n,fmt=x=>String(x)){
+  if(n==null||!Number.isFinite(Number(n)))return "—";
+  const x=Number(n); return (x>0?"+":"")+fmt(x);
+}
+
 function WSTracker() {
   const [data,    setData]    = useState(null);
   const [pasteText, setPaste] = useState("");
   const [img,       setImg]    = useState(null);
   const [parsing,  setParsing] = useState(false);
   const [status,   setStatus]  = useState(null);
-  const [view,     setView]    = useState("table");
   const [wsNote,   setWsNote]  = useState("");
   const wsFileRef = useRef(null);
 
@@ -198,10 +225,10 @@ ${text}`}]
         <textarea value={pasteText} onChange={e=>setPaste(e.target.value)}
           onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
           placeholder={"TC2 (CONT/TA-37)  127.81(+1.87)  FEB/26: 130.50  MAR/26: 142.50  Q1: 135.50\nTC14 (USG/UKC-38)  270.71(+8.57)\nTC23 220.50  TC6 140.00\n\n- or Ctrl+V a screenshot -"}
-          style={{width:"100%",minHeight:180,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
+          style={{width:"100%",minHeight:72,maxHeight:96,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
         <input ref={wsFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
         <div style={{display:"flex",gap:6,marginTop:5,alignItems:"center"}}>
-          <button onClick={parseWS} disabled={parsing} style={{background:parsing?"#1a4a8f":"#1f6feb",border:"none",borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px 18px",cursor:parsing?"default":"pointer"}}>
+          <button onClick={parseWS} disabled={parsing} style={{background:parsing?"rgba(88,166,255,.06)":"rgba(88,166,255,.11)",border:"1px solid rgba(88,166,255,.36)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px 16px",cursor:parsing?"default":"pointer"}}>
             {parsing?"⟳ "+(img?"Reading image…":"Parsing…"):"▶ Parse & Save"}
           </button>
           <button onClick={()=>wsFileRef.current?.click()} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"4px 8px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>📷</button>
@@ -222,105 +249,36 @@ ${text}`}]
       </div>
 
       {data&&<>
-        {/* View toggle */}
-        <div style={{display:"flex",gap:5,marginBottom:10}}>
-          {[["table","📋 Table"],["chart","📈 Chart"]].map(([v,l])=>(
-            <button key={v} onClick={()=>setView(v)} style={{padding:"4px 12px",border:"1px solid "+(view===v?C.blue:C.bd),borderRadius:4,background:view===v?"rgba(88,166,255,.12)":"transparent",color:view===v?C.blue:C.dim,fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:"pointer"}}>{l}</button>
-          ))}
-          <span style={{marginLeft:"auto",fontSize:12,color:C.faint,alignSelf:"center"}}>Last update: {data.lastUpdate||"—"}</span>
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
+          <span style={{fontSize:11,color:C.faint}}>Last update: {data.lastUpdate||"—"}</span>
         </div>
-
-        {/* TABLE VIEW */}
-        {view==="table"&&<>
-          {/* Spot table */}
-          <div style={{marginBottom:12}}>
-            <div style={{fontSize:12,color:C.faint,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>Current Spot</div>
+        <div style={{display:"grid",gridTemplateColumns:"minmax(500px,1.15fr) minmax(420px,1fr)",gap:12}}>
+          <div>
+            <div style={{fontSize:11,color:C.faint,fontWeight:700,textTransform:"uppercase",marginBottom:5}}>Current spot + FFA</div>
             <div style={{overflowX:"auto"}}>
-              <table style={{borderCollapse:"collapse",fontSize:12,minWidth:400}}>
-                <thead>
-                  <tr>
-                    <th style={{...th2,textAlign:"left"}}>Route</th>
-                    <th style={th2}>WS / $/mt</th>
-                    <th style={th2}>Change</th>
-                    <th style={{...th2,color:C.dim}}>Description</th>
-                    <th style={th2}>Updated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ROUTES.map(r=>{
-                    const s=data.spot?.[r.id];
-                    const chg=s?.change;
-                    const chgCol=chg>0?C.green:chg<0?C.red:C.dim;
-                    return(
-                      <tr key={r.id} style={{background:"transparent"}}>
-                        <td style={{...td2,textAlign:"left",fontWeight:700,color:routeColors[r.id]||C.blue}}>{r.name}</td>
-                        <td style={{...td2,fontWeight:800,color:C.tx,fontSize:12}}>{s?.ws!=null?s.ws.toFixed(2):"—"}</td>
-                        <td style={{...td2,color:chgCol,fontWeight:700}}>{chg!=null?(chg>=0?"+":"")+chg.toFixed(2):"—"}</td>
-                        <td style={{...td2,color:C.faint,fontSize:12}}>{r.desc}</td>
-                        <td style={{...td2,color:C.faint,fontSize:12}}>{s?.updatedAt||"—"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
+              <table style={{borderCollapse:"collapse",fontSize:11,width:"100%"}}>
+                <thead><tr><th style={{...th2,textAlign:"left"}}>Route</th><th style={th2}>Spot</th><th style={th2}>Day</th><th style={{...th2,textAlign:"left"}}>Class / Route</th><th style={th2}>Updated</th></tr></thead>
+                <tbody>{ROUTES.map(r=>{const q=data.spot?.[r.id],chg=q?.change,cc=chg>0?C.green:chg<0?C.red:C.dim,cls=(r.id==="TC6"||r.id==="TC23")?"Handy":"MR";return <tr key={r.id}>
+                  <td style={{...td2,textAlign:"left",fontWeight:800,color:routeColors[r.id]||C.blue}}>{r.id}</td>
+                  <td style={{...td2,fontWeight:800,color:C.tx}}>{q?.ws!=null?q.ws.toFixed(2):"—"}</td>
+                  <td style={{...td2,color:cc,fontWeight:700}}>{chg!=null?(chg>=0?"+":"")+chg.toFixed(2):"—"}</td>
+                  <td style={{...td2,textAlign:"left",color:C.faint}}><span style={{color:cls==="Handy"?C.green:C.blue,fontWeight:700}}>{cls}</span> · {r.desc}</td>
+                  <td style={{...td2,color:C.faint,fontSize:10}}>{q?.updatedAt||"—"}</td></tr>})}</tbody>
               </table>
             </div>
           </div>
-
-          {/* FFA table */}
-          {Object.keys(data.ffa||{}).length>0&&(
-            <div>
-              <div style={{fontSize:12,color:C.faint,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>FFA Forward Curve (WS)</div>
-              <div style={{overflowX:"auto"}}>
-                <table style={{borderCollapse:"collapse",fontSize:12}}>
-                  <thead>
-                    <tr>
-                      <th style={{...th2,textAlign:"left",minWidth:60}}>Route</th>
-                      {(()=>{
-                        const allKeys=new Set();
-                        Object.values(data.ffa||{}).forEach(f=>Object.keys(f).filter(k=>k!=="updatedAt").forEach(k=>allKeys.add(k)));
-                        const periodOrder=['Jan26','Feb26','Mar26','Apr26','May26','Jun26','Jul26','Aug26','Sep26','Oct26','Nov26','Dec26','Q126','Q226','Q326','Q426','AVE25','AVE26'];
-                        const sorted=[...allKeys].sort((a,b)=>{const ai=periodOrder.indexOf(a),bi=periodOrder.indexOf(b);return(ai===-1?99:ai)-(bi===-1?99:bi);});
-                        return sorted.map(p=>(<th key={p} style={th2}>{p}</th>));
-                      })()}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ROUTES.filter(r=>data.ffa?.[r.id]).map(r=>{
-                      const f=data.ffa[r.id]||{};
-                      const spot=data.spot?.[r.id]?.ws;
-                      const allKeys=new Set();
-                      Object.values(data.ffa||{}).forEach(fx=>Object.keys(fx).filter(k=>k!=="updatedAt").forEach(k=>allKeys.add(k)));
-                      const periodOrder=['Jan26','Feb26','Mar26','Apr26','May26','Jun26','Jul26','Aug26','Sep26','Oct26','Nov26','Dec26','Q126','Q226','Q326','Q426','AVE25','AVE26'];
-                      const sorted=[...allKeys].sort((a,b)=>{const ai=periodOrder.indexOf(a),bi=periodOrder.indexOf(b);return(ai===-1?99:ai)-(bi===-1?99:bi);});
-                      return(
-                        <tr key={r.id}>
-                          <td style={{...td2,textAlign:"left",fontWeight:700,color:routeColors[r.id]||C.blue}}>{r.name}</td>
-                          {sorted.map(p=>{
-                            const v=f[p];
-                            const diff=v!=null&&spot!=null?v-spot:null;
-                            const col=diff==null?C.dim:diff>0?C.red:C.green;
-                            return(
-                              <td key={p} style={{...td2}}>
-                                {v!=null
-                                  ? <div>
-                                      <div style={{color:C.tx,fontWeight:600}}>{v.toFixed(1)}</div>
-                                      {diff!=null&&<div style={{fontSize:12,color:col}}>{diff>=0?"+":""}{diff.toFixed(1)}</div>}
-                                    </div>
-                                  : <span style={{color:C.faint}}>—</span>
-                                }
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div style={{fontSize:12,color:C.faint,marginTop:4}}>Small number = diff vs spot. Green = backwardation (below spot). Red = contango (above spot).</div>
+          <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:8}}>
+            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px"}}>
+              <div style={{fontSize:10,fontWeight:800,color:C.green,textTransform:"uppercase",marginBottom:3}}>Handy Worldscale · TC6 / TC23</div>
+              {histData.length>=2?<WSChart data={histData} routes={ROUTES.filter(r=>["TC6","TC23"].includes(r.id))} colors={routeColors} compact/>:<div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
             </div>
-          )}
-        </>}
+            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px"}}>
+              <div style={{fontSize:10,fontWeight:800,color:C.blue,textTransform:"uppercase",marginBottom:3}}>MR Worldscale · TC2 / TC14</div>
+              {histData.length>=2?<WSChart data={histData} routes={ROUTES.filter(r=>["TC2","TC14"].includes(r.id))} colors={routeColors} compact/>:<div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
+            </div>
+          </div>
+        </div>
+      </>}
 
         {/* CHART VIEW */}
         {view==="chart"&&histData.length>=2&&(
@@ -338,8 +296,8 @@ ${text}`}]
   );
 }
 
-function WSChart({data,routes,colors}) {
-  const W=700,H=200,PL=42,PR=16,PT=10,PB=28;
+function WSChart({data,routes,colors,compact=false}) {
+  const W=700,H=compact?112:200,PL=42,PR=16,PT=10,PB=compact?22:28;
   const iW=W-PL-PR,iH=H-PT-PB;
 
   // Get all WS values to find scale
@@ -491,6 +449,10 @@ function Dashboard({vessels, cargoes, history}) {
   const [bError, setBError] = useState(null);
   const [bFetched, setBFetched] = useState(false);
   const [bunkerHistory, setBunkerHistory] = useState([]); // New state for graph
+  const [regionHistory,setRegionHistory]=useState([]);
+  const [regionHistoryLoading,setRegionHistoryLoading]=useState(true);
+  const [regionHistoryError,setRegionHistoryError]=useState(null);
+  useEffect(()=>{let alive=true;(async()=>{try{const {data,error}=await supabase.rpc("dashboard_region_history");if(error)throw error;if(alive)setRegionHistory(data||[]);}catch(e){if(alive)setRegionHistoryError(e.message||"RPC failed");}finally{if(alive)setRegionHistoryLoading(false);}})();return()=>{alive=false;};},[]);
 
   // Part 5: Fetch all history entries from Supabase
   useEffect(() => {
@@ -586,51 +548,24 @@ function Dashboard({vessels, cargoes, history}) {
   
   // Helper to calculate days between fileDate and open date
   const calcFixingWindow = (v) => {
-    if (!v.fileDate || !v.date) return null;
-    
-    // Parse fileDate (should be ISO format like "2026-03-30")
-    const fileDt = new Date(v.updatedAt || v.fileDate);
-    if (isNaN(fileDt)) {
-      console.warn('Invalid fileDate:', v.fileDate, 'for vessel:', v.vessel);
-      return null;
+    if(!v?.date)return null;
+    const fileDt=parseDashboardDate(v.updatedAt||v.fileDate||new Date()); if(!fileDt)return null;
+    const openDt=parseDashboardDate(v.date,fileDt); if(!openDt)return null;
+    if(!/\b\d{2,4}\b/.test(String(v.date))){
+      const c=[new Date(fileDt.getFullYear()-1,openDt.getMonth(),openDt.getDate()),new Date(fileDt.getFullYear(),openDt.getMonth(),openDt.getDate()),new Date(fileDt.getFullYear()+1,openDt.getMonth(),openDt.getDate())];
+      c.sort((a,b)=>Math.abs(a-fileDt)-Math.abs(b-fileDt)); openDt.setTime(c[0].getTime());
     }
-    
-    // Parse openDate - try ISO first, then "DD Mon" format
-    let openDt = new Date(v.date);
-    if (isNaN(openDt)) {
-      // Try "DD Mon" format like "1 Apr"
-      const match = String(v.date).match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
-      if (match) {
-        const day = parseInt(match[1]);
-        const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
-        const month = months[match[2].toLowerCase()];
-        const year = fileDt.getFullYear(); // Use same year as fileDate
-        openDt = new Date(year, month, day);
-      }
-    }
-    
-    if (isNaN(openDt)) {
-      console.warn('Invalid openDate:', v.date, 'for vessel:', v.vessel);
-      return null;
-    }
-    
-    const diffMs = openDt - fileDt;
-    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-    
-    console.log('Vessel:', v.vessel, 'FileDate:', fileDt.toISOString().slice(0,10), 'OpenDate:', openDt.toISOString().slice(0,10), 'Diff:', diffDays);
-    
-    return diffDays;
+    const diff=Math.round((openDt-fileDt)/86400000);
+    return Math.abs(diff)<=120?diff:null;
   };
-  
+
   const withDays = openVessels.map(v => ({ ...v, days: calcFixingWindow(v) })).filter(v => v.days !== null);
   const fleetAvg = withDays.length ? Math.round(withDays.reduce((a,b)=>a+b.days,0)/withDays.length) : null;
 
-  // Region breakdown
-  const regionCounts = {};
-  for (const v of openVessels) {
-    const r = classifyRegion(v.openPort)||"Other";
-    regionCounts[r]=(regionCounts[r]||0)+1;
-  }
+  const regionByLabel={};
+  for(const row of regionHistory||[]){const lab=String(row.snapshot_label||"").toUpperCase();regionByLabel[lab]||={};regionByLabel[lab][row.region]={ships:Number(row.ships||0),dwt:Number(row.dwt||0),snapshotAt:row.snapshot_at};}
+  const currentRegionRows=REGION_ORDER.map(region=>({region,now:regionByLabel.NOW?.[region]||{ships:0,dwt:0},d14:regionByLabel["14D"]?.[region]||null,d30:regionByLabel["30D"]?.[region]||null,d90:regionByLabel["90D"]?.[region]||null})).filter(x=>x.now.ships||x.d14?.ships||x.d30?.ships||x.d90?.ships);
+  const latestPositionUpdate=(()=>{const ds=(vessels||[]).map(v=>parseDashboardDate(v.updatedAt||v.fileDate)).filter(Boolean);return ds.length?new Date(Math.max(...ds.map(d=>d.getTime()))):null;})();
 
   // Build chart data from history + today
   const today = new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"});
@@ -740,12 +675,9 @@ function Dashboard({vessels, cargoes, history}) {
       </div>
 
       {/* ── KPI row ── */}
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        {card("Fleet vessels",     vessels.length,                                          null,       D.blue)}
-        {card("Open / fixing",     openVessels.length,                                     null,       D.amber)}
-        {card("Fixing window",     fleetAvg!=null?(fleetAvg>=0?"+"+fleetAvg+"d":fleetAvg+"d"):null, "avg days until open", fleetAvg<0?D.green:fleetAvg<=7?D.amber:D.blue)}
-        {card("Fixed / subs",      vessels.filter(v=>v.openPort==="EMPLOYED").length,       null,       D.purple)}
-        {card("History snapshots", history.length,                                          "data points",D.faint)}
+      <div style={{display:"grid",gridTemplateColumns:"minmax(220px,.45fr) minmax(320px,1fr)",gap:8}}>
+        {card("Ships in positions",vessels.length,`${openVessels.length} currently open`,D.blue)}
+        {card("Last positions update",latestPositionUpdate?latestPositionUpdate.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"—",latestPositionUpdate?latestPositionUpdate.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})+" local":null,D.green)}
       </div>
 
       {/* ── Charts row ── */}
@@ -773,30 +705,27 @@ function Dashboard({vessels, cargoes, history}) {
       {/* ── Region + Bunkers row ── */}
       <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
 
-        {/* Region breakdown */}
+        {/* Historical region breakdown */}
         {panel(
           <>
-            {secHead("Open fleet by region")}
-            {Object.keys(regionCounts).length===0
-              ? <div style={{color:D.faint,fontSize:12}}>No open vessels</div>
-              : Object.entries(regionCounts).sort((a,b)=>b[1]-a[1]).map(([r,n])=>{
-                  const pct=Math.round(n/openVessels.length*100);
-                  const col={WCUK:D.blue,ECUK:D.green,CANAL:D.amber,BISCAY:D.purple,SKAW:"#ff9f43",BALTIC:D.red,Other:D.faint,MED:D.pink}[r]||D.dim;
-                  return(
-                    <div key={r} style={{marginBottom:8}}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                        <span style={{fontSize:12,fontWeight:700,color:col}}>{r}</span>
-                        <span style={{fontSize:11,color:D.faint}}>{n} vessel{n!==1?"s":""}</span>
-                      </div>
-                      <div style={{height:5,background:D.bg4,borderRadius:3,overflow:"hidden"}}>
-                        <div style={{height:"100%",width:pct+"%",background:col,borderRadius:3,transition:"width .4s",boxShadow:"0 0 6px "+col+"66"}}/>
-                      </div>
-                    </div>
-                  );
-                })
-            }
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+              {secHead("Open fleet by main region · historical tonnage")}
+              <span style={{fontSize:9,color:D.faint}}>NOW / 14D / 30D / 90D</span>
+            </div>
+            {regionHistoryLoading?<div style={{fontSize:11,color:D.faint,padding:"12px 0"}}>Loading historical tonnage…</div>:
+             regionHistoryError?<div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Run the Supabase RPC SQL first: {regionHistoryError}</div>:
+             <>
+              <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 60px 78px 110px 110px 110px",gap:8,padding:"0 2px 6px",fontSize:9,fontWeight:800,color:D.faint,textTransform:"uppercase"}}>
+                <span>Region</span><span style={{textAlign:"right"}}>Ships</span><span style={{textAlign:"right"}}>DWT</span><span style={{textAlign:"right"}}>vs 14d</span><span style={{textAlign:"right"}}>vs 30d</span><span style={{textAlign:"right"}}>vs 90d</span>
+              </div>
+              {currentRegionRows.map(({region,now,d14,d30,d90})=>{const max=Math.max(1,...currentRegionRows.map(x=>x.now.ships));const col=REGION_COLORS[region]||D.dim;const delta=p=>p?<span style={{color:(now.ships-p.ships)>0?D.amber:(now.ships-p.ships)<0?D.green:D.faint,fontWeight:700}}>{fmtSigned(now.ships-p.ships)} · {fmtSigned(now.dwt-p.dwt,fmtDwtCompact)}</span>:<span style={{color:D.faint}}>—</span>;return <div key={region} style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 60px 78px 110px 110px 110px",gap:8,alignItems:"center",padding:"5px 2px",borderTop:"1px solid "+D.border}}>
+                <div><span style={{fontSize:11,fontWeight:800,color:col}}>{region}</span><div style={{height:4,background:D.bg4,borderRadius:99,overflow:"hidden",marginTop:3}}><div style={{height:"100%",width:Math.max(3,Math.round(now.ships/max*100))+"%",background:col,borderRadius:99}}/></div></div>
+                <span style={{fontSize:11,textAlign:"right",color:D.tx,fontWeight:800}}>{now.ships}</span><span style={{fontSize:11,textAlign:"right",color:D.dim}}>{fmtDwtCompact(now.dwt)}</span><span style={{fontSize:10,textAlign:"right"}}>{delta(d14)}</span><span style={{fontSize:10,textAlign:"right"}}>{delta(d30)}</span><span style={{fontSize:10,textAlign:"right"}}>{delta(d90)}</span>
+              </div>})}
+              <div style={{fontSize:9,color:D.faint,marginTop:7}}>Latest report per vessel at each snapshot, deduplicated; stale reports older than 14 days excluded.</div>
+             </>}
           </>,
-          {flex:"1 1 260px"}
+          {flex:"1 1 520px",minWidth:520}
         )}
 
         {/* Bunker prices */}
