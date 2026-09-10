@@ -42,10 +42,10 @@ const TabFallback = ()=>null;
 const NAV_KEY="signal_navigation_config";
 const NAV_CLOUD_KEY="navigation_config";
 const NAV_ITEMS=[
- ["pos","Positions","#58a6ff","⌖"],["cargo","Cargoes","#faa356","▤"],["fix","Fixing","#c792ea","✓"],["tcv","Time Charter","#fb923c","◷"],
- ["clients","Clients","#a8e6a3","♙"],["matrix","Matrix","#43e97b","▦"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","⚡"],
- ["dash","Dashboard","#43e97b","▥"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▧"],["map","Freight Map","#10b981","⌁"],
- ["cal","Calendar","#4fc3f7","□"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","◈"],["newbuilds","Newbuilds","#fbbf24","△"]
+ ["pos","Positions","#58a6ff","🚢"],["cargo","Cargoes","#faa356","🛢"],["fix","Fixing","#c792ea","◎"],["tcv","Time Charter","#fb923c","◷"],
+ ["clients","Clients","#a8e6a3","♟"],["matrix","Matrix","#43e97b","⌗"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","∑"],
+ ["dash","Dashboard","#43e97b","▦"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▤"],["map","Freight Map","#10b981","⌁"],
+ ["cal","Calendar","#4fc3f7","◫"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","⚓"],["newbuilds","Newbuilds","#fbbf24","△"]
 ];
 function navDefault(){return{mode:"classic",collapsed:false,order:NAV_ITEMS.map(x=>x[0]),hidden:[],groups:[
  {id:"market",label:"Market",tabs:["pos","cargo","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
@@ -1674,13 +1674,43 @@ const cargoColumns = [
 
   function openBulkPositionTags(){
     if(!selVessels.size)return;
+
     if(bulkPosTagBtnRef.current){
       const r=bulkPosTagBtnRef.current.getBoundingClientRect();
-      const popW=180;
-      let left=r.left;
-      if(left+popW>window.innerWidth-8)left=Math.max(8,r.right-popW);
-      setBulkPosTagPos({top:r.bottom+4,left});
+
+      // Use the exact same zoom-aware anchoring as the Cargo bulk-tag popup.
+      const rawZoom=parseFloat(
+        getComputedStyle(document.body).zoom ||
+        document.body.style.zoom ||
+        "1"
+      );
+      const zoom=Number.isFinite(rawZoom)&&rawZoom>0 ? rawZoom : 1;
+
+      const popWVisual=190*zoom;
+      const popHVisual=Math.min(360,58+getTagListFor("position").length*31)*zoom;
+      const marginVisual=12;
+
+      // Align directly under the + Tag button.
+      let leftVisual=r.left;
+      if(leftVisual+popWVisual>window.innerWidth-marginVisual){
+        leftVisual=r.right-popWVisual;
+      }
+      leftVisual=Math.max(
+        marginVisual,
+        Math.min(leftVisual,window.innerWidth-popWVisual-marginVisual)
+      );
+
+      let topVisual=r.bottom+5;
+      if(topVisual+popHVisual>window.innerHeight-marginVisual){
+        topVisual=Math.max(marginVisual,r.top-popHVisual-5);
+      }
+
+      setBulkPosTagPos({
+        top:topVisual/zoom,
+        left:leftVisual/zoom
+      });
     }
+
     setBulkPosTagOpen(v=>!v);
   }
 
@@ -2988,13 +3018,13 @@ const filtV=useMemo(()=>{
                     <div style={{position:"fixed",inset:0,zIndex:19990}} onClick={()=>setBulkPosTagOpen(false)}/>
                     <div style={{
                       position:"fixed",top:bulkPosTagPos.top,left:bulkPosTagPos.left,zIndex:19999,
-                      width:180,maxHeight:`calc(100vh - ${bulkPosTagPos.top+10}px)`,overflowY:"auto",
+                      width:190,maxHeight:360,overflowY:"auto",overflowX:"hidden",
                       background:"#0a1628",border:"1px solid rgba(88,166,255,0.34)",borderRadius:7,
                       padding:6,boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
                       display:"flex",flexDirection:"column",gap:3
                     }}>
                       <div style={{fontSize:9,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",padding:"2px 3px 5px"}}>
-                        Tag {selVessels.size} selected
+                        Add {selVessels.size} selected to tag
                       </div>
                       {getTagListFor("position").map(t=>{
                         const col=getTagColor(t);
