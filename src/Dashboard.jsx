@@ -219,79 +219,78 @@ ${text}`}]
 
   return(
     <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"14px 16px"}}>
-      {secHead("📊 Worldscale Spot + FFA Tracker")}
-
-      {/* Paste input */}
-      <div style={{marginBottom:5}}>
-        <div style={{fontSize:11,color:C.dim,marginBottom:3}}>
-          Paste data from broker recap, Baltic Exchange, or the FFA screenshot - any format works
-        </div>
-        {img?.dataUrl&&<div style={{position:"relative",marginBottom:4}}><img src={img.dataUrl} alt="" style={{width:"100%",maxHeight:80,objectFit:"cover",borderRadius:4,display:"block"}}/><button onClick={()=>setImg(null)} style={{position:"absolute",top:3,right:3,background:"rgba(0,0,0,.7)",border:"none",color:"#fff",borderRadius:"50%",width:20,height:20,fontSize:12,cursor:"pointer"}}>✕</button></div>}
-        {img&&!img.dataUrl&&<div style={{padding:"3px 10px",background:"rgba(188,140,255,.07)",borderRadius:4,fontSize:12,color:C.purple,display:"flex",justifyContent:"space-between",marginBottom:4}}><span>📷 Image attached</span><button onClick={()=>setImg(null)} style={{background:"none",border:"none",color:C.purple,cursor:"pointer",fontSize:12}}>✕</button></div>}
-        <textarea value={pasteText} onChange={e=>setPaste(e.target.value)}
-          onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
-          placeholder={"TC2 (CONT/TA-37)  127.81(+1.87)  FEB/26: 130.50  MAR/26: 142.50  Q1: 135.50\nTC14 (USG/UKC-38)  270.71(+8.57)\nTC23 220.50  TC6 140.00\n\n- or Ctrl+V a screenshot -"}
-          style={{width:"100%",height:34,minHeight:34,maxHeight:34,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
-        <input ref={wsFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
-        <div style={{display:"flex",gap:6,marginTop:5,alignItems:"center"}}>
-          <button onClick={parseWS} disabled={parsing} style={{background:parsing?"rgba(88,166,255,.06)":"rgba(88,166,255,.11)",border:"1px solid rgba(88,166,255,.36)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px 16px",cursor:parsing?"default":"pointer"}}>
-            {parsing?"⟳ "+(img?"Reading image…":"Parsing…"):"▶ Parse & Save"}
-          </button>
-          <button onClick={()=>wsFileRef.current?.click()} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"4px 8px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>📷</button>
-          {status&&<div style={{fontSize:12,color:sc,padding:"3px 10px",background:sc+"18",borderRadius:4,border:"1px solid "+sc+"44"}}>{status.m}</div>}
-        </div>
-      </div>
-
-      {/* Comment / Market Notes */}
-      <div style={{marginBottom:6}}>
-        <div style={{fontSize:12,color:C.dim,marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span>📝 Market notes / commentary</span>
-          <span style={{fontSize:12,color:C.faint}}>Auto-saved</span>
-        </div>
-        <textarea value={wsNote} onChange={e=>{setWsNote(e.target.value);supabase.from("dashboard").upsert({key:"ws-note",value:e.target.value},{onConflict:"key"});}}
-          placeholder="e.g. TC2 firming on back of USAC demand, FFA contango widening, Baltic tightening..."
-          style={{width:"100%",height:30,minHeight:30,maxHeight:30,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,
-            fontFamily:"inherit",fontSize:12,padding:"6px 8px",resize:"vertical",boxSizing:"border-box"}}/>
-      </div>
-
-      {data&&<>
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
-          <span style={{fontSize:11,color:C.faint}}>Last update: {data.lastUpdate||"—"}</span>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"minmax(190px,.22fr) minmax(0,1.78fr)",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"minmax(300px,.28fr) minmax(0,.72fr)",gap:16,alignItems:"stretch"}}>
+        <div style={{display:"grid",gridTemplateRows:"auto auto 1fr",gap:10,minWidth:0}}>
           <div>
-            <div style={{fontSize:11,color:C.faint,fontWeight:700,textTransform:"uppercase",marginBottom:5}}>Current spot + FFA</div>
-            <div style={{overflowX:"auto"}}>
-              <table style={{borderCollapse:"collapse",fontSize:11,width:"100%"}}>
-                <thead><tr><th style={{...th2,textAlign:"left"}}>Route</th><th style={th2}>Spot</th><th style={th2}>Day</th><th style={{...th2,textAlign:"left"}}>Class / Route</th><th style={th2}>Updated</th></tr></thead>
-                <tbody>{ROUTES.map(r=>{const q=data.spot?.[r.id],chg=q?.change,cc=chg>0?C.green:chg<0?C.red:C.dim,cls=(r.id==="TC6"||r.id==="TC23")?"Handy":"MR";return <tr key={r.id}>
-                  <td style={{...td2,textAlign:"left",fontWeight:800,color:routeColors[r.id]||C.blue}}>{r.id}</td>
-                  <td style={{...td2,fontWeight:800,color:C.tx}}>{q?.ws!=null?q.ws.toFixed(2):"—"}</td>
-                  <td style={{...td2,color:cc,fontWeight:700}}>{chg!=null?(chg>=0?"+":"")+chg.toFixed(2):"—"}</td>
-                  <td style={{...td2,textAlign:"left",color:C.faint}}><span style={{color:cls==="Handy"?C.green:C.blue,fontWeight:700}}>{cls}</span> · {r.desc}</td>
-                  <td style={{...td2,color:C.faint,fontSize:10}}>{q?.updatedAt||"—"}</td></tr>})}</tbody>
-              </table>
+            {secHead("📊 Worldscale Spot + FFA Tracker")}
+            <div style={{fontSize:11,color:C.dim,marginBottom:3}}>
+              Paste data from broker recap, Baltic Exchange, or the FFA screenshot - any format works
+            </div>
+            {img?.dataUrl&&<div style={{position:"relative",marginBottom:4}}><img src={img.dataUrl} alt="" style={{width:"100%",maxHeight:80,objectFit:"cover",borderRadius:4,display:"block"}}/><button onClick={()=>setImg(null)} style={{position:"absolute",top:3,right:3,background:"rgba(0,0,0,.7)",border:"none",color:"#fff",borderRadius:"50%",width:20,height:20,fontSize:12,cursor:"pointer"}}>✕</button></div>}
+            {img&&!img.dataUrl&&<div style={{padding:"3px 10px",background:"rgba(188,140,255,.07)",borderRadius:4,fontSize:12,color:C.purple,display:"flex",justifyContent:"space-between",marginBottom:4}}><span>📷 Image attached</span><button onClick={()=>setImg(null)} style={{background:"none",border:"none",color:C.purple,cursor:"pointer",fontSize:12}}>✕</button></div>}
+            <textarea value={pasteText} onChange={e=>setPaste(e.target.value)}
+              onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
+              placeholder={"TC2 (CONT/TA-37)  127.81(+1.87)  FEB/26: 130.50  MAR/26: 142.50  Q1: 135.50\nTC14 (USG/UKC-38)  270.71(+8.57)\nTC23 220.50  TC6 140.00"}
+              style={{width:"100%",height:34,minHeight:34,maxHeight:34,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
+            <input ref={wsFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
+            <div style={{display:"flex",gap:6,marginTop:5,alignItems:"center"}}>
+              <button onClick={parseWS} disabled={parsing} style={{background:parsing?"rgba(88,166,255,.06)":"rgba(88,166,255,.11)",border:"1px solid rgba(88,166,255,.36)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px 16px",cursor:parsing?"default":"pointer"}}>
+                {parsing?"⟳ "+(img?"Reading image…":"Parsing…"):"▶ Parse & Save"}
+              </button>
+              <button onClick={()=>wsFileRef.current?.click()} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"4px 8px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>📷</button>
+              {status&&<div style={{fontSize:12,color:sc,padding:"3px 10px",background:sc+"18",borderRadius:4,border:"1px solid "+sc+"44"}}>{status.m}</div>}
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:8}}>
-            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px"}}>
-              <div style={{fontSize:10,fontWeight:800,color:C.green,textTransform:"uppercase",marginBottom:3}}>Handy Worldscale · TC6 / TC23</div>
-              {histData.length>=2?<WSChart data={histData} routes={ROUTES.filter(r=>["TC6","TC23"].includes(r.id))} colors={routeColors} compact/>:<div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
+
+          <div>
+            <div style={{fontSize:12,color:C.dim,marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>📝 Market notes / commentary</span>
+              <span style={{fontSize:12,color:C.faint}}>Auto-saved</span>
             </div>
-            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px"}}>
-              <div style={{fontSize:10,fontWeight:800,color:C.blue,textTransform:"uppercase",marginBottom:3}}>MR Worldscale · TC2 / TC14</div>
-              {histData.length>=2?<WSChart data={histData} routes={ROUTES.filter(r=>["TC2","TC14"].includes(r.id))} colors={routeColors} compact/>:<div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
-            </div>
+            <textarea value={wsNote} onChange={e=>{setWsNote(e.target.value);supabase.from("dashboard").upsert({key:"ws-note",value:e.target.value},{onConflict:"key"});}}
+              placeholder="e.g. TC2 firming on back of USAC demand, FFA contango widening, Baltic tightening..."
+              style={{width:"100%",height:36,minHeight:36,maxHeight:36,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 8px",resize:"none",boxSizing:"border-box"}}/>
+          </div>
+
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:11,color:C.faint,fontWeight:700,textTransform:"uppercase",marginBottom:5}}>Current spot + FFA</div>
+            {data?(
+              <div style={{overflowX:"auto"}}>
+                <table style={{borderCollapse:"collapse",fontSize:11,width:"100%"}}>
+                  <thead><tr><th style={{...th2,textAlign:"left"}}>Route</th><th style={th2}>Spot</th><th style={th2}>Day</th><th style={{...th2,textAlign:"left"}}>Class / Route</th><th style={th2}>Updated</th></tr></thead>
+                  <tbody>{ROUTES.map(r=>{const q=data.spot?.[r.id],chg=q?.change,cc=chg>0?C.green:chg<0?C.red:C.dim,cls=(r.id==="TC6"||r.id==="TC23")?"Handy":"MR";return <tr key={r.id}>
+                    <td style={{...td2,textAlign:"left",fontWeight:800,color:routeColors[r.id]||C.blue}}>{r.id}</td>
+                    <td style={{...td2,fontWeight:800,color:C.tx}}>{q?.ws!=null?q.ws.toFixed(2):"—"}</td>
+                    <td style={{...td2,color:cc,fontWeight:700}}>{chg!=null?(chg>=0?"+":"")+chg.toFixed(2):"—"}</td>
+                    <td style={{...td2,textAlign:"left",color:C.faint}}><span style={{color:cls==="Handy"?C.green:C.blue,fontWeight:700}}>{cls}</span> · {r.desc}</td>
+                    <td style={{...td2,color:C.faint,fontSize:10}}>{q?.updatedAt||"—"}</td>
+                  </tr>})}</tbody>
+                </table>
+              </div>
+            ):<div style={{fontSize:11,color:C.faint,padding:"8px 0"}}>No Worldscale data saved yet.</div>}
           </div>
         </div>
-      </>}
 
+        <div style={{display:"grid",gridTemplateRows:"auto 1fr 1fr",gap:8,minWidth:0}}>
+          <div style={{display:"flex",justifyContent:"flex-end",minHeight:16}}>
+            <span style={{fontSize:11,color:C.faint}}>Last update: {data?.lastUpdate||"—"}</span>
+          </div>
+          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:315}}>
+            <div style={{fontSize:10,fontWeight:800,color:C.green,textTransform:"uppercase",marginBottom:3}}>Handy Worldscale · TC6 / TC23</div>
+            {histData.length>=2?<WSChart data={histData} routes={ROUTES.filter(r=>["TC6","TC23"].includes(r.id))} colors={routeColors} compact/>:<div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
+          </div>
+          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:315}}>
+            <div style={{fontSize:10,fontWeight:800,color:C.blue,textTransform:"uppercase",marginBottom:3}}>MR Worldscale · TC2 / TC14</div>
+            {histData.length>=2?<WSChart data={histData} routes={ROUTES.filter(r=>["TC2","TC14"].includes(r.id))} colors={routeColors} compact/>:<div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
 function WSChart({data,routes,colors,compact=false}) {
-  const W=700,H=compact?255:200,PL=42,PR=16,PT=10,PB=compact?24:28;
+  const W=700,H=compact?300:200,PL=42,PR=16,PT=10,PB=compact?24:28;
   const iW=W-PL-PR,iH=H-PT-PB;
 
   // Get all WS values to find scale
@@ -740,7 +739,7 @@ function Dashboard({vessels, cargoes, history}) {
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>{secHead("Regional tonnage supply · now vs 30d")}<span style={{fontSize:9,color:D.faint}}>{segmentFilter}</span></div>
             <RegionCompareChart rows={currentRegionRows} colors={REGION_COLORS}/>
-            <div style={{display:"flex",gap:14,marginTop:8,fontSize:10,color:D.faint}}><span><b style={{color:D.blue}}>■</b> Current</span><span><b style={{color:D.purple}}>■</b> 30 days ago</span></div>
+            <div style={{display:"flex",gap:14,marginTop:8,fontSize:10,color:D.faint}}><span><b style={{color:"#26c6ff"}}>■</b> Current</span><span><b style={{color:"#ff9f43"}}>■</b> 30 days ago</span></div>
           </>,
           {minWidth:0}
         )}
@@ -782,8 +781,8 @@ function RegionCompareChart({rows,colors}) {
     {rows.map(r=><div key={r.region} style={{display:"grid",gridTemplateColumns:"145px 1fr 38px",gap:8,alignItems:"center"}}>
       <span style={{fontSize:10,fontWeight:800,color:colors[r.region]||C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.region}</span>
       <div style={{display:"grid",gap:3}}>
-        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.now?2:0,r.now/max*100)+"%",background:C.blue,borderRadius:99}}/></div>
-        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.d30?2:0,r.d30/max*100)+"%",background:C.purple,borderRadius:99}}/></div>
+        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.now?2:0,r.now/max*100)+"%",background:"#26c6ff",borderRadius:99}}/></div>
+        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.d30?2:0,r.d30/max*100)+"%",background:"#ff9f43",borderRadius:99}}/></div>
       </div>
       <div style={{fontSize:9,textAlign:"right",lineHeight:1.45}}><div style={{color:C.tx,fontWeight:800}}>{r.now}</div><div style={{color:C.faint}}>{r.d30}</div></div>
     </div>)}
