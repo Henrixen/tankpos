@@ -258,7 +258,7 @@ ${text}`}]
         <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
           <span style={{fontSize:11,color:C.faint}}>Last update: {data.lastUpdate||"—"}</span>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"minmax(265px,.42fr) minmax(720px,1.58fr)",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:"minmax(190px,.22fr) minmax(0,1.78fr)",gap:12}}>
           <div>
             <div style={{fontSize:11,color:C.faint,fontWeight:700,textTransform:"uppercase",marginBottom:5}}>Current spot + FFA</div>
             <div style={{overflowX:"auto"}}>
@@ -291,7 +291,7 @@ ${text}`}]
 }
 
 function WSChart({data,routes,colors,compact=false}) {
-  const W=700,H=compact?205:200,PL=42,PR=16,PT=10,PB=compact?24:28;
+  const W=700,H=compact?255:200,PL=42,PR=16,PT=10,PB=compact?24:28;
   const iW=W-PL-PR,iH=H-PT-PB;
 
   // Get all WS values to find scale
