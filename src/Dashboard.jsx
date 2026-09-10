@@ -20,6 +20,12 @@ const REGION_COLORS = {
   "USG / USEC / USAC":"#f5a623","Caribs":"#a78bfa","MEG / WCI / Red Sea":"#22d3ee",
   "SEA / FEA":"#3fb950","Africa":"#bc8cff","South America":"#ff9f43","Other":"rgba(160,200,255,.45)"
 };
+
+const SEGMENT_ORDER = ["All","Sub 10","City","Inter","J19","Flexi","Handy","MR"];
+const SEGMENT_COLORS = {
+  "Sub 10":"#8b949e","City":"#58a6ff","Inter":"#22d3ee","J19":"#a78bfa",
+  "Flexi":"#fd79a8","Handy":"#3fb950","MR":"#f5a623"
+};
 function parseDashboardDate(s, reference=new Date()){
   if(!s)return null;
   const raw=String(s).trim();
@@ -216,7 +222,7 @@ ${text}`}]
       {secHead("📊 Worldscale Spot + FFA Tracker")}
 
       {/* Paste input */}
-      <div style={{marginBottom:7}}>
+      <div style={{marginBottom:5}}>
         <div style={{fontSize:11,color:C.dim,marginBottom:3}}>
           Paste data from broker recap, Baltic Exchange, or the FFA screenshot - any format works
         </div>
@@ -225,7 +231,7 @@ ${text}`}]
         <textarea value={pasteText} onChange={e=>setPaste(e.target.value)}
           onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
           placeholder={"TC2 (CONT/TA-37)  127.81(+1.87)  FEB/26: 130.50  MAR/26: 142.50  Q1: 135.50\nTC14 (USG/UKC-38)  270.71(+8.57)\nTC23 220.50  TC6 140.00\n\n- or Ctrl+V a screenshot -"}
-          style={{width:"100%",height:46,minHeight:46,maxHeight:46,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
+          style={{width:"100%",height:34,minHeight:34,maxHeight:34,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
         <input ref={wsFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
         <div style={{display:"flex",gap:6,marginTop:5,alignItems:"center"}}>
           <button onClick={parseWS} disabled={parsing} style={{background:parsing?"rgba(88,166,255,.06)":"rgba(88,166,255,.11)",border:"1px solid rgba(88,166,255,.36)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px 16px",cursor:parsing?"default":"pointer"}}>
@@ -237,14 +243,14 @@ ${text}`}]
       </div>
 
       {/* Comment / Market Notes */}
-      <div style={{marginBottom:12}}>
+      <div style={{marginBottom:6}}>
         <div style={{fontSize:12,color:C.dim,marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span>📝 Market notes / commentary</span>
           <span style={{fontSize:12,color:C.faint}}>Auto-saved</span>
         </div>
         <textarea value={wsNote} onChange={e=>{setWsNote(e.target.value);supabase.from("dashboard").upsert({key:"ws-note",value:e.target.value},{onConflict:"key"});}}
           placeholder="e.g. TC2 firming on back of USAC demand, FFA contango widening, Baltic tightening..."
-          style={{width:"100%",height:38,minHeight:38,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,
+          style={{width:"100%",height:30,minHeight:30,maxHeight:30,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,
             fontFamily:"inherit",fontSize:12,padding:"6px 8px",resize:"vertical",boxSizing:"border-box"}}/>
       </div>
 
@@ -252,7 +258,7 @@ ${text}`}]
         <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
           <span style={{fontSize:11,color:C.faint}}>Last update: {data.lastUpdate||"—"}</span>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"minmax(300px,.58fr) minmax(620px,1.42fr)",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:"minmax(265px,.42fr) minmax(720px,1.58fr)",gap:12}}>
           <div>
             <div style={{fontSize:11,color:C.faint,fontWeight:700,textTransform:"uppercase",marginBottom:5}}>Current spot + FFA</div>
             <div style={{overflowX:"auto"}}>
@@ -285,7 +291,7 @@ ${text}`}]
 }
 
 function WSChart({data,routes,colors,compact=false}) {
-  const W=700,H=compact?154:200,PL=42,PR=16,PT=10,PB=compact?22:28;
+  const W=700,H=compact?205:200,PL=42,PR=16,PT=10,PB=compact?24:28;
   const iW=W-PL-PR,iH=H-PT-PB;
 
   // Get all WS values to find scale
@@ -424,6 +430,10 @@ function Dashboard({vessels, cargoes, history}) {
   const [regionHistoryLoading,setRegionHistoryLoading]=useState(true);
   const [regionHistoryError,setRegionHistoryError]=useState(null);
   useEffect(()=>{let alive=true;(async()=>{try{const {data,error}=await supabase.rpc("dashboard_region_history");if(error)throw error;if(alive)setRegionHistory(data||[]);}catch(e){if(alive)setRegionHistoryError(e.message||"RPC failed");}finally{if(alive)setRegionHistoryLoading(false);}})();return()=>{alive=false;};},[]);
+  const [segmentFilter,setSegmentFilter]=useState("All");
+  const [fixingSegmentHistory,setFixingSegmentHistory]=useState([]);
+  const [fixingSegmentError,setFixingSegmentError]=useState(null);
+  useEffect(()=>{let alive=true;(async()=>{try{const {data,error}=await supabase.rpc("dashboard_fixing_window_segments");if(error)throw error;if(alive)setFixingSegmentHistory(data||[]);}catch(e){if(alive)setFixingSegmentError(e.message||"RPC failed");}})();return()=>{alive=false;};},[]);
 
   // Part 5: Fetch all history entries from Supabase
   useEffect(() => {
@@ -541,13 +551,21 @@ function Dashboard({vessels, cargoes, history}) {
     regionByLabel[lab][region].ships+=Number(row.ships||0);
     regionByLabel[lab][region].segments[seg]=(regionByLabel[lab][region].segments[seg]||0)+Number(row.ships||0);
   }
+  const getRegionCount=(label,region)=>{
+    const r=regionByLabel[label]?.[region];
+    if(!r)return 0;
+    return segmentFilter==="All"?r.ships:Number(r.segments?.[segmentFilter]||0);
+  };
   const currentRegionRows=REGION_ORDER.map(region=>({
-    region,
-    now:regionByLabel.NOW?.[region]||{ships:0,segments:{}},
-    d14:regionByLabel["14D"]?.[region]||null,
-    d30:regionByLabel["30D"]?.[region]||null,
-    d90:regionByLabel["90D"]?.[region]||null
-  })).filter(x=>x.now.ships||x.d14?.ships||x.d30?.ships||x.d90?.ships);
+    region,now:getRegionCount("NOW",region),d14:getRegionCount("14D",region),d30:getRegionCount("30D",region),d90:getRegionCount("90D",region)
+  })).filter(x=>x.now||x.d14||x.d30||x.d90);
+  const regionTotals={
+    now:currentRegionRows.reduce((a,x)=>a+x.now,0),
+    d14:currentRegionRows.reduce((a,x)=>a+x.d14,0),
+    d30:currentRegionRows.reduce((a,x)=>a+x.d30,0),
+    d90:currentRegionRows.reduce((a,x)=>a+x.d90,0)
+  };
+
   const latestPositionUpdate=(()=>{const ds=(vessels||[]).map(v=>parseDashboardDate(v.updatedAt||v.fileDate)).filter(Boolean);return ds.length?new Date(Math.max(...ds.map(d=>d.getTime()))):null;})();
 
   // Build chart data from history + today
@@ -576,17 +594,16 @@ function Dashboard({vessels, cargoes, history}) {
     return {date:h.date,avg,open:h.openCount,total:h.total};
   }).filter(h=>h.avg!=null);
 
-  // Get all operators seen in history for multi-line chart
-  const allOps = [...new Set(history.flatMap(h=>Object.keys(h.byOp||{})))].slice(0,6);
-  const opChartData = chartSnaps.slice(-30).map(h=>({
-    date:h.date,
-    ...Object.fromEntries(allOps.map(op=>{
-      const raw=Number((h.byOp||{})[op]);
-      return [op,Number.isFinite(raw)&&Math.abs(raw)<=120?Math.abs(raw):null];
-    }))
-  }));
-
-
+  const fixingSegmentChartData=(()=>{
+    const byDate={};
+    for(const r of fixingSegmentHistory||[]){
+      const d=r.snapshot_date; if(!d)continue;
+      byDate[d]||={date:d};
+      byDate[d][r.segment]=Number(r.avg_days);
+    }
+    return Object.values(byDate).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  })();
+  const activeFixingSegments=SEGMENT_ORDER.filter(s=>s!=="All"&&fixingSegmentChartData.some(d=>d[s]!=null));
 
   // ── Ocean theme tokens ──────────────────────────────────────────────────────
   const D = {
@@ -665,116 +682,67 @@ function Dashboard({vessels, cargoes, history}) {
         {card("Last positions update",latestPositionUpdate?latestPositionUpdate.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"—",latestPositionUpdate?latestPositionUpdate.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})+" local":null,D.green)}
       </div>
 
-      {/* ── Charts row ── */}
-      <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+      {/* ── Fixing window + bunker row ── */}
+      <div style={{display:"grid",gridTemplateColumns:"minmax(620px,1.45fr) minmax(430px,.85fr)",gap:12}}>
         {panel(
           <>
-            {secHead("Fixing window trend — fleet avg")}
-            {chartData.length<=1
-              ? <div style={{color:D.faint,fontSize:12,padding:"24px 0",textAlign:"center"}}>Parse positions to build trend data.</div>
-              : <FWChart data={chartData}/>}
-          </>,
-          {flex:"1 1 340px",minWidth:280}
-        )}
-        {panel(
-          <>
-            {secHead("Fixing window by operator")}
-            {allOps.length===0
-              ? <div style={{color:D.faint,fontSize:12,padding:"24px 0",textAlign:"center"}}>Parse positions to build operator data.</div>
-              : <OpChart data={opChartData} ops={allOps} colors={OP_COLORS}/>}
-          </>,
-          {flex:"1 1 340px",minWidth:280}
-        )}
-      </div>
-
-      {/* ── Region + Bunkers row ── */}
-      <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-
-        {/* Historical region breakdown */}
-        {panel(
-          <>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
-              {secHead("Open fleet by main region · vessel count")}
-              <span style={{fontSize:9,color:D.faint}}>NOW / 14D / 30D / 90D</span>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+              {secHead("Fixing window by vessel size · days until open")}
+              <span style={{fontSize:9,color:D.faint}}>past positions · negative values excluded</span>
             </div>
-            {regionHistoryLoading?<div style={{fontSize:11,color:D.faint,padding:"12px 0"}}>Loading historical fleet…</div>:
-             regionHistoryError?<div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Run updated Supabase RPC SQL: {regionHistoryError}</div>:
-             <>
-              <div style={{display:"grid",gridTemplateColumns:"minmax(250px,1fr) 60px 72px 72px 72px",gap:8,padding:"0 2px 6px",fontSize:9,fontWeight:800,color:D.faint,textTransform:"uppercase"}}>
-                <span>Region / size segments</span><span style={{textAlign:"right"}}>Ships</span><span style={{textAlign:"right"}}>vs 14d</span><span style={{textAlign:"right"}}>vs 30d</span><span style={{textAlign:"right"}}>vs 90d</span>
-              </div>
-              {currentRegionRows.map(({region,now,d14,d30,d90})=>{
-                const max=Math.max(1,...currentRegionRows.map(x=>x.now.ships));
-                const col=REGION_COLORS[region]||D.dim;
-                const delta=p=>p?<span style={{color:(now.ships-p.ships)>0?D.amber:(now.ships-p.ships)<0?D.green:D.faint,fontWeight:800}}>{fmtSigned(now.ships-p.ships)}</span>:<span style={{color:D.faint}}>—</span>;
-                const segOrder=["Sub 10","City","Inter","J19","Flexi","Handy","MR"];
-                const segs=segOrder.filter(k=>now.segments?.[k]).map(k=>`${k} ${now.segments[k]}`).join(" · ");
-                return <div key={region} style={{display:"grid",gridTemplateColumns:"minmax(250px,1fr) 60px 72px 72px 72px",gap:8,alignItems:"center",padding:"6px 2px",borderTop:"1px solid "+D.border}}>
-                  <div style={{minWidth:0}}>
-                    <span style={{fontSize:11,fontWeight:800,color:col}}>{region}</span>
-                    <div style={{fontSize:8.5,color:D.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{segs||"No DWT segment data"}</div>
-                    <div style={{height:3,background:D.bg4,borderRadius:99,overflow:"hidden",marginTop:3}}><div style={{height:"100%",width:Math.max(3,Math.round(now.ships/max*100))+"%",background:col,borderRadius:99}}/></div>
-                  </div>
-                  <span style={{fontSize:11,textAlign:"right",color:D.tx,fontWeight:850}}>{now.ships}</span>
-                  <span style={{fontSize:10,textAlign:"right"}}>{delta(d14)}</span>
-                  <span style={{fontSize:10,textAlign:"right"}}>{delta(d30)}</span>
-                  <span style={{fontSize:10,textAlign:"right"}}>{delta(d90)}</span>
-                </div>
-              })}
-              <div style={{fontSize:9,color:D.faint,marginTop:7}}>Latest report per vessel at each snapshot, deduplicated. “Other” = super-regions outside the commercial mappings below.</div>
-             </>}
+            {fixingSegmentError
+              ? <div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Run the updated fixing-window RPC SQL: {fixingSegmentError}</div>
+              : fixingSegmentChartData.length<2
+                ? <div style={{color:D.faint,fontSize:12,padding:"24px 0",textAlign:"center"}}>Loading segment fixing-window history…</div>
+                : <SegmentFWChart data={fixingSegmentChartData} segments={activeFixingSegments} colors={SEGMENT_COLORS}/>}
           </>,
-          {flex:"1 1 520px",minWidth:520}
+          {minWidth:0}
         )}
-
-        {/* Bunker prices */}
         {panel(
           <>
             {secHead("Bunker prices USD/mt — PBT International")}
-            {!bFetched&&!bLoading&&(
-              <div style={{textAlign:"center",padding:"14px 0"}}>
-                <div style={{fontSize:12,color:D.faint,marginBottom:10}}>Source: pbt-international.com · updated 3×/week</div>
-                <button onClick={fetchBunkersPBT} style={{background:"rgba(88,166,255,0.15)",border:"1px solid rgba(88,166,255,0.35)",borderRadius:6,color:D.blue,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"7px 20px",cursor:"pointer"}}>
-                  Fetch live from PBT
-                </button>
-              </div>
-            )}
-            {bLoading&&<div style={{color:D.blue,fontSize:12,padding:"14px 0",textAlign:"center"}}>⟳ Fetching pbt-international.com…</div>}
-            {bError&&<div style={{color:D.red,fontSize:12,padding:"6px 0"}}>{bError}<br/><button onClick={fetchBunkersPBT} style={{marginTop:4,background:"none",border:"1px solid "+D.border,borderRadius:4,color:D.dim,fontSize:12,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit"}}>Retry</button></div>}
-            {bunkers&&(
-              <div>
-                <div style={{fontSize:11,color:D.faint,marginBottom:10}}>
-                  Updated: {bunkers.date} · <a href="https://pbt-international.com/price-quotes" target="_blank" style={{color:D.blue,textDecoration:"none"}}>pbt-international.com</a>
-                </div>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                  <thead>
-                    <tr style={{background:D.bg4}}>
-                      <th style={{padding:"6px 10px",color:D.faint,fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:"0.07em",textAlign:"left"}}>Port</th>
-                      <th style={{padding:"6px 10px",color:D.amber,fontWeight:700,fontSize:11,textTransform:"uppercase",textAlign:"right"}}>HSFO 380</th>
-                      <th style={{padding:"6px 10px",color:D.green,fontWeight:700,fontSize:11,textTransform:"uppercase",textAlign:"right"}}>VLSFO 0.5%</th>
-                      <th style={{padding:"6px 10px",color:D.blue,fontWeight:700,fontSize:11,textTransform:"uppercase",textAlign:"right"}}>MGO</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      ["ARA (Rotterdam)", bunkers.ARA_HSFO, bunkers.ARA_VLSFO, bunkers.ARA_MGO],
-                      ["Fujairah",        bunkers.FUJ_HSFO, bunkers.FUJ_VLSFO, bunkers.FUJ_MGO],
-                      ["Singapore",       bunkers.SIN_HSFO, bunkers.SIN_VLSFO, bunkers.SIN_MGO],
-                    ].map(([port,hsfo,vlsfo,mgo],i)=>(
-                      <tr key={port} style={{background:i%2===0?"transparent":D.bg4,borderBottom:"1px solid "+D.border}}>
-                        <td style={{padding:"7px 10px",color:D.dim,fontWeight:600}}>{port}</td>
-                        <td style={{padding:"7px 10px",color:D.amber,fontWeight:700,textAlign:"right"}}>{hsfo?"$"+hsfo:"—"}</td>
-                        <td style={{padding:"7px 10px",color:D.green,fontWeight:700,textAlign:"right"}}>{vlsfo?"$"+vlsfo:"—"}</td>
-                        <td style={{padding:"7px 10px",color:D.blue,fontWeight:700,textAlign:"right"}}>{mgo?"$"+mgo:"—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <button onClick={fetchBunkersPBT} style={{marginTop:8,background:"none",border:"1px solid "+D.border,borderRadius:4,color:D.faint,fontSize:11,padding:"3px 10px",cursor:"pointer",fontFamily:"inherit"}}>↻ Refresh from PBT</button>
-              </div>
-            )}
+            {!bFetched&&!bLoading&&<div style={{textAlign:"center",padding:"12px 0"}}><div style={{fontSize:11,color:D.faint,marginBottom:8}}>ARA · Fujairah · Singapore</div><button onClick={fetchBunkersPBT} style={{background:"rgba(88,166,255,.12)",border:"1px solid rgba(88,166,255,.32)",borderRadius:5,color:D.blue,fontWeight:700,fontSize:11,padding:"5px 12px",cursor:"pointer"}}>Fetch live from PBT</button></div>}
+            {bLoading&&<div style={{color:D.blue,fontSize:11,padding:"12px",textAlign:"center"}}>⟳ Fetching…</div>}
+            {bError&&<div style={{color:D.red,fontSize:11,padding:"6px 0"}}>{bError}</div>}
+            {bunkers&&<>
+              <div style={{fontSize:9,color:D.faint,marginBottom:6}}>Updated {bunkers.date}</div>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                <thead><tr style={{background:D.bg4}}><th style={{padding:"5px 7px",textAlign:"left",color:D.faint}}>PORT</th><th style={{padding:"5px 7px",textAlign:"right",color:D.amber}}>HSFO</th><th style={{padding:"5px 7px",textAlign:"right",color:D.green}}>VLSFO</th><th style={{padding:"5px 7px",textAlign:"right",color:D.blue}}>MGO</th></tr></thead>
+                <tbody>{[["ARA",bunkers.ARA_HSFO,bunkers.ARA_VLSFO,bunkers.ARA_MGO],["Fujairah",bunkers.FUJ_HSFO,bunkers.FUJ_VLSFO,bunkers.FUJ_MGO],["Singapore",bunkers.SIN_HSFO,bunkers.SIN_VLSFO,bunkers.SIN_MGO]].map(([port,a,v,m],i)=><tr key={port} style={{background:i%2?D.bg4:"transparent",borderBottom:"1px solid "+D.border}}><td style={{padding:"6px 7px",color:D.dim,fontWeight:700}}>{port}</td><td style={{padding:"6px 7px",textAlign:"right",color:D.amber,fontWeight:800}}>{a?"$"+a:"—"}</td><td style={{padding:"6px 7px",textAlign:"right",color:D.green,fontWeight:800}}>{v?"$"+v:"—"}</td><td style={{padding:"6px 7px",textAlign:"right",color:D.blue,fontWeight:800}}>{m?"$"+m:"—"}</td></tr>)}</tbody>
+              </table>
+              <button onClick={fetchBunkersPBT} style={{marginTop:6,background:"none",border:"1px solid "+D.border,borderRadius:4,color:D.faint,fontSize:10,padding:"2px 8px",cursor:"pointer"}}>↻ Refresh</button>
+            </>}
           </>,
-          {flex:"1 1 380px"}
+          {minWidth:0}
+        )}
+      </div>
+
+      {/* ── Regional fleet history ── */}
+      <div style={{display:"grid",gridTemplateColumns:"minmax(640px,1.1fr) minmax(520px,.9fr)",gap:12}}>
+        {panel(
+          <>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+              {secHead("Open fleet by main region · vessel count")}
+              <span style={{fontSize:9,color:D.faint}}>historical totals</span>
+            </div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>
+              {SEGMENT_ORDER.map(seg=>{const active=segmentFilter===seg;return <button key={seg} onClick={()=>setSegmentFilter(seg)} style={{background:active?"rgba(88,166,255,.18)":D.bg3,border:"1px solid "+(active?D.blue:D.border2),borderRadius:5,color:active?D.tx:D.dim,fontFamily:"inherit",fontSize:10,fontWeight:active?800:600,padding:"4px 8px",cursor:"pointer"}}>{seg}</button>})}
+            </div>
+            {regionHistoryLoading?<div style={{fontSize:11,color:D.faint,padding:"12px 0"}}>Loading historical fleet…</div>:regionHistoryError?<div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Run updated Supabase RPC SQL: {regionHistoryError}</div>:<>
+              <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"0 2px 5px",fontSize:9,fontWeight:800,color:D.faint,textTransform:"uppercase"}}><span>Region</span><span style={{textAlign:"right"}}>Now</span><span style={{textAlign:"right"}}>14d</span><span style={{textAlign:"right"}}>30d</span><span style={{textAlign:"right"}}>90d</span></div>
+              {currentRegionRows.map(({region,now,d14,d30,d90})=><div key={region} style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,alignItems:"center",padding:"6px 2px",borderTop:"1px solid "+D.border}}><span style={{fontSize:11,fontWeight:800,color:REGION_COLORS[region]||D.dim}}>{region}</span><span style={{fontSize:11,textAlign:"right",color:D.tx,fontWeight:850}}>{now}</span><span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d14}</span><span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d30}</span><span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d90}</span></div>)}
+              <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"7px 2px 0",borderTop:"1px solid "+D.border2,fontSize:10,fontWeight:850}}><span style={{color:D.faint}}>TOTAL · {segmentFilter}</span><span style={{textAlign:"right",color:D.tx}}>{regionTotals.now}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d14}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d30}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d90}</span></div>
+            </>}
+          </>,
+          {minWidth:0}
+        )}
+        {panel(
+          <>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>{secHead("Regional tonnage supply · now vs 30d")}<span style={{fontSize:9,color:D.faint}}>{segmentFilter}</span></div>
+            <RegionCompareChart rows={currentRegionRows} colors={REGION_COLORS}/>
+            <div style={{display:"flex",gap:14,marginTop:8,fontSize:10,color:D.faint}}><span><b style={{color:D.blue}}>■</b> Current</span><span><b style={{color:D.purple}}>■</b> 30 days ago</span></div>
+          </>,
+          {minWidth:0}
         )}
       </div>
 
@@ -790,6 +758,38 @@ function Dashboard({vessels, cargoes, history}) {
 
 
 // ─── SVG charts (no dependencies) ────────────────────────────────────────────
+function SegmentFWChart({data,segments,colors}) {
+  const W=760,H=220,PL=42,PR=22,PT=12,PB=28;
+  const iW=W-PL-PR,iH=H-PT-PB;
+  const vals=data.flatMap(d=>segments.map(s=>d[s])).filter(v=>v!=null&&v>=0);
+  if(!vals.length)return null;
+  const mn=0,mx=Math.max(7,Math.ceil(Math.max(...vals)+2)),range=mx||1;
+  const xs=data.map((_,i)=>PL+i/(data.length-1||1)*iW);
+  return <div>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",maxHeight:H,display:"block"}}>
+      {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-5} y={y+4} fill={C.faint} fontSize="9" textAnchor="end">{v}d</text></g>})}
+      {segments.map(seg=>{let path="";data.forEach((d,i)=>{const v=d[seg];if(v==null||v<0)return;const p=[xs[i],PT+iH-(v-mn)/range*iH];path+=(path?"L":"M")+p.join(",")});return path?<path key={seg} d={path} fill="none" stroke={colors[seg]||C.blue} strokeWidth="1.8" strokeLinejoin="round" opacity=".92"/>:null})}
+      {data.map((d,i)=>(i===0||i===data.length-1||data.length<=8)?<text key={i} x={xs[i]} y={H-7} fill={C.faint} fontSize="8" textAnchor="middle">{fmtDateShort(d.date)}</text>:null)}
+    </svg>
+    <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:2}}>{segments.map(s=><span key={s} style={{fontSize:10,color:colors[s]||C.blue}}>● {s}</span>)}</div>
+  </div>;
+}
+
+function RegionCompareChart({rows,colors}) {
+  if(!rows?.length)return <div style={{color:C.faint,fontSize:11,padding:20,textAlign:"center"}}>No regional data.</div>;
+  const max=Math.max(1,...rows.flatMap(r=>[r.now||0,r.d30||0]));
+  return <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:3}}>
+    {rows.map(r=><div key={r.region} style={{display:"grid",gridTemplateColumns:"145px 1fr 38px",gap:8,alignItems:"center"}}>
+      <span style={{fontSize:10,fontWeight:800,color:colors[r.region]||C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.region}</span>
+      <div style={{display:"grid",gap:3}}>
+        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.now?2:0,r.now/max*100)+"%",background:C.blue,borderRadius:99}}/></div>
+        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.d30?2:0,r.d30/max*100)+"%",background:C.purple,borderRadius:99}}/></div>
+      </div>
+      <div style={{fontSize:9,textAlign:"right",lineHeight:1.45}}><div style={{color:C.tx,fontWeight:800}}>{r.now}</div><div style={{color:C.faint}}>{r.d30}</div></div>
+    </div>)}
+  </div>;
+}
+
 function FWChart({data}) {
   const W=700,H=180,PL=36,PR=16,PT=10,PB=28;
   const iW=W-PL-PR, iH=H-PT-PB;
