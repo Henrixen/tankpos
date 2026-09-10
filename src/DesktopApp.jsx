@@ -1523,31 +1523,25 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   // Use mobile state from TankPos (reactive, with manual override) — must be before colWidths
   const mobile = mobileProp !== undefined ? mobileProp : isMobile();
 
-  // Landscape mobile: hide the header on scroll-down to reclaim vertical
-  // space (landscape has very little to spare), show it again on scroll-up
-  // or once you're back near the top.
+  // Mobile: hide the top header while scrolling down and slide it back in
+  // as soon as the user scrolls up. Keep it visible near the top or while
+  // the mobile navigation drawer is open.
   const [headerHidden,setHeaderHidden]=useState(false);
-  const [isLandscape,setIsLandscape]=useState(false);
   const lastScrollY=useRef(0);
   useEffect(()=>{
-    function checkOrientation(){ setIsLandscape(window.matchMedia("(orientation: landscape)").matches); }
-    checkOrientation();
-    window.addEventListener("resize",checkOrientation);
-    window.addEventListener("orientationchange",checkOrientation);
-    return ()=>{ window.removeEventListener("resize",checkOrientation); window.removeEventListener("orientationchange",checkOrientation); };
-  },[]);
-  useEffect(()=>{
-    if(!mobile||!isLandscape){ setHeaderHidden(false); return; }
+    if(!mobile){ setHeaderHidden(false); return; }
+    lastScrollY.current=window.scrollY||0;
     function onScroll(){
-      const y=window.scrollY;
-      if(y<=10) setHeaderHidden(false);
-      else if(y>lastScrollY.current+5) setHeaderHidden(true);
-      else if(y<lastScrollY.current-5) setHeaderHidden(false);
+      const y=Math.max(0,window.scrollY||0);
+      const delta=y-lastScrollY.current;
+      if(mobileNavOpen || y<=18) setHeaderHidden(false);
+      else if(delta>7 && y>70) setHeaderHidden(true);
+      else if(delta<-5) setHeaderHidden(false);
       lastScrollY.current=y;
     }
     window.addEventListener("scroll",onScroll,{passive:true});
     return ()=>window.removeEventListener("scroll",onScroll);
-  },[mobile,isLandscape]);
+  },[mobile,mobileNavOpen]);
 
   const [colWidthsV,setColWidthsV]=useState(()=>mobile?{
   Operator:null,Vessel:null,Built:null,DWT:null,Coating:null,LOA:null,Beam:null,CBM:null,Date:null,OpenPort:null,Comment:null,FileDate:null,Spec:null
@@ -2513,8 +2507,10 @@ const filtV=useMemo(()=>{
         background:"linear-gradient(135deg, #070f1c 0%, #0c1a32 50%, #081426 100%)",
         borderBottom:"1px solid rgba(58,130,246,0.18)",
         position:"sticky",top:0,zIndex:200,
-        transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
-        transition:"transform 0.25s ease",
+        transform: headerHidden ? "translateY(calc(-100% - 2px))" : "translateY(0)",
+        opacity:headerHidden?0.96:1,
+        transition:"transform 280ms cubic-bezier(.22,.61,.36,1), opacity 220ms ease",
+        willChange:"transform",
       }}>
         {/* Top bar: brand + Ask AI + Intel Vault + utilities */}
         <div style={{display:"flex",alignItems:"center",gap:mobile?6:12,padding:mobile?"8px 12px 0":"10px 20px 0"}}>
@@ -2584,17 +2580,26 @@ const filtV=useMemo(()=>{
         </div>}
       </div>
 
-      {/* Mobile sidebar navigation: hamburger + overlay drawer. Also supports a
-          left-edge swipe to open and swipe-left inside the drawer to close. */}
+      {/* Mobile sidebar navigation: animated overlay drawer.
+          Swipe in from the left edge to open; swipe left inside to close. */}
       {mobile&&navConfig.mode==="sidebar"&&<>
         {!mobileNavOpen&&<div
           onTouchStart={e=>{mobileNavTouchX.current=e.touches?.[0]?.clientX??null}}
           onTouchEnd={e=>{const x0=mobileNavTouchX.current,x1=e.changedTouches?.[0]?.clientX;if(x0!=null&&x1!=null&&x1-x0>55)setMobileNavOpen(true);mobileNavTouchX.current=null}}
-          style={{position:"fixed",left:0,top:0,bottom:0,width:18,zIndex:205,touchAction:"pan-y"}}
+          style={{position:"fixed",left:0,top:0,bottom:0,width:20,zIndex:205,touchAction:"pan-y"}}
         />}
-        {mobileNavOpen&&<div
+
+        <div
           onClick={()=>setMobileNavOpen(false)}
-          style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(1,7,16,.68)",backdropFilter:"blur(3px)",WebkitBackdropFilter:"blur(3px)"}}
+          aria-hidden={!mobileNavOpen}
+          style={{
+            position:"fixed",inset:0,zIndex:10000,
+            background:"rgba(1,7,16,.68)",
+            backdropFilter:"blur(3px)",WebkitBackdropFilter:"blur(3px)",
+            opacity:mobileNavOpen?1:0,
+            pointerEvents:mobileNavOpen?"auto":"none",
+            transition:"opacity 220ms ease"
+          }}
         >
           <aside
             onClick={e=>e.stopPropagation()}
@@ -2604,8 +2609,11 @@ const filtV=useMemo(()=>{
               width:"min(82vw,300px)",height:"100%",overflowY:"auto",
               background:"linear-gradient(180deg,#07101e 0%,#0b1a30 55%,#081426 100%)",
               borderRight:"1px solid rgba(88,166,255,.28)",
-              boxShadow:"18px 0 50px rgba(0,0,0,.48)",padding:"12px 10px 20px",
-              boxSizing:"border-box",touchAction:"pan-y"
+              boxShadow:mobileNavOpen?"18px 0 50px rgba(0,0,0,.48)":"none",
+              padding:"12px 10px 20px",boxSizing:"border-box",touchAction:"pan-y",
+              transform:mobileNavOpen?"translate3d(0,0,0)":"translate3d(-105%,0,0)",
+              transition:"transform 320ms cubic-bezier(.22,.61,.36,1), box-shadow 260ms ease",
+              willChange:"transform"
             }}
           >
             <div style={{height:44,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 8px 8px",borderBottom:"1px solid rgba(88,166,255,.13)",marginBottom:8}}>
@@ -2615,18 +2623,21 @@ const filtV=useMemo(()=>{
               </div>
               <button onClick={()=>setMobileNavOpen(false)} aria-label="Close navigation" style={{width:34,height:34,borderRadius:7,border:"1px solid rgba(88,166,255,.18)",background:"rgba(88,166,255,.06)",color:"rgba(180,210,245,.8)",fontSize:20,cursor:"pointer"}}>×</button>
             </div>
-            {navIds.map(id=>{const m=navMeta[id],active=tab===id,count=navCount(id);return <button key={id} onClick={()=>goNav(id)} style={{
+            {navIds.map((id,i)=>{const m=navMeta[id],active=tab===id,count=navCount(id);return <button key={id} onClick={()=>goNav(id)} style={{
               width:"100%",height:46,display:"flex",alignItems:"center",gap:12,padding:"0 12px",
               margin:"3px 0",borderRadius:8,border:"1px solid "+(active?m.col+"66":"rgba(88,166,255,.05)"),
               borderLeft:"3px solid "+(active?m.col:"transparent"),background:active?m.col+"16":"transparent",
-              color:active?m.col:"rgba(180,205,238,.78)",cursor:"pointer",fontFamily:"inherit",textAlign:"left"
+              color:active?m.col:"rgba(180,205,238,.78)",cursor:"pointer",fontFamily:"inherit",textAlign:"left",
+              transform:mobileNavOpen?"translateX(0)":"translateX(-10px)",
+              opacity:mobileNavOpen?1:0.55,
+              transition:`transform 260ms cubic-bezier(.22,.61,.36,1) ${Math.min(i*18,180)}ms, opacity 220ms ease ${Math.min(i*18,180)}ms`
             }}>
               <span style={{width:24,textAlign:"center",fontSize:17,flexShrink:0}}>{m.icon}</span>
               <span style={{fontSize:13,fontWeight:active?800:650,flex:1}}>{m.label}</span>
               {count>0&&<span style={{fontSize:10,fontWeight:700,color:active?m.col:"rgba(130,165,210,.55)",background:"rgba(255,255,255,.035)",padding:"2px 6px",borderRadius:9}}>{count.toLocaleString()}</span>}
             </button>})}
           </aside>
-        </div>}
+        </div>
       </>}
 
       <div style={{display:"flex",minWidth:0}}>
