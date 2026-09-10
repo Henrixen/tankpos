@@ -1401,6 +1401,9 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [mxSearch,setMxSearch]=useState("");
   const [cSortK,setCsortK]=useState("updated");
   const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
+  const [bulkCargoTagOpen,setBulkCargoTagOpen]=useState(false);
+  const [bulkCargoTagPos,setBulkCargoTagPos]=useState({top:0,left:0});
+  const bulkCargoTagBtnRef=React.useRef(null);
   const [selVessels,setSelVessels]=useState(()=>new Set());
   const [bulkPosTagOpen,setBulkPosTagOpen]=useState(false);
   const [bulkPosTagPos,setBulkPosTagPos]=useState({top:0,left:0});
@@ -1622,6 +1625,53 @@ const cargoColumns = [
   // get added/updated in the static outsider_vessels roster. Live position
   // tracking after that happens automatically via OutsidersTab's own IMO
   // join — this just needs to get the vessel identity in.
+  function openBulkCargoTags(){
+    if(!selCargoes.size)return;
+
+    if(bulkCargoTagBtnRef.current){
+      const r=bulkCargoTagBtnRef.current.getBoundingClientRect();
+
+      // Match the zoom-aware positioning used by the Positions tag popup.
+      const rawZoom=parseFloat(
+        getComputedStyle(document.body).zoom ||
+        document.body.style.zoom ||
+        "1"
+      );
+      const zoom=Number.isFinite(rawZoom)&&rawZoom>0 ? rawZoom : 1;
+
+      const popWVisual=190*zoom;
+      const popHVisual=Math.min(360,58+getTagListFor("cargo").length*31)*zoom;
+      const marginVisual=12;
+
+      let leftVisual=r.left;
+      if(leftVisual+popWVisual>window.innerWidth-marginVisual){
+        leftVisual=r.right-popWVisual;
+      }
+      leftVisual=Math.max(
+        marginVisual,
+        Math.min(leftVisual,window.innerWidth-popWVisual-marginVisual)
+      );
+
+      let topVisual=r.bottom+5;
+      if(topVisual+popHVisual>window.innerHeight-marginVisual){
+        topVisual=Math.max(marginVisual,r.top-popHVisual-5);
+      }
+
+      setBulkCargoTagPos({
+        top:topVisual/zoom,
+        left:leftVisual/zoom
+      });
+    }
+
+    setBulkCargoTagOpen(v=>!v);
+  }
+
+  async function applyTagToSelectedCargoes(tag){
+    const ids=[...selCargoes];
+    await Promise.all(ids.map(id=>Promise.resolve(onUpdateC(id,"tag",tag))));
+    setBulkCargoTagOpen(false);
+  }
+
   function openBulkPositionTags(){
     if(!selVessels.size)return;
     if(bulkPosTagBtnRef.current){
@@ -3532,31 +3582,33 @@ const filtV=useMemo(()=>{
                 </button>
               )}
               {selCargoes.size>0&&(
-                <div className="hscroll-hide" style={{
-                  display:"flex",alignItems:"center",gap:4,flex:"0 1 auto",minWidth:0,
-                  overflowX:"auto",overflowY:"hidden",whiteSpace:"nowrap",scrollbarWidth:"none"
-                }}>
-                  <span style={{fontSize:10,color:"rgba(120,160,220,0.5)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",flexShrink:0}}>Tag {selCargoes.size}</span>
-                  {getTagList().map(t=>(
-                    <button key={t} onClick={()=>{[...selCargoes].forEach(id=>onUpdateC(id,"tag",t));}}
-                      style={{...fb(false),fontSize:10,padding:"1px 6px",flexShrink:0}}>{t}</button>
-                  ))}
-                  <button onClick={()=>{[...selCargoes].forEach(id=>onUpdateC(id,"tag",""));}}
-                    style={{...fb(false),fontSize:10,color:C.red,borderColor:C.red+"55",padding:"1px 6px",flexShrink:0}}>✕ clear</button>
-                </div>
+                <button
+                  ref={bulkCargoTagBtnRef}
+                  onClick={openBulkCargoTags}
+                  title="Add a tag to all selected cargoes"
+                  style={{
+                    fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,
+                    border:"1px solid rgba(88,166,255,0.48)",
+                    background:"rgba(88,166,255,.12)",color:"#79c0ff",
+                    cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0
+                  }}>
+                  + Add to tag ({selCargoes.size})
+                </button>
               )}
               <div style={{width:1,height:14,background:C.bd2,flexShrink:0}}/>
-              <span style={{fontSize:12,color:C.faint}}>This wk <span style={{color:"#4fc3f7",fontWeight:700}}>{weekCounts.thisWk}</span></span>
-              <span style={{fontSize:12,color:C.faint}}>Last wk <span style={{color:"rgba(120,160,220,0.6)",fontWeight:700}}>{weekCounts.lastWk}</span></span>
-              <span style={{flex:"1 0 12px",minWidth:12}}/>
+              <div style={{display:"flex",alignItems:"center",gap:12,whiteSpace:"nowrap",flexShrink:0}}>
+                <span style={{fontSize:11,color:C.faint}}>This wk <span style={{color:"#4fc3f7",fontWeight:800}}>{weekCounts.thisWk}</span></span>
+                <span style={{fontSize:11,color:C.faint}}>Last wk <span style={{color:"rgba(160,190,230,.70)",fontWeight:800}}>{weekCounts.lastWk}</span></span>
+              </div>
+              <span style={{flex:"1 0 18px",minWidth:18}}/>
               {/* Search */}
-              <div style={{position:"relative"}}>
+              <div style={{position:"relative",flexShrink:0}}>
                 <input value={cSearch} onChange={e=>{const v=e.target.value;setCSearch(v);clearTimeout(window._csTimer);window._csTimer=setTimeout(()=>onCargoSearch(v),350);}} placeholder="Search cargoes…"
-                  style={{width:220,background:C.bg2,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
+                  style={{width:240,background:C.bg2,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
                 {cSearch&&<button onClick={()=>{setCSearch("");onCargoSearch("");}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
               </div>
-              <span style={{fontSize:12,color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{cargoTotal||cargoes.length}</span></span>
-              <span style={{fontSize:12,color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{filtC.length}</span></span>
+              <span style={{fontSize:11,color:C.faint,whiteSpace:"nowrap"}}>Total <span style={{color:C.tx,fontWeight:800}}>{cargoTotal||cargoes.length}</span></span>
+              <span style={{fontSize:11,color:C.faint,whiteSpace:"nowrap"}}>Showing <span style={{color:C.blue,fontWeight:800}}>{filtC.length}</span></span>
               {/* Sort dropdown */}
               <div style={{display:"flex",alignItems:"center",gap:4}}>
                 <span style={{fontSize:11,color:C.faint,whiteSpace:"nowrap"}}>Sort</span>
@@ -3578,6 +3630,49 @@ const filtV=useMemo(()=>{
                 </button>
               </div>
             </div>
+
+            {bulkCargoTagOpen&&(
+              <>
+                <div style={{position:"fixed",inset:0,zIndex:19990}} onClick={()=>setBulkCargoTagOpen(false)}/>
+                <div style={{
+                  position:"fixed",top:bulkCargoTagPos.top,left:bulkCargoTagPos.left,zIndex:19999,
+                  width:190,maxHeight:360,overflowY:"auto",overflowX:"hidden",
+                  background:"#0a1628",border:"1px solid rgba(88,166,255,0.34)",borderRadius:7,
+                  padding:6,boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
+                  display:"flex",flexDirection:"column",gap:3
+                }}>
+                  <div style={{fontSize:9,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",padding:"2px 3px 5px"}}>
+                    Add {selCargoes.size} selected to tag
+                  </div>
+                  {getTagListFor("cargo").map(t=>{
+                    const col=getTagColor(t);
+                    return(
+                      <button key={t} onClick={()=>applyTagToSelectedCargoes(t)}
+                        style={{
+                          fontSize:11,padding:"4px 8px",borderRadius:3,textAlign:"left",
+                          cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
+                          border:"1px solid "+(col?col+"55":"rgba(88,166,255,0.12)"),
+                          background:"transparent",color:col||"rgba(160,200,255,0.78)"
+                        }}>
+                        {col&&<span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:col,marginRight:6,verticalAlign:"middle"}}/>}
+                        {String(t).toUpperCase()}
+                      </button>
+                    );
+                  })}
+                  <div style={{height:1,background:C.bd2,margin:"3px 0"}}/>
+                  <button onClick={()=>applyTagToSelectedCargoes("")}
+                    style={{
+                      fontSize:10,padding:"4px 8px",borderRadius:3,textAlign:"left",
+                      cursor:"pointer",fontFamily:"inherit",
+                      border:"1px solid rgba(255,107,107,.28)",
+                      background:"transparent",color:"rgba(255,107,107,.72)"
+                    }}>
+                    ✕ Clear tag
+                  </button>
+                </div>
+              </>
+            )}
+
             {/* Row hover highlight + mobile no-truncation */}
             <style>{`
               .cargo-table tr:hover td{background:rgba(58,130,246,0.06)!important;}
