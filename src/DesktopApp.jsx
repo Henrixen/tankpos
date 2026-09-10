@@ -1312,6 +1312,8 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   // Configurable navigation — declared after guestMode/GUEST_TABS/tab/bucketFilters
   // so all referenced bindings are initialized before these hooks evaluate.
   const [navConfig,setNavConfig]=useState(navLoad);
+  const [mobileNavOpen,setMobileNavOpen]=useState(false);
+  const mobileNavTouchX=useRef(null);
   useEffect(()=>{
     const h=e=>setNavConfig(navNorm(e.detail||navLoad()));
     window.addEventListener("navigation-config-updated",h);
@@ -1330,7 +1332,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
   const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||GUEST_TABS.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode]);
   const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
-  const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set())});
+  const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set());setMobileNavOpen(false)});
  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
 const [posPage,setPosPage]=useState(1);
 const POS_PAGE_SIZE=100;
@@ -2516,6 +2518,14 @@ const filtV=useMemo(()=>{
       }}>
         {/* Top bar: brand + Ask AI + Intel Vault + utilities */}
         <div style={{display:"flex",alignItems:"center",gap:mobile?6:12,padding:mobile?"8px 12px 0":"10px 20px 0"}}>
+          {mobile&&navConfig.mode==="sidebar"&&(
+            <button onClick={()=>setMobileNavOpen(true)} aria-label="Open navigation" style={{
+              width:38,height:38,flex:"0 0 38px",display:"flex",alignItems:"center",justifyContent:"center",
+              marginBottom:8,borderRadius:8,border:"1px solid rgba(88,166,255,.24)",
+              background:"rgba(11,27,50,.82)",color:"#9ec5ff",fontSize:22,lineHeight:1,
+              cursor:"pointer",fontFamily:"inherit",WebkitTapHighlightColor:"transparent"
+            }}>☰</button>
+          )}
           <div style={{flexShrink:0,display:"flex",flexDirection:"column",gap:1,paddingBottom:mobile?8:10}}>
             {!mobile&&<div style={{fontSize:9,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",color:"rgba(120,180,255,0.45)"}}>Tanker Intel Platform</div>}
             <div style={{display:"flex",alignItems:"baseline",gap:mobile?4:6}}>
@@ -2573,6 +2583,52 @@ const filtV=useMemo(()=>{
           {(()=>{const g=navConfig.groups.find(x=>x.tabs.includes(tab))||navConfig.groups[0];return g?<div style={{display:"flex",gap:3,padding:"5px 20px 7px",background:"rgba(7,15,29,.35)",overflowX:"auto"}}>{g.tabs.filter(id=>navIds.includes(id)).map(id=>{const m=navMeta[id],active=tab===id;return <button key={id} onClick={()=>goNav(id)} style={{display:"flex",gap:6,alignItems:"center",padding:"5px 10px",borderRadius:5,border:"1px solid "+(active?m.col+"66":"transparent"),background:active?m.col+"12":"transparent",color:active?m.col:"rgba(140,170,215,.55)",cursor:"pointer",fontSize:11}}><span>{m.icon}</span>{m.label}</button>})}</div>:null})()}
         </div>}
       </div>
+
+      {/* Mobile sidebar navigation: hamburger + overlay drawer. Also supports a
+          left-edge swipe to open and swipe-left inside the drawer to close. */}
+      {mobile&&navConfig.mode==="sidebar"&&<>
+        {!mobileNavOpen&&<div
+          onTouchStart={e=>{mobileNavTouchX.current=e.touches?.[0]?.clientX??null}}
+          onTouchEnd={e=>{const x0=mobileNavTouchX.current,x1=e.changedTouches?.[0]?.clientX;if(x0!=null&&x1!=null&&x1-x0>55)setMobileNavOpen(true);mobileNavTouchX.current=null}}
+          style={{position:"fixed",left:0,top:0,bottom:0,width:18,zIndex:205,touchAction:"pan-y"}}
+        />}
+        {mobileNavOpen&&<div
+          onClick={()=>setMobileNavOpen(false)}
+          style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(1,7,16,.68)",backdropFilter:"blur(3px)",WebkitBackdropFilter:"blur(3px)"}}
+        >
+          <aside
+            onClick={e=>e.stopPropagation()}
+            onTouchStart={e=>{mobileNavTouchX.current=e.touches?.[0]?.clientX??null}}
+            onTouchEnd={e=>{const x0=mobileNavTouchX.current,x1=e.changedTouches?.[0]?.clientX;if(x0!=null&&x1!=null&&x0-x1>55)setMobileNavOpen(false);mobileNavTouchX.current=null}}
+            style={{
+              width:"min(82vw,300px)",height:"100%",overflowY:"auto",
+              background:"linear-gradient(180deg,#07101e 0%,#0b1a30 55%,#081426 100%)",
+              borderRight:"1px solid rgba(88,166,255,.28)",
+              boxShadow:"18px 0 50px rgba(0,0,0,.48)",padding:"12px 10px 20px",
+              boxSizing:"border-box",touchAction:"pan-y"
+            }}
+          >
+            <div style={{height:44,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 8px 8px",borderBottom:"1px solid rgba(88,166,255,.13)",marginBottom:8}}>
+              <div>
+                <div style={{fontSize:9,fontWeight:800,letterSpacing:".16em",textTransform:"uppercase",color:"rgba(120,180,255,.45)"}}>Navigation</div>
+                <div style={{fontSize:15,fontWeight:800,color:"#e8f2ff",marginTop:2}}>Broker <span style={{color:"#43e97b"}}>Dashboard</span></div>
+              </div>
+              <button onClick={()=>setMobileNavOpen(false)} aria-label="Close navigation" style={{width:34,height:34,borderRadius:7,border:"1px solid rgba(88,166,255,.18)",background:"rgba(88,166,255,.06)",color:"rgba(180,210,245,.8)",fontSize:20,cursor:"pointer"}}>×</button>
+            </div>
+            {navIds.map(id=>{const m=navMeta[id],active=tab===id,count=navCount(id);return <button key={id} onClick={()=>goNav(id)} style={{
+              width:"100%",height:46,display:"flex",alignItems:"center",gap:12,padding:"0 12px",
+              margin:"3px 0",borderRadius:8,border:"1px solid "+(active?m.col+"66":"rgba(88,166,255,.05)"),
+              borderLeft:"3px solid "+(active?m.col:"transparent"),background:active?m.col+"16":"transparent",
+              color:active?m.col:"rgba(180,205,238,.78)",cursor:"pointer",fontFamily:"inherit",textAlign:"left"
+            }}>
+              <span style={{width:24,textAlign:"center",fontSize:17,flexShrink:0}}>{m.icon}</span>
+              <span style={{fontSize:13,fontWeight:active?800:650,flex:1}}>{m.label}</span>
+              {count>0&&<span style={{fontSize:10,fontWeight:700,color:active?m.col:"rgba(130,165,210,.55)",background:"rgba(255,255,255,.035)",padding:"2px 6px",borderRadius:9}}>{count.toLocaleString()}</span>}
+            </button>})}
+          </aside>
+        </div>}
+      </>}
+
       <div style={{display:"flex",minWidth:0}}>
         {navConfig.mode==="sidebar"&&!mobile&&<aside style={{
           width:navConfig.collapsed?58:218,
