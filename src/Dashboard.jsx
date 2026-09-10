@@ -280,18 +280,6 @@ ${text}`}]
         </div>
       </>}
 
-        {/* CHART VIEW */}
-        {view==="chart"&&histData.length>=2&&(
-          <div>
-            <WSChart data={histData} routes={ROUTES} colors={routeColors}/>
-          </div>
-        )}
-        {view==="chart"&&(histData.length<=1)?(
-          <div style={{color:C.faint,fontSize:12,padding:"20px 0",textAlign:"center"}}>
-            Paste updates to build a chart. {histData.length} snapshots so far.
-          </div>
-        ):null}
-      </>}
     </div>
   );
 }
