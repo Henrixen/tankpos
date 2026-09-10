@@ -115,6 +115,17 @@ function fmtIntSpace(v){
   return Math.round(n).toLocaleString("en-US").replace(/,/g," ");
 }
 
+function formatDwtDisplay(v){
+  const raw=String(v??"").trim();
+  if(!raw) return "";
+  const compact=raw.toLowerCase().replace(/\s/g,"").replace(/,/g,"");
+  let n;
+  if(/^\d+(?:\.\d+)?k$/.test(compact)) n=parseFloat(compact)*1000;
+  else n=Number(compact.replace(/[^\d.-]/g,""));
+  if(!Number.isFinite(n)) return raw;
+  return Math.round(n).toLocaleString("en-US").replace(/,/g," ");
+}
+
 function formatRateUSD(v){
   const raw=String(v||"").trim();
   if(!raw) return "";
@@ -363,15 +374,18 @@ ${t}`}]
   return JSON.parse(cl.slice(s,e+1));
 }
 
-function MiniBar({label,value,max,color=C.blue}){
+function MiniBar({label,value,max,color=C.blue,onClick,active=false}){
   const pct=max?Math.max(4,Math.round(value/max*100)):0;
   return (
-    <div style={{display:"flex",alignItems:"center",gap:8,fontSize:12}}>
-      <div style={{width:72,color:C.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
+    <div onClick={onClick} title={onClick?`Filter table by ${label}`:undefined}
+      style={{display:"flex",alignItems:"center",gap:8,fontSize:12,cursor:onClick?"pointer":"default",
+        padding:"2px 4px",margin:"0 -4px",borderRadius:4,
+        background:active?color+"14":"transparent",border:"1px solid "+(active?color+"55":"transparent")}}>
+      <div style={{width:72,color:active?color:C.faint,fontWeight:active?800:400,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
       <div style={{flex:1,height:8,background:C.bg3,borderRadius:99,overflow:"hidden"}}>
         <div style={{height:"100%",width:pct+"%",background:color+"cc"}}/>
       </div>
-      <div style={{width:42,textAlign:"right",color:C.tx,fontVariantNumeric:"tabular-nums"}}>{value}</div>
+      <div style={{width:42,textAlign:"right",color:C.dim,fontVariantNumeric:"tabular-nums"}}>{value}</div>
     </div>
   );
 }
@@ -483,6 +497,43 @@ function TagPicker({value=[],onChange,compact=false}){
   );
 }
 
+function TableEditInput({value,displayValue,onSave,color}){
+  const [editing,setEditing]=useState(false);
+  const [draft,setDraft]=useState("");
+
+  useEffect(()=>{
+    if(!editing) setDraft(String(value??""));
+  },[value,editing]);
+
+  function begin(){
+    setDraft(String(value??""));
+    setEditing(true);
+  }
+  function commit(){
+    if(!editing) return;
+    setEditing(false);
+    if(String(draft)!==String(value??"")) onSave(draft);
+  }
+
+  return (
+    <input
+      value={editing?draft:(displayValue??String(value??""))}
+      onFocus={e=>{begin();setTimeout(()=>e.target.select?.(),0);}}
+      onChange={e=>setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e=>{
+        if(e.key==="Enter"){e.preventDefault();e.currentTarget.blur();}
+        if(e.key==="Escape"){e.preventDefault();setDraft(String(value??""));setEditing(false);e.currentTarget.blur();}
+      }}
+      style={{
+        background:"transparent",border:"none",borderRadius:0,color,
+        fontFamily:"inherit",fontSize:12,padding:"3px 2px",outline:"none",width:"100%",
+        whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",boxSizing:"border-box"
+      }}
+    />
+  );
+}
+
 const DEFAULT_W={vessel_name:130,dwt:64,built:60,coating:90,vessel_spec:170,owner:110,commercial_operator:150,tc_charterer:130,rate:110,period:90,delivered:100,entry_date:92,tags:170,comment:220};
 
 export default function TimeCharterTab(){
@@ -497,6 +548,8 @@ export default function TimeCharterTab(){
   const [status,setStatus]=useState(null);
   const [search,setSearch]=useState("");
   const [tagFilter,setTagFilter]=useState(()=>new Set());
+  const [chartererChartFilter,setChartererChartFilter]=useState("");
+  const [segmentChartFilter,setSegmentChartFilter]=useState("");
   const [sortKey,setSortKey]=useState(null);
   const [sortDir,setSortDir]=useState("asc");
   const [tagList,setTagList]=useState(getTagList);
@@ -619,9 +672,9 @@ export default function TimeCharterTab(){
     }
   }
 
-  const filtered=useMemo(()=>{
+  const baseFiltered=useMemo(()=>{
     const q=search.trim().toLowerCase();
-    let out=rows.filter(r=>{
+    return rows.filter(r=>{
       if(tagFilter.size && !(r.tags||[]).some(t=>tagFilter.has(t))) return false;
       if(!q) return true;
       return [
@@ -629,28 +682,36 @@ export default function TimeCharterTab(){
         r.entry_date,r.dwt,r.built,r.coating,r.vessel_spec,r.comment,(r.tags||[]).join(" ")
       ].join(" ").toLowerCase().includes(q);
     });
+  },[rows,search,tagFilter]);
+
+  const filtered=useMemo(()=>{
+    let out=baseFiltered;
+    if(chartererChartFilter) out=out.filter(r=>(r.tc_charterer||"Unknown")===chartererChartFilter);
+    if(segmentChartFilter) out=out.filter(r=>dwtBucket(r.dwt)===segmentChartFilter);
+
     // No explicit sort chosen -> preserve natural row order so editing a cell
-    // (e.g. clicking into the date field) never reshuffles the table.
+    // never reshuffles the table.
     if(!sortKey) return out;
     const dir=sortDir==="asc"?1:-1;
     return [...out].sort((a,b)=>{
       if(sortKey==="rate"||sortKey==="dwt"){
-        const av=parseRate(a[sortKey]),bv=parseRate(b[sortKey]);
-        if(av==null&&bv==null) return 0;
-        if(av==null) return 1;
-        if(bv==null) return -1;
+        const av=sortKey==="rate"?parseRate(a.rate):Number(String(a.dwt||"").replace(/[^\d.]/g,""));
+        const bv=sortKey==="rate"?parseRate(b.rate):Number(String(b.dwt||"").replace(/[^\d.]/g,""));
+        if(!Number.isFinite(av)&&!Number.isFinite(bv)) return 0;
+        if(!Number.isFinite(av)) return 1;
+        if(!Number.isFinite(bv)) return -1;
         return (av-bv)*dir;
       }
       return String(a[sortKey]||"").localeCompare(String(b[sortKey]||""))*dir;
     });
-  },[rows,search,tagFilter,sortKey,sortDir]);
+  },[baseFiltered,chartererChartFilter,segmentChartFilter,sortKey,sortDir]);
 
   const stats=useMemo(()=>{
-    const rates=filtered.map(r=>parseRate(r.rate)).filter(n=>n!=null);
+    const rates=baseFiltered.map(r=>parseRate(r.rate)).filter(n=>n!=null);
     const byChar={};
     const bySize={};
     const ratesBySize={};
-    filtered.forEach(r=>{
+    baseFiltered.forEach(r=>{
       const c=r.tc_charterer||"Unknown";
       byChar[c]=(byChar[c]||0)+1;
       const seg=dwtBucket(r.dwt);
@@ -675,7 +736,7 @@ export default function TimeCharterTab(){
       bySize:sizeEntries,
       avgBySize
     };
-  },[filtered]);
+  },[baseFiltered]);
 
   const inp={
     background:C.bg3,
@@ -714,7 +775,7 @@ export default function TimeCharterTab(){
   };
   const td={
     padding:"5px 8px",
-    borderBottom:"1px solid rgba(39,74,116,.24)",
+    borderBottom:"1px solid rgba(255,255,255,0.035)",
     fontSize:12,
     verticalAlign:"middle"
   };
@@ -805,12 +866,14 @@ export default function TimeCharterTab(){
       <div style={{display:"grid",gridTemplateColumns:"220px minmax(420px,1fr) minmax(560px,1.15fr)",gap:12}}>
         <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:12}}>
           <div style={{fontSize:11,color:C.faint,textTransform:"uppercase",fontWeight:800}}>Stats</div>
-          <div style={{fontSize:26,color:C.tx,fontWeight:800}}>{stats.count}</div>
+          <div style={{fontSize:26,color:C.tx,fontWeight:800}}>{filtered.length}</div>
           <div style={{fontSize:12,color:C.dim}}>TC vessels shown</div>
         </div>
         <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:12}}>
           <div style={{fontSize:11,color:C.faint,textTransform:"uppercase",fontWeight:800,marginBottom:8}}>Top TC charterers</div>
-          {stats.byChar.map(([k,v])=><MiniBar key={k} label={k} value={v} max={stats.maxChar} color={C.blue}/>)}
+          {stats.byChar.map(([k,v])=><MiniBar key={k} label={k} value={v} max={stats.maxChar} color={C.blue}
+            active={chartererChartFilter===k}
+            onClick={()=>setChartererChartFilter(cur=>cur===k?"":k)}/>)}
         </div>
         <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:12}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,color:C.faint,textTransform:"uppercase",fontWeight:800,marginBottom:8}}>
@@ -819,7 +882,11 @@ export default function TimeCharterTab(){
           </div>
           <div style={{display:"flex",flexDirection:"column"}}>
             {stats.bySize.map(([k,v])=>(
-              <div key={k} style={{display:"grid",gridTemplateColumns:"118px 1fr 38px 105px",alignItems:"center",gap:8,minHeight:23,fontSize:12,borderBottom:"1px solid "+C.bd2}}>
+              <div key={k} onClick={()=>setSegmentChartFilter(cur=>cur===k?"":k)} title={`Filter table by ${k}`}
+                style={{display:"grid",gridTemplateColumns:"118px 1fr 38px 105px",alignItems:"center",gap:8,minHeight:23,fontSize:12,
+                  borderBottom:"1px solid rgba(255,255,255,.035)",cursor:"pointer",borderRadius:3,
+                  background:segmentChartFilter===k?(SEGMENT_COLORS[k]||C.blue)+"12":"transparent",
+                  outline:segmentChartFilter===k?"1px solid "+(SEGMENT_COLORS[k]||C.blue)+"44":"none"}}>
                 <div style={{color:SEGMENT_COLORS[k]||C.dim,fontWeight:800,whiteSpace:"nowrap"}}>▸ {k}</div>
                 <div style={{height:7,background:C.bg3,borderRadius:99,overflow:"hidden"}}>
                   <div style={{height:"100%",width:(stats.maxSize?Math.max(4,Math.round(v/stats.maxSize*100)):0)+"%",background:(SEGMENT_COLORS[k]||C.blue)+"cc"}}/>
@@ -837,6 +904,12 @@ export default function TimeCharterTab(){
       <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,overflow:"hidden"}}>
         <div style={{display:"flex",gap:8,padding:10,borderBottom:"1px solid "+C.bd2,alignItems:"center",flexWrap:"wrap"}}>
           <input style={{...inp,width:230}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search vessel, owner, TC, rate…"/>
+          {(chartererChartFilter||segmentChartFilter)&&(
+            <button style={btn(true,C.blue)} onClick={()=>{setChartererChartFilter("");setSegmentChartFilter("");}}
+              title="Clear chart filters">
+              ✕ {chartererChartFilter||segmentChartFilter}
+            </button>
+          )}
           <select
             value={sortKey||""}
             onChange={e=>{ if(e.target.value){setSortKey(e.target.value);setSortDir("asc");} else {setSortKey(null);} }}
@@ -874,18 +947,18 @@ export default function TimeCharterTab(){
             </thead>
             <tbody>
               {filtered.map((r,i)=>(
-                <tr key={r.id} style={{background:i%2?"#101d31":"#0b1728",height:34}}>
+                <tr key={r.id} style={{background:i%2?"rgba(22,37,64,0.82)":"rgba(7,15,28,0.96)",height:34}}>
                   {COLS.map(c=>c==="tags" ? (
                     <td key={c} style={{...td,width:colWidths[c]||DEFAULT_W[c]||100,overflow:"hidden"}}>
                       <TagPicker compact value={r.tags||[]} onChange={tags=>{update(r.id,"tags",tags);setTagList(getTagList());}} />
                     </td>
                   ) : (
                     <td key={c} style={{...td,width:colWidths[c]||DEFAULT_W[c]||100,overflow:"hidden"}} title={r[c]||""}>
-                      <input
-                        value={c==="dwt" ? fmtIntSpace(r[c]) : c==="rate" ? formatRateUSD(r[c]) : (r[c]||"")}
-                        onChange={e=>update(r.id,c,e.target.value)}
-                        onBlur={e=>{ if(c==="rate") update(r.id,"rate",formatRateUSD(e.target.value)); }}
-                        style={{...inp,border:"none",background:"transparent",padding:"3px 2px",color:c==="rate"?C.amber:C.tx,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}
+                      <TableEditInput
+                        value={r[c]||""}
+                        displayValue={c==="dwt" ? formatDwtDisplay(r[c]) : c==="rate" ? formatRateUSD(r[c]) : (r[c]||"")}
+                        onSave={val=>update(r.id,c,c==="rate"?formatRateUSD(val):val)}
+                        color={c==="rate"?C.green:(c==="vessel_name"||c==="tc_charterer")?"#d9e8ff":C.dim}
                       />
                     </td>
                   ))}
