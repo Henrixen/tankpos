@@ -356,13 +356,68 @@ export const normaliseQty = q => {
 };
 
 export const fmtN = n => { if(!n && n!==0) return ""; const v=Number(String(n).replace(/,/g,"")); if(isNaN(v)) return String(n); if(v>=1000) return Math.round(v/1000)+"k"; return String(v); };
-export const fmtFreight = s => {
-  if(!s) return s;
-  return String(s)
-    .trim()
-    .replace(/\s+/g, " ")
-    .replace(/(\d)\.(\d)/g, "$1,$2");
-};
+// Freight normaliser. Clear numeric freight values are always stored/displayed
+// in the canonical dashboard format:
+// 250k / 250000 / 250 000 -> USD 250K LS
+// 115 -> USD 115 PMT
+// 272.5k -> USD 272,5K LS
+// Text values such as RNR, COA, LPS and PDPR are preserved.
+export function normaliseFreight(value){
+  if(value === null || value === undefined) return "";
+
+  const original = String(value).trim();
+  if(!original) return "";
+
+  // Collapse spaces first so "250 000" behaves like 250000.
+  const s = original.replace(/\s+/g, " ").trim();
+  const compact = s.replace(/\s/g,"");
+
+  const shown = n => {
+    const rounded = Math.round(Number(n) * 1000) / 1000;
+    return String(rounded).replace(".", ",");
+  };
+
+  // Explicit PMT.
+  let m = s.match(/^(?:\$\s*|USD\s+)?(\d+(?:[.,]\d+)?)\s*PMT(?:\s+(\d+\/\d+))?$/i);
+  if(m){
+    const n=Number(m[1].replace(",","."));
+    if(Number.isFinite(n)) return `USD ${shown(n)} PMT${m[2]?` ${m[2]}`:""}`;
+  }
+
+  // Explicit K = lumpsum.
+  m = s.match(/^(?:\$\s*|USD\s+)?(\d+(?:[.,]\d+)?)\s*K(?:\s*(?:LS|L\/S|LSUM))?$/i);
+  if(m){
+    const n=Number(m[1].replace(",","."));
+    if(Number.isFinite(n)) return `USD ${shown(n)}K LS`;
+  }
+
+  // Explicit M = lumpsum.
+  m = s.match(/^(?:\$\s*|USD\s+)?(\d+(?:[.,]\d+)?)\s*M(?:\s*(?:LS|L\/S|LSUM))?$/i);
+  if(m){
+    const n=Number(m[1].replace(",","."));
+    if(Number.isFinite(n)) return `USD ${shown(n)}M LS`;
+  }
+
+  // Plain digits, including spaced thousands such as "250 000".
+  const numericCandidate=compact
+    .replace(/^USD/i,"")
+    .replace(/^\$/,"")
+    .replace(/(?:LS|L\/S|LSUM)$/i,"")
+    .replace(/,/g,"");
+
+  if(/^\d+$/.test(numericCandidate)){
+    const n=Number(numericCandidate);
+    if(Number.isFinite(n)){
+      if(n<=999) return `USD ${shown(n)} PMT`;
+      if(n>=1000000) return `USD ${shown(n/1000000)}M LS`;
+      return `USD ${shown(n/1000)}K LS`;
+    }
+  }
+
+  return original;
+}
+
+export const fmtFreight = s => normaliseFreight(s);
 
 export const toTCase = s => {
   if(!s) return s;
