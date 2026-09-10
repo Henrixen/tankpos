@@ -216,8 +216,8 @@ ${text}`}]
       {secHead("📊 Worldscale Spot + FFA Tracker")}
 
       {/* Paste input */}
-      <div style={{marginBottom:12}}>
-        <div style={{fontSize:12,color:C.dim,marginBottom:4}}>
+      <div style={{marginBottom:7}}>
+        <div style={{fontSize:11,color:C.dim,marginBottom:3}}>
           Paste data from broker recap, Baltic Exchange, or the FFA screenshot - any format works
         </div>
         {img?.dataUrl&&<div style={{position:"relative",marginBottom:4}}><img src={img.dataUrl} alt="" style={{width:"100%",maxHeight:80,objectFit:"cover",borderRadius:4,display:"block"}}/><button onClick={()=>setImg(null)} style={{position:"absolute",top:3,right:3,background:"rgba(0,0,0,.7)",border:"none",color:"#fff",borderRadius:"50%",width:20,height:20,fontSize:12,cursor:"pointer"}}>✕</button></div>}
@@ -225,7 +225,7 @@ ${text}`}]
         <textarea value={pasteText} onChange={e=>setPaste(e.target.value)}
           onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
           placeholder={"TC2 (CONT/TA-37)  127.81(+1.87)  FEB/26: 130.50  MAR/26: 142.50  Q1: 135.50\nTC14 (USG/UKC-38)  270.71(+8.57)\nTC23 220.50  TC6 140.00\n\n- or Ctrl+V a screenshot -"}
-          style={{width:"100%",minHeight:72,maxHeight:96,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
+          style={{width:"100%",height:46,minHeight:46,maxHeight:46,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
         <input ref={wsFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
         <div style={{display:"flex",gap:6,marginTop:5,alignItems:"center"}}>
           <button onClick={parseWS} disabled={parsing} style={{background:parsing?"rgba(88,166,255,.06)":"rgba(88,166,255,.11)",border:"1px solid rgba(88,166,255,.36)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px 16px",cursor:parsing?"default":"pointer"}}>
@@ -244,7 +244,7 @@ ${text}`}]
         </div>
         <textarea value={wsNote} onChange={e=>{setWsNote(e.target.value);supabase.from("dashboard").upsert({key:"ws-note",value:e.target.value},{onConflict:"key"});}}
           placeholder="e.g. TC2 firming on back of USAC demand, FFA contango widening, Baltic tightening..."
-          style={{width:"100%",minHeight:54,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,
+          style={{width:"100%",height:38,minHeight:38,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,
             fontFamily:"inherit",fontSize:12,padding:"6px 8px",resize:"vertical",boxSizing:"border-box"}}/>
       </div>
 
@@ -252,7 +252,7 @@ ${text}`}]
         <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
           <span style={{fontSize:11,color:C.faint}}>Last update: {data.lastUpdate||"—"}</span>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"minmax(500px,1.15fr) minmax(420px,1fr)",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:"minmax(300px,.58fr) minmax(620px,1.42fr)",gap:12}}>
           <div>
             <div style={{fontSize:11,color:C.faint,fontWeight:700,textTransform:"uppercase",marginBottom:5}}>Current spot + FFA</div>
             <div style={{overflowX:"auto"}}>
@@ -285,7 +285,7 @@ ${text}`}]
 }
 
 function WSChart({data,routes,colors,compact=false}) {
-  const W=700,H=compact?112:200,PL=42,PR=16,PT=10,PB=compact?22:28;
+  const W=700,H=compact?154:200,PL=42,PR=16,PT=10,PB=compact?22:28;
   const iW=W-PL-PR,iH=H-PT-PB;
 
   // Get all WS values to find scale
@@ -357,32 +357,15 @@ function NewsFeed() {
   async function fetchNews() {
     setLoading(true); setErr(null);
     try {
-      const feeds = [
-        "https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.tradewindsnews.com%2Frss%2F",
-        "https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fwww.tradewindsnews.com%2Ftankers%2Frss",
-      ];
-      const results = await Promise.allSettled(feeds.map(u=>fetch(u).then(r=>r.json())));
-      const all = [];
-      for(const r of results){
-        if(r.status==="fulfilled" && r.value?.items){
-          all.push(...r.value.items.map(it=>({
-            title:   it.title,
-            link:    it.link,
-            pubDate: it.pubDate,
-            desc:    stripHtml(it.description||"").slice(0,120),
-          })));
-        }
-      }
-      const seen=new Set();
-      const deduped=all.filter(it=>{if(seen.has(it.link))return false;seen.add(it.link);return true;});
-      deduped.sort((a,b)=>new Date(b.pubDate)-new Date(a.pubDate));
-      const fresh=deduped.slice(0,20);
+      const r=await fetch("/api/shipping-news",{cache:"no-store"});
+      if(!r.ok)throw new Error("HTTP "+r.status);
+      const j=await r.json();
+      const fresh=(j.items||[]).slice(0,24);
       const time=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
       setItems(fresh); setLastFetch(time);
-      // Cache in Supabase (fire and forget)
       try{await supabase.from("dashboard").upsert({key:"news-cache",value:JSON.stringify({items:fresh,time})},{onConflict:"key"});}catch(_){}
     } catch(e) {
-      setErr("News unavailable - " + e.message.slice(0,60));
+      setErr("Shipping news unavailable - "+String(e.message||e).slice(0,80));
     } finally { setLoading(false); }
   }
 
@@ -398,7 +381,7 @@ function NewsFeed() {
     <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"14px 16px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
         <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em"}}>
-          📰 TradeWinds - Tanker News
+          📰 Shipping News · Tankers / Maritime
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           {lastFetch&&<span style={{fontSize:12,color:C.faint}}>Fetched {lastFetch}</span>}
@@ -410,7 +393,7 @@ function NewsFeed() {
       </div>
       {err&&<div style={{fontSize:12,color:C.amber,padding:"8px",background:C.bg3,borderRadius:4,marginBottom:8}}>{err}</div>}
       {loading&&items.length===0?(<div style={{color:C.faint,fontSize:12,padding:"16px 0",textAlign:"center"}}>Loading news…</div>):null}
-      <div style={{display:"flex",flexDirection:"column",gap:0}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",columnGap:18,rowGap:0}}>
         {items.map((it,i)=>(
           <a key={it.link+i} href={it.link} target="_blank" rel="noopener noreferrer"
             style={{display:"block",padding:"8px 6px",borderBottom:"1px solid "+C.bg3,textDecoration:"none",
@@ -547,12 +530,24 @@ function Dashboard({vessels, cargoes, history}) {
     return Math.abs(diff)<=120?diff:null;
   };
 
-  const withDays = openVessels.map(v => ({ ...v, days: calcFixingWindow(v) })).filter(v => v.days !== null);
+  const withDays = openVessels.map(v => ({ ...v, days: calcFixingWindow(v) })).filter(v => v.days !== null && v.days >= 0);
   const fleetAvg = withDays.length ? Math.round(withDays.reduce((a,b)=>a+b.days,0)/withDays.length) : null;
 
   const regionByLabel={};
-  for(const row of regionHistory||[]){const lab=String(row.snapshot_label||"").toUpperCase();regionByLabel[lab]||={};regionByLabel[lab][row.region]={ships:Number(row.ships||0),dwt:Number(row.dwt||0),snapshotAt:row.snapshot_at};}
-  const currentRegionRows=REGION_ORDER.map(region=>({region,now:regionByLabel.NOW?.[region]||{ships:0,dwt:0},d14:regionByLabel["14D"]?.[region]||null,d30:regionByLabel["30D"]?.[region]||null,d90:regionByLabel["90D"]?.[region]||null})).filter(x=>x.now.ships||x.d14?.ships||x.d30?.ships||x.d90?.ships);
+  for(const row of regionHistory||[]){
+    const lab=String(row.snapshot_label||"").toUpperCase(), region=row.region, seg=row.segment||"Unknown";
+    regionByLabel[lab]||={};
+    regionByLabel[lab][region]||={ships:0,segments:{}};
+    regionByLabel[lab][region].ships+=Number(row.ships||0);
+    regionByLabel[lab][region].segments[seg]=(regionByLabel[lab][region].segments[seg]||0)+Number(row.ships||0);
+  }
+  const currentRegionRows=REGION_ORDER.map(region=>({
+    region,
+    now:regionByLabel.NOW?.[region]||{ships:0,segments:{}},
+    d14:regionByLabel["14D"]?.[region]||null,
+    d30:regionByLabel["30D"]?.[region]||null,
+    d90:regionByLabel["90D"]?.[region]||null
+  })).filter(x=>x.now.ships||x.d14?.ships||x.d30?.ships||x.d90?.ships);
   const latestPositionUpdate=(()=>{const ds=(vessels||[]).map(v=>parseDashboardDate(v.updatedAt||v.fileDate)).filter(Boolean);return ds.length?new Date(Math.max(...ds.map(d=>d.getTime()))):null;})();
 
   // Build chart data from history + today
@@ -565,7 +560,7 @@ function Dashboard({vessels, cargoes, history}) {
     
     for(const v of openVessels){
       const d = calcFixingWindow(v);
-      if(d === null) continue;
+      if(d === null || d < 0) continue;
       const op = (v.operator||"Unknown").trim();
       todayByOp[op] = (todayByOp[op]||[]).concat(d);
     }
@@ -575,18 +570,20 @@ function Dashboard({vessels, cargoes, history}) {
     if (todayIdx>=0) chartSnaps[todayIdx]=todaySnap;
     else chartSnaps.push(todaySnap);
   }
-  const chartData = chartSnaps.slice(-30).map(h=>({
-    date: h.date,
-    avg:  h.fixingAvg,
-    open: h.openCount,
-    total:h.total,
-  }));
+  const chartData = chartSnaps.slice(-30).map(h=>{
+    const raw=Number(h.fixingAvg);
+    const avg=Number.isFinite(raw)&&Math.abs(raw)<=120?Math.abs(raw):null;
+    return {date:h.date,avg,open:h.openCount,total:h.total};
+  }).filter(h=>h.avg!=null);
 
   // Get all operators seen in history for multi-line chart
   const allOps = [...new Set(history.flatMap(h=>Object.keys(h.byOp||{})))].slice(0,6);
   const opChartData = chartSnaps.slice(-30).map(h=>({
-    date: h.date,
-    ...Object.fromEntries(allOps.map(op=>[op,(h.byOp||{})[op]??null]))
+    date:h.date,
+    ...Object.fromEntries(allOps.map(op=>{
+      const raw=Number((h.byOp||{})[op]);
+      return [op,Number.isFinite(raw)&&Math.abs(raw)<=120?Math.abs(raw):null];
+    }))
   }));
 
 
@@ -697,20 +694,34 @@ function Dashboard({vessels, cargoes, history}) {
         {panel(
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
-              {secHead("Open fleet by main region · historical tonnage")}
+              {secHead("Open fleet by main region · vessel count")}
               <span style={{fontSize:9,color:D.faint}}>NOW / 14D / 30D / 90D</span>
             </div>
-            {regionHistoryLoading?<div style={{fontSize:11,color:D.faint,padding:"12px 0"}}>Loading historical tonnage…</div>:
-             regionHistoryError?<div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Run the Supabase RPC SQL first: {regionHistoryError}</div>:
+            {regionHistoryLoading?<div style={{fontSize:11,color:D.faint,padding:"12px 0"}}>Loading historical fleet…</div>:
+             regionHistoryError?<div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Run updated Supabase RPC SQL: {regionHistoryError}</div>:
              <>
-              <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 60px 78px 110px 110px 110px",gap:8,padding:"0 2px 6px",fontSize:9,fontWeight:800,color:D.faint,textTransform:"uppercase"}}>
-                <span>Region</span><span style={{textAlign:"right"}}>Ships</span><span style={{textAlign:"right"}}>DWT</span><span style={{textAlign:"right"}}>vs 14d</span><span style={{textAlign:"right"}}>vs 30d</span><span style={{textAlign:"right"}}>vs 90d</span>
+              <div style={{display:"grid",gridTemplateColumns:"minmax(250px,1fr) 60px 72px 72px 72px",gap:8,padding:"0 2px 6px",fontSize:9,fontWeight:800,color:D.faint,textTransform:"uppercase"}}>
+                <span>Region / size segments</span><span style={{textAlign:"right"}}>Ships</span><span style={{textAlign:"right"}}>vs 14d</span><span style={{textAlign:"right"}}>vs 30d</span><span style={{textAlign:"right"}}>vs 90d</span>
               </div>
-              {currentRegionRows.map(({region,now,d14,d30,d90})=>{const max=Math.max(1,...currentRegionRows.map(x=>x.now.ships));const col=REGION_COLORS[region]||D.dim;const delta=p=>p?<span style={{color:(now.ships-p.ships)>0?D.amber:(now.ships-p.ships)<0?D.green:D.faint,fontWeight:700}}>{fmtSigned(now.ships-p.ships)} · {fmtSigned(now.dwt-p.dwt,fmtDwtCompact)}</span>:<span style={{color:D.faint}}>—</span>;return <div key={region} style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 60px 78px 110px 110px 110px",gap:8,alignItems:"center",padding:"5px 2px",borderTop:"1px solid "+D.border}}>
-                <div><span style={{fontSize:11,fontWeight:800,color:col}}>{region}</span><div style={{height:4,background:D.bg4,borderRadius:99,overflow:"hidden",marginTop:3}}><div style={{height:"100%",width:Math.max(3,Math.round(now.ships/max*100))+"%",background:col,borderRadius:99}}/></div></div>
-                <span style={{fontSize:11,textAlign:"right",color:D.tx,fontWeight:800}}>{now.ships}</span><span style={{fontSize:11,textAlign:"right",color:D.dim}}>{fmtDwtCompact(now.dwt)}</span><span style={{fontSize:10,textAlign:"right"}}>{delta(d14)}</span><span style={{fontSize:10,textAlign:"right"}}>{delta(d30)}</span><span style={{fontSize:10,textAlign:"right"}}>{delta(d90)}</span>
-              </div>})}
-              <div style={{fontSize:9,color:D.faint,marginTop:7}}>Latest report per vessel at each snapshot, deduplicated; stale reports older than 14 days excluded.</div>
+              {currentRegionRows.map(({region,now,d14,d30,d90})=>{
+                const max=Math.max(1,...currentRegionRows.map(x=>x.now.ships));
+                const col=REGION_COLORS[region]||D.dim;
+                const delta=p=>p?<span style={{color:(now.ships-p.ships)>0?D.amber:(now.ships-p.ships)<0?D.green:D.faint,fontWeight:800}}>{fmtSigned(now.ships-p.ships)}</span>:<span style={{color:D.faint}}>—</span>;
+                const segOrder=["Sub 10","City","Inter","J19","Flexi","Handy","MR"];
+                const segs=segOrder.filter(k=>now.segments?.[k]).map(k=>`${k} ${now.segments[k]}`).join(" · ");
+                return <div key={region} style={{display:"grid",gridTemplateColumns:"minmax(250px,1fr) 60px 72px 72px 72px",gap:8,alignItems:"center",padding:"6px 2px",borderTop:"1px solid "+D.border}}>
+                  <div style={{minWidth:0}}>
+                    <span style={{fontSize:11,fontWeight:800,color:col}}>{region}</span>
+                    <div style={{fontSize:8.5,color:D.faint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",marginTop:2}}>{segs||"No DWT segment data"}</div>
+                    <div style={{height:3,background:D.bg4,borderRadius:99,overflow:"hidden",marginTop:3}}><div style={{height:"100%",width:Math.max(3,Math.round(now.ships/max*100))+"%",background:col,borderRadius:99}}/></div>
+                  </div>
+                  <span style={{fontSize:11,textAlign:"right",color:D.tx,fontWeight:850}}>{now.ships}</span>
+                  <span style={{fontSize:10,textAlign:"right"}}>{delta(d14)}</span>
+                  <span style={{fontSize:10,textAlign:"right"}}>{delta(d30)}</span>
+                  <span style={{fontSize:10,textAlign:"right"}}>{delta(d90)}</span>
+                </div>
+              })}
+              <div style={{fontSize:9,color:D.faint,marginTop:7}}>Latest report per vessel at each snapshot, deduplicated. “Other” = super-regions outside the commercial mappings below.</div>
              </>}
           </>,
           {flex:"1 1 520px",minWidth:520}
