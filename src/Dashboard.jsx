@@ -318,14 +318,14 @@ ${text}`}]
         display:"grid",
         gridTemplateColumns:"minmax(360px,40%) minmax(0,60%)",
         gap:12,
-        height:560,
-        minHeight:560,
+        height:620,
+        minHeight:620,
         alignItems:"stretch"
       }}>
         {/* LEFT 40% — paste / parsed market / larger daily notes */}
         <div style={{
           display:"grid",
-          gridTemplateRows:"22% 31% minmax(0,47%)",
+          gridTemplateRows:"33% 39% minmax(0,28%)",
           gap:8,
           minWidth:0,
           minHeight:0
@@ -340,7 +340,7 @@ ${text}`}]
             <textarea value={pasteText} onChange={e=>setPaste(e.target.value)}
               onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
               placeholder={"TC2 127.81(+1.87)  FEB/26 130.50 · TC14 270.71(+8.57) · or paste screenshot"}
-              style={{width:"100%",height:50,minHeight:50,maxHeight:50,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"5px 7px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
+              style={{width:"100%",height:72,minHeight:72,maxHeight:72,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"5px 7px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
             <input ref={wsFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
             <div style={{display:"flex",gap:5,marginTop:4,alignItems:"center",minWidth:0}}>
               <button onClick={parseWS} disabled={parsing} style={{background:parsing?"rgba(88,166,255,.06)":"rgba(88,166,255,.11)",border:"1px solid rgba(88,166,255,.36)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:10.5,padding:"4px 10px",cursor:parsing?"default":"pointer",whiteSpace:"nowrap"}}>
@@ -358,8 +358,8 @@ ${text}`}]
               <span style={{fontSize:9,color:C.faint,whiteSpace:"nowrap"}}>{data?.lastUpdate||"—"}</span>
             </div>
             {data ? (
-              <div style={{overflow:"auto",minHeight:0,flex:1}}>
-                <table style={{borderCollapse:"collapse",fontSize:11,width:"100%"}}>
+              <div style={{overflowX:"auto",overflowY:"visible",minHeight:0,flex:1}}>
+                <table style={{borderCollapse:"collapse",fontSize:11.5,width:"100%"}}>
                   <thead>
                     <tr>
                       <th style={{...th2,textAlign:"left",position:"sticky",top:0,zIndex:1}}>Route</th>
@@ -786,7 +786,8 @@ function Dashboard({vessels, cargoes, history}) {
   }
   const getRegionCount=(label,region)=>{
     const r=regionByLabel[label]?.[region];
-    return r?Number(r.ships||0):0;
+    if(!r)return 0;
+    return segmentFilter==="All" ? Number(r.ships||0) : Number(r.segments?.[segmentFilter]||0);
   };
   const currentRegionRows=REGION_ORDER.map(region=>({
     region,now:getRegionCount("NOW",region),d14:getRegionCount("14D",region),d30:getRegionCount("30D",region),d90:getRegionCount("90D",region)
@@ -995,21 +996,27 @@ function Dashboard({vessels, cargoes, history}) {
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
               {secHead("Open fleet by main region · vessel count")}
+            <div style={{display:"flex",gap:4,flexWrap:"wrap",margin:"2px 0 8px"}}>
+              {SEGMENT_ORDER.map(seg=>{const active=segmentFilter===seg;return <button key={seg} onClick={()=>setSegmentFilter(seg)} style={{background:active?"rgba(88,166,255,.16)":D.bg3,border:"1px solid "+(active?D.blue:D.border2),borderRadius:4,color:active?D.tx:D.dim,fontFamily:"inherit",fontSize:9.5,fontWeight:active?800:600,padding:"3px 7px",cursor:"pointer"}}>{seg}</button>})}
+            </div>
               <span style={{fontSize:9,color:D.faint}}>historical totals</span>
             </div>
             {regionHistoryLoading?<div style={{fontSize:11,color:D.faint,padding:"12px 0"}}>Loading historical fleet…</div>:regionHistoryError?<div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Run updated Supabase RPC SQL: {regionHistoryError}</div>:<>
               <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"1px 2px 7px",fontSize:10.5,fontWeight:900,color:D.dim,textTransform:"uppercase",letterSpacing:".04em"}}><span>Region</span><span style={{textAlign:"right",color:D.tx}}>NOW</span><span style={{textAlign:"right"}}>14D</span><span style={{textAlign:"right"}}>30D</span><span style={{textAlign:"right"}}>90D</span></div>
               {currentRegionRows.map(({region,now,d14,d30,d90})=><div key={region} style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,alignItems:"center",padding:"6px 2px",borderTop:"1px solid "+D.border}}><span style={{fontSize:11,fontWeight:800,color:REGION_COLORS[region]||D.dim}}>{region}</span><span style={{fontSize:11,textAlign:"right",color:D.tx,fontWeight:850}}>{now}</span><span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d14}</span><span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d30}</span><span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d90}</span></div>)}
-              <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"7px 2px 0",borderTop:"1px solid "+D.border2,fontSize:10,fontWeight:850}}><span style={{color:D.faint}}>TOTAL FLEET</span><span style={{textAlign:"right",color:D.tx}}>{regionTotals.now}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d14}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d30}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d90}</span></div>
+              <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"7px 2px 0",borderTop:"1px solid "+D.border2,fontSize:10,fontWeight:850}}><span style={{color:D.faint}}>{segmentFilter==="All"?"TOTAL FLEET":"TOTAL · "+segmentFilter}</span><span style={{textAlign:"right",color:D.tx}}>{regionTotals.now}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d14}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d30}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d90}</span></div>
             </>}
           </>,
           {minWidth:0}
         )}
         {panel(
           <>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>{secHead("Regional tonnage supply · now vs 30d")}<span style={{fontSize:9,color:D.faint}}>fleet totals</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>{secHead("Regional tonnage supply · now vs 30d")}<span style={{fontSize:9,color:D.faint}}>{segmentFilter==="All"?"fleet totals":segmentFilter}</span></div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap",margin:"2px 0 8px"}}>
+              {SEGMENT_ORDER.map(seg=>{const active=segmentFilter===seg;return <button key={seg} onClick={()=>setSegmentFilter(seg)} style={{background:active?"rgba(88,166,255,.16)":D.bg3,border:"1px solid "+(active?D.blue:D.border2),borderRadius:4,color:active?D.tx:D.dim,fontFamily:"inherit",fontSize:9.5,fontWeight:active?800:600,padding:"3px 7px",cursor:"pointer"}}>{seg}</button>})}
+            </div>
             <RegionCompareChart rows={currentRegionRows} colors={REGION_COLORS}/>
-            <div style={{display:"flex",gap:14,marginTop:8,fontSize:10,color:D.faint}}><span><b style={{color:"#73c7ff"}}>■</b> Current</span><span><b style={{color:"rgba(190,202,220,.65)"}}>■</b> 30 days ago</span></div>
+            <div style={{display:"flex",gap:14,marginTop:8,fontSize:10,color:D.faint}}><span><b style={{color:"#3b82f6"}}>■</b> Current</span><span><b style={{color:"rgba(190,202,220,.65)"}}>■</b> 30 days ago</span></div>
           </>,
           {minWidth:0}
         )}
@@ -1051,7 +1058,7 @@ function RegionCompareChart({rows,colors}) {
     {rows.map(r=><div key={r.region} style={{display:"grid",gridTemplateColumns:"145px 1fr 38px",gap:8,alignItems:"center"}}>
       <span style={{fontSize:10,fontWeight:800,color:colors[r.region]||C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.region}</span>
       <div style={{display:"grid",gap:3}}>
-        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.now?2:0,r.now/max*100)+"%",background:"#73c7ff",borderRadius:99}}/></div>
+        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.now?2:0,r.now/max*100)+"%",background:"#3b82f6",borderRadius:99}}/></div>
         <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.d30?2:0,r.d30/max*100)+"%",background:"rgba(190,202,220,.62)",borderRadius:99}}/></div>
       </div>
       <div style={{fontSize:9,textAlign:"right",lineHeight:1.45}}><div style={{color:C.tx,fontWeight:800}}>{r.now}</div><div style={{color:C.faint}}>{r.d30}</div></div>
