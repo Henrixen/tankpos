@@ -55,13 +55,105 @@ function WSTracker() {
   const [parsing,  setParsing] = useState(false);
   const [status,   setStatus]  = useState(null);
   const [wsNote,   setWsNote]  = useState("");
+  const [wsNoteImg,setWsNoteImg] = useState(null);
+  const [wsNoteSavedAt,setWsNoteSavedAt] = useState(null);
+  const [wsNoteSaveState,setWsNoteSaveState] = useState("loading");
+  const wsNoteLoadedRef = useRef(false);
   const wsFileRef = useRef(null);
+  const wsNoteFileRef = useRef(null);
 
-  // Load wsNote from Supabase
+  function compressNoteImage(file){
+    return new Promise((resolve,reject)=>{
+      if(!file){resolve(null);return;}
+      const reader=new FileReader();
+      reader.onerror=()=>reject(new Error("Could not read image"));
+      reader.onload=e=>{
+        const im=new Image();
+        im.onerror=()=>reject(new Error("Could not decode image"));
+        im.onload=()=>{
+          const maxW=520,maxH=320;
+          const scale=Math.min(1,maxW/im.width,maxH/im.height);
+          const w=Math.max(1,Math.round(im.width*scale));
+          const h=Math.max(1,Math.round(im.height*scale));
+          const canvas=document.createElement("canvas");
+          canvas.width=w;canvas.height=h;
+          const ctx=canvas.getContext("2d");
+          ctx.drawImage(im,0,0,w,h);
+          resolve(canvas.toDataURL("image/jpeg",0.72));
+        };
+        im.src=e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function setNoteImageFile(file){
+    if(!file)return;
+    try{
+      const dataUrl=await compressNoteImage(file);
+      setWsNoteImg(dataUrl);
+    }catch(e){
+      console.error("WS note image:",e);
+      setWsNoteSaveState("error");
+    }
+  }
+
+  // Load latest market note from Supabase. Supports both the old plain-text row
+  // and the new JSON payload with an optional compressed thumbnail.
   useEffect(()=>{
-    supabase.from("dashboard").select("value").eq("key","ws-note").single()
-      .then(({data:row})=>{if(row)setWsNote(row.value||"");});
+    let alive=true;
+    (async()=>{
+      try{
+        const {data:row,error}=await supabase.from("dashboard").select("value").eq("key","ws-note").maybeSingle();
+        if(error) throw error;
+        if(!alive)return;
+        const raw=row?.value;
+        if(raw){
+          try{
+            const parsed=typeof raw==="string"?JSON.parse(raw):raw;
+            if(parsed && typeof parsed==="object"){
+              setWsNote(parsed.text||"");
+              setWsNoteImg(parsed.imageDataUrl||null);
+              setWsNoteSavedAt(parsed.updatedAt||null);
+            }else{
+              setWsNote(String(raw||""));
+            }
+          }catch{
+            setWsNote(String(raw||""));
+          }
+        }
+        setWsNoteSaveState("saved");
+      }catch(e){
+        console.error("Load WS note:",e);
+        if(alive)setWsNoteSaveState("error");
+      }finally{
+        wsNoteLoadedRef.current=true;
+      }
+    })();
+    return()=>{alive=false;};
   },[]);
+
+  // Debounced cloud save so typing does not fire one Supabase request per keypress.
+  useEffect(()=>{
+    if(!wsNoteLoadedRef.current)return;
+    setWsNoteSaveState("saving");
+    const timer=setTimeout(async()=>{
+      const updatedAt=new Date().toISOString();
+      const payload={text:wsNote||"",imageDataUrl:wsNoteImg||null,updatedAt};
+      const {error}=await supabase.from("dashboard").upsert(
+        {key:"ws-note",value:JSON.stringify(payload)},
+        {onConflict:"key"}
+      );
+      if(error){
+        console.error("Save WS note:",error);
+        setWsNoteSaveState("error");
+      }else{
+        setWsNoteSavedAt(updatedAt);
+        setWsNoteSaveState("saved");
+      }
+    },700);
+    return()=>clearTimeout(timer);
+  },[wsNote,wsNoteImg]);
 
   // Load from Supabase
   useEffect(()=>{
@@ -230,10 +322,10 @@ ${text}`}]
         minHeight:560,
         alignItems:"stretch"
       }}>
-        {/* LEFT 40% — paste 15%, commentary 15%, parsed table 70% */}
+        {/* LEFT 40% — paste / parsed market / larger daily notes */}
         <div style={{
           display:"grid",
-          gridTemplateRows:"22% 15% minmax(0,63%)",
+          gridTemplateRows:"22% 31% minmax(0,47%)",
           gap:8,
           minWidth:0,
           minHeight:0
@@ -257,17 +349,6 @@ ${text}`}]
               <button onClick={()=>wsFileRef.current?.click()} style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 7px",fontFamily:"inherit",fontSize:10.5,cursor:"pointer"}}>📷</button>
               {status&&<div style={{fontSize:9.5,color:sc,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{status.m}</div>}
             </div>
-          </div>
-
-          {/* Commentary */}
-          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,overflow:"hidden"}}>
-            <div style={{fontSize:10,color:C.dim,marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center",fontWeight:700,textTransform:"uppercase",letterSpacing:".05em"}}>
-              <span>Market notes</span>
-              <span style={{fontSize:9,color:C.faint,textTransform:"none",letterSpacing:0,fontWeight:500}}>Auto-saved</span>
-            </div>
-            <textarea value={wsNote} onChange={e=>{setWsNote(e.target.value);supabase.from("dashboard").upsert({key:"ws-note",value:e.target.value},{onConflict:"key"});}}
-              placeholder="TC2 firming on USAC demand, FFA contango widening..."
-              style={{width:"100%",height:45,minHeight:45,maxHeight:45,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"5px 7px",resize:"none",boxSizing:"border-box"}}/>
           </div>
 
           {/* Parsed current table */}
@@ -300,6 +381,40 @@ ${text}`}]
               <div style={{fontSize:11,color:C.faint,padding:"18px 4px"}}>Paste market data above to populate the table.</div>
             )}
           </div>
+
+          {/* Daily market notes / gossip — stored in Supabase */}
+          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"9px 10px",minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <div style={{fontSize:10,color:C.dim,marginBottom:5,display:"flex",justifyContent:"space-between",alignItems:"center",fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",gap:8}}>
+              <span>Daily market notes / gossip</span>
+              <span style={{fontSize:9,textTransform:"none",letterSpacing:0,fontWeight:500,color:wsNoteSaveState==="error"?C.red:wsNoteSaveState==="saving"?C.amber:C.faint,whiteSpace:"nowrap"}}>
+                {wsNoteSaveState==="saving"?"Saving…":wsNoteSaveState==="error"?"Save failed":wsNoteSavedAt?"Saved "+new Date(wsNoteSavedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"Saved in Supabase"}
+              </span>
+            </div>
+            <textarea
+              value={wsNote}
+              onChange={e=>setWsNote(e.target.value)}
+              onPaste={e=>{
+                const imageItem=Array.from(e.clipboardData?.items||[]).find(it=>it.type?.startsWith("image/"));
+                if(imageItem){
+                  e.preventDefault();
+                  setNoteImageFile(imageItem.getAsFile());
+                }
+              }}
+              placeholder="Replace with today's latest gossip, broker colour, market direction, cargo rumours, owner sentiment… You can also paste a screenshot here."
+              style={{width:"100%",flex:1,minHeight:92,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"7px 8px",resize:"none",boxSizing:"border-box",outline:"none"}}
+            />
+            <input ref={wsNoteFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{setNoteImageFile(e.target.files?.[0]);e.target.value="";}}/>
+            <div style={{display:"flex",alignItems:"center",gap:7,marginTop:6,minHeight:34}}>
+              <button onClick={()=>wsNoteFileRef.current?.click()} style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"4px 8px",fontFamily:"inherit",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}}>📷 Add image</button>
+              {wsNoteImg&&<>
+                <div style={{position:"relative",height:34,width:58,borderRadius:4,overflow:"hidden",border:"1px solid "+C.bd,background:C.bg2}}>
+                  <img src={wsNoteImg} alt="Market note" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                  <button onClick={()=>setWsNoteImg(null)} title="Remove image" style={{position:"absolute",top:1,right:1,width:15,height:15,borderRadius:"50%",border:"none",background:"rgba(0,0,0,.72)",color:"#fff",fontSize:9,lineHeight:"15px",padding:0,cursor:"pointer"}}>×</button>
+                </div>
+                <span style={{fontSize:9,color:C.faint}}>thumbnail stored with note</span>
+              </>}
+            </div>
+          </div>
         </div>
 
         {/* RIGHT 60% — charts use full height */}
@@ -327,7 +442,7 @@ ${text}`}]
 }
 
 function WSChart({data,routes,colors,fill=false}) {
-  const W=1120,H=260,PL=38,PR=12,PT=8,PB=24;
+  const W=1120,H=260,PL=50,PR=58,PT=10,PB=28;
   const iW=W-PL-PR,iH=H-PT-PB;
 
   const allVals=data.flatMap(d=>routes.map(r=>d.spot?.[r.id]?.ws)).filter(v=>v!=null);
@@ -343,7 +458,7 @@ function WSChart({data,routes,colors,fill=false}) {
           const y=PT+t*iH,v=Math.round(mx-t*range);
           return <g key={t}>
             <line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2} strokeWidth="1"/>
-            <text x={PL-4} y={y+4} fill={C.faint} fontSize="9" textAnchor="end">{v}</text>
+            <text x={PL-4} y={y+4} fill="#e8f2ff" fontSize="9" textAnchor="end">{v}</text>
           </g>;
         })}
         {routes.map(r=>{
@@ -355,16 +470,16 @@ function WSChart({data,routes,colors,fill=false}) {
             <path d={path} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" pathLength="1" strokeDasharray="1" strokeDashoffset="1">
               <animate attributeName="stroke-dashoffset" from="1" to="0" dur=".9s" fill="freeze"/>
             </path>
-            {lastPt&&<text x={lastPt[0]+4} y={lastPt[1]+4} fill={colors[r.id]||C.dim} fontSize="9">{r.id}</text>}
+            {lastPt&&<text x={Math.min(W-PR+8,lastPt[0]+7)} y={lastPt[1]+4} fill={colors[r.id]||C.dim} fontSize="9" fontWeight="700">{r.id}</text>}
           </g>;
         })}
         {data.map((d,i)=>(i===0||i===data.length-1||data.length<9)&&(
-          <text key={i} x={xs[i]} y={H-PB+15} fill={C.faint} fontSize="8" textAnchor="middle">
+          <text key={i} x={xs[i]} y={H-PB+15} fill="#e8f2ff" fontSize="8.5" textAnchor="middle">
             {(d.date||"").split(" ").slice(0,2).join(" ")}
           </text>
         ))}
       </svg>
-      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:2,flexShrink:0}}>
+      <div style={{display:"flex",gap:14,flexWrap:"wrap",justifyContent:"center",alignItems:"center",marginTop:3,flexShrink:0}}>
         {routes.map(r=>(<span key={r.id} style={{fontSize:9,color:colors[r.id]||C.dim}}><span style={{fontWeight:700}}>●</span> {r.name}</span>))}
       </div>
     </div>
@@ -785,7 +900,16 @@ function Dashboard({vessels, cargoes, history}) {
           <path d="M120,160 Q190,140 260,175" fill="none" stroke="rgba(88,200,255,0.8)" strokeWidth="0.8" strokeDasharray="4,3"/>
           <path d="M260,175 Q325,155 390,168" fill="none" stroke="rgba(20,200,120,0.8)" strokeWidth="0.8" strokeDasharray="4,3"/>
         </svg>
-        <div style={{position:"relative",zIndex:2,padding:"22px 26px 18px"}}>
+        <div style={{position:"absolute",right:22,top:16,zIndex:3,minWidth:205,padding:"9px 13px",borderRadius:8,background:"rgba(12,29,53,.82)",border:"1px solid rgba(88,166,255,.22)",backdropFilter:"blur(6px)",textAlign:"right"}}>
+          <div style={{fontSize:8.5,fontWeight:800,letterSpacing:".10em",textTransform:"uppercase",color:D.faint}}>Positions latest</div>
+          <div style={{fontSize:22,fontWeight:900,color:D.blue,lineHeight:1.05,marginTop:2}}>{positionMeta.count??vessels.length}</div>
+          <div style={{fontSize:9,color:D.faint,marginTop:2}}>
+            {positionMeta.updatedAt
+              ? "ships · "+new Date(positionMeta.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short"})+" "+new Date(positionMeta.updatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})
+              : `${openVessels.length} currently open`}
+          </div>
+        </div>
+        <div style={{position:"relative",zIndex:2,padding:"22px 270px 18px 26px"}}>
           <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",color:"rgba(120,180,255,0.55)",marginBottom:6}}>Signal — Tanker Intelligence</div>
           <div style={{fontSize:22,fontWeight:800,color:"#e8f2ff",lineHeight:1.2,marginBottom:4}}>Market Dashboard</div>
           <div style={{fontSize:12,color:"rgba(140,190,255,0.5)"}}>
@@ -797,20 +921,8 @@ function Dashboard({vessels, cargoes, history}) {
 
       <NewsTicker/>
 
-      {/* ── KPI row ── */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(240px,360px)",gap:8}}>
-        {card(
-          "Positions latest",
-          positionMeta.count??vessels.length,
-          positionMeta.updatedAt
-            ? "ships · updated "+new Date(positionMeta.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short"})+" "+new Date(positionMeta.updatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})
-            : `${openVessels.length} currently open`,
-          D.blue
-        )}
-      </div>
-
       {/* ── Tanker market tape ── */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.65fr) minmax(320px,.65fr)",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"minmax(0,62fr) minmax(360px,38fr)",gap:12}}>
         {panel(
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
@@ -840,7 +952,7 @@ function Dashboard({vessels, cargoes, history}) {
       </div>
 
       {/* ── Fixing window + bunker row ── */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(620px,1.45fr) minmax(430px,.85fr)",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"minmax(0,62fr) minmax(360px,38fr)",gap:12}}>
         {panel(
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
@@ -878,7 +990,7 @@ function Dashboard({vessels, cargoes, history}) {
       </div>
 
       {/* ── Regional fleet history ── */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(640px,1.1fr) minmax(520px,.9fr)",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"minmax(0,62fr) minmax(360px,38fr)",gap:12}}>
         {panel(
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
@@ -903,11 +1015,11 @@ function Dashboard({vessels, cargoes, history}) {
         )}
       </div>
 
-      {/* ── News Feed ── */}
-      <NewsFeed/>
-
       {/* ── WS / FFA tracker ── */}
       <WSTracker/>
+
+      {/* ── News Feed ── */}
+      <NewsFeed/>
 
     </div>
   );
@@ -916,19 +1028,19 @@ function Dashboard({vessels, cargoes, history}) {
 
 // ─── SVG charts (no dependencies) ────────────────────────────────────────────
 function SegmentFWChart({data,segments,colors}) {
-  const W=760,H=220,PL=42,PR=22,PT=12,PB=28;
+  const W=1000,H=225,PL=34,PR=18,PT=12,PB=30;
   const iW=W-PL-PR,iH=H-PT-PB;
   const vals=data.flatMap(d=>segments.map(s=>d[s])).filter(v=>v!=null&&v>=0);
   if(!vals.length)return null;
   const mn=0,mx=Math.max(7,Math.ceil(Math.max(...vals)+2)),range=mx||1;
   const xs=data.map((_,i)=>PL+i/(data.length-1||1)*iW);
   return <div>
-    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",maxHeight:H,display:"block"}}>
-      {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-5} y={y+4} fill={C.faint} fontSize="9" textAnchor="end">{v}d</text></g>})}
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{width:"100%",height:225,display:"block"}}>
+      {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-5} y={y+4} fill="#e8f2ff" fontSize="9" textAnchor="end">{v}d</text></g>})}
       {segments.map(seg=>{let path="";data.forEach((d,i)=>{const v=d[seg];if(v==null||v<0)return;const p=[xs[i],PT+iH-(v-mn)/range*iH];path+=(path?"L":"M")+p.join(",")});return path?<path key={seg} d={path} fill="none" stroke={colors[seg]||C.blue} strokeWidth="1.8" strokeLinejoin="round" opacity=".92" pathLength="1" strokeDasharray="1" strokeDashoffset="1"><animate attributeName="stroke-dashoffset" from="1" to="0" dur=".85s" fill="freeze"/></path>:null})}
-      {data.map((d,i)=>(i===0||i===data.length-1||data.length<=8)?<text key={i} x={xs[i]} y={H-7} fill={C.faint} fontSize="8" textAnchor="middle">{fmtDateShort(d.date)}</text>:null)}
+      {data.map((d,i)=>(i===0||i===data.length-1||data.length<=8)?<text key={i} x={xs[i]} y={H-7} fill="#e8f2ff" fontSize="8.5" textAnchor="middle">{fmtDateShort(d.date)}</text>:null)}
     </svg>
-    <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:2}}>{segments.map(s=><span key={s} style={{fontSize:10,color:colors[s]||C.blue}}>● {s}</span>)}</div>
+    <div style={{display:"flex",gap:11,flexWrap:"wrap",justifyContent:"center",marginTop:3}}>{segments.map(s=><span key={s} style={{fontSize:10,color:colors[s]||C.blue}}>● {s}</span>)}</div>
   </div>;
 }
 
