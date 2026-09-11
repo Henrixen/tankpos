@@ -233,7 +233,7 @@ ${text}`}]
         {/* LEFT 40% — paste 15%, commentary 15%, parsed table 70% */}
         <div style={{
           display:"grid",
-          gridTemplateRows:"15% 15% minmax(0,70%)",
+          gridTemplateRows:"22% 15% minmax(0,63%)",
           gap:8,
           minWidth:0,
           minHeight:0
@@ -248,7 +248,7 @@ ${text}`}]
             <textarea value={pasteText} onChange={e=>setPaste(e.target.value)}
               onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
               placeholder={"TC2 127.81(+1.87)  FEB/26 130.50 · TC14 270.71(+8.57) · or paste screenshot"}
-              style={{width:"100%",height:30,minHeight:30,maxHeight:30,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"5px 7px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
+              style={{width:"100%",height:50,minHeight:50,maxHeight:50,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"5px 7px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
             <input ref={wsFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
             <div style={{display:"flex",gap:5,marginTop:4,alignItems:"center",minWidth:0}}>
               <button onClick={parseWS} disabled={parsing} style={{background:parsing?"rgba(88,166,255,.06)":"rgba(88,166,255,.11)",border:"1px solid rgba(88,166,255,.36)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:10.5,padding:"4px 10px",cursor:parsing?"default":"pointer",whiteSpace:"nowrap"}}>
