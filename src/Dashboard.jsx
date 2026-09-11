@@ -219,78 +219,77 @@ ${text}`}]
 
   return(
     <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"14px 16px"}}>
-      <div style={{display:"grid",gridTemplateColumns:"minmax(300px,.28fr) minmax(0,.72fr)",gap:16,alignItems:"stretch"}}>
-        <div style={{display:"grid",gridTemplateRows:"auto auto 1fr",gap:10,minWidth:0}}>
-          <div>
-            {secHead("📊 Worldscale Spot + FFA Tracker")}
-            <div style={{fontSize:11,color:C.dim,marginBottom:3}}>
-              Paste data from broker recap, Baltic Exchange, or the FFA screenshot - any format works
-            </div>
-            {img?.dataUrl&&<div style={{position:"relative",marginBottom:4}}><img src={img.dataUrl} alt="" style={{width:"100%",maxHeight:80,objectFit:"cover",borderRadius:4,display:"block"}}/><button onClick={()=>setImg(null)} style={{position:"absolute",top:3,right:3,background:"rgba(0,0,0,.7)",border:"none",color:"#fff",borderRadius:"50%",width:20,height:20,fontSize:12,cursor:"pointer"}}>✕</button></div>}
-            {img&&!img.dataUrl&&<div style={{padding:"3px 10px",background:"rgba(188,140,255,.07)",borderRadius:4,fontSize:12,color:C.purple,display:"flex",justifyContent:"space-between",marginBottom:4}}><span>📷 Image attached</span><button onClick={()=>setImg(null)} style={{background:"none",border:"none",color:C.purple,cursor:"pointer",fontSize:12}}>✕</button></div>}
-            <textarea value={pasteText} onChange={e=>setPaste(e.target.value)}
-              onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
-              placeholder={"TC2 (CONT/TA-37)  127.81(+1.87)  FEB/26: 130.50  MAR/26: 142.50  Q1: 135.50\nTC14 (USG/UKC-38)  270.71(+8.57)\nTC23 220.50  TC6 140.00"}
-              style={{width:"100%",height:34,minHeight:34,maxHeight:34,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
-            <input ref={wsFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
-            <div style={{display:"flex",gap:6,marginTop:5,alignItems:"center"}}>
-              <button onClick={parseWS} disabled={parsing} style={{background:parsing?"rgba(88,166,255,.06)":"rgba(88,166,255,.11)",border:"1px solid rgba(88,166,255,.36)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px 16px",cursor:parsing?"default":"pointer"}}>
-                {parsing?"⟳ "+(img?"Reading image…":"Parsing…"):"▶ Parse & Save"}
-              </button>
-              <button onClick={()=>wsFileRef.current?.click()} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"4px 8px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>📷</button>
-              {status&&<div style={{fontSize:12,color:sc,padding:"3px 10px",background:sc+"18",borderRadius:4,border:"1px solid "+sc+"44"}}>{status.m}</div>}
-            </div>
-          </div>
+      {secHead("📊 Worldscale Spot + FFA Tracker")}
 
-          <div>
-            <div style={{fontSize:12,color:C.dim,marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span>📝 Market notes / commentary</span>
-              <span style={{fontSize:12,color:C.faint}}>Auto-saved</span>
-            </div>
-            <textarea value={wsNote} onChange={e=>{setWsNote(e.target.value);supabase.from("dashboard").upsert({key:"ws-note",value:e.target.value},{onConflict:"key"});}}
-              placeholder="e.g. TC2 firming on back of USAC demand, FFA contango widening, Baltic tightening..."
-              style={{width:"100%",height:36,minHeight:36,maxHeight:36,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 8px",resize:"none",boxSizing:"border-box"}}/>
-          </div>
-
-          <div style={{minWidth:0}}>
-            <div style={{fontSize:11,color:C.faint,fontWeight:700,textTransform:"uppercase",marginBottom:5}}>Current spot + FFA</div>
-            {data?(
-              <div style={{overflowX:"auto"}}>
-                <table style={{borderCollapse:"collapse",fontSize:11,width:"100%"}}>
-                  <thead><tr><th style={{...th2,textAlign:"left"}}>Route</th><th style={th2}>Spot</th><th style={th2}>Day</th><th style={{...th2,textAlign:"left"}}>Class / Route</th><th style={th2}>Updated</th></tr></thead>
-                  <tbody>{ROUTES.map(r=>{const q=data.spot?.[r.id],chg=q?.change,cc=chg>0?C.green:chg<0?C.red:C.dim,cls=(r.id==="TC6"||r.id==="TC23")?"Handy":"MR";return <tr key={r.id}>
-                    <td style={{...td2,textAlign:"left",fontWeight:800,color:routeColors[r.id]||C.blue}}>{r.id}</td>
-                    <td style={{...td2,fontWeight:800,color:C.tx}}>{q?.ws!=null?q.ws.toFixed(2):"—"}</td>
-                    <td style={{...td2,color:cc,fontWeight:700}}>{chg!=null?(chg>=0?"+":"")+chg.toFixed(2):"—"}</td>
-                    <td style={{...td2,textAlign:"left",color:C.faint}}><span style={{color:cls==="Handy"?C.green:C.blue,fontWeight:700}}>{cls}</span> · {r.desc}</td>
-                    <td style={{...td2,color:C.faint,fontSize:10}}>{q?.updatedAt||"—"}</td>
-                  </tr>})}</tbody>
-                </table>
-              </div>
-            ):<div style={{fontSize:11,color:C.faint,padding:"8px 0"}}>No Worldscale data saved yet.</div>}
-          </div>
+      {/* Paste input */}
+      <div style={{marginBottom:5}}>
+        <div style={{fontSize:11,color:C.dim,marginBottom:3}}>
+          Paste data from broker recap, Baltic Exchange, or the FFA screenshot - any format works
         </div>
-
-        <div style={{display:"grid",gridTemplateRows:"auto 1fr 1fr",gap:8,minWidth:0}}>
-          <div style={{display:"flex",justifyContent:"flex-end",minHeight:16}}>
-            <span style={{fontSize:11,color:C.faint}}>Last update: {data?.lastUpdate||"—"}</span>
-          </div>
-          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:315}}>
-            <div style={{fontSize:10,fontWeight:800,color:C.green,textTransform:"uppercase",marginBottom:3}}>Handy Worldscale · TC6 / TC23</div>
-            {histData.length>=2?<WSChart data={histData} routes={ROUTES.filter(r=>["TC6","TC23"].includes(r.id))} colors={routeColors} compact/>:<div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
-          </div>
-          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:315}}>
-            <div style={{fontSize:10,fontWeight:800,color:C.blue,textTransform:"uppercase",marginBottom:3}}>MR Worldscale · TC2 / TC14</div>
-            {histData.length>=2?<WSChart data={histData} routes={ROUTES.filter(r=>["TC2","TC14"].includes(r.id))} colors={routeColors} compact/>:<div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
-          </div>
+        {img?.dataUrl&&<div style={{position:"relative",marginBottom:4}}><img src={img.dataUrl} alt="" style={{width:"100%",maxHeight:80,objectFit:"cover",borderRadius:4,display:"block"}}/><button onClick={()=>setImg(null)} style={{position:"absolute",top:3,right:3,background:"rgba(0,0,0,.7)",border:"none",color:"#fff",borderRadius:"50%",width:20,height:20,fontSize:12,cursor:"pointer"}}>✕</button></div>}
+        {img&&!img.dataUrl&&<div style={{padding:"3px 10px",background:"rgba(188,140,255,.07)",borderRadius:4,fontSize:12,color:C.purple,display:"flex",justifyContent:"space-between",marginBottom:4}}><span>📷 Image attached</span><button onClick={()=>setImg(null)} style={{background:"none",border:"none",color:C.purple,cursor:"pointer",fontSize:12}}>✕</button></div>}
+        <textarea value={pasteText} onChange={e=>setPaste(e.target.value)}
+          onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
+          placeholder={"TC2 (CONT/TA-37)  127.81(+1.87)  FEB/26: 130.50  MAR/26: 142.50  Q1: 135.50\nTC14 (USG/UKC-38)  270.71(+8.57)\nTC23 220.50  TC6 140.00\n\n- or Ctrl+V a screenshot -"}
+          style={{width:"100%",height:34,minHeight:34,maxHeight:34,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
+        <input ref={wsFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
+        <div style={{display:"flex",gap:6,marginTop:5,alignItems:"center"}}>
+          <button onClick={parseWS} disabled={parsing} style={{background:parsing?"rgba(88,166,255,.06)":"rgba(88,166,255,.11)",border:"1px solid rgba(88,166,255,.36)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px 16px",cursor:parsing?"default":"pointer"}}>
+            {parsing?"⟳ "+(img?"Reading image…":"Parsing…"):"▶ Parse & Save"}
+          </button>
+          <button onClick={()=>wsFileRef.current?.click()} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"4px 8px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>📷</button>
+          {status&&<div style={{fontSize:12,color:sc,padding:"3px 10px",background:sc+"18",borderRadius:4,border:"1px solid "+sc+"44"}}>{status.m}</div>}
         </div>
       </div>
+
+      {/* Comment / Market Notes */}
+      <div style={{marginBottom:6}}>
+        <div style={{fontSize:12,color:C.dim,marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span>📝 Market notes / commentary</span>
+          <span style={{fontSize:12,color:C.faint}}>Auto-saved</span>
+        </div>
+        <textarea value={wsNote} onChange={e=>{setWsNote(e.target.value);supabase.from("dashboard").upsert({key:"ws-note",value:e.target.value},{onConflict:"key"});}}
+          placeholder="e.g. TC2 firming on back of USAC demand, FFA contango widening, Baltic tightening..."
+          style={{width:"100%",height:30,minHeight:30,maxHeight:30,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,
+            fontFamily:"inherit",fontSize:12,padding:"6px 8px",resize:"vertical",boxSizing:"border-box"}}/>
+      </div>
+
+      {data&&<>
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
+          <span style={{fontSize:11,color:C.faint}}>Last update: {data.lastUpdate||"—"}</span>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"minmax(150px,.16fr) minmax(0,1.84fr)",gap:12}}>
+          <div>
+            <div style={{fontSize:11,color:C.faint,fontWeight:700,textTransform:"uppercase",marginBottom:5}}>Current spot + FFA</div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{borderCollapse:"collapse",fontSize:11,width:"100%"}}>
+                <thead><tr><th style={{...th2,textAlign:"left"}}>Route</th><th style={th2}>Spot</th><th style={th2}>Day</th></tr></thead>
+                <tbody>{ROUTES.map(r=>{const q=data.spot?.[r.id],chg=q?.change,cc=chg>0?C.green:chg<0?C.red:C.dim,cls=(r.id==="TC6"||r.id==="TC23")?"Handy":"MR";return <tr key={r.id}>
+                  <td style={{...td2,textAlign:"left",fontWeight:800,color:routeColors[r.id]||C.blue}}>{r.id}</td>
+                  <td style={{...td2,fontWeight:800,color:C.tx}}>{q?.ws!=null?q.ws.toFixed(2):"—"}</td>
+                  <td style={{...td2,color:cc,fontWeight:700}}>{chg!=null?(chg>=0?"+":"")+chg.toFixed(2):"—"}</td></tr>})}</tbody>
+              </table>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:8}}>
+            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px"}}>
+              <div style={{fontSize:10,fontWeight:800,color:C.green,textTransform:"uppercase",marginBottom:3}}>Handy Worldscale · TC6 / TC23</div>
+              {histData.length>=2?<WSChart data={histData} routes={ROUTES.filter(r=>["TC6","TC23"].includes(r.id))} colors={routeColors} compact/>:<div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
+            </div>
+            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px"}}>
+              <div style={{fontSize:10,fontWeight:800,color:C.blue,textTransform:"uppercase",marginBottom:3}}>MR Worldscale · TC2 / TC14</div>
+              {histData.length>=2?<WSChart data={histData} routes={ROUTES.filter(r=>["TC2","TC14"].includes(r.id))} colors={routeColors} compact/>:<div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
+            </div>
+          </div>
+        </div>
+      </>}
+
     </div>
   );
 }
 
 function WSChart({data,routes,colors,compact=false}) {
-  const W=700,H=compact?300:200,PL=42,PR=16,PT=10,PB=compact?24:28;
+  const W=1120,H=compact?245:200,PL=38,PR=10,PT=8,PB=compact?22:28;
   const iW=W-PL-PR,iH=H-PT-PB;
 
   // Get all WS values to find scale
@@ -301,7 +300,7 @@ function WSChart({data,routes,colors,compact=false}) {
 
   return(
     <div>
-      <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",maxHeight:H,display:"block"}}>
+      <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:compact?245:H,display:"block"}}>
         {/* Grid */}
         {[0,.5,1].map(t=>{
           const y=PT+t*iH, v=Math.round(mx-t*range);
@@ -317,7 +316,9 @@ function WSChart({data,routes,colors,compact=false}) {
           let path="";pts.forEach(p=>{if(p)path+=(path?"L":"M")+p.join(",");});
           const lastPt=valid[valid.length-1];
           return <g key={r.id}>
-            <path d={path} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2" strokeLinejoin="round"/>
+            <path d={path} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2" strokeLinejoin="round" pathLength="1" strokeDasharray="1" strokeDashoffset="1">
+              <animate attributeName="stroke-dashoffset" from="1" to="0" dur=".9s" fill="freeze"/>
+            </path>
             {lastPt&&<text x={lastPt[0]+4} y={lastPt[1]+4} fill={colors[r.id]||C.dim} fontSize="9">{r.id}</text>}
           </g>;
         })}
@@ -418,6 +419,68 @@ function NewsFeed() {
   );
 }
 
+
+function NewsTicker() {
+  const [items,setItems]=useState([]);
+  useEffect(()=>{
+    let alive=true;
+    fetch("/api/shipping-news",{cache:"no-store"})
+      .then(r=>r.ok?r.json():Promise.reject(new Error("HTTP "+r.status)))
+      .then(j=>{if(alive)setItems((j.items||[]).slice(0,12));})
+      .catch(()=>{});
+    return()=>{alive=false;};
+  },[]);
+  if(!items.length)return null;
+  const loop=[...items,...items];
+  return(
+    <div style={{background:"#081423",border:"1px solid rgba(88,166,255,.20)",borderRadius:7,overflow:"hidden",height:31,display:"flex",alignItems:"center"}}>
+      <div style={{flexShrink:0,padding:"0 10px",fontSize:9,fontWeight:850,letterSpacing:".09em",color:"#58a6ff",textTransform:"uppercase",borderRight:"1px solid rgba(88,166,255,.18)",height:"100%",display:"flex",alignItems:"center"}}>Shipping news</div>
+      <div style={{overflow:"hidden",minWidth:0,flex:1}}>
+        <div className="signal-news-ticker" style={{display:"flex",width:"max-content",alignItems:"center",gap:28,whiteSpace:"nowrap"}}>
+          {loop.map((it,i)=><a key={(it.link||it.title)+i} href={it.link} target="_blank" rel="noopener noreferrer" style={{fontSize:10.5,color:"rgba(210,230,255,.78)",textDecoration:"none"}}><b style={{color:"rgba(120,190,255,.95)",fontWeight:800}}>{it.source||"News"}</b>&nbsp;·&nbsp;{it.title}</a>)}
+        </div>
+      </div>
+      <style>{`@keyframes signalTickerMove{from{transform:translateX(0)}to{transform:translateX(-50%)}} .signal-news-ticker{animation:signalTickerMove 55s linear infinite}.signal-news-ticker:hover{animation-play-state:paused}`}</style>
+    </div>
+  );
+}
+
+function CommodityTape({data}) {
+  const items=data?.items||[];
+  if(!items.length)return null;
+  return(
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(112px,1fr))",gap:6}}>
+      {items.map(x=><div key={x.id} style={{background:"#111f35",border:"1px solid rgba(58,130,246,.14)",borderRadius:6,padding:"7px 9px",minWidth:0}}>
+        <div style={{fontSize:8.5,fontWeight:800,color:"rgba(120,160,220,.55)",textTransform:"uppercase",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{x.label}</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:5,marginTop:2}}>
+          <span style={{fontSize:15,fontWeight:850,color:"#e8f2ff"}}>{x.price!=null?Number(x.price).toLocaleString("en-US",{maximumFractionDigits:2}):"—"}</span>
+          <span style={{fontSize:8,color:"rgba(120,160,220,.45)"}}>{x.unit||""}</span>
+        </div>
+        {x.changePct!=null&&<div style={{fontSize:8.5,color:Number(x.changePct)>=0?"#3fb950":"#ff6b6b",marginTop:1}}>{Number(x.changePct)>0?"+":""}{Number(x.changePct).toFixed(2)}%</div>}
+      </div>)}
+    </div>
+  );
+}
+
+function VlccSparkline({history}) {
+  if(!history?.length)return null;
+  const W=360,H=72,PL=4,PR=4,PT=8,PB=8;
+  const vals=history.map(x=>Number(x.tce)).filter(Number.isFinite);
+  if(vals.length<2)return null;
+  const mn=Math.min(...vals),mx=Math.max(...vals),range=mx-mn||1;
+  const pts=history.map((x,i)=>{
+    const px=PL+i/(history.length-1||1)*(W-PL-PR);
+    const py=PT+(mx-Number(x.tce))/range*(H-PT-PB);
+    return [px,py];
+  });
+  const path="M"+pts.map(p=>p.join(",")).join(" L");
+  return <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:72,display:"block"}}>
+    <path d={path} fill="none" stroke="#58a6ff" strokeWidth="2" strokeLinejoin="round" pathLength="1" strokeDasharray="1" strokeDashoffset="1">
+      <animate attributeName="stroke-dashoffset" from="1" to="0" dur=".9s" fill="freeze"/>
+    </path>
+  </svg>;
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 function Dashboard({vessels, cargoes, history}) {
   const [bunkers, setBunkers] = useState(null);
@@ -425,6 +488,27 @@ function Dashboard({vessels, cargoes, history}) {
   const [bError, setBError] = useState(null);
   const [bFetched, setBFetched] = useState(false);
   const [bunkerHistory, setBunkerHistory] = useState([]); // New state for graph
+  const [positionMeta,setPositionMeta]=useState({count:null,updatedAt:null});
+  const [commodities,setCommodities]=useState(null);
+  const [vlcc,setVlcc]=useState(null);
+
+  useEffect(()=>{
+    let alive=true;
+    (async()=>{
+      try{
+        const [{count,error:countErr},{data:last,error:lastErr}]=await Promise.all([
+          supabase.from("positions_latest").select("updated_at",{count:"exact",head:true}),
+          supabase.from("positions_latest").select("updated_at").not("updated_at","is",null).order("updated_at",{ascending:false}).limit(1)
+        ]);
+        if(countErr)throw countErr;if(lastErr)throw lastErr;
+        if(alive)setPositionMeta({count:count??null,updatedAt:last?.[0]?.updated_at||null});
+      }catch(e){console.error("positions_latest meta:",e);}
+    })();
+    fetch("/api/commodities",{cache:"no-store"}).then(r=>r.ok?r.json():Promise.reject()).then(j=>{if(alive)setCommodities(j)}).catch(()=>{});
+    fetch("/api/vlcc-earnings",{cache:"no-store"}).then(r=>r.ok?r.json():Promise.reject()).then(j=>{if(alive)setVlcc(j)}).catch(()=>{});
+    return()=>{alive=false;};
+  },[]);
+
   const [regionHistory,setRegionHistory]=useState([]);
   const [regionHistoryLoading,setRegionHistoryLoading]=useState(true);
   const [regionHistoryError,setRegionHistoryError]=useState(null);
@@ -552,8 +636,7 @@ function Dashboard({vessels, cargoes, history}) {
   }
   const getRegionCount=(label,region)=>{
     const r=regionByLabel[label]?.[region];
-    if(!r)return 0;
-    return segmentFilter==="All"?r.ships:Number(r.segments?.[segmentFilter]||0);
+    return r?Number(r.ships||0):0;
   };
   const currentRegionRows=REGION_ORDER.map(region=>({
     region,now:getRegionCount("NOW",region),d14:getRegionCount("14D",region),d30:getRegionCount("30D",region),d90:getRegionCount("90D",region)
@@ -602,7 +685,7 @@ function Dashboard({vessels, cargoes, history}) {
     }
     return Object.values(byDate).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   })();
-  const activeFixingSegments=SEGMENT_ORDER.filter(s=>s!=="All"&&fixingSegmentChartData.some(d=>d[s]!=null));
+  const activeFixingSegments=(segmentFilter==="All"?SEGMENT_ORDER.filter(s=>s!=="All"): [segmentFilter]).filter(s=>fixingSegmentChartData.some(d=>d[s]!=null));
 
   // ── Ocean theme tokens ──────────────────────────────────────────────────────
   const D = {
@@ -675,10 +758,48 @@ function Dashboard({vessels, cargoes, history}) {
         </div>
       </div>
 
+      <NewsTicker/>
+
       {/* ── KPI row ── */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(220px,.45fr) minmax(320px,1fr)",gap:8}}>
-        {card("Ships in positions",vessels.length,`${openVessels.length} currently open`,D.blue)}
-        {card("Last positions update",latestPositionUpdate?latestPositionUpdate.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"—",latestPositionUpdate?latestPositionUpdate.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})+" local":null,D.green)}
+      <div style={{display:"grid",gridTemplateColumns:"minmax(240px,360px)",gap:8}}>
+        {card(
+          "Positions latest",
+          positionMeta.count??vessels.length,
+          positionMeta.updatedAt
+            ? "ships · updated "+new Date(positionMeta.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short"})+" "+new Date(positionMeta.updatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})
+            : `${openVessels.length} currently open`,
+          D.blue
+        )}
+      </div>
+
+      {/* ── Tanker market tape ── */}
+      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.65fr) minmax(320px,.65fr)",gap:12}}>
+        {panel(
+          <>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+              {secHead("Energy / tanker-linked commodities")}
+              <span style={{fontSize:9,color:D.faint}}>{commodities?.updatedAt?new Date(commodities.updatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):""}</span>
+            </div>
+            {commodities?<CommodityTape data={commodities}/>:<div style={{fontSize:11,color:D.faint,padding:"8px 0"}}>Loading commodity prices…</div>}
+          </>,
+          {minWidth:0}
+        )}
+        {panel(
+          <>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+              {secHead("VLCC · TD3C MEG → China")}
+              <span style={{fontSize:9,color:D.faint}}>Baltic weekly</span>
+            </div>
+            {vlcc?.latest?<div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:10,alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:22,fontWeight:900,color:D.tx}}>${Math.round(Number(vlcc.latest.tce)/1000)}k<span style={{fontSize:10,color:D.faint,fontWeight:600}}>/day</span></div>
+                <div style={{fontSize:9,color:D.faint,marginTop:2}}>{vlcc.latest.date||""} · {vlcc.latest.ws!=null?"WS "+vlcc.latest.ws:"TD3C"}</div>
+              </div>
+              <VlccSparkline history={vlcc.history||[]}/>
+            </div>:<div style={{fontSize:11,color:D.faint,padding:"8px 0"}}>Loading VLCC earnings…</div>}
+          </>,
+          {minWidth:0}
+        )}
       </div>
 
       {/* ── Fixing window + bunker row ── */}
@@ -689,8 +810,11 @@ function Dashboard({vessels, cargoes, history}) {
               {secHead("Fixing window by vessel size · days until open")}
               <span style={{fontSize:9,color:D.faint}}>past positions · negative values excluded</span>
             </div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap",margin:"-2px 0 8px"}}>
+              {SEGMENT_ORDER.map(seg=>{const active=segmentFilter===seg;return <button key={seg} onClick={()=>setSegmentFilter(seg)} style={{background:active?"rgba(88,166,255,.18)":D.bg3,border:"1px solid "+(active?D.blue:D.border2),borderRadius:5,color:active?D.tx:D.dim,fontFamily:"inherit",fontSize:10,fontWeight:active?800:600,padding:"4px 8px",cursor:"pointer"}}>{seg}</button>})}
+            </div>
             {fixingSegmentError
-              ? <div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Run the updated fixing-window RPC SQL: {fixingSegmentError}</div>
+              ? <div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Fixing-window history unavailable: {fixingSegmentError}</div>
               : fixingSegmentChartData.length<2
                 ? <div style={{color:D.faint,fontSize:12,padding:"24px 0",textAlign:"center"}}>Loading segment fixing-window history…</div>
                 : <SegmentFWChart data={fixingSegmentChartData} segments={activeFixingSegments} colors={SEGMENT_COLORS}/>}
@@ -724,22 +848,19 @@ function Dashboard({vessels, cargoes, history}) {
               {secHead("Open fleet by main region · vessel count")}
               <span style={{fontSize:9,color:D.faint}}>historical totals</span>
             </div>
-            <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:10}}>
-              {SEGMENT_ORDER.map(seg=>{const active=segmentFilter===seg;return <button key={seg} onClick={()=>setSegmentFilter(seg)} style={{background:active?"rgba(88,166,255,.18)":D.bg3,border:"1px solid "+(active?D.blue:D.border2),borderRadius:5,color:active?D.tx:D.dim,fontFamily:"inherit",fontSize:10,fontWeight:active?800:600,padding:"4px 8px",cursor:"pointer"}}>{seg}</button>})}
-            </div>
             {regionHistoryLoading?<div style={{fontSize:11,color:D.faint,padding:"12px 0"}}>Loading historical fleet…</div>:regionHistoryError?<div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Run updated Supabase RPC SQL: {regionHistoryError}</div>:<>
-              <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"0 2px 5px",fontSize:9,fontWeight:800,color:D.faint,textTransform:"uppercase"}}><span>Region</span><span style={{textAlign:"right"}}>Now</span><span style={{textAlign:"right"}}>14d</span><span style={{textAlign:"right"}}>30d</span><span style={{textAlign:"right"}}>90d</span></div>
+              <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"1px 2px 7px",fontSize:10.5,fontWeight:900,color:D.dim,textTransform:"uppercase",letterSpacing:".04em"}}><span>Region</span><span style={{textAlign:"right",color:D.tx}}>NOW</span><span style={{textAlign:"right"}}>14D</span><span style={{textAlign:"right"}}>30D</span><span style={{textAlign:"right"}}>90D</span></div>
               {currentRegionRows.map(({region,now,d14,d30,d90})=><div key={region} style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,alignItems:"center",padding:"6px 2px",borderTop:"1px solid "+D.border}}><span style={{fontSize:11,fontWeight:800,color:REGION_COLORS[region]||D.dim}}>{region}</span><span style={{fontSize:11,textAlign:"right",color:D.tx,fontWeight:850}}>{now}</span><span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d14}</span><span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d30}</span><span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d90}</span></div>)}
-              <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"7px 2px 0",borderTop:"1px solid "+D.border2,fontSize:10,fontWeight:850}}><span style={{color:D.faint}}>TOTAL · {segmentFilter}</span><span style={{textAlign:"right",color:D.tx}}>{regionTotals.now}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d14}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d30}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d90}</span></div>
+              <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"7px 2px 0",borderTop:"1px solid "+D.border2,fontSize:10,fontWeight:850}}><span style={{color:D.faint}}>TOTAL FLEET</span><span style={{textAlign:"right",color:D.tx}}>{regionTotals.now}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d14}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d30}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d90}</span></div>
             </>}
           </>,
           {minWidth:0}
         )}
         {panel(
           <>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>{secHead("Regional tonnage supply · now vs 30d")}<span style={{fontSize:9,color:D.faint}}>{segmentFilter}</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>{secHead("Regional tonnage supply · now vs 30d")}<span style={{fontSize:9,color:D.faint}}>fleet totals</span></div>
             <RegionCompareChart rows={currentRegionRows} colors={REGION_COLORS}/>
-            <div style={{display:"flex",gap:14,marginTop:8,fontSize:10,color:D.faint}}><span><b style={{color:"#26c6ff"}}>■</b> Current</span><span><b style={{color:"#ff9f43"}}>■</b> 30 days ago</span></div>
+            <div style={{display:"flex",gap:14,marginTop:8,fontSize:10,color:D.faint}}><span><b style={{color:"#73c7ff"}}>■</b> Current</span><span><b style={{color:"rgba(190,202,220,.65)"}}>■</b> 30 days ago</span></div>
           </>,
           {minWidth:0}
         )}
@@ -767,7 +888,7 @@ function SegmentFWChart({data,segments,colors}) {
   return <div>
     <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",maxHeight:H,display:"block"}}>
       {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-5} y={y+4} fill={C.faint} fontSize="9" textAnchor="end">{v}d</text></g>})}
-      {segments.map(seg=>{let path="";data.forEach((d,i)=>{const v=d[seg];if(v==null||v<0)return;const p=[xs[i],PT+iH-(v-mn)/range*iH];path+=(path?"L":"M")+p.join(",")});return path?<path key={seg} d={path} fill="none" stroke={colors[seg]||C.blue} strokeWidth="1.8" strokeLinejoin="round" opacity=".92"/>:null})}
+      {segments.map(seg=>{let path="";data.forEach((d,i)=>{const v=d[seg];if(v==null||v<0)return;const p=[xs[i],PT+iH-(v-mn)/range*iH];path+=(path?"L":"M")+p.join(",")});return path?<path key={seg} d={path} fill="none" stroke={colors[seg]||C.blue} strokeWidth="1.8" strokeLinejoin="round" opacity=".92" pathLength="1" strokeDasharray="1" strokeDashoffset="1"><animate attributeName="stroke-dashoffset" from="1" to="0" dur=".85s" fill="freeze"/></path>:null})}
       {data.map((d,i)=>(i===0||i===data.length-1||data.length<=8)?<text key={i} x={xs[i]} y={H-7} fill={C.faint} fontSize="8" textAnchor="middle">{fmtDateShort(d.date)}</text>:null)}
     </svg>
     <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:2}}>{segments.map(s=><span key={s} style={{fontSize:10,color:colors[s]||C.blue}}>● {s}</span>)}</div>
@@ -781,8 +902,8 @@ function RegionCompareChart({rows,colors}) {
     {rows.map(r=><div key={r.region} style={{display:"grid",gridTemplateColumns:"145px 1fr 38px",gap:8,alignItems:"center"}}>
       <span style={{fontSize:10,fontWeight:800,color:colors[r.region]||C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.region}</span>
       <div style={{display:"grid",gap:3}}>
-        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.now?2:0,r.now/max*100)+"%",background:"#26c6ff",borderRadius:99}}/></div>
-        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.d30?2:0,r.d30/max*100)+"%",background:"#ff9f43",borderRadius:99}}/></div>
+        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.now?2:0,r.now/max*100)+"%",background:"#73c7ff",borderRadius:99}}/></div>
+        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.d30?2:0,r.d30/max*100)+"%",background:"rgba(190,202,220,.62)",borderRadius:99}}/></div>
       </div>
       <div style={{fontSize:9,textAlign:"right",lineHeight:1.45}}><div style={{color:C.tx,fontWeight:800}}>{r.now}</div><div style={{color:C.faint}}>{r.d30}</div></div>
     </div>)}
