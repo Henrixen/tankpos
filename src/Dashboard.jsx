@@ -595,7 +595,7 @@ function CommodityTape({data}) {
   if(!items.length)return null;
   return(
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(112px,1fr))",gap:6}}>
-      {items.map(x=><div key={x.id} style={{background:"#111f35",border:"1px solid rgba(58,130,246,.14)",borderRadius:6,padding:"7px 9px",minWidth:0}}>
+      {items.map(x=><div key={x.id} style={{background:"#111f35",border:"1px solid rgba(58,130,246,.14)",borderRadius:6,padding:"10px 11px",minWidth:0}}>
         <div style={{fontSize:8.5,fontWeight:800,color:"rgba(120,160,220,.55)",textTransform:"uppercase",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{x.label}</div>
         <div style={{display:"flex",alignItems:"baseline",gap:5,marginTop:2}}>
           <span style={{fontSize:15,fontWeight:850,color:"#e8f2ff"}}>{x.price!=null?Number(x.price).toLocaleString("en-US",{maximumFractionDigits:2}):"—"}</span>
@@ -924,7 +924,7 @@ function Dashboard({vessels, cargoes, history}) {
         {panel(
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-              {secHead("Energy / tanker-linked commodities")}
+              {secHead("Energy & Commodities")}
               <span style={{fontSize:9,color:D.faint}}>{commodities?.updatedAt?new Date(commodities.updatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):""}</span>
             </div>
             {commodities?<CommodityTape data={commodities}/>:<div style={{fontSize:11,color:D.faint,padding:"8px 0"}}>Loading commodity prices…</div>}
