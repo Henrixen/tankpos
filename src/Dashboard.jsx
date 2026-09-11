@@ -60,7 +60,6 @@ function WSTracker() {
   const [wsNoteSaveState,setWsNoteSaveState] = useState("loading");
   const wsNoteLoadedRef = useRef(false);
   const wsFileRef = useRef(null);
-  const wsNoteFileRef = useRef(null);
 
   function compressNoteImage(file){
     return new Promise((resolve,reject)=>{
@@ -325,13 +324,13 @@ ${text}`}]
         {/* LEFT 40% — paste / parsed market / larger daily notes */}
         <div style={{
           display:"grid",
-          gridTemplateRows:"33% 39% minmax(0,28%)",
+          gridTemplateRows:"31% 39% minmax(0,30%)",
           gap:8,
           minWidth:0,
           minHeight:0
         }}>
           {/* Paste / parse */}
-          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,overflow:"hidden"}}>
+          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
             <div style={{fontSize:10,color:C.dim,marginBottom:4,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em"}}>
               Paste WS / FFA
             </div>
@@ -340,9 +339,9 @@ ${text}`}]
             <textarea value={pasteText} onChange={e=>setPaste(e.target.value)}
               onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
               placeholder={"TC2 127.81(+1.87)  FEB/26 130.50 · TC14 270.71(+8.57) · or paste screenshot"}
-              style={{width:"100%",height:72,minHeight:72,maxHeight:72,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"5px 7px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
+              style={{width:"100%",flex:1,minHeight:110,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"7px 8px",resize:"none",outline:"none",boxSizing:"border-box",overflowY:"hidden"}}/>
             <input ref={wsFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
-            <div style={{display:"flex",gap:5,marginTop:4,alignItems:"center",minWidth:0}}>
+            <div style={{display:"flex",gap:5,marginTop:6,alignItems:"center",minWidth:0,flexShrink:0}}>
               <button onClick={parseWS} disabled={parsing} style={{background:parsing?"rgba(88,166,255,.06)":"rgba(88,166,255,.11)",border:"1px solid rgba(88,166,255,.36)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:10.5,padding:"4px 10px",cursor:parsing?"default":"pointer",whiteSpace:"nowrap"}}>
                 {parsing?"⟳ Parsing…":"▶ Parse & Save"}
               </button>
@@ -403,9 +402,7 @@ ${text}`}]
               placeholder="Replace with today's latest gossip, broker colour, market direction, cargo rumours, owner sentiment… You can also paste a screenshot here."
               style={{width:"100%",flex:1,minHeight:92,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"7px 8px",resize:"none",boxSizing:"border-box",outline:"none"}}
             />
-            <input ref={wsNoteFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{setNoteImageFile(e.target.files?.[0]);e.target.value="";}}/>
-            <div style={{display:"flex",alignItems:"center",gap:7,marginTop:6,minHeight:34}}>
-              <button onClick={()=>wsNoteFileRef.current?.click()} style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"4px 8px",fontFamily:"inherit",fontSize:10,cursor:"pointer",whiteSpace:"nowrap"}}>📷 Add image</button>
+            <div style={{display:"flex",alignItems:"center",gap:7,marginTop:wsNoteImg?6:0,minHeight:wsNoteImg?34:0}}>
               {wsNoteImg&&<>
                 <div style={{position:"relative",height:34,width:58,borderRadius:4,overflow:"hidden",border:"1px solid "+C.bd,background:C.bg2}}>
                   <img src={wsNoteImg} alt="Market note" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
@@ -458,7 +455,7 @@ function WSChart({data,routes,colors,fill=false}) {
           const y=PT+t*iH,v=Math.round(mx-t*range);
           return <g key={t}>
             <line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2} strokeWidth="1"/>
-            <text x={PL-4} y={y+4} fill="#e8f2ff" fontSize="9" textAnchor="end">{v}</text>
+            <text x={PL-4} y={y+4} fill="#ffffff" fontSize="12" fontWeight="700" textAnchor="end">{v}</text>
           </g>;
         })}
         {routes.map(r=>{
@@ -470,17 +467,17 @@ function WSChart({data,routes,colors,fill=false}) {
             <path d={path} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" pathLength="1" strokeDasharray="1" strokeDashoffset="1">
               <animate attributeName="stroke-dashoffset" from="1" to="0" dur=".9s" fill="freeze"/>
             </path>
-            {lastPt&&<text x={Math.min(W-PR+8,lastPt[0]+7)} y={lastPt[1]+4} fill={colors[r.id]||C.dim} fontSize="9" fontWeight="700">{r.id}</text>}
+            {lastPt&&<text x={Math.min(W-PR+8,lastPt[0]+7)} y={lastPt[1]+4} fill={colors[r.id]||C.dim} fontSize="11" fontWeight="800">{r.id}</text>}
           </g>;
         })}
         {data.map((d,i)=>(i===0||i===data.length-1||data.length<9)&&(
-          <text key={i} x={xs[i]} y={H-PB+15} fill="#e8f2ff" fontSize="8.5" textAnchor="middle">
+          <text key={i} x={xs[i]} y={H-PB+15} fill="#ffffff" fontSize="11" fontWeight="700" textAnchor="middle">
             {(d.date||"").split(" ").slice(0,2).join(" ")}
           </text>
         ))}
       </svg>
       <div style={{display:"flex",gap:14,flexWrap:"wrap",justifyContent:"center",alignItems:"center",marginTop:3,flexShrink:0}}>
-        {routes.map(r=>(<span key={r.id} style={{fontSize:9,color:colors[r.id]||C.dim}}><span style={{fontWeight:700}}>●</span> {r.name}</span>))}
+        {routes.map(r=>(<span key={r.id} style={{fontSize:11,color:colors[r.id]||C.dim,fontWeight:700}}><span style={{fontWeight:700}}>●</span> {r.name}</span>))}
       </div>
     </div>
   );
@@ -996,9 +993,6 @@ function Dashboard({vessels, cargoes, history}) {
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
               {secHead("Open fleet by main region · vessel count")}
-            <div style={{display:"flex",gap:4,flexWrap:"wrap",margin:"2px 0 8px"}}>
-              {SEGMENT_ORDER.map(seg=>{const active=segmentFilter===seg;return <button key={seg} onClick={()=>setSegmentFilter(seg)} style={{background:active?"rgba(88,166,255,.16)":D.bg3,border:"1px solid "+(active?D.blue:D.border2),borderRadius:4,color:active?D.tx:D.dim,fontFamily:"inherit",fontSize:9.5,fontWeight:active?800:600,padding:"3px 7px",cursor:"pointer"}}>{seg}</button>})}
-            </div>
               <span style={{fontSize:9,color:D.faint}}>historical totals</span>
             </div>
             {regionHistoryLoading?<div style={{fontSize:11,color:D.faint,padding:"12px 0"}}>Loading historical fleet…</div>:regionHistoryError?<div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Run updated Supabase RPC SQL: {regionHistoryError}</div>:<>
@@ -1012,9 +1006,6 @@ function Dashboard({vessels, cargoes, history}) {
         {panel(
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>{secHead("Regional tonnage supply · now vs 30d")}<span style={{fontSize:9,color:D.faint}}>{segmentFilter==="All"?"fleet totals":segmentFilter}</span></div>
-            <div style={{display:"flex",gap:4,flexWrap:"wrap",margin:"2px 0 8px"}}>
-              {SEGMENT_ORDER.map(seg=>{const active=segmentFilter===seg;return <button key={seg} onClick={()=>setSegmentFilter(seg)} style={{background:active?"rgba(88,166,255,.16)":D.bg3,border:"1px solid "+(active?D.blue:D.border2),borderRadius:4,color:active?D.tx:D.dim,fontFamily:"inherit",fontSize:9.5,fontWeight:active?800:600,padding:"3px 7px",cursor:"pointer"}}>{seg}</button>})}
-            </div>
             <RegionCompareChart rows={currentRegionRows} colors={REGION_COLORS}/>
             <div style={{display:"flex",gap:14,marginTop:8,fontSize:10,color:D.faint}}><span><b style={{color:"#3b82f6"}}>■</b> Current</span><span><b style={{color:"rgba(190,202,220,.65)"}}>■</b> 30 days ago</span></div>
           </>,
@@ -1043,9 +1034,9 @@ function SegmentFWChart({data,segments,colors}) {
   const xs=data.map((_,i)=>PL+i/(data.length-1||1)*iW);
   return <div>
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{width:"100%",height:225,display:"block"}}>
-      {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-5} y={y+4} fill="#e8f2ff" fontSize="9" textAnchor="end">{v}d</text></g>})}
+      {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-5} y={y+4} fill="#ffffff" fontSize="11.5" fontWeight="700" textAnchor="end">{v}d</text></g>})}
       {segments.map(seg=>{let path="";data.forEach((d,i)=>{const v=d[seg];if(v==null||v<0)return;const p=[xs[i],PT+iH-(v-mn)/range*iH];path+=(path?"L":"M")+p.join(",")});return path?<path key={seg} d={path} fill="none" stroke={colors[seg]||C.blue} strokeWidth="1.8" strokeLinejoin="round" opacity=".92" pathLength="1" strokeDasharray="1" strokeDashoffset="1"><animate attributeName="stroke-dashoffset" from="1" to="0" dur=".85s" fill="freeze"/></path>:null})}
-      {data.map((d,i)=>(i===0||i===data.length-1||data.length<=8)?<text key={i} x={xs[i]} y={H-7} fill="#e8f2ff" fontSize="8.5" textAnchor="middle">{fmtDateShort(d.date)}</text>:null)}
+      {data.map((d,i)=>(i===0||i===data.length-1||data.length<=8)?<text key={i} x={xs[i]} y={H-7} fill="#ffffff" fontSize="10.5" fontWeight="700" textAnchor="middle">{fmtDateShort(d.date)}</text>:null)}
     </svg>
     <div style={{display:"flex",gap:11,flexWrap:"wrap",justifyContent:"center",marginTop:3}}>{segments.map(s=><span key={s} style={{fontSize:10,color:colors[s]||C.blue}}>● {s}</span>)}</div>
   </div>;
