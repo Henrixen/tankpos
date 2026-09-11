@@ -151,7 +151,7 @@ ${text}`}]
         if(val) stampedSpot[rid]={...val, updatedAt:today};
       }
       const snap = {date:today, spot: stampedSpot};
-      const prevHistory = (existing.history||[]).filter(h=>h.date!==today);
+      const prevHistory = (Array.isArray(existing.history)?existing.history:[]).filter(h=>h.date!==today);
       const newHistory = [...prevHistory, snap].slice(-90);
 
        const next = {
@@ -208,7 +208,8 @@ ${text}`}]
       return new Date(s).getTime()||0;
     }catch{return 0;}
   }
-  const histData = [...(data?.history||[])]
+  const histRows = Array.isArray(data?.history) ? data.history : [];
+  const histData = [...histRows]
     .sort((a,b)=>parseChartDate(a.date)-parseChartDate(b.date))
     .slice(-30);
   const routeColors = {TC2:C.blue,TC6:C.green,TC14:C.amber,TC23:C.purple,TC178:"#ff9f43"};
@@ -218,126 +219,157 @@ ${text}`}]
   const td2 = {padding:"5px 8px",fontSize:12,textAlign:"right",whiteSpace:"nowrap",borderBottom:"1px solid "+C.bg2};
 
   return(
-    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"14px 16px"}}>
+    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"12px 14px"}}>
       {secHead("📊 Worldscale Spot + FFA Tracker")}
 
-      {/* Paste input */}
-      <div style={{marginBottom:5}}>
-        <div style={{fontSize:11,color:C.dim,marginBottom:3}}>
-          Paste data from broker recap, Baltic Exchange, or the FFA screenshot - any format works
-        </div>
-        {img?.dataUrl&&<div style={{position:"relative",marginBottom:4}}><img src={img.dataUrl} alt="" style={{width:"100%",maxHeight:80,objectFit:"cover",borderRadius:4,display:"block"}}/><button onClick={()=>setImg(null)} style={{position:"absolute",top:3,right:3,background:"rgba(0,0,0,.7)",border:"none",color:"#fff",borderRadius:"50%",width:20,height:20,fontSize:12,cursor:"pointer"}}>✕</button></div>}
-        {img&&!img.dataUrl&&<div style={{padding:"3px 10px",background:"rgba(188,140,255,.07)",borderRadius:4,fontSize:12,color:C.purple,display:"flex",justifyContent:"space-between",marginBottom:4}}><span>📷 Image attached</span><button onClick={()=>setImg(null)} style={{background:"none",border:"none",color:C.purple,cursor:"pointer",fontSize:12}}>✕</button></div>}
-        <textarea value={pasteText} onChange={e=>setPaste(e.target.value)}
-          onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
-          placeholder={"TC2 (CONT/TA-37)  127.81(+1.87)  FEB/26: 130.50  MAR/26: 142.50  Q1: 135.50\nTC14 (USG/UKC-38)  270.71(+8.57)\nTC23 220.50  TC6 140.00\n\n- or Ctrl+V a screenshot -"}
-          style={{width:"100%",height:34,minHeight:34,maxHeight:34,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
-        <input ref={wsFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
-        <div style={{display:"flex",gap:6,marginTop:5,alignItems:"center"}}>
-          <button onClick={parseWS} disabled={parsing} style={{background:parsing?"rgba(88,166,255,.06)":"rgba(88,166,255,.11)",border:"1px solid rgba(88,166,255,.36)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px 16px",cursor:parsing?"default":"pointer"}}>
-            {parsing?"⟳ "+(img?"Reading image…":"Parsing…"):"▶ Parse & Save"}
-          </button>
-          <button onClick={()=>wsFileRef.current?.click()} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"4px 8px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>📷</button>
-          {status&&<div style={{fontSize:12,color:sc,padding:"3px 10px",background:sc+"18",borderRadius:4,border:"1px solid "+sc+"44"}}>{status.m}</div>}
-        </div>
-      </div>
-
-      {/* Comment / Market Notes */}
-      <div style={{marginBottom:6}}>
-        <div style={{fontSize:12,color:C.dim,marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span>📝 Market notes / commentary</span>
-          <span style={{fontSize:12,color:C.faint}}>Auto-saved</span>
-        </div>
-        <textarea value={wsNote} onChange={e=>{setWsNote(e.target.value);supabase.from("dashboard").upsert({key:"ws-note",value:e.target.value},{onConflict:"key"});}}
-          placeholder="e.g. TC2 firming on back of USAC demand, FFA contango widening, Baltic tightening..."
-          style={{width:"100%",height:30,minHeight:30,maxHeight:30,background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,
-            fontFamily:"inherit",fontSize:12,padding:"6px 8px",resize:"vertical",boxSizing:"border-box"}}/>
-      </div>
-
-      {data&&<>
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
-          <span style={{fontSize:11,color:C.faint}}>Last update: {data.lastUpdate||"—"}</span>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"minmax(150px,.16fr) minmax(0,1.84fr)",gap:12}}>
-          <div>
-            <div style={{fontSize:11,color:C.faint,fontWeight:700,textTransform:"uppercase",marginBottom:5}}>Current spot + FFA</div>
-            <div style={{overflowX:"auto"}}>
-              <table style={{borderCollapse:"collapse",fontSize:11,width:"100%"}}>
-                <thead><tr><th style={{...th2,textAlign:"left"}}>Route</th><th style={th2}>Spot</th><th style={th2}>Day</th></tr></thead>
-                <tbody>{ROUTES.map(r=>{const q=data.spot?.[r.id],chg=q?.change,cc=chg>0?C.green:chg<0?C.red:C.dim,cls=(r.id==="TC6"||r.id==="TC23")?"Handy":"MR";return <tr key={r.id}>
-                  <td style={{...td2,textAlign:"left",fontWeight:800,color:routeColors[r.id]||C.blue}}>{r.id}</td>
-                  <td style={{...td2,fontWeight:800,color:C.tx}}>{q?.ws!=null?q.ws.toFixed(2):"—"}</td>
-                  <td style={{...td2,color:cc,fontWeight:700}}>{chg!=null?(chg>=0?"+":"")+chg.toFixed(2):"—"}</td></tr>})}</tbody>
-              </table>
+      <div style={{
+        display:"grid",
+        gridTemplateColumns:"minmax(360px,40%) minmax(0,60%)",
+        gap:12,
+        height:560,
+        minHeight:560,
+        alignItems:"stretch"
+      }}>
+        {/* LEFT 40% — paste 15%, commentary 15%, parsed table 70% */}
+        <div style={{
+          display:"grid",
+          gridTemplateRows:"15% 15% minmax(0,70%)",
+          gap:8,
+          minWidth:0,
+          minHeight:0
+        }}>
+          {/* Paste / parse */}
+          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,overflow:"hidden"}}>
+            <div style={{fontSize:10,color:C.dim,marginBottom:4,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em"}}>
+              Paste WS / FFA
+            </div>
+            {img?.dataUrl&&<div style={{position:"relative",marginBottom:3}}><img src={img.dataUrl} alt="" style={{width:"100%",maxHeight:34,objectFit:"cover",borderRadius:3,display:"block"}}/><button onClick={()=>setImg(null)} style={{position:"absolute",top:2,right:2,background:"rgba(0,0,0,.7)",border:"none",color:"#fff",borderRadius:"50%",width:18,height:18,fontSize:10,cursor:"pointer"}}>✕</button></div>}
+            {img&&!img.dataUrl&&<div style={{fontSize:10,color:C.purple,marginBottom:3}}>📷 Image attached</div>}
+            <textarea value={pasteText} onChange={e=>setPaste(e.target.value)}
+              onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
+              placeholder={"TC2 127.81(+1.87)  FEB/26 130.50 · TC14 270.71(+8.57) · or paste screenshot"}
+              style={{width:"100%",height:30,minHeight:30,maxHeight:30,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"5px 7px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
+            <input ref={wsFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
+            <div style={{display:"flex",gap:5,marginTop:4,alignItems:"center",minWidth:0}}>
+              <button onClick={parseWS} disabled={parsing} style={{background:parsing?"rgba(88,166,255,.06)":"rgba(88,166,255,.11)",border:"1px solid rgba(88,166,255,.36)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:10.5,padding:"4px 10px",cursor:parsing?"default":"pointer",whiteSpace:"nowrap"}}>
+                {parsing?"⟳ Parsing…":"▶ Parse & Save"}
+              </button>
+              <button onClick={()=>wsFileRef.current?.click()} style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 7px",fontFamily:"inherit",fontSize:10.5,cursor:"pointer"}}>📷</button>
+              {status&&<div style={{fontSize:9.5,color:sc,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{status.m}</div>}
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:8}}>
-            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px"}}>
-              <div style={{fontSize:10,fontWeight:800,color:C.green,textTransform:"uppercase",marginBottom:3}}>Handy Worldscale · TC6 / TC23</div>
-              {histData.length>=2?<WSChart data={histData} routes={ROUTES.filter(r=>["TC6","TC23"].includes(r.id))} colors={routeColors} compact/>:<div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
+
+          {/* Commentary */}
+          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,overflow:"hidden"}}>
+            <div style={{fontSize:10,color:C.dim,marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center",fontWeight:700,textTransform:"uppercase",letterSpacing:".05em"}}>
+              <span>Market notes</span>
+              <span style={{fontSize:9,color:C.faint,textTransform:"none",letterSpacing:0,fontWeight:500}}>Auto-saved</span>
             </div>
-            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px"}}>
-              <div style={{fontSize:10,fontWeight:800,color:C.blue,textTransform:"uppercase",marginBottom:3}}>MR Worldscale · TC2 / TC14</div>
-              {histData.length>=2?<WSChart data={histData} routes={ROUTES.filter(r=>["TC2","TC14"].includes(r.id))} colors={routeColors} compact/>:<div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
+            <textarea value={wsNote} onChange={e=>{setWsNote(e.target.value);supabase.from("dashboard").upsert({key:"ws-note",value:e.target.value},{onConflict:"key"});}}
+              placeholder="TC2 firming on USAC demand, FFA contango widening..."
+              style={{width:"100%",height:45,minHeight:45,maxHeight:45,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"5px 7px",resize:"none",boxSizing:"border-box"}}/>
+          </div>
+
+          {/* Parsed current table */}
+          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:6}}>
+              <div style={{fontSize:10,color:C.faint,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em"}}>Current spot + FFA</div>
+              <span style={{fontSize:9,color:C.faint,whiteSpace:"nowrap"}}>{data?.lastUpdate||"—"}</span>
+            </div>
+            {data ? (
+              <div style={{overflow:"auto",minHeight:0,flex:1}}>
+                <table style={{borderCollapse:"collapse",fontSize:11,width:"100%"}}>
+                  <thead>
+                    <tr>
+                      <th style={{...th2,textAlign:"left",position:"sticky",top:0,zIndex:1}}>Route</th>
+                      <th style={{...th2,position:"sticky",top:0,zIndex:1}}>Spot</th>
+                      <th style={{...th2,position:"sticky",top:0,zIndex:1}}>Day</th>
+                    </tr>
+                  </thead>
+                  <tbody>{ROUTES.map(r=>{
+                    const q=data.spot?.[r.id],chg=q?.change,cc=chg>0?C.green:chg<0?C.red:C.dim;
+                    return <tr key={r.id}>
+                      <td style={{...td2,textAlign:"left",fontWeight:800,color:routeColors[r.id]||C.blue}}>{r.id}</td>
+                      <td style={{...td2,fontWeight:800,color:C.tx}}>{q?.ws!=null?q.ws.toFixed(2):"—"}</td>
+                      <td style={{...td2,color:cc,fontWeight:700}}>{chg!=null?(chg>=0?"+":"")+chg.toFixed(2):"—"}</td>
+                    </tr>;
+                  })}</tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{fontSize:11,color:C.faint,padding:"18px 4px"}}>Paste market data above to populate the table.</div>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT 60% — charts use full height */}
+        <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:8,minWidth:0,minHeight:0}}>
+          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
+            <div style={{fontSize:10,fontWeight:800,color:C.green,textTransform:"uppercase",marginBottom:3}}>Handy Worldscale · TC6 / TC23</div>
+            <div style={{flex:1,minHeight:0}}>
+              {histData.length>=2
+                ? <WSChart data={histData} routes={ROUTES.filter(r=>["TC6","TC23"].includes(r.id))} colors={routeColors} fill/>
+                : <div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
+            </div>
+          </div>
+          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
+            <div style={{fontSize:10,fontWeight:800,color:C.blue,textTransform:"uppercase",marginBottom:3}}>MR Worldscale · TC2 / TC14</div>
+            <div style={{flex:1,minHeight:0}}>
+              {histData.length>=2
+                ? <WSChart data={histData} routes={ROUTES.filter(r=>["TC2","TC14"].includes(r.id))} colors={routeColors} fill/>
+                : <div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
             </div>
           </div>
         </div>
-      </>}
-
+      </div>
     </div>
   );
 }
 
-function WSChart({data,routes,colors,compact=false}) {
-  const W=1120,H=compact?245:200,PL=38,PR=10,PT=8,PB=compact?22:28;
+function WSChart({data,routes,colors,fill=false}) {
+  const W=1120,H=260,PL=38,PR=12,PT=8,PB=24;
   const iW=W-PL-PR,iH=H-PT-PB;
 
-  // Get all WS values to find scale
   const allVals=data.flatMap(d=>routes.map(r=>d.spot?.[r.id]?.ws)).filter(v=>v!=null);
   if(!allVals.length)return null;
   const mn=Math.min(...allVals)*0.95,mx=Math.max(...allVals)*1.05,range=mx-mn||1;
   const xs=data.map((_,i)=>PL+i/(data.length-1||1)*iW);
 
   return(
-    <div>
-      <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:compact?245:H,display:"block"}}>
-        {/* Grid */}
+    <div style={{height:fill?"100%":"auto",display:"flex",flexDirection:"column",minHeight:0}}>
+      <svg viewBox={"0 0 "+W+" "+H} preserveAspectRatio="none"
+        style={{width:"100%",height:fill?"100%":260,minHeight:0,display:"block",flex:fill?1:"0 0 auto"}}>
         {[0,.5,1].map(t=>{
-          const y=PT+t*iH, v=Math.round(mx-t*range);
+          const y=PT+t*iH,v=Math.round(mx-t*range);
           return <g key={t}>
             <line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2} strokeWidth="1"/>
             <text x={PL-4} y={y+4} fill={C.faint} fontSize="9" textAnchor="end">{v}</text>
           </g>;
         })}
-        {/* Lines per route */}
         {routes.map(r=>{
           const pts=data.map((d,i)=>{const v=d.spot?.[r.id]?.ws;return v!=null?[xs[i],PT+iH-(v-mn)/range*iH]:null;});
           const valid=pts.filter(Boolean);if(valid.length<2)return null;
           let path="";pts.forEach(p=>{if(p)path+=(path?"L":"M")+p.join(",");});
           const lastPt=valid[valid.length-1];
           return <g key={r.id}>
-            <path d={path} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2" strokeLinejoin="round" pathLength="1" strokeDasharray="1" strokeDashoffset="1">
+            <path d={path} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" pathLength="1" strokeDasharray="1" strokeDashoffset="1">
               <animate attributeName="stroke-dashoffset" from="1" to="0" dur=".9s" fill="freeze"/>
             </path>
             {lastPt&&<text x={lastPt[0]+4} y={lastPt[1]+4} fill={colors[r.id]||C.dim} fontSize="9">{r.id}</text>}
           </g>;
         })}
-        {/* X labels */}
         {data.map((d,i)=>(i===0||i===data.length-1||data.length<9)&&(
-          <text key={i} x={xs[i]} y={H-PB+14} fill={C.faint} fontSize="8" textAnchor="middle">
+          <text key={i} x={xs[i]} y={H-PB+15} fill={C.faint} fontSize="8" textAnchor="middle">
             {(d.date||"").split(" ").slice(0,2).join(" ")}
           </text>
         ))}
       </svg>
-      {/* Legend */}
-      <div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:4}}>
-        {routes.map(r=>(<span key={r.id} style={{fontSize:12,color:colors[r.id]||C.dim}}><span style={{fontWeight:700}}>●</span> {r.name} {r.desc}</span>))}
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:2,flexShrink:0}}>
+        {routes.map(r=>(<span key={r.id} style={{fontSize:9,color:colors[r.id]||C.dim}}><span style={{fontWeight:700}}>●</span> {r.name}</span>))}
       </div>
     </div>
   );
 }
-
-
 
 // ─── News Feed ────────────────────────────────────────────────────────────────
 function NewsFeed() {
@@ -426,12 +458,13 @@ function NewsTicker() {
     let alive=true;
     fetch("/api/shipping-news",{cache:"no-store"})
       .then(r=>r.ok?r.json():Promise.reject(new Error("HTTP "+r.status)))
-      .then(j=>{if(alive)setItems((j.items||[]).slice(0,12));})
+      .then(j=>{if(alive)setItems(Array.isArray(j?.items)?j.items.slice(0,12):[]);})
       .catch(()=>{});
     return()=>{alive=false;};
   },[]);
-  if(!items.length)return null;
-  const loop=[...items,...items];
+  const safeItems=Array.isArray(items)?items:[];
+  if(!safeItems.length)return null;
+  const loop=safeItems.concat(safeItems);
   return(
     <div style={{background:"#081423",border:"1px solid rgba(88,166,255,.20)",borderRadius:7,overflow:"hidden",height:31,display:"flex",alignItems:"center"}}>
       <div style={{flexShrink:0,padding:"0 10px",fontSize:9,fontWeight:850,letterSpacing:".09em",color:"#58a6ff",textTransform:"uppercase",borderRight:"1px solid rgba(88,166,255,.18)",height:"100%",display:"flex",alignItems:"center"}}>Shipping news</div>
@@ -446,7 +479,7 @@ function NewsTicker() {
 }
 
 function CommodityTape({data}) {
-  const items=data?.items||[];
+  const items=Array.isArray(data?.items)?data.items:[];
   if(!items.length)return null;
   return(
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(112px,1fr))",gap:6}}>
@@ -463,13 +496,14 @@ function CommodityTape({data}) {
 }
 
 function VlccSparkline({history}) {
-  if(!history?.length)return null;
+  const rows=Array.isArray(history)?history:[];
+  if(!rows.length)return null;
   const W=360,H=72,PL=4,PR=4,PT=8,PB=8;
-  const vals=history.map(x=>Number(x.tce)).filter(Number.isFinite);
+  const vals=rows.map(x=>Number(x.tce)).filter(Number.isFinite);
   if(vals.length<2)return null;
   const mn=Math.min(...vals),mx=Math.max(...vals),range=mx-mn||1;
-  const pts=history.map((x,i)=>{
-    const px=PL+i/(history.length-1||1)*(W-PL-PR);
+  const pts=rows.map((x,i)=>{
+    const px=PL+i/(rows.length-1||1)*(W-PL-PR);
     const py=PT+(mx-Number(x.tce))/range*(H-PT-PB);
     return [px,py];
   });
@@ -627,7 +661,8 @@ function Dashboard({vessels, cargoes, history}) {
   const fleetAvg = withDays.length ? Math.round(withDays.reduce((a,b)=>a+b.days,0)/withDays.length) : null;
 
   const regionByLabel={};
-  for(const row of regionHistory||[]){
+  const safeRegionHistory=Array.isArray(regionHistory)?regionHistory:[];
+  for(const row of safeRegionHistory){
     const lab=String(row.snapshot_label||"").toUpperCase(), region=row.region, seg=row.segment||"Unknown";
     regionByLabel[lab]||={};
     regionByLabel[lab][region]||={ships:0,segments:{}};
@@ -652,7 +687,8 @@ function Dashboard({vessels, cargoes, history}) {
 
   // Build chart data from history + today
   const today = new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"});
-  const chartSnaps = [...history];
+  const safeHistory=Array.isArray(history)?history:[];
+  const chartSnaps = [...safeHistory];
   // Patch today's live data in
   if (fleetAvg !== null) {
     const todayIdx = chartSnaps.findIndex(h=>h.date===today);
@@ -678,7 +714,8 @@ function Dashboard({vessels, cargoes, history}) {
 
   const fixingSegmentChartData=(()=>{
     const byDate={};
-    for(const r of fixingSegmentHistory||[]){
+    const rows=Array.isArray(fixingSegmentHistory)?fixingSegmentHistory:[];
+    for(const r of rows){
       const d=r.snapshot_date; if(!d)continue;
       byDate[d]||={date:d};
       byDate[d][r.segment]=Number(r.avg_days);
