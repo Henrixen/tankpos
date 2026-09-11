@@ -151,7 +151,7 @@ ${text}`}]
         if(val) stampedSpot[rid]={...val, updatedAt:today};
       }
       const snap = {date:today, spot: stampedSpot};
-      const prevHistory = (existing.history||[]).filter(h=>h.date!==today);
+      const prevHistory = (Array.isArray(existing.history)?existing.history:[]).filter(h=>h.date!==today);
       const newHistory = [...prevHistory, snap].slice(-90);
 
        const next = {
@@ -208,7 +208,8 @@ ${text}`}]
       return new Date(s).getTime()||0;
     }catch{return 0;}
   }
-  const histData = [...(data?.history||[])]
+  const histRows = Array.isArray(data?.history) ? data.history : [];
+  const histData = [...histRows]
     .sort((a,b)=>parseChartDate(a.date)-parseChartDate(b.date))
     .slice(-30);
   const routeColors = {TC2:C.blue,TC6:C.green,TC14:C.amber,TC23:C.purple,TC178:"#ff9f43"};
@@ -457,12 +458,13 @@ function NewsTicker() {
     let alive=true;
     fetch("/api/shipping-news",{cache:"no-store"})
       .then(r=>r.ok?r.json():Promise.reject(new Error("HTTP "+r.status)))
-      .then(j=>{if(alive)setItems((j.items||[]).slice(0,12));})
+      .then(j=>{if(alive)setItems(Array.isArray(j?.items)?j.items.slice(0,12):[]);})
       .catch(()=>{});
     return()=>{alive=false;};
   },[]);
-  if(!items.length)return null;
-  const loop=[...items,...items];
+  const safeItems=Array.isArray(items)?items:[];
+  if(!safeItems.length)return null;
+  const loop=safeItems.concat(safeItems);
   return(
     <div style={{background:"#081423",border:"1px solid rgba(88,166,255,.20)",borderRadius:7,overflow:"hidden",height:31,display:"flex",alignItems:"center"}}>
       <div style={{flexShrink:0,padding:"0 10px",fontSize:9,fontWeight:850,letterSpacing:".09em",color:"#58a6ff",textTransform:"uppercase",borderRight:"1px solid rgba(88,166,255,.18)",height:"100%",display:"flex",alignItems:"center"}}>Shipping news</div>
@@ -477,7 +479,7 @@ function NewsTicker() {
 }
 
 function CommodityTape({data}) {
-  const items=data?.items||[];
+  const items=Array.isArray(data?.items)?data.items:[];
   if(!items.length)return null;
   return(
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(112px,1fr))",gap:6}}>
@@ -494,13 +496,14 @@ function CommodityTape({data}) {
 }
 
 function VlccSparkline({history}) {
-  if(!history?.length)return null;
+  const rows=Array.isArray(history)?history:[];
+  if(!rows.length)return null;
   const W=360,H=72,PL=4,PR=4,PT=8,PB=8;
-  const vals=history.map(x=>Number(x.tce)).filter(Number.isFinite);
+  const vals=rows.map(x=>Number(x.tce)).filter(Number.isFinite);
   if(vals.length<2)return null;
   const mn=Math.min(...vals),mx=Math.max(...vals),range=mx-mn||1;
-  const pts=history.map((x,i)=>{
-    const px=PL+i/(history.length-1||1)*(W-PL-PR);
+  const pts=rows.map((x,i)=>{
+    const px=PL+i/(rows.length-1||1)*(W-PL-PR);
     const py=PT+(mx-Number(x.tce))/range*(H-PT-PB);
     return [px,py];
   });
@@ -658,7 +661,8 @@ function Dashboard({vessels, cargoes, history}) {
   const fleetAvg = withDays.length ? Math.round(withDays.reduce((a,b)=>a+b.days,0)/withDays.length) : null;
 
   const regionByLabel={};
-  for(const row of regionHistory||[]){
+  const safeRegionHistory=Array.isArray(regionHistory)?regionHistory:[];
+  for(const row of safeRegionHistory){
     const lab=String(row.snapshot_label||"").toUpperCase(), region=row.region, seg=row.segment||"Unknown";
     regionByLabel[lab]||={};
     regionByLabel[lab][region]||={ships:0,segments:{}};
@@ -683,7 +687,8 @@ function Dashboard({vessels, cargoes, history}) {
 
   // Build chart data from history + today
   const today = new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"});
-  const chartSnaps = [...history];
+  const safeHistory=Array.isArray(history)?history:[];
+  const chartSnaps = [...safeHistory];
   // Patch today's live data in
   if (fleetAvg !== null) {
     const todayIdx = chartSnaps.findIndex(h=>h.date===today);
@@ -709,7 +714,8 @@ function Dashboard({vessels, cargoes, history}) {
 
   const fixingSegmentChartData=(()=>{
     const byDate={};
-    for(const r of fixingSegmentHistory||[]){
+    const rows=Array.isArray(fixingSegmentHistory)?fixingSegmentHistory:[];
+    for(const r of rows){
       const d=r.snapshot_date; if(!d)continue;
       byDate[d]||={date:d};
       byDate[d][r.segment]=Number(r.avg_days);
