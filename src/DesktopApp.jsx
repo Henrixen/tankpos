@@ -1,1048 +1,4219 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react";
+import { C, OP_COLORS, isMobile } from "./constants";
+import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
+import { loadHistory } from "./supabaseHelpers";
 import { supabase } from "./supabaseclient";
-import { C, OP_COLORS } from "./constants";
-import { stripHtml, classifyRegion, daysBetween } from "./utils";
-import { apiCall, ocrImage } from "./api";
+import { getUsageCache, fetchUsageTotals } from "./aiUsage";
 
-const WS_STORE = "ws-data";
-const ROUTES = [
-  {id:"TC2",  name:"TC2",  desc:"ARA→USAC 37kt",    unit:"WS"},
-  {id:"TC6",  name:"TC6",  desc:"Cross-Med 30kt",   unit:"WS"},
-  {id:"TC14", name:"TC14", desc:"US Gulf→UKC 38kt", unit:"WS"},
-  {id:"TC23", name:"TC23", desc:"UKC→USAC 30kt",    unit:"WS"},
+// Every component lazy-loaded to fully break circular dependency chains
+const EC             = React.lazy(()=>import("./EC"));
+const ParsePanel     = React.lazy(()=>import("./ParsePanel"));
+const AskAIStrip     = React.lazy(()=>import("./AIAsk").then(m=>({default:m.AskAIStrip})));
+const RateMatrix     = React.lazy(()=>import("./RateMatrix").then(m=>({default:m.RateMatrix})));
+const RateMatrixCard = React.lazy(()=>import("./RateMatrix").then(m=>({default:m.RateMatrixCard})));
+const RateMatrixBunkerInput = React.lazy(()=>import("./RateMatrix").then(m=>({default:m.RateMatrixBunkerInput})));
+const FixingTab      = React.lazy(()=>import("./FixingTab"));
+const TimeCharterTab = React.lazy(()=>import("./TimeCharterTab"));
+const ProjectsTab    = React.lazy(()=>import("./ProjectsTab"));
+const TCECalculator  = React.lazy(()=>import("./TCECalculator").then(m=>({default:m.TCECalculator})));
+const Dashboard      = React.lazy(()=>import("./Dashboard"));
+const OpeningBreakdown = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.OpeningBreakdown})));
+const FixingWindow   = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.FixingWindow})));
+const FixingWindowChart = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.FixingWindowChart})));
+const ExportPanel    = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.ExportPanel})));
+const IntelVault     = React.lazy(()=>import("./IntelVault"));
+const IntelVaultStrip = React.lazy(()=>import("./IntelVault").then(m=>({default:m.IntelVaultStrip})));
+const AISMap         = React.lazy(()=>import("./AISMap"));
+const MatrixTable    = React.lazy(()=>import("./components/ui/MatrixTable"));
+const NotesTab       = React.lazy(()=>import("./NotesTab"));
+const CalendarTab    = React.lazy(()=>import("./CalendarTab"));
+const SettingsTab    = React.lazy(()=>import("./SettingsTab"));
+const ReportsTab     = React.lazy(()=>import("./ReportsTab"));
+const FreightMapTab  = React.lazy(()=>import("./FreightMapTab"));
+const VesselPopout   = React.lazy(()=>import("./VesselPopout"));
+const ClientsTab     = React.lazy(()=>import("./ClientsTab"));
+const VesselUploader = React.lazy(()=>import("./VesselUploader"));
+const NewbuildsTab   = React.lazy(()=>import("./NewbuildsTab"));
+const FleetTab       = React.lazy(()=>import("./FleetTab"));
+const OutsidersTab   = React.lazy(()=>import("./OutsidersTab"));
+
+const TabFallback = ()=>null;
+
+const NAV_KEY="signal_navigation_config";
+const NAV_CLOUD_KEY="navigation_config";
+const NAV_ITEMS=[
+ ["pos","Positions","#58a6ff","🚢"],["cargo","Cargoes","#faa356","🛢"],["fix","Fixing","#c792ea","◎"],["tcv","Time Charter","#fb923c","◷"],
+ ["clients","Clients","#a8e6a3","♟"],["matrix","Matrix","#43e97b","⌗"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","∑"],
+ ["dash","Dashboard","#43e97b","▦"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▤"],["map","Freight Map","#10b981","⌁"],
+ ["cal","Calendar","#4fc3f7","◫"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","⚓"],["newbuilds","Newbuilds","#fbbf24","△"]
 ];
+function navDefault(){return{mode:"classic",collapsed:false,order:NAV_ITEMS.map(x=>x[0]),hidden:[],groups:[
+ {id:"market",label:"Market",tabs:["pos","cargo","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
+ {id:"tools",label:"Tools",tabs:["projects","tce","map"]},{id:"reporting",label:"Reporting",tabs:["dash","reports"]},
+ {id:"workspace",label:"Workspace",tabs:["clients","notes","cal","settings"]}]};}
+function navNorm(x){
+ const d=navDefault(),valid=new Set(NAV_ITEMS.map(x=>x[0]));
+ const order=(Array.isArray(x?.order)?x.order:[]).filter(id=>valid.has(id));d.order.forEach(id=>{if(!order.includes(id))order.push(id)});
+ const groups=(Array.isArray(x?.groups)?x.groups:d.groups).map((g,i)=>({id:String(g.id||"g"+i),label:String(g.label||"Menu"),tabs:(g.tabs||[]).filter(id=>valid.has(id))}));
+ const used=new Set(groups.flatMap(g=>g.tabs));const missing=order.filter(id=>!used.has(id));if(missing.length){if(!groups.length)groups.push({id:"other",label:"Other",tabs:[]});groups.at(-1).tabs.push(...missing);}
+ return{mode:["classic","grouped","sidebar"].includes(x?.mode)?x.mode:"classic",collapsed:!!x?.collapsed,order,hidden:(x?.hidden||[]).filter(id=>valid.has(id)),groups};
+}
+function navLoad(){try{return navNorm(JSON.parse(localStorage.getItem(NAV_KEY)||"null"));}catch{return navDefault();}}
 
-const FFA_PERIODS = ["Feb/26","Mar/26","Apr/26","Q1/26","Q2/26","AVE/25"];
 
-const REGION_ORDER = ["NWE / UKC","Baltic","Med / Black Sea","USG / USEC / USAC","Caribs","MEG / WCI / Red Sea","SEA / FEA","Africa","South America","Other"];
-const REGION_COLORS = {
-  "NWE / UKC":"#58a6ff","Baltic":"#ff6b6b","Med / Black Sea":"#fd79a8",
-  "USG / USEC / USAC":"#f5a623","Caribs":"#a78bfa","MEG / WCI / Red Sea":"#22d3ee",
-  "SEA / FEA":"#3fb950","Africa":"#bc8cff","South America":"#ff9f43","Other":"rgba(160,200,255,.45)"
-};
 
-const SEGMENT_ORDER = ["All","Sub 10","City","Inter","J19","Flexi","Handy","MR"];
-const SEGMENT_COLORS = {
-  "Sub 10":"#8b949e","City":"#58a6ff","Inter":"#22d3ee","J19":"#a78bfa",
-  "Flexi":"#fd79a8","Handy":"#3fb950","MR":"#f5a623"
-};
-function parseDashboardDate(s, reference=new Date()){
-  if(!s)return null;
-  const raw=String(s).trim();
-  const m=raw.match(/^(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(?:\s+(\d{2,4}))?$/i);
-  if(m){
-    const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
-    let year=m[3]?Number(m[3]):reference.getFullYear(); if(year<100)year+=2000;
-    return new Date(year,months[m[2].toLowerCase()],Number(m[1]));
+
+// PanelEC — div-based click-to-edit cell for the vessel popout (EC is <td>-only, breaks in flex)
+function PanelEC({value,color,placeholder,onSave}){
+  const [editing,setEditing]=React.useState(false);
+  const [draft,setDraft]=React.useState("");
+  const ref=React.useRef(null);
+  function start(){setDraft(value||"");setEditing(true);setTimeout(()=>{ref.current?.focus();ref.current?.select?.();},15);}
+  function commit(){setEditing(false);const t=(draft||"").trim();if(t!==(value||""))onSave?.(t);}
+  if(editing)return(
+    <input ref={ref} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={commit}
+      onKeyDown={e=>{e.stopPropagation();if(e.key==="Enter"){e.preventDefault();commit();}if(e.key==="Escape"){e.preventDefault();setEditing(false);}}}
+      placeholder={placeholder||""}
+      style={{width:140,background:"#0f1d33",border:"1px solid #2a4a7f",borderRadius:4,color:"#e6edf7",fontSize:12,padding:"2px 6px",outline:"none",fontFamily:"inherit",textAlign:"right"}}/>
+  );
+  return(
+    <span onClick={start} title="Click to edit"
+      style={{fontSize:12,color:value?(color||"#e6edf7"):"#4a5a78",cursor:"text",textAlign:"right",maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+      {value||placeholder||"—"}
+    </span>
+  );
+}
+
+// TagCell helpers
+const PRESET_TAGS=["AG","CPP","DPP","EX ASIA","MED","PARCEL","TA","UKC","WAF","OUTSIDER EUROPE","SPACE ASIA-EUROPE"];
+
+// DWT display: always full number with space thousands (e.g. 15 212), handling
+// raw numbers (15212) and feed "8K"/"26K" strings alike.
+function fmtDwtFull(raw){
+  if(raw==null||raw==="")return "";
+  let n;
+  if(typeof raw==="number")n=raw;
+  else{
+    const s=String(raw).trim().toUpperCase().replace(/\s/g,"");
+    if(/^\d+(\.\d+)?K$/.test(s))n=parseFloat(s)*1000;
+    else n=parseFloat(s.replace(/[^\d.]/g,""));
   }
-  const d=new Date(raw); return isNaN(d)?null:d;
-}
-function fmtDwtCompact(n){
-  const x=Number(n||0); if(!x)return "—";
-  if(x>=1000000)return (x/1000000).toFixed(x>=10000000?1:2).replace(/\.?0+$/,"")+"m";
-  if(x>=1000)return Math.round(x/1000).toLocaleString("en-US")+"k";
-  return Math.round(x).toLocaleString("en-US");
-}
-function fmtSigned(n,fmt=x=>String(x)){
-  if(n==null||!Number.isFinite(Number(n)))return "—";
-  const x=Number(n); return (x>0?"+":"")+fmt(x);
+  if(!isFinite(n)||n<=0)return String(raw);
+  return Math.round(n).toLocaleString("en-US").replace(/,/g," ");
 }
 
-function WSTracker() {
-  const [data,    setData]    = useState(null);
-  const [pasteText, setPaste] = useState("");
-  const [img,       setImg]    = useState(null);
-  const [parsing,  setParsing] = useState(false);
-  const [status,   setStatus]  = useState(null);
-  const [wsNote,   setWsNote]  = useState("");
-  const wsFileRef = useRef(null);
+// Coating display map — keep full value in DB, show short code in UI
+const COATING_DISPLAY={"STAINLESS STEEL":"STST","MARINELINE":"ML","EPOXY":"EPOXY","ZINC":"ZINC"};
+function fmtCoating(c){if(!c)return "";const k=String(c).trim().toUpperCase();return COATING_DISPLAY[k]||c;}
+function getTagList(){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");return[...new Set([...PRESET_TAGS,...c].map(t=>(t||"").toUpperCase()))].sort();}catch{return PRESET_TAGS.slice();}}
+function addCustomTag(t){try{t=(t||"").toUpperCase();const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");if(!c.includes(t)){const next=[...c,t];localStorage.setItem("signal_custom_tags",JSON.stringify(next));pushTagKey("custom_tags",next).catch(e=>console.error("tag push failed:",e));notifyTagsUpdated();}}catch{}}
+function getTagScopes(){try{return JSON.parse(localStorage.getItem("signal_tag_scopes")||"{}");}catch{return{};}}
+function setTagScope(t,scope){try{const s=getTagScopes();if(scope==="both")delete s[t];else s[t]=scope;localStorage.setItem("signal_tag_scopes",JSON.stringify(s));pushTagKey("tag_scopes",s).catch(e=>console.error("tag push failed:",e));notifyTagsUpdated();}catch{}}
+function getTagScope(t){return getTagScopes()[t]||"both";}
+function getTagListFor(view){ // view: "cargo" | "position"
+  const all=getTagList();
+  const scopes=getTagScopes();
+  return all.filter(t=>{const s=scopes[t]||"both";return s==="both"||s===view;});
+}
+function removeCustomTag(t){try{const c=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");const next=c.filter(x=>x!==t);localStorage.setItem("signal_custom_tags",JSON.stringify(next));pushTagKey("custom_tags",next).catch(e=>console.error("tag push failed:",e));notifyTagsUpdated();}catch{}}
+function getTagColors(){try{return JSON.parse(localStorage.getItem("signal_tag_colors")||"{}");} catch{return {};}}
+function setTagColor(t,col){try{const c=getTagColors();c[t]=col;localStorage.setItem("signal_tag_colors",JSON.stringify(c));pushTagKey("tag_colors",c).catch(e=>console.error("tag push failed:",e));notifyTagsUpdated();}catch{}}
+function removeTagColor(t){try{const c=getTagColors();delete c[t];localStorage.setItem("signal_tag_colors",JSON.stringify(c));pushTagKey("tag_colors",c).catch(e=>console.error("tag push failed:",e));notifyTagsUpdated();}catch{}}
+function getTagColor(t){const c=getTagColors();return c[t]||null;}
 
-  // Load wsNote from Supabase
+// ─── Tag catalog sync (Supabase) ───────────────────────────────────────────
+// Tags/colors/scopes were previously localStorage-only, so they diverged
+// between devices (e.g. a tag colored on one machine showed as uncolored on
+// another). localStorage stays as the fast synchronous read cache that all
+// the code above uses, but every mutation now also writes through to
+// Supabase, and `pullTagsFromCloud` (called once on app load) pulls the
+// shared state down and overwrites the local cache so devices converge.
+const TAG_SETTINGS_TABLE="tag_settings";
+function notifyTagsUpdated(){ try{ window.dispatchEvent(new Event("tags-updated")); }catch{} }
+async function pushTagKey(key,value){
+  const { error } = await supabase.from(TAG_SETTINGS_TABLE).upsert({key,value,updated_at:new Date().toISOString()},{onConflict:"key"});
+  if(error){ console.error("pushTagKey error:",error); throw error; }
+}
+async function pullTagsFromCloud(){
+  try{
+    const {data,error}=await supabase.from(TAG_SETTINGS_TABLE).select("key,value");
+    if(error||!data) return;
+    const byKey={}; data.forEach(r=>{byKey[r.key]=r.value;});
+    if(byKey.custom_tags) localStorage.setItem("signal_custom_tags",JSON.stringify(byKey.custom_tags));
+    if(byKey.tag_colors)  localStorage.setItem("signal_tag_colors",JSON.stringify(byKey.tag_colors));
+    if(byKey.tag_scopes)  localStorage.setItem("signal_tag_scopes",JSON.stringify(byKey.tag_scopes));
+    notifyTagsUpdated();
+  }catch(e){ console.error("pullTagsFromCloud error:",e); }
+}
+
+// TagCell — proper component so useState works in renderRow
+const TAG_PALETTE=["#ef4444","#f97316","#eab308","#22c55e","#14b8a6","#3b82f6","#8b5cf6","#ec4899","#f43f5e","#06b6d4"];
+function TagCell({cargoId,tag,onUpdateC}){
+  const [open,setOpen]=useState(false);
+  const [editMode,setEditMode]=useState(null);
+  const [colorPick,setColorPick]=useState(null); // tag name being color-edited
+  const btnRef=React.useRef(null);
+  const [pos,setPos]=useState({top:0,left:0});
+  const [tagList,setTagList]=useState(()=>getTagListFor("cargo"));
+  const [tagColors,setTagColors]=useState(getTagColors);
+
   useEffect(()=>{
-    supabase.from("dashboard").select("value").eq("key","ws-note").single()
-      .then(({data:row})=>{if(row)setWsNote(row.value||"");});
+    const h=()=>{setTagList(getTagListFor("cargo"));setTagColors(getTagColors());};
+    window.addEventListener("tags-updated",h);
+    return ()=>window.removeEventListener("tags-updated",h);
   },[]);
 
-  // Load from Supabase
-  useEffect(()=>{
-    (async()=>{
-      try{
-        const{data:row,error}=await supabase.from("dashboard").select("value").eq("key",WS_STORE).single();
-        if(!error&&row) setData(JSON.parse(row.value));
-      }catch(_){}
-    })();
-  },[]);
-
-  function normalisePeriodKeys(ffa){
-    if(!ffa) return ffa;
-    const keyMap={'Feb26':'Feb26','Mar26':'Mar26','Apr26':'Apr26','May26':'May26','Jun26':'Jun26',
-      'FEB26':'Feb26','MAR26':'Mar26','APR26':'Apr26','MAY26':'May26','JUN26':'Jun26',
-      'Q126':'Q126','Q226':'Q226','Q326':'Q326','Q426':'Q426',
-      '1Q26':'Q126','2Q26':'Q226','3Q26':'Q326','4Q26':'Q426',
-      'AVE25':'AVE25','AVE26':'AVE26','ave25':'AVE25','ave26':'AVE26'};
-    const result={};
-    for(const[rid,periods] of Object.entries(ffa)){
-      result[rid]={};
-      for(const[k,v] of Object.entries(periods)){
-        const norm=keyMap[k]||k;
-        result[rid][norm]=v;
-      }
+  function openPick(e){
+    e.stopPropagation();
+    setTagList(getTagListFor("cargo"));
+    setTagColors(getTagColors());
+    if(btnRef.current){
+      const r=btnRef.current.getBoundingClientRect();
+      const popW=160; const popH=240;
+      // Prefer opening directly below the button, left-aligned
+      let left=r.left;
+      if(left+popW>window.innerWidth-8) left=r.right-popW;
+      left=Math.max(8,Math.min(left,window.innerWidth-popW-8));
+      let top=r.bottom+4;
+      if(top+popH>window.innerHeight-8) top=Math.max(8,r.top-popH-4);
+      setPos({top,left});
     }
-    return result;
+    setOpen(v=>!v);
+    setEditMode(null); setColorPick(null);
   }
-  async function saveWS(d) {
-    const clean={...d,ffa:normalisePeriodKeys(d.ffa)};
-    try{await supabase.from("dashboard").upsert({key:WS_STORE,value:JSON.stringify(clean)},{onConflict:"key"});}catch(_){}
-    setData(clean);
-  }
-
-  async function parseWS() {
-    if (!pasteText.trim() && !img) { setStatus({t:"error",m:"Paste text or attach an image"}); return; }
-    setParsing(true); setStatus({t:"info",m:img?"Reading image…":"Parsing…"});
-    try {
-      let text = pasteText;
-      if (img) {
-        const ocr = await ocrImage(img);
-        text = ocr + (pasteText.trim() ? "\n\n" + pasteText : "");
-      }
-      const raw = await apiCall(
-        "You are a freight market data parser. Parse worldscale and FFA data. Respond ONLY with raw JSON, no markdown.",
-        [{role:"user",content:`Parse this WS/FFA market data into JSON.
-Routes we track: TC2 (ARA-USAC 37kt), TC6 (Cross-Med 30kt), TC14 (USGC-UKC 38kt), TC23 (UKC-USAC 30kt), TC178 (Rdam barge $/mt).
-
-Output format:
-{
-  "date": "DD Mon YY",
-  "spot": {
-    "TC2":  {"ws": 218.75, "change": -1.25},
-    "TC6":  {"ws": 310.56, "change": -14.44}
-  },
-  "ffa": {
-    "TC2":  {"Mar26": 247.50, "Apr26": 227.50, "May26": 165.50, "Q126": 167.50, "Q226": 179.50, "AVE25": 134.50},
-    "TC14": {"Mar26": 394.50, "Apr26": 329.50, "May26": 243.50, "Q126": 277.50, "Q226": 255.50, "AVE25": 147.50}
-  }
+  function pick(t){onUpdateC(cargoId,"tag",t);setOpen(false);}
+  function addNew(val){const t=val.trim();if(!t)return;addCustomTag(t);onUpdateC(cargoId,"tag",t);setTagList(getTagListFor("cargo"));setOpen(false);}
+  function delTag(t,e){e.stopPropagation();removeCustomTag(t);setTagList(getTagListFor("cargo"));if(tag===t)onUpdateC(cargoId,"tag","");}
+  function renameTag(o,nw){if(!nw.trim()||nw===o)return;removeCustomTag(o);addCustomTag(nw.trim());setTagList(getTagListFor("cargo"));if(tag===o)onUpdateC(cargoId,"tag",nw.trim());setEditMode(null);}
+  const cur=tag||"";
+  const curCol=cur?getTagColor(cur):null;
+  return(
+    <td style={{padding:"2px 4px",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)"}} onClick={e=>e.stopPropagation()}>
+      <button ref={btnRef} onClick={openPick}
+        style={{background:curCol?curCol+"22":cur?"rgba(88,166,255,0.15)":"transparent",
+          border:"1px solid "+(curCol||( cur?"rgba(88,166,255,0.4)":"rgba(88,166,255,0.12)")),
+          borderRadius:3,color:curCol||( cur?"#79c0ff":"rgba(120,160,220,0.25)"),
+          fontSize:10,fontWeight:cur?700:400,padding:"1px 5px",cursor:"pointer",
+          fontFamily:"inherit",whiteSpace:"nowrap",maxWidth:76,overflow:"hidden",textOverflow:"ellipsis"}}>
+        {cur||"＋"}
+      </button>
+      {open&&(
+        <>
+          <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setOpen(false)}/>
+          <div style={{position:"fixed",top:pos.top,left:pos.left,zIndex:9999,background:"#0a1628",
+            border:"1px solid rgba(88,166,255,0.3)",borderRadius:7,padding:"6px",
+            boxShadow:"0 8px 28px rgba(0,0,0,0.7)",display:"flex",flexDirection:"column",gap:2,minWidth:150}}>
+            {cur&&<button onClick={()=>{onUpdateC(cargoId,"tag","");setOpen(false);}}
+              style={{fontSize:10,padding:"2px 6px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",
+                background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",
+                fontFamily:"inherit",textAlign:"left",marginBottom:2}}>✕ clear</button>}
+            {tagList.map(t=>{
+              const tCol=tagColors[t]||null;
+              return(
+                <button key={t} onClick={()=>pick(t)}
+                  style={{fontSize:11,padding:"3px 8px",borderRadius:3,textAlign:"left",cursor:"pointer",fontFamily:"inherit",
+                    border:"1px solid "+(cur===t?(tCol||"rgba(88,166,255,0.5)"):(tCol?tCol+"55":"rgba(88,166,255,0.12)")),
+                    background:cur===t?(tCol?tCol+"33":"rgba(88,166,255,0.2)"):"transparent",
+                    color:cur===t?(tCol||"#79c0ff"):(tCol||"rgba(160,200,255,0.7)"),
+                    fontWeight:cur===t?700:400}}>
+                  {tCol&&<span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:tCol,marginRight:5,verticalAlign:"middle"}}/>}
+                  {t}
+                </button>
+              );
+            })}
+            <input placeholder="New tag + Enter"
+              onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){addNew(e.target.value);e.target.value="";}if(e.key==="Escape")setOpen(false);}}
+              style={{fontSize:10,padding:"3px 5px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none",marginTop:4}}/>
+            <div style={{fontSize:9,color:"rgba(88,166,255,0.3)",marginTop:3,textAlign:"center",cursor:"pointer"}}
+              onClick={()=>setOpen(false)}>
+              Manage tags in Settings →
+            </div>
+          </div>
+        </>
+      )}
+    </td>
+  );
 }
 
-Rules:
-- Only include routes and fields where you actually found a value — omit nulls entirely
-- spot: include ws and change (as signed number e.g. -1.25) if present
-- ffa period key format MUST be exactly: Mar26 Apr26 May26 Jun26 Q126 Q226 Q326 Q426 AVE25 AVE26 (no slash, no space)
-- If input has "MAR/26" use "Mar26", "1Q/26" use "Q126", "AVE/25" use "AVE25"
-- Spot change: extract from parentheses e.g. "218.75(-1.25)" → ws:218.75 change:-1.25
-- TC178 uses $/mt not WS — still put the number in "ws" field
+function TagCellV({vesselName,tag,onUpdateV}){
+  const [open,setOpen]=useState(false);
+  const [tagList,setTagList]=useState(()=>getTagListFor("position"));
+  const [tagColors,setTagColors]=useState(getTagColors);
+  const btnRef=React.useRef(null);
+  const [pos,setPos]=useState({top:0,left:0});
 
-Data:
-${text}`}]
+  useEffect(()=>{
+    const h=()=>{setTagList(getTagListFor("position"));setTagColors(getTagColors());};
+    window.addEventListener("tags-updated",h);
+    return ()=>window.removeEventListener("tags-updated",h);
+  },[]);
+
+  function openPick(e){
+    e.stopPropagation();
+    setTagList(getTagListFor("position"));
+    setTagColors(getTagColors());
+    if(btnRef.current){
+      const r=btnRef.current.getBoundingClientRect();
+
+      // The app's "Font size" control uses CSS `zoom` on <body>.
+      // Fixed-position coordinates are then evaluated in the zoomed body
+      // coordinate system, while getBoundingClientRect() is in visual pixels.
+      // Convert visual coordinates back into the body's CSS coordinate space.
+      const rawZoom=parseFloat(
+        getComputedStyle(document.body).zoom ||
+        document.body.style.zoom ||
+        "1"
       );
-      const cl = raw.replace(/^```[\w]*/g,"").replace(/```/g,"").trim();
-      const s=cl.indexOf("{"),e=cl.lastIndexOf("}");
-      if(s<0||e<=s) throw new Error("No JSON found");
-      const parsed = JSON.parse(cl.slice(s,e+1));
+      const zoom=Number.isFinite(rawZoom)&&rawZoom>0 ? rawZoom : 1;
 
-      // Merge into existing data
-      const existing = data || {spot:{},ffa:{},history:[]};
-      const today = parsed.date || new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"});
+      const popWVisual=190*zoom;
+      const popHVisual=340*zoom;
+      const marginVisual=12;
 
-      // Build history snapshot
-      // Stamp update time on each parsed spot route
-      const parsedSpot = parsed.spot||{};
-      const stampedSpot = {};
-      for(const[rid,val] of Object.entries(parsedSpot)){
-        if(val) stampedSpot[rid]={...val, updatedAt:today};
+      const viewportW=window.innerWidth;
+      const viewportH=window.innerHeight;
+
+      // Prefer opening immediately to the LEFT of the clicked +/tag button.
+      // If there is not enough room, open to its right.
+      let leftVisual=r.left-popWVisual-6;
+      if(leftVisual<marginVisual){
+        leftVisual=r.right+6;
       }
-      const snap = {date:today, spot: stampedSpot};
-      const prevHistory = (Array.isArray(existing.history)?existing.history:[]).filter(h=>h.date!==today);
-      const newHistory = [...prevHistory, snap].slice(-90);
+      leftVisual=Math.max(
+        marginVisual,
+        Math.min(leftVisual,viewportW-popWVisual-marginVisual)
+      );
 
-       const next = {
-        spot: (()=>{
-          const es=existing.spot||{};
-          const ns={...es};
-          for(const[rid,val] of Object.entries(stampedSpot)){
-            if(!val) continue;
-            const prev=es[rid]||{};
-            // Only overwrite fields that are non-null in the new parse
-            ns[rid]={...prev};
-            if(val.ws!=null) ns[rid].ws=val.ws;
-            if(val.change!=null) ns[rid].change=val.change;
-            ns[rid].updatedAt=today;
-          }
-          return ns;
-        })(),
-        ffa: (()=>{
-          const ef=existing.ffa||{};
-          const pf=parsed.ffa||{};
-          // If new paste has FFA data, replace entirely so columns always match latest paste
-          if(Object.keys(pf).length>0){
-            const nf={};
-            for(const[rid,val] of Object.entries(pf)){
-              if(!val) continue;
-              nf[rid]={...val,updatedAt:today};
-            }
-            return nf;
-          }
-          // No FFA in this paste — keep existing
-          return ef;
-        })(),
-        history: newHistory,
-        lastUpdate: today,
-      };
-      await saveWS(next);
-      setPaste(""); setImg(null);
-      setStatus({t:"success",m:`✓ Updated ${Object.keys(parsed.spot||{}).length} routes · ${today}`});
-    } catch(e) {
-      setStatus({t:"error",m:e.message});
-    } finally {
-      setParsing(false);
-    }
-  }
+      // Keep the top close to the clicked row and clamp vertically.
+      let topVisual=r.top-8;
+      topVisual=Math.max(
+        marginVisual,
+        Math.min(topVisual,viewportH-popHVisual-marginVisual)
+      );
 
-  const sc = status?.t==="success"?C.green:status?.t==="error"?C.red:C.blue;
-
-  // Chart data: last 30 history snapshots sorted chronologically
-  function parseChartDate(s){
-    if(!s)return 0;
-    try{
-      const m=s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{2,4})$/);
-      if(m){const yr=m[3].length===2?"20"+m[3]:m[3];return new Date(`${m[2]} ${m[1]} ${yr}`).getTime();}
-      return new Date(s).getTime()||0;
-    }catch{return 0;}
-  }
-  const histRows = Array.isArray(data?.history) ? data.history : [];
-  const histData = [...histRows]
-    .sort((a,b)=>parseChartDate(a.date)-parseChartDate(b.date))
-    .slice(-30);
-  const routeColors = {TC2:C.blue,TC6:C.green,TC14:C.amber,TC23:C.purple,TC178:"#ff9f43"};
-
-  const secHead = t=>(<div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>{t}</div>);
-  const th2 = {padding:"5px 8px",background:C.bg3,color:C.faint,fontWeight:700,fontSize:12,textTransform:"uppercase",textAlign:"right",whiteSpace:"nowrap"};
-  const td2 = {padding:"5px 8px",fontSize:12,textAlign:"right",whiteSpace:"nowrap",borderBottom:"1px solid "+C.bg2};
-
-  return(
-    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"12px 14px"}}>
-      {secHead("📊 Worldscale Spot + FFA Tracker")}
-
-      <div style={{
-        display:"grid",
-        gridTemplateColumns:"minmax(360px,40%) minmax(0,60%)",
-        gap:12,
-        height:560,
-        minHeight:560,
-        alignItems:"stretch"
-      }}>
-        {/* LEFT 40% — paste 15%, commentary 15%, parsed table 70% */}
-        <div style={{
-          display:"grid",
-          gridTemplateRows:"15% 15% minmax(0,70%)",
-          gap:8,
-          minWidth:0,
-          minHeight:0
-        }}>
-          {/* Paste / parse */}
-          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,overflow:"hidden"}}>
-            <div style={{fontSize:10,color:C.dim,marginBottom:4,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em"}}>
-              Paste WS / FFA
-            </div>
-            {img?.dataUrl&&<div style={{position:"relative",marginBottom:3}}><img src={img.dataUrl} alt="" style={{width:"100%",maxHeight:34,objectFit:"cover",borderRadius:3,display:"block"}}/><button onClick={()=>setImg(null)} style={{position:"absolute",top:2,right:2,background:"rgba(0,0,0,.7)",border:"none",color:"#fff",borderRadius:"50%",width:18,height:18,fontSize:10,cursor:"pointer"}}>✕</button></div>}
-            {img&&!img.dataUrl&&<div style={{fontSize:10,color:C.purple,marginBottom:3}}>📷 Image attached</div>}
-            <textarea value={pasteText} onChange={e=>setPaste(e.target.value)}
-              onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
-              placeholder={"TC2 127.81(+1.87)  FEB/26 130.50 · TC14 270.71(+8.57) · or paste screenshot"}
-              style={{width:"100%",height:30,minHeight:30,maxHeight:30,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"5px 7px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
-            <input ref={wsFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
-            <div style={{display:"flex",gap:5,marginTop:4,alignItems:"center",minWidth:0}}>
-              <button onClick={parseWS} disabled={parsing} style={{background:parsing?"rgba(88,166,255,.06)":"rgba(88,166,255,.11)",border:"1px solid rgba(88,166,255,.36)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:10.5,padding:"4px 10px",cursor:parsing?"default":"pointer",whiteSpace:"nowrap"}}>
-                {parsing?"⟳ Parsing…":"▶ Parse & Save"}
-              </button>
-              <button onClick={()=>wsFileRef.current?.click()} style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 7px",fontFamily:"inherit",fontSize:10.5,cursor:"pointer"}}>📷</button>
-              {status&&<div style={{fontSize:9.5,color:sc,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{status.m}</div>}
-            </div>
-          </div>
-
-          {/* Commentary */}
-          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,overflow:"hidden"}}>
-            <div style={{fontSize:10,color:C.dim,marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center",fontWeight:700,textTransform:"uppercase",letterSpacing:".05em"}}>
-              <span>Market notes</span>
-              <span style={{fontSize:9,color:C.faint,textTransform:"none",letterSpacing:0,fontWeight:500}}>Auto-saved</span>
-            </div>
-            <textarea value={wsNote} onChange={e=>{setWsNote(e.target.value);supabase.from("dashboard").upsert({key:"ws-note",value:e.target.value},{onConflict:"key"});}}
-              placeholder="TC2 firming on USAC demand, FFA contango widening..."
-              style={{width:"100%",height:45,minHeight:45,maxHeight:45,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"5px 7px",resize:"none",boxSizing:"border-box"}}/>
-          </div>
-
-          {/* Parsed current table */}
-          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:6}}>
-              <div style={{fontSize:10,color:C.faint,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em"}}>Current spot + FFA</div>
-              <span style={{fontSize:9,color:C.faint,whiteSpace:"nowrap"}}>{data?.lastUpdate||"—"}</span>
-            </div>
-            {data ? (
-              <div style={{overflow:"auto",minHeight:0,flex:1}}>
-                <table style={{borderCollapse:"collapse",fontSize:11,width:"100%"}}>
-                  <thead>
-                    <tr>
-                      <th style={{...th2,textAlign:"left",position:"sticky",top:0,zIndex:1}}>Route</th>
-                      <th style={{...th2,position:"sticky",top:0,zIndex:1}}>Spot</th>
-                      <th style={{...th2,position:"sticky",top:0,zIndex:1}}>Day</th>
-                    </tr>
-                  </thead>
-                  <tbody>{ROUTES.map(r=>{
-                    const q=data.spot?.[r.id],chg=q?.change,cc=chg>0?C.green:chg<0?C.red:C.dim;
-                    return <tr key={r.id}>
-                      <td style={{...td2,textAlign:"left",fontWeight:800,color:routeColors[r.id]||C.blue}}>{r.id}</td>
-                      <td style={{...td2,fontWeight:800,color:C.tx}}>{q?.ws!=null?q.ws.toFixed(2):"—"}</td>
-                      <td style={{...td2,color:cc,fontWeight:700}}>{chg!=null?(chg>=0?"+":"")+chg.toFixed(2):"—"}</td>
-                    </tr>;
-                  })}</tbody>
-                </table>
-              </div>
-            ) : (
-              <div style={{fontSize:11,color:C.faint,padding:"18px 4px"}}>Paste market data above to populate the table.</div>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT 60% — charts use full height */}
-        <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:8,minWidth:0,minHeight:0}}>
-          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
-            <div style={{fontSize:10,fontWeight:800,color:C.green,textTransform:"uppercase",marginBottom:3}}>Handy Worldscale · TC6 / TC23</div>
-            <div style={{flex:1,minHeight:0}}>
-              {histData.length>=2
-                ? <WSChart data={histData} routes={ROUTES.filter(r=>["TC6","TC23"].includes(r.id))} colors={routeColors} fill/>
-                : <div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
-            </div>
-          </div>
-          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
-            <div style={{fontSize:10,fontWeight:800,color:C.blue,textTransform:"uppercase",marginBottom:3}}>MR Worldscale · TC2 / TC14</div>
-            <div style={{flex:1,minHeight:0}}>
-              {histData.length>=2
-                ? <WSChart data={histData} routes={ROUTES.filter(r=>["TC2","TC14"].includes(r.id))} colors={routeColors} fill/>
-                : <div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function WSChart({data,routes,colors,fill=false}) {
-  const W=1120,H=260,PL=38,PR=12,PT=8,PB=24;
-  const iW=W-PL-PR,iH=H-PT-PB;
-
-  const allVals=data.flatMap(d=>routes.map(r=>d.spot?.[r.id]?.ws)).filter(v=>v!=null);
-  if(!allVals.length)return null;
-  const mn=Math.min(...allVals)*0.95,mx=Math.max(...allVals)*1.05,range=mx-mn||1;
-  const xs=data.map((_,i)=>PL+i/(data.length-1||1)*iW);
-
-  return(
-    <div style={{height:fill?"100%":"auto",display:"flex",flexDirection:"column",minHeight:0}}>
-      <svg viewBox={"0 0 "+W+" "+H} preserveAspectRatio="none"
-        style={{width:"100%",height:fill?"100%":260,minHeight:0,display:"block",flex:fill?1:"0 0 auto"}}>
-        {[0,.5,1].map(t=>{
-          const y=PT+t*iH,v=Math.round(mx-t*range);
-          return <g key={t}>
-            <line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2} strokeWidth="1"/>
-            <text x={PL-4} y={y+4} fill={C.faint} fontSize="9" textAnchor="end">{v}</text>
-          </g>;
-        })}
-        {routes.map(r=>{
-          const pts=data.map((d,i)=>{const v=d.spot?.[r.id]?.ws;return v!=null?[xs[i],PT+iH-(v-mn)/range*iH]:null;});
-          const valid=pts.filter(Boolean);if(valid.length<2)return null;
-          let path="";pts.forEach(p=>{if(p)path+=(path?"L":"M")+p.join(",");});
-          const lastPt=valid[valid.length-1];
-          return <g key={r.id}>
-            <path d={path} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" pathLength="1" strokeDasharray="1" strokeDashoffset="1">
-              <animate attributeName="stroke-dashoffset" from="1" to="0" dur=".9s" fill="freeze"/>
-            </path>
-            {lastPt&&<text x={lastPt[0]+4} y={lastPt[1]+4} fill={colors[r.id]||C.dim} fontSize="9">{r.id}</text>}
-          </g>;
-        })}
-        {data.map((d,i)=>(i===0||i===data.length-1||data.length<9)&&(
-          <text key={i} x={xs[i]} y={H-PB+15} fill={C.faint} fontSize="8" textAnchor="middle">
-            {(d.date||"").split(" ").slice(0,2).join(" ")}
-          </text>
-        ))}
-      </svg>
-      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:2,flexShrink:0}}>
-        {routes.map(r=>(<span key={r.id} style={{fontSize:9,color:colors[r.id]||C.dim}}><span style={{fontWeight:700}}>●</span> {r.name}</span>))}
-      </div>
-    </div>
-  );
-}
-
-// ─── News Feed ────────────────────────────────────────────────────────────────
-function NewsFeed() {
-  const [items, setItems]   = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr]       = useState(null);
-  const [lastFetch, setLastFetch] = useState(null);
-
-  // Load cached news from Supabase immediately on mount
-  useEffect(()=>{
-    supabase.from("dashboard").select("value").eq("key","news-cache").single()
-      .then(({data})=>{
-        if(data?.value){
-          try{
-            const cached=JSON.parse(data.value);
-            if(cached.items?.length){setItems(cached.items);setLastFetch(cached.time||null);}
-          }catch{}
-        }
+      setPos({
+        top:topVisual/zoom,
+        left:leftVisual/zoom
       });
-    fetchNews();
+    }
+    setOpen(v=>!v);
+  }
+  function pick(t){onUpdateV(vesselName,"tag",t);setOpen(false);}
+  function addNew(val){
+    const t=val.trim();
+    if(!t)return;
+    addCustomTag(t);
+    onUpdateV(vesselName,"tag",t);
+    setTagList(getTagListFor("position"));
+    setOpen(false);
+  }
+
+  const cur=tag||"";
+  const curCol=cur?getTagColor(cur):null;
+
+  return(
+    <td style={{padding:"2px 4px",verticalAlign:"middle",textAlign:"center",borderBottom:"1px solid rgba(255,255,255,0.035)"}} onClick={e=>e.stopPropagation()}>
+      <button ref={btnRef} onClick={openPick}
+        style={{
+          background:curCol?curCol+"22":cur?"rgba(88,166,255,0.15)":"transparent",
+          border:"1px solid "+(curCol||(cur?"rgba(88,166,255,0.4)":"rgba(88,166,255,0.12)")),
+          borderRadius:3,color:curCol||(cur?"#79c0ff":"rgba(120,160,220,0.25)"),
+          fontSize:10,fontWeight:cur?700:400,padding:"1px 5px",cursor:"pointer",
+          fontFamily:"inherit",whiteSpace:"nowrap",maxWidth:76,overflow:"hidden",textOverflow:"ellipsis"
+        }}>
+        {cur?cur.toUpperCase():"＋"}
+      </button>
+
+      {open&&(
+        <>
+          <div style={{position:"fixed",inset:0,zIndex:19990}} onClick={()=>setOpen(false)}/>
+          <div style={{
+            position:"fixed",top:pos.top,left:pos.left,right:"auto",zIndex:19999,
+            background:"#0a1628",border:"1px solid rgba(88,166,255,0.34)",borderRadius:7,
+            padding:"6px",boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
+            display:"flex",flexDirection:"column",gap:3,width:190,
+            maxWidth:"calc(100vw - 20px)",
+            maxHeight:`calc(100vh - ${pos.top+10}px)`,overflowY:"auto",overflowX:"hidden"
+          }}>
+            {cur&&(
+              <button onClick={()=>{onUpdateV(vesselName,"tag","");setOpen(false);}}
+                style={{fontSize:10.5,padding:"4px 7px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",
+                  background:"transparent",color:"rgba(255,107,107,0.65)",cursor:"pointer",
+                  fontFamily:"inherit",textAlign:"left",marginBottom:2}}>✕ clear</button>
+            )}
+            {tagList.map(t=>{
+              const tCol=tagColors[t]||null;
+              return(
+                <button key={t} onClick={()=>pick(t)}
+                  style={{
+                    fontSize:11.5,padding:"4px 7px",borderRadius:4,textAlign:"left",
+                    cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
+                    border:"1px solid "+(cur===t?(tCol||"rgba(88,166,255,0.5)"):(tCol?tCol+"55":"rgba(88,166,255,0.12)")),
+                    background:cur===t?(tCol?tCol+"33":"rgba(88,166,255,0.2)"):"transparent",
+                    color:cur===t?(tCol||"#79c0ff"):(tCol||"rgba(160,200,255,0.75)"),
+                    fontWeight:cur===t?700:400
+                  }}>
+                  {tCol&&<span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:tCol,marginRight:5,verticalAlign:"middle"}}/>}
+                  {t}
+                </button>
+              );
+            })}
+            <input placeholder="New tag + Enter"
+              onKeyDown={e=>{
+                if(e.key==="Enter"&&e.target.value.trim()){addNew(e.target.value);e.target.value="";}
+                if(e.key==="Escape")setOpen(false);
+              }}
+              style={{fontSize:11,padding:"5px 7px",borderRadius:3,border:"1px solid rgba(88,166,255,0.2)",
+                background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none",marginTop:3}}/>
+          </div>
+        </>
+      )}
+    </td>
+  );
+}
+
+// BunkerHeader — bunker input + refresh button for MGO ARA price
+// Pre-initialize bunker state from localStorage so RateMatrixBunkerInput gets it on mount
+if(!window._bunkerState){
+  const stored=localStorage.getItem("signal_bunker_price");
+  const p=stored?parseInt(stored):1100;
+  window._bunkerState={val:p>0?p:1100,listeners:[]};
+}
+
+function BunkerHeader(){
+  const [fetching,setFetching]=useState(false);
+  const [lastPrice,setLastPrice]=useState(null);
+  const [fetchErr,setFetchErr]=useState(null);
+
+  // Load persisted bunker price on mount and push into RateMatrix state
+  React.useEffect(()=>{
+    const stored=localStorage.getItem("signal_bunker_price");
+    if(stored){
+      const p=parseInt(stored);
+      if(p>0){
+        if(!window._bunkerState) window._bunkerState={val:p,listeners:[]};
+        window._bunkerState.val=p;
+        window._bunkerState.listeners.forEach(cb=>cb(p));
+      }
+    }
   },[]);
 
-  async function fetchNews() {
-    setLoading(true); setErr(null);
-    try {
-      const r=await fetch("/api/shipping-news",{cache:"no-store"});
-      if(!r.ok)throw new Error("HTTP "+r.status);
-      const j=await r.json();
-      const fresh=(j.items||[]).slice(0,24);
-      const time=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
-      setItems(fresh); setLastFetch(time);
-      try{await supabase.from("dashboard").upsert({key:"news-cache",value:JSON.stringify({items:fresh,time})},{onConflict:"key"});}catch(_){}
-    } catch(e) {
-      setErr("Shipping news unavailable - "+String(e.message||e).slice(0,80));
-    } finally { setLoading(false); }
+  function pushPrice(price){
+    setLastPrice(price);
+    localStorage.setItem("signal_bunker_price",String(price));
+    if(!window._bunkerState) window._bunkerState={val:price,listeners:[]};
+    window._bunkerState.val=price;
+    window._bunkerState.listeners.forEach(cb=>cb(price));
   }
 
-  const fmtAge = d => {
-    if(!d)return"";
-    const mins=Math.round((Date.now()-new Date(d))/60000);
-    if(mins<60)return mins+"m ago";
-    if(mins<1440)return Math.round(mins/60)+"h ago";
-    return Math.round(mins/1440)+"d ago";
-  };
+  async function fetchMGO(){
+    setFetching(true); setFetchErr(null);
+    try{
+      // Fetch via allorigins proxy to avoid CORS
+      const url=encodeURIComponent("https://www.bunkerindex.com/rss/prices.php");
+      const res=await fetch(`https://api.allorigins.win/get?url=${url}`);
+      const data=await res.json();
+      const xml=data.contents||"";
+      // Parse titles from RSS XML
+      const titles=[...xml.matchAll(/<title><!\[CDATA\[([^\]]+)\]\]><\/title>/g)].map(m=>m[1]);
+      const json={items:titles.map(t=>({title:t}))};
+      if(json?.items?.length){
+        // Look for ARA MGO or VLSFO price in title
+        for(const item of json.items){
+          const t=(item.title||"").toLowerCase();
+          if(t.includes("ams")||t.includes("ara")||t.includes("rotterdam")){
+            // Extract number from title like "Rotterdam MGO: 1235"
+            const nums=(item.title||"").match(/\d{3,4}/g);
+            if(nums){
+              const price=parseInt(nums[nums.length-1]);
+              if(price>400&&price<3000){
+                pushPrice(price);
+                setFetching(false);
+                return;
+              }
+            }
+          }
+        }
+        // Try any item with a 4-digit number between 400-3000
+        for(const item of json.items){
+          const nums=(item.title||"").match(/\d{3,4}/g);
+          if(nums){
+            const price=parseInt(nums[0]);
+            if(price>400&&price<3000){
+              pushPrice(price);
+              setFetching(false);
+              return;
+            }
+          }
+        }
+      }
+      setFetchErr("No price found in feed");
+    }catch(e){setFetchErr(e.message?.slice(0,40)||"Error");}
+    setFetching(false);
+  }
 
   return(
-    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"14px 16px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em"}}>
-          📰 Shipping News · Tankers / Maritime
+    <div style={{display:"flex",alignItems:"center",gap:4}}>
+      <span style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.06em"}}>Bunker</span>
+      <Suspense fallback={null}><RateMatrixBunkerInput/></Suspense>
+      <span style={{fontSize:10,color:"rgba(120,160,220,0.4)"}}>$/mt</span>
+      <button onClick={fetchMGO} disabled={fetching} title="Fetch latest MGO ARA price"
+        style={{fontSize:10,padding:"1px 6px",borderRadius:3,border:"1px solid rgba(88,166,255,0.25)",background:"rgba(88,166,255,0.08)",color:fetching?"rgba(120,160,220,0.4)":"rgba(88,166,255,0.7)",cursor:fetching?"default":"pointer",fontFamily:"inherit",flexShrink:0}}>
+        {fetching?"⟳…":"⟳ MGO"}
+      </button>
+      {lastPrice&&<span style={{fontSize:10,color:"#43e97b",fontWeight:600}}>{lastPrice}</span>}
+      {fetchErr&&<span style={{fontSize:9,color:"rgba(255,107,107,0.6)"}} title={fetchErr}>⚠</span>}
+    </div>
+  );
+}
+
+function TagManager(){
+  const [tags,setTags]=React.useState(getTagList);
+  const [colors,setColors]=React.useState(getTagColors);
+  const [scopes,setScopes]=React.useState(getTagScopes);
+  const [editTag,setEditTag]=React.useState(null);
+  const [colorPick,setColorPick]=React.useState(null);
+  const [syncStatus,setSyncStatus]=React.useState(null);
+  function refresh(){setTags(getTagList());setColors(getTagColors());setScopes(getTagScopes());}
+  React.useEffect(()=>{
+    window.addEventListener("tags-updated",refresh);
+    return ()=>window.removeEventListener("tags-updated",refresh);
+  },[]);
+  async function forceSyncToCloud(){
+    setSyncStatus("Syncing…");
+    try{
+      await Promise.all([
+        pushTagKey("custom_tags", JSON.parse(localStorage.getItem("signal_custom_tags")||"[]")),
+        pushTagKey("tag_colors",  JSON.parse(localStorage.getItem("signal_tag_colors")||"{}")),
+        pushTagKey("tag_scopes",  JSON.parse(localStorage.getItem("signal_tag_scopes")||"{}")),
+      ]);
+      setSyncStatus("Synced ✓");
+    }catch(e){ setSyncStatus("Sync failed"); }
+    setTimeout(()=>setSyncStatus(null),2500);
+  }
+  const isPreset=t=>PRESET_TAGS.includes(t);
+  const scopeOpts=[{v:"both",label:"Both"},{v:"cargo",label:"Cargoes"},{v:"position",label:"Positions"}];
+  return(
+    <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:8,padding:"14px 16px",maxWidth:680}}>
+      <div style={{borderBottom:"1px solid rgba(58,130,246,0.14)",paddingBottom:10,marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+        <div>
+          <div style={{fontSize:12,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:4}}>Tag Management</div>
+          <div style={{fontSize:12,color:"rgba(180,200,230,0.45)"}}>Set whether each tag applies to Cargoes, Positions, or Both.</div>
         </div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          {lastFetch&&<span style={{fontSize:12,color:C.faint}}>Fetched {lastFetch}</span>}
-          <button onClick={fetchNews} disabled={loading} style={{fontSize:12,padding:"2px 8px",background:C.bg3,
-            border:"1px solid "+C.bd,borderRadius:4,color:C.dim,cursor:"pointer"}}>
-            {loading?"⟳":"↻ Refresh"}
+        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          {syncStatus && <span style={{fontSize:11,color:syncStatus.includes("failed")?"#ff6b6b":"#4ade80",fontWeight:600,whiteSpace:"nowrap"}}>{syncStatus}</span>}
+          <button onClick={forceSyncToCloud} title="Push tags/colors/scopes created before cloud sync existed up to Supabase"
+            style={{fontSize:11,fontWeight:700,padding:"5px 10px",borderRadius:5,border:"1px solid rgba(88,166,255,0.35)",background:"rgba(88,166,255,0.1)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+            ☁ Sync to cloud now
           </button>
         </div>
       </div>
-      {err&&<div style={{fontSize:12,color:C.amber,padding:"8px",background:C.bg3,borderRadius:4,marginBottom:8}}>{err}</div>}
-      {loading&&items.length===0?(<div style={{color:C.faint,fontSize:12,padding:"16px 0",textAlign:"center"}}>Loading news…</div>):null}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",columnGap:18,rowGap:0}}>
-        {items.map((it,i)=>(
-          <a key={it.link+i} href={it.link} target="_blank" rel="noopener noreferrer"
-            style={{display:"block",padding:"8px 6px",borderBottom:"1px solid "+C.bg3,textDecoration:"none",
-              borderRadius:3,transition:"background 0.15s"}}
-            onMouseEnter={e=>e.currentTarget.style.background=C.bg3}
-            onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-              <div style={{fontSize:12,color:C.tx,fontWeight:500,lineHeight:1.4,flex:1}}>{it.title}</div>
-              <div style={{fontSize:12,color:C.faint,whiteSpace:"nowrap",marginTop:2}}>{fmtAge(it.pubDate)}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {tags.map(t=>{
+          const tCol=colors[t]||null;
+          const scope=scopes[t]||"both";
+          return(
+            <div key={t} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",background:C.bg2,borderRadius:6,border:"1px solid "+C.bd2}}>
+              <div style={{position:"relative"}}>
+                <button onClick={()=>setColorPick(colorPick===t?null:t)}
+                  style={{width:16,height:16,borderRadius:"50%",background:tCol||"rgba(88,166,255,0.2)",border:"2px solid "+(tCol||"rgba(88,166,255,0.3)"),cursor:"pointer",padding:0,flexShrink:0}} title="Set colour"/>
+                {colorPick===t&&(
+                  <>
+                    <div style={{position:"fixed",inset:0,zIndex:9990}} onClick={()=>setColorPick(null)}/>
+                    <div style={{position:"absolute",left:22,top:0,zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:7,padding:"8px",display:"flex",flexWrap:"wrap",gap:5,width:136,boxShadow:"0 4px 20px rgba(0,0,0,0.7)"}}>
+                      {TAG_PALETTE.map(col=>(
+                        <button key={col} onClick={()=>{setTagColor(t,col);setColorPick(null);refresh();}}
+                          style={{width:22,height:22,borderRadius:"50%",background:col,border:tCol===col?"2.5px solid white":"2px solid transparent",cursor:"pointer",padding:0}}/>
+                      ))}
+                      {tCol&&<button onClick={()=>{removeTagColor(t);setColorPick(null);refresh();}}
+                        style={{fontSize:9,padding:"2px 6px",borderRadius:4,border:"1px solid rgba(255,107,107,0.4)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit",width:"100%"}}>reset colour</button>}
+                    </div>
+                  </>
+                )}
+              </div>
+              {editTag===t?(
+                <input autoFocus defaultValue={t}
+                  style={{width:160,fontSize:12,padding:"2px 6px",borderRadius:4,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(8,16,32,0.9)",color:"#cde",fontFamily:"inherit",outline:"none"}}
+                  onBlur={e=>{if(e.target.value.trim()&&e.target.value!==t){removeCustomTag(t);addCustomTag(e.target.value.trim());}setEditTag(null);refresh();}}
+                  onKeyDown={e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape")setEditTag(null);}}/>
+              ):(
+                <span style={{width:160,fontSize:12,color:tCol||"rgba(160,200,255,0.7)",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} onClick={()=>!isPreset(t)&&setEditTag(t)}>
+                  {tCol&&<span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:tCol,marginRight:6,verticalAlign:"middle"}}/>}
+                  {t}{isPreset(t)&&<span style={{fontSize:9,color:C.faint,marginLeft:6}}>preset</span>}
+                </span>
+              )}
+              <div style={{width:1,height:18,background:C.bd2,flexShrink:0}}/>
+              <div style={{display:"flex",gap:2,background:"rgba(8,16,32,0.6)",borderRadius:5,padding:2}}>
+                {scopeOpts.map(o=>(
+                  <button key={o.v} onClick={()=>{setTagScope(t,o.v);refresh();}}
+                    style={{fontSize:10,padding:"2px 7px",borderRadius:4,border:"none",cursor:"pointer",fontFamily:"inherit",
+                      background:scope===o.v?"rgba(88,166,255,0.25)":"transparent",
+                      color:scope===o.v?"#79c0ff":C.faint,fontWeight:scope===o.v?700:400}}>
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{width:1,height:18,background:C.bd2,flexShrink:0}}/>
+              <div style={{width:44,display:"flex",flexShrink:0}}>
+                {!isPreset(t)&&editTag!==t&&(
+                  <>
+                    <button onClick={()=>setEditTag(t)} style={{background:"none",border:"none",color:"rgba(120,160,220,0.4)",fontSize:11,cursor:"pointer",padding:"0 4px"}} title="Rename">✎</button>
+                    <button onClick={()=>{if(window.confirm(`Delete tag "${t}"? This removes it from the tag list (existing items keep the tag text until changed).`)){removeCustomTag(t);refresh();}}} style={{background:"none",border:"none",color:"rgba(255,107,107,0.4)",fontSize:11,cursor:"pointer",padding:"0 4px"}} title="Delete">✕</button>
+                  </>
+                )}
+              </div>
             </div>
-            {it.desc&&<div style={{fontSize:12,color:C.dim,marginTop:3,lineHeight:1.4}}>{it.desc}…</div>}
-          </a>
-        ))}
-        {!loading&&items.length===0&&!err&&<div style={{color:C.faint,fontSize:12,padding:"16px 0",textAlign:"center"}}>No articles loaded.</div>}
-      </div>
-    </div>
-  );
-}
-
-
-function NewsTicker() {
-  const [items,setItems]=useState([]);
-  useEffect(()=>{
-    let alive=true;
-    fetch("/api/shipping-news",{cache:"no-store"})
-      .then(r=>r.ok?r.json():Promise.reject(new Error("HTTP "+r.status)))
-      .then(j=>{if(alive)setItems(Array.isArray(j?.items)?j.items.slice(0,12):[]);})
-      .catch(()=>{});
-    return()=>{alive=false;};
-  },[]);
-  const safeItems=Array.isArray(items)?items:[];
-  if(!safeItems.length)return null;
-  const loop=safeItems.concat(safeItems);
-  return(
-    <div style={{background:"#081423",border:"1px solid rgba(88,166,255,.20)",borderRadius:7,overflow:"hidden",height:31,display:"flex",alignItems:"center"}}>
-      <div style={{flexShrink:0,padding:"0 10px",fontSize:9,fontWeight:850,letterSpacing:".09em",color:"#58a6ff",textTransform:"uppercase",borderRight:"1px solid rgba(88,166,255,.18)",height:"100%",display:"flex",alignItems:"center"}}>Shipping news</div>
-      <div style={{overflow:"hidden",minWidth:0,flex:1}}>
-        <div className="signal-news-ticker" style={{display:"flex",width:"max-content",alignItems:"center",gap:28,whiteSpace:"nowrap"}}>
-          {loop.map((it,i)=><a key={(it.link||it.title)+i} href={it.link} target="_blank" rel="noopener noreferrer" style={{fontSize:10.5,color:"rgba(210,230,255,.78)",textDecoration:"none"}}><b style={{color:"rgba(120,190,255,.95)",fontWeight:800}}>{it.source||"News"}</b>&nbsp;·&nbsp;{it.title}</a>)}
+          );
+        })}
+        <div style={{display:"flex",gap:6,marginTop:4}}>
+          <input placeholder="Add new tag…" id="newTagInput"
+            style={{flex:1,fontSize:12,padding:"5px 8px",borderRadius:5,border:"1px solid rgba(88,166,255,0.2)",background:"rgba(8,16,32,0.8)",color:"#cde",fontFamily:"inherit",outline:"none"}}
+            onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){addCustomTag(e.target.value.trim());e.target.value="";refresh();}}}/>
+          <button onClick={()=>{const i=document.getElementById("newTagInput");if(i&&i.value.trim()){addCustomTag(i.value.trim());i.value="";refresh();}}}
+            style={{fontSize:12,padding:"5px 12px",borderRadius:5,border:"1px solid rgba(88,166,255,0.3)",background:"rgba(88,166,255,0.1)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"}}>+ Add</button>
         </div>
       </div>
-      <style>{`@keyframes signalTickerMove{from{transform:translateX(0)}to{transform:translateX(-50%)}} .signal-news-ticker{animation:signalTickerMove 55s linear infinite}.signal-news-ticker:hover{animation-play-state:paused}`}</style>
     </div>
   );
 }
 
-function CommodityTape({data}) {
-  const items=Array.isArray(data?.items)?data.items:[];
-  if(!items.length)return null;
-  return(
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(112px,1fr))",gap:6}}>
-      {items.map(x=><div key={x.id} style={{background:"#111f35",border:"1px solid rgba(58,130,246,.14)",borderRadius:6,padding:"7px 9px",minWidth:0}}>
-        <div style={{fontSize:8.5,fontWeight:800,color:"rgba(120,160,220,.55)",textTransform:"uppercase",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{x.label}</div>
-        <div style={{display:"flex",alignItems:"baseline",gap:5,marginTop:2}}>
-          <span style={{fontSize:15,fontWeight:850,color:"#e8f2ff"}}>{x.price!=null?Number(x.price).toLocaleString("en-US",{maximumFractionDigits:2}):"—"}</span>
-          <span style={{fontSize:8,color:"rgba(120,160,220,.45)"}}>{x.unit||""}</span>
-        </div>
-        {x.changePct!=null&&<div style={{fontSize:8.5,color:Number(x.changePct)>=0?"#3fb950":"#ff6b6b",marginTop:1}}>{Number(x.changePct)>0?"+":""}{Number(x.changePct).toFixed(2)}%</div>}
-      </div>)}
-    </div>
-  );
-}
-
-function VlccSparkline({history}) {
-  const rows=Array.isArray(history)?history:[];
-  if(!rows.length)return null;
-  const W=360,H=72,PL=4,PR=4,PT=8,PB=8;
-  const vals=rows.map(x=>Number(x.tce)).filter(Number.isFinite);
-  if(vals.length<2)return null;
-  const mn=Math.min(...vals),mx=Math.max(...vals),range=mx-mn||1;
-  const pts=rows.map((x,i)=>{
-    const px=PL+i/(rows.length-1||1)*(W-PL-PR);
-    const py=PT+(mx-Number(x.tce))/range*(H-PT-PB);
-    return [px,py];
+// AI Credit tracker — shows estimated remaining balance
+const STARTING_BALANCE_KEY = "signal_ai_starting_balance";
+function AICreditWidget(){
+  const [usage,setUsage]=React.useState(getUsageCache);
+  const [starting,setStarting]=React.useState(()=>{
+    const s=localStorage.getItem(STARTING_BALANCE_KEY);
+    return s?parseFloat(s):9.38; // default to current known balance
   });
-  const path="M"+pts.map(p=>p.join(",")).join(" L");
-  return <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:72,display:"block"}}>
-    <path d={path} fill="none" stroke="#58a6ff" strokeWidth="2" strokeLinejoin="round" pathLength="1" strokeDasharray="1" strokeDashoffset="1">
-      <animate attributeName="stroke-dashoffset" from="1" to="0" dur=".9s" fill="freeze"/>
-    </path>
-  </svg>;
+  const [editing,setEditing]=React.useState(false);
+  const [editVal,setEditVal]=React.useState("");
+
+  // Refresh from Supabase every 60s
+  React.useEffect(()=>{
+    fetchUsageTotals().then(t=>setUsage(t));
+    const interval=setInterval(()=>fetchUsageTotals().then(t=>setUsage(t)),60000);
+    return()=>clearInterval(interval);
+  },[]);
+
+  const remaining=Math.max(0,starting-usage.total);
+  const pct=starting>0?Math.min(100,remaining/starting*100):100;
+  const barCol=pct>50?"#43e97b":pct>20?"#faa356":"#ef4444";
+
+  function saveBalance(v){
+    const n=parseFloat(v);
+    if(!isNaN(n)&&n>=0){
+      setStarting(n);
+      localStorage.setItem(STARTING_BALANCE_KEY,String(n));
+    }
+    setEditing(false);
+  }
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:2,padding:"4px 10px",
+      background:"rgba(8,16,32,0.6)",border:"1px solid rgba(58,130,246,0.15)",
+      borderRadius:7,minWidth:150,cursor:"pointer"}}
+      title="Click balance to update starting amount">
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+        <span style={{fontSize:9,fontWeight:700,color:"rgba(120,160,220,0.45)",textTransform:"uppercase",letterSpacing:"0.08em"}}>API Credits</span>
+        {editing?(
+          <input autoFocus defaultValue={starting.toFixed(2)}
+            onBlur={e=>saveBalance(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter")saveBalance(e.target.value);if(e.key==="Escape")setEditing(false);}}
+            style={{width:60,fontSize:11,background:"rgba(8,16,32,0.9)",border:"1px solid rgba(88,166,255,0.4)",
+              borderRadius:3,color:"#cde",padding:"1px 5px",fontFamily:"inherit",outline:"none",textAlign:"right"}}/>
+        ):(
+          <span style={{fontSize:11,fontWeight:700,color:barCol,cursor:"pointer"}}
+            onClick={()=>{setEditVal(starting.toFixed(2));setEditing(true);}}>
+            ${remaining.toFixed(2)} left
+          </span>
+        )}
+      </div>
+      {/* Progress bar */}
+      <div style={{height:3,background:"rgba(255,255,255,0.08)",borderRadius:2}}>
+        <div style={{height:"100%",borderRadius:2,background:barCol,width:pct+"%",transition:"width 0.5s"}}/>
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"rgba(100,140,180,0.4)"}}>
+        <span>Today ${usage.today.toFixed(3)}</span>
+        <span>Month ${usage.month.toFixed(3)}</span>
+      </div>
+    </div>
+  );
 }
 
-// ─── Dashboard ────────────────────────────────────────────────────────────────
-function Dashboard({vessels, cargoes, history}) {
-  const [bunkers, setBunkers] = useState(null);
-  const [bLoading, setBLoading] = useState(false);
-  const [bError, setBError] = useState(null);
-  const [bFetched, setBFetched] = useState(false);
-  const [bunkerHistory, setBunkerHistory] = useState([]); // New state for graph
-  const [positionMeta,setPositionMeta]=useState({count:null,updatedAt:null});
-  const [commodities,setCommodities]=useState(null);
-  const [vlcc,setVlcc]=useState(null);
+const INP_INLINE={background:"rgba(8,16,32,0.85)",border:"1px solid rgba(88,166,255,0.25)",borderRadius:4,color:"rgba(200,220,255,0.9)",fontFamily:"Inter,sans-serif",fontSize:11,padding:"5px 8px",outline:"none",width:"100%",boxSizing:"border-box"};
+const rangeInp={background:"rgba(8,16,32,0.85)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:3,color:"rgba(200,220,255,0.9)",fontFamily:"inherit",fontSize:10,padding:"3px 6px",outline:"none",width:52,minWidth:0,boxSizing:"border-box",MozAppearance:"textfield"};
 
+// Renders the cargo-count-by-month line chart sized to its actual container
+// pixel dimensions (measured via ResizeObserver) rather than stretching a
+// fixed viewBox with preserveAspectRatio="none" — that approach was causing
+// visible vertical distortion (oval dots, squashed-looking text).
+function CargoMonthChart({ counts, total }){
+  const wrapRef = React.useRef(null);
+  const [size, setSize] = React.useState({ w:520, h:180 });
+  React.useEffect(()=>{
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries=>{
+      const box = entries[0]?.contentRect;
+      if (box && box.width>0 && box.height>0) setSize({ w: box.width, h: box.height });
+    });
+    ro.observe(el);
+    return ()=>ro.disconnect();
+  },[]);
+
+  const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  if(!counts.length) return null;
+  const W=Math.max(counts.length,2);
+  const maxC=Math.max(1,...counts.map(b=>b.count));
+  const SVG_W=size.w, SVG_H=size.h;
+  const PAD={t:20,r:12,b:28,l:36};
+  const iW=Math.max(1,SVG_W-PAD.l-PAD.r);
+  const iH=Math.max(1,SVG_H-PAD.t-PAD.b);
+  const pts=counts.map((bkt,i)=>({
+    x:PAD.l+(W<=1?0:i*(iW/(W-1))),
+    y:PAD.t+iH-(bkt.count/maxC)*iH,
+    ...bkt
+  }));
+  const pathD=pts.map((p,i)=>(i===0?"M":"L")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
+  const areaD=pathD+" L"+pts[pts.length-1].x.toFixed(1)+","+(PAD.t+iH)+" L"+pts[0].x.toFixed(1)+","+(PAD.t+iH)+" Z";
+  const lineLen=pts.reduce((a,p,i)=>i===0?0:a+Math.hypot(p.x-pts[i-1].x,p.y-pts[i-1].y),0);
+  const step=Math.max(1,Math.ceil(W/8));
+  const yearStarts=pts.filter((p,i)=>i>0&&p.year!==pts[i-1].year);
+  const peakIdx=counts.reduce((mx,b,i)=>b.count>counts[mx].count?i:mx,0);
+
+  return(
+    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"10px 12px 8px",display:"flex",flexDirection:"column",gap:4,minWidth:0,boxSizing:"border-box",height:260}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+        <div style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em"}}>Cargoes entered by month</div>
+        <div style={{fontSize:11,color:"rgba(88,166,255,0.7)",fontWeight:700}}>{total.toLocaleString()} total</div>
+      </div>
+      <div ref={wrapRef} style={{flex:1,minHeight:0,width:"100%"}}>
+        <svg width={SVG_W} height={SVG_H} viewBox={"0 0 "+SVG_W+" "+SVG_H} style={{display:"block",overflow:"visible"}}>
+          <defs>
+            <linearGradient id="cgGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.3"/>
+              <stop offset="100%" stopColor="#58a6ff" stopOpacity="0.02"/>
+            </linearGradient>
+            <style>{`
+              @keyframes cgDraw{from{stroke-dashoffset:${lineLen.toFixed(0)}}to{stroke-dashoffset:0}}
+              .cgLine{stroke-dasharray:${lineLen.toFixed(0)};stroke-dashoffset:${lineLen.toFixed(0)};animation:cgDraw 1.6s ease-out forwards;}
+            `}</style>
+          </defs>
+          {[0,0.25,0.5,0.75,1].map(f=>(
+            <g key={f}>
+              <line x1={PAD.l} y1={PAD.t+iH*(1-f)} x2={PAD.l+iW} y2={PAD.t+iH*(1-f)} stroke="rgba(88,130,200,0.1)" strokeWidth="1" strokeDasharray={f===0?"0":"3,4"}/>
+              <text x={PAD.l-5} y={PAD.t+iH*(1-f)+4} textAnchor="end" fontSize="10" fill="rgba(120,160,200,0.45)">{Math.round(maxC*f)}</text>
+            </g>
+          ))}
+          {yearStarts.map(p=>(
+            <g key={p.year}>
+              <line x1={p.x} y1={PAD.t-4} x2={p.x} y2={PAD.t+iH+20} stroke="rgba(88,166,255,0.22)" strokeWidth="1.5" strokeDasharray="4,3"/>
+              <text x={p.x+3} y={PAD.t-6} fontSize="10" fill="rgba(88,166,255,0.5)" fontWeight="700">{p.year}</text>
+            </g>
+          ))}
+          <path d={areaD} fill="url(#cgGrad)"/>
+          <path d={pathD} fill="none" stroke="#58a6ff" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" className="cgLine"/>
+          {pts.map((p,i)=>{
+            const showLabel=i===0||i===pts.length-1||i%step===0;
+            return(
+              <g key={i}>
+                {p.count>0&&<circle cx={p.x} cy={p.y} r={i===peakIdx?4:2.5} fill={i===peakIdx?"#79c0ff":"#58a6ff"} stroke="#0c1729" strokeWidth="1.5"/>}
+                {i===peakIdx&&(
+                  <text x={p.x} y={p.y-9} textAnchor="middle" fontSize="10" fill="#79c0ff" fontWeight="700">{p.count}</text>
+                )}
+                {showLabel&&(
+                  <text x={p.x} y={PAD.t+iH+16} textAnchor="middle" fontSize="10" fill="rgba(120,160,200,0.5)">{MONTHS[p.month]}</text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+// Stable filter column (module-level so children like RangeBox keep focus)
+function COL({label,col,children}){
+  return (
+    <div style={{display:"flex",flexDirection:"column",minWidth:0,overflow:"hidden",height:"100%"}}>
+      <div style={{fontSize:9,fontWeight:700,color:col,textTransform:"uppercase",letterSpacing:"0.1em",padding:"0 0 4px 0",borderBottom:"1px solid "+C.bd2,marginBottom:4,whiteSpace:"nowrap",flexShrink:0}}>{label}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:1,overflowY:"auto",flex:1,minHeight:0}}>{children}</div>
+    </div>
+  );
+}
+
+// One-time global CSS to hide scrollbars on rows using the hscroll-hide class,
+// while overflow-x:auto still scrolls (native touch drag on iPad/mobile,
+// custom mouse-drag below for desktop).
+function HScrollStyle(){
+  return <style>{`
+    .hscroll-hide{scrollbar-width:none;-ms-overflow-style:none;}
+    .hscroll-hide::-webkit-scrollbar{display:none;}
+  `}</style>;
+}
+
+// Horizontal row with iPhone-style "grab and drag" scrolling for desktop mouse
+// users; touch devices (iPad) get native momentum scroll for free since
+// overflow-x:auto already supports it — no extra code needed for touch.
+function HScrollRow({children,style}){
+  const ref = React.useRef(null);
+  const drag = React.useRef({active:false,startX:0,startScroll:0,moved:false});
+  function onDown(e){
+    const el=ref.current; if(!el) return;
+    drag.current={active:true,startX:e.pageX,startScroll:el.scrollLeft,moved:false};
+  }
+  function onMove(e){
+    if(!drag.current.active) return;
+    const el=ref.current; if(!el) return;
+    const dx=e.pageX-drag.current.startX;
+    if(Math.abs(dx)>3) drag.current.moved=true;
+    el.scrollLeft=drag.current.startScroll-dx;
+  }
+  function endDrag(){ drag.current.active=false; }
+  return (
+    <div
+      ref={ref}
+      className="hscroll-hide"
+      onMouseDown={onDown}
+      onMouseMove={onMove}
+      onMouseUp={endDrag}
+      onMouseLeave={endDrag}
+      // Suppress click-through on chips right after a drag, so dragging
+      // doesn't accidentally toggle whatever chip the cursor lands on.
+      onClickCapture={e=>{ if(drag.current.moved){ e.stopPropagation(); e.preventDefault(); drag.current.moved=false; } }}
+      style={{display:"flex",gap:8,overflowX:"auto",overflowY:"hidden",flex:1,minWidth:0,cursor:"grab",userSelect:"none",WebkitOverflowScrolling:"touch",...style}}
+    >
+      {children}
+    </div>
+  );
+}
+
+// One filter category as a full-width horizontal row: label on the left,
+// chips scrolling horizontally on the right (drag or touch-swipe if they
+// overflow the width — no visible scrollbar).
+function FilterRow({label,col,children}){
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"5px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
+      <div style={{width:80,flexShrink:0,fontSize:10,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em"}}>{label}</div>
+      <HScrollRow style={{gap:6}}>{children}</HScrollRow>
+    </div>
+  );
+}
+
+// Wrapping variant (no horizontal scroll) — for rows with few enough items
+// that wrapping onto a second line reads better than side-scrolling, like
+// DWT/Built which pair a short chip list with two small range inputs.
+function FilterRowWrap({label,col,children}){
+  return (
+    <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"6px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
+      <div style={{width:80,flexShrink:0,fontSize:10,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em",paddingTop:4}}>{label}</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1,minWidth:0,rowGap:6}}>{children}</div>
+    </div>
+  );
+}
+
+// Two-tab panel wrapper (used for Fixing Window History/Open-Segments and
+// AIS Map/Regional Snapshot) — frees up horizontal space by combining what
+// used to be two separate side-by-side boxes into one.
+// One-line tappable header that expands to full content below it — used to
+// give mobile access to sections (Parse, Filters, Fixing Window, Map) that
+// are normally laid out side-by-side on desktop but don't fit that way on a
+// phone/iPad width.
+function MobileCollapse({ title, color="#58a6ff", defaultOpen=false, children }){
+  const [open, setOpen] = React.useState(defaultOpen);
+  return (
+    <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:7, overflow:"hidden" }}>
+      <button onClick={()=>setOpen(o=>!o)}
+        style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between",
+          padding:"10px 12px", background:"transparent", border:"none", cursor:"pointer", fontFamily:"inherit",
+          minHeight:44, boxSizing:"border-box" }}>
+        <span style={{ fontSize:13, fontWeight:700, color }}>{title}</span>
+        <span style={{ fontSize:12, color:C.faint }}>{open?"▾":"▸"}</span>
+      </button>
+      {open && <div style={{ padding:"0 10px 10px" }}>{children}</div>}
+    </div>
+  );
+}
+
+function TabbedPanel({tabs,active,onChange,height=460,children}){
+  const fillParent = height==="100%";
+  return (
+    <div style={{
+      ...(fillParent ? {position:"absolute",inset:0} : {height}),
+      display:"flex",flexDirection:"column",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden"
+    }}>
+      <div style={{display:"flex",flexShrink:0,borderBottom:"1px solid "+C.bd2}}>
+        {tabs.map(t=>(
+          <button key={t} onClick={()=>onChange(t)}
+            style={{flex:1,padding:"7px 10px",fontSize:11,fontWeight:700,fontFamily:"inherit",cursor:"pointer",
+              border:"none",borderBottom:"2px solid "+(active===t?C.blue:"transparent"),
+              background:active===t?"rgba(88,166,255,0.08)":"transparent",
+              color:active===t?C.blue:C.faint}}>
+            {t}
+          </button>
+        ))}
+      </div>
+      <div style={{flex:1,minHeight:0,position:"relative"}}>{children}</div>
+    </div>
+  );
+}
+
+// Stable range-input pair (module-level so it isn't remounted each render → no cursor jump)
+function RangeBox({minVal,maxVal,minPh,maxPh,onMin,onMax}){
+  return (
+    <div style={{display:"flex",gap:3,marginTop:3}}>
+      <input type="text" inputMode="numeric" value={minVal} placeholder={minPh} onChange={e=>onMin(e.target.value.replace(/[^\d]/g,""))} style={rangeInp}/>
+      <input type="text" inputMode="numeric" value={maxVal} placeholder={maxPh} onChange={e=>onMax(e.target.value.replace(/[^\d]/g,""))} style={rangeInp}/>
+    </div>
+  );
+}
+
+function AddVesselInlineRow({onSave,onClose}){
+  const now=new Date();
+  const today=now.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+  const [vals,setVals]=useState({vessel:"",openPort:"",date:today,operator:"",dwt:"",coating:"",comment:""});
+  const firstRef=useRef(null);
+  useEffect(()=>{firstRef.current?.focus();},[]);
+  function upd(k,v){setVals(p=>({...p,[k]:v}));}
+  async function save(){
+    if(!vals.vessel.trim()||!vals.openPort.trim()) return;
+    await onSave({vessel:vals.vessel.trim().toUpperCase(),openPort:vals.openPort.trim().toUpperCase(),date:vals.date||today,operator:vals.operator||null,dwt:vals.dwt?parseInt(vals.dwt):null,coating:vals.coating||null,comment:vals.comment||null,entered_by:localStorage.getItem("signal_user")||"H"});
+    onClose();
+  }
+  const TC={borderBottom:"2px solid rgba(67,233,123,0.35)",padding:"2px 3px",background:"rgba(10,24,52,0.9)"};
+  return(
+    <table style={{width:"100%",borderCollapse:"collapse",background:"rgba(22,45,88,0.5)",borderTop:"2px solid rgba(67,233,123,0.4)"}}>
+      <tbody>
+        <tr>
+          <td style={{...TC,width:32,textAlign:"center"}}><span style={{color:"#43e97b",fontSize:12,fontWeight:700}}>+</span></td>
+          <td style={{...TC,width:140}}><input ref={firstRef} value={vals.operator} onChange={e=>upd("operator",e.target.value)} placeholder="Operator" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:140}}><input value={vals.vessel} onChange={e=>upd("vessel",e.target.value)} placeholder="Vessel *" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={{...INP_INLINE,color:"#79c0ff",fontWeight:700}}/></td>
+          <td style={{...TC,width:55}}><input value={vals.dwt} onChange={e=>upd("dwt",e.target.value)} placeholder="DWT" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:80}}><input value={vals.coating} onChange={e=>upd("coating",e.target.value)} placeholder="Coating" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:96}}><input value={vals.date} onChange={e=>upd("date",e.target.value)} onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={{...INP_INLINE,color:"#a8e6a3"}}/></td>
+          <td style={{...TC,width:140}}><input value={vals.openPort} onChange={e=>upd("openPort",e.target.value)} placeholder="Open port *" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={{...INP_INLINE,color:"#79c0ff"}}/></td>
+          <td style={{...TC}}><input value={vals.comment} onChange={e=>upd("comment",e.target.value)} placeholder="Comment" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:86,textAlign:"center"}}>
+            <button onClick={save} style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:3,border:"1px solid rgba(67,233,123,0.5)",background:"rgba(67,233,123,0.12)",color:"#43e97b",cursor:"pointer",fontFamily:"inherit"}}>Save</button>
+            {" "}
+            <button onClick={onClose} style={{fontSize:10,padding:"3px 5px",borderRadius:3,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.5)",cursor:"pointer",fontFamily:"inherit"}}>✕</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
+function AddCargoInlineRow({onSave,onClose}){
+  const now=new Date();
+  const valsRef=useRef({charterer:"",cargo:"",qty:"",load:"",disch:"",from:"",to:"",freight:"",vessel:"",status:""});
+  const firstRef=useRef(null);
+  useEffect(()=>{firstRef.current?.focus();},[]);
+
+  async function trySave(){
+    const v=valsRef.current;
+    if(!v.charterer?.trim()&&!v.cargo?.trim()) return; // empty row — just close
+    if(v.charterer?.trim()||v.cargo?.trim()){
+      await onSave({charterer:v.charterer?.trim()||"",cargo:v.cargo?.trim()||"",qty:v.qty||null,load:v.load||null,disch:v.disch||null,from:v.from||null,to:v.to||null,freight:v.freight||null,vessel:v.vessel||null,status:v.status?.toUpperCase()||null,updated:now.toISOString(),entered_by:localStorage.getItem("signal_user")||"H"});
+    }
+    onClose();
+  }
+
+  const TC={borderBottom:"1px solid rgba(250,163,86,0.25)",padding:"0",background:"rgba(35,20,5,0.85)"};
+  const inp=(k,ph,w,extra)=>(
+    <td key={k} style={{...TC,width:w||undefined}}>
+      <input ref={k==="charterer"?firstRef:undefined}
+        defaultValue=""
+        placeholder={ph}
+        onChange={e=>{valsRef.current[k]=e.target.value;}}
+        onKeyDown={e=>{if(e.key==="Escape")onClose();}}
+        onBlur={e=>{
+          // Save when focus leaves the entire row (check if new focus is still in row)
+          setTimeout(()=>{
+            const active=document.activeElement;
+            if(!active||!active.closest(".cargo-new-row")) trysave_ref.current?.();
+          },80);
+        }}
+        style={{...INP_INLINE,...(extra||{})}}/>
+    </td>
+  );
+  const tryave_ref=useRef(tryave);
+  function tryave(){trySave();}
+  const tryave_refObj=useRef(null);
+  tryave_refObj.current=trySave;
+
+  // Simpler: just save on blur with a delay check
+  const rowRef=useRef(null);
+
+  return(
+    <table ref={rowRef} style={{width:"100%",borderCollapse:"collapse",borderBottom:"2px solid rgba(250,163,86,0.3)"}} className="cargo-new-row">
+      <tbody>
+        <tr style={{background:"rgba(40,22,4,0.9)"}}>
+          <td style={{...TC,width:28,textAlign:"center",paddingLeft:4}}><span style={{color:"#faa356",fontSize:11}}>✦</span></td>
+          <td style={{...TC,width:56}}><input defaultValue="" placeholder="Status" onChange={e=>{valsRef.current.status=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:110}}><input defaultValue="" placeholder="Vessel" onChange={e=>{valsRef.current.vessel=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:120}}><input ref={firstRef} defaultValue="" placeholder="Charterer" onChange={e=>{valsRef.current.charterer=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={{...INP_INLINE,fontWeight:700}}/></td>
+          <td style={{...TC,width:60}}><input defaultValue="" placeholder="Qty" onChange={e=>{valsRef.current.qty=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:80}}><input defaultValue="" placeholder="Cargo" onChange={e=>{valsRef.current.cargo=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={{...INP_INLINE,color:"#faa356"}}/></td>
+          <td style={{...TC,width:100}}><input defaultValue="" placeholder="Load" onChange={e=>{valsRef.current.load=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:100}}><input defaultValue="" placeholder="Disch" onChange={e=>{valsRef.current.disch=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:78}}><input defaultValue="" placeholder="From" onChange={e=>{valsRef.current.from=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:78}}><input defaultValue="" placeholder="To" onChange={e=>{valsRef.current.to=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC}}><input defaultValue="" placeholder="Freight" onChange={e=>{valsRef.current.freight=e.target.value;}} onKeyDown={e=>{if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
+          <td style={{...TC,width:26,textAlign:"center"}}>
+            <button onMouseDown={e=>{e.preventDefault();trySave();}}
+              style={{background:"none",border:"none",color:"#43e97b",cursor:"pointer",fontSize:11,padding:"2px 4px"}} title="Save (Enter)">✓</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
+function AddVesselModal({onSave,onClose}){
+  const vals=useRef({});
+  const fields=[
+    {k:"vessel",label:"Vessel name",req:true},
+    {k:"openPort",label:"Open port",req:true},
+    {k:"date",label:"Open date (e.g. 15 Jun 2026)",req:false},
+    {k:"operator",label:"Operator",req:false},
+    {k:"dwt",label:"DWT",req:false,type:"number"},
+    {k:"coating",label:"Coating (Epoxy / MarineLine / Stainless…)",req:false},
+    {k:"comment",label:"Comment",req:false},
+  ];
+  async function save(){
+    const v=vals.current;
+    if(!v.vessel?.trim()||!v.openPort?.trim()){alert("Vessel name and open port are required.");return;}
+    await onSave({vessel:v.vessel.trim(),openPort:v.openPort.trim(),date:v.date||null,operator:v.operator||null,dwt:v.dwt?parseInt(v.dwt):null,coating:v.coating||null,comment:v.comment||null});
+    onClose();
+  }
+  const INP={width:"100%",background:"rgba(8,16,32,0.8)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:5,color:"rgba(200,220,255,0.9)",fontFamily:"Inter,sans-serif",fontSize:12,padding:"7px 10px",outline:"none",boxSizing:"border-box"};
+  return(
+    <>
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:9998}} onClick={onClose}/>
+      <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:10,padding:"20px 24px",width:420,maxWidth:"95vw",boxShadow:"0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Inter,sans-serif"}}>
+        <div style={{fontSize:14,fontWeight:700,color:"#79c0ff",marginBottom:16}}>+ Add Vessel</div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {fields.map(({k,label,req,type})=>(
+            <div key={k}>
+              <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>{label}{req&&<span style={{color:"#ef4444",marginLeft:3}}>*</span>}</div>
+              <input type={type||"text"} onChange={e=>vals.current[k]=e.target.value} style={INP}/>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{fontSize:12,padding:"6px 16px",borderRadius:5,border:"1px solid rgba(58,130,246,0.2)",background:"transparent",color:"rgba(120,160,220,0.6)",cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
+          <button onClick={save} style={{fontSize:12,fontWeight:700,padding:"6px 18px",borderRadius:5,border:"1px solid rgba(67,233,123,0.4)",background:"rgba(67,233,123,0.1)",color:"#43e97b",cursor:"pointer",fontFamily:"inherit"}}>Save Vessel</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function AddCargoModal({onSave,onClose}){
+  const vals=useRef({});
+  const fields=[
+    {k:"charterer",label:"Charterer",req:true},
+    {k:"cargo",label:"Cargo / grade",req:true},
+    {k:"qty",label:"Quantity (e.g. 15kt)",req:false},
+    {k:"load",label:"Load port",req:false},
+    {k:"disch",label:"Discharge port",req:false},
+    {k:"from",label:"Laycan from (dd Mon yyyy)",req:false},
+    {k:"to",label:"Laycan to (dd Mon yyyy)",req:false},
+    {k:"freight",label:"Freight (e.g. USD 450k ls)",req:false},
+    {k:"vessel",label:"Vessel (if fixed)",req:false},
+    {k:"status",label:"Status (FIXED / SUBS / OPEN)",req:false},
+    {k:"comment",label:"Comment",req:false},
+  ];
+  async function save(){
+    const v=vals.current;
+    if(!v.charterer?.trim()||!v.cargo?.trim()){alert("Charterer and cargo are required.");return;}
+    await onSave({charterer:v.charterer.trim(),cargo:v.cargo.trim(),qty:v.qty||null,load:v.load||null,disch:v.disch||null,from:v.from||null,to:v.to||null,freight:v.freight||null,vessel:v.vessel||null,status:v.status?.toUpperCase()||null,comment:v.comment||null});
+    onClose();
+  }
+  const INP={width:"100%",background:"rgba(8,16,32,0.8)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:5,color:"rgba(200,220,255,0.9)",fontFamily:"Inter,sans-serif",fontSize:12,padding:"7px 10px",outline:"none",boxSizing:"border-box"};
+  return(
+    <>
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:9998}} onClick={onClose}/>
+      <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:10,padding:"20px 24px",width:420,maxWidth:"95vw",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Inter,sans-serif"}}>
+        <div style={{fontSize:14,fontWeight:700,color:"#faa356",marginBottom:16}}>+ Add Cargo</div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {fields.map(({k,label,req})=>(
+            <div key={k}>
+              <div style={{fontSize:10,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>{label}{req&&<span style={{color:"#ef4444",marginLeft:3}}>*</span>}</div>
+              <input onChange={e=>vals.current[k]=e.target.value} style={INP}/>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{fontSize:12,padding:"6px 16px",borderRadius:5,border:"1px solid rgba(58,130,246,0.2)",background:"transparent",color:"rgba(120,160,220,0.6)",cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
+          <button onClick={save} style={{fontSize:12,fontWeight:700,padding:"6px 18px",borderRadius:5,border:"1px solid rgba(250,163,86,0.4)",background:"rgba(250,163,86,0.1)",color:"#faa356",cursor:"pointer",fontFamily:"inherit"}}>Save Cargo</button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function CopyPositionsButton({filtV,fmtDateShort}){
+  const [copied,setCopied]=React.useState(false);
+  const [fallbackText,setFallbackText]=React.useState(null);
+  function buildText(){
+    if(!filtV.length) return "";
+    const byOp={};
+    filtV.forEach(v=>{const op=v.operator||"Unknown";if(!byOp[op])byOp[op]=[];byOp[op].push(v);});
+    const lines=["|| Available tonnage ||",""];
+    Object.entries(byOp).sort(([a],[b])=>a.localeCompare(b)).forEach(([op,vs])=>{
+      lines.push("*"+op+"*");
+      vs.forEach(v=>{
+        const d=fmtDateShort?fmtDateShort(v.date):v.date;
+        const p=[(v.vessel||"").toUpperCase(),(v.openPort||"").toUpperCase(),(d||"").toUpperCase()];
+        lines.push(p.filter(Boolean).join(" – "));
+      });
+      lines.push("");
+    });
+    return lines.join("\n").trim();
+  }
+  function copyPositions(){
+    const text=buildText();if(!text)return;
+    const ta=document.createElement("textarea");
+    ta.value=text;ta.setAttribute("readonly","");
+    ta.style.cssText="position:fixed;top:0;left:0;width:2px;height:2px;padding:0;border:none;outline:none;background:transparent;";
+    document.body.appendChild(ta);ta.focus();ta.select();
+    let ok=false;try{ok=document.execCommand("copy");}catch(e){}
+    document.body.removeChild(ta);
+    if(ok){setCopied(true);setTimeout(()=>setCopied(false),2500);return;}
+    if(navigator.clipboard?.writeText){navigator.clipboard.writeText(text).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2500);}).catch(()=>setFallbackText(text));return;}
+    setFallbackText(text);
+  }
+  return(<>
+    <button title="Copy positions" onClick={copyPositions} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",border:copied?"1px solid rgba(67,233,123,0.5)":"1px solid rgba(58,130,246,0.25)",background:copied?"rgba(67,233,123,0.1)":"rgba(58,130,246,0.08)",color:copied?"#43e97b":"#79c0ff"}}>
+      {copied?"✓ Copied!":filtV.length>0?`Copy (${filtV.length})`:"Copy positions"}
+    </button>
+    {fallbackText&&(<>
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:9998}} onClick={()=>setFallbackText(null)}/>
+      <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:9999,background:"#0a1628",border:"1px solid rgba(88,166,255,0.3)",borderRadius:10,padding:"20px",width:520,maxWidth:"95vw",boxShadow:"0 12px 40px rgba(0,0,0,0.7)"}}>
+        <div style={{fontSize:12,fontWeight:700,color:"#79c0ff",marginBottom:8}}>Select all (Ctrl+A) → Copy (Ctrl+C)</div>
+        <textarea readOnly autoFocus value={fallbackText} onFocus={e=>e.target.select()} style={{width:"100%",height:280,background:"rgba(8,16,32,0.9)",border:"1px solid rgba(88,166,255,0.2)",borderRadius:5,color:"rgba(200,220,255,0.9)",fontFamily:"monospace",fontSize:11,padding:"8px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
+        <div style={{display:"flex",justifyContent:"flex-end",marginTop:10}}>
+          <button onClick={()=>setFallbackText(null)} style={{fontSize:12,padding:"5px 16px",borderRadius:5,border:"1px solid rgba(58,130,246,0.3)",background:"rgba(58,130,246,0.1)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"}}>Close</button>
+        </div>
+      </div>
+    </>)}
+  </>);
+}
+
+function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
+  const [open,setOpen]=React.useState(false);
+  const [menuPos,setMenuPos]=React.useState({top:60,right:8});
+  const btnRef=React.useRef(null);
+
+  function handleTap(e){
+    e.preventDefault();
+    e.stopPropagation();
+    if(btnRef.current){
+      const r=btnRef.current.getBoundingClientRect();
+      setMenuPos({top:r.bottom+6, right:Math.max(6,window.innerWidth-r.right)});
+    }
+    setOpen(v=>!v);
+  }
+
+  return(
+    <>
+      <button ref={btnRef}
+        onPointerUp={handleTap}
+        style={{
+          fontSize:16,lineHeight:1,cursor:"pointer",
+          padding:mobile?"8px 10px":"4px 8px",
+          borderRadius:6,
+          border:"1px solid rgba(58,130,246,0.25)",
+          background:"transparent",
+          color:"rgba(140,190,255,0.7)",
+          flexShrink:0,
+          WebkitTapHighlightColor:"transparent",
+          touchAction:"manipulation",
+          userSelect:"none",
+        }}>⚙</button>
+      {open&&(
+        <>
+          <div style={{position:"fixed",inset:0,zIndex:9990}} onPointerUp={()=>setOpen(false)}/>
+          <div style={{
+            position:"fixed",top:menuPos.top,right:menuPos.right,
+            zIndex:9999,width:230,maxWidth:"calc(100vw - 16px)",
+            background:"#0a1628",border:"1px solid rgba(88,166,255,0.25)",
+            borderRadius:10,padding:"14px 16px",
+            boxShadow:"0 12px 40px rgba(0,0,0,0.8)",
+            display:"flex",flexDirection:"column",gap:14,
+          }}>
+            {onToggleLayout&&(
+              <div>
+                <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:7}}>Layout</div>
+                <button
+                  onPointerUp={e=>{e.stopPropagation();onToggleLayout();setOpen(false);}}
+                  style={{fontSize:13,fontWeight:600,padding:"10px 12px",borderRadius:7,width:"100%",
+                    border:"1px solid rgba(58,130,246,0.3)",background:"rgba(58,130,246,0.1)",
+                    color:"rgba(160,200,255,0.9)",cursor:"pointer",fontFamily:"inherit",textAlign:"left",
+                    WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}>
+                  {mobile?"🖥  Switch to Desktop":"📱  Switch to Mobile"}
+                  {layoutOverride&&<span style={{fontSize:9,opacity:0.45,marginLeft:8}}>override</span>}
+                </button>
+              </div>
+            )}
+            <div>
+              <div style={{fontSize:10,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:7}}>Font size</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {[80,90,100,110,120].map(z=>(
+                  <button key={z}
+                    onPointerUp={e=>{e.stopPropagation();document.body.style.zoom=z+"%";}}
+                    style={{fontSize:13,padding:"6px 10px",borderRadius:6,
+                      border:"1px solid rgba(58,130,246,0.2)",background:"rgba(14,28,58,0.8)",
+                      color:"rgba(160,200,255,0.8)",cursor:"pointer",fontFamily:"inherit",
+                      WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}>
+                    {z}%
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+// Catches render errors in tab content so a crash in one tab (e.g. a
+// component suspending unexpectedly) shows a recoverable message instead of
+// taking the whole app down to a black screen.
+class TabErrorBoundary extends React.Component {
+  constructor(props){ super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error){ return { error }; }
+  componentDidCatch(error, info){ console.error("Tab render error:", error, info); }
+  render(){
+    if (this.state.error) {
+      return (
+        <div style={{ padding:40, textAlign:"center", color:C.dim }}>
+          <div style={{ fontSize:14, marginBottom:10 }}>⚠ Something went wrong rendering this tab.</div>
+          <div style={{ fontSize:12, color:C.faint, marginBottom:16 }}>{String(this.state.error?.message||this.state.error)}</div>
+          <button onClick={()=>this.setState({error:null})}
+            style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer",
+              border:"1px solid "+C.bd, background:C.bg2, color:C.tx, fontFamily:"inherit" }}>
+            Try again
+          </button>
+          <span style={{ marginLeft:8, fontSize:12, color:C.faint }}>or reload the page if this keeps happening</span>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
+  // ── PIN config ───────────────────────────────────────────────────────────
+  const MASTER_PIN = "4524"; // ← your PIN → full access
+  const GUEST_PIN  = "0250"; // ← colleague's PIN → positions + cargoes only
+  const GUEST_TABS = ["pos","cargo","clients"];
+
+  const [unlocked, setUnlocked] = React.useState(false); // always ask on load
+  const [pinInput, setPinInput] = React.useState("");
+  const [pinError, setPinError] = React.useState(false);
+  const [guestMode, setGuestMode] = React.useState(false);
+
+  // Login-screen live feeds. Fail quietly so the PIN screen always remains usable.
+  const [loginMarkets,setLoginMarkets]=React.useState({
+    brent:null,mgoAra:null,mgoSingapore:null,mgoUsg:null,updatedAt:null
+  });
+  const [loginNews,setLoginNews]=React.useState([]);
+  const [loginFeedLoading,setLoginFeedLoading]=React.useState(true);
+
+  React.useEffect(()=>{
+    if(unlocked)return;
+    let alive=true;
+    const loadLoginFeeds=async()=>{
+      try{
+        const [mktRes,newsRes]=await Promise.allSettled([
+          fetch("/api/login-market",{cache:"no-store"}).then(r=>r.ok?r.json():null),
+          fetch("/api/login-news",{cache:"no-store"}).then(r=>r.ok?r.json():null)
+        ]);
+        if(!alive)return;
+        if(mktRes.status==="fulfilled"&&mktRes.value)setLoginMarkets(v=>({...v,...mktRes.value}));
+        if(newsRes.status==="fulfilled"&&Array.isArray(newsRes.value?.items))setLoginNews(newsRes.value.items.slice(0,5));
+      }catch(_){}
+      finally{if(alive)setLoginFeedLoading(false);}
+    };
+    loadLoginFeeds();
+    const timer=setInterval(loadLoginFeeds,10*60*1000);
+    return()=>{alive=false;clearInterval(timer);};
+  },[unlocked]);
+
+  // Pull the shared tag catalog (list/colors/scopes) down from Supabase once
+  // on load, so tags created/colored on one device show correctly on others.
+  useEffect(()=>{ pullTagsFromCloud(); },[]);
+
+  // vesselDB was designed as an on-demand load via onLoadVesselDB, but nothing
+  // in this component was actually calling it — meaning manually pasted/parsed
+  // positions never got spec enrichment (DWT/built/coating/etc) because the
+  // lookup table was always empty. Load it once on mount instead.
+  useEffect(()=>{ if(!vesselDBLoaded && !vesselDBLoading && onLoadVesselDB) onLoadVesselDB(); },[]);
+
+  // No sessionStorage — PIN required on every load/refresh/new tab
+
+  function submitPin(p){
+    if(p===MASTER_PIN){
+      localStorage.setItem("signal_user","H");
+      setGuestMode(false);
+      setUnlocked(true);
+      setPinInput("");
+    } else if(p===GUEST_PIN){
+      localStorage.setItem("signal_user","L");
+      setGuestMode(true);
+      setUnlocked(true);
+      setPinInput("");
+    } else {
+      setPinError(true);
+      setPinInput("");
+      setTimeout(()=>setPinError(false),1200);
+    }
+  }
+
+  React.useEffect(()=>{
+    if(unlocked) return;
+    function onKey(e){
+      if(e.key>="0"&&e.key<="9"){
+        setPinInput(p=>{
+          const next=p+e.key;
+          if(next.length===4) setTimeout(()=>submitPin(next),0);
+          return next.length<=4?next:p;
+        });
+      } else if(e.key==="Backspace"){
+        setPinInput(p=>p.slice(0,-1));
+      }
+    }
+    window.addEventListener("keydown",onKey);
+    return()=>window.removeEventListener("keydown",onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[unlocked]);
+  // ────────────────────────────────────────────────────────────────────────
+  const [tab,setTab]=useState(()=>guestMode?"pos":"pos");
+  const [search,setSearch]=useState("");
+  const [filters,setFilters]=useState(new Set());
+  const [posTagFilter,setPosTagFilter]=useState(new Set());
+  const [dwtRange,setDwtRange]=useState({min:"",max:""});
+  const [builtRange,setBuiltRange]=useState({min:"",max:""});
+  const [sortK,setSortK]=useState("fileDate");
+  const [sortD,setSortD]=useState(-1);
+  const [sel,setSel]=useState(null);
+  const [showVesselPopout,setShowVesselPopout]=useState(false);
+  const [popoutVessel,setPopoutVessel]=useState(null);
+  const [contextMenu,setContextMenu]=useState(null);
+  const [opFilter,setOpFilter]=useState(null);
+  const [updFilter,setUpdFilter]=useState(""); // "" | "today" | "week"
+  const [bucketFilters,setBucketFilters]=useState(new Set()); // set of active bucket keys
+
+  // Configurable navigation — declared after guestMode/GUEST_TABS/tab/bucketFilters
+  // so all referenced bindings are initialized before these hooks evaluate.
+  const [navConfig,setNavConfig]=useState(navLoad);
+  const [mobileNavOpen,setMobileNavOpen]=useState(false);
+  const mobileNavTouchX=useRef(null);
+  useEffect(()=>{
+    const h=e=>setNavConfig(navNorm(e.detail||navLoad()));
+    window.addEventListener("navigation-config-updated",h);
+    (async()=>{
+      try{
+        const {data}=await supabase.from("tag_settings").select("value").eq("key",NAV_CLOUD_KEY).maybeSingle();
+        if(data?.value){
+          const n=navNorm(data.value);
+          setNavConfig(n);
+          try{localStorage.setItem(NAV_KEY,JSON.stringify(n));}catch{}
+        }
+      }catch{}
+    })();
+    return()=>window.removeEventListener("navigation-config-updated",h);
+  },[]);
+  const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
+  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||GUEST_TABS.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode]);
+  const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
+  const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set());setMobileNavOpen(false)});
+ const [posFileDaysBack,setPosFileDaysBack]=useState(90);
+const [posPage,setPosPage]=useState(1);
+const POS_PAGE_SIZE=100;
+const [superRegionFilter,setSuperRegionFilter]=useState(new Set());
+const [segmentFilter,setSegmentFilter]=useState(new Set());
+const [dwtFilter,setDwtFilter]=useState(new Set()); // multi-select Set
+const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
+  const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
+  const [cTimeFilter,setCTimeFilter]=useState("");
+  const [cGradeFilter,setCGradeFilter]=useState("");
+  const [cLaycanMonthFilter,setCLaycanMonthFilter]=useState("");
+  const [cLaycanYearFilter,setCLaycanYearFilter]=useState("");
+  const [cTagFilter,setCTagFilter]=useState("");
+  const [pendingParseTag,setPendingParseTag]=useState("");
+  const [customParseTag,setCustomParseTag]=useState("");
+
+  function getWeekBounds(offset=0){
+    const now=new Date();now.setHours(0,0,0,0);
+    const dow=(now.getDay()+6)%7;
+    const mon=new Date(now);mon.setDate(now.getDate()-dow+offset*7);
+    const sun=new Date(mon);sun.setDate(mon.getDate()+6);
+    return[mon,sun];
+  }
+  const [thisWeekMon,thisWeekSun]=useMemo(()=>getWeekBounds(0),[]);
+  const [lastWeekMon,lastWeekSun]=useMemo(()=>getWeekBounds(-1),[]);
+  // Accurate week counts from DB (not just the first 200 loaded)
+  const [weekCounts,setWeekCounts]=useState({thisWk:0,lastWk:0});
+  const [graphMonthlyData,setGraphMonthlyData]=useState([]); // [{year,month,count}] from DB
+
+  useEffect(()=>{
+    async function fetchWeekCounts(){
+      const fmt=d=>d.toISOString().slice(0,10);
+      const[{count:tw},{count:lw}]=await Promise.all([
+        supabase.from("cargoes").select("*",{count:"exact",head:true}).gte("updated",fmt(thisWeekMon)).lte("updated",fmt(thisWeekSun)+"T23:59:59"),
+        supabase.from("cargoes").select("*",{count:"exact",head:true}).gte("updated",fmt(lastWeekMon)).lte("updated",fmt(lastWeekSun)+"T23:59:59"),
+      ]);
+      setWeekCounts({thisWk:tw||0,lastWk:lw||0});
+    }
+    fetchWeekCounts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  // Fetch monthly cargo counts — query month-by-month using date ranges (avoids field-level RLS issues)
+  useEffect(()=>{
+    async function fetchMonthly(){
+      const now=new Date();
+      const buckets=[];
+      // Go back 24 months from now
+      for(let i=23;i>=0;i--){
+        const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+        const nextD=new Date(d.getFullYear(),d.getMonth()+1,1);
+        const from=d.toISOString().slice(0,10);
+        const to=nextD.toISOString().slice(0,10);
+        const{count,error}=await supabase.from("cargoes")
+          .select("*",{count:"exact",head:true})
+          .gte("updated",from)
+          .lt("updated",to);
+        if(!error) buckets.push({year:d.getFullYear(),month:d.getMonth(),count:count||0});
+      }
+      const nonZero=buckets.filter(b=>b.count>0);
+      console.log("fetchMonthly: buckets=",buckets.length,"nonZero=",nonZero.length,"sample=",nonZero.slice(-3));
+      if(nonZero.length>0) setGraphMonthlyData(buckets.filter((_,i)=>i>=buckets.findIndex(b=>b.count>0)));
+    }
+    fetchMonthly();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+  function inRange(dateStr,from,to){if(!dateStr)return false;const d=new Date(dateStr);d.setHours(0,0,0,0);return d>=from&&d<=to;}
+  const [mxSearch,setMxSearch]=useState("");
+  const [cSortK,setCsortK]=useState("updated");
+  const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
+  const [bulkCargoTagOpen,setBulkCargoTagOpen]=useState(false);
+  const [bulkCargoTagPos,setBulkCargoTagPos]=useState({top:0,left:0});
+  const bulkCargoTagBtnRef=React.useRef(null);
+  const [selVessels,setSelVessels]=useState(()=>new Set());
+  const [bulkPosTagOpen,setBulkPosTagOpen]=useState(false);
+  const [bulkPosTagPos,setBulkPosTagPos]=useState({top:0,left:0});
+  const bulkPosTagBtnRef=React.useRef(null);
+  const [history,setHistory]=useState([]);
+  useEffect(()=>{loadHistory().then(setHistory);},[vessels]);
+  const [intelItems,setIntelItems]=useState([]);
+  const [pendingDel,setPendingDel]=useState(null);
+  const [showAddVessel,setShowAddVessel]=useState(false);
+  const [showAddCargo,setShowAddCargo]=useState(false);
+  // "Save for later" vessel set — persists in localStorage per session
+  const [savedVessels,setSavedVessels]=useState(()=>{
+    try{return new Set(JSON.parse(localStorage.getItem("signal_saved_vessels")||"[]"));}catch{return new Set();}
+  });
+
+  // Saved/starred positions are tiny settings data. Keep them in Supabase so
+  // they sync across devices and do not depend on localStorage having free
+  // quota. localStorage is only a best-effort cache.
   useEffect(()=>{
     let alive=true;
     (async()=>{
       try{
-        const [{count,error:countErr},{data:last,error:lastErr}]=await Promise.all([
-          supabase.from("positions_latest").select("updated_at",{count:"exact",head:true}),
-          supabase.from("positions_latest").select("updated_at").not("updated_at","is",null).order("updated_at",{ascending:false}).limit(1)
-        ]);
-        if(countErr)throw countErr;if(lastErr)throw lastErr;
-        if(alive)setPositionMeta({count:count??null,updatedAt:last?.[0]?.updated_at||null});
-      }catch(e){console.error("positions_latest meta:",e);}
+        const {data,error}=await supabase
+          .from("tag_settings")
+          .select("value")
+          .eq("key","saved_vessels")
+          .maybeSingle();
+
+        if(!error && alive && Array.isArray(data?.value)){
+          const next=new Set(data.value);
+          setSavedVessels(next);
+          try{
+            localStorage.setItem("signal_saved_vessels",JSON.stringify([...next]));
+          }catch(e){
+            console.warn("saved vessels local cache unavailable:",e?.name||e);
+          }
+        }
+      }catch(e){
+        console.warn("saved vessels cloud load failed:",e);
+      }
     })();
-    fetch("/api/commodities",{cache:"no-store"}).then(r=>r.ok?r.json():Promise.reject()).then(j=>{if(alive)setCommodities(j)}).catch(()=>{});
-    fetch("/api/vlcc-earnings",{cache:"no-store"}).then(r=>r.ok?r.json():Promise.reject()).then(j=>{if(alive)setVlcc(j)}).catch(()=>{});
     return()=>{alive=false;};
   },[]);
 
-  const [regionHistory,setRegionHistory]=useState([]);
-  const [regionHistoryLoading,setRegionHistoryLoading]=useState(true);
-  const [regionHistoryError,setRegionHistoryError]=useState(null);
-  useEffect(()=>{let alive=true;(async()=>{try{const {data,error}=await supabase.rpc("dashboard_region_history");if(error)throw error;if(alive)setRegionHistory(data||[]);}catch(e){if(alive)setRegionHistoryError(e.message||"RPC failed");}finally{if(alive)setRegionHistoryLoading(false);}})();return()=>{alive=false;};},[]);
-  const [segmentFilter,setSegmentFilter]=useState("All");
-  const [fixingSegmentHistory,setFixingSegmentHistory]=useState([]);
-  const [fixingSegmentError,setFixingSegmentError]=useState(null);
-  useEffect(()=>{let alive=true;(async()=>{try{const {data,error}=await supabase.rpc("dashboard_fixing_window_segments");if(error)throw error;if(alive)setFixingSegmentHistory(data||[]);}catch(e){if(alive)setFixingSegmentError(e.message||"RPC failed");}})();return()=>{alive=false;};},[]);
+  function persistSavedVessels(next){
+    const arr=[...next];
 
-  // Part 5: Fetch all history entries from Supabase
-  useEffect(() => {
-    async function getHistory() {
-      const { data } = await supabase
-        .from("dashboard")
-        .select("value")
-        .ilike("key", "bunker-hist-%");
-      if (data) {
-        // Sort by date so the graph flows left to right
-        const parsed = data.map(d => JSON.parse(d.value));
-        setBunkerHistory(parsed.sort((a,b) => new Date(a.date) - new Date(b.date)));
+    // Never let a full browser cache break the UI.
+    try{
+      localStorage.setItem("signal_saved_vessels",JSON.stringify(arr));
+    }catch(e){
+      console.warn("saved vessels local cache unavailable:",e?.name||e);
+    }
+
+    supabase
+      .from("tag_settings")
+      .upsert({
+        key:"saved_vessels",
+        value:arr,
+        updated_at:new Date().toISOString()
+      },{onConflict:"key"})
+      .then(({error})=>{
+        if(error) console.error("saved vessels cloud save failed:",error);
+      });
+  }
+
+  function toggleSavedVessel(name){
+    setSavedVessels(prev=>{
+      const next=new Set(prev);
+      next.has(name)?next.delete(name):next.add(name);
+      persistSavedVessels(next);
+      return next;
+    });
+  }
+
+  function clearSavedVessels(){
+    const next=new Set();
+    setSavedVessels(next);
+    try{localStorage.removeItem("signal_saved_vessels");}catch{}
+    supabase
+      .from("tag_settings")
+      .upsert({
+        key:"saved_vessels",
+        value:[],
+        updated_at:new Date().toISOString()
+      },{onConflict:"key"})
+      .then(({error})=>{
+        if(error) console.error("saved vessels cloud clear failed:",error);
+      });
+  }
+  // Inter UKC config — loaded from localStorage (editable in Settings)
+  const [showSavedOnly,setShowSavedOnly]=useState(false);
+  const [fixingPanelTab,setFixingPanelTab]=useState("History");
+  const [aisPanelTab,setAisPanelTab]=useState("Map");
+  const [posOutsiderView,setPosOutsiderView]=useState(false);
+  const [outsiderSyncStatus,setOutsiderSyncStatus]=useState(null);
+  function getInterUKCConfig(){
+    try{return JSON.parse(localStorage.getItem("signal_interukc_config")||"null");}catch{return null;}
+  }
+  const defaultInterUKCConfig={
+    dwtMin:15,dwtMax:21,
+    owners:["Stenersen","Furetank","Carl F","Maersk","Harren","Navix","Donso","Relet"],
+    reletsFrom:["Exxon","Shell","Circle K","Essar","Total","CSS SA"],
+  };
+  function applyInterUKCFilter(){
+    const cfg=getInterUKCConfig()||defaultInterUKCConfig;
+    setDwtFilter("15-20");
+    setInterUKCActive(true);
+    setShowSavedOnly(false);
+    setPosPage(1);
+  }
+  const [interUKCActive,setInterUKCActive]=useState(false);
+  const [restoreMsg,setRestoreMsg]=useState("");
+  const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
+  // Use mobile state from TankPos (reactive, with manual override) — must be before colWidths
+  const mobile = mobileProp !== undefined ? mobileProp : isMobile();
+
+  // Mobile: hide the top header while scrolling down and slide it back in
+  // as soon as the user scrolls up. Keep it visible near the top or while
+  // the mobile navigation drawer is open.
+  const [headerHidden,setHeaderHidden]=useState(false);
+  const lastScrollY=useRef(0);
+  useEffect(()=>{
+    if(!mobile){ setHeaderHidden(false); return; }
+    lastScrollY.current=window.scrollY||0;
+    function onScroll(){
+      const y=Math.max(0,window.scrollY||0);
+      const delta=y-lastScrollY.current;
+      if(mobileNavOpen || y<=18) setHeaderHidden(false);
+      else if(delta>7 && y>70) setHeaderHidden(true);
+      else if(delta<-5) setHeaderHidden(false);
+      lastScrollY.current=y;
+    }
+    window.addEventListener("scroll",onScroll,{passive:true});
+    return ()=>window.removeEventListener("scroll",onScroll);
+  },[mobile,mobileNavOpen]);
+
+  const [colWidthsV,setColWidthsV]=useState(()=>mobile?{
+  Operator:null,Vessel:null,Built:null,DWT:null,Coating:null,LOA:null,Beam:null,CBM:null,Date:null,OpenPort:null,Comment:null,FileDate:null,Spec:null
+  }:{
+  Operator:150,Vessel:145,Built:60,DWT:72,Coating:78,LOA:62,Beam:56,CBM:78,Date:88,OpenPort:155,Comment:140,FileDate:88,Spec:72
+  });
+  const [colWidthsC,setColWidthsC]=useState(()=>mobile?{
+  Status:55,Vessel:null,Charterer:null,Cargo:null,Qty:null,Load:null,Disch:null,LaycanStart:null,LaycanEnd:null,Freight:null,Comment:null,Updated:null
+  }:{
+  Status:68,Vessel:165,Charterer:165,Cargo:95,Qty:75,Load:148,Disch:148,LaycanStart:82,LaycanEnd:82,Freight:115,Comment:180,Updated:96
+  });
+  const [askAiExpanded,setAskAiExpanded]=useState(false);
+  const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
+  const [selectedAISVessels,setSelectedAISVessels]=useState([]);
+  const [matrixExpanded,setMatrixExpanded]=useState(false);
+  const [aisVesselSet,setAisVesselSet]=useState(new Set());
+  
+  // Dashboard / bunker-matrix theme styles
+  const th2={
+  padding:"7px 10px",
+  color:"rgba(120,160,220,0.55)",
+  fontWeight:700,
+  fontSize:11,
+  textTransform:"uppercase",
+  letterSpacing:"0.08em",
+  textAlign:"left",
+  background:C.bg4,
+  borderBottom:"1px solid rgba(58,130,246,0.14)",
+  whiteSpace:"nowrap",
+  verticalAlign:"middle"
+};
+  const td2={
+  padding:"6px 10px",
+  color:"#d9e8ff",
+  fontWeight:500,
+  fontSize:12,
+  borderBottom:"1px solid rgba(255,255,255,0.035)",
+  verticalAlign:"middle",
+  whiteSpace:"nowrap",
+};
+  const tdNum = {...td2, textAlign:"right", fontVariantNumeric:"tabular-nums", textTransform:"uppercase"};
+const tdCtr = {...td2, textAlign:"center", fontVariantNumeric:"tabular-nums", textTransform:"uppercase"};
+const tdTxt = {...td2, textAlign:"left", textTransform:"uppercase"};
+  const tableWrap={
+    border:"1px solid "+C.bd,
+    borderRadius:8,
+    overflow:"auto",
+    WebkitOverflowScrolling:"touch",
+    width:"100%",
+    display:"block",
+    background:C.bg2,
+    boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)",
+  };
+  const tableStyle={width:"max-content",minWidth:mobile?"1400px":"max-content",borderCollapse:"separate",borderSpacing:0,fontSize:mobile?10:11,tableLayout:mobile?"auto":"fixed",fontFamily:"sans-serif"};
+  const rowBg=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
+const cargoColumns = [
+  { key: "select", label: "", align: "center", width: 28 },
+  { key:"status",    sortKey:"Status",    label:"Status",    align:"left", width:colWidthsC.Status },
+  { key:"vessel",    sortKey:"Vessel",    label:"Vessel",    align:"left", width:colWidthsC.Vessel },
+  { key:"charterer", sortKey:"Charterer", label:"Charterer", align:"left", width:colWidthsC.Charterer },
+  { key:"qty",       sortKey:"Qty",       label:"Qty",             align:"left", width:colWidthsC.Qty },
+  { key:"cargo",     sortKey:"Cargo",     label:"Cargo",       align:"left", width:colWidthsC.Cargo },
+  { key:"load",      sortKey:"Load",      label:"Load",          align:"left", width:colWidthsC.Load },
+  { key:"disch",     sortKey:"Disch",     label:"Disch",       align:"left", width:colWidthsC.Disch },
+  { key:"from",      sortKey:"LaycanStart",label:"From", align:"left", width:colWidthsC.LaycanStart },
+  { key:"to",        sortKey:"LaycanEnd",  label:"To",   align:"left", width:colWidthsC.LaycanEnd },
+  { key:"freight",   sortKey:"Freight",   label:"Freight",  align:"left", width:colWidthsC.Freight },
+  { key:"comment",   sortKey:"Comment",   label:"Comment",  align:"left", width:colWidthsC.Comment },
+  { key:"tag",       sortKey:"tag",       label:"Tag",            align:"left", width:80 },
+  { key:"updated",   sortKey:"Updated",   label:"Updated", align:"left", width:colWidthsC.Updated },
+  { key:"badge", label:"", align:"center", width:20 },
+  { key: "delete", label: "", align: "center", width: 26 },
+];
+  const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
+  const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
+  // Vessels tagged "OUTSIDER" that currently have a known open date + port
+  // get added/updated in the static outsider_vessels roster. Live position
+  // tracking after that happens automatically via OutsidersTab's own IMO
+  // join — this just needs to get the vessel identity in.
+  function openBulkCargoTags(){
+    if(!selCargoes.size)return;
+
+    if(bulkCargoTagBtnRef.current){
+      const r=bulkCargoTagBtnRef.current.getBoundingClientRect();
+
+      // Match the zoom-aware positioning used by the Positions tag popup.
+      const rawZoom=parseFloat(
+        getComputedStyle(document.body).zoom ||
+        document.body.style.zoom ||
+        "1"
+      );
+      const zoom=Number.isFinite(rawZoom)&&rawZoom>0 ? rawZoom : 1;
+
+      const popWVisual=190*zoom;
+      const popHVisual=Math.min(360,58+getTagListFor("cargo").length*31)*zoom;
+      const marginVisual=12;
+
+      let leftVisual=r.left;
+      if(leftVisual+popWVisual>window.innerWidth-marginVisual){
+        leftVisual=r.right-popWVisual;
+      }
+      leftVisual=Math.max(
+        marginVisual,
+        Math.min(leftVisual,window.innerWidth-popWVisual-marginVisual)
+      );
+
+      let topVisual=r.bottom+5;
+      if(topVisual+popHVisual>window.innerHeight-marginVisual){
+        topVisual=Math.max(marginVisual,r.top-popHVisual-5);
+      }
+
+      setBulkCargoTagPos({
+        top:topVisual/zoom,
+        left:leftVisual/zoom
+      });
+    }
+
+    setBulkCargoTagOpen(v=>!v);
+  }
+
+  async function applyTagToSelectedCargoes(tag){
+    const ids=[...selCargoes];
+    await Promise.all(ids.map(id=>Promise.resolve(onUpdateC(id,"tag",tag))));
+    setBulkCargoTagOpen(false);
+  }
+
+  function openBulkPositionTags(){
+    if(!selVessels.size)return;
+
+    if(bulkPosTagBtnRef.current){
+      const r=bulkPosTagBtnRef.current.getBoundingClientRect();
+
+      // Use the exact same zoom-aware anchoring as the Cargo bulk-tag popup.
+      const rawZoom=parseFloat(
+        getComputedStyle(document.body).zoom ||
+        document.body.style.zoom ||
+        "1"
+      );
+      const zoom=Number.isFinite(rawZoom)&&rawZoom>0 ? rawZoom : 1;
+
+      const popWVisual=190*zoom;
+      const popHVisual=Math.min(360,58+getTagListFor("position").length*31)*zoom;
+      const marginVisual=12;
+
+      // Align directly under the + Tag button.
+      let leftVisual=r.left;
+      if(leftVisual+popWVisual>window.innerWidth-marginVisual){
+        leftVisual=r.right-popWVisual;
+      }
+      leftVisual=Math.max(
+        marginVisual,
+        Math.min(leftVisual,window.innerWidth-popWVisual-marginVisual)
+      );
+
+      let topVisual=r.bottom+5;
+      if(topVisual+popHVisual>window.innerHeight-marginVisual){
+        topVisual=Math.max(marginVisual,r.top-popHVisual-5);
+      }
+
+      setBulkPosTagPos({
+        top:topVisual/zoom,
+        left:leftVisual/zoom
+      });
+    }
+
+    setBulkPosTagOpen(v=>!v);
+  }
+
+  async function applyTagToSelectedVessels(tag){
+    const names=[...selVessels];
+    await Promise.all(names.map(name=>Promise.resolve(onUpdateV(name,"tag",tag))));
+    setBulkPosTagOpen(false);
+  }
+
+  async function addSelectedToOutsiders(){
+    const selected = vessels.filter(v=>selVessels.has(v.vessel));
+    if(!selected.length) return;
+
+    setOutsiderSyncStatus(`Adding ${selected.length} to Outsiders…`);
+    let added=0, updated=0, failed=0;
+
+    for(const v of selected){
+      const imo = v.imoNo ? String(v.imoNo).trim() : null;
+      const payload = {
+        imo,
+        vessel: v.vessel || null,
+        dwt: v.dwt ? Math.round(Number(String(v.dwt).replace(/[^\d.]/g,""))) || null : null,
+        built: v.built ? parseInt(v.built) || null : null,
+        source_operator: v.operator || null,
+        coating: v.coating || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      try{
+        let existing=null;
+        let findErr=null;
+
+        // IMO is the primary identity. If somehow missing, fall back to the
+        // vessel name so a manually entered position can still be followed.
+        if(imo){
+          const res=await supabase.from("outsider_vessels")
+            .select("imo,vessel")
+            .eq("imo",imo)
+            .limit(1);
+          existing=res.data?.[0]||null;
+          findErr=res.error;
+        } else {
+          const res=await supabase.from("outsider_vessels")
+            .select("imo,vessel")
+            .ilike("vessel",v.vessel)
+            .limit(1);
+          existing=res.data?.[0]||null;
+          findErr=res.error;
+        }
+
+        if(findErr) throw findErr;
+
+        let error=null;
+        if(existing){
+          if(imo){
+            ({error}=await supabase.from("outsider_vessels")
+              .update(payload)
+              .eq("imo",imo));
+          } else {
+            ({error}=await supabase.from("outsider_vessels")
+              .update(payload)
+              .is("imo",null)
+              .ilike("vessel",v.vessel));
+          }
+          if(!error) updated++;
+        } else {
+          ({error}=await supabase.from("outsider_vessels").insert(payload));
+          if(!error) added++;
+        }
+
+        if(error) throw error;
+
+        // If this vessel previously existed only as a name-only row and we
+        // now know its IMO, remove the obsolete name-only copy.
+        if(imo){
+          await supabase.from("outsider_vessels")
+            .delete()
+            .is("imo",null)
+            .ilike("vessel",v.vessel);
+        }
+      }catch(e){
+        failed++;
+        console.error("Add to Outsiders failed:",v.vessel,e);
       }
     }
-    getHistory();
-  }, []);
 
-  // Part 4: Load the "Last Known" prices so the screen isn't blank on refresh
-  useEffect(() => {
-    async function loadSaved() {
-      const { data } = await supabase
-        .from("dashboard")
-        .select("value")
-        .eq("key", "last-bunker-prices")
-        .maybeSingle();
-      if (data) {
-        setBunkers(JSON.parse(data.value));
-        setBFetched(true);
+    if(failed){
+      setOutsiderSyncStatus(`Outsiders: ${added} added, ${updated} already there/updated, ${failed} failed`);
+    }else{
+      setOutsiderSyncStatus(`✓ Outsiders: ${added} added, ${updated} already there/updated`);
+    }
+    setTimeout(()=>setOutsiderSyncStatus(null),4500);
+  }
+
+  async function syncOutsiderTaggedVessels(){
+    const candidates = vessels.filter(v => (v.tag||"").trim().toUpperCase()==="OUTSIDER" && v.openPort && v.date);
+    if(!candidates.length){ setOutsiderSyncStatus("No OUTSIDER-tagged vessels with a known date + port"); setTimeout(()=>setOutsiderSyncStatus(null),3000); return; }
+    setOutsiderSyncStatus(`Syncing ${candidates.length}…`);
+    const withImo = candidates.filter(v=>v.imoNo);
+    const withoutImo = candidates.filter(v=>!v.imoNo);
+    let failed = 0;
+    if(withImo.length){
+      for(const v of withImo){
+        const payload={
+          imo:String(v.imoNo), vessel:v.vessel, dwt:v.dwt||null, built:v.built||null,
+          source_operator:v.operator||null, coating:v.coating||null,
+          updated_at:new Date().toISOString(),
+        };
+        const {data:existing,error:findErr}=await supabase.from("outsider_vessels")
+          .select("imo").eq("imo",String(v.imoNo)).limit(1);
+        if(findErr){ console.error(findErr); failed++; continue; }
+        const res=existing?.length
+          ? await supabase.from("outsider_vessels").update(payload).eq("imo",String(v.imoNo))
+          : await supabase.from("outsider_vessels").insert(payload);
+        if(res.error){ console.error(res.error); failed++; }
       }
     }
-    loadSaved();
-  }, []);
+    if(withoutImo.length){
+      // No IMO to upsert against — check existing vessel names first so
+      // re-running this doesn't pile up duplicate rows for the same ship.
+      const { data: existing } = await supabase.from("outsider_vessels").select("vessel").is("imo",null);
+      const existingNames = new Set((existing||[]).map(r=>(r.vessel||"").toUpperCase()));
+      const fresh = withoutImo.filter(v=>!existingNames.has((v.vessel||"").toUpperCase()));
+      if(fresh.length){
+        const payload = fresh.map(v=>({
+          vessel: v.vessel, dwt: v.dwt||null, built: v.built||null,
+          source_operator: v.operator||null, coating: v.coating||null,
+          updated_at: new Date().toISOString(),
+        }));
+        const { error } = await supabase.from("outsider_vessels").insert(payload);
+        if(error){ console.error(error); failed += fresh.length; }
+      }
+    }
+    setOutsiderSyncStatus(failed ? `Done, ${failed} failed — check console` : `✓ Synced ${candidates.length} vessel(s)`);
+    setTimeout(()=>setOutsiderSyncStatus(null),4000);
+  }
 
-  // ── Bunker prices: fetch live from PBT via web_search, fallback to last known ──
-  async function fetchBunkersPBT() {
-  setBLoading(true); setBError(null);
-  try {
-    const res = await fetch("/api/bunkers");
-    const p = await res.json();
-    const newBunkers = {
-      date: p.date || new Date().toLocaleDateString("en-GB"),
-      ARA_HSFO: p.ARA_HSFO, ARA_VLSFO: p.ARA_VLSFO, ARA_MGO: p.ARA_MGO,
-      FUJ_HSFO: p.FUJ_HSFO, FUJ_VLSFO: p.FUJ_VLSFO, FUJ_MGO: p.FUJ_MGO,
-      SIN_HSFO: p.SIN_HSFO, SIN_VLSFO: p.SIN_VLSFO, SIN_MGO: p.SIN_MGO,
+  const fb=on=>({
+  fontSize:11,
+  fontWeight:600,
+  padding:"2px 7px",
+  borderRadius:3,
+  border:"1px solid "+(on ? C.blue : "rgba(120,160,220,0.35)"),
+  background:on ? "rgba(88,166,255,.22)" : C.bg4,
+  color:on ? "#d9ecff" : "#9fc3f5",
+  cursor:"pointer",
+  fontFamily:"inherit",
+  whiteSpace:"nowrap",
+  boxShadow:on ? "0 0 0 1px rgba(88,166,255,.18) inset" : "none"
+});
+
+  // Larger pill-style chip for the horizontal-row filter redesign
+  const fbBig=(on,col)=>({
+    fontSize:11,
+    fontWeight:600,
+    padding:"3px 9px",
+    borderRadius:4,
+    border:"1px solid "+(on ? col : "rgba(120,160,220,0.3)"),
+    background:on ? col+"22" : "transparent",
+    color:on ? col : "rgba(180,205,240,0.8)",
+    cursor:"pointer",
+    fontFamily:"inherit",
+    whiteSpace:"nowrap",
+    flexShrink:0,
+  });
+
+  // Tag component for vessel specs
+  const Tag=({col,children})=><span style={{fontSize:11,fontWeight:600,padding:"2px 6px",borderRadius:3,background:col+"18",border:"1px solid "+col+"44",color:col}}>{children}</span>;
+
+  function toggleFilter(f){setFilters(prev=>{const n=new Set(prev);n.has(f)?n.delete(f):n.add(f);return n;});}
+  function srt(k){setSortD(sortK===k?sortD*-1:1);setSortK(k);}
+
+  function focusCell(row, key){
+  const el = document.querySelector(`[data-cell="${row}-${key}"]`);
+  el?.click();
+}
+
+  // When a vessel name is manually corrected, immediately re-resolve that
+  // vessel against the already-loaded vessels_db and refresh the visible
+  // specs. Example: TRITON -> STEN TRITON. This deliberately does not
+  // overwrite operator/comment/open position data from the pasted position.
+  async function renameVesselAndRefreshSpecs(oldName, rawNewName){
+    const newName=String(rawNewName||"").trim().toUpperCase();
+    if(!newName||newName===String(oldName||"").trim().toUpperCase()) return;
+
+    // Rename first so spec overrides are stored against the corrected vessel
+    // name rather than the shortened/incorrect pasted name.
+    if(onRenameV) await Promise.resolve(onRenameV(oldName,newName));
+
+    const db=(window.vesselDB||{});
+    const d=db[newName.toLowerCase().trim()];
+    if(!d||!onUpdateV) return;
+
+    const specUpdates=[
+      ["built",d.built],
+      ["dwt",d.dwt],
+      ["coating",d.coating],
+      ["loa",d.loa],
+      ["beam",d.beam],
+      ["cbm",d.cbm],
+      ["spec.iceClass",d.ice_class],
+      ["spec.fuel",d.fuel],
+    ].filter(([,value])=>value!==null&&value!==undefined&&String(value).trim()!=="");
+
+    for(const [field,value] of specUpdates){
+      await Promise.resolve(onUpdateV(newName,field,value));
+    }
+  }
+
+  // Multi-token search across all text fields
+  const tokens=search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  function matchesSearch(v){
+  if(!tokens.length)return true;
+  const hay=JSON.stringify(v).toLowerCase();
+  return tokens.every(t=>hay.includes(t));
+}
+
+const superRegionOptions=["ALL", ...Array.from(new Set(
+  vessels.map(v=>String(v.superRegion||"").trim()).filter(Boolean)
+)).sort((a,b)=>a.localeCompare(b))];
+
+function daysAgoDate(days){
+  const d=new Date();
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate()-days);
+  return d;
+}
+
+function fmtShortDate(d){
+  if(!d) return "";
+  return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
+}
+
+const vesselsTodayUpdated=useMemo(()=>{
+    const todayStart=new Date();
+    todayStart.setHours(0,0,0,0);
+    return new Set(vessels.filter(v=>{
+      if(!v.updatedAt) return false;
+      const d=new Date(v.updatedAt);
+      return !isNaN(d) && d>=todayStart;
+    }).map(v=>v.vessel));
+  },[vessels]);
+
+const filtV=useMemo(()=>{
+  let list=vessels;
+
+  if(filters.size>0){
+    list=list.filter(v=>{
+      // OR within one filter group, AND between different groups.
+      // Example: (WCUK OR ECUK) AND (PPT OR SUBS) AND selected DWT/tag/etc.
+      const statusKeys=["PPT","SUBS","HIDE_EMP"];
+      const selectedStatus=statusKeys.filter(k=>filters.has(k));
+      if(selectedStatus.length){
+        const statusMatch=selectedStatus.some(k=>{
+          if(k==="PPT") return isOpenPPT(v.date);
+          if(k==="SUBS") return v.openPort==="EMPLOYED";
+          if(k==="HIDE_EMP") return v.openPort!=="EMPLOYED";
+          return false;
+        });
+        if(!statusMatch) return false;
+      }
+
+      if(filters.has("NAP") && !(v.comment?.toLowerCase().includes("naph") || v.spec?.lastCargo?.toLowerCase().includes("naph"))) return false;
+
+      const reg=classifyRegion(v.openPort);
+      const port=(v.openPort||"").toUpperCase();
+      const asiaports=["SINGAPORE","MALAYSIA","THAILAND","VIETNAM","CHINA","JAPAN","KOREA","INDIA","PAKISTAN","INDONESIA","PHILIPPINES","TAIWAN","HONGKONG","HONG KONG","FUJAIRAH","UAE","BAHRAIN","KUWAIT","SAUDI","JEDDAH","YANBU","JUBAIL","OMAN","MUSCAT"];
+      const isAsia=asiaports.some(p=>port.includes(p));
+      const regionKeys=["WCUK","ECUK","CANAL","BISCAY","BALTIC","SKAW","MED"];
+      const selectedRegions=regionKeys.filter(r=>filters.has(r));
+      if(selectedRegions.length){
+        if(isAsia||!reg) return false;
+        if(!selectedRegions.includes(reg)) return false;
+      }
+      return true;
+    });
+  }
+
+  if(bucketFilters.size>0){
+    list=list.filter(v=>{
+      if(v.openPort==="EMPLOYED") return false;
+      const d=daysBetween(v.date);
+      const inPPT=d!==null && d>=0 && d<=1 && vesselsTodayUpdated.has(v.vessel);
+      const in24=d!==null && d>=2 && d<=4;
+      const in48=d!==null && d>=5 && d<=8;
+      const in8p=d!==null && d>8;
+      return (bucketFilters.has("PPT") && inPPT)
+        || (bucketFilters.has("2-4d") && in24)
+        || (bucketFilters.has("4-8d") && in48)
+        || (bucketFilters.has(">8d") && in8p);
+    });
+  }
+
+  const normOp=s=>(s||"Unknown").trim().toLowerCase();
+  if(opFilter) list=list.filter(v=>normOp(v.operator)===normOp(opFilter));
+
+  if(superRegionFilter.size>0){
+    list=list.filter(v=>superRegionFilter.has(String(v.superRegion||"").trim()));
+  }
+  if(segmentFilter.size>0){
+    list=list.filter(v=>segmentFilter.has(String(v.segment||"").trim()));
+  }
+  if(posTagFilter.size>0){
+    // OR inside the TAG filter group:
+    // BASF + LITFERT means BASF OR LITFERT.
+    // Other filter groups are still combined with this group using AND.
+    const selectedTags=new Set([...posTagFilter].map(t=>String(t||"").trim().toUpperCase()));
+    list=list.filter(v=>{
+      const raw=Array.isArray(v.tag)?v.tag.join("|"):String(v.tag||"");
+      const vesselTags=raw
+        .split(/[|,;]+/)
+        .map(t=>t.trim().toUpperCase())
+        .filter(Boolean);
+      return vesselTags.some(t=>selectedTags.has(t));
+    });
+  }
+  // Custom DWT range (in tonnes). Handles "8K"/raw numbers.
+  const parseDwt=(raw)=>{if(raw==null||raw==="")return null;if(typeof raw==="number")return raw;const s=String(raw).trim().toUpperCase().replace(/\s/g,"");if(/^\d+(\.\d+)?K$/.test(s))return parseFloat(s)*1000;const n=parseFloat(s.replace(/[^\d.]/g,""));return isFinite(n)?n:null;};
+  if(dwtRange.min!==""||dwtRange.max!==""){
+    const lo=dwtRange.min!==""?Number(dwtRange.min):-Infinity;
+    const hi=dwtRange.max!==""?Number(dwtRange.max):Infinity;
+    list=list.filter(v=>{const d=parseDwt(v.dwt);return d!=null&&d>=lo&&d<=hi;});
+  }
+  if(builtRange.min!==""||builtRange.max!==""){
+    const lo=builtRange.min!==""?Number(builtRange.min):-Infinity;
+    const hi=builtRange.max!==""?Number(builtRange.max):Infinity;
+    list=list.filter(v=>{const b=parseInt(v.built);return isFinite(b)&&b>=lo&&b<=hi;});
+  }
+
+  // Inter UKC filter
+  if(interUKCActive){
+    const cfg=getInterUKCConfig()||defaultInterUKCConfig;
+    list=list.filter(v=>{
+      const dwt=parseFloat(v.dwt)||0;
+      if(dwt>0&&(dwt<cfg.dwtMin*1000||dwt>cfg.dwtMax*1000)) return false;
+      const op=(v.operator||"").toLowerCase();
+      const isOwner=cfg.owners.some(o=>op.includes(o.toLowerCase()));
+      const isRelet=cfg.reletsFrom.some(r=>op.includes(r.toLowerCase()));
+      return isOwner||isRelet;
+    });
+  }
+
+  // Saved filter — OR with interUKC means: show if saved OR matches interUKC
+  if(showSavedOnly){
+    if(interUKCActive){
+      // Already have interUKC results; add any saved vessels not yet in list
+      const inList=new Set(list.map(v=>v.vessel));
+      const extra=vessels.filter(v=>savedVessels.has(v.vessel)&&!inList.has(v.vessel));
+      list=[...list,...extra];
+    } else {
+      list=list.filter(v=>savedVessels.has(v.vessel));
+    }
+  }
+
+  if(dwtFilter.size>0){
+    list=list.filter(v=>{
+      const d=parseFloat(v.dwt)||0;
+      const match=v=>{
+        if(v==="<10") return d<10000;
+        if(v==="10-15") return d>=10000&&d<15000;
+        if(v==="15-20") return d>=15000&&d<20000;
+        if(v==="20-30") return d>=20000&&d<30000;
+        if(v==="30-40") return d>=30000&&d<40000;
+        if(v===">40") return d>=40000;
+        return false;
+      };
+      return [...dwtFilter].some(match);
+    });
+  }
+
+  if(builtFilter.size>0){
+    list=list.filter(v=>{
+      const b=parseInt(v.built)||0;
+      const match=val=>{
+        if(val==="<2005") return b>0&&b<2005;
+        if(val==="2005-10") return b>=2005&&b<2010;
+        if(val==="2010-15") return b>=2010&&b<2015;
+        if(val==="2015-20") return b>=2015&&b<2020;
+        if(val===">2020") return b>=2020;
+        return false;
+      };
+      return [...builtFilter].some(match);
+    });
+  }
+
+  list=list.filter(matchesSearch);
+
+   if(updFilter){
+    const now=new Date();
+    const todayStart=new Date(now);
+    todayStart.setHours(0,0,0,0);
+
+    const weekStart=new Date(now);
+    weekStart.setHours(0,0,0,0);
+    weekStart.setDate(weekStart.getDate()-((weekStart.getDay()+6)%7));
+
+    list=list.filter(v=>{
+      const ts=v.updatedAt||v.addedAt;
+      if(!ts) return true; // keep vessels without timestamp
+      const d=new Date(ts);
+      if(isNaN(d)) return true;
+      if(updFilter==="today") return d>=todayStart;
+      if(updFilter==="week") return d>=weekStart;
+      if(updFilter==="7d"){const x=new Date();x.setDate(x.getDate()-7);return d>=x;}
+      if(updFilter==="14d"){const x=new Date();x.setDate(x.getDate()-14);return d>=x;}
+      if(updFilter==="30d"){const x=new Date();x.setDate(x.getDate()-30);return d>=x;}
+      return true;
+    });
+  }
+
+  if(sortK){
+    list=[...list].sort((a,b)=>{
+      if(sortK==="date"){
+        const MON=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+        const toNum=s=>{
+          if(!s) return 9999;
+          const m=String(s).toLowerCase().match(/^(\d{1,2})\s+([a-z]{3})/);
+          if(!m) return 9999;
+          return MON.indexOf(m[2])*100 + parseInt(m[1]);
+        };
+        return (toNum(a.date)-toNum(b.date))*sortD;
+      }
+
+      const av=String(a[sortK]||"").toLowerCase();
+      const bv=String(b[sortK]||"").toLowerCase();
+      return av<bv ? -sortD : av>bv ? sortD : 0;
+    });
+  }
+
+  return list;
+},[
+  vessels,
+  filters,
+  search,
+  sortK,
+  sortD,
+  opFilter,
+  bucketFilters,
+  updFilter,
+  posFileDaysBack,
+  superRegionFilter,
+  segmentFilter,
+  [...posTagFilter].join(),
+  dwtRange.min,dwtRange.max,builtRange.min,builtRange.max,
+  [...dwtFilter].join(),
+  [...builtFilter].join(),
+  interUKCActive,
+  showSavedOnly,
+  savedVessels,
+]);
+
+  // One visible row per vessel. Duplicate vessel names were producing duplicate
+  // React keys in MatrixTable, which could leave stale rows behind after searching.
+  const displayPosRows=useMemo(()=>{
+    const seen=new Set();
+    return filtV.filter(v=>{
+      const key=String(v.vessel||"").trim().toUpperCase();
+      if(!key||seen.has(key))return false;
+      seen.add(key);
+      return true;
+    });
+  },[filtV]);
+
+  const posColumns = [
+  { 
+    key: "select", 
+    label: (
+      <div 
+        onClick={(e) => {
+          e.stopPropagation();
+          const allSelected = filtV.length > 0 && filtV.every(v => selVessels.has(v.vessel));
+          if (allSelected) {
+            setSelVessels(new Set());
+          } else {
+            setSelVessels(new Set(filtV.map(v => v.vessel)));
+          }
+        }}
+        style={{ cursor: "pointer", userSelect: "none" }}
+        title="Mark all / none"
+      >
+        <div style={{ fontSize: 11, color: filtV.length > 0 && filtV.every(v => selVessels.has(v.vessel)) ? "#4fc3f7" : C.faint }}>
+          {filtV.length > 0 && filtV.every(v => selVessels.has(v.vessel)) ? "[✓]" : "[ ]"}
+        </div>
+        <div style={{ fontSize: 8, color: C.faint, marginTop: 1, whiteSpace:"nowrap" }}>ALL</div>
+      </div>
+    ), 
+    align: "center", 
+    width: 40 
+  },
+  { key: "operator",  sortKey:"operator",  label: "Operator",  width: colWidthsV.Operator },
+  { key: "vessel",    sortKey:"vessel",    label: "Vessel",    width: colWidthsV.Vessel },
+  { key: "ais",       label: "",           align:"center",     width: 18 },
+  { key: "built",     sortKey:"built",     label: "Built",     align:"left", width: colWidthsV.Built },
+  { key: "dwt",       sortKey:"dwt",       label: "DWT",           align:"left", width: colWidthsV.DWT },
+  { key: "coating",   sortKey:"coating",   label: "Coating", width: colWidthsV.Coating },
+  { key: "loa",       sortKey:"loa",       label: "LOA",           align:"left", width: colWidthsV.LOA },
+  { key: "beam",      sortKey:"beam",      label: "Beam",        align:"right", width: colWidthsV.Beam },
+  { key: "cbm",       sortKey:"cbm",       label: "CBM",           align:"left", width: colWidthsV.CBM },
+  { key: "date",      sortKey:"date",      label: "Date",        align:"center", width: colWidthsV.Date },
+  { key: "openPort",  sortKey:"openPort",  label: "Open Port", width: colWidthsV.OpenPort },
+  { key: "comment",   sortKey:"comment",   label: "Comment",  width: colWidthsV.Comment },
+  { key: "updatedAt", sortKey:"fileDate",  label: "Updated", align:"center", width: colWidthsV.FileDate },
+  { key: "badge", label: "", align: "center", width: 32 },
+  { key: "tag", label: "Tag", align: "center", width: 70 },
+  { key: "delete", label: "", align: "center", width: 24 },
+];
+
+  // Mobile-specific columns: fixed (not user-resizable) widths so the sticky
+  // offsets below are reliable, LOA/Beam/CBM dropped to save width — those
+  // are the columns Haakon uses least for a quick scan on a phone.
+  const MOBILE_SELECT_W = 24, MOBILE_OPERATOR_W = 84, MOBILE_VESSEL_W = 84;
+  const posColumnsMobile = [
+    posColumns[0], // select — compact, scrolls with the table
+    { key:"operator", sortKey:"operator", label:"Op",      width:MOBILE_OPERATOR_W },
+    { key:"vessel",   sortKey:"vessel",   label:"Vessel",  width:MOBILE_VESSEL_W },
+    { key:"ais",      label:"",           align:"center",  width:14 },
+    { key:"built",    sortKey:"built",    label:"Blt",     align:"left", width:36 },
+    { key:"dwt",      sortKey:"dwt",      label:"DWT",     align:"left", width:48 },
+    { key:"coating",  sortKey:"coating",  label:"Coat",    width:44 },
+    { key:"date",     sortKey:"date",     label:"Date",    align:"center", width:44 },
+    { key:"openPort", sortKey:"openPort", label:"Port",    width:80 },
+    { key:"comment",  sortKey:"comment",  label:"Comment", width:90 },
+    { key:"tag",      label:"Tag",        align:"center",  width:50 },
+    { key:"delete",   label:"",           align:"center",  width:22 },
+  ];
+
+  // Reset page when filters change
+  useEffect(()=>{setPosPage(1);},[vessels,filters,search,sortK,opFilter,bucketFilters,updFilter,posFileDaysBack,superRegionFilter]);
+
+  const stats={total:vessels.length,ppt:filtV.filter(v=>isOpenPPT(v.date)).length,subs:filtV.filter(v=>v.openPort==="EMPLOYED").length};
+  const vessels14d=useMemo(()=>{
+    const cutoff=new Date();
+    cutoff.setDate(cutoff.getDate()-14);
+    cutoff.setHours(0,0,0,0);
+    return vessels.filter(v=>{
+      if(!v.updatedAt) return false;
+      const d=new Date(v.updatedAt);
+      return !isNaN(d) && d>=cutoff;
+    });
+  },[vessels]);
+  React.useEffect(()=>{
+    if(sel && !displayPosRows.some(v=>v.vessel===sel)){
+      setSel(null);
+      setSelectedAISVessels([]);
+    }
+  },[displayPosRows,sel]);
+
+  const selV=sel?vessels.find(v=>v.vessel===sel):null;
+  React.useEffect(()=>{
+    if(!selV)return;
+    const closeOnOutside=(e)=>{
+      if(e.target.closest?.("[data-pos-vessel-panel]"))return;
+      if(e.target.closest?.(".pos-table-wrap"))return;
+      setSel(null);
+      setSelectedAISVessels([]);
     };
+    document.addEventListener("mousedown",closeOnOutside);
+    return()=>document.removeEventListener("mousedown",closeOnOutside);
+  },[selV]);
 
-    setBunkers(newBunkers);
-    setBFetched(true);
-
-    // PERSIST: Save latest so refresh doesn't wipe it
-    await supabase.from("dashboard").upsert({ key: "last-bunker-prices", value: JSON.stringify(newBunkers) }, { onConflict: "key" });
-
-    // HISTORY: Save a snapshot for the graph
-    const histKey = `bunker-hist-${newBunkers.date.replaceAll("/", "-").replaceAll(" ", "-")}`;
-    await supabase.from("dashboard").upsert({ key: histKey, value: JSON.stringify(newBunkers) }, { onConflict: "key" });
-
-  } catch(e) {
-    setBError("Fetch failed. Using fallback.");
-  } finally { setBLoading(false); }
-}
-
-  function BunkerChart({ history }) {
-  if (!history || history.length < 2) return null;
-  
-  const W = 400, H = 120, P = 20;
-  // We will track ARA VLSFO as the primary trend line
-  const vals = history.map(h => h.ARA_VLSFO || 0);
-  const min = Math.min(...vals) * 0.98;
-  const max = Math.max(...vals) * 1.02;
-  const range = max - min || 1;
-
-  const points = history.map((h, i) => {
-    const x = P + (i / (history.length - 1)) * (W - P * 2);
-    const y = H - P - ((h.ARA_VLSFO - min) / range) * (H - P * 2);
-    return `${x},${y}`;
-  }).join(" ");
-
-  return (
-    <div style={{ marginTop: 10, background: 'rgba(0,0,0,0.2)', borderRadius: 6, padding: 8 }}>
-      <div style={{ fontSize: 10, color: '#8b949e', marginBottom: 4 }}>ARA VLSFO Trend (Last {history.length} updates)</div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }}>
-        <polyline fill="none" stroke="#58a6ff" strokeWidth="2" strokeLinejoin="round" points={points} />
-        {/* Min/Max Labels */}
-        <text x={W - 5} y={P} fill="#8b949e" fontSize="10" textAnchor="end">${Math.round(max)}</text>
-        <text x={W - 5} y={H - 5} fill="#8b949e" fontSize="10" textAnchor="end">${Math.round(min)}</text>
-      </svg>
-    </div>
-  );
-}
-  
-  // Fleet stats
-  const openVessels = vessels.filter(v=>v.date&&v.openPort&&v.openPort!=="EMPLOYED");
-  
-  // Helper to calculate days between fileDate and open date
-  const calcFixingWindow = (v) => {
-    if(!v?.date)return null;
-    const fileDt=parseDashboardDate(v.updatedAt||v.fileDate||new Date()); if(!fileDt)return null;
-    const openDt=parseDashboardDate(v.date,fileDt); if(!openDt)return null;
-    if(!/\b\d{2,4}\b/.test(String(v.date))){
-      const c=[new Date(fileDt.getFullYear()-1,openDt.getMonth(),openDt.getDate()),new Date(fileDt.getFullYear(),openDt.getMonth(),openDt.getDate()),new Date(fileDt.getFullYear()+1,openDt.getMonth(),openDt.getDate())];
-      c.sort((a,b)=>Math.abs(a-fileDt)-Math.abs(b-fileDt)); openDt.setTime(c[0].getTime());
+  const selFixes=sel?cargoes.filter(c=>c.vessel&&c.vessel.toLowerCase()===sel.toLowerCase()):[];
+  const cTokens=cSearch.trim().toLowerCase().split(",").map(g=>g.trim().split(/\s+/).filter(Boolean)).filter(g=>g.length);
+  const filtC=useMemo(()=>{
+    const now=new Date();
+    const startOfWeek=(d)=>{const r=new Date(d);r.setHours(0,0,0,0);r.setDate(r.getDate()-r.getDay()+1);return r;};
+    const thisWeekStart=startOfWeek(now);
+    const lastWeekStart=new Date(thisWeekStart);lastWeekStart.setDate(lastWeekStart.getDate()-7);
+    const lastWeekEnd=new Date(thisWeekStart);
+    const ytdStart=new Date(now.getFullYear(),0,1);
+    let list=cargoes.filter(c=>{
+      if(cTimeFilter){
+        const d=new Date(c.updated||0);
+        if(cTimeFilter==="tw"&&(d<thisWeekStart||d>now))return false;
+        if(cTimeFilter==="lw"&&(d<lastWeekStart||d>=lastWeekEnd))return false;
+        if(cTimeFilter==="ytd"&&d<ytdStart)return false;
+      }
+      if(cFilter==="FIXED"&&c.status!=="FIXED")return false;
+      if(cFilter==="SUBS"&&c.status!=="SUBS")return false;
+      if(cFilter==="FAILED"&&c.status!=="FAILED")return false;
+      
+      if(cDateFilter){const hay=(c.from||" ")+" "+(c.to||"");if(!hay.toLowerCase().includes(cDateFilter.toLowerCase()))return false;}
+      if(!cTokens.length)return true;
+      return cTokens.some(terms=>terms.every(t=>JSON.stringify(c).toLowerCase().includes(t)));
+    });
+    if(cSortK){
+      list=[...list].sort((a,b)=>{
+        const colToField={Status:"status",Vessel:"vessel",Charterer:"charterer",Cargo:"cargo",Qty:"qty",Load:"load",Disch:"disch",LaycanStart:"from",LaycanEnd:"to",Freight:"freight",Comment:"comment",Updated:"updated"};
+        const fld=colToField[cSortK]||cSortK;
+        let av=a[fld]||"",bv=b[fld]||"";
+        if(fld==="updated"){av=av?new Date(av).getTime():0;bv=bv?new Date(bv).getTime():0;return(av-bv)*cSortD;}
+        return String(av).toLowerCase()<String(bv).toLowerCase()?-cSortD:String(av).toLowerCase()>String(bv).toLowerCase()?cSortD:0;
+      });
     }
-    const diff=Math.round((openDt-fileDt)/86400000);
-    return Math.abs(diff)<=120?diff:null;
-  };
-
-  const withDays = openVessels.map(v => ({ ...v, days: calcFixingWindow(v) })).filter(v => v.days !== null && v.days >= 0);
-  const fleetAvg = withDays.length ? Math.round(withDays.reduce((a,b)=>a+b.days,0)/withDays.length) : null;
-
-  const regionByLabel={};
-  const safeRegionHistory=Array.isArray(regionHistory)?regionHistory:[];
-  for(const row of safeRegionHistory){
-    const lab=String(row.snapshot_label||"").toUpperCase(), region=row.region, seg=row.segment||"Unknown";
-    regionByLabel[lab]||={};
-    regionByLabel[lab][region]||={ships:0,segments:{}};
-    regionByLabel[lab][region].ships+=Number(row.ships||0);
-    regionByLabel[lab][region].segments[seg]=(regionByLabel[lab][region].segments[seg]||0)+Number(row.ships||0);
-  }
-  const getRegionCount=(label,region)=>{
-    const r=regionByLabel[label]?.[region];
-    return r?Number(r.ships||0):0;
-  };
-  const currentRegionRows=REGION_ORDER.map(region=>({
-    region,now:getRegionCount("NOW",region),d14:getRegionCount("14D",region),d30:getRegionCount("30D",region),d90:getRegionCount("90D",region)
-  })).filter(x=>x.now||x.d14||x.d30||x.d90);
-  const regionTotals={
-    now:currentRegionRows.reduce((a,x)=>a+x.now,0),
-    d14:currentRegionRows.reduce((a,x)=>a+x.d14,0),
-    d30:currentRegionRows.reduce((a,x)=>a+x.d30,0),
-    d90:currentRegionRows.reduce((a,x)=>a+x.d90,0)
-  };
-
-  const latestPositionUpdate=(()=>{const ds=(vessels||[]).map(v=>parseDashboardDate(v.updatedAt||v.fileDate)).filter(Boolean);return ds.length?new Date(Math.max(...ds.map(d=>d.getTime()))):null;})();
-
-  // Build chart data from history + today
-  const today = new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"});
-  const safeHistory=Array.isArray(history)?history:[];
-  const chartSnaps = [...safeHistory];
-  // Patch today's live data in
-  if (fleetAvg !== null) {
-    const todayIdx = chartSnaps.findIndex(h=>h.date===today);
-    const todayByOp = {};
-    
-    for(const v of openVessels){
-      const d = calcFixingWindow(v);
-      if(d === null || d < 0) continue;
-      const op = (v.operator||"Unknown").trim();
-      todayByOp[op] = (todayByOp[op]||[]).concat(d);
+    if(cTagFilter) list=list.filter(c=>(c.tag||"").toLowerCase()===cTagFilter.toLowerCase());
+    if(cGradeFilter){
+      let allGroups=[];try{const raw=localStorage.getItem("signal_cargo_filter_groups");allGroups=raw?JSON.parse(raw):[];}catch{}
+      const grp=allGroups.find(g=>g.id===cGradeFilter);
+      if(grp){
+        const fieldMap={grade:"cargo",load:"load",disch:"disch",charterer:"charterer",laycan:"from",tag:"tag"};
+        const field=fieldMap[grp.category||"grade"]||"cargo";
+        list=list.filter(c=>{const val=(c[field]||"").toLowerCase();return grp.aliases.some(a=>val.includes(a.toLowerCase()));});
+      } else {
+        list=list.filter(c=>(c.cargo||"").toLowerCase().includes(cGradeFilter.toLowerCase()));
+      }
     }
-    
-    const todayOpAvgs = Object.fromEntries(Object.entries(todayByOp).map(([op,ds])=>[op,Math.round(ds.reduce((a,b)=>a+b,0)/ds.length)]));
-    const todaySnap = {date:today,fixingAvg:fleetAvg,total:vessels.length,openCount:openVessels.length,byOp:todayOpAvgs};
-    if (todayIdx>=0) chartSnaps[todayIdx]=todaySnap;
-    else chartSnaps.push(todaySnap);
-  }
-  const chartData = chartSnaps.slice(-30).map(h=>{
-    const raw=Number(h.fixingAvg);
-    const avg=Number.isFinite(raw)&&Math.abs(raw)<=120?Math.abs(raw):null;
-    return {date:h.date,avg,open:h.openCount,total:h.total};
-  }).filter(h=>h.avg!=null);
+    return list;
+  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cTagFilter,cGradeFilter]);
 
-  const fixingSegmentChartData=(()=>{
-    const byDate={};
-    const rows=Array.isArray(fixingSegmentHistory)?fixingSegmentHistory:[];
-    for(const r of rows){
-      const d=r.snapshot_date; if(!d)continue;
-      byDate[d]||={date:d};
-      byDate[d][r.segment]=Number(r.avg_days);
-    }
-    return Object.values(byDate).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
-  })();
-  const activeFixingSegments=(segmentFilter==="All"?SEGMENT_ORDER.filter(s=>s!=="All"): [segmentFilter]).filter(s=>fixingSegmentChartData.some(d=>d[s]!=null));
+  const FILTER_GROUPS=[
+    {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"],["HIDE_EMP","Hide Employed"]]},
+    {label:"Region",items:[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]]},
+  ];
 
-  // ── Ocean theme tokens ──────────────────────────────────────────────────────
-  const D = {
-    bg:       "#070f1c",
-    bg2:      "#0d1a2e",
-    bg3:      "#111f35",
-    bg4:      "#162540",
-    border:   "rgba(58,130,246,0.14)",
-    border2:  "rgba(58,130,246,0.22)",
-    tx:       "#e8f2ff",
-    dim:      "rgba(160,200,255,0.6)",
-    faint:    "rgba(120,160,220,0.45)",
-    blue:     "#58a6ff",
-    green:    "#3fb950",
-    amber:    "#f5a623",
-    purple:   "#a78bfa",
-    red:      "#ff6b6b",
-    pink:     "#fd79a8",
-  };
+  return(
+    <div style={{minHeight:"100vh",background:C.bg,color:C.tx,fontFamily:"Inter,sans-serif",fontSize:mobile?11:13}}>
+      {/* Mobile globals */}
+      {mobile&&<style>{`
+        * { -webkit-tap-highlight-color: transparent; }
+        ::-webkit-scrollbar { display: none; }
+        html { overflow-x: hidden; }
+      `}</style>}
+      {/* ── PIN overlay — rendered on top, app loads underneath ── */}
+      {!unlocked&&(
+        <div style={{
+          position:"fixed",inset:0,zIndex:99999,overflow:"hidden",
+          background:"linear-gradient(rgba(3,12,25,.88),rgba(3,12,25,.94)),url('/login-tanker-bg.png') center/cover no-repeat",
+          display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,system-ui,sans-serif"
+        }}>
+          <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true"
+            style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",opacity:0.08}}>
+            <defs>
+              <linearGradient id="loginRoute" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.03"/>
+                <stop offset="45%" stopColor="#58a6ff" stopOpacity="0.42"/>
+                <stop offset="100%" stopColor="#43e97b" stopOpacity="0.10"/>
+              </linearGradient>
+              <pattern id="loginGrid" width="44" height="44" patternUnits="userSpaceOnUse">
+                <path d="M44 0H0V44" fill="none" stroke="#58a6ff" strokeOpacity="0.05" strokeWidth="0.7"/>
+              </pattern>
+              <filter id="loginGlow"><feGaussianBlur stdDeviation="2.6"/></filter>
+            </defs>
+            <rect width="1600" height="900" fill="url(#loginGrid)" opacity="0.55"/>
+            <g fill="none" stroke="#7aa8da" strokeOpacity="0.10" strokeWidth="1.2">
+              <path d="M120 315 C225 245 330 255 410 320 C475 374 470 440 414 515 C370 575 330 625 292 700"/>
+              <path d="M515 280 C590 225 680 225 747 270 C805 310 807 365 772 410 C733 458 692 486 658 545"/>
+              <path d="M765 295 C850 230 960 220 1042 262 C1110 298 1153 345 1188 405 C1128 425 1070 430 1022 465 C978 496 953 535 915 575"/>
+              <path d="M1080 575 C1148 535 1222 538 1278 580 C1310 605 1312 645 1292 674 C1240 700 1188 696 1140 672"/>
+            </g>
+            <g fill="none" strokeLinecap="round">
+              <path d="M980 315 C885 365 804 410 716 458 C627 506 533 520 427 500" stroke="url(#loginRoute)" strokeWidth="1.9"/>
+              <path d="M1090 405 C997 414 914 438 836 478 C760 518 683 558 596 578" stroke="#43e97b" strokeOpacity="0.17" strokeWidth="1.25"/>
+              <path d="M428 500 C360 474 293 455 220 463" stroke="#58a6ff" strokeOpacity="0.14" strokeWidth="1.05"/>
+            </g>
+            <g>
+              {[[427,500,"#58a6ff"],[716,458,"#58a6ff"],[980,315,"#43e97b"],[836,478,"#43e97b"],[596,578,"#58a6ff"]].map(([cx,cy,col],i)=>(
+                <g key={i}>
+                  <circle cx={cx} cy={cy} r="3.2" fill={col} opacity="0.9"/>
+                  <circle cx={cx} cy={cy} r="8" fill="none" stroke={col} strokeOpacity="0.18"/>
+                </g>
+              ))}
+            </g>
+          </svg>
 
-  const card = (label, val, sub, col) => (
-    <div style={{background:D.bg3,border:"1px solid "+D.border2,borderRadius:8,padding:"12px 18px",flex:"1 1 120px",position:"relative",overflow:"hidden"}}>
-      <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:col||D.blue,opacity:0.7,borderRadius:"8px 8px 0 0"}}/>
-      <div style={{fontSize:10,fontWeight:700,color:D.faint,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}}>{label}</div>
-      <div style={{fontSize:26,fontWeight:800,color:col||D.tx,lineHeight:1}}>{val??"—"}</div>
-      {sub&&<div style={{fontSize:11,color:D.faint,marginTop:4}}>{sub}</div>}
-    </div>
-  );
+          <div style={{
+            position:"absolute",right:"clamp(18px,4vw,64px)",top:"50%",transform:"translateY(-50%)",
+            width:310,padding:"16px 17px",borderRadius:12,zIndex:1,
+            background:"rgba(4,16,33,.58)",border:"1px solid rgba(88,166,255,.12)",
+            backdropFilter:"blur(10px)",color:"#dcecff"
+          }}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}>
+              <div style={{fontSize:9,fontWeight:800,letterSpacing:".14em",color:"#58a6ff"}}>LATEST SHIPPING NEWS</div>
+              <div style={{fontSize:8,color:"rgba(175,205,240,.35)"}}>{loginFeedLoading?"UPDATING":"RSS"}</div>
+            </div>
+            {(loginNews.length?loginNews:[
+              {title:"Latest tanker and shipping headlines will appear here",source:"RSS feed"},
+              {title:"Feed refreshes automatically every 10 minutes",source:"Live"}
+            ]).slice(0,5).map((n,i)=><a key={i} href={n.link||undefined} target={n.link?"_blank":undefined} rel="noreferrer"
+              style={{display:"block",textDecoration:"none",color:"inherit",padding:"9px 0",borderTop:i?"1px solid rgba(88,166,255,.08)":"none"}}>
+              <div style={{fontSize:10.5,fontWeight:650,lineHeight:1.35,color:"rgba(225,239,255,.88)"}}>{n.title}</div>
+              <div style={{fontSize:8.5,marginTop:4,color:"rgba(125,178,240,.46)"}}>
+                {n.source||"Shipping"}{n.published?"  ·  "+n.published:""}
+              </div>
+            </a>)}
+          </div>
 
-  const secHead = t => (
-    <div style={{fontSize:11,fontWeight:700,color:D.faint,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
-      <span style={{display:"inline-block",width:2,height:12,background:D.blue,borderRadius:2,opacity:0.8}}/>
-      {t}
-    </div>
-  );
+          <div style={{
+            position:"absolute",left:"50%",bottom:78,transform:"translateX(-50%)",zIndex:3,
+            display:"grid",gridTemplateColumns:"repeat(4,minmax(115px,1fr))",
+            minWidth:"min(650px,calc(100vw - 36px))",
+            border:"1px solid rgba(88,166,255,.11)",borderRadius:10,overflow:"hidden",
+            background:"rgba(4,16,33,.58)",backdropFilter:"blur(7px)"
+          }}>
+            {[
+              ["BRENT",loginMarkets.brent,"USD/BBL"],
+              ["MGO USG",loginMarkets.mgoUsg,"USD/MT"],
+              ["MGO ARA",loginMarkets.mgoAra,"USD/MT"],
+              ["MGO SPORE",loginMarkets.mgoSingapore,"USD/MT"]
+            ].map(([label,val,unit],i)=><div key={label} style={{padding:"9px 12px",textAlign:"center",borderLeft:i?"1px solid rgba(88,166,255,.08)":"none"}}>
+              <div style={{fontSize:10.5,fontWeight:850,letterSpacing:".10em",color:"rgba(125,178,240,.54)"}}>{label}</div>
+              <div style={{fontSize:18,fontWeight:850,color:val!=null?"#eef6ff":"rgba(225,239,255,.30)",marginTop:2}}>
+                {val!=null?(typeof val==="number"?val.toLocaleString(undefined,{maximumFractionDigits:2}):val):"—"}
+              </div>
+              <div style={{fontSize:8.5,color:"rgba(125,178,240,.34)"}}>{unit}</div>
+            </div>)}
+          </div>
 
-  const panel = (children, extraStyle={}) => (
-    <div style={{background:D.bg2,border:"1px solid "+D.border,borderRadius:10,padding:"16px 18px",position:"relative",overflow:"hidden",...extraStyle}}>
-      <div style={{position:"absolute",inset:0,backgroundImage:"linear-gradient(rgba(30,100,200,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(30,100,200,0.03) 1px,transparent 1px)",backgroundSize:"40px 40px",pointerEvents:"none"}}/>
-      <div style={{position:"relative",zIndex:1}}>{children}</div>
-    </div>
-  );
+          <div style={{
+            position:"relative",zIndex:2,width:410,maxWidth:"calc(100vw - 32px)",
+            background:"linear-gradient(180deg,rgba(9,24,46,.94),rgba(6,17,34,.96))",
+            border:"1px solid rgba(88,166,255,.18)",borderRadius:16,padding:"30px 34px 26px",
+            boxShadow:"0 20px 60px rgba(0,0,0,.44)",
+            backdropFilter:"blur(18px)",WebkitBackdropFilter:"blur(18px)"
+          }}>
+            <div style={{textAlign:"center",marginBottom:24}}>
+              <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.22em",textTransform:"uppercase",color:"rgba(125,178,240,.48)",marginBottom:7}}>
+                Tanker Intelligence Platform
+              </div>
+              <div style={{display:"flex",justifyContent:"center",alignItems:"baseline",gap:7}}>
+                <span style={{fontSize:25,fontWeight:800,color:"#eef6ff"}}>Broker</span>
+                <span style={{fontSize:25,fontWeight:800,color:"#43e97b"}}>Dashboard</span>
+              </div>
+              <div style={{fontSize:11,color:"rgba(135,170,215,.42)",marginTop:8,letterSpacing:"0.10em",textTransform:"uppercase"}}>
+                {guestMode?"Guest access":"Secure access"}
+              </div>
+            </div>
 
-  return (
-    <div style={{display:"flex",flexDirection:"column",gap:14,background:D.bg,borderRadius:10,padding:"16px",fontFamily:"Inter,sans-serif"}}>
+            <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:22}}>
+              {[0,1,2,3].map(i=>(
+                <div key={i} style={{
+                  width:52,height:58,borderRadius:10,
+                  background:pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",
+                  border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.56)":"rgba(88,166,255,.18)"),
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:20,color:"#79c0ff",transition:"all .16s"
+                }}>{pinInput.length>i?"●":""}</div>
+              ))}
+            </div>
 
-      {/* ── Hero banner ── */}
-      <div style={{position:"relative",borderRadius:10,overflow:"hidden",background:"#070f1c",border:"1px solid "+D.border2}}>
-        <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse 80% 100% at 75% 100%,#0d2a4a 0%,#070f1c 65%)"}}/>
-        <div style={{position:"absolute",inset:0,backgroundImage:"linear-gradient(rgba(30,100,200,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(30,100,200,0.06) 1px,transparent 1px)",backgroundSize:"48px 48px"}}/>
-        <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse 50% 60% at 80% 70%,rgba(30,90,180,0.25) 0%,transparent 70%)"}}/>
-        {/* ship arcs */}
-        <svg style={{position:"absolute",bottom:0,right:0,width:"55%",height:"100%",opacity:0.12}} viewBox="0 0 500 200" preserveAspectRatio="xMaxYMax slice">
-          <ellipse cx="420" cy="220" rx="300" ry="160" fill="none" stroke="rgba(88,166,255,1)" strokeWidth="1"/>
-          <ellipse cx="420" cy="220" rx="200" ry="105" fill="none" stroke="rgba(88,166,255,1)" strokeWidth="1"/>
-          <ellipse cx="420" cy="220" rx="110" ry="58" fill="none" stroke="rgba(88,166,255,1)" strokeWidth="0.8"/>
-          <circle cx="120" cy="160" r="2" fill="rgba(88,200,255,1)"/>
-          <circle cx="260" cy="175" r="2" fill="rgba(20,200,120,1)"/>
-          <circle cx="390" cy="168" r="2" fill="rgba(88,166,255,1)"/>
-          <path d="M120,160 Q190,140 260,175" fill="none" stroke="rgba(88,200,255,0.8)" strokeWidth="0.8" strokeDasharray="4,3"/>
-          <path d="M260,175 Q325,155 390,168" fill="none" stroke="rgba(20,200,120,0.8)" strokeWidth="0.8" strokeDasharray="4,3"/>
-        </svg>
-        <div style={{position:"relative",zIndex:2,padding:"22px 26px 18px"}}>
-          <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",color:"rgba(120,180,255,0.55)",marginBottom:6}}>Signal — Tanker Intelligence</div>
-          <div style={{fontSize:22,fontWeight:800,color:"#e8f2ff",lineHeight:1.2,marginBottom:4}}>Market Dashboard</div>
-          <div style={{fontSize:12,color:"rgba(140,190,255,0.5)"}}>
-            Clean products · UKC / Med / TA ·&nbsp;
-            {new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:9,maxWidth:260,margin:"0 auto"}}>
+              {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=>(
+                <button key={i} disabled={d===""}
+                  onClick={()=>{
+                    if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}
+                    if(d===""||typeof d!=="number")return;
+                    const next=pinInput+String(d);
+                    setPinInput(next);
+                    if(next.length===4) submitPin(next);
+                  }}
+                  style={{
+                    height:50,borderRadius:9,
+                    border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.17)"),
+                    background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.76),rgba(10,27,53,.8))",
+                    color:d===""?"transparent":"rgba(184,216,255,.88)",
+                    fontSize:17,fontWeight:650,cursor:d===""?"default":"pointer",
+                    fontFamily:"inherit",visibility:d===""?"hidden":"visible"
+                  }}>{d}</button>
+              ))}
+            </div>
+
+            <div style={{height:22,marginTop:14,textAlign:"center"}}>
+              {pinError&&<span style={{fontSize:11,color:"rgba(255,107,107,.9)",letterSpacing:"0.05em"}}>Incorrect code</span>}
+            </div>
+
+            <div style={{borderTop:"1px solid rgba(88,166,255,.10)",marginTop:3,paddingTop:16,textAlign:"center",
+              fontSize:9,fontWeight:700,color:"rgba(120,160,220,.34)",letterSpacing:"0.12em",textTransform:"uppercase"}}>
+              Positions&nbsp;&nbsp;·&nbsp;&nbsp;Cargoes&nbsp;&nbsp;·&nbsp;&nbsp;Freight&nbsp;&nbsp;·&nbsp;&nbsp;Fleet Intelligence
+            </div>
           </div>
         </div>
-      </div>
-
-      <NewsTicker/>
-
-      {/* ── KPI row ── */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(240px,360px)",gap:8}}>
-        {card(
-          "Positions latest",
-          positionMeta.count??vessels.length,
-          positionMeta.updatedAt
-            ? "ships · updated "+new Date(positionMeta.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short"})+" "+new Date(positionMeta.updatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})
-            : `${openVessels.length} currently open`,
-          D.blue
-        )}
-      </div>
-
-      {/* ── Tanker market tape ── */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.65fr) minmax(320px,.65fr)",gap:12}}>
-        {panel(
-          <>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-              {secHead("Energy / tanker-linked commodities")}
-              <span style={{fontSize:9,color:D.faint}}>{commodities?.updatedAt?new Date(commodities.updatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):""}</span>
+      )}
+      {pendingDel&&(
+        <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",
+          background:C.bg2,border:"1px solid "+C.red,borderRadius:8,padding:"12px 20px",
+          zIndex:9999,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.5)",
+          fontFamily:"sans-serif",fontSize:12,minWidth:300}}>
+          <span style={{color:C.tx,flex:1}}>Delete <strong>{pendingDel.label}</strong>?</span>
+          <button onClick={()=>{
+            if(pendingDel.id==="__SELECTED__"){[...selVessels].forEach(v=>onDelV(v));setSelVessels(new Set());}
+            else if(pendingDel.type==="clearsaved"){clearSavedVessels();}
+            else if(pendingDel.type==="vessel"||pendingDel.type==="all") onDelV(pendingDel.id);
+            else if(pendingDel.type==="cargo") onDelC(pendingDel.id);
+            else if(pendingDel.type==="allcargo"){
+              if(pendingDel.id==="__SELCARGO__"){[...selCargoes].forEach(id=>onDelC(id));setSelCargoes(new Set());}
+              else onDelC("__ALLCARGO__");
+            }
+            setPendingDel(null);
+          }} style={{background:C.red,border:"none",borderRadius:5,color:"#fff",padding:"5px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>Delete</button>
+          <button onClick={()=>setPendingDel(null)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,padding:"5px 14px",cursor:"pointer",fontSize:12}}>Cancel</button>
+        </div>
+      )}
+      {headerHidden && (
+        <div onClick={()=>setHeaderHidden(false)}
+          style={{ position:"fixed", top:0, left:0, right:0, height:10, zIndex:201, cursor:"pointer",
+            background:"rgba(58,130,246,0.15)", borderBottom:"1px solid rgba(58,130,246,0.25)" }}/>
+      )}
+      {/* ── APP HEADER ── */}
+      <div style={{
+        background:"linear-gradient(135deg, #070f1c 0%, #0c1a32 50%, #081426 100%)",
+        borderBottom:"1px solid rgba(58,130,246,0.18)",
+        position:"sticky",top:0,zIndex:200,
+        transform: headerHidden ? "translateY(calc(-100% - 2px))" : "translateY(0)",
+        opacity:headerHidden?0.96:1,
+        transition:"transform 280ms cubic-bezier(.22,.61,.36,1), opacity 220ms ease",
+        willChange:"transform",
+      }}>
+        {/* Top bar: brand + Ask AI + Intel Vault + utilities */}
+        <div style={{display:"flex",alignItems:"center",gap:mobile?6:12,padding:mobile?"8px 12px 0":"10px 20px 0"}}>
+          {mobile&&navConfig.mode==="sidebar"&&(
+            <button onClick={()=>setMobileNavOpen(true)} aria-label="Open navigation" style={{
+              width:38,height:38,flex:"0 0 38px",display:"flex",alignItems:"center",justifyContent:"center",
+              marginBottom:8,borderRadius:8,border:"1px solid rgba(88,166,255,.24)",
+              background:"rgba(11,27,50,.82)",color:"#9ec5ff",fontSize:22,lineHeight:1,
+              cursor:"pointer",fontFamily:"inherit",WebkitTapHighlightColor:"transparent"
+            }}>☰</button>
+          )}
+          <div style={{flexShrink:0,display:"flex",flexDirection:"column",gap:1,paddingBottom:mobile?8:10}}>
+            {!mobile&&<div style={{fontSize:9,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",color:"rgba(120,180,255,0.45)"}}>Tanker Intel Platform</div>}
+            <div style={{display:"flex",alignItems:"baseline",gap:mobile?4:6}}>
+              <span style={{fontSize:mobile?14:18,fontWeight:800,color:"#e8f2ff",letterSpacing:"0.02em"}}>Broker</span>
+              <span style={{fontSize:mobile?14:18,fontWeight:800,color:"#43e97b",letterSpacing:"0.02em"}}>Dashboard</span>
+              {!mobile&&<span style={{fontSize:10,color:"rgba(140,190,255,0.35)",marginLeft:2}}>
+                {new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
+              </span>}
+              {guestMode&&(
+                <span style={{fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:4,
+                  background:"rgba(250,163,86,0.12)",border:"1px solid rgba(250,163,86,0.3)",
+                  color:"rgba(250,163,86,0.8)",letterSpacing:"0.1em",textTransform:"uppercase",marginLeft:4}}>
+                  Guest
+                </span>
+              )}
             </div>
-            {commodities?<CommodityTape data={commodities}/>:<div style={{fontSize:11,color:D.faint,padding:"8px 0"}}>Loading commodity prices…</div>}
-          </>,
-          {minWidth:0}
-        )}
-        {panel(
-          <>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-              {secHead("VLCC · TD3C MEG → China")}
-              <span style={{fontSize:9,color:D.faint}}>Baltic weekly</span>
-            </div>
-            {vlcc?.latest?<div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:10,alignItems:"center"}}>
-              <div>
-                <div style={{fontSize:22,fontWeight:900,color:D.tx}}>${Math.round(Number(vlcc.latest.tce)/1000)}k<span style={{fontSize:10,color:D.faint,fontWeight:600}}>/day</span></div>
-                <div style={{fontSize:9,color:D.faint,marginTop:2}}>{vlcc.latest.date||""} · {vlcc.latest.ws!=null?"WS "+vlcc.latest.ws:"TD3C"}</div>
+            {/* Inline sync status */}
+            {offlineIndicator&&!mobile&&(
+              <div style={{fontSize:9,color:"rgba(100,140,200,0.4)",marginTop:2,letterSpacing:"0.04em"}}>
+                {offlineIndicator}
               </div>
-              <VlccSparkline history={vlcc.history||[]}/>
-            </div>:<div style={{fontSize:11,color:D.faint,padding:"8px 0"}}>Loading VLCC earnings…</div>}
-          </>,
-          {minWidth:0}
-        )}
+            )}
+          </div>
+          {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}
+          {/* ASK AI — hidden on mobile (too small) */}
+          {!mobile&&(
+            <div style={{flex:1,minWidth:0,position:"relative",paddingBottom:10}}>
+              <Suspense fallback={null}><AskAIStrip vessels={vessels} cargoes={cargoes} intelItems={intelItems}/></Suspense>
+            </div>
+          )}
+          {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}
+          {/* INTEL VAULT — hidden on mobile */}
+          {!mobile&&(
+            <div style={{flex:1,minWidth:0,paddingBottom:10}}
+              onFocusCapture={e=>{e.currentTarget.style.flex="2";e.currentTarget.style.zIndex="10";}}
+              onBlurCapture={e=>{e.currentTarget.style.flex="1";e.currentTarget.style.zIndex="";}}
+            >
+              <Suspense fallback={null}><IntelVaultStrip onVaultUpdate={setIntelItems}/></Suspense>
+            </div>
+          )}
+          {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}          <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0,paddingBottom:10}}>
+            {!mobile&&<AICreditWidget/>}
+            {/* ⚙ Settings dropdown */}
+            <SettingsMenu mobile={mobile} onToggleLayout={onToggleLayout} layoutOverride={layoutOverride}/>
+          </div>
+        </div>
+        {/* Configurable navigation */}
+        {navConfig.mode==="classic"&&<div style={{display:"flex",padding:mobile?"0 8px":"0 20px",overflowX:"auto",scrollbarWidth:"none"}}>
+          {navIds.map(id=>{const m=navMeta[id],active=tab===id,count=navCount(id);return <button key={id} onClick={()=>goNav(id)} style={{display:"flex",alignItems:"center",gap:6,padding:mobile?"0 12px":"10px 16px",height:mobile?44:undefined,background:"transparent",border:"none",borderBottom:"2px solid "+(active?m.col:"transparent"),color:active?m.col:"rgba(120,155,210,.5)",cursor:"pointer",fontSize:12,fontWeight:active?700:500,textTransform:"uppercase",letterSpacing:".07em",whiteSpace:"nowrap"}}>{m.label}{count>0&&<span style={{fontSize:9}}>{count.toLocaleString()}</span>}</button>})}
+        </div>}
+        {navConfig.mode==="grouped"&&<div>
+          <div style={{display:"flex",padding:"0 20px",height:34,alignItems:"end",gap:4}}>
+            {navConfig.groups.filter(g=>g.tabs.some(id=>navIds.includes(id))).map(g=>{const active=g.tabs.includes(tab);return <button key={g.id} onClick={()=>{const id=g.tabs.find(x=>navIds.includes(x));if(id)goNav(id)}} style={{height:34,padding:"0 15px",border:"none",borderBottom:"2px solid "+(active?"#58a6ff":"transparent"),background:"transparent",color:active?"#9ec5ff":"rgba(120,155,210,.5)",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",cursor:"pointer"}}>{g.label}</button>})}
+          </div>
+          {(()=>{const g=navConfig.groups.find(x=>x.tabs.includes(tab))||navConfig.groups[0];return g?<div style={{display:"flex",gap:3,padding:"5px 20px 7px",background:"rgba(7,15,29,.35)",overflowX:"auto"}}>{g.tabs.filter(id=>navIds.includes(id)).map(id=>{const m=navMeta[id],active=tab===id;return <button key={id} onClick={()=>goNav(id)} style={{display:"flex",gap:6,alignItems:"center",padding:"5px 10px",borderRadius:5,border:"1px solid "+(active?m.col+"66":"transparent"),background:active?m.col+"12":"transparent",color:active?m.col:"rgba(140,170,215,.55)",cursor:"pointer",fontSize:11}}><span>{m.icon}</span>{m.label}</button>})}</div>:null})()}
+        </div>}
       </div>
 
-      {/* ── Fixing window + bunker row ── */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(620px,1.45fr) minmax(430px,.85fr)",gap:12}}>
-        {panel(
-          <>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
-              {secHead("Fixing window by vessel size · days until open")}
-              <span style={{fontSize:9,color:D.faint}}>past positions · negative values excluded</span>
+      {/* Mobile sidebar navigation: animated overlay drawer.
+          Swipe in from the left edge to open; swipe left inside to close. */}
+      {mobile&&navConfig.mode==="sidebar"&&<>
+        {!mobileNavOpen&&<div
+          onTouchStart={e=>{mobileNavTouchX.current=e.touches?.[0]?.clientX??null}}
+          onTouchEnd={e=>{const x0=mobileNavTouchX.current,x1=e.changedTouches?.[0]?.clientX;if(x0!=null&&x1!=null&&x1-x0>55)setMobileNavOpen(true);mobileNavTouchX.current=null}}
+          style={{position:"fixed",left:0,top:0,bottom:0,width:20,zIndex:205,touchAction:"pan-y"}}
+        />}
+
+        <div
+          onClick={()=>setMobileNavOpen(false)}
+          aria-hidden={!mobileNavOpen}
+          style={{
+            position:"fixed",inset:0,zIndex:10000,
+            background:"rgba(1,7,16,.68)",
+            backdropFilter:"blur(3px)",WebkitBackdropFilter:"blur(3px)",
+            opacity:mobileNavOpen?1:0,
+            pointerEvents:mobileNavOpen?"auto":"none",
+            transition:"opacity 220ms ease"
+          }}
+        >
+          <aside
+            onClick={e=>e.stopPropagation()}
+            onTouchStart={e=>{mobileNavTouchX.current=e.touches?.[0]?.clientX??null}}
+            onTouchEnd={e=>{const x0=mobileNavTouchX.current,x1=e.changedTouches?.[0]?.clientX;if(x0!=null&&x1!=null&&x0-x1>55)setMobileNavOpen(false);mobileNavTouchX.current=null}}
+            style={{
+              width:"min(82vw,300px)",height:"100%",overflowY:"auto",
+              background:"linear-gradient(180deg,#07101e 0%,#0b1a30 55%,#081426 100%)",
+              borderRight:"1px solid rgba(88,166,255,.28)",
+              boxShadow:mobileNavOpen?"18px 0 50px rgba(0,0,0,.48)":"none",
+              padding:"12px 10px 20px",boxSizing:"border-box",touchAction:"pan-y",
+              transform:mobileNavOpen?"translate3d(0,0,0)":"translate3d(-105%,0,0)",
+              transition:"transform 320ms cubic-bezier(.22,.61,.36,1), box-shadow 260ms ease",
+              willChange:"transform"
+            }}
+          >
+            <div style={{height:44,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 8px 8px",borderBottom:"1px solid rgba(88,166,255,.13)",marginBottom:8}}>
+              <div>
+                <div style={{fontSize:9,fontWeight:800,letterSpacing:".16em",textTransform:"uppercase",color:"rgba(120,180,255,.45)"}}>Navigation</div>
+                <div style={{fontSize:15,fontWeight:800,color:"#e8f2ff",marginTop:2}}>Broker <span style={{color:"#43e97b"}}>Dashboard</span></div>
+              </div>
+              <button onClick={()=>setMobileNavOpen(false)} aria-label="Close navigation" style={{width:34,height:34,borderRadius:7,border:"1px solid rgba(88,166,255,.18)",background:"rgba(88,166,255,.06)",color:"rgba(180,210,245,.8)",fontSize:20,cursor:"pointer"}}>×</button>
             </div>
-            <div style={{display:"flex",gap:5,flexWrap:"wrap",margin:"-2px 0 8px"}}>
-              {SEGMENT_ORDER.map(seg=>{const active=segmentFilter===seg;return <button key={seg} onClick={()=>setSegmentFilter(seg)} style={{background:active?"rgba(88,166,255,.18)":D.bg3,border:"1px solid "+(active?D.blue:D.border2),borderRadius:5,color:active?D.tx:D.dim,fontFamily:"inherit",fontSize:10,fontWeight:active?800:600,padding:"4px 8px",cursor:"pointer"}}>{seg}</button>})}
+            {navIds.map((id,i)=>{const m=navMeta[id],active=tab===id,count=navCount(id);return <button key={id} onClick={()=>goNav(id)} style={{
+              width:"100%",height:46,display:"flex",alignItems:"center",gap:12,padding:"0 12px",
+              margin:"3px 0",borderRadius:8,border:"1px solid "+(active?m.col+"66":"rgba(88,166,255,.05)"),
+              borderLeft:"3px solid "+(active?m.col:"transparent"),background:active?m.col+"16":"transparent",
+              color:active?m.col:"rgba(180,205,238,.78)",cursor:"pointer",fontFamily:"inherit",textAlign:"left",
+              transform:mobileNavOpen?"translateX(0)":"translateX(-10px)",
+              opacity:mobileNavOpen?1:0.55,
+              transition:`transform 260ms cubic-bezier(.22,.61,.36,1) ${Math.min(i*18,180)}ms, opacity 220ms ease ${Math.min(i*18,180)}ms`
+            }}>
+              <span style={{width:24,textAlign:"center",fontSize:17,flexShrink:0}}>{m.icon}</span>
+              <span style={{fontSize:13,fontWeight:active?800:650,flex:1}}>{m.label}</span>
+              {count>0&&<span style={{fontSize:10,fontWeight:700,color:active?m.col:"rgba(130,165,210,.55)",background:"rgba(255,255,255,.035)",padding:"2px 6px",borderRadius:9}}>{count.toLocaleString()}</span>}
+            </button>})}
+          </aside>
+        </div>
+      </>}
+
+      <div style={{display:"flex",minWidth:0}}>
+        {navConfig.mode==="sidebar"&&!mobile&&<aside style={{
+          width:navConfig.collapsed?58:218,
+          flex:"0 0 auto",
+          borderRight:"1px solid rgba(58,130,246,.18)",
+          background:"linear-gradient(180deg,rgba(7,15,29,.94),rgba(7,15,29,.76))",
+          padding:"10px 8px",
+          minHeight:"calc(100vh - 92px)",
+          boxShadow:"inset -1px 0 0 rgba(88,166,255,.04)"
+        }}>
+          <button onClick={()=>{const n={...navConfig,collapsed:!navConfig.collapsed};setNavConfig(n);try{localStorage.setItem(NAV_KEY,JSON.stringify(n))}catch{};supabase.from("tag_settings").upsert({key:NAV_CLOUD_KEY,value:n,updated_at:new Date().toISOString()},{onConflict:"key"}).then(()=>{})}} style={{
+            width:"100%",height:30,border:"none",background:"transparent",
+            color:"rgba(135,175,225,.6)",cursor:"pointer",
+            textAlign:navConfig.collapsed?"center":"right",
+            padding:"0 8px",fontSize:16,fontFamily:"inherit"
+          }}>{navConfig.collapsed?"›":"‹"}</button>
+          {navIds.map(id=>{const m=navMeta[id],active=tab===id;return <button key={id} title={navConfig.collapsed?m.label:""} onClick={()=>goNav(id)} style={{
+            width:"100%",height:42,display:"flex",alignItems:"center",
+            justifyContent:navConfig.collapsed?"center":"flex-start",
+            gap:11,padding:navConfig.collapsed?0:"0 12px",
+            margin:"3px 0",borderRadius:7,
+            border:"1px solid "+(active?m.col+"66":"rgba(88,166,255,.05)"),
+            borderLeft:"3px solid "+(active?m.col:"transparent"),
+            background:active?m.col+"16":"transparent",
+            color:active?m.col:"rgba(165,195,235,.72)",
+            cursor:"pointer",fontFamily:"inherit",
+            boxShadow:active?"inset 0 0 0 1px "+m.col+"10":"none"
+          }}>
+            <span style={{width:22,textAlign:"center",fontSize:15,opacity:active?1:.8,flexShrink:0}}>{m.icon}</span>
+            {!navConfig.collapsed&&<span style={{
+              fontSize:12.5,fontWeight:active?750:600,
+              letterSpacing:".01em",whiteSpace:"nowrap"
+            }}>{m.label}</span>}
+          </button>})}
+        </aside>}
+        <div style={{padding:mobile?"8px 8px":"12px 20px",maxWidth:1900,margin:"0 auto",flex:1,minWidth:0,width:"100%"}}>
+      <TabErrorBoundary>
+
+        {/* ── POSITIONS ── */}
+        {tab==="pos"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setPosOutsiderView(false)}
+                style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer", fontFamily:"inherit",
+                  border:"1px solid "+(!posOutsiderView?"#58a6ff88":C.bd), background:!posOutsiderView?"#58a6ff22":"transparent",
+                  color:!posOutsiderView?"#58a6ff":C.faint }}>
+                Positions
+              </button>
+              <button onClick={()=>setPosOutsiderView(true)}
+                style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer", fontFamily:"inherit",
+                  border:"1px solid "+(posOutsiderView?"#f5a62388":C.bd), background:posOutsiderView?"#f5a62322":"transparent",
+                  color:posOutsiderView?"#f5a623":C.faint }}>
+                🌏 Outsiders
+              </button>
             </div>
-            {fixingSegmentError
-              ? <div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Fixing-window history unavailable: {fixingSegmentError}</div>
-              : fixingSegmentChartData.length<2
-                ? <div style={{color:D.faint,fontSize:12,padding:"24px 0",textAlign:"center"}}>Loading segment fixing-window history…</div>
-                : <SegmentFWChart data={fixingSegmentChartData} segments={activeFixingSegments} colors={SEGMENT_COLORS}/>}
-          </>,
-          {minWidth:0}
+
+            {posOutsiderView ? (
+              <Suspense fallback={<div style={{fontSize:12,color:C.faint}}>Loading…</div>}><OutsidersTab/></Suspense>
+            ) : (
+            <>
+
+            {/* ── Top row: Perfect grid (desktop) ── */}
+            {!mobile && (
+            <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
+              
+              {/* LEFT: Parse + Fixing (32%) */}
+              <div
+  style={{
+    width: mobile ? "100%" : "32%",
+    height: mobile ? "auto" : 460,
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    overflow: "hidden",
+    minHeight: 0
+  }}
+>
+  <div style={{ flex: "0 0 auto" }}>
+    <ParsePanel
+      vessels={vessels}
+      onAddVessels={onAddVessels}
+      onAddCargoes={onAddCargoes}
+      lockedMode="pos"
+      vesselDB={{}}
+    />
+  </div>
+
+  <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position:"relative" }}>
+    <TabbedPanel tabs={["History","Open Segments"]} active={fixingPanelTab} onChange={setFixingPanelTab} height="100%">
+      {fixingPanelTab==="History" ? (
+        <>
+          {/* CSS overrides: vivid opaque bar colours for FixingWindow */}
+          <style>{`
+            div[class*="fix"] div[style*="height"][style*="background"],
+            div[class*="Fix"] div[style*="height"][style*="background"],
+            div[class*="window"] div[style*="height"][style*="background"],
+            div[class*="Window"] div[style*="height"][style*="background"] {
+              filter: saturate(2) brightness(1.3) !important;
+              opacity: 1 !important;
+            }
+          `}</style>
+          <Suspense fallback={null}><FixingWindowChart
+            vessels={filtV}
+            filterActive={filtV.length !== vessels.length}
+            tagFilter={cTagFilter||null}
+          /></Suspense>
+        </>
+      ) : (
+        <Suspense fallback={null}><OpeningBreakdown
+          vessels={vessels14d.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+          filteredVessels={filtV.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+          bucketFilters={bucketFilters}
+          onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
+          fillHeight={true}
+        /></Suspense>
+      )}
+    </TabbedPanel>
+  </div>
+</div>
+ 
+              {/* CENTER: Filters — redesigned as horizontal scrolling rows (frees up the box
+                  that used to be split between this and the Regional Snapshot placeholder,
+                  since Regional Snapshot is now a tab inside the AIS Map panel on the right) */}
+              {!mobile&&(
+                <div style={{width:"34%",height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                  <HScrollStyle/>
+                  {(opFilter||bucketFilters.size>0)&&(
+                    <div style={{flexShrink:0,padding:"8px 12px 0 12px",display:"flex",flexDirection:"column",gap:4}}>
+                      {opFilter&&(
+                        <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:"rgba(79,195,247,0.08)",border:"1px solid rgba(79,195,247,0.25)",borderRadius:5}}>
+                          <span style={{fontSize:12,color:C.blue,fontWeight:700}}>🔍 Filtered: {opFilter}</span>
+                          <button onClick={()=>setOpFilter(null)} style={{background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:12,padding:"0 2px"}}>✕ Clear</button>
+                        </div>
+                      )}
+                      {bucketFilters.size>0&&(
+                        <div style={{fontSize:12,color:C.blue,cursor:"pointer"}} onClick={()=>setBucketFilters(new Set())}>
+                          ✕ Clear segment filter ({[...bucketFilters].join(", ")})
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"4px 12px",display:"flex",flexDirection:"column",justifyContent:"space-evenly"}}>
+                    {(()=>{
+                      const Chip=({active,onClick,col,children})=>(
+                        <button onClick={onClick} style={{...fbBig(active,col),textTransform:"uppercase"}}>{children}</button>
+                      );
+                      return (
+                        <>
+                          {/* Tags */}
+                          <FilterRow label="Tags" col="#79c0ff">
+                            {(()=>{const available=getTagListFor("position");return available.length?available.map(t=>(<Chip key={t} col="#79c0ff" active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t.toUpperCase()}</Chip>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>NONE</span>;})()}
+                            {posTagFilter.size>0&&<Chip col={C.red} active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}>✕</Chip>}
+                            {vessels.some(v=>(v.tag||"").trim().toUpperCase()==="OUTSIDER")&&(
+                              <button onClick={syncOutsiderTaggedVessels} title="Adds/updates OUTSIDER-tagged vessels with a known date+port into the static Outsider list"
+                                style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:5, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap",
+                                  border:"1px solid rgba(245,166,35,0.5)", background:"rgba(245,166,35,0.12)", color:"#f5a623" }}>
+                                🌏 Sync OUTSIDER tag → list
+                              </button>
+                            )}
+                            {outsiderSyncStatus&&<span style={{ fontSize:11, color:C.faint }}>{outsiderSyncStatus}</span>}
+                          </FilterRow>
+                          {/* Updated */}
+                          <FilterRow label="Updated" col={C.blue}>
+                            {[["","All"],["today","Today"],["week","This week"],["7d","7 days"],["14d","14 days"],["30d","30 days"]].map(([v,l])=>(<Chip key={v||"all"} col={C.blue} active={updFilter===v&&(v!==""||updFilter==="")} onClick={()=>setUpdFilter(v)}>{l}</Chip>))}
+                          </FilterRow>
+                          {/* Region */}
+                          <FilterRow label="Region" col="#7dd3fc">
+                            {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(<Chip key={f} col="#7dd3fc" active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</Chip>))}
+                          </FilterRow>
+                          {/* S.Region */}
+                          <FilterRow label="S.Region" col={C.purple}>
+                            {superRegionOptions.filter(r=>r!=="ALL").map(r=>{
+                              const toggle=e=>{
+                                if(e.ctrlKey||e.metaKey){setSuperRegionFilter(prev=>{const n=new Set(prev);n.has(r)?n.delete(r):n.add(r);return n;});}
+                                else{setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));}
+                              };
+                              return <Chip key={r} col={C.purple} active={superRegionFilter.has(r)} onClick={toggle}>{r}</Chip>;
+                            })}
+                            {superRegionFilter.size>0&&<Chip col={C.red} active={false} onClick={()=>setSuperRegionFilter(new Set())}>✕</Chip>}
+                          </FilterRow>
+                          {/* Status */}
+                          <FilterRow label="Status" col={C.amber}>
+                            {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<Chip key={f} col={C.amber} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</Chip>))}
+                            {filters.size>0&&<Chip col={C.red} active={false} onClick={()=>setFilters(new Set())}>✕ Clear</Chip>}
+                          </FilterRow>
+                          {/* Inter UKC */}
+                          <FilterRow label="Inter UKC" col="#4fc3f7">
+                            <Chip col="#4fc3f7" active={interUKCActive} onClick={()=>{setInterUKCActive(v=>!v);setPosPage(1);}}>Inter UKC</Chip>
+                            <Chip col="#fbbf24" active={showSavedOnly} onClick={()=>setShowSavedOnly(v=>!v)}>
+                              <span style={{display:"flex",alignItems:"center",gap:6}}>
+                                Saved ({savedVessels.size}) ★
+                                {savedVessels.size>0&&<span onClick={e=>{e.stopPropagation();setPendingDel({type:"clearsaved",label:`all ${savedVessels.size} saved vessels`});}} style={{color:C.red,cursor:"pointer"}}>✕</span>}
+                              </span>
+                            </Chip>
+                            {interUKCActive&&<Chip col={C.red} active={false} onClick={()=>{setInterUKCActive(false);}}>✕ Clear</Chip>}
+                          </FilterRow>
+                          {/* Segment */}
+                          <FilterRow label="Segment" col={C.green}>
+                            {(()=>{const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];return[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort((a,b)=>(ORDER.indexOf(a)===-1?99:ORDER.indexOf(a))-(ORDER.indexOf(b)===-1?99:ORDER.indexOf(b))).map(s=>(<Chip key={s} col={C.green} active={segmentFilter.has(s)} onClick={e=>{if(e.ctrlKey||e.metaKey){setSegmentFilter(prev=>{const n=new Set(prev);n.has(s)?n.delete(s):n.add(s);return n;});}else{setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));setPosPage(1);}}}>{s}</Chip>));})()}
+                            {segmentFilter.size>0&&<Chip col={C.red} active={false} onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}}>✕</Chip>}
+                          </FilterRow>
+                          {/* DWT */}
+                          <FilterRowWrap label="DWT" col="#f59e0b">
+                            {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<Chip key={v} col="#f59e0b" active={dwtFilter.has(v)} onClick={e=>{setDwtFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</Chip>))}
+                            <RangeBox minVal={dwtRange.min} maxVal={dwtRange.max} minPh="min" maxPh="max" onMin={v=>{setDwtRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setDwtRange(r=>({...r,max:v}));setPosPage(1);}}/>
+                            {(dwtFilter.size>0||dwtRange.min!==""||dwtRange.max!=="")&&<Chip col={C.red} active={false} onClick={()=>{setDwtFilter(new Set());setDwtRange({min:"",max:""});setPosPage(1);}}>✕</Chip>}
+                          </FilterRowWrap>
+                          {/* Built */}
+                          <FilterRowWrap label="Built" col="#94a3b8">
+                            {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<Chip key={v} col="#94a3b8" active={builtFilter.has(v)} onClick={()=>{setBuiltFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</Chip>))}
+                            <RangeBox minVal={builtRange.min} maxVal={builtRange.max} minPh="from" maxPh="to" onMin={v=>{setBuiltRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setBuiltRange(r=>({...r,max:v}));setPosPage(1);}}/>
+                            {(builtFilter.size>0||builtRange.min!==""||builtRange.max!=="")&&<Chip col={C.red} active={false} onClick={()=>{setBuiltFilter(new Set());setBuiltRange({min:"",max:""});setPosPage(1);}}>✕</Chip>}
+                          </FilterRowWrap>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {/* RIGHT: AIS Map / Regional Position Snapshot (34%) */}
+{!mobile&&(
+  <div style={{width:"34%"}}>
+    <TabbedPanel tabs={["Map","Regional Snapshot"]} active={aisPanelTab} onChange={setAisPanelTab} height={460}>
+      {aisPanelTab==="Map" ? (
+        <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels} onAisVesselsChange={setAisVesselSet}/></Suspense>
+      ) : (
+        <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <span style={{fontSize:11,color:C.faint,textAlign:"center",padding:"0 16px"}}>Regional Position Snapshot — coming here next</span>
+        </div>
+      )}
+    </TabbedPanel>
+  </div>
+)}
+ </div>
+            )}
+
+            {/* ── Mobile: same sections, collapsed into one-line tappable bars ── */}
+            {mobile && (
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                <MobileCollapse title="📋 Paste positions" color="#58a6ff">
+                  <ParsePanel
+                    vessels={vessels}
+                    onAddVessels={onAddVessels}
+                    onAddCargoes={onAddCargoes}
+                    lockedMode="pos"
+                    vesselDB={{}}
+                  />
+                </MobileCollapse>
+
+                <MobileCollapse title="📈 Fixing Window / Segments" color="#c792ea">
+                  <div style={{ height:340, position:"relative" }}>
+                    <TabbedPanel tabs={["History","Open Segments"]} active={fixingPanelTab} onChange={setFixingPanelTab} height="100%">
+                      {fixingPanelTab==="History" ? (
+                        <>
+                          <style>{`
+                            div[class*="fix"] div[style*="height"][style*="background"],
+                            div[class*="Fix"] div[style*="height"][style*="background"],
+                            div[class*="window"] div[style*="height"][style*="background"],
+                            div[class*="Window"] div[style*="height"][style*="background"] {
+                              filter: saturate(2) brightness(1.3) !important;
+                              opacity: 1 !important;
+                            }
+                          `}</style>
+                          <Suspense fallback={null}><FixingWindowChart
+                            vessels={filtV}
+                            filterActive={filtV.length !== vessels.length}
+                            tagFilter={cTagFilter||null}
+                          /></Suspense>
+                        </>
+                      ) : (
+                        <Suspense fallback={null}><OpeningBreakdown
+                          vessels={vessels14d.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+                          filteredVessels={filtV.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+                          bucketFilters={bucketFilters}
+                          onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
+                          fillHeight={true}
+                        /></Suspense>
+                      )}
+                    </TabbedPanel>
+                  </div>
+                </MobileCollapse>
+
+                <MobileCollapse title="🏷️ Tags & Filters" color="#f5a623">
+                  <HScrollStyle/>
+                  {(opFilter||bucketFilters.size>0)&&(
+                    <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
+                      {opFilter&&(
+                        <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 8px",background:"rgba(79,195,247,0.08)",border:"1px solid rgba(79,195,247,0.25)",borderRadius:5}}>
+                          <span style={{fontSize:12,color:C.blue,fontWeight:700}}>🔍 Filtered: {opFilter}</span>
+                          <button onClick={()=>setOpFilter(null)} style={{background:"none",border:"none",color:C.faint,cursor:"pointer",fontSize:12,padding:"0 2px"}}>✕ Clear</button>
+                        </div>
+                      )}
+                      {bucketFilters.size>0&&(
+                        <div style={{fontSize:12,color:C.blue,cursor:"pointer"}} onClick={()=>setBucketFilters(new Set())}>
+                          ✕ Clear segment filter ({[...bucketFilters].join(", ")})
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {(()=>{
+                    const B=({active,onClick,children})=>(
+                      <button onClick={onClick} style={{...fb(active),padding:"6px 10px",fontSize:12}}>{children}</button>
+                    );
+                    return (
+                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                        <COL label="Tags" col="#79c0ff">
+                          {(()=>{const available=getTagListFor("position");return available.length?available.map(t=>(<B key={t} active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t.toUpperCase()}</B>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>NONE</span>;})()}
+                          {posTagFilter.size>0&&<B active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
+                        </COL>
+                        <COL label="Status" col={C.amber}>
+                          {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
+                          {filters.size>0&&<B active={false} onClick={()=>setFilters(new Set())}><span style={{color:C.red}}>✕ Clear</span></B>}
+                        </COL>
+                        <COL label="Region" col="#7dd3fc">
+                          {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
+                        </COL>
+                        <COL label="S.Region" col={C.purple}>
+                          {superRegionOptions.filter(r=>r!=="ALL").map(r=>{
+                            const toggle=()=>setSuperRegionFilter(prev=>prev.size===1&&prev.has(r)?new Set():new Set([r]));
+                            return <B key={r} active={superRegionFilter.has(r)} onClick={toggle}>{r}</B>;
+                          })}
+                          {superRegionFilter.size>0&&<B active={false} onClick={()=>setSuperRegionFilter(new Set())}><span style={{color:C.red}}>✕</span></B>}
+                        </COL>
+                        <COL label="Segment" col={C.green}>
+                          {(()=>{const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];return[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort((a,b)=>(ORDER.indexOf(a)===-1?99:ORDER.indexOf(a))-(ORDER.indexOf(b)===-1?99:ORDER.indexOf(b))).map(s=>(<B key={s} active={segmentFilter.has(s)} onClick={()=>{setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));setPosPage(1);}}>{s}</B>));})()}
+                          {segmentFilter.size>0&&<B active={false} onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
+                        </COL>
+                        <COL label="Inter UKC / Saved" col="#4fc3f7">
+                          <B active={interUKCActive} onClick={()=>{setInterUKCActive(v=>!v);setPosPage(1);}}>Inter UKC</B>
+                          <B active={showSavedOnly} onClick={()=>setShowSavedOnly(v=>!v)}>Saved ({savedVessels.size}) ★</B>
+                        </COL>
+                        <COL label="DWT" col="#f59e0b">
+                          {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<B key={v} active={dwtFilter.has(v)} onClick={()=>{setDwtFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
+                        </COL>
+                        <COL label="Built" col="#94a3b8">
+                          {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<B key={v} active={builtFilter.has(v)} onClick={()=>{setBuiltFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
+                        </COL>
+                      </div>
+                    );
+                  })()}
+                </MobileCollapse>
+
+                <MobileCollapse title="🗺️ AIS Map" color="#4ade80">
+                  <div style={{ height:340, position:"relative" }}>
+                    <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels} onAisVesselsChange={setAisVesselSet}/></Suspense>
+                  </div>
+                </MobileCollapse>
+              </div>
+            )}
+            {vessels.length > 0 && (
+              <>
+                {/* MOVED: Fleet count + Export + Search to same row */}
+                <div style={{
+                  display:"flex",alignItems:"center",gap:8,padding:"6px 10px",
+                  background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,
+                  flexWrap:"nowrap",minHeight:38,boxSizing:"border-box",
+                  overflowX:"auto",overflowY:"hidden",scrollbarWidth:"thin"
+                }}>
+                  <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
+                  {/* Copy positions in formatted style */}
+                  <CopyPositionsButton filtV={filtV} fmtDateShort={fmtDateShort}/>
+                  {selVessels.size>0&&(
+                    <>
+                      <button
+                        onClick={()=>setPendingDel({type:"all",id:"__SELECTED__",label:selVessels.size+" vessel"+(selVessels.size!==1?"s":"")})}
+                        style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid "+C.red+"55",background:"rgba(255,107,107,.12)",color:C.red,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}
+                      >
+                        🗑 Delete ({selVessels.size})
+                      </button>
+                      <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());setSelVessels(new Set());setOpFilter(null);}}
+                        style={{fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",border:"1px solid "+C.bd,background:C.bg2,color:C.tx}}>
+                        ✕ Clear all
+                      </button>
+                    </>
+                  )}
+                  {/* Inline add vessel */}
+                  <button onClick={()=>setShowAddVessel(v=>!v)}
+                    style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
+                      border:showAddVessel?"1px solid rgba(67,233,123,0.5)":"1px solid rgba(67,233,123,0.25)",
+                      background:showAddVessel?"rgba(67,233,123,0.12)":"rgba(67,233,123,0.06)",color:"#43e97b"}}>
+                    {showAddVessel?"✕ Cancel":"+ Add vessel"}
+                  </button>
+                  {selVessels.size>0&&(
+                    <button ref={bulkPosTagBtnRef} onClick={openBulkPositionTags}
+                      title="Add a tag to all selected vessels"
+                      style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(88,166,255,0.48)",background:"rgba(88,166,255,.12)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                      + Tag ({selVessels.size})
+                    </button>
+                  )}
+                  {selVessels.size>0&&(
+                    <button onClick={addSelectedToOutsiders}
+                      title="Keep selected vessel(s) permanently in the Outsiders roster"
+                      style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(245,166,35,0.55)",background:"rgba(245,166,35,.12)",color:"#f5a623",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                      + To Outsiders ({selVessels.size})
+                    </button>
+                  )}
+                  {selVessels.size>0&&(
+                    <button onClick={()=>React.startTransition(()=>setTab("reports"))} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                      📋 To Report ({selVessels.size})
+                    </button>
+                  )}
+                  {outsiderSyncStatus&&<span style={{fontSize:11,color:outsiderSyncStatus.startsWith("✓")?"#43e97b":C.faint,whiteSpace:"nowrap"}}>{outsiderSyncStatus}</span>}
+                  <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{vessels.length}</span></span>
+                  <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{Math.min(displayPosRows.length, posPage*POS_PAGE_SIZE)}</span></span>
+                  <span style={{color:C.faint}}>Selected <span style={{color:"#4fc3f7",fontWeight:700}}>{selVessels.size}</span></span>
+                  
+                  {/* MOVED SEARCH FIELD HERE */}
+                  <div style={{position:"relative",marginLeft:"auto",display:"flex",alignItems:"center",gap:4,width:270,minWidth:270,maxWidth:270,flex:"0 0 270px"}}>
+                    <input
+                      value={search}
+                      onChange={e=>setSearch(e.target.value)}
+                      placeholder="🔍 Multi-search: e.g. belfast ulsd 1A"
+                      style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}
+                    />
+                    {search&&(
+                      <button onClick={()=>setSearch("")} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  <span style={{fontSize:11,color:C.faint,whiteSpace:"nowrap",flexShrink:0}}>Sort</span>
+                  <select value={sortK} onChange={e=>srt(e.target.value)}
+                    style={{fontSize:11,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",colorScheme:"dark",flexShrink:0}}>
+                    <option value="operator">Operator</option>
+                    <option value="vessel">Vessel</option>
+                    <option value="built">Built</option>
+                    <option value="dwt">DWT</option>
+                    <option value="coating">Coating</option>
+                    <option value="date">Date</option>
+                    <option value="openPort">Open Port</option>
+                    <option value="fileDate">Updated</option>
+                  </select>
+                  <button onClick={()=>setSortD(d=>d*-1)}
+                    style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",minWidth:28,flexShrink:0}}>
+                    {sortD>0?"▲":"▼"}
+                  </button>
+                </div>
+
+                {bulkPosTagOpen&&(
+                  <>
+                    <div style={{position:"fixed",inset:0,zIndex:19990}} onClick={()=>setBulkPosTagOpen(false)}/>
+                    <div style={{
+                      position:"fixed",top:bulkPosTagPos.top,left:bulkPosTagPos.left,zIndex:19999,
+                      width:190,maxHeight:360,overflowY:"auto",overflowX:"hidden",
+                      background:"#0a1628",border:"1px solid rgba(88,166,255,0.34)",borderRadius:7,
+                      padding:6,boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
+                      display:"flex",flexDirection:"column",gap:3
+                    }}>
+                      <div style={{fontSize:9,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",padding:"2px 3px 5px"}}>
+                        Add {selVessels.size} selected to tag
+                      </div>
+                      {getTagListFor("position").map(t=>{
+                        const col=getTagColor(t);
+                        return(
+                          <button key={t} onClick={()=>applyTagToSelectedVessels(t)}
+                            style={{
+                              fontSize:11,padding:"4px 8px",borderRadius:3,textAlign:"left",
+                              cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
+                              border:"1px solid "+(col?col+"55":"rgba(88,166,255,0.12)"),
+                              background:"transparent",color:col||"rgba(160,200,255,0.75)"
+                            }}>
+                            {col&&<span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:col,marginRight:5,verticalAlign:"middle"}}/>}
+                            {String(t).toUpperCase()}
+                          </button>
+                        );
+                      })}
+                      <button onClick={()=>applyTagToSelectedVessels("")}
+                        style={{fontSize:10,padding:"4px 8px",borderRadius:3,textAlign:"left",cursor:"pointer",fontFamily:"inherit",
+                          border:"1px solid rgba(255,107,107,0.25)",background:"transparent",color:"rgba(255,107,107,0.62)",marginTop:2}}>
+                        ✕ Clear tag
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {/* Vessel Table + Side panel row */}
+                <div ref={(el)=>{window.__posRow=el;}} style={{display:"flex",gap:10,alignItems:"flex-start",position:"relative"}}>
+                {/* Vessel Table */}
+                <div className="pos-table-wrap" style={{
+                  width:"100%",flex:1,minWidth:0,overflowX:"auto",WebkitOverflowScrolling:"touch",
+                  transition:"flex-basis .22s ease,width .22s ease"
+                }}
+                  onClick={e=>{
+                    const th=e.target.closest("th");
+                    if(!th) return;
+                    // Find th index in header row, map to posColumns sortKey
+                    const row=th.parentElement;
+                    if(!row) return;
+                    const idx=Array.from(row.children).indexOf(th);
+                    const col=posColumns[idx];
+                    if(col?.sortKey) srt(col.sortKey);
+                  }}>
+                    {showAddVessel&&<AddVesselInlineRow onSave={onAddV} onClose={()=>setShowAddVessel(false)}/>}
+                  <div style={{...tableWrap,minWidth:mobile?"1400px":undefined}} className={mobile?"pos-table":undefined}>
+                    {mobile&&<style>{`
+                      .pos-table td, .pos-table td>*{overflow:visible!important;text-overflow:unset!important;white-space:nowrap!important;max-width:none!important;}
+                      .pos-table th, .pos-table td{position:static!important;left:auto!important;right:auto!important;box-shadow:none!important;}
+                    `}</style>}
+                    <MatrixTable
+  key={`positions-${search}-${displayPosRows.length}-${sortK}-${sortD}-${posPage}-${[...filters].join("|")}-${[...posTagFilter].join("|")}`}
+  columns={mobile ? posColumnsMobile : posColumns}
+  data={displayPosRows.slice(0, posPage * POS_PAGE_SIZE)}
+  keyField="vessel"
+  selectedKey={sel}
+  onRowClick={(row) => {
+    const deselecting = sel === row.vessel;
+    setSel(deselecting ? null : row.vessel);
+    setSelectedAISVessels(deselecting ? [] : [row.vessel]);
+  }}
+  onRowContextMenu={(row, e) => {
+    e.preventDefault();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      vessel: row
+    });
+  }}
+  renderRow={(v, td, i) => {
+  const isSel = sel === v.vessel;
+  const ppt = isOpenPPT(v.date);
+
+  return (
+    <>
+      {/* SELECT */}
+      <td
+        style={{ ...tdCtr, width: 40, minWidth:40, maxWidth:40, padding: "0 2px" }}
+        onClick={e => {
+          e.stopPropagation();
+          setSelVessels(p => {
+            const n = new Set(p);
+            n.has(v.vessel) ? n.delete(v.vessel) : n.add(v.vessel);
+            return n;
+          });
+        }}
+      >
+        <span style={{ fontSize: mobile?13:12, color: selVessels.has(v.vessel) ? "#4fc3f7" : C.faint }}>
+          {selVessels.has(v.vessel) ? "[✓]" : "[ ]"}
+        </span>
+      </td>
+
+      {/* OPERATOR */}
+      <EC
+  value={v.operator}
+  color="rgba(160,200,255,0.65)"
+  placeholder="Operator"
+  onSave={val=>onUpdateV(v.vessel,"operator",val)}
+  data-cell={`${i}-operator`}
+  onTab={() => focusCell(i, "vessel")}
+  onShiftTab={() => focusCell(i-1, "comment")}
+  onDown={() => focusCell(i+1, "operator")}
+  onUp={() => focusCell(i-1, "operator")}
+  style={mobile?{minWidth:MOBILE_OPERATOR_W,maxWidth:MOBILE_OPERATOR_W,whiteSpace:"nowrap"}:undefined}
+/>
+
+      {/* VESSEL */}
+      <EC
+        value={toTCase(v.vessel)}
+        color={ppt ? "#a8e6a3" : "#79c0ff"}
+        bold={true}
+        placeholder="Vessel"
+        onSave={val=>renameVesselAndRefreshSpecs(v.vessel,val)}
+        data-cell={`${i}-vessel`}
+        onTab={() => focusCell(i, "date")}
+        onShiftTab={() => focusCell(i, "operator")}
+        onDown={() => focusCell(i+1, "vessel")}
+        onUp={() => focusCell(i-1, "vessel")}
+        style={mobile?{minWidth:MOBILE_VESSEL_W,maxWidth:MOBILE_VESSEL_W,whiteSpace:"nowrap"}:undefined}
+      />
+
+      <td style={{padding:"2px 3px",textAlign:"center",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)"}} title={aisVesselSet.has((v.vessel||"").toUpperCase().trim())?"AIS data available":"No AIS data"}>
+        <span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",
+          background:aisVesselSet.has((v.vessel||"").toUpperCase().trim())?"#4ade80":"rgba(120,160,220,0.15)"}}/>
+      </td>
+
+      <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.built || ""}</td>
+      <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtDwtFull(v.dwt)}</td>
+      <td style={{ ...tdTxt, color: C.dim }} title={v.coating||""}>{fmtCoating(v.coating)}</td>
+      {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.loa || ""}</td>}
+      {!mobile && <td style={{ ...tdNum, color: C.dim }}>{v.beam || ""}</td>}
+      {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtN(v.cbm)}</td>}
+
+      {/* DATE */}
+      <EC
+  value={v.date}
+  color={ppt ? "#a8e6a3" : "#79c0ff"}
+  placeholder="Date"
+  onSave={val => {
+    const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    let fmt=val.trim();
+    const m1=fmt.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+    if(m1){
+      const mo=parseInt(m1[2])-1;
+      if(mo>=0&&mo<12) fmt=parseInt(m1[1])+" "+MON[mo];
+    } else {
+      const m2=fmt.match(/^(\d{1,2})\s+([A-Za-z]{3})/i);
+      if(m2){
+        const mi=MON.findIndex(m=>m.toLowerCase()===m2[2].toLowerCase().slice(0,3));
+        if(mi>=0) fmt=parseInt(m2[1])+" "+MON[mi];
+      }
+    }
+    onUpdateV(v.vessel,"date",fmt);
+  }}
+  data-cell={`${i}-date`}
+  onTab={() => focusCell(i, "port")}
+  onShiftTab={() => focusCell(i, "vessel")}
+  onDown={() => focusCell(i+1, "date")}
+  onUp={() => focusCell(i-1, "date")}
+/>
+      {/* PORT */}
+      <EC
+  value={v.openPort}
+  color={v.openPort==="EMPLOYED"?C.purple:"#79c0ff"}
+  placeholder="Port"
+  onSave={val=>onUpdateV(v.vessel,"openPort",val)}
+  data-cell={`${i}-port`}
+  onTab={() => focusCell(i, "comment")}
+  onShiftTab={() => focusCell(i, "date")}
+  onDown={() => focusCell(i+1, "port")}
+  onUp={() => focusCell(i-1, "port")}
+/>
+
+      {/* COMMENT */}
+      <EC
+  value={v.comment}
+  color={C.dim}
+  placeholder="Comment"
+  onSave={val=>onUpdateV(v.vessel,"comment",val)}
+  data-cell={`${i}-comment`}
+  onTab={() => focusCell(i+1, "vessel")}
+  onShiftTab={() => focusCell(i, "port")}
+  onDown={() => focusCell(i+1, "comment")}
+  onUp={() => focusCell(i-1, "comment")}
+/>
+
+      {/* UPDATED */}
+      {!mobile && (
+        <td style={{ ...tdCtr, color: C.faint }}>
+          {v.updatedAt ? new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
+        </td>
+      )}
+
+      {/* WHO ENTERED badge + SAVE star */}
+      {!mobile && (
+        <td style={{...tdCtr,width:32,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
+          <div style={{display:"flex",alignItems:"center",gap:2}}>
+          <button onClick={()=>toggleSavedVessel(v.vessel)}
+            title={savedVessels.has(v.vessel)?"Remove from saved":"Save for later"}
+            style={{background:"none",border:"none",cursor:"pointer",fontSize:15,padding:"1px",
+              color:savedVessels.has(v.vessel)?"#fbbf24":"rgba(120,160,200,0.15)",lineHeight:1}}>
+            {savedVessels.has(v.vessel)?"⭐":"☆"}
+          </button>
+          {(v.entered_by==="H"||v.entered_by==="L")&&(
+            <span title={v.entered_by==="H"?"Entered by Henriksen":"Entered by Løken"}
+              style={{display:"inline-flex",alignItems:"center",justifyContent:"center",
+                width:14,height:14,borderRadius:"50%",fontSize:8,fontWeight:700,lineHeight:1,
+                background:v.entered_by==="H"?"rgba(88,166,255,0.25)":"rgba(74,222,128,0.25)",
+                color:v.entered_by==="H"?"#79c0ff":"#4ade80",
+                border:"1px solid "+(v.entered_by==="H"?"rgba(88,166,255,0.5)":"rgba(74,222,128,0.5)")}}>
+              {v.entered_by}
+            </span>
+          )}
+          </div>
+        </td>
+      )}
+      <TagCellV vesselName={v.vessel} tag={v.tag} onUpdateV={onUpdateV}/>
+      {/* DELETE */}
+      <td style={{ ...tdCtr, width: 24, minWidth: 24, maxWidth: 24, padding: "0 2px" }} onClick={e=>e.stopPropagation()}>
+        <button
+          onClick={(e)=>{
+            e.stopPropagation();
+            setPendingDel({type:"vessel",id:v.vessel,label:v.vessel});
+          }}
+          style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:10,padding:"0 2px",opacity:0.7}}
+          title="Delete"
+        >
+          ✕
+        </button>
+      </td>
+    </>
+  );
+}}
+/>
+                  </div>
+
+                </div>{/* end pos-table-wrap */}
+
+                  {/* Right-hand vessel detail drawer — stays inside the positions layout */}
+                  {selV&&(
+                    <div data-pos-vessel-panel style={{
+                      width:310,flex:"0 0 310px",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,
+                      overflow:"hidden",position:"sticky",top:112,zIndex:40,maxHeight:"calc(100vh - 128px)",
+                      display:"flex",flexDirection:"column",boxShadow:"-12px 12px 34px rgba(0,0,0,0.40)",
+                      animation:"posDrawerIn .24s cubic-bezier(.16,.8,.24,1)"
+                    }}>
+                      <style>{`
+                        @keyframes posDrawerIn{
+                          from{opacity:0;transform:translateX(24px) scale(.985)}
+                          to{opacity:1;transform:translateX(0) scale(1)}
+                        }
+                      `}</style>
+                      <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
+                        <div>
+                          <div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>
+                          <div style={{fontSize:12,color:C.purple}}>{selV.operator||""}</div>
+                        </div>
+                        <button onClick={()=>{setSel(null);setSelectedAISVessels([]);}} style={{background:"none",border:"none",color:C.dim,fontSize:14,cursor:"pointer"}}>✕</button>
+                      </div>
+
+                      <div style={{padding:"8px 12px",overflowY:"auto",flex:1}}>
+                        {[["Open Port","openPort",C.amber],["Date","date",C.blue],["Comment","comment",C.dim],["Operator","operator",C.purple],["Built","built",C.dim],["DWT","dwt",C.amber],["Coating","coating",C.green],["LOA","loa",C.dim],["Beam","beam",C.dim],["CBM","cbm",C.dim]].map(([l,f,col])=>(
+                          <div key={f} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderBottom:"1px solid "+C.bg,gap:4}}>
+                            <span style={{fontSize:12,color:C.faint,minWidth:55,flexShrink:0}}>{l}</span>
+                            <PanelEC value={selV[f]} color={col} placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
+                          </div>
+                        ))}
+
+                        <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em",padding:"6px 0 3px",borderBottom:"1px solid "+C.bd2}}>Spec</div>
+                        {[["Fuel","spec.fuel",C.purple],["Ice Class","spec.iceClass",C.blue],["Last Cargo","spec.lastCargo",C.dim]].map(([l,f,col])=>{
+                          const val=f.startsWith("spec.")?(selV.spec||{})[f.split(".")[1]]:selV[f];
+                          return(
+                            <div key={f} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderBottom:"1px solid "+C.bg,gap:4}}>
+                              <span style={{fontSize:12,color:C.faint,minWidth:55,flexShrink:0}}>{l}</span>
+                              <PanelEC value={val} color={col} placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
+                            </div>
+                          );
+                        })}
+
+                        <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em",padding:"6px 0 3px",borderBottom:"1px solid "+C.bd2,marginTop:4}}>Notes</div>
+                        <textarea 
+                          defaultValue={selV.notes||""}
+                          key={selV.vessel}
+                          onBlur={e => {
+                            if (e.target.value !== (selV.notes||"")) {
+                              onUpdateV(selV.vessel,"notes",e.target.value);
+                            }
+                          }}
+                          placeholder="Add vessel notes…"
+                          style={{
+                            width:"100%",
+                            minHeight:80,
+                            background:C.bg3,
+                            border:"1px solid "+C.bd,
+                            borderRadius:4,
+                            color:C.dim,
+                            fontSize:12,
+                            padding:"6px 8px",
+                            fontFamily:"inherit",
+                            resize:"vertical",
+                            outline:"none",
+                            marginTop:4
+                          }}
+                        />
+
+                        {selFixes.length > 0 && (
+                          <>
+                            <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em",padding:"6px 0 3px",borderBottom:"1px solid "+C.bd2}}>
+                              Fixtures ({selFixes.length})
+                            </div>
+                            {selFixes.map((f) => {
+                              const col =
+                                f.status === "FIXED" ? C.green :
+                                f.status === "SUBS" ? C.purple :
+                                f.status === "FAILED" ? C.red : C.blue;
+
+                              return (
+                                <div
+                                  key={f.id}
+                                  style={{
+                                    background:C.bg,
+                                    border:"1px solid "+col+"33",
+                                    borderRadius:4,
+                                    padding:"5px 8px",
+                                    marginBottom:4,
+                                    marginTop:3
+                                  }}
+                                >
+                                  <div style={{fontFamily:"sans-serif",fontWeight:700,fontSize:12,color:col}}>
+                                    {f.status}{f.from ? ` · ${f.from}` : ""}{f.to ? ` - ${f.to}` : ""}
+                                  </div>
+                                  <div style={{fontSize:12,fontWeight:600}}>
+                                    {f.load || "?"} → {f.disch || "?"}
+                                  </div>
+                                  {f.freight && <div style={{fontSize:12,color:C.purple}}>{f.freight}</div>}
+                                </div>
+                              );
+                            })}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>{/* end vessel table + drawer row */}
+
+                {displayPosRows.length > posPage * POS_PAGE_SIZE && (
+                  <div style={{textAlign:"center",padding:"12px 0"}}>
+                    <button
+                      onClick={() => setPosPage(p => p + 1)}
+                      style={{
+                        background:"none",
+                        border:"1px solid " + C.blue,
+                        borderRadius:4,
+                        padding:"5px 18px",
+                        color:C.blue,
+                        cursor:"pointer",
+                        fontFamily:"inherit",
+                        fontSize:12,
+                        fontWeight:700
+                      }}
+                    >
+                      Show more ({filtV.length - posPage * POS_PAGE_SIZE} remaining)
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+            </>
+            )}
+          </div>
         )}
-        {panel(
-          <>
-            {secHead("Bunker prices USD/mt — PBT International")}
-            {!bFetched&&!bLoading&&<div style={{textAlign:"center",padding:"12px 0"}}><div style={{fontSize:11,color:D.faint,marginBottom:8}}>ARA · Fujairah · Singapore</div><button onClick={fetchBunkersPBT} style={{background:"rgba(88,166,255,.12)",border:"1px solid rgba(88,166,255,.32)",borderRadius:5,color:D.blue,fontWeight:700,fontSize:11,padding:"5px 12px",cursor:"pointer"}}>Fetch live from PBT</button></div>}
-            {bLoading&&<div style={{color:D.blue,fontSize:11,padding:"12px",textAlign:"center"}}>⟳ Fetching…</div>}
-            {bError&&<div style={{color:D.red,fontSize:11,padding:"6px 0"}}>{bError}</div>}
-            {bunkers&&<>
-              <div style={{fontSize:9,color:D.faint,marginBottom:6}}>Updated {bunkers.date}</div>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-                <thead><tr style={{background:D.bg4}}><th style={{padding:"5px 7px",textAlign:"left",color:D.faint}}>PORT</th><th style={{padding:"5px 7px",textAlign:"right",color:D.amber}}>HSFO</th><th style={{padding:"5px 7px",textAlign:"right",color:D.green}}>VLSFO</th><th style={{padding:"5px 7px",textAlign:"right",color:D.blue}}>MGO</th></tr></thead>
-                <tbody>{[["ARA",bunkers.ARA_HSFO,bunkers.ARA_VLSFO,bunkers.ARA_MGO],["Fujairah",bunkers.FUJ_HSFO,bunkers.FUJ_VLSFO,bunkers.FUJ_MGO],["Singapore",bunkers.SIN_HSFO,bunkers.SIN_VLSFO,bunkers.SIN_MGO]].map(([port,a,v,m],i)=><tr key={port} style={{background:i%2?D.bg4:"transparent",borderBottom:"1px solid "+D.border}}><td style={{padding:"6px 7px",color:D.dim,fontWeight:700}}>{port}</td><td style={{padding:"6px 7px",textAlign:"right",color:D.amber,fontWeight:800}}>{a?"$"+a:"—"}</td><td style={{padding:"6px 7px",textAlign:"right",color:D.green,fontWeight:800}}>{v?"$"+v:"—"}</td><td style={{padding:"6px 7px",textAlign:"right",color:D.blue,fontWeight:800}}>{m?"$"+m:"—"}</td></tr>)}</tbody>
-              </table>
-              <button onClick={fetchBunkersPBT} style={{marginTop:6,background:"none",border:"1px solid "+D.border,borderRadius:4,color:D.faint,fontSize:10,padding:"2px 8px",cursor:"pointer"}}>↻ Refresh</button>
-            </>}
-          </>,
-          {minWidth:0}
+        {/* ── CARGOES ── */}
+        {tab==="cargo"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {/* Parse + filter panel + graph (desktop) */}
+            {!mobile && (
+            <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
+              {/* Left: OnParse tag selector + ParsePanel */}
+              <div style={{flex:mobile?"1 1 auto":"0 0 25%",display:"flex",flexDirection:"column",gap:4,height:mobile?"auto":260}}>
+                {/* ON PARSE tag selector — above Parse & Add */}
+                {(()=>{
+                  const usedTags=getTagList();
+                  return(
+                    <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:5,padding:"5px 8px",display:"flex",alignItems:"center",flexWrap:"wrap",gap:4}}>
+                      <span style={{fontSize:9,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.1em",marginRight:2}}>Tag on parse</span>
+                      {usedTags.map(t=>(
+                        <button key={t} onClick={()=>setPendingParseTag(v=>v===t?"":t)} style={fb(pendingParseTag===t)}>{t}</button>
+                      ))}
+                      {pendingParseTag&&<button onClick={()=>setPendingParseTag("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕ {pendingParseTag}</button>}
+                    </div>
+                  );
+                })()}
+                <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels}
+                  onAddCargoes={async(parsed)=>{
+                    const user=localStorage.getItem("signal_user")||"H";
+                    const withMeta=parsed.map(c=>({...c,entered_by:user,tag:pendingParseTag?pendingParseTag:c.tag||""}));
+                    const result=await onAddCargoes(withMeta);
+                    if(pendingParseTag)setPendingParseTag(""); // reset after parse
+                    return result;
+                  }}
+                  lockedMode="cargo" vesselDB={{}}/>
+              </div>
+              {/* Centre: Grade | Period | Tag filter grid — same height as parse section */}
+              {(()=>{
+                let allGroups=[];
+                try{const raw=localStorage.getItem("signal_cargo_filter_groups");allGroups=raw?JSON.parse(raw):[];}catch{}
+                const gradeGroups=allGroups.filter(g=>(g.category||"grade")==="grade");
+                const showRaw=gradeGroups.length===0;
+                const rawGrades=showRaw?[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort().slice(0,20):[];
+                const usedTags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
+                const COL=({label,col,children})=>(
+                  <div style={{display:"flex",flexDirection:"column",gap:0,minWidth:0,flex:1}}>
+                    <div style={{fontSize:9,fontWeight:700,color:col,textTransform:"uppercase",letterSpacing:"0.1em",padding:"0 0 4px 0",borderBottom:"1px solid "+C.bd2,marginBottom:4,whiteSpace:"nowrap"}}>{label}</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:1}}>{children}</div>
+                  </div>
+                );
+                const B=({active,onClick,children,red})=>(
+                  <button onClick={onClick} style={{...fb(active),display:"block",width:"100%",textAlign:"left",padding:"3px 7px",fontSize:11,whiteSpace:"nowrap",color:red?C.red:active?"#d9ecff":"#9fc3f5",borderColor:red?C.red+"55":undefined}}>{children}</button>
+                );
+                return(
+                  <div style={{flex:"0 0 auto",width:mobile?"100%":"25%",display:"flex",flexDirection:"column",gap:0,minHeight:0,height:mobile?"auto":260}}>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,padding:"8px 8px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,overflowY:"auto",flex:1,boxSizing:"border-box"}}>
+                      {/* Grade column */}
+                      <COL label="Grade" col={C.purple}>
+                        {showRaw
+                          ?rawGrades.map(g=><B key={g} active={cGradeFilter===g} onClick={()=>setCGradeFilter(v=>v===g?"":g)}>{g}</B>)
+                          :gradeGroups.map(grp=><B key={grp.id} active={cGradeFilter===grp.id} onClick={()=>setCGradeFilter(v=>v===grp.id?"":grp.id)}>{grp.label}</B>)
+                        }
+                        {cGradeFilter&&gradeGroups.some(g=>g.id===cGradeFilter)&&<B active={false} red onClick={()=>setCGradeFilter("")}>✕ Clear</B>}
+                      </COL>
+                      {/* Period column */}
+                      <COL label="Period" col="#94a3b8">
+                        {[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([v,l])=>(
+                          <B key={v||"all"} active={cTimeFilter===v} onClick={()=>setCTimeFilter(v)}>{l}</B>
+                        ))}
+                        {(cGradeFilter||cFilter!=="ALL"||cTimeFilter||cTagFilter)&&<B active={false} red onClick={()=>{setCGradeFilter("");setCFilter("ALL");setCTimeFilter("");setCTagFilter("");}}>✕ Clear all</B>}
+                      </COL>
+                      {/* Tag column */}
+                      <COL label="Tag" col="#f472b6">
+                        {usedTags.map(t=>(
+                          <B key={t} active={cTagFilter===t} onClick={()=>setCTagFilter(v=>v===t?"":t)}>{t}</B>
+                        ))}
+                        {cTagFilter&&<B active={false} red onClick={()=>setCTagFilter("")}>✕ Clear</B>}
+                      </COL>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Rate Matrix — condensed card, click to expand; moved here from Positions */}
+              {!mobile&&(
+                <div style={{flex: matrixExpanded ? "0 0 50%" : "0 0 25%", position:"relative", transition:"flex-basis .18s ease"}}>
+                  <Suspense fallback={null}>
+                    <RateMatrixCard collapsedHeight={260} bunkerHeader={<Suspense fallback={null}><BunkerHeader/></Suspense>} onExpandChange={setMatrixExpanded}/>
+                  </Suspense>
+                </div>
+              )}
+
+              {/* Right: Cargo count by month — animated, full history (minimized while Rate Matrix is expanded) */}
+              {!matrixExpanded&&!mobile&&(()=>{
+                const now=new Date();
+                const counts=graphMonthlyData.length>0?graphMonthlyData:[...Array.from({length:3},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-2+i,1);return{year:d.getFullYear(),month:d.getMonth(),count:0};})];
+                return <CargoMonthChart counts={counts} total={cargoTotal||cargoes.length}/>;
+              })()}
+            </div>
+            )}
+
+            {/* Mobile: Parse + Filters collapsed into tappable bars */}
+            {mobile && (
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                <MobileCollapse title="📋 Paste cargo" color="#faa356">
+                  {(()=>{
+                    const usedTags=getTagList();
+                    return(
+                      <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:5,padding:"5px 8px",display:"flex",alignItems:"center",flexWrap:"wrap",gap:4,marginBottom:8}}>
+                        <span style={{fontSize:9,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.1em",marginRight:2}}>Tag on parse</span>
+                        {usedTags.map(t=>(
+                          <button key={t} onClick={()=>setPendingParseTag(v=>v===t?"":t)} style={fb(pendingParseTag===t)}>{t}</button>
+                        ))}
+                        {pendingParseTag&&<button onClick={()=>setPendingParseTag("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕ {pendingParseTag}</button>}
+                      </div>
+                    );
+                  })()}
+                  <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels}
+                    onAddCargoes={async(parsed)=>{
+                      const user=localStorage.getItem("signal_user")||"H";
+                      const withMeta=parsed.map(c=>({...c,entered_by:user,tag:pendingParseTag?pendingParseTag:c.tag||""}));
+                      const result=await onAddCargoes(withMeta);
+                      if(pendingParseTag)setPendingParseTag("");
+                      return result;
+                    }}
+                    lockedMode="cargo" vesselDB={{}}/>
+                </MobileCollapse>
+
+                <MobileCollapse title="🏷️ Grade / Period / Tag Filters" color="#f472b6">
+                  {(()=>{
+                    let allGroups=[];
+                    try{const raw=localStorage.getItem("signal_cargo_filter_groups");allGroups=raw?JSON.parse(raw):[];}catch{}
+                    const gradeGroups=allGroups.filter(g=>(g.category||"grade")==="grade");
+                    const showRaw=gradeGroups.length===0;
+                    const rawGrades=showRaw?[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort().slice(0,20):[];
+                    const usedTags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
+                    const B=({active,onClick,children,red})=>(
+                      <button onClick={onClick} style={{...fb(active),padding:"6px 10px",fontSize:12,color:red?C.red:active?"#d9ecff":"#9fc3f5",borderColor:red?C.red+"55":undefined}}>{children}</button>
+                    );
+                    return(
+                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                        <COL label="Grade" col={C.purple}>
+                          {showRaw
+                            ?rawGrades.map(g=><B key={g} active={cGradeFilter===g} onClick={()=>setCGradeFilter(v=>v===g?"":g)}>{g}</B>)
+                            :gradeGroups.map(grp=><B key={grp.id} active={cGradeFilter===grp.id} onClick={()=>setCGradeFilter(v=>v===grp.id?"":grp.id)}>{grp.label}</B>)
+                          }
+                          {cGradeFilter&&gradeGroups.some(g=>g.id===cGradeFilter)&&<B active={false} red onClick={()=>setCGradeFilter("")}>✕ Clear</B>}
+                        </COL>
+                        <COL label="Period" col="#94a3b8">
+                          {[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([v,l])=>(
+                            <B key={v||"all"} active={cTimeFilter===v} onClick={()=>setCTimeFilter(v)}>{l}</B>
+                          ))}
+                        </COL>
+                        <COL label="Tag" col="#f472b6">
+                          {usedTags.map(t=>(
+                            <B key={t} active={cTagFilter===t} onClick={()=>setCTagFilter(v=>v===t?"":t)}>{t}</B>
+                          ))}
+                          {cTagFilter&&<B active={false} red onClick={()=>setCTagFilter("")}>✕ Clear</B>}
+                        </COL>
+                        {(cGradeFilter||cFilter!=="ALL"||cTimeFilter||cTagFilter)&&(
+                          <button onClick={()=>{setCGradeFilter("");setCFilter("ALL");setCTimeFilter("");setCTagFilter("");}}
+                            style={{...fb(false),color:C.red,borderColor:C.red+"55",padding:"6px 10px",fontSize:12,alignSelf:"flex-start"}}>
+                            ✕ Clear all filters
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </MobileCollapse>
+              </div>
+            )}
+            {/* Stats + Copy/CSV/Delete */}
+            <div style={{
+              display:"flex",alignItems:"center",gap:8,padding:"5px 10px",
+              background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,
+              flexWrap:"nowrap",minHeight:38,height:38,boxSizing:"border-box",
+              overflowX:"auto",overflowY:"hidden",scrollbarWidth:"thin"
+            }}>
+              <button onClick={()=>setShowAddCargo(v=>!v)}
+                style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
+                  border:showAddCargo?"1px solid rgba(250,163,86,0.5)":"1px solid rgba(250,163,86,0.3)",
+                  background:showAddCargo?"rgba(250,163,86,0.12)":"rgba(250,163,86,0.07)",color:"#faa356"}}>
+                {showAddCargo?"✕ Cancel":"+ Add cargo"}
+              </button>
+              <Suspense fallback={null}><ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes} allFilteredCargoes={filtC}
+                onExportAll={async()=>{
+                  // Fetch ALL matching cargoes from DB with current search
+                  const term=cSearch.trim();
+                  let query=supabase.from("cargoes").select("*").order("updated",{ascending:false});
+                  if(term) query=query.or(`charterer.ilike.%${term}%,vessel.ilike.%${term}%,load.ilike.%${term}%,disch.ilike.%${term}%,cargo.ilike.%${term}%`);
+                  // Fetch in batches to get all
+                  let all=[];let from=0;const BATCH=1000;
+                  while(true){
+                    const{data,error}=await query.range(from,from+BATCH-1);
+                    if(error||!data)break;
+                    all=[...all,...data.map(normaliseCargo)];
+                    if(data.length<BATCH)break;
+                    from+=BATCH;
+                  }
+                  // Apply in-memory filters
+                  let list=all;
+                  if(cTagFilter)list=list.filter(c=>(c.tag||"").toLowerCase()===cTagFilter.toLowerCase());
+                  if(cGradeFilter){
+                    let allGroups=[];try{const raw=localStorage.getItem("signal_cargo_filter_groups");allGroups=raw?JSON.parse(raw):[];}catch{}
+                    const grp=allGroups.find(g=>g.id===cGradeFilter);
+                    if(grp){const fm={grade:"cargo",load:"load",disch:"disch",charterer:"charterer",tag:"tag"};const f=fm[grp.category||"grade"]||"cargo";list=list.filter(c=>grp.aliases.some(a=>(c[f]||"").toLowerCase().includes(a.toLowerCase())));}
+                    else list=list.filter(c=>(c.cargo||"").toLowerCase().includes(cGradeFilter.toLowerCase()));
+                  }
+                  return list;
+                }}
+              /></Suspense>
+              {selCargoes.size>0&&(
+                <button onClick={()=>React.startTransition(()=>setTab("reports"))} style={{fontSize:11,fontWeight:600,padding:"2px 9px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                  📋 To Report ({selCargoes.size})
+                </button>
+              )}
+              {selCargoes.size>0&&(
+                <button onClick={()=>setPendingDel({type:"allcargo",id:"__SELCARGO__",label:selCargoes.size+" cargo"+(selCargoes.size!==1?"es":"")})}
+                  style={{fontSize:11,fontWeight:600,padding:"2px 9px",borderRadius:4,border:"1px solid rgba(255,107,107,0.4)",background:"rgba(255,107,107,0.1)",color:"#ff6b6b",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                  Delete ({selCargoes.size})
+                </button>
+              )}
+              {selCargoes.size>0&&(
+                <button
+                  ref={bulkCargoTagBtnRef}
+                  onClick={openBulkCargoTags}
+                  title="Add a tag to all selected cargoes"
+                  style={{
+                    fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,
+                    border:"1px solid rgba(88,166,255,0.48)",
+                    background:"rgba(88,166,255,.12)",color:"#79c0ff",
+                    cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0
+                  }}>
+                  + Add to tag ({selCargoes.size})
+                </button>
+              )}
+              <div style={{width:1,height:14,background:C.bd2,flexShrink:0}}/>
+              <div style={{display:"flex",alignItems:"center",gap:12,whiteSpace:"nowrap",flexShrink:0}}>
+                <span style={{fontSize:11,color:C.faint}}>This wk <span style={{color:"#4fc3f7",fontWeight:800}}>{weekCounts.thisWk}</span></span>
+                <span style={{fontSize:11,color:C.faint}}>Last wk <span style={{color:"rgba(160,190,230,.70)",fontWeight:800}}>{weekCounts.lastWk}</span></span>
+              </div>
+              <span style={{flex:"1 0 18px",minWidth:18}}/>
+              {/* Search */}
+              <div style={{position:"relative",flexShrink:0}}>
+                <input value={cSearch} onChange={e=>{const v=e.target.value;setCSearch(v);clearTimeout(window._csTimer);window._csTimer=setTimeout(()=>onCargoSearch(v),350);}} placeholder="Search cargoes…"
+                  style={{width:240,background:C.bg2,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
+                {cSearch&&<button onClick={()=>{setCSearch("");onCargoSearch("");}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
+              </div>
+              <span style={{fontSize:11,color:C.faint,whiteSpace:"nowrap"}}>Total <span style={{color:C.tx,fontWeight:800}}>{cargoTotal||cargoes.length}</span></span>
+              <span style={{fontSize:11,color:C.faint,whiteSpace:"nowrap"}}>Showing <span style={{color:C.blue,fontWeight:800}}>{filtC.length}</span></span>
+              {/* Sort dropdown */}
+              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                <span style={{fontSize:11,color:C.faint,whiteSpace:"nowrap"}}>Sort</span>
+                <select value={cSortK} onChange={e=>{setCsortK(e.target.value);setCsortD(-1);}}
+                  style={{fontSize:11,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",colorScheme:"dark"}}>
+                  <option value="Updated">Updated</option>
+                  <option value="Status">Status</option>
+                  <option value="Vessel">Vessel</option>
+                  <option value="Charterer">Charterer</option>
+                  <option value="Cargo">Cargo</option>
+                  <option value="Load">Load</option>
+                  <option value="Disch">Disch</option>
+                  <option value="LaycanStart">From</option>
+                  <option value="Freight">Freight</option>
+                </select>
+                <button onClick={()=>setCsortD(d=>d*-1)}
+                  style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",minWidth:28}}>
+                  {cSortD>0?"▲":"▼"}
+                </button>
+              </div>
+            </div>
+
+            {bulkCargoTagOpen&&(
+              <>
+                <div style={{position:"fixed",inset:0,zIndex:19990}} onClick={()=>setBulkCargoTagOpen(false)}/>
+                <div style={{
+                  position:"fixed",top:bulkCargoTagPos.top,left:bulkCargoTagPos.left,zIndex:19999,
+                  width:190,maxHeight:360,overflowY:"auto",overflowX:"hidden",
+                  background:"#0a1628",border:"1px solid rgba(88,166,255,0.34)",borderRadius:7,
+                  padding:6,boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
+                  display:"flex",flexDirection:"column",gap:3
+                }}>
+                  <div style={{fontSize:9,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",padding:"2px 3px 5px"}}>
+                    Add {selCargoes.size} selected to tag
+                  </div>
+                  {getTagListFor("cargo").map(t=>{
+                    const col=getTagColor(t);
+                    return(
+                      <button key={t} onClick={()=>applyTagToSelectedCargoes(t)}
+                        style={{
+                          fontSize:11,padding:"4px 8px",borderRadius:3,textAlign:"left",
+                          cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
+                          border:"1px solid "+(col?col+"55":"rgba(88,166,255,0.12)"),
+                          background:"transparent",color:col||"rgba(160,200,255,0.78)"
+                        }}>
+                        {col&&<span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:col,marginRight:6,verticalAlign:"middle"}}/>}
+                        {String(t).toUpperCase()}
+                      </button>
+                    );
+                  })}
+                  <div style={{height:1,background:C.bd2,margin:"3px 0"}}/>
+                  <button onClick={()=>applyTagToSelectedCargoes("")}
+                    style={{
+                      fontSize:10,padding:"4px 8px",borderRadius:3,textAlign:"left",
+                      cursor:"pointer",fontFamily:"inherit",
+                      border:"1px solid rgba(255,107,107,.28)",
+                      background:"transparent",color:"rgba(255,107,107,.72)"
+                    }}>
+                    ✕ Clear tag
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Row hover highlight + mobile no-truncation */}
+            <style>{`
+              .cargo-table tr:hover td{background:rgba(58,130,246,0.06)!important;}
+              .pos-table-wrap tbody tr:hover td{background:rgba(58,130,246,0.06)!important;}
+              @media(max-width:900px){
+                .cargo-table td, .cargo-table td>*{overflow:visible!important;text-overflow:unset!important;white-space:nowrap!important;max-width:none!important;}
+              }
+            `}</style>
+            <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}
+              onClick={e=>{
+                const th=e.target.closest("th");
+                if(!th) return;
+                const row=th.parentElement;
+                if(!row) return;
+                const idx=Array.from(row.children).indexOf(th);
+                const col=cargoColumns[idx];
+                if(col?.sortKey){const d=cSortK===col.sortKey?cSortD*-1:-1;setCsortK(col.sortKey);setCsortD(d);}
+              }}>
+            <div style={{...tableWrap,minWidth:mobile?"1200px":undefined}} className="cargo-table">
+              {showAddCargo&&<AddCargoInlineRow onSave={onAddC} onClose={()=>setShowAddCargo(false)}/>}
+              {filtC.length===0
+                ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
+                : <MatrixTable
+    columns={(()=>{const allTicked=filtC.length>0&&filtC.every(c=>selCargoes.has(c.id));return cargoColumns.map(col=>col.key==="select"?{...col,label:<span style={{fontSize:11,color:allTicked?"#4fc3f7":C.faint,cursor:"pointer",userSelect:"none"}} onClick={e=>{e.stopPropagation();setSelCargoes(allTicked?new Set():new Set(filtC.map(c=>c.id)));}}>{allTicked?"[✓]":"[ ]"}</span>}:col);})()}
+    data={filtC}
+    keyField="id"
+    getRowStyle={(row,i)=>selCargoes.has(row.id)?"rgba(88,166,255,0.12)":i%2?"rgba(255,255,255,0.02)":"transparent"}
+    renderRow={(f, td) => {
+  const i = filtC.findIndex(x => x.id === f.id);
+  const sc = f.status==="FIXED" ? C.green : f.status==="SUBS" ? C.purple : f.status==="FAILED" ? C.red : C.faint;
+
+  return (
+    <>
+      {/* SELECT */}
+      <td
+        style={{ ...tdCtr, width: 28, padding: "0 2px" }}
+        onClick={e => {
+          e.stopPropagation();
+          setSelCargoes(p => {
+            const n = new Set(p);
+            n.has(f.id) ? n.delete(f.id) : n.add(f.id);
+            return n;
+          });
+        }}
+      >
+        <span style={{ fontSize: 12, color: selCargoes.has(f.id) ? "#4fc3f7" : C.faint }}>
+          {selCargoes.has(f.id) ? "[✓]" : "[ ]"}
+        </span>
+      </td>
+
+      {/* STATUS */}
+      <td
+        style={{ ...tdCtr, color: sc, fontWeight: 700, cursor: "pointer" }}
+        onClick={e => {
+          e.stopPropagation();
+          const opts = ["SUBS","FIXED","FAILED",""];
+          const cur = opts.indexOf(f.status || "");
+          onUpdateC(f.id, "status", opts[(cur + 1) % opts.length]);
+        }}
+      >
+        {f.status || ""}
+      </td>
+
+      <EC
+  value={f.vessel}
+  color={C.blue}
+  placeholder="TBN"
+  onSave={v2 => onUpdateC(f.id, "vessel", v2)}
+  data-cell={`${i}-cvessel`}
+  onTab={() => focusCell(i, "charterer")}
+  onShiftTab={() => focusCell(i, "status")}
+  onDown={() => focusCell(i + 1, "cvessel")}
+  onUp={() => focusCell(i - 1, "cvessel")}
+  style={mobile?{minWidth:'auto',overflow:'visible',whiteSpace:'nowrap'}:undefined}
+/>
+
+<EC
+  value={toTCase(f.charterer)}
+  color={"#79c0ff"}
+  bold
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "charterer", toTCase(v2))}
+  data-cell={`${i}-charterer`}
+  onTab={() => focusCell(i, "qty")}
+  onShiftTab={() => focusCell(i, "cvessel")}
+  onDown={() => focusCell(i + 1, "charterer")}
+  onUp={() => focusCell(i - 1, "charterer")}
+  style={mobile?{minWidth:'auto',overflow:'visible',whiteSpace:'nowrap'}:undefined}
+/>
+
+<EC
+  value={normaliseQty(f.qty)}
+  color={C.amber}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "qty", normaliseQty(v2))}
+  data-cell={`${i}-qty`}
+  onTab={() => focusCell(i, "cargo")}
+  onShiftTab={() => focusCell(i, "charterer")}
+  onDown={() => focusCell(i + 1, "qty")}
+  onUp={() => focusCell(i - 1, "qty")}
+/>
+
+<EC
+  value={f.cargo || ""}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "cargo", v2)}
+  data-cell={`${i}-cargo`}
+  onTab={() => focusCell(i, "load")}
+  onShiftTab={() => focusCell(i, "qty")}
+  onDown={() => focusCell(i + 1, "cargo")}
+  onUp={() => focusCell(i - 1, "cargo")}
+/>
+
+<EC
+  value={toTCase(f.load || "")}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "load", toTCase(v2))}
+  data-cell={`${i}-load`}
+  onTab={() => focusCell(i, "disch")}
+  onShiftTab={() => focusCell(i, "cargo")}
+  onDown={() => focusCell(i + 1, "load")}
+  onUp={() => focusCell(i - 1, "load")}
+  style={mobile?{minWidth:'auto',overflow:'visible',whiteSpace:'nowrap'}:undefined}
+/>
+
+<EC
+  value={toTCase(f.disch || "")}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "disch", toTCase(v2))}
+  data-cell={`${i}-disch`}
+  onTab={() => focusCell(i, "from")}
+  onShiftTab={() => focusCell(i, "load")}
+  onDown={() => focusCell(i + 1, "disch")}
+  onUp={() => focusCell(i - 1, "disch")}
+  style={mobile?{minWidth:'auto',overflow:'visible',whiteSpace:'nowrap'}:undefined}
+/>
+
+<EC
+  value={fmtDateShort(f.from)}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "from", v2)}
+  data-cell={`${i}-from`}
+  onTab={() => focusCell(i, "to")}
+  onShiftTab={() => focusCell(i, "disch")}
+  onDown={() => focusCell(i + 1, "from")}
+  onUp={() => focusCell(i - 1, "from")}
+/>
+
+<EC
+  value={fmtDateShort(f.to)}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "to", v2)}
+  data-cell={`${i}-to`}
+  onTab={() => focusCell(i, "freight")}
+  onShiftTab={() => focusCell(i, "from")}
+  onDown={() => focusCell(i + 1, "to")}
+  onUp={() => focusCell(i - 1, "to")}
+/>
+
+<EC
+  value={fmtFreight(f.freight) || f.freight}
+  color={"#a8e6a3"}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "freight", fmtFreight(v2) || v2)}
+  data-cell={`${i}-freight`}
+  onTab={() => focusCell(i, "comment")}
+  onShiftTab={() => focusCell(i, "to")}
+  onDown={() => focusCell(i + 1, "freight")}
+  onUp={() => focusCell(i - 1, "freight")}
+  style={mobile?{minWidth:'auto',overflow:'visible',whiteSpace:'nowrap'}:undefined}
+/>
+
+<EC
+  value={f.comment || ""}
+  color={C.dim}
+  placeholder=""
+  onSave={v2 => onUpdateC(f.id, "comment", v2)}
+  data-cell={`${i}-comment`}
+  onTab={() => focusCell(i + 1, "cvessel")}
+  onShiftTab={() => focusCell(i, "freight")}
+  onDown={() => focusCell(i + 1, "comment")}
+  onUp={() => focusCell(i - 1, "comment")}
+/>
+
+      {/* TAG */}
+      <TagCell cargoId={f.id} tag={f.tag} onUpdateC={onUpdateC}/>
+
+      {/* UPDATED */}
+      <td style={{ ...td2, color: C.faint, textAlign:"left" }}>
+        {f.updated ? new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
+      </td>
+
+      {/* WHO ENTERED — H (blue) or L (green) badge */}
+      <td style={{...tdCtr,width:20,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
+        {(f.entered_by==="H"||f.entered_by==="L")&&(
+          <span title={f.entered_by==="H"?"Entered by Henriksen":"Entered by Løken"}
+            style={{display:"inline-flex",alignItems:"center",justifyContent:"center",
+              width:14,height:14,borderRadius:"50%",fontSize:8,fontWeight:700,lineHeight:1,
+              background:f.entered_by==="H"?"rgba(88,166,255,0.25)":"rgba(74,222,128,0.25)",
+              color:f.entered_by==="H"?"#79c0ff":"#4ade80",
+              border:"1px solid "+(f.entered_by==="H"?"rgba(88,166,255,0.5)":"rgba(74,222,128,0.5)")}}>
+            {f.entered_by}
+          </span>
         )}
+      </td>
+      {/* DELETE */}
+      <td
+        style={{ ...tdCtr, width: 26, minWidth: 26, maxWidth: 26, padding: "0 2px" }}
+        onClick={e=>e.stopPropagation()}
+      >
+        <button
+          onClick={(e)=>{
+            e.stopPropagation();
+            setPendingDel({type:"cargo",id:f.id,label:f.vessel||"cargo"});
+          }}
+          style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.7}}
+          title="Delete"
+        >
+          ✕
+        </button>
+      </td>
+    </>
+  );
+}}
+  />}
+              {hasMore&&
+              <div style={{textAlign:"center",padding:"12px"}}>
+                <button onClick={onLoadMore} style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"4px 16px",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Load more</button>
+              </div>}
+            </div>
+            </div>{/* end cargo scroll wrapper */}
+          </div>
+        )}
+
+        {/* ── FIXING ── */}
+        {tab==="clients"&&(
+          <Suspense fallback={<TabFallback/>}><ClientsTab/></Suspense>
+        )}
+        <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",display: tab==="fix" ? "block" : "none"}}>
+          <Suspense fallback={<TabFallback/>}><FixingTab vessels={vessels}/></Suspense>
+        </div>
+
+        {/* ── TIME CHARTER ── */}
+{tab==="tcv"&&(
+  <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+    <Suspense fallback={<TabFallback/>}>
+      <TimeCharterTab/>
+    </Suspense>
+  </div>
+)}
+
+        {/* ── PROJECTS ── */}
+        {tab==="projects"&&(
+          <div style={{overflowX:mobile?"hidden":"visible"}}>
+            <Suspense fallback={<TabFallback/>}><ProjectsTab/></Suspense>
+          </div>
+        )}
+
+        {/* ── MATRIX ── */}
+        {tab==="matrix"&&(
+          <div style={{border:"1px solid "+C.bd2,borderRadius:7,overflow:"hidden"}}>
+            <div style={{background:C.bg2,padding:"6px 14px",borderBottom:"1px solid "+C.bd2,display:"flex",gap:16,fontSize:13,color:C.dim,alignItems:"center",flexWrap:"wrap"}}>
+              <span style={{fontWeight:700,color:C.tx}}>🔗 Voyage Matrix</span>
+              <span>12.5 kts · 1d load · 18h disch</span>
+              <input value={mxSearch||""} onChange={e=>setMxSearch(e.target.value)} placeholder="🔍 Search vessel…"
+                style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:13,padding:"2px 8px",outline:"none",width:160,marginLeft:"auto"}}/>
+            </div>
+            {vessels.length===0
+              ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>🔗</div>Add vessels and cargoes</div>
+              :vessels.filter(v=>!mxSearch||v.vessel?.toLowerCase().includes(mxSearch.toLowerCase())||v.operator?.toLowerCase().includes(mxSearch.toLowerCase())).map((v,i)=>{
+                const fixes=cargoes.filter(c=>c.vessel&&c.vessel.toLowerCase()===v.vessel.toLowerCase()).sort((a,b)=>(b.updated||"").localeCompare(a.updated||""));
+                const cargo=fixes[0];const calc=cargo?calcVoyage(v,cargo):null;
+                const bg=i%2===0?C.bg:C.bg2;
+                const sc=cargo?(cargo.status==="FIXED"?C.green:cargo.status==="SUBS"?C.purple:cargo.status==="FAILED"?C.red:C.amber):C.faint;
+                return(
+                  <div key={v.vessel} style={{background:bg,borderBottom:"1px solid "+C.bd2,padding:"9px 14px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                      <div style={{minWidth:150,marginRight:4}}>
+                        <div style={{fontWeight:700,fontSize:13,color:C.blue}}>{toTCase(v.vessel)}</div>
+                        <div style={{fontSize:13,color:C.dim}}>{v.operator||""}</div>
+                      </div>
+                      <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,padding:"3px 9px",textAlign:"center"}}>
+                        <div style={{fontSize:11,color:C.faint,textTransform:"uppercase"}}>Now open</div>
+                        <div style={{fontSize:13,fontWeight:700,color:v.openPort==="EMPLOYED"?C.purple:C.amber}}>{v.openPort||"?"}</div>
+                        {v.date&&<div style={{fontSize:13,color:C.blue}}>{v.date}</div>}
+                      </div>
+                      {cargo&&<>
+                        <div style={{textAlign:"center",padding:"0 3px"}}>
+                          {calc?.ballastNm&&<div style={{fontSize:13,color:C.faint}}>{calc.ballastNm}nm</div>}
+                          <div style={{fontSize:15,color:C.faint}}>──▶</div>
+                          {calc?.ballastDays&&<div style={{fontSize:13,color:C.faint}}>{calc.ballastDays}d</div>}
+                        </div>
+                        <div style={{background:C.bg3,border:"1px solid "+sc+"55",borderRadius:5,padding:"3px 9px",textAlign:"center"}}>
+                          <div style={{fontSize:11,color:C.faint,textTransform:"uppercase"}}>Load</div>
+                          <div style={{fontSize:13,fontWeight:700}}>{cargo.load||"?"}</div>
+                          <div style={{fontSize:13,color:C.blue}}>{calc?.loadDate||cargo.from||"—"}</div>
+                        </div>
+                        <div style={{textAlign:"center",padding:"0 3px"}}>
+                          {calc?.ladenNm&&<div style={{fontSize:13,color:C.faint}}>{calc.ladenNm}nm</div>}
+                          <div style={{fontSize:15,color:sc}}>──▶</div>
+                          {cargo.cargo&&<div style={{fontSize:13,color:C.purple}}>{cargo.cargo}</div>}
+                        </div>
+                        <div style={{background:C.bg3,border:"1px solid "+(calc?.openDate?C.green:C.bd)+"88",borderRadius:5,padding:"3px 9px",textAlign:"center"}}>
+                          <div style={{fontSize:11,color:C.faint,textTransform:"uppercase"}}>Next open</div>
+                          <div style={{fontSize:13,fontWeight:700,color:calc?.openDate?C.green:C.dim}}>{cargo.disch||"?"}</div>
+                          {calc?.openDate?(<div style={{fontSize:13,color:C.green}}>~{calc.openDate}</div>):(<div style={{fontSize:13,color:C.faint}}>—</div>)}
+                        </div>
+                        <div style={{marginLeft:6,display:"flex",flexDirection:"column",gap:2}}>
+                          <span style={{fontSize:13,fontWeight:700,color:sc,background:sc+"18",border:"1px solid "+sc+"44",borderRadius:3,padding:"1px 7px"}}>{cargo.status}</span>
+                          {cargo.freight&&<span style={{fontSize:13,color:C.purple,fontWeight:700}}>{cargo.freight}</span>}
+                          {(()=>{
+                            const b=calc?.ballastNm||0;const l=calc?.ladenNm||0;
+                            if(!l)return null;
+                            const ets=calcEuEts(b,l,13,15,3,8,2,1,0.25,1,0.25,0,12.5,false);
+                            return ets>0?<span style={{fontSize:12,color:"#fd79a8",fontWeight:600,background:"rgba(253,121,168,0.08)",border:"1px solid rgba(253,121,168,0.25)",borderRadius:3,padding:"1px 5px",whiteSpace:"nowrap"}} title="Indicative EU ETS cost (50% scope, deep-sea)">ETS ~${ets.toLocaleString()}</span>:null;
+                          })()}
+                        </div>
+                      </>}
+                      {!cargo&&<div style={{marginLeft:8,fontSize:13,color:C.faint,fontStyle:"italic"}}>No fixture - vessel open</div>}
+                    </div>
+                    {v.spec?.fuel||v.spec?.iceClass?(<div style={{display:"flex",gap:3,marginTop:4}}>{v.spec?.fuel&&<Tag col={v.spec.fuel==="LNG"?C.green:C.purple}>{v.spec.fuel}</Tag>}{v.spec?.iceClass&&<Tag col={C.blue}>{v.spec.iceClass}</Tag>}</div>):null}
+                  </div>
+                );
+              })
+            }
+          </div>
+        )}
+
+        {/* ── DASHBOARD ── */}
+        {tab==="tce"&&(
+          <div style={{padding:"14px 0"}}>
+            <Suspense fallback={<TabFallback/>}><TCECalculator/></Suspense>
+          </div>
+        )}
+        {tab==="dash"&&(
+          <Suspense fallback={<TabFallback/>}><Dashboard vessels={vessels} cargoes={cargoes} history={history||[]}/></Suspense>
+        )}
+        {tab==="notes"&&(
+          <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
+            <Suspense fallback={<TabFallback/>}><NotesTab/></Suspense>
+          </div>
+        )}
+        {tab==="cal"&&<Suspense fallback={<TabFallback/>}><CalendarTab/></Suspense>}
+        {tab==="vessels"&&(
+          <Suspense fallback={<TabFallback/>}><VesselUploader/></Suspense>
+        )}
+        <div style={{display: tab==="fleet" ? "block" : "none"}}>
+          <Suspense fallback={<TabFallback/>}><FleetTab/></Suspense>
+        </div>
+        {tab==="newbuilds"&&(
+          <Suspense fallback={<TabFallback/>}><NewbuildsTab/></Suspense>
+        )}
+        {tab==="settings"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px"}}>
+            <TagManager/>
+            <div style={{height:1,background:C.bd2,margin:"4px 0"}}/>
+            {/* Original settings component */}
+            <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
+          </div>
+        )}
+        {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={Array.from(selCargoes)}/></Suspense></div>}
+        {tab==="map"&&<Suspense fallback={<TabFallback/>}><FreightMapTab/></Suspense>}
+      </TabErrorBoundary>
       </div>
 
-      {/* ── Regional fleet history ── */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(640px,1.1fr) minmax(520px,.9fr)",gap:12}}>
-        {panel(
-          <>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
-              {secHead("Open fleet by main region · vessel count")}
-              <span style={{fontSize:9,color:D.faint}}>historical totals</span>
-            </div>
-            {regionHistoryLoading?<div style={{fontSize:11,color:D.faint,padding:"12px 0"}}>Loading historical fleet…</div>:regionHistoryError?<div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Run updated Supabase RPC SQL: {regionHistoryError}</div>:<>
-              <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"1px 2px 7px",fontSize:10.5,fontWeight:900,color:D.dim,textTransform:"uppercase",letterSpacing:".04em"}}><span>Region</span><span style={{textAlign:"right",color:D.tx}}>NOW</span><span style={{textAlign:"right"}}>14D</span><span style={{textAlign:"right"}}>30D</span><span style={{textAlign:"right"}}>90D</span></div>
-              {currentRegionRows.map(({region,now,d14,d30,d90})=><div key={region} style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,alignItems:"center",padding:"6px 2px",borderTop:"1px solid "+D.border}}><span style={{fontSize:11,fontWeight:800,color:REGION_COLORS[region]||D.dim}}>{region}</span><span style={{fontSize:11,textAlign:"right",color:D.tx,fontWeight:850}}>{now}</span><span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d14}</span><span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d30}</span><span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d90}</span></div>)}
-              <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"7px 2px 0",borderTop:"1px solid "+D.border2,fontSize:10,fontWeight:850}}><span style={{color:D.faint}}>TOTAL FLEET</span><span style={{textAlign:"right",color:D.tx}}>{regionTotals.now}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d14}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d30}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d90}</span></div>
-            </>}
-          </>,
-          {minWidth:0}
-        )}
-        {panel(
-          <>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>{secHead("Regional tonnage supply · now vs 30d")}<span style={{fontSize:9,color:D.faint}}>fleet totals</span></div>
-            <RegionCompareChart rows={currentRegionRows} colors={REGION_COLORS}/>
-            <div style={{display:"flex",gap:14,marginTop:8,fontSize:10,color:D.faint}}><span><b style={{color:"#73c7ff"}}>■</b> Current</span><span><b style={{color:"rgba(190,202,220,.65)"}}>■</b> 30 days ago</span></div>
-          </>,
-          {minWidth:0}
-        )}
       </div>
 
-      {/* ── News Feed ── */}
-      <NewsFeed/>
+      {/* Vessel Popout — also feeds the AIS map so clicking a vessel shows its route */}
+      {showVesselPopout && popoutVessel && (
+        <VesselPopout
+          vessel={popoutVessel}
+          onClose={() => {
+            setShowVesselPopout(false);
+            setPopoutVessel(null);
+          }}
+          onUpdate={() => {
+            // Refresh vessels list to show updated tags
+            if (onRefresh) onRefresh();
+          }}
+        />
+      )}
 
-      {/* ── WS / FFA tracker ── */}
-      <WSTracker/>
+      {/* Context Menu for Right-Click */}
+      {contextMenu && (
+        <div
+          style={{
+            position: "fixed",
+            top: contextMenu.y,
+            left: contextMenu.x,
+            background: C.bg2,
+            border: "1px solid " + C.bd,
+            borderRadius: 6,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+            zIndex: 10000,
+            minWidth: 180
+          }}
+          onMouseLeave={() => setContextMenu(null)}
+        >
+          <div
+            onClick={() => {
+              setPopoutVessel(contextMenu.vessel);
+              setShowVesselPopout(true);
+              setSelectedAISVessels([contextMenu.vessel]);
+              setContextMenu(null);
+            }}
+            style={{
+              padding: "10px 14px",
+              fontSize: 13,
+              color: C.tx,
+              cursor: "pointer",
+              borderBottom: "1px solid " + C.bd
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = C.bg3}
+            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >
+            📋 View Details & Notes
+          </div>
+          <div
+            onClick={() => {
+              // Quick copy vessel name
+              navigator.clipboard.writeText(contextMenu.vessel.vessel);
+              setContextMenu(null);
+            }}
+            style={{
+              padding: "10px 14px",
+              fontSize: 13,
+              color: C.tx,
+              cursor: "pointer"
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = C.bg3}
+            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >
+            📝 Copy Vessel Name
+          </div>
+        </div>
+      )}
+
+
+
+      {/* ── Add Vessel Modal ── */}
+
 
     </div>
   );
 }
 
-
-// ─── SVG charts (no dependencies) ────────────────────────────────────────────
-function SegmentFWChart({data,segments,colors}) {
-  const W=760,H=220,PL=42,PR=22,PT=12,PB=28;
-  const iW=W-PL-PR,iH=H-PT-PB;
-  const vals=data.flatMap(d=>segments.map(s=>d[s])).filter(v=>v!=null&&v>=0);
-  if(!vals.length)return null;
-  const mn=0,mx=Math.max(7,Math.ceil(Math.max(...vals)+2)),range=mx||1;
-  const xs=data.map((_,i)=>PL+i/(data.length-1||1)*iW);
-  return <div>
-    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",maxHeight:H,display:"block"}}>
-      {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-5} y={y+4} fill={C.faint} fontSize="9" textAnchor="end">{v}d</text></g>})}
-      {segments.map(seg=>{let path="";data.forEach((d,i)=>{const v=d[seg];if(v==null||v<0)return;const p=[xs[i],PT+iH-(v-mn)/range*iH];path+=(path?"L":"M")+p.join(",")});return path?<path key={seg} d={path} fill="none" stroke={colors[seg]||C.blue} strokeWidth="1.8" strokeLinejoin="round" opacity=".92" pathLength="1" strokeDasharray="1" strokeDashoffset="1"><animate attributeName="stroke-dashoffset" from="1" to="0" dur=".85s" fill="freeze"/></path>:null})}
-      {data.map((d,i)=>(i===0||i===data.length-1||data.length<=8)?<text key={i} x={xs[i]} y={H-7} fill={C.faint} fontSize="8" textAnchor="middle">{fmtDateShort(d.date)}</text>:null)}
-    </svg>
-    <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:2}}>{segments.map(s=><span key={s} style={{fontSize:10,color:colors[s]||C.blue}}>● {s}</span>)}</div>
-  </div>;
-}
-
-function RegionCompareChart({rows,colors}) {
-  if(!rows?.length)return <div style={{color:C.faint,fontSize:11,padding:20,textAlign:"center"}}>No regional data.</div>;
-  const max=Math.max(1,...rows.flatMap(r=>[r.now||0,r.d30||0]));
-  return <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:3}}>
-    {rows.map(r=><div key={r.region} style={{display:"grid",gridTemplateColumns:"145px 1fr 38px",gap:8,alignItems:"center"}}>
-      <span style={{fontSize:10,fontWeight:800,color:colors[r.region]||C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.region}</span>
-      <div style={{display:"grid",gap:3}}>
-        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.now?2:0,r.now/max*100)+"%",background:"#73c7ff",borderRadius:99}}/></div>
-        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.d30?2:0,r.d30/max*100)+"%",background:"rgba(190,202,220,.62)",borderRadius:99}}/></div>
-      </div>
-      <div style={{fontSize:9,textAlign:"right",lineHeight:1.45}}><div style={{color:C.tx,fontWeight:800}}>{r.now}</div><div style={{color:C.faint}}>{r.d30}</div></div>
-    </div>)}
-  </div>;
-}
-
-function FWChart({data}) {
-  const W=700,H=180,PL=36,PR=16,PT=10,PB=28;
-  const iW=W-PL-PR, iH=H-PT-PB;
-  const vals=data.map(d=>d.avg).filter(v=>v!=null);
-  if(!vals.length)return null;
-  const mn=Math.min(...vals)-2, mx=Math.max(...vals)+2;
-  const range=mx-mn||1;
-  const xs=data.map((_,i)=>PL+i/(data.length-1||1)*iW);
-  const ys=data.map(d=>d.avg!=null?PT+iH-(d.avg-mn)/range*iH:null);
-
-  // Build path
-  const pts=data.map((d,i)=>ys[i]!=null?[xs[i],ys[i]]:null).filter(Boolean);
-  const path="M"+pts.map(p=>p.join(",")).join(" L");
-  const area="M"+pts[0][0]+","+( PT+iH)+" L"+pts.map(p=>p.join(",")).join(" L")+" L"+pts[pts.length-1][0]+","+(PT+iH)+" Z";
-
-  // Y axis ticks
-  const ticks=[mn, Math.round((mn+mx)/2), mx].map(v=>({v:Math.round(v),y:PT+iH-(v-mn)/range*iH}));
-
-  return(
-    <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",maxHeight:H,display:"block"}}>
-      <defs>
-        <linearGradient id="fwg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={C.blue} stopOpacity="0.3"/>
-          <stop offset="100%" stopColor={C.blue} stopOpacity="0"/>
-        </linearGradient>
-      </defs>
-      {/* Grid */}
-      {ticks.map(t=>(
-        <g key={t.v}>
-          <line x1={PL} y1={t.y} x2={W-PR} y2={t.y} stroke={C.bd2} strokeWidth="1"/>
-          <text x={PL-4} y={t.y+4} fill={C.faint} fontSize="9" textAnchor="end">{t.v>=0?"+":""}{t.v}d</text>
-        </g>
-      ))}
-      {/* Zero line */}
-      {(mn<0&&mx>0)?(<line x1={PL} y1={PT+iH-(-mn)/range*iH} x2={W-PR} y2={PT+iH-(-mn)/range*iH} stroke={C.green} strokeWidth="1" strokeDasharray="3,3"/>):null}
-      {/* Area */}
-      <path d={area} fill="url(#fwg)"/>
-      {/* Line */}
-      <path d={path} fill="none" stroke={C.blue} strokeWidth="2" strokeLinejoin="round"/>
-      {/* Dots + labels */}
-      {data.map((d,i)=>ys[i]!=null&&(
-        <g key={i}>
-          <circle cx={xs[i]} cy={ys[i]} r="3" fill={C.blue}/>
-          {(i===0||i===data.length-1||(data.length<11))?(<text x={xs[i]} y={H-PB+14} fill={C.faint} fontSize="8" textAnchor="middle">{d.date?.split(" ").slice(0,2).join(" ")}</text>):null}
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-function OpChart({data,ops,colors}) {
-  const W=700,H=160,PL=36,PR=16,PT=10,PB=24;
-  const iW=W-PL-PR,iH=H-PT-PB;
-  const allVals=data.flatMap(d=>ops.map(op=>d[op])).filter(v=>v!=null);
-  if(!allVals.length)return <div style={{color:C.faint,fontSize:12}}>Not enough operator data yet.</div>;
-  const mn=Math.min(...allVals)-1,mx=Math.max(...allVals)+1,range=mx-mn||1;
-  const xs=data.map((_,i)=>PL+i/(data.length-1||1)*iW);
-
-  return(
-    <div>
-      <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",maxHeight:H,display:"block"}}>
-        {ops.map((op,oi)=>{
-          const pts=data.map((d,i)=>d[op]!=null?[xs[i],PT+iH-(d[op]-mn)/range*iH]:null);
-          const valid=pts.filter(Boolean);
-          if(valid.length<2)return null;
-          // Build path skipping nulls
-          let path="";
-          pts.forEach((p,i)=>{if(p){path+=(path?"L":"M")+p.join(",");}});
-          return <path key={op} d={path} fill="none" stroke={colors?.[op] || colors?.[oi] || C.blue} strokeWidth="1.5" strokeLinejoin="round" opacity="0.85"/>;
-        })}
-        {[mn,mx].map(v=>(
-          <g key={v}>
-            <text x={PL-4} y={PT+iH-(v-mn)/range*iH+4} fill={C.faint} fontSize="9" textAnchor="end">{v>=0?"+":""}{Math.round(v)}d</text>
-          </g>
-        ))}
-        {data.map((_,i)=>(i===0||i===data.length-1)?(<text key={i} x={xs[i]} y={H-PB+14} fill={C.faint} fontSize="8" textAnchor="middle">{data[i].date?.split(" ").slice(0,2).join(" ")}</text>):null)}
-      </svg>
-      {/* Legend */}
-      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:4}}>
-        {ops.map((op,i)=>(<span key={op} style={{fontSize:12,color:colors?.[op] || colors?.[i] || C.blue}}><span style={{fontWeight:700}}>●</span> {op}</span>))}
-      </div>
-    </div>
-  );
-}
-// --- Date formatter (21 Jan)
-function fmtDateShort(d){
-  if(!d) return "";
-  const s=String(d).trim();
-  // Already "13 Mar" or "13 Mar 26" — return as-is
-  if(/^\d{1,2}\s[A-Za-z]{3}/.test(s)) return s.slice(0,6);
-  // ISO date string
-  const x = new Date(s);
-  if(isNaN(x)) return s;
-  return x.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
-}
-// ─── Cargo schema normaliser ──────────────────────────────────────────────────
-
-export { WSTracker, NewsFeed, Dashboard, FWChart, OpChart };
-export default Dashboard;
+export default DesktopApp;
