@@ -594,19 +594,55 @@ function CommodityTape({data}) {
   const items=Array.isArray(data?.items)?data.items:[];
   if(!items.length)return null;
   return(
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(112px,1fr))",gap:6}}>
-      {items.map(x=><div key={x.id} style={{background:"#111f35",border:"1px solid rgba(58,130,246,.14)",borderRadius:6,padding:"10px 11px",minWidth:0}}>
-        <div style={{fontSize:8.5,fontWeight:800,color:"rgba(120,160,220,.55)",textTransform:"uppercase",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{x.label}</div>
-        <div style={{display:"flex",alignItems:"baseline",gap:5,marginTop:2}}>
-          <span style={{fontSize:15,fontWeight:850,color:"#e8f2ff"}}>{x.price!=null?Number(x.price).toLocaleString("en-US",{maximumFractionDigits:2}):"—"}</span>
-          <span style={{fontSize:8,color:"rgba(120,160,220,.45)"}}>{x.unit||""}</span>
+    <div style={{
+      display:"flex",
+      flexWrap:"wrap",
+      gap:8,
+      width:"100%",
+      height:"100%",
+      alignContent:"stretch"
+    }}>
+      {items.map(x=><div key={x.id} style={{
+        flex:"1 1 155px",
+        minWidth:145,
+        minHeight:78,
+        background:"#111f35",
+        border:"1px solid rgba(88,166,255,.22)",
+        borderRadius:7,
+        padding:"11px 13px",
+        display:"flex",
+        flexDirection:"column",
+        justifyContent:"center",
+        boxSizing:"border-box"
+      }}>
+        <div style={{
+          fontSize:11,
+          fontWeight:900,
+          color:"rgba(155,200,255,.88)",
+          textTransform:"uppercase",
+          letterSpacing:".045em",
+          whiteSpace:"nowrap",
+          overflow:"hidden",
+          textOverflow:"ellipsis"
+        }}>{x.label}</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:6,marginTop:5,minWidth:0}}>
+          <span style={{fontSize:20,fontWeight:900,color:"#f1f7ff",lineHeight:1}}>
+            {x.price!=null?Number(x.price).toLocaleString("en-US",{maximumFractionDigits:2}):"—"}
+          </span>
+          <span style={{fontSize:9.5,fontWeight:700,color:"rgba(135,175,225,.58)",whiteSpace:"nowrap"}}>
+            {x.unit||""}
+          </span>
         </div>
-        {x.changePct!=null&&<div style={{fontSize:8.5,color:Number(x.changePct)>=0?"#3fb950":"#ff6b6b",marginTop:1}}>{Number(x.changePct)>0?"+":""}{Number(x.changePct).toFixed(2)}%</div>}
+        {x.changePct!=null&&<div style={{
+          fontSize:9.5,
+          fontWeight:700,
+          color:Number(x.changePct)>=0?"#3fb950":"#ff6b6b",
+          marginTop:4
+        }}>{Number(x.changePct)>0?"+":""}{Number(x.changePct).toFixed(2)}%</div>}
       </div>)}
     </div>
   );
 }
-
 function VlccSparkline({history}) {
   const rows=Array.isArray(history)?history:[];
   if(!rows.length)return null;
@@ -924,7 +960,7 @@ function Dashboard({vessels, cargoes, history}) {
         {panel(
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-              {secHead("Energy & Commodities")}
+              <div style={{fontSize:12.5,fontWeight:900,color:"rgba(130,180,245,.82)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:8}}>▏ Energy & Commodities</div>
               <span style={{fontSize:9,color:D.faint}}>{commodities?.updatedAt?new Date(commodities.updatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):""}</span>
             </div>
             {commodities?<CommodityTape data={commodities}/>:<div style={{fontSize:11,color:D.faint,padding:"8px 0"}}>Loading commodity prices…</div>}
