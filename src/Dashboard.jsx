@@ -328,7 +328,7 @@ ${text}`}]
         {wsView==="graph"&&(
           <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:8,height:"100%",minHeight:0}}>
             <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
-              <div style={{fontSize:10.5,fontWeight:900,color:C.green,textTransform:"uppercase",marginBottom:3}}>Handy · TC6 / TC23</div>
+              <div style={{fontSize:11.5,fontWeight:900,color:C.green,textTransform:"uppercase",marginBottom:3,textAlign:"center",letterSpacing:".06em"}}>Handy</div>
               <div style={{flex:1,minHeight:0}}>
                 {histData.length>=2
                   ? <WSChart data={histData} routes={ROUTES.filter(r=>["TC6","TC23"].includes(r.id))} colors={routeColors} fill/>
@@ -336,7 +336,7 @@ ${text}`}]
               </div>
             </div>
             <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
-              <div style={{fontSize:10.5,fontWeight:900,color:C.blue,textTransform:"uppercase",marginBottom:3}}>MR · TC2 / TC14</div>
+              <div style={{fontSize:11.5,fontWeight:900,color:C.blue,textTransform:"uppercase",marginBottom:3,textAlign:"center",letterSpacing:".06em"}}>MR</div>
               <div style={{flex:1,minHeight:0}}>
                 {histData.length>=2
                   ? <WSChart data={histData} routes={ROUTES.filter(r=>["TC2","TC14"].includes(r.id))} colors={routeColors} fill/>
@@ -414,7 +414,7 @@ ${text}`}]
 }
 
 function WSChart({data,routes,colors,fill=false}) {
-  const W=1120,H=260,PL=50,PR=58,PT=10,PB=28;
+  const W=1120,H=260,PL=68,PR=68,PT=10,PB=30;
   const iW=W-PL-PR,iH=H-PT-PB;
 
   const allVals=data.flatMap(d=>routes.map(r=>d.spot?.[r.id]?.ws)).filter(v=>v!=null);
@@ -590,9 +590,13 @@ function MiniCommoditySpark({rows,color,height=28}){
   if(!rows?.length)return <div style={{height,display:"flex",alignItems:"center",color:"rgba(130,160,205,.25)",fontSize:8}}>history builds daily</div>;
   const vals=rows.map(x=>x.price).filter(Number.isFinite);
   if(vals.length===1){
-    return <svg viewBox="0 0 120 28" preserveAspectRatio="none" style={{width:"100%",height,display:"block"}}>
-      <line x1="3" y1="14" x2="117" y2="14" stroke={color} strokeWidth="1.5" opacity=".55"/>
-    </svg>;
+    return <div style={{height,display:"flex",alignItems:"center",gap:5}}>
+      <svg viewBox="0 0 120 28" preserveAspectRatio="none" style={{width:"100%",height,display:"block"}}>
+        <line x1="3" y1="14" x2="117" y2="14" stroke={color} strokeWidth="1.5" opacity=".35"/>
+        <circle cx="114" cy="14" r="2.5" fill={color}/>
+      </svg>
+      <span style={{fontSize:7.5,color:"rgba(140,175,220,.38)",whiteSpace:"nowrap"}}>1 obs</span>
+    </div>;
   }
   const W=120,H=28,P=3,mn=Math.min(...vals),mx=Math.max(...vals),range=mx-mn||1;
   const pts=rows.map((r,i)=>[
@@ -607,13 +611,7 @@ function MiniCommoditySpark({rows,color,height=28}){
 
 function CommodityBigChart({item,history,period}){
   if(!item)return null;
-  let rows=commodityWindowRows(history,item.id,period);
-  if(rows.length<2 && Number.isFinite(Number(item.price)) && Number.isFinite(Number(item.changePct))){
-    const px=Number(item.price),chg=Number(item.changePct);
-    const prev=chg===-100?px:px/(1+chg/100);
-    const d0=new Date(); d0.setDate(d0.getDate()-1);
-    rows=[{date:d0.toISOString().slice(0,10),price:prev},{date:new Date().toISOString().slice(0,10),price:px}];
-  }
+  const rows=commodityWindowRows(history,item.id,period);
   const color=COMMODITY_ACCENTS[item.id]||"#58a6ff";
   const vals=rows.map(x=>x.price).filter(Number.isFinite);
   if(vals.length<2){
@@ -656,13 +654,7 @@ function CommodityTape({data,history,period,selectedId,onSelect}){
     }}>
       {items.map(x=>{
         const accent=COMMODITY_ACCENTS[x.id]||"#58a6ff";
-        let rows=commodityWindowRows(history,x.id,period);
-        if(rows.length<2 && Number.isFinite(Number(x.price)) && Number.isFinite(Number(x.changePct))){
-          const px=Number(x.price),chg=Number(x.changePct);
-          const prev=chg===-100?px:px/(1+chg/100);
-          const d0=new Date(); d0.setDate(d0.getDate()-1);
-          rows=[{date:d0.toISOString().slice(0,10),price:prev},{date:new Date().toISOString().slice(0,10),price:px}];
-        }
+        const rows=commodityWindowRows(history,x.id,period);
         const first=rows[0]?.price,last=rows.at(-1)?.price;
         const pct=(Number.isFinite(first)&&Number.isFinite(last)&&first!==0)?((last-first)/first*100):null;
         const selected=selectedId===x.id;
@@ -734,6 +726,7 @@ function Dashboard({vessels, cargoes, history}) {
   const [vlcc,setVlcc]=useState(null);
   const [shippingPriceTab,setShippingPriceTab]=useState("vlcc");
   const [vlccError,setVlccError]=useState(null);
+  const [wsSummaryData,setWsSummaryData]=useState(null);
 
   useEffect(()=>{
     let alive=true;
@@ -771,6 +764,19 @@ function Dashboard({vessels, cargoes, history}) {
     return()=>{alive=false;};
   },[]);
 
+
+  useEffect(()=>{
+    let alive=true;
+    (async()=>{
+      try{
+        const {data,error}=await supabase.from("dashboard").select("value").eq("key",WS_STORE).maybeSingle();
+        if(error)throw error;
+        if(!alive||!data?.value)return;
+        try{setWsSummaryData(typeof data.value==="string"?JSON.parse(data.value):data.value);}catch(_){}
+      }catch(_){}
+    })();
+    return()=>{alive=false;};
+  },[]);
 
   useEffect(()=>{
     let alive=true;
@@ -973,6 +979,48 @@ function Dashboard({vessels, cargoes, history}) {
   })();
   const activeFixingSegments=(segmentFilter==="All"?SEGMENT_ORDER.filter(s=>s!=="All"): [segmentFilter]).filter(s=>fixingSegmentChartData.some(d=>d[s]!=null));
 
+  const marketSummary=(()=>{
+    const bits=[];
+
+    if(fixingSegmentChartData.length>=2){
+      const latest=fixingSegmentChartData[fixingSegmentChartData.length-1];
+      const target=new Date(latest.date); target.setDate(target.getDate()-14);
+      const past=[...fixingSegmentChartData].sort((a,b)=>Math.abs(new Date(a.date)-target)-Math.abs(new Date(b.date)-target))[0];
+      const moves=["MR","Handy","Inter","City","Flexi","J19","Sub 10"].map(seg=>{
+        const a=Number(latest?.[seg]),b=Number(past?.[seg]);
+        return Number.isFinite(a)&&Number.isFinite(b)?{seg,delta:a-b}:null;
+      }).filter(Boolean);
+      if(moves.length){
+        const strongest=[...moves].sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta))[0];
+        bits.push(Math.abs(strongest.delta)<0.6
+          ? `${strongest.seg} fixing window broadly flat`
+          : `${strongest.seg} fixing window ${strongest.delta<0?"down":"up"} ${Math.abs(strongest.delta).toFixed(1)}d vs ~2 weeks ago`);
+        const flat=moves.find(x=>x.seg!==strongest.seg&&Math.abs(x.delta)<0.6);
+        if(flat) bits.push(`${flat.seg} stays broadly flat`);
+      }
+    }
+
+    const regional=currentRegionRows.map(r=>{
+      const pct=r.d14>0?((r.now-r.d14)/r.d14*100):null;
+      return pct!=null?{region:r.region,pct}:null;
+    }).filter(Boolean).sort((a,b)=>b.pct-a.pct);
+    if(regional[0]&&regional[0].pct>=5) bits.push(`${Math.round(regional[0].pct)}% more ships in ${regional[0].region} vs 14d`);
+
+    const spot=wsSummaryData?.spot||{};
+    const mean=ids=>{
+      const vals=ids.map(id=>Number(spot?.[id]?.change)).filter(Number.isFinite);
+      return vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;
+    };
+    const describe=v=>v==null?null:Math.abs(v)<1?"flat":v>0?"improving":"softening";
+    const mr=describe(mean(["TC2","TC14"]));
+    const handy=describe(mean(["TC6","TC23"]));
+    if(mr&&handy) bits.push(`MR ${mr}; Handy ${handy}`);
+    else if(mr) bits.push(`MR ${mr}`);
+    else if(handy) bits.push(`Handy ${handy}`);
+
+    return bits.slice(0,4);
+  })();
+
   // ── Ocean theme tokens ──────────────────────────────────────────────────────
   const D = {
     bg:       "#070f1c",
@@ -1082,6 +1130,11 @@ function Dashboard({vessels, cargoes, history}) {
             Clean products · UKC / Med / TA ·&nbsp;
             {new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
           </div>
+          <div style={{marginTop:8,maxWidth:920,fontSize:11.5,lineHeight:1.45,fontWeight:650,color:"rgba(218,233,250,.82)"}}>
+            {marketSummary.length
+              ? marketSummary.map((x,i)=><React.Fragment key={i}>{i>0&&<span style={{color:D.blue,opacity:.72}}> · </span>}<span>{x}</span></React.Fragment>)
+              : <span style={{color:D.faint,fontWeight:500}}>Market summary will populate as recent fixing-window, regional and Worldscale updates accumulate.</span>}
+          </div>
         </div>
       </div>
 
@@ -1171,7 +1224,7 @@ function Dashboard({vessels, cargoes, history}) {
       {/* ── Fixing window + Worldscale ── */}
       <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12,alignItems:"stretch"}}>
 {panel(
-          <>
+          <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
               {secHead("Fixing window by vessel size · days until open")}
               <span style={{fontSize:9,color:D.faint}}>past positions · negative values excluded</span>
@@ -1183,8 +1236,8 @@ function Dashboard({vessels, cargoes, history}) {
               ? <div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Fixing-window history unavailable: {fixingSegmentError}</div>
               : fixingSegmentChartData.length<2
                 ? <div style={{color:D.faint,fontSize:12,padding:"24px 0",textAlign:"center"}}>Loading segment fixing-window history…</div>
-                : <SegmentFWChart data={fixingSegmentChartData} segments={activeFixingSegments} colors={SEGMENT_COLORS}/>}
-          </>,
+                : <div style={{flex:1,minHeight:0}}><SegmentFWChart data={fixingSegmentChartData} segments={activeFixingSegments} colors={SEGMENT_COLORS}/></div>}
+          </div>,
           {minWidth:0}
         )}
         <WSTracker/>
@@ -1210,7 +1263,7 @@ function Dashboard({vessels, cargoes, history}) {
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>{secHead("Regional tonnage supply · now vs 30d")}<span style={{fontSize:9,color:D.faint}}>{segmentFilter==="All"?"fleet totals":segmentFilter}</span></div>
             <RegionCompareChart rows={currentRegionRows} colors={REGION_COLORS}/>
-            <div style={{display:"flex",gap:14,marginTop:8,fontSize:10,color:D.faint}}><span><b style={{color:"#3b82f6"}}>■</b> Current</span><span><b style={{color:"rgba(190,202,220,.65)"}}>■</b> 30 days ago</span></div>
+            <div style={{display:"flex",gap:14,marginTop:8,fontSize:10,color:D.faint}}><span><b style={{color:"#1f6feb"}}>■</b> Current</span><span><b style={{color:"rgba(190,202,220,.65)"}}>■</b> 30 days ago</span></div>
           </>,
           {minWidth:0}
         )}
@@ -1226,19 +1279,38 @@ function Dashboard({vessels, cargoes, history}) {
 
 // ─── SVG charts (no dependencies) ────────────────────────────────────────────
 function SegmentFWChart({data,segments,colors}) {
-  const W=1000,H=225,PL=34,PR=18,PT=12,PB=30;
+  const W=1000,H=330,PL=60,PR=24,PT=16,PB=38;
   const iW=W-PL-PR,iH=H-PT-PB;
   const vals=data.flatMap(d=>segments.map(s=>d[s])).filter(v=>v!=null&&v>=0);
   if(!vals.length)return null;
   const mn=0,mx=Math.max(7,Math.ceil(Math.max(...vals)+2)),range=mx||1;
   const xs=data.map((_,i)=>PL+i/(data.length-1||1)*iW);
-  return <div>
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{width:"100%",height:225,display:"block"}}>
-      {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-5} y={y+4} fill="#ffffff" fontSize="11.5" fontWeight="700" textAnchor="end">{v}d</text></g>})}
-      {segments.map(seg=>{let path="";data.forEach((d,i)=>{const v=d[seg];if(v==null||v<0)return;const p=[xs[i],PT+iH-(v-mn)/range*iH];path+=(path?"L":"M")+p.join(",")});return path?<path key={seg} d={path} fill="none" stroke={colors[seg]||C.blue} strokeWidth="1.8" strokeLinejoin="round" opacity=".92" pathLength="1" strokeDasharray="1" strokeDashoffset="1"><animate attributeName="stroke-dashoffset" from="1" to="0" dur=".85s" fill="freeze"/></path>:null})}
-      {data.map((d,i)=>(i===0||i===data.length-1||data.length<=8)?<text key={i} x={xs[i]} y={H-7} fill="#ffffff" fontSize="10.5" fontWeight="700" textAnchor="middle">{fmtDateShort(d.date)}</text>:null)}
+  return <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:330}}>
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{width:"100%",height:"100%",minHeight:300,display:"block",flex:1}}>
+      {[0,.5,1].map(fr=>{
+        const v=Math.round(mx*(1-fr)),y=PT+fr*iH;
+        return <g key={fr}>
+          <line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/>
+          <text x={PL-10} y={y+4} fill="#ffffff" fontSize="12" fontWeight="700" textAnchor="end">{v}d</text>
+        </g>;
+      })}
+      {segments.map(seg=>{
+        let path="";
+        data.forEach((d,i)=>{
+          const v=d[seg];
+          if(v==null||v<0)return;
+          const p=[xs[i],PT+iH-(v-mn)/range*iH];
+          path+=(path?"L":"M")+p.join(",");
+        });
+        return path?<path key={seg} d={path} fill="none" stroke={colors[seg]||C.blue} strokeWidth="2" strokeLinejoin="round" opacity=".94" pathLength="1" strokeDasharray="1" strokeDashoffset="1"><animate attributeName="stroke-dashoffset" from="1" to="0" dur=".85s" fill="freeze"/></path>:null;
+      })}
+      {data.map((d,i)=>(i===0||i===data.length-1||data.length<=8)
+        ? <text key={i} x={xs[i]} y={H-9} fill="#ffffff" fontSize="11.5" fontWeight="700" textAnchor="middle">{fmtDateShort(d.date)}</text>
+        : null)}
     </svg>
-    <div style={{display:"flex",gap:11,flexWrap:"wrap",justifyContent:"center",marginTop:3}}>{segments.map(s=><span key={s} style={{fontSize:10,color:colors[s]||C.blue}}>● {s}</span>)}</div>
+    <div style={{display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center",marginTop:5,flexShrink:0}}>
+      {segments.map(s=><span key={s} style={{fontSize:10.5,color:colors[s]||C.blue,fontWeight:700}}>● {s}</span>)}
+    </div>
   </div>;
 }
 
@@ -1249,7 +1321,7 @@ function RegionCompareChart({rows,colors}) {
     {rows.map(r=><div key={r.region} style={{display:"grid",gridTemplateColumns:"145px 1fr 38px",gap:8,alignItems:"center"}}>
       <span style={{fontSize:10,fontWeight:800,color:colors[r.region]||C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.region}</span>
       <div style={{display:"grid",gap:3}}>
-        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.now?2:0,r.now/max*100)+"%",background:"#3b82f6",borderRadius:99}}/></div>
+        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.now?2:0,r.now/max*100)+"%",background:"#1f6feb",borderRadius:99}}/></div>
         <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.d30?2:0,r.d30/max*100)+"%",background:"rgba(190,202,220,.62)",borderRadius:99}}/></div>
       </div>
       <div style={{fontSize:9,textAlign:"right",lineHeight:1.45}}><div style={{color:C.tx,fontWeight:800}}>{r.now}</div><div style={{color:C.faint}}>{r.d30}</div></div>
