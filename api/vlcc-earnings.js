@@ -14,38 +14,27 @@ function strip(s=""){return String(s).replace(/<script[\s\S]*?<\/script>/gi," ")
 async function fetchWeek(year,week){
   const url=`https://www.balticexchange.com/en/data-services/WeeklyRoundup/tanker/news/${year}/tanker-report-week-${week}.html`;
   const r=await fetch(url,{headers:{"user-agent":"Mozilla/5.0 (compatible; SignalTankerDashboard/1.0)","accept":"text/html,*/*"}});
-  if(!r.ok)throw new Error(String(r.status));
+  if(!r.ok)throw new Error(`${year}-W${week} HTTP ${r.status}`);
   const txt=strip(await r.text());
-  const section=(txt.match(/\bVLCC\b([\s\S]{0,2200}?)(?:\bSuezmax\b|\bAframax\b|\bClean\b|$)/i)||[])[1]||txt;
-  const tceMatches=[...section.matchAll(/(?:TCE|time charter equivalent)[^$]{0,90}\$?([\d,]+)(?:\/day| per day)?/gi)];
-  let tce=null;
-  for(const m of tceMatches){const n=Number(m[1].replace(/,/g,""));if(n>5000){tce=n;break;}}
-  if(!tce){
-    const m=section.match(/daily round-trip TCE[^$]{0,80}\$?([\d,]+)/i)||section.match(/TCE of (?:just under |just over |close to |about |over )?\$?([\d,]+)/i);
-    if(m)tce=Number(m[1].replace(/,/g,""));
-  }
-  const wsM=section.match(/TD3C[\s\S]{0,500}?WS\s*([\d.]+)/i);
+  const section=(txt.match(/\bVLCC\b([\s\S]{0,5000}?)(?:\bSuezmax\b|\bAframax\b|\bClean\b|$)/i)||[])[1]||txt;
+  const wsM=section.match(/TD3C[\s\S]{0,900}?\bWS\s*([0-9]+(?:\.[0-9]+)?)/i);
+  const tceM=
+    section.match(/TD3C[\s\S]{0,1600}?(?:daily\s+round-trip\s+TCE|round-trip\s+TCE|TCE)[^$0-9]{0,140}(?:just\s+under\s+|just\s+over\s+|over\s+|about\s+|around\s+)?\$?\s*([0-9][0-9,]+)/i) ||
+    section.match(/(?:daily\s+round-trip\s+TCE|round-trip\s+TCE|TCE)[^$0-9]{0,140}(?:just\s+under\s+|just\s+over\s+|over\s+|about\s+|around\s+)?\$?\s*([0-9][0-9,]+)/i);
   const dateM=txt.match(/\b(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+20\d{2})\b/i);
-  if(!tce||!Number.isFinite(tce))throw new Error("parse");
-  return {year,week,tce,ws:wsM?Number(wsM[1]):null,date:dateM?dateM[1]:`W${week} ${year}`,url};
+  const tce=tceM?Number(tceM[1].replace(/,/g,"")):null;
+  if(!Number.isFinite(tce))throw new Error(`${year}-W${week} parse`);
+  return {year,week,tce,ws:wsM?Number(wsM[1]):null,date:dateM?.[1]||`W${week} ${year}`,url};
+}
+async function fetchTarget(t){
+  try{return await fetchWeek(t.year,t.week);}
+  catch(_){const p=weekShift(t.year,t.week,-1);try{return await fetchWeek(p.year,p.week);}catch{return null;}}
 }
 export default async function handler(req,res){
-  const cur=isoWeek();
-  // Baltic weekly report is normally the preceding completed week.
-  const latestBase=weekShift(cur.year,cur.week,-1);
-  const targets=[];
-  for(let i=0;i<13;i++)targets.push(weekShift(latestBase.year,latestBase.week,-i*4));
-  const points=[];
-  for(const t of targets){
-    let hit=null;
-    for(const shift of [0,-1,1]){
-      const q=weekShift(t.year,t.week,shift);
-      try{hit=await fetchWeek(q.year,q.week);break;}catch(_){}
-    }
-    if(hit)points.push(hit);
-  }
-  points.sort((a,b)=>a.year-b.year||a.week-b.week);
-  const latest=points[points.length-1]||null;
+  const cur=isoWeek(),latestBase=weekShift(cur.year,cur.week,-1);
+  const targets=Array.from({length:13},(_,i)=>weekShift(latestBase.year,latestBase.week,-i*4));
+  const points=(await Promise.all(targets.map(fetchTarget))).filter(Boolean);
+  const history=[...new Map(points.map(p=>[`${p.year}-${p.week}`,p])).values()].sort((a,b)=>a.year-b.year||a.week-b.week);
   res.setHeader("Cache-Control","s-maxage=21600, stale-while-revalidate=43200");
-  res.status(200).json({latest,history:points,source:"Baltic Exchange weekly tanker reports",updatedAt:new Date().toISOString()});
+  res.status(200).json({latest:history.at(-1)||null,history,source:"Baltic Exchange weekly tanker reports",updatedAt:new Date().toISOString()});
 }
