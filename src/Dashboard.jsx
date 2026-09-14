@@ -691,22 +691,46 @@ function CommodityTape({data,history,period,selectedId,onSelect}){
   );
 }
 function VlccSparkline({history}) {
-  const rows=Array.isArray(history)?history:[];
+  const rows=(Array.isArray(history)?history:[])
+    .map(x=>({...x,tce:Number(x.tce)}))
+    .filter(x=>Number.isFinite(x.tce))
+    .sort((a,b)=>(a.year||0)-(b.year||0)||(a.week||0)-(b.week||0));
   if(!rows.length)return null;
-  const W=360,H=72,PL=4,PR=4,PT=8,PB=8;
-  const vals=rows.map(x=>Number(x.tce)).filter(Number.isFinite);
-  if(vals.length<2)return null;
-  const mn=Math.min(...vals),mx=Math.max(...vals),range=mx-mn||1;
-  const pts=rows.map((x,i)=>{
-    const px=PL+i/(rows.length-1||1)*(W-PL-PR);
-    const py=PT+(mx-Number(x.tce))/range*(H-PT-PB);
-    return [px,py];
-  });
-  const path="M"+pts.map(p=>p.join(",")).join(" L");
-  return <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:72,display:"block"}}>
-    <path d={path} fill="none" stroke="#58a6ff" strokeWidth="2" strokeLinejoin="round" pathLength="1" strokeDasharray="1" strokeDashoffset="1">
+
+  const W=760,H=170,PL=54,PR=18,PT=12,PB=30;
+  const vals=rows.map(x=>x.tce/1000);
+  const mn=Math.min(...vals),mx=Math.max(...vals);
+  const pad=Math.max(25,(mx-mn)*.14);
+  const lo=Math.max(0,mn-pad),hi=mx+pad,range=hi-lo||1;
+  const pts=rows.map((x,i)=>[
+    PL+i/(rows.length-1||1)*(W-PL-PR),
+    PT+(hi-x.tce/1000)/range*(H-PT-PB)
+  ]);
+  const path=pts.length>1?"M"+pts.map(p=>p.join(",")).join(" L"):"";
+
+  const ticks=[hi,(hi+lo)/2,lo];
+  const labelIndexes=[0,Math.floor((rows.length-1)/2),rows.length-1]
+    .filter((v,i,a)=>a.indexOf(v)===i);
+
+  return <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+    style={{width:"100%",height:"100%",minHeight:145,display:"block"}}>
+    {ticks.map((v,i)=>{
+      const y=PT+i/2*(H-PT-PB);
+      return <g key={i}>
+        <line x1={PL} y1={y} x2={W-PR} y2={y} stroke="rgba(88,130,200,.14)" strokeWidth="1"/>
+        <text x={PL-8} y={y+4} fill="#e8f2ff" fontSize="10.5" fontWeight="700" textAnchor="end">${Math.round(v)}k</text>
+      </g>;
+    })}
+    {path&&<path d={path} fill="none" stroke="#58a6ff" strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" pathLength="1" strokeDasharray="1" strokeDashoffset="1">
       <animate attributeName="stroke-dashoffset" from="1" to="0" dur=".9s" fill="freeze"/>
-    </path>
+    </path>}
+    {pts.map((p,i)=><circle key={i} cx={p[0]} cy={p[1]} r="2.5" fill="#58a6ff"/>)}
+    {labelIndexes.map(i=>{
+      const r=rows[i];
+      const label=r.date||(`W${r.week||""}`);
+      return <text key={i} x={pts[i][0]} y={H-8} fill="#e8f2ff" fontSize="9.5" fontWeight="700"
+        textAnchor={i===0?"start":i===rows.length-1?"end":"middle"}>{label}</text>;
+    })}
   </svg>;
 }
 
@@ -1059,7 +1083,7 @@ function Dashboard({vessels, cargoes, history}) {
   const panel = (children, extraStyle={}) => (
     <div style={{background:D.bg2,border:"1px solid "+D.border,borderRadius:10,padding:"16px 18px",position:"relative",overflow:"hidden",...extraStyle}}>
       <div style={{position:"absolute",inset:0,backgroundImage:"linear-gradient(rgba(30,100,200,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(30,100,200,0.03) 1px,transparent 1px)",backgroundSize:"40px 40px",pointerEvents:"none"}}/>
-      <div style={{position:"relative",zIndex:1}}>{children}</div>
+      <div style={{position:"relative",zIndex:1,height:extraStyle?.height?"100%":undefined}}>{children}</div>
     </div>
   );
 
@@ -1191,13 +1215,16 @@ function Dashboard({vessels, cargoes, history}) {
               </div>
             </div>
             {shippingPriceTab==="vlcc" ? (
-              vlcc?.latest ? <div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:10,alignItems:"center"}}>
-                <div>
-                  <div style={{fontSize:9,fontWeight:800,color:D.faint,textTransform:"uppercase",letterSpacing:".05em"}}>TD3C MEG → China</div>
-                  <div style={{fontSize:24,fontWeight:900,color:D.tx,marginTop:3}}>${Math.round(Number(vlcc.latest.tce)/1000)}k<span style={{fontSize:10,color:D.faint,fontWeight:600}}>/day</span></div>
-                  <div style={{fontSize:9,color:D.faint,marginTop:2}}>{vlcc.latest.date||""} · {vlcc.latest.ws!=null?"WS "+vlcc.latest.ws:"Baltic weekly"}</div>
+              vlcc?.latest ? <div style={{display:"flex",flexDirection:"column",height:205,minHeight:205}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:4}}>
+                  <div>
+                    <div style={{fontSize:9,fontWeight:800,color:D.faint,textTransform:"uppercase",letterSpacing:".05em"}}>TD3C MEG → China</div>
+                    <div style={{fontSize:25,fontWeight:900,color:D.tx,marginTop:3}}>${Math.round(Number(vlcc.latest.tce)/1000)}k<span style={{fontSize:10,color:D.faint,fontWeight:600}}>/day</span></div>
+                    <div style={{fontSize:9,color:D.faint,marginTop:2}}>{vlcc.latest.date||""} · {vlcc.latest.ws!=null?"WS "+vlcc.latest.ws:"Baltic weekly"}</div>
+                  </div>
+                  <div style={{fontSize:9,color:D.faint,textAlign:"right"}}>Baltic weekly<br/>{(vlcc.history||[]).length} observations</div>
                 </div>
-                <VlccSparkline history={vlcc.history||[]}/>
+                <div style={{flex:1,minHeight:0}}><VlccSparkline history={vlcc.history||[]}/></div>
               </div> : <div style={{fontSize:11,color:vlccError?D.red:D.faint,padding:"10px 0"}}>
                 {vlccError?"VLCC unavailable · "+vlccError:"Loading VLCC earnings…"}
               </div>
@@ -1222,7 +1249,7 @@ function Dashboard({vessels, cargoes, history}) {
       </div>
 
       {/* ── Fixing window + Worldscale ── */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12,alignItems:"stretch"}}>
+      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12,alignItems:"stretch",height:520}}>
 {panel(
           <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
@@ -1238,9 +1265,9 @@ function Dashboard({vessels, cargoes, history}) {
                 ? <div style={{color:D.faint,fontSize:12,padding:"24px 0",textAlign:"center"}}>Loading segment fixing-window history…</div>
                 : <div style={{flex:1,minHeight:0}}><SegmentFWChart data={fixingSegmentChartData} segments={activeFixingSegments} colors={SEGMENT_COLORS}/></div>}
           </div>,
-          {minWidth:0}
+          {minWidth:0,height:"100%",boxSizing:"border-box"}
         )}
-        <WSTracker/>
+        <div style={{height:"100%",minHeight:0}}><WSTracker/></div>
       </div>
 
       {/* ── Regional fleet history ── */}
@@ -1263,7 +1290,7 @@ function Dashboard({vessels, cargoes, history}) {
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>{secHead("Regional tonnage supply · now vs 30d")}<span style={{fontSize:9,color:D.faint}}>{segmentFilter==="All"?"fleet totals":segmentFilter}</span></div>
             <RegionCompareChart rows={currentRegionRows} colors={REGION_COLORS}/>
-            <div style={{display:"flex",gap:14,marginTop:8,fontSize:10,color:D.faint}}><span><b style={{color:"#1f6feb"}}>■</b> Current</span><span><b style={{color:"rgba(190,202,220,.65)"}}>■</b> 30 days ago</span></div>
+            <div style={{display:"flex",gap:14,marginTop:8,fontSize:10,color:D.faint}}><span><b style={{color:"#1769d2"}}>■</b> Current</span><span><b style={{color:"rgba(190,202,220,.65)"}}>■</b> 30 days ago</span></div>
           </>,
           {minWidth:0}
         )}
@@ -1279,14 +1306,14 @@ function Dashboard({vessels, cargoes, history}) {
 
 // ─── SVG charts (no dependencies) ────────────────────────────────────────────
 function SegmentFWChart({data,segments,colors}) {
-  const W=1000,H=330,PL=60,PR=24,PT=16,PB=38;
+  const W=1000,H=400,PL=72,PR=28,PT=18,PB=42;
   const iW=W-PL-PR,iH=H-PT-PB;
   const vals=data.flatMap(d=>segments.map(s=>d[s])).filter(v=>v!=null&&v>=0);
   if(!vals.length)return null;
   const mn=0,mx=Math.max(7,Math.ceil(Math.max(...vals)+2)),range=mx||1;
   const xs=data.map((_,i)=>PL+i/(data.length-1||1)*iW);
-  return <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:330}}>
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{width:"100%",height:"100%",minHeight:300,display:"block",flex:1}}>
+  return <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{width:"100%",height:"100%",minHeight:0,display:"block",flex:1}}>
       {[0,.5,1].map(fr=>{
         const v=Math.round(mx*(1-fr)),y=PT+fr*iH;
         return <g key={fr}>
@@ -1304,9 +1331,12 @@ function SegmentFWChart({data,segments,colors}) {
         });
         return path?<path key={seg} d={path} fill="none" stroke={colors[seg]||C.blue} strokeWidth="2" strokeLinejoin="round" opacity=".94" pathLength="1" strokeDasharray="1" strokeDashoffset="1"><animate attributeName="stroke-dashoffset" from="1" to="0" dur=".85s" fill="freeze"/></path>:null;
       })}
-      {data.map((d,i)=>(i===0||i===data.length-1||data.length<=8)
-        ? <text key={i} x={xs[i]} y={H-9} fill="#ffffff" fontSize="11.5" fontWeight="700" textAnchor="middle">{fmtDateShort(d.date)}</text>
-        : null)}
+      {data.map((d,i)=>{
+        const step=Math.max(1,Math.floor(data.length/8));
+        return (i===0||i===data.length-1||i%step===0)
+          ? <text key={i} x={xs[i]} y={H-10} fill="#ffffff" fontSize="10.5" fontWeight="700" textAnchor="middle">{fmtDateShort(d.date)}</text>
+          : null;
+      })}
     </svg>
     <div style={{display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center",marginTop:5,flexShrink:0}}>
       {segments.map(s=><span key={s} style={{fontSize:10.5,color:colors[s]||C.blue,fontWeight:700}}>● {s}</span>)}
@@ -1321,7 +1351,7 @@ function RegionCompareChart({rows,colors}) {
     {rows.map(r=><div key={r.region} style={{display:"grid",gridTemplateColumns:"145px 1fr 38px",gap:8,alignItems:"center"}}>
       <span style={{fontSize:10,fontWeight:800,color:colors[r.region]||C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.region}</span>
       <div style={{display:"grid",gap:3}}>
-        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.now?2:0,r.now/max*100)+"%",background:"#1f6feb",borderRadius:99}}/></div>
+        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.now?2:0,r.now/max*100)+"%",background:"#1769d2",borderRadius:99}}/></div>
         <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.max(r.d30?2:0,r.d30/max*100)+"%",background:"rgba(190,202,220,.62)",borderRadius:99}}/></div>
       </div>
       <div style={{fontSize:9,textAlign:"right",lineHeight:1.45}}><div style={{color:C.tx,fontWeight:800}}>{r.now}</div><div style={{color:C.faint}}>{r.d30}</div></div>
