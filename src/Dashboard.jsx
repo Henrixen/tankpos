@@ -54,6 +54,7 @@ function WSTracker() {
   const [img,       setImg]    = useState(null);
   const [parsing,  setParsing] = useState(false);
   const [status,   setStatus]  = useState(null);
+  const [wsView,setWsView] = useState("graph");
   const [wsNote,   setWsNote]  = useState("");
   const [wsNoteImg,setWsNoteImg] = useState(null);
   const [wsNoteSavedAt,setWsNoteSavedAt] = useState(null);
@@ -310,129 +311,103 @@ ${text}`}]
   const td2 = {padding:"5px 8px",fontSize:12,textAlign:"right",whiteSpace:"nowrap",borderBottom:"1px solid "+C.bg2};
 
   return(
-    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"12px 14px"}}>
-      {secHead("📊 Worldscale Spot + FFA Tracker")}
+    <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"12px 14px",height:"100%",boxSizing:"border-box",display:"flex",flexDirection:"column",minHeight:0}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8}}>
+        {secHead("Worldscale Spot + FFA")}
+        <div style={{display:"flex",gap:4}}>
+          {[["graph","Graph"],["table","Table"],["parse","Parse"]].map(([v,l])=><button key={v} onClick={()=>setWsView(v)} style={{
+            fontSize:9.5,fontWeight:800,padding:"4px 9px",borderRadius:5,cursor:"pointer",fontFamily:"inherit",
+            border:"1px solid "+(wsView===v?C.blue:C.bd),
+            background:wsView===v?"rgba(88,166,255,.14)":C.bg3,
+            color:wsView===v?C.tx:C.dim
+          }}>{l}</button>)}
+        </div>
+      </div>
 
-      <div style={{
-        display:"grid",
-        gridTemplateColumns:"minmax(360px,40%) minmax(0,60%)",
-        gap:12,
-        height:620,
-        minHeight:620,
-        alignItems:"stretch"
-      }}>
-        {/* LEFT 40% — paste / parsed market / larger daily notes */}
-        <div style={{
-          display:"grid",
-          gridTemplateRows:"31% 39% minmax(0,30%)",
-          gap:8,
-          minWidth:0,
-          minHeight:0
-        }}>
-          {/* Paste / parse */}
-          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-            <div style={{fontSize:10,color:C.dim,marginBottom:4,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em"}}>
-              Paste WS / FFA
-            </div>
-            {img?.dataUrl&&<div style={{position:"relative",marginBottom:3}}><img src={img.dataUrl} alt="" style={{width:"100%",maxHeight:34,objectFit:"cover",borderRadius:3,display:"block"}}/><button onClick={()=>setImg(null)} style={{position:"absolute",top:2,right:2,background:"rgba(0,0,0,.7)",border:"none",color:"#fff",borderRadius:"50%",width:18,height:18,fontSize:10,cursor:"pointer"}}>✕</button></div>}
-            {img&&!img.dataUrl&&<div style={{fontSize:10,color:C.purple,marginBottom:3}}>📷 Image attached</div>}
-            <textarea value={pasteText} onChange={e=>setPaste(e.target.value)}
-              onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
-              placeholder={"TC2 127.81(+1.87)  FEB/26 130.50 · TC14 270.71(+8.57) · or paste screenshot"}
-              style={{width:"100%",flex:1,minHeight:110,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"7px 8px",resize:"none",outline:"none",boxSizing:"border-box",overflowY:"hidden"}}/>
-            <input ref={wsFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
-            <div style={{display:"flex",gap:5,marginTop:6,alignItems:"center",minWidth:0,flexShrink:0}}>
-              <button onClick={parseWS} disabled={parsing} style={{background:parsing?"rgba(88,166,255,.06)":"rgba(88,166,255,.11)",border:"1px solid rgba(88,166,255,.36)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:10.5,padding:"4px 10px",cursor:parsing?"default":"pointer",whiteSpace:"nowrap"}}>
-                {parsing?"⟳ Parsing…":"▶ Parse & Save"}
-              </button>
-              <button onClick={()=>wsFileRef.current?.click()} style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 7px",fontFamily:"inherit",fontSize:10.5,cursor:"pointer"}}>📷</button>
-              {status&&<div style={{fontSize:9.5,color:sc,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{status.m}</div>}
-            </div>
-          </div>
-
-          {/* Parsed current table */}
-          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:6}}>
-              <div style={{fontSize:10,color:C.faint,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em"}}>Current spot + FFA</div>
-              <span style={{fontSize:9,color:C.faint,whiteSpace:"nowrap"}}>{data?.lastUpdate||"—"}</span>
-            </div>
-            {data ? (
-              <div style={{overflowX:"auto",overflowY:"visible",minHeight:0,flex:1}}>
-                <table style={{borderCollapse:"collapse",fontSize:11.5,width:"100%"}}>
-                  <thead>
-                    <tr>
-                      <th style={{...th2,textAlign:"left",position:"sticky",top:0,zIndex:1}}>Route</th>
-                      <th style={{...th2,position:"sticky",top:0,zIndex:1}}>Spot</th>
-                      <th style={{...th2,position:"sticky",top:0,zIndex:1}}>Day</th>
-                    </tr>
-                  </thead>
-                  <tbody>{ROUTES.map(r=>{
-                    const q=data.spot?.[r.id],chg=q?.change,cc=chg>0?C.green:chg<0?C.red:C.dim;
-                    return <tr key={r.id}>
-                      <td style={{...td2,textAlign:"left",fontWeight:800,color:routeColors[r.id]||C.blue}}>{r.id}</td>
-                      <td style={{...td2,fontWeight:800,color:C.tx}}>{q?.ws!=null?q.ws.toFixed(2):"—"}</td>
-                      <td style={{...td2,color:cc,fontWeight:700}}>{chg!=null?(chg>=0?"+":"")+chg.toFixed(2):"—"}</td>
-                    </tr>;
-                  })}</tbody>
-                </table>
+      <div style={{flex:1,minHeight:0}}>
+        {wsView==="graph"&&(
+          <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:8,height:"100%",minHeight:0}}>
+            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
+              <div style={{fontSize:10.5,fontWeight:900,color:C.green,textTransform:"uppercase",marginBottom:3}}>Handy · TC6 / TC23</div>
+              <div style={{flex:1,minHeight:0}}>
+                {histData.length>=2
+                  ? <WSChart data={histData} routes={ROUTES.filter(r=>["TC6","TC23"].includes(r.id))} colors={routeColors} fill/>
+                  : <div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
               </div>
-            ) : (
-              <div style={{fontSize:11,color:C.faint,padding:"18px 4px"}}>Paste market data above to populate the table.</div>
-            )}
-          </div>
-
-          {/* Daily market notes / gossip — stored in Supabase */}
-          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"9px 10px",minHeight:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-            <div style={{fontSize:10,color:C.dim,marginBottom:5,display:"flex",justifyContent:"space-between",alignItems:"center",fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",gap:8}}>
-              <span>Daily market notes / gossip</span>
-              <span style={{fontSize:9,textTransform:"none",letterSpacing:0,fontWeight:500,color:wsNoteSaveState==="error"?C.red:wsNoteSaveState==="saving"?C.amber:C.faint,whiteSpace:"nowrap"}}>
-                {wsNoteSaveState==="saving"?"Saving…":wsNoteSaveState==="error"?"Save failed":wsNoteSavedAt?"Saved "+new Date(wsNoteSavedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"Saved in Supabase"}
-              </span>
             </div>
-            <textarea
-              value={wsNote}
-              onChange={e=>setWsNote(e.target.value)}
-              onPaste={e=>{
-                const imageItem=Array.from(e.clipboardData?.items||[]).find(it=>it.type?.startsWith("image/"));
-                if(imageItem){
-                  e.preventDefault();
-                  setNoteImageFile(imageItem.getAsFile());
-                }
-              }}
-              placeholder="Replace with today's latest gossip, broker colour, market direction, cargo rumours, owner sentiment… You can also paste a screenshot here."
-              style={{width:"100%",flex:1,minHeight:92,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"7px 8px",resize:"none",boxSizing:"border-box",outline:"none"}}
-            />
-            <div style={{display:"flex",alignItems:"center",gap:7,marginTop:wsNoteImg?6:0,minHeight:wsNoteImg?34:0}}>
-              {wsNoteImg&&<>
-                <div style={{position:"relative",height:34,width:58,borderRadius:4,overflow:"hidden",border:"1px solid "+C.bd,background:C.bg2}}>
+            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
+              <div style={{fontSize:10.5,fontWeight:900,color:C.blue,textTransform:"uppercase",marginBottom:3}}>MR · TC2 / TC14</div>
+              <div style={{flex:1,minHeight:0}}>
+                {histData.length>=2
+                  ? <WSChart data={histData} routes={ROUTES.filter(r=>["TC2","TC14"].includes(r.id))} colors={routeColors} fill/>
+                  : <div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {wsView==="table"&&(
+          <div style={{display:"grid",gridTemplateRows:"auto minmax(0,1fr)",gap:8,height:"100%",minHeight:0}}>
+            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:6}}>
+                <div style={{fontSize:10,color:C.faint,fontWeight:900,textTransform:"uppercase",letterSpacing:".06em"}}>Current spot + FFA</div>
+                <span style={{fontSize:9,color:C.faint,whiteSpace:"nowrap"}}>{data?.lastUpdate||"—"}</span>
+              </div>
+              {data ? <table style={{borderCollapse:"collapse",fontSize:11.5,width:"100%"}}>
+                <thead><tr>
+                  <th style={{...th2,textAlign:"left"}}>Route</th>
+                  <th style={th2}>Spot</th>
+                  <th style={th2}>Day</th>
+                </tr></thead>
+                <tbody>{ROUTES.map(r=>{
+                  const q=data.spot?.[r.id],chg=q?.change,cc=chg>0?C.green:chg<0?C.red:C.dim;
+                  return <tr key={r.id}>
+                    <td style={{...td2,textAlign:"left",fontWeight:800,color:routeColors[r.id]||C.blue}}>{r.id}</td>
+                    <td style={{...td2,fontWeight:800,color:C.tx}}>{q?.ws!=null?q.ws.toFixed(2):"—"}</td>
+                    <td style={{...td2,color:cc,fontWeight:700}}>{chg!=null?(chg>=0?"+":"")+chg.toFixed(2):"—"}</td>
+                  </tr>;
+                })}</tbody>
+              </table> : <div style={{fontSize:11,color:C.faint,padding:"14px 4px"}}>No parsed market data yet.</div>}
+            </div>
+
+            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"9px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
+              <div style={{fontSize:10,color:C.dim,marginBottom:5,display:"flex",justifyContent:"space-between",alignItems:"center",fontWeight:800,textTransform:"uppercase",letterSpacing:".05em",gap:8}}>
+                <span>Daily market notes / gossip</span>
+                <span style={{fontSize:9,textTransform:"none",letterSpacing:0,fontWeight:500,color:wsNoteSaveState==="error"?C.red:wsNoteSaveState==="saving"?C.amber:C.faint,whiteSpace:"nowrap"}}>
+                  {wsNoteSaveState==="saving"?"Saving…":wsNoteSaveState==="error"?"Save failed":wsNoteSavedAt?"Saved "+new Date(wsNoteSavedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"Saved in Supabase"}
+                </span>
+              </div>
+              <textarea value={wsNote} onChange={e=>setWsNote(e.target.value)}
+                onPaste={e=>{const imageItem=Array.from(e.clipboardData?.items||[]).find(it=>it.type?.startsWith("image/"));if(imageItem){e.preventDefault();setNoteImageFile(imageItem.getAsFile());}}}
+                placeholder="Latest gossip, broker colour, market direction, cargo rumours, owner sentiment… paste a screenshot directly if useful."
+                style={{width:"100%",flex:1,minHeight:92,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"7px 8px",resize:"none",boxSizing:"border-box",outline:"none"}}/>
+              {wsNoteImg&&<div style={{display:"flex",alignItems:"center",gap:7,marginTop:6}}>
+                <div style={{position:"relative",height:40,width:68,borderRadius:4,overflow:"hidden",border:"1px solid "+C.bd,background:C.bg2}}>
                   <img src={wsNoteImg} alt="Market note" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
                   <button onClick={()=>setWsNoteImg(null)} title="Remove image" style={{position:"absolute",top:1,right:1,width:15,height:15,borderRadius:"50%",border:"none",background:"rgba(0,0,0,.72)",color:"#fff",fontSize:9,lineHeight:"15px",padding:0,cursor:"pointer"}}>×</button>
                 </div>
-                <span style={{fontSize:9,color:C.faint}}>thumbnail stored with note</span>
-              </>}
+                <span style={{fontSize:9,color:C.faint}}>pasted thumbnail stored with note</span>
+              </div>}
             </div>
           </div>
-        </div>
+        )}
 
-        {/* RIGHT 60% — charts use full height */}
-        <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:8,minWidth:0,minHeight:0}}>
-          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
-            <div style={{fontSize:10,fontWeight:800,color:C.green,textTransform:"uppercase",marginBottom:3}}>Handy Worldscale · TC6 / TC23</div>
-            <div style={{flex:1,minHeight:0}}>
-              {histData.length>=2
-                ? <WSChart data={histData} routes={ROUTES.filter(r=>["TC6","TC23"].includes(r.id))} colors={routeColors} fill/>
-                : <div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
+        {wsView==="parse"&&(
+          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"10px",height:"100%",minHeight:0,boxSizing:"border-box",display:"flex",flexDirection:"column"}}>
+            <div style={{fontSize:10,color:C.dim,marginBottom:5,fontWeight:800,textTransform:"uppercase",letterSpacing:".05em"}}>Paste WS / FFA</div>
+            {img?.dataUrl&&<div style={{position:"relative",marginBottom:5}}><img src={img.dataUrl} alt="" style={{width:"100%",maxHeight:58,objectFit:"cover",borderRadius:3,display:"block"}}/><button onClick={()=>setImg(null)} style={{position:"absolute",top:2,right:2,background:"rgba(0,0,0,.7)",border:"none",color:"#fff",borderRadius:"50%",width:18,height:18,fontSize:10,cursor:"pointer"}}>✕</button></div>}
+            <textarea value={pasteText} onChange={e=>setPaste(e.target.value)}
+              onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
+              placeholder={"TC2 127.81(+1.87)  FEB/26 130.50 · TC14 270.71(+8.57) · or paste screenshot"}
+              style={{width:"100%",flex:1,minHeight:140,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"8px",resize:"none",outline:"none",boxSizing:"border-box",overflowY:"hidden"}}/>
+            <input ref={wsFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
+            <div style={{display:"flex",gap:5,marginTop:7,alignItems:"center",flexShrink:0}}>
+              <button onClick={parseWS} disabled={parsing} style={{background:parsing?"rgba(88,166,255,.06)":"rgba(88,166,255,.11)",border:"1px solid rgba(88,166,255,.36)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:10.5,padding:"5px 11px",cursor:parsing?"default":"pointer",whiteSpace:"nowrap"}}>{parsing?"⟳ Parsing…":"▶ Parse & Save"}</button>
+              <button onClick={()=>wsFileRef.current?.click()} style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"4px 7px",fontFamily:"inherit",fontSize:10.5,cursor:"pointer"}}>📷</button>
+              {status&&<div style={{fontSize:9.5,color:sc,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{status.m}</div>}
             </div>
           </div>
-          <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
-            <div style={{fontSize:10,fontWeight:800,color:C.blue,textTransform:"uppercase",marginBottom:3}}>MR Worldscale · TC2 / TC14</div>
-            <div style={{flex:1,minHeight:0}}>
-              {histData.length>=2
-                ? <WSChart data={histData} routes={ROUTES.filter(r=>["TC2","TC14"].includes(r.id))} colors={routeColors} fill/>
-                : <div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -594,7 +569,7 @@ function NewsTicker() {
 const COMMODITY_ACCENTS={
   "brent":"#58a6ff","crude":"#4fc3f7","eu-gas":"#a78bfa","natgas":"#22d3ee",
   "gasoline":"#f5a623","heating-oil":"#fb923c","ethanol":"#3fb950","naphtha":"#eab308",
-  "methanol":"#c084fc","urea":"#34d399","eu-carbon":"#94a3b8"
+  "methanol":"#c084fc","urea":"#34d399","eu-carbon":"#94a3b8","mgo-ara":"#2563eb"
 };
 
 function commodityWindowRows(history,id,period){
@@ -632,7 +607,13 @@ function MiniCommoditySpark({rows,color,height=28}){
 
 function CommodityBigChart({item,history,period}){
   if(!item)return null;
-  const rows=commodityWindowRows(history,item.id,period);
+  let rows=commodityWindowRows(history,item.id,period);
+  if(rows.length<2 && Number.isFinite(Number(item.price)) && Number.isFinite(Number(item.changePct))){
+    const px=Number(item.price),chg=Number(item.changePct);
+    const prev=chg===-100?px:px/(1+chg/100);
+    const d0=new Date(); d0.setDate(d0.getDate()-1);
+    rows=[{date:d0.toISOString().slice(0,10),price:prev},{date:new Date().toISOString().slice(0,10),price:px}];
+  }
   const color=COMMODITY_ACCENTS[item.id]||"#58a6ff";
   const vals=rows.map(x=>x.price).filter(Number.isFinite);
   if(vals.length<2){
@@ -675,7 +656,13 @@ function CommodityTape({data,history,period,selectedId,onSelect}){
     }}>
       {items.map(x=>{
         const accent=COMMODITY_ACCENTS[x.id]||"#58a6ff";
-        const rows=commodityWindowRows(history,x.id,period);
+        let rows=commodityWindowRows(history,x.id,period);
+        if(rows.length<2 && Number.isFinite(Number(x.price)) && Number.isFinite(Number(x.changePct))){
+          const px=Number(x.price),chg=Number(x.changePct);
+          const prev=chg===-100?px:px/(1+chg/100);
+          const d0=new Date(); d0.setDate(d0.getDate()-1);
+          rows=[{date:d0.toISOString().slice(0,10),price:prev},{date:new Date().toISOString().slice(0,10),price:px}];
+        }
         const first=rows[0]?.price,last=rows.at(-1)?.price;
         const pct=(Number.isFinite(first)&&Number.isFinite(last)&&first!==0)?((last-first)/first*100):null;
         const selected=selectedId===x.id;
@@ -745,6 +732,8 @@ function Dashboard({vessels, cargoes, history}) {
   const [commodityPeriod,setCommodityPeriod]=useState("1M");
   const [selectedCommodity,setSelectedCommodity]=useState("brent");
   const [vlcc,setVlcc]=useState(null);
+  const [shippingPriceTab,setShippingPriceTab]=useState("vlcc");
+  const [vlccError,setVlccError]=useState(null);
 
   useEffect(()=>{
     let alive=true;
@@ -775,7 +764,10 @@ function Dashboard({vessels, cargoes, history}) {
           await supabase.from("dashboard").upsert({key:"commodity-hist-"+day,value:JSON.stringify(snap)},{onConflict:"key"});
         }catch(e){console.warn("commodity snapshot save:",e);}
       }).catch(()=>{});
-    fetch("/api/vlcc-earnings",{cache:"no-store"}).then(r=>r.ok?r.json():Promise.reject()).then(j=>{if(alive)setVlcc(j)}).catch(()=>{});
+    fetch("/api/vlcc-earnings",{cache:"no-store"})
+      .then(r=>r.ok?r.json():Promise.reject(new Error("HTTP "+r.status)))
+      .then(j=>{if(alive){setVlcc(j);setVlccError(j?.latest?null:"No VLCC data returned");}})
+      .catch(e=>{if(alive)setVlccError(e?.message||"VLCC fetch failed");});
     return()=>{alive=false;};
   },[]);
 
@@ -789,7 +781,11 @@ function Dashboard({vessels, cargoes, history}) {
         const rows=(data||[]).map(r=>{
           try{return typeof r.value==="string"?JSON.parse(r.value):r.value;}catch{return null;}
         }).filter(Boolean).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
-        if(alive)setCommodityHistory(rows);
+        if(alive)setCommodityHistory(prev=>{
+          const byDate=new Map();
+          for(const x of [...rows,...(Array.isArray(prev)?prev:[])]) if(x?.date) byDate.set(x.date,x);
+          return [...byDate.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+        });
       }catch(e){console.warn("commodity history load:",e);}
     })();
     return()=>{alive=false;};
@@ -1019,6 +1015,38 @@ function Dashboard({vessels, cargoes, history}) {
     </div>
   );
 
+  const commodityDisplayData=(()=>{
+    if(!commodities)return null;
+    const base=Array.isArray(commodities.items)?commodities.items.filter(x=>x.id!=="mgo-ara"):[];
+    const mgoVal=Number(bunkers?.ARA_MGO);
+    const mgo={id:"mgo-ara",label:"MGO ARA",unit:"USD/t",price:Number.isFinite(mgoVal)?mgoVal:null,changePct:null};
+    return {...commodities,items:[...base,mgo]};
+  })();
+
+  const commodityDisplayHistory=(()=>{
+    const byDate=new Map();
+    for(const s of Array.isArray(commodityHistory)?commodityHistory:[]){
+      if(!s?.date)continue;
+      byDate.set(s.date,{...s,items:{...(s.items||{})}});
+    }
+    for(const b of Array.isArray(bunkerHistory)?bunkerHistory:[]){
+      if(!b?.date)continue;
+      const parsed=new Date(b.date);
+      const d=!isNaN(parsed)?parsed.toISOString().slice(0,10):String(b.date);
+      const row=byDate.get(d)||{date:d,items:{}};
+      const px=Number(b.ARA_MGO);
+      if(Number.isFinite(px))row.items["mgo-ara"]={price:px,unit:"USD/t",label:"MGO ARA"};
+      byDate.set(d,row);
+    }
+    const today=new Date().toISOString().slice(0,10);
+    if(Number.isFinite(Number(bunkers?.ARA_MGO))){
+      const row=byDate.get(today)||{date:today,items:{}};
+      row.items["mgo-ara"]={price:Number(bunkers.ARA_MGO),unit:"USD/t",label:"MGO ARA"};
+      byDate.set(today,row);
+    }
+    return [...byDate.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  })();
+
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14,background:D.bg,borderRadius:10,padding:"16px",fontFamily:"Inter,sans-serif"}}>
 
@@ -1075,12 +1103,12 @@ function Dashboard({vessels, cargoes, history}) {
                 {["7D","1M","YTD"].map(p=><button key={p} onClick={()=>setCommodityPeriod(p)} style={{fontSize:9,fontWeight:800,padding:"3px 7px",borderRadius:4,border:"1px solid "+(commodityPeriod===p?D.blue:D.border2),background:commodityPeriod===p?"rgba(88,166,255,.12)":"transparent",color:commodityPeriod===p?D.blue:D.faint,cursor:"pointer",fontFamily:"inherit"}}>{p}</button>)}
               </div>
             </div>
-            {commodities ? commodityView==="overview" ? (
-              <CommodityTape data={commodities} history={commodityHistory} period={commodityPeriod} selectedId={selectedCommodity} onSelect={id=>setSelectedCommodity(id)}/>
+            {commodityDisplayData ? commodityView==="overview" ? (
+              <CommodityTape data={commodityDisplayData} history={commodityDisplayHistory} period={commodityPeriod} selectedId={selectedCommodity} onSelect={id=>setSelectedCommodity(id)}/>
             ) : (
               <div style={{background:D.bg3,border:"1px solid "+D.border2,borderRadius:7,padding:"10px 12px"}}>
                 {(()=>{
-                  const item=(commodities.items||[]).find(x=>x.id===selectedCommodity)||commodities.items?.[0];
+                  const item=(commodityDisplayData.items||[]).find(x=>x.id===selectedCommodity)||commodityDisplayData.items?.[0];
                   if(!item)return null;
                   const accent=COMMODITY_ACCENTS[item.id]||D.blue;
                   return <>
@@ -1088,7 +1116,7 @@ function Dashboard({vessels, cargoes, history}) {
                       <div style={{fontSize:13,fontWeight:900,color:accent,textTransform:"uppercase",letterSpacing:".05em"}}>{item.label}</div>
                       <div style={{textAlign:"right"}}><span style={{fontSize:22,fontWeight:900,color:D.tx}}>{item.price!=null?Number(item.price).toLocaleString("en-US",{maximumFractionDigits:2}):"—"}</span><span style={{fontSize:9,color:D.faint,marginLeft:5}}>{item.unit||""}</span></div>
                     </div>
-                    <CommodityBigChart item={item} history={commodityHistory} period={commodityPeriod}/>
+                    <CommodityBigChart item={item} history={commodityDisplayHistory} period={commodityPeriod}/>
                   </>;
                 })()}
               </div>
@@ -1099,24 +1127,50 @@ function Dashboard({vessels, cargoes, history}) {
         {panel(
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-              {secHead("VLCC · TD3C MEG → China")}
-              <span style={{fontSize:9,color:D.faint}}>Baltic weekly</span>
-            </div>
-            {vlcc?.latest?<div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:10,alignItems:"center"}}>
-              <div>
-                <div style={{fontSize:22,fontWeight:900,color:D.tx}}>${Math.round(Number(vlcc.latest.tce)/1000)}k<span style={{fontSize:10,color:D.faint,fontWeight:600}}>/day</span></div>
-                <div style={{fontSize:9,color:D.faint,marginTop:2}}>{vlcc.latest.date||""} · {vlcc.latest.ws!=null?"WS "+vlcc.latest.ws:"TD3C"}</div>
+              {secHead("Shipping Prices")}
+              <div style={{display:"flex",gap:4}}>
+                {[["vlcc","VLCC"],["bunkers","Bunkers"]].map(([v,l])=><button key={v} onClick={()=>setShippingPriceTab(v)} style={{
+                  fontSize:9.5,fontWeight:800,padding:"4px 8px",borderRadius:5,cursor:"pointer",fontFamily:"inherit",
+                  border:"1px solid "+(shippingPriceTab===v?D.blue:D.border2),
+                  background:shippingPriceTab===v?"rgba(88,166,255,.14)":D.bg3,
+                  color:shippingPriceTab===v?D.tx:D.dim
+                }}>{l}</button>)}
               </div>
-              <VlccSparkline history={vlcc.history||[]}/>
-            </div>:<div style={{fontSize:11,color:D.faint,padding:"8px 0"}}>Loading VLCC earnings…</div>}
+            </div>
+            {shippingPriceTab==="vlcc" ? (
+              vlcc?.latest ? <div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:10,alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:9,fontWeight:800,color:D.faint,textTransform:"uppercase",letterSpacing:".05em"}}>TD3C MEG → China</div>
+                  <div style={{fontSize:24,fontWeight:900,color:D.tx,marginTop:3}}>${Math.round(Number(vlcc.latest.tce)/1000)}k<span style={{fontSize:10,color:D.faint,fontWeight:600}}>/day</span></div>
+                  <div style={{fontSize:9,color:D.faint,marginTop:2}}>{vlcc.latest.date||""} · {vlcc.latest.ws!=null?"WS "+vlcc.latest.ws:"Baltic weekly"}</div>
+                </div>
+                <VlccSparkline history={vlcc.history||[]}/>
+              </div> : <div style={{fontSize:11,color:vlccError?D.red:D.faint,padding:"10px 0"}}>
+                {vlccError?"VLCC unavailable · "+vlccError:"Loading VLCC earnings…"}
+              </div>
+            ) : (
+              <>
+                {!bFetched&&!bLoading&&<div style={{textAlign:"center",padding:"8px 0"}}><button onClick={fetchBunkersPBT} style={{background:"rgba(88,166,255,.12)",border:"1px solid rgba(88,166,255,.32)",borderRadius:5,color:D.blue,fontWeight:700,fontSize:10,padding:"5px 10px",cursor:"pointer"}}>Fetch bunker prices</button></div>}
+                {bLoading&&<div style={{color:D.blue,fontSize:11,padding:"8px",textAlign:"center"}}>⟳ Fetching…</div>}
+                {bError&&<div style={{color:D.red,fontSize:10,padding:"4px 0"}}>{bError}</div>}
+                {bunkers&&<>
+                  <div style={{fontSize:9,color:D.faint,marginBottom:5}}>Updated {bunkers.date}</div>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:10.5}}>
+                    <thead><tr style={{background:D.bg4}}><th style={{padding:"4px 6px",textAlign:"left",color:D.faint}}>PORT</th><th style={{padding:"4px 6px",textAlign:"right",color:D.amber}}>HSFO</th><th style={{padding:"4px 6px",textAlign:"right",color:D.green}}>VLSFO</th><th style={{padding:"4px 6px",textAlign:"right",color:D.blue}}>MGO</th></tr></thead>
+                    <tbody>{[["ARA",bunkers.ARA_HSFO,bunkers.ARA_VLSFO,bunkers.ARA_MGO],["Fujairah",bunkers.FUJ_HSFO,bunkers.FUJ_VLSFO,bunkers.FUJ_MGO],["Singapore",bunkers.SIN_HSFO,bunkers.SIN_VLSFO,bunkers.SIN_MGO]].map(([port,a,v,m],i)=><tr key={port} style={{background:i%2?D.bg4:"transparent",borderBottom:"1px solid "+D.border}}><td style={{padding:"5px 6px",color:D.dim,fontWeight:700}}>{port}</td><td style={{padding:"5px 6px",textAlign:"right",color:D.amber,fontWeight:800}}>{a?"$"+a:"—"}</td><td style={{padding:"5px 6px",textAlign:"right",color:D.green,fontWeight:800}}>{v?"$"+v:"—"}</td><td style={{padding:"5px 6px",textAlign:"right",color:D.blue,fontWeight:800}}>{m?"$"+m:"—"}</td></tr>)}</tbody>
+                  </table>
+                  <button onClick={fetchBunkersPBT} style={{marginTop:5,background:"none",border:"1px solid "+D.border,borderRadius:4,color:D.faint,fontSize:9.5,padding:"2px 7px",cursor:"pointer"}}>↻ Refresh</button>
+                </>}
+              </>
+            )}
           </>,
           {minWidth:0}
         )}
       </div>
 
-      {/* ── Fixing window + bunker row ── */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(0,62fr) minmax(360px,38fr)",gap:12}}>
-        {panel(
+      {/* ── Fixing window + Worldscale ── */}
+      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12,alignItems:"stretch"}}>
+{panel(
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
               {secHead("Fixing window by vessel size · days until open")}
@@ -1133,27 +1187,11 @@ function Dashboard({vessels, cargoes, history}) {
           </>,
           {minWidth:0}
         )}
-        {panel(
-          <>
-            {secHead("Bunker prices USD/mt — PBT International")}
-            {!bFetched&&!bLoading&&<div style={{textAlign:"center",padding:"12px 0"}}><div style={{fontSize:11,color:D.faint,marginBottom:8}}>ARA · Fujairah · Singapore</div><button onClick={fetchBunkersPBT} style={{background:"rgba(88,166,255,.12)",border:"1px solid rgba(88,166,255,.32)",borderRadius:5,color:D.blue,fontWeight:700,fontSize:11,padding:"5px 12px",cursor:"pointer"}}>Fetch live from PBT</button></div>}
-            {bLoading&&<div style={{color:D.blue,fontSize:11,padding:"12px",textAlign:"center"}}>⟳ Fetching…</div>}
-            {bError&&<div style={{color:D.red,fontSize:11,padding:"6px 0"}}>{bError}</div>}
-            {bunkers&&<>
-              <div style={{fontSize:9,color:D.faint,marginBottom:6}}>Updated {bunkers.date}</div>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-                <thead><tr style={{background:D.bg4}}><th style={{padding:"5px 7px",textAlign:"left",color:D.faint}}>PORT</th><th style={{padding:"5px 7px",textAlign:"right",color:D.amber}}>HSFO</th><th style={{padding:"5px 7px",textAlign:"right",color:D.green}}>VLSFO</th><th style={{padding:"5px 7px",textAlign:"right",color:D.blue}}>MGO</th></tr></thead>
-                <tbody>{[["ARA",bunkers.ARA_HSFO,bunkers.ARA_VLSFO,bunkers.ARA_MGO],["Fujairah",bunkers.FUJ_HSFO,bunkers.FUJ_VLSFO,bunkers.FUJ_MGO],["Singapore",bunkers.SIN_HSFO,bunkers.SIN_VLSFO,bunkers.SIN_MGO]].map(([port,a,v,m],i)=><tr key={port} style={{background:i%2?D.bg4:"transparent",borderBottom:"1px solid "+D.border}}><td style={{padding:"6px 7px",color:D.dim,fontWeight:700}}>{port}</td><td style={{padding:"6px 7px",textAlign:"right",color:D.amber,fontWeight:800}}>{a?"$"+a:"—"}</td><td style={{padding:"6px 7px",textAlign:"right",color:D.green,fontWeight:800}}>{v?"$"+v:"—"}</td><td style={{padding:"6px 7px",textAlign:"right",color:D.blue,fontWeight:800}}>{m?"$"+m:"—"}</td></tr>)}</tbody>
-              </table>
-              <button onClick={fetchBunkersPBT} style={{marginTop:6,background:"none",border:"1px solid "+D.border,borderRadius:4,color:D.faint,fontSize:10,padding:"2px 8px",cursor:"pointer"}}>↻ Refresh</button>
-            </>}
-          </>,
-          {minWidth:0}
-        )}
+        <WSTracker/>
       </div>
 
       {/* ── Regional fleet history ── */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(0,62fr) minmax(360px,38fr)",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12}}>
         {panel(
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
@@ -1177,9 +1215,6 @@ function Dashboard({vessels, cargoes, history}) {
           {minWidth:0}
         )}
       </div>
-
-      {/* ── WS / FFA tracker ── */}
-      <WSTracker/>
 
       {/* ── News Feed ── */}
       <NewsFeed/>
