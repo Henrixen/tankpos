@@ -826,6 +826,7 @@ function Dashboard({vessels, cargoes, history}) {
   const [regionHistoryError,setRegionHistoryError]=useState(null);
   useEffect(()=>{let alive=true;(async()=>{try{const {data,error}=await supabase.rpc("dashboard_region_history");if(error)throw error;if(alive)setRegionHistory(data||[]);}catch(e){if(alive)setRegionHistoryError(e.message||"RPC failed");}finally{if(alive)setRegionHistoryLoading(false);}})();return()=>{alive=false;};},[]);
   const [segmentFilter,setSegmentFilter]=useState("All");
+  const [fixingRegionFilter,setFixingRegionFilter]=useState("All");
   const [fixingSegmentHistory,setFixingSegmentHistory]=useState([]);
   const [fixingSegmentError,setFixingSegmentError]=useState(null);
   useEffect(()=>{let alive=true;(async()=>{try{const {data,error}=await supabase.rpc("dashboard_fixing_window_segments");if(error)throw error;if(alive)setFixingSegmentHistory(data||[]);}catch(e){if(alive)setFixingSegmentError(e.message||"RPC failed");}})();return()=>{alive=false;};},[]);
@@ -993,11 +994,27 @@ function Dashboard({vessels, cargoes, history}) {
 
   const fixingSegmentChartData=(()=>{
     const byDate={};
-    const rows=Array.isArray(fixingSegmentHistory)?fixingSegmentHistory:[];
+    const rows=(Array.isArray(fixingSegmentHistory)?fixingSegmentHistory:[])
+      .filter(r=>fixingRegionFilter==="All" || r.region===fixingRegionFilter);
     for(const r of rows){
       const d=r.snapshot_date; if(!d)continue;
       byDate[d]||={date:d};
-      byDate[d][r.segment]=Number(r.avg_days);
+      // RPC returns one row per date / region / segment. When All geographies are
+      // selected, combine regional averages weighted by vessel observations.
+      const seg=r.segment;
+      const ships=Math.max(1,Number(r.ships||1));
+      const avg=Number(r.avg_days);
+      if(!Number.isFinite(avg))continue;
+      byDate[d]["__"+seg]||={sum:0,ships:0};
+      byDate[d]["__"+seg].sum+=avg*ships;
+      byDate[d]["__"+seg].ships+=ships;
+    }
+    for(const row of Object.values(byDate)){
+      for(const seg of SEGMENT_ORDER.filter(s=>s!=="All")){
+        const a=row["__"+seg];
+        if(a?.ships)row[seg]=a.sum/a.ships;
+        delete row["__"+seg];
+      }
     }
     return Object.values(byDate).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   })();
@@ -1253,7 +1270,7 @@ function Dashboard({vessels, cargoes, history}) {
 {panel(
           <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
-              {secHead("Fixing window by vessel size · days until open")}
+              {secHead(`Fixing window by vessel size · days until open${fixingRegionFilter!=="All"?" · "+fixingRegionFilter:""}`)}
               <span style={{fontSize:9,color:D.faint}}>past positions · negative values excluded</span>
             </div>
             <div style={{display:"flex",gap:5,flexWrap:"wrap",margin:"-2px 0 8px"}}>
@@ -1276,11 +1293,33 @@ function Dashboard({vessels, cargoes, history}) {
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
               {secHead("Open fleet by main region · vessel count")}
-              <span style={{fontSize:9,color:D.faint}}>historical totals</span>
+              <span style={{fontSize:9,color:fixingRegionFilter!=="All"?D.blue:D.faint}}>
+                {fixingRegionFilter!=="All" ? `Fixing filter: ${fixingRegionFilter} · click again to clear` : "click a region to filter fixing window"}
+              </span>
             </div>
             {regionHistoryLoading?<div style={{fontSize:11,color:D.faint,padding:"12px 0"}}>Loading historical fleet…</div>:regionHistoryError?<div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Run updated Supabase RPC SQL: {regionHistoryError}</div>:<>
               <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"1px 2px 7px",fontSize:10.5,fontWeight:900,color:D.dim,textTransform:"uppercase",letterSpacing:".04em"}}><span>Region</span><span style={{textAlign:"right",color:D.tx}}>NOW</span><span style={{textAlign:"right"}}>14D</span><span style={{textAlign:"right"}}>30D</span><span style={{textAlign:"right"}}>90D</span></div>
-              {currentRegionRows.map(({region,now,d14,d30,d90})=><div key={region} style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,alignItems:"center",padding:"6px 2px",borderTop:"1px solid "+D.border}}><span style={{fontSize:11,fontWeight:800,color:REGION_COLORS[region]||D.dim}}>{region}</span><span style={{fontSize:11,textAlign:"right",color:D.tx,fontWeight:850}}>{now}</span><span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d14}</span><span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d30}</span><span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d90}</span></div>)}
+              {currentRegionRows.map(({region,now,d14,d30,d90})=>{
+                const activeRegion=fixingRegionFilter===region;
+                return <div key={region}
+                  onClick={()=>setFixingRegionFilter(activeRegion?"All":region)}
+                  title={activeRegion?"Click to clear geography filter":"Filter fixing window to "+region}
+                  style={{
+                    display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",
+                    gap:8,alignItems:"center",padding:"6px 5px",
+                    borderTop:"1px solid "+D.border,
+                    borderLeft:"2px solid "+(activeRegion?(REGION_COLORS[region]||D.blue):"transparent"),
+                    background:activeRegion?"rgba(88,166,255,.08)":"transparent",
+                    borderRadius:activeRegion?4:0,
+                    cursor:"pointer",transition:"background .14s,border-color .14s"
+                  }}>
+                  <span style={{fontSize:11,fontWeight:800,color:REGION_COLORS[region]||D.dim}}>{region}</span>
+                  <span style={{fontSize:11,textAlign:"right",color:D.tx,fontWeight:850}}>{now}</span>
+                  <span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d14}</span>
+                  <span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d30}</span>
+                  <span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d90}</span>
+                </div>;
+              })}
               <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"7px 2px 0",borderTop:"1px solid "+D.border2,fontSize:10,fontWeight:850}}><span style={{color:D.faint}}>{segmentFilter==="All"?"TOTAL FLEET":"TOTAL · "+segmentFilter}</span><span style={{textAlign:"right",color:D.tx}}>{regionTotals.now}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d14}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d30}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d90}</span></div>
             </>}
           </>,
