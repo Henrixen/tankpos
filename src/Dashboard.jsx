@@ -305,7 +305,7 @@ ${text}`}]
     .slice(-30);
   const routeColors = {TC2:C.blue,TC6:C.green,TC14:C.amber,TC23:C.purple,TC178:"#ff9f43"};
 
-  const secHead = t=>(<div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>{t}</div>);
+  const secHead = t=>(<div style={{fontSize:12.5,fontWeight:900,color:"rgba(130,180,245,.82)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:9,display:"flex",alignItems:"center",gap:7}}><span style={{display:"inline-block",width:2,height:14,background:C.blue,borderRadius:2}}/>{t}</div>);
   const th2 = {padding:"5px 8px",background:C.bg3,color:C.faint,fontWeight:700,fontSize:12,textTransform:"uppercase",textAlign:"right",whiteSpace:"nowrap"};
   const td2 = {padding:"5px 8px",fontSize:12,textAlign:"right",whiteSpace:"nowrap",borderBottom:"1px solid "+C.bg2};
 
@@ -530,8 +530,8 @@ function NewsFeed() {
   return(
     <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"14px 16px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.08em"}}>
-          📰 Shipping News · Tankers / Maritime
+        <div style={{fontSize:12.5,fontWeight:900,color:"rgba(130,180,245,.82)",textTransform:"uppercase",letterSpacing:".08em",display:"flex",alignItems:"center",gap:7}}>
+          <span style={{display:"inline-block",width:2,height:14,background:C.blue,borderRadius:2}}/> Shipping News · Tankers / Maritime
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           {lastFetch&&<span style={{fontSize:12,color:C.faint}}>Fetched {lastFetch}</span>}
@@ -590,56 +590,124 @@ function NewsTicker() {
   );
 }
 
-function CommodityTape({data}) {
+
+const COMMODITY_ACCENTS={
+  "brent":"#58a6ff","crude":"#4fc3f7","eu-gas":"#a78bfa","natgas":"#22d3ee",
+  "gasoline":"#f5a623","heating-oil":"#fb923c","ethanol":"#3fb950","naphtha":"#eab308",
+  "methanol":"#c084fc","urea":"#34d399","eu-carbon":"#94a3b8"
+};
+
+function commodityWindowRows(history,id,period){
+  const rows=(Array.isArray(history)?history:[])
+    .map(s=>({date:s.date,price:Number(s.items?.[id]?.price)}))
+    .filter(x=>Number.isFinite(x.price) && x.date)
+    .sort((a,b)=>new Date(a.date)-new Date(b.date));
+  if(!rows.length)return [];
+  const now=new Date(rows[rows.length-1].date);
+  let cutoff;
+  if(period==="7D"){cutoff=new Date(now);cutoff.setDate(cutoff.getDate()-7);}
+  else if(period==="1M"){cutoff=new Date(now);cutoff.setMonth(cutoff.getMonth()-1);}
+  else {cutoff=new Date(now.getFullYear(),0,1);}
+  return rows.filter(x=>new Date(x.date)>=cutoff);
+}
+
+function MiniCommoditySpark({rows,color,height=28}){
+  if(!rows?.length)return <div style={{height,display:"flex",alignItems:"center",color:"rgba(130,160,205,.25)",fontSize:8}}>history builds daily</div>;
+  const vals=rows.map(x=>x.price).filter(Number.isFinite);
+  if(vals.length===1){
+    return <svg viewBox="0 0 120 28" preserveAspectRatio="none" style={{width:"100%",height,display:"block"}}>
+      <line x1="3" y1="14" x2="117" y2="14" stroke={color} strokeWidth="1.5" opacity=".55"/>
+    </svg>;
+  }
+  const W=120,H=28,P=3,mn=Math.min(...vals),mx=Math.max(...vals),range=mx-mn||1;
+  const pts=rows.map((r,i)=>[
+    P+i/(rows.length-1)*(W-P*2),
+    P+(mx-r.price)/range*(H-P*2)
+  ]);
+  const d="M"+pts.map(p=>p.join(",")).join(" L");
+  return <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{width:"100%",height,display:"block"}}>
+    <path d={d} fill="none" stroke={color} strokeWidth="1.8" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
+  </svg>;
+}
+
+function CommodityBigChart({item,history,period}){
+  if(!item)return null;
+  const rows=commodityWindowRows(history,item.id,period);
+  const color=COMMODITY_ACCENTS[item.id]||"#58a6ff";
+  const vals=rows.map(x=>x.price).filter(Number.isFinite);
+  if(vals.length<2){
+    return <div style={{height:150,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"rgba(130,160,205,.45)"}}>
+      Historical chart will build automatically as daily snapshots are saved.
+    </div>;
+  }
+  const W=800,H=180,PL=52,PR=18,PT=12,PB=28;
+  const mn=Math.min(...vals),mx=Math.max(...vals),pad=(mx-mn||Math.abs(mx)*.02||1)*.12;
+  const lo=mn-pad,hi=mx+pad,range=hi-lo||1;
+  const pts=rows.map((r,i)=>[
+    PL+i/(rows.length-1)*(W-PL-PR),
+    PT+(hi-r.price)/range*(H-PT-PB)
+  ]);
+  const path="M"+pts.map(p=>p.join(",")).join(" L");
+  return(
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{width:"100%",height:180,display:"block"}}>
+        {[0,.5,1].map(t=>{
+          const y=PT+t*(H-PT-PB),v=hi-t*range;
+          return <g key={t}>
+            <line x1={PL} y1={y} x2={W-PR} y2={y} stroke="rgba(88,130,200,.12)" strokeWidth="1"/>
+            <text x={PL-7} y={y+4} fill="#e8f2ff" fontSize="10" fontWeight="700" textAnchor="end">{v.toLocaleString("en-US",{maximumFractionDigits:2})}</text>
+          </g>;
+        })}
+        <path d={path} fill="none" stroke={color} strokeWidth="2.4" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
+        <text x={PL} y={H-6} fill="#e8f2ff" fontSize="9.5" fontWeight="700">{new Date(rows[0].date).toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}</text>
+        <text x={W-PR} y={H-6} fill="#e8f2ff" fontSize="9.5" fontWeight="700" textAnchor="end">{new Date(rows.at(-1).date).toLocaleDateString("en-GB",{day:"2-digit",month:"short"})}</text>
+      </svg>
+    </div>
+  );
+}
+
+function CommodityTape({data,history,period,selectedId,onSelect}){
   const items=Array.isArray(data?.items)?data.items:[];
   if(!items.length)return null;
   return(
     <div style={{
-      display:"flex",
-      flexWrap:"wrap",
-      gap:8,
-      width:"100%",
-      height:"100%",
-      alignContent:"stretch"
+      display:"flex",flexWrap:"wrap",gap:8,width:"100%",height:"100%",alignContent:"stretch"
     }}>
-      {items.map(x=><div key={x.id} style={{
-        flex:"1 1 155px",
-        minWidth:145,
-        minHeight:78,
-        background:"#111f35",
-        border:"1px solid rgba(88,166,255,.22)",
-        borderRadius:7,
-        padding:"11px 13px",
-        display:"flex",
-        flexDirection:"column",
-        justifyContent:"center",
-        boxSizing:"border-box"
-      }}>
-        <div style={{
-          fontSize:11,
-          fontWeight:900,
-          color:"rgba(155,200,255,.88)",
-          textTransform:"uppercase",
-          letterSpacing:".045em",
-          whiteSpace:"nowrap",
-          overflow:"hidden",
-          textOverflow:"ellipsis"
-        }}>{x.label}</div>
-        <div style={{display:"flex",alignItems:"baseline",gap:6,marginTop:5,minWidth:0}}>
-          <span style={{fontSize:20,fontWeight:900,color:"#f1f7ff",lineHeight:1}}>
-            {x.price!=null?Number(x.price).toLocaleString("en-US",{maximumFractionDigits:2}):"—"}
-          </span>
-          <span style={{fontSize:9.5,fontWeight:700,color:"rgba(135,175,225,.58)",whiteSpace:"nowrap"}}>
-            {x.unit||""}
-          </span>
-        </div>
-        {x.changePct!=null&&<div style={{
-          fontSize:9.5,
-          fontWeight:700,
-          color:Number(x.changePct)>=0?"#3fb950":"#ff6b6b",
-          marginTop:4
-        }}>{Number(x.changePct)>0?"+":""}{Number(x.changePct).toFixed(2)}%</div>}
-      </div>)}
+      {items.map(x=>{
+        const accent=COMMODITY_ACCENTS[x.id]||"#58a6ff";
+        const rows=commodityWindowRows(history,x.id,period);
+        const first=rows[0]?.price,last=rows.at(-1)?.price;
+        const pct=(Number.isFinite(first)&&Number.isFinite(last)&&first!==0)?((last-first)/first*100):null;
+        const selected=selectedId===x.id;
+        return <button key={x.id} onClick={()=>onSelect?.(x.id)} style={{
+          flex:"1 1 155px",minWidth:145,minHeight:108,
+          background:selected?accent+"16":"#111f35",
+          border:"1px solid "+(selected?accent:accent+"55"),
+          borderTop:"3px solid "+accent,
+          borderRadius:7,padding:"10px 12px 8px",
+          display:"flex",flexDirection:"column",boxSizing:"border-box",
+          cursor:"pointer",fontFamily:"inherit",textAlign:"left",overflow:"hidden"
+        }}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+            <div style={{fontSize:11,fontWeight:900,color:accent,textTransform:"uppercase",letterSpacing:".045em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{x.label}</div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontSize:19,fontWeight:900,color:"#f4f8ff",lineHeight:1}}>
+                {x.price!=null?Number(x.price).toLocaleString("en-US",{maximumFractionDigits:2}):"—"}
+              </div>
+              <div style={{fontSize:8.5,fontWeight:700,color:"rgba(145,180,225,.58)",marginTop:2}}>{x.unit||""}</div>
+            </div>
+          </div>
+          <div style={{marginTop:"auto",paddingTop:6}}>
+            <MiniCommoditySpark rows={rows} color={accent} height={30}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:8.5,marginTop:2}}>
+              <span style={{color:"rgba(140,175,220,.48)"}}>{period}</span>
+              <span style={{fontWeight:800,color:pct==null?"rgba(140,175,220,.34)":pct>=0?"#3fb950":"#ff6b6b"}}>
+                {pct==null?"—":(pct>0?"+":"")+pct.toFixed(1)+"%"}
+              </span>
+            </div>
+          </div>
+        </button>;
+      })}
     </div>
   );
 }
@@ -672,6 +740,10 @@ function Dashboard({vessels, cargoes, history}) {
   const [bunkerHistory, setBunkerHistory] = useState([]); // New state for graph
   const [positionMeta,setPositionMeta]=useState({count:null,updatedAt:null});
   const [commodities,setCommodities]=useState(null);
+  const [commodityHistory,setCommodityHistory]=useState([]);
+  const [commodityView,setCommodityView]=useState("overview");
+  const [commodityPeriod,setCommodityPeriod]=useState("1M");
+  const [selectedCommodity,setSelectedCommodity]=useState("brent");
   const [vlcc,setVlcc]=useState(null);
 
   useEffect(()=>{
@@ -686,8 +758,40 @@ function Dashboard({vessels, cargoes, history}) {
         if(alive)setPositionMeta({count:count??null,updatedAt:last?.[0]?.updated_at||null});
       }catch(e){console.error("positions_latest meta:",e);}
     })();
-    fetch("/api/commodities",{cache:"no-store"}).then(r=>r.ok?r.json():Promise.reject()).then(j=>{if(alive)setCommodities(j)}).catch(()=>{});
+    fetch("/api/commodities",{cache:"no-store"})
+      .then(r=>r.ok?r.json():Promise.reject())
+      .then(async j=>{
+        if(!alive)return;
+        setCommodities(j);
+        const itemsObj={};
+        for(const x of Array.isArray(j?.items)?j.items:[])itemsObj[x.id]={price:x.price,unit:x.unit,label:x.label};
+        const day=new Date().toISOString().slice(0,10);
+        const snap={date:day,items:itemsObj};
+        setCommodityHistory(prev=>{
+          const rows=(Array.isArray(prev)?prev:[]).filter(x=>x.date!==day);
+          return [...rows,snap].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+        });
+        try{
+          await supabase.from("dashboard").upsert({key:"commodity-hist-"+day,value:JSON.stringify(snap)},{onConflict:"key"});
+        }catch(e){console.warn("commodity snapshot save:",e);}
+      }).catch(()=>{});
     fetch("/api/vlcc-earnings",{cache:"no-store"}).then(r=>r.ok?r.json():Promise.reject()).then(j=>{if(alive)setVlcc(j)}).catch(()=>{});
+    return()=>{alive=false;};
+  },[]);
+
+
+  useEffect(()=>{
+    let alive=true;
+    (async()=>{
+      try{
+        const {data,error}=await supabase.from("dashboard").select("key,value").ilike("key","commodity-hist-%");
+        if(error)throw error;
+        const rows=(data||[]).map(r=>{
+          try{return typeof r.value==="string"?JSON.parse(r.value):r.value;}catch{return null;}
+        }).filter(Boolean).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+        if(alive)setCommodityHistory(rows);
+      }catch(e){console.warn("commodity history load:",e);}
+    })();
     return()=>{alive=false;};
   },[]);
 
@@ -902,8 +1006,8 @@ function Dashboard({vessels, cargoes, history}) {
   );
 
   const secHead = t => (
-    <div style={{fontSize:11,fontWeight:700,color:D.faint,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
-      <span style={{display:"inline-block",width:2,height:12,background:D.blue,borderRadius:2,opacity:0.8}}/>
+    <div style={{fontSize:12.5,fontWeight:900,color:"rgba(130,180,245,.82)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:9,display:"flex",alignItems:"center",gap:7}}>
+      <span style={{display:"inline-block",width:2,height:14,background:D.blue,borderRadius:2,opacity:0.95}}/>
       {t}
     </div>
   );
@@ -960,10 +1064,35 @@ function Dashboard({vessels, cargoes, history}) {
         {panel(
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-              <div style={{fontSize:12.5,fontWeight:900,color:"rgba(130,180,245,.82)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:8}}>▏ Energy & Commodities</div>
+              {secHead("Energy & Commodities")}
               <span style={{fontSize:9,color:D.faint}}>{commodities?.updatedAt?new Date(commodities.updatedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):""}</span>
             </div>
-            {commodities?<CommodityTape data={commodities}/>:<div style={{fontSize:11,color:D.faint,padding:"8px 0"}}>Loading commodity prices…</div>}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,margin:"-2px 0 9px"}}>
+              <div style={{display:"flex",gap:4}}>
+                {[["overview","Overview"],["chart","Chart"]].map(([v,l])=><button key={v} onClick={()=>setCommodityView(v)} style={{fontSize:9.5,fontWeight:800,padding:"4px 9px",borderRadius:5,border:"1px solid "+(commodityView===v?D.blue:D.border2),background:commodityView===v?"rgba(88,166,255,.14)":D.bg3,color:commodityView===v?D.tx:D.dim,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>)}
+              </div>
+              <div style={{display:"flex",gap:3}}>
+                {["7D","1M","YTD"].map(p=><button key={p} onClick={()=>setCommodityPeriod(p)} style={{fontSize:9,fontWeight:800,padding:"3px 7px",borderRadius:4,border:"1px solid "+(commodityPeriod===p?D.blue:D.border2),background:commodityPeriod===p?"rgba(88,166,255,.12)":"transparent",color:commodityPeriod===p?D.blue:D.faint,cursor:"pointer",fontFamily:"inherit"}}>{p}</button>)}
+              </div>
+            </div>
+            {commodities ? commodityView==="overview" ? (
+              <CommodityTape data={commodities} history={commodityHistory} period={commodityPeriod} selectedId={selectedCommodity} onSelect={id=>setSelectedCommodity(id)}/>
+            ) : (
+              <div style={{background:D.bg3,border:"1px solid "+D.border2,borderRadius:7,padding:"10px 12px"}}>
+                {(()=>{
+                  const item=(commodities.items||[]).find(x=>x.id===selectedCommodity)||commodities.items?.[0];
+                  if(!item)return null;
+                  const accent=COMMODITY_ACCENTS[item.id]||D.blue;
+                  return <>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10,marginBottom:5}}>
+                      <div style={{fontSize:13,fontWeight:900,color:accent,textTransform:"uppercase",letterSpacing:".05em"}}>{item.label}</div>
+                      <div style={{textAlign:"right"}}><span style={{fontSize:22,fontWeight:900,color:D.tx}}>{item.price!=null?Number(item.price).toLocaleString("en-US",{maximumFractionDigits:2}):"—"}</span><span style={{fontSize:9,color:D.faint,marginLeft:5}}>{item.unit||""}</span></div>
+                    </div>
+                    <CommodityBigChart item={item} history={commodityHistory} period={commodityPeriod}/>
+                  </>;
+                })()}
+              </div>
+            ) : <div style={{fontSize:11,color:D.faint,padding:"8px 0"}}>Loading commodity prices…</div>}
           </>,
           {minWidth:0}
         )}
