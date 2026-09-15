@@ -1,10 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { C, TCE_DEFAULTS } from "./constants";
-import { supabase } from "./supabaseclient";
 
 const TCE_STORE_KEY = "tankpos-tce-defaults-v1";
 async function loadTCEDefaults(){try{const r=await window.storage.get(TCE_STORE_KEY,true);return r?JSON.parse(r.value):null;}catch(_){return null;}}
 async function saveTCEDefaults(d){try{await window.storage.set(TCE_STORE_KEY,JSON.stringify(d),true);}catch(_){}}
+
+
+// UKC intermediate benchmark routes. Shared with ReportsTab.
+// `from` / `to` use the same keys as lookupDist().
+const BENCHMARK_ROUTES = [
+  { key:"immingham_ara",  label:"Immingham–ARA",   from:"immingham",  to:"ara" },
+  { key:"mongstad_ara",   label:"Mongstad–ARA",    from:"mongstad",   to:"ara" },
+  { key:"kaarstoe_ara",   label:"Kaarstoe–ARA",    from:"kaarstoe",   to:"ara" },
+  { key:"ara_thames",     label:"ARA–Thames",      from:"ara",        to:"thames" },
+  { key:"lehavre_ara",    label:"Le Havre–ARA",    from:"le havre",   to:"ara" },
+  { key:"gothenburg_ara", label:"Gothenburg–ARA",  from:"gothenburg", to:"ara" },
+  { key:"tees_ara",       label:"Tees–ARA",        from:"tees",       to:"ara" },
+];
 
 // EU ETS constants
 const ETS_CO2_FACTOR=3.114;
@@ -213,21 +225,7 @@ function TCECalculator(){
   const [result,setResult]=useState(null);
   const [showDist,setShowDist]=useState(false);
 
-  useEffect(()=>{
-    let alive=true;
-    (async()=>{
-      const saved=await loadTCEDefaults();
-      let next={...TCE_DEFAULTS,...(saved||{})};
-      try{
-        const {data}=await supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle();
-        const b=data?.value?(typeof data.value==="string"?JSON.parse(data.value):data.value):null;
-        const live=Number(b?.ARA_MGO);
-        if(Number.isFinite(live)&&live>0){next.bunker=live;await saveTCEDefaults(next);}
-      }catch(_){}
-      if(alive){setDefaults(next);setLoaded(true);}
-    })();
-    return()=>{alive=false;};
-  },[]);
+  useEffect(()=>{loadTCEDefaults().then(d=>{if(d)setDefaults(prev=>({...TCE_DEFAULTS,...d,...prev===TCE_DEFAULTS?d:{}}));setLoaded(true);});},[]);
 
   function sV(k,val){setVars(p=>({...p,[k]:val}));setResult(null);}
   function sD(k,val){const next={...defaults,[k]:val};setDefaults(next);saveTCEDefaults(next);setResult(null);}
@@ -435,5 +433,5 @@ const SEGMENTS=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];
 const TRADES=["UKC","Med","EU Feast", "AG","TA West","Ex US","Asia"];
 
 
-export { calcEuEts, calcTCE, calcFreightFromTCE, DistanceTable, PortCostRow, TCECalculator, numD, lookupDist };
+export { calcEuEts, calcTCE, calcFreightFromTCE, DistanceTable, PortCostRow, TCECalculator, numD, lookupDist, BENCHMARK_ROUTES, loadTCEDefaults };
 export default TCECalculator;
