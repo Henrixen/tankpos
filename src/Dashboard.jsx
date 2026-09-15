@@ -518,18 +518,20 @@ function NewsFeed() {
       </div>
       {err&&<div style={{fontSize:12,color:C.amber,padding:"8px",background:C.bg3,borderRadius:4,marginBottom:8}}>{err}</div>}
       {loading&&items.length===0?(<div style={{color:C.faint,fontSize:12,padding:"16px 0",textAlign:"center"}}>Loading news…</div>):null}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",columnGap:18,rowGap:0}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(280px,100%),1fr))",gap:8}}>
         {items.map((it,i)=>(
           <a key={it.link+i} href={it.link} target="_blank" rel="noopener noreferrer"
-            style={{display:"block",padding:"8px 6px",borderBottom:"1px solid "+C.bg3,textDecoration:"none",
-              borderRadius:3,transition:"background 0.15s"}}
-            onMouseEnter={e=>e.currentTarget.style.background=C.bg3}
-            onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-              <div style={{fontSize:12,color:C.tx,fontWeight:500,lineHeight:1.4,flex:1}}>{it.title}</div>
-              <div style={{fontSize:12,color:C.faint,whiteSpace:"nowrap",marginTop:2}}>{fmtAge(it.pubDate)}</div>
+            style={{display:"flex",flexDirection:"column",minWidth:0,padding:i<2?"12px":"9px 10px",border:"1px solid "+C.bd,
+              background:i<2?"linear-gradient(135deg,rgba(88,166,255,.08),rgba(8,20,38,.35))":C.bg3,
+              textDecoration:"none",borderRadius:7,transition:"transform .15s,border-color .15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.borderColor="rgba(88,166,255,.38)";}}
+            onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.borderColor=C.bd;}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:5}}>
+              <span style={{fontSize:8.5,fontWeight:850,color:C.blue,textTransform:"uppercase",letterSpacing:".08em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.source||"Shipping"}</span>
+              <span style={{fontSize:9,color:C.faint,whiteSpace:"nowrap"}}>{fmtAge(it.pubDate)}</span>
             </div>
-            {it.desc&&<div style={{fontSize:12,color:C.dim,marginTop:3,lineHeight:1.4}}>{it.desc}…</div>}
+            <div style={{fontSize:i<2?13:11.5,color:C.tx,fontWeight:i<2?750:650,lineHeight:1.35}}>{it.title}</div>
+            {it.desc&&i<4&&<div style={{fontSize:10.5,color:C.dim,marginTop:5,lineHeight:1.4}}>{String(it.desc).slice(0,150)}{String(it.desc).length>150?"…":""}</div>}
           </a>
         ))}
         {!loading&&items.length===0&&!err&&<div style={{color:C.faint,fontSize:12,padding:"16px 0",textAlign:"center"}}>No articles loaded.</div>}
@@ -749,6 +751,8 @@ function Dashboard({vessels, cargoes, history}) {
   const [selectedCommodity,setSelectedCommodity]=useState("brent");
   const [vlcc,setVlcc]=useState(null);
   const [shippingPriceTab,setShippingPriceTab]=useState("vlcc");
+  const [dashMobile,setDashMobile]=useState(()=>typeof window!=="undefined"&&window.innerWidth<760);
+  useEffect(()=>{const onResize=()=>setDashMobile(window.innerWidth<760);window.addEventListener("resize",onResize);return()=>window.removeEventListener("resize",onResize);},[]);
   const [vlccError,setVlccError]=useState(null);
   const [wsSummaryData,setWsSummaryData]=useState(null);
 
@@ -1137,7 +1141,7 @@ function Dashboard({vessels, cargoes, history}) {
   })();
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:14,background:D.bg,borderRadius:10,padding:"16px",fontFamily:"Inter,sans-serif"}}>
+    <div style={{display:"flex",flexDirection:"column",gap:dashMobile?10:14,background:D.bg,borderRadius:10,padding:dashMobile?"8px":"16px",fontFamily:"Inter,sans-serif",minWidth:0,overflowX:"hidden"}}>
 
       {/* ── Hero banner ── */}
       <div style={{position:"relative",borderRadius:10,overflow:"hidden",background:"#070f1c",border:"1px solid "+D.border2}}>
@@ -1155,7 +1159,7 @@ function Dashboard({vessels, cargoes, history}) {
           <path d="M120,160 Q190,140 260,175" fill="none" stroke="rgba(88,200,255,0.8)" strokeWidth="0.8" strokeDasharray="4,3"/>
           <path d="M260,175 Q325,155 390,168" fill="none" stroke="rgba(20,200,120,0.8)" strokeWidth="0.8" strokeDasharray="4,3"/>
         </svg>
-        <div style={{position:"absolute",right:22,top:16,zIndex:3,minWidth:205,padding:"9px 13px",borderRadius:8,background:"rgba(12,29,53,.82)",border:"1px solid rgba(88,166,255,.22)",backdropFilter:"blur(6px)",textAlign:"right"}}>
+        <div style={{position:dashMobile?"relative":"absolute",right:dashMobile?"auto":22,top:dashMobile?"auto":16,zIndex:3,minWidth:dashMobile?0:205,margin:dashMobile?"12px 12px 0":"0",padding:"9px 13px",borderRadius:8,background:"rgba(12,29,53,.82)",border:"1px solid rgba(88,166,255,.22)",backdropFilter:"blur(6px)",textAlign:"right"}}>
           <div style={{fontSize:8.5,fontWeight:800,letterSpacing:".10em",textTransform:"uppercase",color:D.faint}}>Positions latest</div>
           <div style={{fontSize:22,fontWeight:900,color:D.blue,lineHeight:1.05,marginTop:2}}>{positionMeta.count??vessels.length}</div>
           <div style={{fontSize:9,color:D.faint,marginTop:2}}>
@@ -1164,7 +1168,7 @@ function Dashboard({vessels, cargoes, history}) {
               : `${openVessels.length} currently open`}
           </div>
         </div>
-        <div style={{position:"relative",zIndex:2,padding:"22px 270px 18px 26px"}}>
+        <div style={{position:"relative",zIndex:2,padding:dashMobile?"14px 14px 16px":"22px 270px 18px 26px"}}>
           <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.18em",textTransform:"uppercase",color:"rgba(120,180,255,0.55)",marginBottom:6}}>Signal — Tanker Intelligence</div>
           <div style={{fontSize:22,fontWeight:800,color:"#e8f2ff",lineHeight:1.2,marginBottom:4}}>Market Dashboard</div>
           <div style={{fontSize:12,color:"rgba(140,190,255,0.5)"}}>
@@ -1182,7 +1186,7 @@ function Dashboard({vessels, cargoes, history}) {
       <NewsTicker/>
 
       {/* ── Tanker market tape ── */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(0,62fr) minmax(360px,38fr)",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:dashMobile?"minmax(0,1fr)":"minmax(0,62fr) minmax(360px,38fr)",gap:12}}>
         {panel(
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
@@ -1252,10 +1256,10 @@ function Dashboard({vessels, cargoes, history}) {
                 {bError&&<div style={{color:D.red,fontSize:10,padding:"4px 0"}}>{bError}</div>}
                 {bunkers&&<>
                   <div style={{fontSize:9,color:D.faint,marginBottom:5}}>Updated {bunkers.date}</div>
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:10.5}}>
+                  <div style={{width:"100%",overflowX:"auto"}}><table style={{width:"100%",minWidth:dashMobile?320:0,borderCollapse:"collapse",fontSize:10.5}}>
                     <thead><tr style={{background:D.bg4}}><th style={{padding:"4px 6px",textAlign:"left",color:D.faint}}>PORT</th><th style={{padding:"4px 6px",textAlign:"right",color:D.amber}}>HSFO</th><th style={{padding:"4px 6px",textAlign:"right",color:D.green}}>VLSFO</th><th style={{padding:"4px 6px",textAlign:"right",color:D.blue}}>MGO</th></tr></thead>
                     <tbody>{[["ARA",bunkers.ARA_HSFO,bunkers.ARA_VLSFO,bunkers.ARA_MGO],["Fujairah",bunkers.FUJ_HSFO,bunkers.FUJ_VLSFO,bunkers.FUJ_MGO],["Singapore",bunkers.SIN_HSFO,bunkers.SIN_VLSFO,bunkers.SIN_MGO]].map(([port,a,v,m],i)=><tr key={port} style={{background:i%2?D.bg4:"transparent",borderBottom:"1px solid "+D.border}}><td style={{padding:"5px 6px",color:D.dim,fontWeight:700}}>{port}</td><td style={{padding:"5px 6px",textAlign:"right",color:D.amber,fontWeight:800}}>{a?"$"+a:"—"}</td><td style={{padding:"5px 6px",textAlign:"right",color:D.green,fontWeight:800}}>{v?"$"+v:"—"}</td><td style={{padding:"5px 6px",textAlign:"right",color:D.blue,fontWeight:800}}>{m?"$"+m:"—"}</td></tr>)}</tbody>
-                  </table>
+                  </table></div>
                   <button onClick={fetchBunkersPBT} style={{marginTop:5,background:"none",border:"1px solid "+D.border,borderRadius:4,color:D.faint,fontSize:9.5,padding:"2px 7px",cursor:"pointer"}}>↻ Refresh</button>
                 </>}
               </>
@@ -1266,7 +1270,7 @@ function Dashboard({vessels, cargoes, history}) {
       </div>
 
       {/* ── Fixing window + Worldscale ── */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12,alignItems:"stretch",height:520}}>
+      <div style={{display:"grid",gridTemplateColumns:dashMobile?"minmax(0,1fr)":"minmax(0,1fr) minmax(0,1fr)",gap:12,alignItems:"stretch",height:dashMobile?"auto":520}}>
 {panel(
           <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
@@ -1282,13 +1286,13 @@ function Dashboard({vessels, cargoes, history}) {
                 ? <div style={{color:D.faint,fontSize:12,padding:"24px 0",textAlign:"center"}}>Loading segment fixing-window history…</div>
                 : <div style={{flex:1,minHeight:0}}><SegmentFWChart data={fixingSegmentChartData} segments={activeFixingSegments} colors={SEGMENT_COLORS}/></div>}
           </div>,
-          {minWidth:0,height:"100%",boxSizing:"border-box"}
+          {minWidth:0,height:dashMobile?420:"100%",boxSizing:"border-box"}
         )}
-        <div style={{height:"100%",minHeight:0}}><WSTracker/></div>
+        <div style={{height:dashMobile?"auto":"100%",minHeight:0,minWidth:0,overflow:"hidden"}}><WSTracker/></div>
       </div>
 
       {/* ── Regional fleet history ── */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:dashMobile?"minmax(0,1fr)":"minmax(0,1fr) minmax(0,1fr)",gap:12}}>
         {panel(
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
@@ -1298,14 +1302,14 @@ function Dashboard({vessels, cargoes, history}) {
               </span>
             </div>
             {regionHistoryLoading?<div style={{fontSize:11,color:D.faint,padding:"12px 0"}}>Loading historical fleet…</div>:regionHistoryError?<div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Run updated Supabase RPC SQL: {regionHistoryError}</div>:<>
-              <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"1px 2px 7px",fontSize:10.5,fontWeight:900,color:D.dim,textTransform:"uppercase",letterSpacing:".04em"}}><span>Region</span><span style={{textAlign:"right",color:D.tx}}>NOW</span><span style={{textAlign:"right"}}>14D</span><span style={{textAlign:"right"}}>30D</span><span style={{textAlign:"right"}}>90D</span></div>
+              <div style={{display:"grid",gridTemplateColumns:dashMobile?"minmax(105px,1fr) repeat(4,42px)":"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"1px 2px 7px",fontSize:10.5,fontWeight:900,color:D.dim,textTransform:"uppercase",letterSpacing:".04em"}}><span>Region</span><span style={{textAlign:"right",color:D.tx}}>NOW</span><span style={{textAlign:"right"}}>14D</span><span style={{textAlign:"right"}}>30D</span><span style={{textAlign:"right"}}>90D</span></div>
               {currentRegionRows.map(({region,now,d14,d30,d90})=>{
                 const activeRegion=fixingRegionFilter===region;
                 return <div key={region}
                   onClick={()=>setFixingRegionFilter(activeRegion?"All":region)}
                   title={activeRegion?"Click to clear geography filter":"Filter fixing window to "+region}
                   style={{
-                    display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",
+                    display:"grid",gridTemplateColumns:dashMobile?"minmax(105px,1fr) repeat(4,42px)":"minmax(190px,1fr) 64px 64px 64px 64px",
                     gap:8,alignItems:"center",padding:"6px 5px",
                     borderTop:"1px solid "+D.border,
                     borderLeft:"2px solid "+(activeRegion?(REGION_COLORS[region]||D.blue):"transparent"),
@@ -1320,7 +1324,7 @@ function Dashboard({vessels, cargoes, history}) {
                   <span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d90}</span>
                 </div>;
               })}
-              <div style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"7px 2px 0",borderTop:"1px solid "+D.border2,fontSize:10,fontWeight:850}}><span style={{color:D.faint}}>{segmentFilter==="All"?"TOTAL FLEET":"TOTAL · "+segmentFilter}</span><span style={{textAlign:"right",color:D.tx}}>{regionTotals.now}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d14}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d30}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d90}</span></div>
+              <div style={{display:"grid",gridTemplateColumns:dashMobile?"minmax(105px,1fr) repeat(4,42px)":"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"7px 2px 0",borderTop:"1px solid "+D.border2,fontSize:10,fontWeight:850}}><span style={{color:D.faint}}>{segmentFilter==="All"?"TOTAL FLEET":"TOTAL · "+segmentFilter}</span><span style={{textAlign:"right",color:D.tx}}>{regionTotals.now}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d14}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d30}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d90}</span></div>
             </>}
           </>,
           {minWidth:0}
