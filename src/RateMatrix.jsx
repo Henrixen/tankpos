@@ -2,10 +2,31 @@ import React, { useState, useEffect, useRef } from "react";
 import { C, TCE_DEFAULTS } from "./constants";
 import { loadRates, saveRates } from "./supabaseHelpers";
 import { calcTCE, calcEuEts } from "./TCECalculator";
+import { supabase } from "./supabaseclient";
 
 function getBunkerState(){
   if(!window._bunkerState)window._bunkerState={val:TCE_DEFAULTS.bunker,listeners:[]};
   return window._bunkerState;
+}
+
+function extractLatestAraMgo(payload){
+  const root=payload?.value ?? payload?.data ?? payload?.prices ?? payload;
+  const rows=Array.isArray(root) ? root
+    : Array.isArray(root?.data) ? root.data
+    : Array.isArray(root?.prices) ? root.prices
+    : Array.isArray(root?.bunkers) ? root.bunkers : [];
+  const ara=rows.find(r=>String(r?.port ?? r?.name ?? r?.location ?? "").trim().toUpperCase()==="ARA");
+  const raw=ara?.mgo ?? ara?.MGO ?? ara?.mgo_price ?? ara?.mgoPrice;
+  const n=Number(String(raw ?? "").replace(/[^0-9.-]/g,""));
+  return Number.isFinite(n)&&n>0 ? n : null;
+}
+
+async function loadLatestDashboardBunker(){
+  try{
+    const {data,error}=await supabase.from("dashboard").select("*").eq("key","last-bunker-prices").maybeSingle();
+    if(error||!data)return null;
+    return extractLatestAraMgo(data?.value ?? data?.data ?? data);
+  }catch{return null;}
 }
 function RateMatrixBunkerInput(){
   const bs=getBunkerState();
@@ -14,8 +35,16 @@ function RateMatrixBunkerInput(){
     const bs=getBunkerState();
     const cb=v=>{setVal(v);};
     bs.listeners.push(cb);
-    // Load saved bunker on mount
-    loadRates().then(d=>{if(d?.__matrixBunker){bs.val=d.__matrixBunker;bs.listeners.forEach(c=>c(d.__matrixBunker));}});
+    // Load saved value first, then sync to the latest Dashboard-refreshed ARA MGO.
+    loadRates().then(async d=>{
+      if(d?.__matrixBunker){bs.val=d.__matrixBunker;bs.listeners.forEach(c=>c(d.__matrixBunker));}
+      const latest=await loadLatestDashboardBunker();
+      if(latest){
+        bs.val=latest;
+        bs.listeners.forEach(c=>c(latest));
+        if(d && Number(d.__matrixBunker)!==latest)saveRates({...d,__matrixBunker:latest});
+      }
+    });
     return()=>{bs.listeners=bs.listeners.filter(x=>x!==cb);};
   },[]);
   return(
@@ -160,6 +189,21 @@ function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
       }
       loadedRef.current=true;
       forceUpdate(n=>n+1);
+
+      // Dashboard bunker refresh is authoritative for Rate Matrix/TCE.
+      loadLatestDashboardBunker().then(latest=>{
+        if(!latest)return;
+        const current=Number(matrixRef.current.__matrixBunker);
+        setMatrixBunker(latest);
+        const bs=getBunkerState();
+        bs.val=latest;
+        bs.listeners.forEach(cb=>cb(latest));
+        if(current!==latest){
+          matrixRef.current.__matrixBunker=latest;
+          saveRates(matrixRef.current);
+          markSaved();
+        }
+      });
     });
   },[]);
   const [editComment,setEditComment]=useState(null);
