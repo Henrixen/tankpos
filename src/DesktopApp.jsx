@@ -1220,7 +1220,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
 
   // Login-screen live feeds. Fail quietly so the PIN screen always remains usable.
   const [loginMarkets,setLoginMarkets]=React.useState({
-    brent:null,mgoAra:null,mgoSingapore:null,mgoFujairah:null,mgoUsg:null,updatedAt:null
+    brent:null,mgoAra:null,mgoSingapore:null,mgoUsg:null,updatedAt:null
   });
   const [loginNews,setLoginNews]=React.useState([]);
   const [loginFeedLoading,setLoginFeedLoading]=React.useState(true);
@@ -1236,18 +1236,18 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         ]);
         if(!alive)return;
         if(mktRes.status==="fulfilled"&&mktRes.value)setLoginMarkets(v=>({...v,...mktRes.value}));
-        // Use the exact same persisted bunker snapshot as Dashboard/TCE.
+        // Keep the front-page bunker strip aligned with the latest Dashboard refresh
+        // while retaining the original USG / ARA / Singapore layout.
         try{
           const {data}=await supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle();
           const b=data?.value?(typeof data.value==="string"?JSON.parse(data.value):data.value):null;
           if(b)setLoginMarkets(v=>({...v,
             mgoAra:Number(b.ARA_MGO)||v.mgoAra,
             mgoSingapore:Number(b.SIN_MGO)||v.mgoSingapore,
-            mgoFujairah:Number(b.FUJ_MGO)||v.mgoFujairah,
             bunkerDate:b.date||v.bunkerDate
           }));
         }catch(_){}
-        if(newsRes.status==="fulfilled"&&Array.isArray(newsRes.value?.items))setLoginNews(newsRes.value.items.slice(0,5));
+        if(newsRes.status==="fulfilled"&&Array.isArray(newsRes.value?.items))setLoginNews(newsRes.value.items.slice(0,8));
       }catch(_){}
       finally{if(alive)setLoginFeedLoading(false);}
     };
@@ -2339,151 +2339,87 @@ const filtV=useMemo(()=>{
         ::-webkit-scrollbar { display: none; }
         html { overflow-x: hidden; }
       `}</style>}
-      {/* ── PIN overlay — rendered on top, app loads underneath ── */}
+      {/* ── PIN overlay — modern market terminal / responsive ── */}
       {!unlocked&&(
         <div style={{
-          position:"fixed",inset:0,zIndex:99999,overflowX:"hidden",overflowY:mobile?"auto":"hidden",
-          background:"linear-gradient(rgba(3,12,25,.88),rgba(3,12,25,.94)),url('/login-tanker-bg.png') center/cover no-repeat",
-          display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,system-ui,sans-serif"
+          position:"fixed",inset:0,zIndex:99999,overflowX:"hidden",overflowY:"auto",
+          background:"radial-gradient(circle at 50% 32%,rgba(25,75,135,.18),transparent 36%),linear-gradient(180deg,rgba(2,10,22,.94),rgba(2,10,22,.985)),url('/login-tanker-bg.png') center/cover no-repeat",
+          fontFamily:"Inter,system-ui,sans-serif",color:"#dcecff"
         }}>
-          <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true"
-            style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",opacity:0.08}}>
-            <defs>
-              <linearGradient id="loginRoute" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.03"/>
-                <stop offset="45%" stopColor="#58a6ff" stopOpacity="0.42"/>
-                <stop offset="100%" stopColor="#43e97b" stopOpacity="0.10"/>
-              </linearGradient>
-              <pattern id="loginGrid" width="44" height="44" patternUnits="userSpaceOnUse">
-                <path d="M44 0H0V44" fill="none" stroke="#58a6ff" strokeOpacity="0.05" strokeWidth="0.7"/>
-              </pattern>
-              <filter id="loginGlow"><feGaussianBlur stdDeviation="2.6"/></filter>
-            </defs>
-            <rect width="1600" height="900" fill="url(#loginGrid)" opacity="0.55"/>
-            <g fill="none" stroke="#7aa8da" strokeOpacity="0.10" strokeWidth="1.2">
-              <path d="M120 315 C225 245 330 255 410 320 C475 374 470 440 414 515 C370 575 330 625 292 700"/>
-              <path d="M515 280 C590 225 680 225 747 270 C805 310 807 365 772 410 C733 458 692 486 658 545"/>
-              <path d="M765 295 C850 230 960 220 1042 262 C1110 298 1153 345 1188 405 C1128 425 1070 430 1022 465 C978 496 953 535 915 575"/>
-              <path d="M1080 575 C1148 535 1222 538 1278 580 C1310 605 1312 645 1292 674 C1240 700 1188 696 1140 672"/>
-            </g>
-            <g fill="none" strokeLinecap="round">
-              <path d="M980 315 C885 365 804 410 716 458 C627 506 533 520 427 500" stroke="url(#loginRoute)" strokeWidth="1.9"/>
-              <path d="M1090 405 C997 414 914 438 836 478 C760 518 683 558 596 578" stroke="#43e97b" strokeOpacity="0.17" strokeWidth="1.25"/>
-              <path d="M428 500 C360 474 293 455 220 463" stroke="#58a6ff" strokeOpacity="0.14" strokeWidth="1.05"/>
-            </g>
-            <g>
-              {[[427,500,"#58a6ff"],[716,458,"#58a6ff"],[980,315,"#43e97b"],[836,478,"#43e97b"],[596,578,"#58a6ff"]].map(([cx,cy,col],i)=>(
-                <g key={i}>
-                  <circle cx={cx} cy={cy} r="3.2" fill={col} opacity="0.9"/>
-                  <circle cx={cx} cy={cy} r="8" fill="none" stroke={col} strokeOpacity="0.18"/>
-                </g>
-              ))}
-            </g>
-          </svg>
+          <div style={{position:"absolute",inset:0,pointerEvents:"none",opacity:.26,
+            backgroundImage:"linear-gradient(rgba(88,166,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(88,166,255,.025) 1px,transparent 1px)",
+            backgroundSize:"42px 42px"}}/>
 
-          <div style={{
-            display:mobile?"none":"block",position:"absolute",right:"clamp(18px,4vw,64px)",top:"50%",transform:"translateY(-50%)",
-            width:310,padding:"16px 17px",borderRadius:12,zIndex:1,
-            background:"rgba(4,16,33,.58)",border:"1px solid rgba(88,166,255,.12)",
-            backdropFilter:"blur(10px)",color:"#dcecff"
-          }}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}>
-              <div style={{fontSize:9,fontWeight:800,letterSpacing:".14em",color:"#58a6ff"}}>LATEST SHIPPING NEWS</div>
-              <div style={{fontSize:8,color:"rgba(175,205,240,.35)"}}>{loginFeedLoading?"UPDATING":"RSS"}</div>
-            </div>
-            {(loginNews.length?loginNews:[
-              {title:"Latest tanker and shipping headlines will appear here",source:"RSS feed"},
-              {title:"Feed refreshes automatically every 10 minutes",source:"Live"}
-            ]).slice(0,5).map((n,i)=><a key={i} href={n.link||undefined} target={n.link?"_blank":undefined} rel="noreferrer"
-              style={{display:"block",textDecoration:"none",color:"inherit",padding:"9px 0",borderTop:i?"1px solid rgba(88,166,255,.08)":"none"}}>
-              <div style={{fontSize:10.5,fontWeight:650,lineHeight:1.35,color:"rgba(225,239,255,.88)"}}>{n.title}</div>
-              <div style={{fontSize:8.5,marginTop:4,color:"rgba(125,178,240,.46)"}}>
-                {n.source||"Shipping"}{n.published?"  ·  "+n.published:""}
+          <div style={{position:"relative",zIndex:2,width:"min(1460px,calc(100vw - 32px))",margin:"0 auto",padding:mobile?"18px 0 24px":"24px 0 28px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,marginBottom:mobile?14:18}}>
+              <div>
+                <div style={{fontSize:9,fontWeight:800,letterSpacing:".20em",color:"rgba(125,178,240,.48)",textTransform:"uppercase"}}>Tanker Intelligence Platform</div>
+                <div style={{display:"flex",alignItems:"baseline",gap:7,marginTop:4}}>
+                  <span style={{fontSize:mobile?20:25,fontWeight:850,color:"#eef6ff"}}>Broker</span>
+                  <span style={{fontSize:mobile?20:25,fontWeight:850,color:"#43e97b"}}>Dashboard</span>
+                </div>
               </div>
-            </a>)}
-          </div>
-
-          <div style={{
-            position:"absolute",left:"50%",bottom:mobile?16:78,transform:"translateX(-50%)",zIndex:3,
-            display:"grid",gridTemplateColumns:mobile?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(115px,1fr))",
-            width:mobile?"calc(100vw - 24px)":"auto",minWidth:mobile?0:"min(650px,calc(100vw - 36px))",
-            border:"1px solid rgba(88,166,255,.11)",borderRadius:10,overflow:"hidden",
-            background:"rgba(4,16,33,.58)",backdropFilter:"blur(7px)"
-          }}>
-            {[
-              ["BRENT",loginMarkets.brent,"USD/BBL"],
-              ["MGO ARA",loginMarkets.mgoAra,"USD/MT"],
-              ["MGO FUJ",loginMarkets.mgoFujairah,"USD/MT"],
-              ["MGO SPORE",loginMarkets.mgoSingapore,"USD/MT"]
-            ].map(([label,val,unit],i)=><div key={label} style={{padding:"9px 12px",textAlign:"center",borderLeft:i&&!mobile?"1px solid rgba(88,166,255,.08)":"none",borderTop:mobile&&i>1?"1px solid rgba(88,166,255,.08)":"none"}}>
-              <div style={{fontSize:10.5,fontWeight:850,letterSpacing:".10em",color:"rgba(125,178,240,.54)"}}>{label}</div>
-              <div style={{fontSize:18,fontWeight:850,color:val!=null?"#eef6ff":"rgba(225,239,255,.30)",marginTop:2}}>
-                {val!=null?(typeof val==="number"?val.toLocaleString(undefined,{maximumFractionDigits:2}):val):"—"}
-              </div>
-              <div style={{fontSize:8.5,color:"rgba(125,178,240,.34)"}}>{unit}</div>
-            </div>)}
-          </div>
-
-          <div style={{
-            position:"relative",zIndex:2,width:410,maxWidth:"calc(100vw - 24px)",marginBottom:mobile?190:0,
-            background:"linear-gradient(180deg,rgba(9,24,46,.94),rgba(6,17,34,.96))",
-            border:"1px solid rgba(88,166,255,.18)",borderRadius:16,padding:"30px 34px 26px",
-            boxShadow:"0 20px 60px rgba(0,0,0,.44)",
-            backdropFilter:"blur(18px)",WebkitBackdropFilter:"blur(18px)"
-          }}>
-            <div style={{textAlign:"center",marginBottom:24}}>
-              <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.22em",textTransform:"uppercase",color:"rgba(125,178,240,.48)",marginBottom:7}}>
-                Tanker Intelligence Platform
-              </div>
-              <div style={{display:"flex",justifyContent:"center",alignItems:"baseline",gap:7}}>
-                <span style={{fontSize:25,fontWeight:800,color:"#eef6ff"}}>Broker</span>
-                <span style={{fontSize:25,fontWeight:800,color:"#43e97b"}}>Dashboard</span>
-              </div>
-              <div style={{fontSize:11,color:"rgba(135,170,215,.42)",marginTop:8,letterSpacing:"0.10em",textTransform:"uppercase"}}>
-                {guestMode?"Guest access":"Secure access"}
-              </div>
+              <div style={{fontSize:9,fontWeight:800,letterSpacing:".13em",color:"rgba(125,178,240,.42)",textTransform:"uppercase"}}>Live market terminal</div>
             </div>
 
-            <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:22}}>
-              {[0,1,2,3].map(i=>(
-                <div key={i} style={{
-                  width:52,height:58,borderRadius:10,
-                  background:pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",
-                  border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.56)":"rgba(88,166,255,.18)"),
-                  display:"flex",alignItems:"center",justifyContent:"center",
-                  fontSize:20,color:"#79c0ff",transition:"all .16s"
-                }}>{pinInput.length>i?"●":""}</div>
-              ))}
+            {/* Market pulse — Brent + bunkers in requested order: Houston | ARA | Singapore */}
+            <div style={{display:"grid",gridTemplateColumns:mobile?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:8,marginBottom:mobile?12:16}}>
+              {[
+                ["BRENT",loginMarkets.brent,"USD/BBL"],
+                ["MGO HOUSTON",loginMarkets.mgoUsg,"USD/MT"],
+                ["MGO ARA",loginMarkets.mgoAra,"USD/MT"],
+                ["MGO SPORE",loginMarkets.mgoSingapore,"USD/MT"]
+              ].map(([label,val,unit])=><div key={label} style={{padding:mobile?"11px 12px":"12px 16px",border:"1px solid rgba(88,166,255,.11)",borderRadius:10,background:"linear-gradient(180deg,rgba(8,25,48,.76),rgba(4,16,33,.70))",backdropFilter:"blur(8px)"}}>
+                <div style={{fontSize:9,fontWeight:850,letterSpacing:".12em",color:"rgba(125,178,240,.52)"}}>{label}</div>
+                <div style={{fontSize:mobile?18:21,fontWeight:850,color:val!=null?"#eef6ff":"rgba(225,239,255,.30)",marginTop:3}}>
+                  {val!=null?(typeof val==="number"?val.toLocaleString(undefined,{maximumFractionDigits:2}):val):"—"}
+                </div>
+                <div style={{fontSize:8,color:"rgba(125,178,240,.32)",marginTop:1}}>{unit}</div>
+              </div>)}
             </div>
 
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:9,maxWidth:260,margin:"0 auto"}}>
-              {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=>(
-                <button key={i} disabled={d===""}
-                  onClick={()=>{
-                    if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}
-                    if(d===""||typeof d!=="number")return;
-                    const next=pinInput+String(d);
-                    setPinInput(next);
-                    if(next.length===4) submitPin(next);
-                  }}
-                  style={{
-                    height:50,borderRadius:9,
-                    border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.17)"),
-                    background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.76),rgba(10,27,53,.8))",
-                    color:d===""?"transparent":"rgba(184,216,255,.88)",
-                    fontSize:17,fontWeight:650,cursor:d===""?"default":"pointer",
-                    fontFamily:"inherit",visibility:d===""?"hidden":"visible"
-                  }}>{d}</button>
-              ))}
-            </div>
+            <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"minmax(0,1.55fr) minmax(340px,.85fr)",gap:12,alignItems:"stretch"}}>
+              {/* News terminal */}
+              <div style={{border:"1px solid rgba(88,166,255,.11)",borderRadius:14,background:"rgba(4,16,33,.66)",backdropFilter:"blur(10px)",padding:mobile?14:18,minWidth:0}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div>
+                    <div style={{fontSize:9,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>SHIPPING INTELLIGENCE</div>
+                    <div style={{fontSize:mobile?16:18,fontWeight:800,color:"#eef6ff",marginTop:3}}>Latest market headlines</div>
+                  </div>
+                  <div style={{fontSize:8,color:"rgba(175,205,240,.38)"}}>{loginFeedLoading?"UPDATING":"LIVE · 10 MIN"}</div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(2,minmax(0,1fr))",gap:8}}>
+                  {(loginNews.length?loginNews:[
+                    {title:"Latest tanker and shipping headlines will appear here",source:"RSS feed"},
+                    {title:"Feed refreshes automatically every 10 minutes",source:"Live"}
+                  ]).slice(0,mobile?4:6).map((n,i)=><a key={i} href={n.link||undefined} target={n.link?"_blank":undefined} rel="noreferrer"
+                    style={{display:"block",textDecoration:"none",color:"inherit",padding:12,borderRadius:9,border:"1px solid rgba(88,166,255,.08)",background:i===0?"linear-gradient(135deg,rgba(88,166,255,.10),rgba(4,16,33,.48))":"rgba(8,25,48,.40)",minHeight:76}}>
+                    <div style={{fontSize:i===0?12:11,fontWeight:i===0?760:650,lineHeight:1.38,color:"rgba(235,245,255,.92)"}}>{n.title}</div>
+                    <div style={{fontSize:8.5,marginTop:7,color:"rgba(125,178,240,.48)"}}>{n.source||"Shipping"}{n.published?"  ·  "+n.published:""}</div>
+                  </a>)}
+                </div>
+              </div>
 
-            <div style={{height:22,marginTop:14,textAlign:"center"}}>
-              {pinError&&<span style={{fontSize:11,color:"rgba(255,107,107,.9)",letterSpacing:"0.05em"}}>Incorrect code</span>}
-            </div>
+              {/* Secure access */}
+              <div style={{border:"1px solid rgba(88,166,255,.15)",borderRadius:14,padding:mobile?"18px 16px":"20px 22px",background:"linear-gradient(180deg,rgba(9,24,46,.92),rgba(6,17,34,.94))",boxShadow:"0 20px 60px rgba(0,0,0,.32)",alignSelf:"stretch"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                  <div>
+                    <div style={{fontSize:9,fontWeight:850,letterSpacing:".14em",color:"rgba(125,178,240,.48)"}}>SECURE ACCESS</div>
+                    <div style={{fontSize:16,fontWeight:800,color:"#eef6ff",marginTop:3}}>{guestMode?"Guest login":"Enter PIN"}</div>
+                  </div>
+                  <div style={{width:8,height:8,borderRadius:"50%",background:"#43e97b",boxShadow:"0 0 12px rgba(67,233,123,.45)"}}/>
+                </div>
 
-            <div style={{borderTop:"1px solid rgba(88,166,255,.10)",marginTop:3,paddingTop:16,textAlign:"center",
-              fontSize:9,fontWeight:700,color:"rgba(120,160,220,.34)",letterSpacing:"0.12em",textTransform:"uppercase"}}>
-              Positions&nbsp;&nbsp;·&nbsp;&nbsp;Cargoes&nbsp;&nbsp;·&nbsp;&nbsp;Freight&nbsp;&nbsp;·&nbsp;&nbsp;Fleet Intelligence
+                <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:15}}>
+                  {[0,1,2,3].map(i=><div key={i} style={{width:mobile?46:50,height:42,borderRadius:8,background:pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.56)":"rgba(88,166,255,.18)"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,color:"#79c0ff"}}>{pinInput.length>i?"●":""}</div>)}
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,maxWidth:250,margin:"0 auto"}}>
+                  {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=><button key={i} disabled={d===""} onClick={()=>{if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}if(d===""||typeof d!=="number")return;const next=pinInput+String(d);setPinInput(next);if(next.length===4)submitPin(next);}} style={{height:mobile?42:44,borderRadius:8,border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.17)"),background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.76),rgba(10,27,53,.8))",color:d===""?"transparent":"rgba(184,216,255,.88)",fontSize:15,fontWeight:700,cursor:d===""?"default":"pointer",fontFamily:"inherit",visibility:d===""?"hidden":"visible"}}>{d}</button>)}
+                </div>
+                <div style={{height:20,marginTop:9,textAlign:"center"}}>{pinError&&<span style={{fontSize:10,color:"rgba(255,107,107,.9)"}}>Incorrect code</span>}</div>
+                <div style={{borderTop:"1px solid rgba(88,166,255,.09)",paddingTop:12,textAlign:"center",fontSize:8.5,fontWeight:700,color:"rgba(120,160,220,.34)",letterSpacing:".09em",textTransform:"uppercase"}}>Positions · Cargoes · Freight · Fleet Intelligence</div>
+              </div>
             </div>
           </div>
         </div>
