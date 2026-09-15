@@ -1210,11 +1210,13 @@ class TabErrorBoundary extends React.Component {
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
   // ── PIN config ───────────────────────────────────────────────────────────
   const MASTER_PIN = "4524"; // ← your PIN → full access
-  const GUEST_PIN  = "0250"; // ← colleague's PIN
+  const DEFAULT_GUEST_PIN = "0250";
   const GUEST_TABS_KEY = "guest_visible_tabs";
+  const GUEST_PIN_KEY = "guest_pin";
   const DEFAULT_GUEST_TABS = ["pos","cargo","clients"];
 
   const [unlocked, setUnlocked] = React.useState(false); // always ask on load
+  const [guestPin,setGuestPin] = React.useState(DEFAULT_GUEST_PIN);
   const [guestTabs,setGuestTabs] = React.useState(DEFAULT_GUEST_TABS);
   const [pinInput, setPinInput] = React.useState("");
   const [pinError, setPinError] = React.useState(false);
@@ -1232,10 +1234,15 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     let alive=true;
     (async()=>{
       try{
-        const {data}=await supabase.from("tag_settings").select("value").eq("key",GUEST_TABS_KEY).maybeSingle();
-        const raw=data?.value;
+        const [{data:tabsData},{data:pinData}]=await Promise.all([
+          supabase.from("tag_settings").select("value").eq("key",GUEST_TABS_KEY).maybeSingle(),
+          supabase.from("tag_settings").select("value").eq("key",GUEST_PIN_KEY).maybeSingle()
+        ]);
+        const raw=tabsData?.value;
         const tabs=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
         if(alive&&tabs?.length)setGuestTabs(tabs.filter(id=>id!=="settings"));
+        const cloudPin=String(pinData?.value??"").replace(/\D/g,"").slice(0,4);
+        if(alive&&cloudPin.length===4)setGuestPin(cloudPin);
       }catch(_){}
     })();
     return()=>{alive=false;};
@@ -2398,9 +2405,9 @@ const filtV=useMemo(()=>{
             <div style={{display:"flex",justifyContent:"center",width:"100%",minWidth:0,marginBottom:12}}>
               <div style={{width:mobile?"100%":"min(430px,100%)",maxWidth:"100%",boxSizing:"border-box",border:"1px solid rgba(88,166,255,.15)",borderRadius:14,padding:mobile?"14px 14px":"18px 22px",background:"linear-gradient(180deg,rgba(9,24,46,.92),rgba(6,17,34,.94))",boxShadow:"0 20px 60px rgba(0,0,0,.32)"}}>
                 <div style={{textAlign:"center",marginBottom:mobile?10:14}}>
-                  <div style={{fontSize:9,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>ENTER DASHBOARD</div>
-                  <div style={{fontSize:mobile?14:16,fontWeight:800,color:"#eef6ff",marginTop:3}}>Enter your 4-digit access code</div>
-                  <div style={{fontSize:9,color:"rgba(175,205,240,.42)",marginTop:4}}>Personal or colleague guest code</div>
+                  <div style={{fontSize:mobile?9:11,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>ENTER DASHBOARD</div>
+                  <div style={{fontSize:mobile?14:20,fontWeight:800,color:"#eef6ff",marginTop:4}}>Enter your 4-digit access code</div>
+                  <div style={{fontSize:mobile?9:12,color:"rgba(175,205,240,.48)",marginTop:5}}>Personal or colleague guest code</div>
                 </div>
 
                 <div style={{display:"flex",gap:7,justifyContent:"center",marginBottom:mobile?10:13}}>
@@ -2408,7 +2415,7 @@ const filtV=useMemo(()=>{
                 </div>
 
                 <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,maxWidth:230,margin:"0 auto"}}>
-                  {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=><button key={i} disabled={d===""} onClick={()=>{if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}if(d===""||typeof d!=="number")return;const next=pinInput+String(d);setPinInput(next);if(next.length===4)submitPin(next);}} style={{height:mobile?37:40,borderRadius:8,border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.17)"),background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.76),rgba(10,27,53,.8))",color:d===""?"transparent":"rgba(184,216,255,.88)",fontSize:14,fontWeight:700,cursor:d===""?"default":"pointer",fontFamily:"inherit",visibility:d===""?"hidden":"visible"}}>{d}</button>)}
+                  {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=><button key={i} disabled={d===""} onClick={()=>{if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}if(d===""||typeof d!=="number")return;const next=pinInput+String(d);setPinInput(next);if(next.length===4)submitPin(next);}} style={{height:mobile?37:48,borderRadius:8,border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.17)"),background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.76),rgba(10,27,53,.8))",color:d===""?"transparent":"rgba(184,216,255,.88)",fontSize:mobile?14:17,fontWeight:700,cursor:d===""?"default":"pointer",fontFamily:"inherit",visibility:d===""?"hidden":"visible"}}>{d}</button>)}
                 </div>
                 <div style={{height:mobile?15:18,marginTop:5,textAlign:"center"}}>{pinError&&<span style={{fontSize:10,color:"rgba(255,107,107,.9)"}}>Incorrect code</span>}</div>
               </div>
@@ -2419,7 +2426,7 @@ const filtV=useMemo(()=>{
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:8}}>
                 <div>
                   <div style={{fontSize:9,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>SHIPPING INTELLIGENCE</div>
-                  <div style={{fontSize:mobile?13:16,fontWeight:800,color:"#eef6ff",marginTop:2}}>Latest tanker & shipping headlines</div>
+                  <div style={{fontSize:mobile?13:19,fontWeight:800,color:"#eef6ff",marginTop:2}}>Latest tanker & shipping headlines</div>
                 </div>
                 <div style={{fontSize:8,color:"rgba(175,205,240,.38)",whiteSpace:"nowrap"}}>{loginFeedLoading?"UPDATING":"LIVE · 10 MIN"}</div>
               </div>
@@ -2429,7 +2436,7 @@ const filtV=useMemo(()=>{
                   {title:"Feed refreshes automatically every 10 minutes",source:"Live"}
                 ]).slice(0,mobile?2:4).map((n,i)=><a key={i} href={n.link||undefined} target={n.link?"_blank":undefined} rel="noreferrer"
                   style={{display:"block",minWidth:0,textDecoration:"none",color:"inherit",padding:mobile?9:10,borderRadius:8,border:"1px solid rgba(88,166,255,.08)",background:i===0?"linear-gradient(135deg,rgba(88,166,255,.10),rgba(4,16,33,.48))":"rgba(8,25,48,.40)",boxSizing:"border-box"}}>
-                  <div style={{fontSize:mobile?10.5:11,fontWeight:i===0?760:650,lineHeight:1.3,color:"rgba(235,245,255,.92)",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{n.title}</div>
+                  <div style={{fontSize:mobile?10.5:13,fontWeight:i===0?760:650,lineHeight:1.3,color:"rgba(235,245,255,.92)",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{n.title}</div>
                   <div style={{fontSize:8,marginTop:5,color:"rgba(125,178,240,.48)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{n.source||"Shipping"}{n.published?"  ·  "+n.published:""}</div>
                 </a>)}
               </div>
