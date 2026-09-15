@@ -947,7 +947,7 @@ export default function TimeCharterTab(){
             </thead>
             <tbody>
               {filtered.map((r,i)=>(
-                <tr key={r.id} style={{background:i%2?"rgba(22,37,64,0.82)":"rgba(7,15,28,0.96)",height:34}}>
+                <tr key={r.id} style={{background:i%2?"rgba(18,34,57,0.96)":"rgba(11,25,45,0.96)",height:34}}>
                   {COLS.map(c=>c==="tags" ? (
                     <td key={c} style={{...td,width:colWidths[c]||DEFAULT_W[c]||100,overflow:"hidden"}}>
                       <TagPicker compact value={r.tags||[]} onChange={tags=>{update(r.id,"tags",tags);setTagList(getTagList());}} />
