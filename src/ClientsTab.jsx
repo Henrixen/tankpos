@@ -11,8 +11,8 @@ import { v4 as uuidv4 } from 'uuid';
 
 const BROKERS = ["", "Henriksen", "Løken", "Henriksen & Løken", "Løken & Henriksen"];
 const CLIENT_TYPES = ["Charterer", "Owner"];
-const ROW_EVEN = "rgba(7,15,28,0.96)";
-const ROW_ODD  = "rgba(22,37,64,0.82)";
+const ROW_EVEN = "rgba(11,25,45,0.96)";
+const ROW_ODD  = "rgba(18,34,57,0.96)";
 const TH_BASE = {
   fontSize:10, fontWeight:700, color:"rgba(120,160,220,0.45)", textTransform:"uppercase",
   letterSpacing:"0.08em", padding:"7px 10px", borderBottom:"1px solid rgba(58,130,246,0.14)",
@@ -476,12 +476,12 @@ export default function ClientsTab(){
       {loading
         ?<div style={{padding:40,textAlign:"center",color:"rgba(120,160,200,0.4)",fontSize:13}}>Loading…</div>
         :<div style={{background:"rgba(12,23,43,0.9)",border:"1px solid rgba(58,130,246,0.14)",borderRadius:8,overflow:"hidden"}}>
-          <div style={{overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",minWidth:900}}>
+          <div style={{overflowX:"hidden",width:"100%"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed"}}>
               <thead>
                 <tr>
-                  {[["COMPANY",145],["TYPE",100],["PIC",145],["LEAD BROKER",155],["RATING",86],["LAST CONTACT",98],["EMAIL",155],["COMMENT",null],["",30]].map(([h,w])=>(
-                    <th key={h} style={{...TH_BASE,width:w||undefined,minWidth:w||100}}>{h}</th>
+                  {[["COMPANY","14%"],["TYPE","9%"],["PIC","13%"],["LEAD BROKER","13%"],["RATING","7%"],["LAST CONTACT","10%"],["EMAIL","11%"],["COMMENT","21%"],["","2%"]].map(([h,w])=>(
+                    <th key={h} style={{...TH_BASE,width:w,minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -491,7 +491,7 @@ export default function ClientsTab(){
                   return(
                     <React.Fragment key={c.id}>
                       <tr style={{background:i%2===0?ROW_EVEN:ROW_ODD}}>
-                        <td style={{...TD,minWidth:130,maxWidth:145,overflow:"hidden"}}>
+                        <td style={{...TD,overflow:"hidden"}}>
                           <InlineCell value={c.company} placeholder="Company name" onChange={v=>onUpdate(c.id,"company",v)} isCompany/>
                         </td>
                         <TypeCell value={c.client_type} onChange={v=>onUpdate(c.id,"client_type",v)}/>
