@@ -1220,7 +1220,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
 
   // Login-screen live feeds. Fail quietly so the PIN screen always remains usable.
   const [loginMarkets,setLoginMarkets]=React.useState({
-    brent:null,mgoAra:null,mgoSingapore:null,mgoUsg:null,updatedAt:null
+    brent:null,mgoAra:null,mgoSingapore:null,mgoFujairah:null,mgoUsg:null,updatedAt:null
   });
   const [loginNews,setLoginNews]=React.useState([]);
   const [loginFeedLoading,setLoginFeedLoading]=React.useState(true);
@@ -1236,6 +1236,17 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         ]);
         if(!alive)return;
         if(mktRes.status==="fulfilled"&&mktRes.value)setLoginMarkets(v=>({...v,...mktRes.value}));
+        // Use the exact same persisted bunker snapshot as Dashboard/TCE.
+        try{
+          const {data}=await supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle();
+          const b=data?.value?(typeof data.value==="string"?JSON.parse(data.value):data.value):null;
+          if(b)setLoginMarkets(v=>({...v,
+            mgoAra:Number(b.ARA_MGO)||v.mgoAra,
+            mgoSingapore:Number(b.SIN_MGO)||v.mgoSingapore,
+            mgoFujairah:Number(b.FUJ_MGO)||v.mgoFujairah,
+            bunkerDate:b.date||v.bunkerDate
+          }));
+        }catch(_){}
         if(newsRes.status==="fulfilled"&&Array.isArray(newsRes.value?.items))setLoginNews(newsRes.value.items.slice(0,5));
       }catch(_){}
       finally{if(alive)setLoginFeedLoading(false);}
@@ -2331,7 +2342,7 @@ const filtV=useMemo(()=>{
       {/* ── PIN overlay — rendered on top, app loads underneath ── */}
       {!unlocked&&(
         <div style={{
-          position:"fixed",inset:0,zIndex:99999,overflow:"hidden",
+          position:"fixed",inset:0,zIndex:99999,overflowX:"hidden",overflowY:mobile?"auto":"hidden",
           background:"linear-gradient(rgba(3,12,25,.88),rgba(3,12,25,.94)),url('/login-tanker-bg.png') center/cover no-repeat",
           display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,system-ui,sans-serif"
         }}>
@@ -2371,7 +2382,7 @@ const filtV=useMemo(()=>{
           </svg>
 
           <div style={{
-            position:"absolute",right:"clamp(18px,4vw,64px)",top:"50%",transform:"translateY(-50%)",
+            display:mobile?"none":"block",position:"absolute",right:"clamp(18px,4vw,64px)",top:"50%",transform:"translateY(-50%)",
             width:310,padding:"16px 17px",borderRadius:12,zIndex:1,
             background:"rgba(4,16,33,.58)",border:"1px solid rgba(88,166,255,.12)",
             backdropFilter:"blur(10px)",color:"#dcecff"
@@ -2393,18 +2404,18 @@ const filtV=useMemo(()=>{
           </div>
 
           <div style={{
-            position:"absolute",left:"50%",bottom:78,transform:"translateX(-50%)",zIndex:3,
-            display:"grid",gridTemplateColumns:"repeat(4,minmax(115px,1fr))",
-            minWidth:"min(650px,calc(100vw - 36px))",
+            position:"absolute",left:"50%",bottom:mobile?16:78,transform:"translateX(-50%)",zIndex:3,
+            display:"grid",gridTemplateColumns:mobile?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(115px,1fr))",
+            width:mobile?"calc(100vw - 24px)":"auto",minWidth:mobile?0:"min(650px,calc(100vw - 36px))",
             border:"1px solid rgba(88,166,255,.11)",borderRadius:10,overflow:"hidden",
             background:"rgba(4,16,33,.58)",backdropFilter:"blur(7px)"
           }}>
             {[
               ["BRENT",loginMarkets.brent,"USD/BBL"],
-              ["MGO USG",loginMarkets.mgoUsg,"USD/MT"],
               ["MGO ARA",loginMarkets.mgoAra,"USD/MT"],
+              ["MGO FUJ",loginMarkets.mgoFujairah,"USD/MT"],
               ["MGO SPORE",loginMarkets.mgoSingapore,"USD/MT"]
-            ].map(([label,val,unit],i)=><div key={label} style={{padding:"9px 12px",textAlign:"center",borderLeft:i?"1px solid rgba(88,166,255,.08)":"none"}}>
+            ].map(([label,val,unit],i)=><div key={label} style={{padding:"9px 12px",textAlign:"center",borderLeft:i&&!mobile?"1px solid rgba(88,166,255,.08)":"none",borderTop:mobile&&i>1?"1px solid rgba(88,166,255,.08)":"none"}}>
               <div style={{fontSize:10.5,fontWeight:850,letterSpacing:".10em",color:"rgba(125,178,240,.54)"}}>{label}</div>
               <div style={{fontSize:18,fontWeight:850,color:val!=null?"#eef6ff":"rgba(225,239,255,.30)",marginTop:2}}>
                 {val!=null?(typeof val==="number"?val.toLocaleString(undefined,{maximumFractionDigits:2}):val):"—"}
@@ -2414,7 +2425,7 @@ const filtV=useMemo(()=>{
           </div>
 
           <div style={{
-            position:"relative",zIndex:2,width:410,maxWidth:"calc(100vw - 32px)",
+            position:"relative",zIndex:2,width:410,maxWidth:"calc(100vw - 24px)",marginBottom:mobile?190:0,
             background:"linear-gradient(180deg,rgba(9,24,46,.94),rgba(6,17,34,.96))",
             border:"1px solid rgba(88,166,255,.18)",borderRadius:16,padding:"30px 34px 26px",
             boxShadow:"0 20px 60px rgba(0,0,0,.44)",
