@@ -1210,10 +1210,12 @@ class TabErrorBoundary extends React.Component {
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
   // ── PIN config ───────────────────────────────────────────────────────────
   const MASTER_PIN = "4524"; // ← your PIN → full access
-  const GUEST_PIN  = "0250"; // ← colleague's PIN → positions + cargoes only
-  const GUEST_TABS = ["pos","cargo","clients"];
+  const GUEST_PIN  = "0250"; // ← colleague's PIN
+  const GUEST_TABS_KEY = "guest_visible_tabs";
+  const DEFAULT_GUEST_TABS = ["pos","cargo","clients"];
 
   const [unlocked, setUnlocked] = React.useState(false); // always ask on load
+  const [guestTabs,setGuestTabs] = React.useState(DEFAULT_GUEST_TABS);
   const [pinInput, setPinInput] = React.useState("");
   const [pinError, setPinError] = React.useState(false);
   const [guestMode, setGuestMode] = React.useState(false);
@@ -1224,6 +1226,20 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   });
   const [loginNews,setLoginNews]=React.useState([]);
   const [loginFeedLoading,setLoginFeedLoading]=React.useState(true);
+
+  // Guest tab visibility is controlled from Settings and stored in Supabase.
+  React.useEffect(()=>{
+    let alive=true;
+    (async()=>{
+      try{
+        const {data}=await supabase.from("tag_settings").select("value").eq("key",GUEST_TABS_KEY).maybeSingle();
+        const raw=data?.value;
+        const tabs=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
+        if(alive&&tabs?.length)setGuestTabs(tabs.filter(id=>id!=="settings"));
+      }catch(_){}
+    })();
+    return()=>{alive=false;};
+  },[]);
 
   React.useEffect(()=>{
     if(unlocked)return;
@@ -1341,7 +1357,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     return()=>window.removeEventListener("navigation-config-updated",h);
   },[]);
   const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
-  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||GUEST_TABS.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode]);
+  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||guestTabs.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode,guestTabs]);
   const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
   const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set());setMobileNavOpen(false)});
  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
@@ -2342,7 +2358,7 @@ const filtV=useMemo(()=>{
       {/* ── PIN overlay — modern market terminal / responsive ── */}
       {!unlocked&&(
         <div style={{
-          position:"fixed",inset:0,zIndex:99999,overflowX:"hidden",overflowY:"auto",
+          position:"fixed",inset:0,zIndex:99999,overflowX:"hidden",overflowY:"auto",boxSizing:"border-box",maxWidth:"100vw",
           background:"radial-gradient(circle at 50% 32%,rgba(25,75,135,.18),transparent 36%),linear-gradient(180deg,rgba(2,10,22,.94),rgba(2,10,22,.985)),url('/login-tanker-bg.png') center/cover no-repeat",
           fontFamily:"Inter,system-ui,sans-serif",color:"#dcecff"
         }}>
@@ -2350,7 +2366,7 @@ const filtV=useMemo(()=>{
             backgroundImage:"linear-gradient(rgba(88,166,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(88,166,255,.025) 1px,transparent 1px)",
             backgroundSize:"42px 42px"}}/>
 
-          <div style={{position:"relative",zIndex:2,width:"min(1460px,calc(100vw - 32px))",margin:"0 auto",padding:mobile?"18px 0 24px":"24px 0 28px"}}>
+          <div style={{position:"relative",zIndex:2,width:mobile?"calc(100vw - 20px)":"min(1460px,calc(100vw - 32px))",maxWidth:"100%",boxSizing:"border-box",margin:"0 auto",padding:mobile?"12px 0 18px":"24px 0 28px"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,marginBottom:mobile?14:18}}>
               <div>
                 <div style={{fontSize:9,fontWeight:800,letterSpacing:".20em",color:"rgba(125,178,240,.48)",textTransform:"uppercase"}}>Tanker Intelligence Platform</div>
@@ -2378,47 +2394,44 @@ const filtV=useMemo(()=>{
               </div>)}
             </div>
 
-            <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"minmax(0,1.55fr) minmax(340px,.85fr)",gap:12,alignItems:"stretch"}}>
-              {/* News terminal */}
-              <div style={{border:"1px solid rgba(88,166,255,.11)",borderRadius:14,background:"rgba(4,16,33,.66)",backdropFilter:"blur(10px)",padding:mobile?14:18,minWidth:0}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                  <div>
-                    <div style={{fontSize:9,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>SHIPPING INTELLIGENCE</div>
-                    <div style={{fontSize:mobile?16:18,fontWeight:800,color:"#eef6ff",marginTop:3}}>Latest market headlines</div>
-                  </div>
-                  <div style={{fontSize:8,color:"rgba(175,205,240,.38)"}}>{loginFeedLoading?"UPDATING":"LIVE · 10 MIN"}</div>
+            {/* Enter Dashboard — centered on desktop and first on mobile */}
+            <div style={{display:"flex",justifyContent:"center",width:"100%",minWidth:0,marginBottom:12}}>
+              <div style={{width:mobile?"100%":"min(430px,100%)",maxWidth:"100%",boxSizing:"border-box",border:"1px solid rgba(88,166,255,.15)",borderRadius:14,padding:mobile?"14px 14px":"18px 22px",background:"linear-gradient(180deg,rgba(9,24,46,.92),rgba(6,17,34,.94))",boxShadow:"0 20px 60px rgba(0,0,0,.32)"}}>
+                <div style={{textAlign:"center",marginBottom:mobile?10:14}}>
+                  <div style={{fontSize:9,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>ENTER DASHBOARD</div>
+                  <div style={{fontSize:mobile?14:16,fontWeight:800,color:"#eef6ff",marginTop:3}}>Enter your 4-digit access code</div>
+                  <div style={{fontSize:9,color:"rgba(175,205,240,.42)",marginTop:4}}>Personal or colleague guest code</div>
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(2,minmax(0,1fr))",gap:8}}>
-                  {(loginNews.length?loginNews:[
-                    {title:"Latest tanker and shipping headlines will appear here",source:"RSS feed"},
-                    {title:"Feed refreshes automatically every 10 minutes",source:"Live"}
-                  ]).slice(0,mobile?4:6).map((n,i)=><a key={i} href={n.link||undefined} target={n.link?"_blank":undefined} rel="noreferrer"
-                    style={{display:"block",textDecoration:"none",color:"inherit",padding:12,borderRadius:9,border:"1px solid rgba(88,166,255,.08)",background:i===0?"linear-gradient(135deg,rgba(88,166,255,.10),rgba(4,16,33,.48))":"rgba(8,25,48,.40)",minHeight:76}}>
-                    <div style={{fontSize:i===0?12:11,fontWeight:i===0?760:650,lineHeight:1.38,color:"rgba(235,245,255,.92)"}}>{n.title}</div>
-                    <div style={{fontSize:8.5,marginTop:7,color:"rgba(125,178,240,.48)"}}>{n.source||"Shipping"}{n.published?"  ·  "+n.published:""}</div>
-                  </a>)}
+
+                <div style={{display:"flex",gap:7,justifyContent:"center",marginBottom:mobile?10:13}}>
+                  {[0,1,2,3].map(i=><div key={i} style={{width:mobile?42:48,height:mobile?36:40,borderRadius:8,background:pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.56)":"rgba(88,166,255,.18)"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"#79c0ff"}}>{pinInput.length>i?"●":""}</div>)}
                 </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,maxWidth:230,margin:"0 auto"}}>
+                  {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=><button key={i} disabled={d===""} onClick={()=>{if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}if(d===""||typeof d!=="number")return;const next=pinInput+String(d);setPinInput(next);if(next.length===4)submitPin(next);}} style={{height:mobile?37:40,borderRadius:8,border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.17)"),background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.76),rgba(10,27,53,.8))",color:d===""?"transparent":"rgba(184,216,255,.88)",fontSize:14,fontWeight:700,cursor:d===""?"default":"pointer",fontFamily:"inherit",visibility:d===""?"hidden":"visible"}}>{d}</button>)}
+                </div>
+                <div style={{height:mobile?15:18,marginTop:5,textAlign:"center"}}>{pinError&&<span style={{fontSize:10,color:"rgba(255,107,107,.9)"}}>Incorrect code</span>}</div>
               </div>
+            </div>
 
-              {/* Secure access */}
-              <div style={{border:"1px solid rgba(88,166,255,.15)",borderRadius:14,padding:mobile?"18px 16px":"20px 22px",background:"linear-gradient(180deg,rgba(9,24,46,.92),rgba(6,17,34,.94))",boxShadow:"0 20px 60px rgba(0,0,0,.32)",alignSelf:"stretch"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                  <div>
-                    <div style={{fontSize:9,fontWeight:850,letterSpacing:".14em",color:"rgba(125,178,240,.48)"}}>SECURE ACCESS</div>
-                    <div style={{fontSize:16,fontWeight:800,color:"#eef6ff",marginTop:3}}>{guestMode?"Guest login":"Enter PIN"}</div>
-                  </div>
-                  <div style={{width:8,height:8,borderRadius:"50%",background:"#43e97b",boxShadow:"0 0 12px rgba(67,233,123,.45)"}}/>
+            {/* Compact news — deliberately shorter on mobile so access stays above the fold */}
+            <div style={{width:"100%",maxWidth:"100%",boxSizing:"border-box",overflow:"hidden",border:"1px solid rgba(88,166,255,.11)",borderRadius:14,background:"rgba(4,16,33,.66)",backdropFilter:"blur(10px)",padding:mobile?10:14,minWidth:0}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:8}}>
+                <div>
+                  <div style={{fontSize:9,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>SHIPPING INTELLIGENCE</div>
+                  <div style={{fontSize:mobile?13:16,fontWeight:800,color:"#eef6ff",marginTop:2}}>Latest tanker & shipping headlines</div>
                 </div>
-
-                <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:15}}>
-                  {[0,1,2,3].map(i=><div key={i} style={{width:mobile?46:50,height:42,borderRadius:8,background:pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.56)":"rgba(88,166,255,.18)"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,color:"#79c0ff"}}>{pinInput.length>i?"●":""}</div>)}
-                </div>
-
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,maxWidth:250,margin:"0 auto"}}>
-                  {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=><button key={i} disabled={d===""} onClick={()=>{if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}if(d===""||typeof d!=="number")return;const next=pinInput+String(d);setPinInput(next);if(next.length===4)submitPin(next);}} style={{height:mobile?42:44,borderRadius:8,border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.17)"),background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.76),rgba(10,27,53,.8))",color:d===""?"transparent":"rgba(184,216,255,.88)",fontSize:15,fontWeight:700,cursor:d===""?"default":"pointer",fontFamily:"inherit",visibility:d===""?"hidden":"visible"}}>{d}</button>)}
-                </div>
-                <div style={{height:20,marginTop:9,textAlign:"center"}}>{pinError&&<span style={{fontSize:10,color:"rgba(255,107,107,.9)"}}>Incorrect code</span>}</div>
-                <div style={{borderTop:"1px solid rgba(88,166,255,.09)",paddingTop:12,textAlign:"center",fontSize:8.5,fontWeight:700,color:"rgba(120,160,220,.34)",letterSpacing:".09em",textTransform:"uppercase"}}>Positions · Cargoes · Freight · Fleet Intelligence</div>
+                <div style={{fontSize:8,color:"rgba(175,205,240,.38)",whiteSpace:"nowrap"}}>{loginFeedLoading?"UPDATING":"LIVE · 10 MIN"}</div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(4,minmax(0,1fr))",gap:6,maxHeight:mobile?126:"none",overflow:"hidden"}}>
+                {(loginNews.length?loginNews:[
+                  {title:"Latest tanker and shipping headlines will appear here",source:"RSS feed"},
+                  {title:"Feed refreshes automatically every 10 minutes",source:"Live"}
+                ]).slice(0,mobile?2:4).map((n,i)=><a key={i} href={n.link||undefined} target={n.link?"_blank":undefined} rel="noreferrer"
+                  style={{display:"block",minWidth:0,textDecoration:"none",color:"inherit",padding:mobile?9:10,borderRadius:8,border:"1px solid rgba(88,166,255,.08)",background:i===0?"linear-gradient(135deg,rgba(88,166,255,.10),rgba(4,16,33,.48))":"rgba(8,25,48,.40)",boxSizing:"border-box"}}>
+                  <div style={{fontSize:mobile?10.5:11,fontWeight:i===0?760:650,lineHeight:1.3,color:"rgba(235,245,255,.92)",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{n.title}</div>
+                  <div style={{fontSize:8,marginTop:5,color:"rgba(125,178,240,.48)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{n.source||"Shipping"}{n.published?"  ·  "+n.published:""}</div>
+                </a>)}
               </div>
             </div>
           </div>
