@@ -216,6 +216,8 @@ function GroupRow({g,editing,onStartEdit,onSaveEdit,onCancelEdit,onDelete,editLa
 
 const NAV_KEY="signal_navigation_config";
 const NAV_CLOUD_KEY="navigation_config";
+const GUEST_TABS_CLOUD_KEY="guest_visible_tabs";
+const DEFAULT_GUEST_TABS=["pos","cargo","clients"];
 const UI_ZOOM_KEY="signal_ui_zoom";
 const UI_ZOOM_CLOUD_KEY="ui_zoom";
 const NAV_ITEMS=[
@@ -237,6 +239,39 @@ function navNorm(x){
 }
 function navLoad(){try{return navNorm(JSON.parse(localStorage.getItem(NAV_KEY)||"null"));}catch{return navDefault();}}
 
+
+
+function GuestAccessEditor(){
+ const allowed=NAV_ITEMS.filter(([id])=>id!=="settings");
+ const [tabs,setTabs]=useState(DEFAULT_GUEST_TABS),[status,setStatus]=useState("");
+ useEffect(()=>{(async()=>{try{
+   const {data}=await supabase.from("tag_settings").select("value").eq("key",GUEST_TABS_CLOUD_KEY).maybeSingle();
+   const raw=data?.value;
+   const next=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
+   if(next)setTabs(next.filter(id=>id!=="settings"));
+ }catch{}})()},[]);
+ function save(next){
+   next=[...new Set(next)].filter(id=>id!=="settings");
+   setTabs(next);setStatus("Saving…");
+   supabase.from("tag_settings").upsert(
+     {key:GUEST_TABS_CLOUD_KEY,value:next,updated_at:new Date().toISOString()},
+     {onConflict:"key"}
+   ).then(({error})=>{setStatus(error?"Cloud save failed":"Saved");setTimeout(()=>setStatus(""),1600);});
+ }
+ return <div>
+   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:7}}>
+     {allowed.map(([id,label,,icon])=><label key={id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 9px",border:"1px solid "+(tabs.includes(id)?"#58a6ff55":C.bd2),borderRadius:6,background:tabs.includes(id)?"rgba(88,166,255,.08)":C.bg2,color:C.tx,fontSize:11,cursor:"pointer"}}>
+       <input type="checkbox" checked={tabs.includes(id)} onChange={e=>save(e.target.checked?[...tabs,id]:tabs.filter(x=>x!==id))}/>
+       <span>{icon}</span><span>{label}</span>
+     </label>)}
+   </div>
+   <div style={{display:"flex",alignItems:"center",gap:10,marginTop:10}}>
+     <button onClick={()=>save(DEFAULT_GUEST_TABS)} style={{fontSize:10,padding:"4px 9px",borderRadius:5,border:"1px solid "+C.bd2,background:"transparent",color:C.faint,cursor:"pointer"}}>Reset guest tabs</button>
+     <span style={{fontSize:10,color:C.faint}}>{status}</span>
+   </div>
+   <div style={{fontSize:10,color:C.faint,marginTop:8}}>Settings is always hidden from guest users, so colleagues cannot change their own access.</div>
+ </div>
+}
 
 function AppScaleControl(){
   const [zoom,setZoom]=useState(()=>{
@@ -405,6 +440,7 @@ export default function SettingsTab() {
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px",fontFamily:"Inter,sans-serif"}}>
       <SectionCard title="Navigation / Menu" subtitle="Choose menu style, order existing tabs, visibility and grouped headings."><NavigationEditor/><AppScaleControl/></SectionCard>
+      <SectionCard title="Guest Access" subtitle="Choose which tabs colleagues can see when they enter the guest code."><GuestAccessEditor/></SectionCard>
 
       <SectionCard title="Fixing">
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
