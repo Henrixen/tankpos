@@ -9,7 +9,7 @@ async function saveTCEDefaults(d){try{await window.storage.set(TCE_STORE_KEY,JSO
 // Shared card style so every panel on this tab matches the Fleet tab's look —
 // same border-radius, border, and background across Distance Table, Bunker,
 // Calculator, and Benchmark Routes.
-const CARD = { background:C.bg2, border:"1px solid "+C.bd, borderRadius:10, overflaow:"hidden" };
+const CARD = { background:C.bg2, border:"1px solid "+C.bd, borderRadius:10, overflow:"hidden" };
 
 // Formatted numeric input: shows "25 000" (nb-NO spacing) when not focused,
 // raw digits while typing/editing. Used everywhere freight/PDA/ETS/bunker
@@ -545,10 +545,40 @@ function TCECalculator(){
   const [sharedBunker,setSharedBunker]=useState("");
   const [pbtStatus,setPbtStatus]=useState(null);
 
-  useEffect(()=>{loadTCEDefaults().then(d=>{if(d)setDefaults(prev=>({...TCE_DEFAULTS,...d,...prev===TCE_DEFAULTS?d:{}}));setLoaded(true);});},[]);
-  useEffect(()=>{ if(loaded && sharedBunker==="") setSharedBunker(String(defaults.bunker??"")); },[loaded]);
+  // Load the saved TCE defaults, but make the last refreshed Dashboard/PBT
+  // ARA MGO snapshot authoritative for bunker. This prevents refresh from
+  // falling back to TCE_DEFAULTS.bunker (1100).
+  useEffect(()=>{
+    let alive=true;
+    (async()=>{
+      const saved=await loadTCEDefaults();
+      let next={...TCE_DEFAULTS,...(saved||{})};
+      try{
+        const {data}=await supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle();
+        const parsed=data?.value?(typeof data.value==="string"?JSON.parse(data.value):data.value):null;
+        const latest=Number(parsed?.ARA_MGO);
+        if(Number.isFinite(latest)&&latest>0){
+          next={...next,bunker:latest};
+          await saveTCEDefaults(next);
+        }
+      }catch(_){}
+      if(!alive)return;
+      setDefaults(next);
+      setSharedBunker(String(next.bunker??""));
+      setLoaded(true);
+    })();
+    return()=>{alive=false;};
+  },[]);
 
-  function updateSharedBunker(val){ setSharedBunker(val); }
+  function updateSharedBunker(val){
+    setSharedBunker(val);
+    const n=Number(String(val).replace(/\s/g,""));
+    if(Number.isFinite(n)&&n>0){
+      const next={...defaults,bunker:n};
+      setDefaults(next);
+      saveTCEDefaults(next);
+    }
+  }
 
   // Fetch live PBT prices through the same /api/bunkers endpoint used by
   // Dashboard, then persist the same shared snapshot in Supabase.
@@ -567,7 +597,11 @@ function TCECalculator(){
         SIN_HSFO:p.SIN_HSFO, SIN_VLSFO:p.SIN_VLSFO, SIN_MGO:p.SIN_MGO,
       };
 
-      setSharedBunker(String(newBunkers.ARA_MGO));
+      const latestBunker=Number(newBunkers.ARA_MGO);
+      setSharedBunker(String(latestBunker));
+      const nextDefaults={...defaults,bunker:latestBunker};
+      setDefaults(nextDefaults);
+      await saveTCEDefaults(nextDefaults);
       await supabase.from("dashboard").upsert(
         {key:"last-bunker-prices",value:JSON.stringify(newBunkers)},
         {onConflict:"key"}
@@ -584,7 +618,11 @@ function TCECalculator(){
       try{
         const parsed=data?.value?JSON.parse(data.value):null;
         if(parsed?.ARA_MGO){
-          setSharedBunker(String(parsed.ARA_MGO));
+          const latestBunker=Number(parsed.ARA_MGO);
+          setSharedBunker(String(latestBunker));
+          const nextDefaults={...defaults,bunker:latestBunker};
+          setDefaults(nextDefaults);
+          await saveTCEDefaults(nextDefaults);
           setPbtStatus(`Live fetch failed — using saved PBT $${parsed.ARA_MGO}/mt`);
         }else setPbtStatus("PBT fetch failed");
       }catch(_){setPbtStatus("PBT fetch failed");}
