@@ -3899,7 +3899,12 @@ const filtV=useMemo(()=>{
                   <option value="Freight">Freight</option>
                 </select>
                 <button onClick={()=>setCsortD(d=>d*-1)}
-                  style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cu              <button onClick={e=>{
+                  style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",minWidth:28}}>
+                  {cSortD>0?"▲":"▼"}
+                </button>
+              </div>
+
+              <button onClick={e=>{
                   const r=e.currentTarget.getBoundingClientRect();
                   setCargoColumnsPos({top:r.bottom+5,left:Math.max(8,r.right-205)});
                   setCargoColumnsOpen(v=>!v);
@@ -3907,6 +3912,7 @@ const filtV=useMemo(()=>{
                 style={{fontSize:11,fontWeight:700,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"3px 8px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                 Columns ▾
               </button>
+
               {cargoColumnsOpen&&<>
                 <div style={{position:"fixed",inset:0,zIndex:29990}} onClick={()=>setCargoColumnsOpen(false)}/>
                 <div style={{position:"fixed",left:cargoColumnsPos.left,top:cargoColumnsPos.top,zIndex:29999,width:205,maxHeight:390,overflowY:"auto",background:"#071223",border:"1px solid rgba(88,166,255,.34)",borderRadius:7,boxShadow:"0 12px 34px rgba(0,0,0,.72)",padding:7}}>
@@ -3921,11 +3927,11 @@ const filtV=useMemo(()=>{
                   })}
                   <div style={{height:1,background:C.bd2,margin:"5px 0"}}/>
                   <button onClick={()=>tab==="cargo2"?setQfVisibleCols(new Set(QF_DEFAULT_VISIBLE)):setCargoVisibleCols(new Set(CARGO_COLUMN_KEYS))}
-                    style={{width:"100%",fontSize:10,fontWeight:700,padding:"5px 7px",borderRadius:4,cursor:"pointer",border:"1px solid "+C.bd,background:C.bg2,color:C.blue,fontFamily:"inherit"}}>Reset default</button>
+                    style={{width:"100%",fontSize:10,fontWeight:700,padding:"5px 7px",borderRadius:4,cursor:"pointer",border:"1px solid "+C.bd,background:C.bg2,color:C.blue,fontFamily:"inherit"}}>
+                    Reset default
+                  </button>
                 </div>
-              </>}olid "+C.bd,background:C.bg2,color:C.blue,fontFamily:"inherit"}}>Reset default</button>
-                </div>
-              </details>
+              </>}
             </div>
 
             {bulkCargoTagOpen&&(
