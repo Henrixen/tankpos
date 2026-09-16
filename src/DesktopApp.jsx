@@ -1297,7 +1297,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
       setGuestMode(false);
       setUnlocked(true);
       setPinInput("");
-    } else if(p===guestPin){
+    } else if(p===GUEST_PIN){
       localStorage.setItem("signal_user","L");
       setGuestMode(true);
       setUnlocked(true);
@@ -1305,7 +1305,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     } else {
       setPinError(true);
       setPinInput("");
-      setTimeout(()=>setPinError(false),1500);
+      setTimeout(()=>setPinError(false),1200);
     }
   }
 
@@ -2376,13 +2376,13 @@ const filtV=useMemo(()=>{
           <div style={{position:"relative",zIndex:2,width:mobile?"calc(100vw - 20px)":"min(1460px,calc(100vw - 32px))",maxWidth:"100%",boxSizing:"border-box",margin:"0 auto",padding:mobile?"12px 0 18px":"24px 0 28px"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,marginBottom:mobile?14:18}}>
               <div>
-                <div style={{fontSize:9,fontWeight:800,letterSpacing:".20em",color:"rgba(125,178,240,.48)",textTransform:"uppercase"}}>Tanker Intelligence Platform</div>
+                <div style={{fontSize:mobile?9:11,fontWeight:800,letterSpacing:".20em",color:"rgba(125,178,240,.48)",textTransform:"uppercase"}}>Tanker Intelligence Platform</div>
                 <div style={{display:"flex",alignItems:"baseline",gap:7,marginTop:4}}>
-                  <span style={{fontSize:mobile?20:25,fontWeight:850,color:"#eef6ff"}}>Broker</span>
-                  <span style={{fontSize:mobile?20:25,fontWeight:850,color:"#43e97b"}}>Dashboard</span>
+                  <span style={{fontSize:mobile?20:29,fontWeight:850,color:"#eef6ff"}}>Broker</span>
+                  <span style={{fontSize:mobile?20:29,fontWeight:850,color:"#43e97b"}}>Dashboard</span>
                 </div>
               </div>
-              <div style={{fontSize:9,fontWeight:800,letterSpacing:".13em",color:"rgba(125,178,240,.42)",textTransform:"uppercase"}}>Live market terminal</div>
+              <div style={{fontSize:mobile?9:10,fontWeight:800,letterSpacing:".13em",color:"rgba(125,178,240,.42)",textTransform:"uppercase"}}>Live market terminal</div>
             </div>
 
             {/* Market pulse — Brent + bunkers in requested order: Houston | ARA | Singapore */}
@@ -2392,63 +2392,121 @@ const filtV=useMemo(()=>{
                 ["MGO HOUSTON",loginMarkets.mgoUsg,"USD/MT"],
                 ["MGO ARA",loginMarkets.mgoAra,"USD/MT"],
                 ["MGO SPORE",loginMarkets.mgoSingapore,"USD/MT"]
-              ].map(([label,val,unit])=><div key={label} style={{padding:mobile?"11px 12px":"12px 16px",border:"1px solid rgba(88,166,255,.11)",borderRadius:10,background:"linear-gradient(180deg,rgba(8,25,48,.76),rgba(4,16,33,.70))",backdropFilter:"blur(8px)"}}>
-                <div style={{fontSize:9,fontWeight:850,letterSpacing:".12em",color:"rgba(125,178,240,.52)"}}>{label}</div>
-                <div style={{fontSize:mobile?18:21,fontWeight:850,color:val!=null?"#eef6ff":"rgba(225,239,255,.30)",marginTop:3}}>
+              ].map(([label,val,unit])=><div key={label} style={{padding:mobile?"11px 12px":"16px 18px",border:"1px solid rgba(88,166,255,.11)",borderRadius:10,background:"linear-gradient(180deg,rgba(8,25,48,.76),rgba(4,16,33,.70))",backdropFilter:"blur(8px)"}}>
+                <div style={{fontSize:mobile?9:10,fontWeight:850,letterSpacing:".12em",color:"rgba(125,178,240,.52)"}}>{label}</div>
+                <div style={{fontSize:mobile?18:25,fontWeight:850,color:val!=null?"#eef6ff":"rgba(225,239,255,.30)",marginTop:3}}>
                   {val!=null?(typeof val==="number"?val.toLocaleString(undefined,{maximumFractionDigits:2}):val):"—"}
                 </div>
-                <div style={{fontSize:8,color:"rgba(125,178,240,.32)",marginTop:1}}>{unit}</div>
+                <div style={{fontSize:mobile?8:9,color:"rgba(125,178,240,.36)",marginTop:1}}>{unit}</div>
               </div>)}
             </div>
 
-            {/* Enter Dashboard — centered on desktop and first on mobile */}
-            <div style={{display:"flex",justifyContent:"center",width:"100%",minWidth:0,marginBottom:12}}>
-              <div style={{width:mobile?"100%":"min(430px,100%)",maxWidth:"100%",boxSizing:"border-box",border:"1px solid rgba(88,166,255,.15)",borderRadius:14,padding:mobile?"14px 14px":"18px 22px",background:"linear-gradient(180deg,rgba(9,24,46,.92),rgba(6,17,34,.94))",boxShadow:"0 20px 60px rgba(0,0,0,.32)"}}>
-                <div style={{textAlign:"center",marginBottom:mobile?10:14}}>
-                  <div style={{fontSize:mobile?9:11,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>ENTER DASHBOARD</div>
-                  <div style={{fontSize:mobile?14:20,fontWeight:800,color:"#eef6ff",marginTop:4}}>Enter your 4-digit access code</div>
-                  <div style={{fontSize:mobile?9:12,color:"rgba(175,205,240,.48)",marginTop:5}}>Personal or colleague guest code</div>
-                </div>
+            {/* Desktop: news moves up beside access card. Mobile: access remains first. */}
+            <div style={{
+              display:"grid",
+              gridTemplateColumns:mobile?"minmax(0,1fr)":"minmax(0,1.85fr) minmax(390px,.72fr)",
+              gap:mobile?12:16,
+              alignItems:"stretch",
+              width:"100%",
+              minWidth:0
+            }}>
+              {/* Enter Dashboard — first on mobile, right-hand access panel on desktop */}
+              <div style={{
+                order:mobile?1:2,
+                display:"flex",
+                justifyContent:"center",
+                alignItems:"stretch",
+                width:"100%",
+                minWidth:0
+              }}>
+                <div style={{
+                  width:"100%",maxWidth:"100%",boxSizing:"border-box",
+                  border:"1px solid rgba(88,166,255,.18)",borderRadius:14,
+                  padding:mobile?"14px 14px":"22px 26px",
+                  background:"linear-gradient(180deg,rgba(9,24,46,.94),rgba(6,17,34,.96))",
+                  boxShadow:"0 20px 60px rgba(0,0,0,.32)",
+                  display:"flex",flexDirection:"column",justifyContent:"center"
+                }}>
+                  <div style={{textAlign:"center",marginBottom:mobile?10:16}}>
+                    <div style={{fontSize:mobile?9:12,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>ENTER DASHBOARD</div>
+                    <div style={{fontSize:mobile?14:22,fontWeight:800,color:"#eef6ff",marginTop:5}}>Enter your 4-digit access code</div>
+                    <div style={{fontSize:mobile?9:13,color:"rgba(175,205,240,.52)",marginTop:6}}>Personal or colleague guest code</div>
+                  </div>
 
-                <div style={{display:"flex",gap:7,justifyContent:"center",marginBottom:mobile?10:13}}>
-                  {[0,1,2,3].map(i=><div key={i} style={{width:mobile?42:48,height:mobile?36:40,borderRadius:8,background:pinError?"rgba(255,107,107,.10)":pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.56)":"rgba(88,166,255,.18)"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"#79c0ff"}}>{pinInput.length>i?"●":""}</div>)}
-                </div>
+                  <div style={{display:"flex",gap:mobile?7:9,justifyContent:"center",marginBottom:mobile?10:15}}>
+                    {[0,1,2,3].map(i=><div key={i} style={{
+                      width:mobile?42:54,height:mobile?36:46,borderRadius:8,
+                      background:pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",
+                      border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.56)":"rgba(88,166,255,.18)"),
+                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:mobile?16:18,color:"#79c0ff"
+                    }}>{pinInput.length>i?"●":""}</div>)}
+                  </div>
 
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,maxWidth:230,margin:"0 auto"}}>
-                  {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=><button key={i} disabled={d===""} onClick={()=>{
-                    if(pinError)return;
-                    if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}
-                    if(d===""||typeof d!=="number")return;
-                    const next=pinInput+String(d);
-                    if(next.length===4){submitPin(next);return;}
-                    setPinInput(next);
-                  }} style={{height:mobile?37:48,borderRadius:8,border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.17)"),background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.76),rgba(10,27,53,.8))",color:d===""?"transparent":"rgba(184,216,255,.88)",fontSize:mobile?14:17,fontWeight:700,cursor:d===""?"default":"pointer",fontFamily:"inherit",visibility:d===""?"hidden":"visible"}}>{d}</button>)}
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:mobile?6:8,maxWidth:mobile?230:270,margin:"0 auto",width:"100%"}}>
+                    {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=><button key={i} disabled={d===""} onClick={()=>{
+                      if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}
+                      if(d===""||typeof d!=="number")return;
+                      const next=pinInput+String(d);setPinInput(next);if(next.length===4)submitPin(next);
+                    }} style={{
+                      height:mobile?37:52,borderRadius:8,
+                      border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.19)"),
+                      background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.82),rgba(10,27,53,.86))",
+                      color:d===""?"transparent":"rgba(198,225,255,.94)",
+                      fontSize:mobile?14:19,fontWeight:750,cursor:d===""?"default":"pointer",
+                      fontFamily:"inherit",visibility:d===""?"hidden":"visible"
+                    }}>{d}</button>)}
+                  </div>
+                  <div style={{height:mobile?15:20,marginTop:6,textAlign:"center"}}>
+                    {pinError&&<span style={{fontSize:mobile?10:12,fontWeight:750,color:"rgba(255,107,107,.95)"}}>Incorrect code</span>}
+                  </div>
                 </div>
-                <div style={{height:mobile?15:18,marginTop:5,textAlign:"center"}}>{pinError&&<span style={{fontSize:10,color:"rgba(255,107,107,.9)"}}>Incorrect code</span>}</div>
               </div>
-            </div>
 
-            {/* Compact news — deliberately shorter on mobile so access stays above the fold */}
-            <div style={{width:"100%",maxWidth:"100%",boxSizing:"border-box",overflow:"hidden",border:"1px solid rgba(88,166,255,.11)",borderRadius:14,background:"rgba(4,16,33,.66)",backdropFilter:"blur(10px)",padding:mobile?10:14,minWidth:0}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:8}}>
-                <div>
-                  <div style={{fontSize:9,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>SHIPPING INTELLIGENCE</div>
-                  <div style={{fontSize:mobile?13:19,fontWeight:800,color:"#eef6ff",marginTop:2}}>Latest tanker & shipping headlines</div>
+              {/* Shipping intelligence — moved up; desktop now shows two rows / 8 headlines */}
+              <div style={{
+                order:mobile?2:1,width:"100%",maxWidth:"100%",boxSizing:"border-box",overflow:"hidden",
+                border:"1px solid rgba(88,166,255,.13)",borderRadius:14,
+                background:"rgba(4,16,33,.72)",backdropFilter:"blur(10px)",
+                padding:mobile?10:18,minWidth:0
+              }}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:mobile?8:13}}>
+                  <div>
+                    <div style={{fontSize:mobile?9:11,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>SHIPPING INTELLIGENCE</div>
+                    <div style={{fontSize:mobile?13:22,fontWeight:800,color:"#eef6ff",marginTop:3}}>Latest tanker & shipping headlines</div>
+                  </div>
+                  <div style={{fontSize:mobile?8:9,color:"rgba(175,205,240,.42)",whiteSpace:"nowrap"}}>{loginFeedLoading?"UPDATING":"LIVE · 10 MIN"}</div>
                 </div>
-                <div style={{fontSize:8,color:"rgba(175,205,240,.38)",whiteSpace:"nowrap"}}>{loginFeedLoading?"UPDATING":"LIVE · 10 MIN"}</div>
+                <div style={{
+                  display:"grid",
+                  gridTemplateColumns:mobile?"1fr":"repeat(2,minmax(0,1fr))",
+                  gridTemplateRows:mobile?undefined:"repeat(4,minmax(0,1fr))",
+                  gap:mobile?6:9,
+                  maxHeight:mobile?126:"none",overflow:"hidden"
+                }}>
+                  {(loginNews.length?loginNews:[
+                    {title:"Latest tanker and shipping headlines will appear here",source:"RSS feed"},
+                    {title:"Feed refreshes automatically every 10 minutes",source:"Live"}
+                  ]).slice(0,mobile?2:8).map((n,i)=><a key={i} href={n.link||undefined} target={n.link?"_blank":undefined} rel="noreferrer"
+                    style={{
+                      display:"flex",flexDirection:"column",justifyContent:"space-between",minWidth:0,
+                      textDecoration:"none",color:"inherit",padding:mobile?9:13,borderRadius:9,
+                      border:"1px solid rgba(88,166,255,.10)",
+                      background:i===0?"linear-gradient(135deg,rgba(88,166,255,.12),rgba(4,16,33,.50))":"rgba(8,25,48,.46)",
+                      boxSizing:"border-box",minHeight:mobile?0:76
+                    }}>
+                    <div style={{
+                      fontSize:mobile?10.5:14,fontWeight:i===0?780:680,lineHeight:1.28,
+                      color:"rgba(235,245,255,.94)",display:"-webkit-box",WebkitLineClamp:2,
+                      WebkitBoxOrient:"vertical",overflow:"hidden"
+                    }}>{n.title}</div>
+                    <div style={{
+                      fontSize:mobile?8:9,marginTop:7,color:"rgba(125,178,240,.52)",
+                      whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"
+                    }}>{n.source||"Shipping"}{n.published?"  ·  "+n.published:""}</div>
+                  </a>)}
+                </div>
               </div>
-              <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(4,minmax(0,1fr))",gap:6,maxHeight:mobile?126:"none",overflow:"hidden"}}>
-                {(loginNews.length?loginNews:[
-                  {title:"Latest tanker and shipping headlines will appear here",source:"RSS feed"},
-                  {title:"Feed refreshes automatically every 10 minutes",source:"Live"}
-                ]).slice(0,mobile?2:4).map((n,i)=><a key={i} href={n.link||undefined} target={n.link?"_blank":undefined} rel="noreferrer"
-                  style={{display:"block",minWidth:0,textDecoration:"none",color:"inherit",padding:mobile?9:10,borderRadius:8,border:"1px solid rgba(88,166,255,.08)",background:i===0?"linear-gradient(135deg,rgba(88,166,255,.10),rgba(4,16,33,.48))":"rgba(8,25,48,.40)",boxSizing:"border-box"}}>
-                  <div style={{fontSize:mobile?10.5:13,fontWeight:i===0?760:650,lineHeight:1.3,color:"rgba(235,245,255,.92)",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{n.title}</div>
-                  <div style={{fontSize:8,marginTop:5,color:"rgba(125,178,240,.48)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{n.source||"Shipping"}{n.published?"  ·  "+n.published:""}</div>
-                </a>)}
-              </div>
-            </div>
-          </div>
+            </div>          </div>
         </div>
       )}
       {pendingDel&&(
