@@ -1297,7 +1297,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
       setGuestMode(false);
       setUnlocked(true);
       setPinInput("");
-    } else if(p===GUEST_PIN){
+    } else if(p===guestPin){
       localStorage.setItem("signal_user","L");
       setGuestMode(true);
       setUnlocked(true);
@@ -1305,7 +1305,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     } else {
       setPinError(true);
       setPinInput("");
-      setTimeout(()=>setPinError(false),1200);
+      setTimeout(()=>setPinError(false),1500);
     }
   }
 
@@ -2411,11 +2411,18 @@ const filtV=useMemo(()=>{
                 </div>
 
                 <div style={{display:"flex",gap:7,justifyContent:"center",marginBottom:mobile?10:13}}>
-                  {[0,1,2,3].map(i=><div key={i} style={{width:mobile?42:48,height:mobile?36:40,borderRadius:8,background:pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.56)":"rgba(88,166,255,.18)"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"#79c0ff"}}>{pinInput.length>i?"●":""}</div>)}
+                  {[0,1,2,3].map(i=><div key={i} style={{width:mobile?42:48,height:mobile?36:40,borderRadius:8,background:pinError?"rgba(255,107,107,.10)":pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.56)":"rgba(88,166,255,.18)"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"#79c0ff"}}>{pinInput.length>i?"●":""}</div>)}
                 </div>
 
                 <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,maxWidth:230,margin:"0 auto"}}>
-                  {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=><button key={i} disabled={d===""} onClick={()=>{if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}if(d===""||typeof d!=="number")return;const next=pinInput+String(d);setPinInput(next);if(next.length===4)submitPin(next);}} style={{height:mobile?37:48,borderRadius:8,border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.17)"),background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.76),rgba(10,27,53,.8))",color:d===""?"transparent":"rgba(184,216,255,.88)",fontSize:mobile?14:17,fontWeight:700,cursor:d===""?"default":"pointer",fontFamily:"inherit",visibility:d===""?"hidden":"visible"}}>{d}</button>)}
+                  {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=><button key={i} disabled={d===""} onClick={()=>{
+                    if(pinError)return;
+                    if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}
+                    if(d===""||typeof d!=="number")return;
+                    const next=pinInput+String(d);
+                    if(next.length===4){submitPin(next);return;}
+                    setPinInput(next);
+                  }} style={{height:mobile?37:48,borderRadius:8,border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.17)"),background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.76),rgba(10,27,53,.8))",color:d===""?"transparent":"rgba(184,216,255,.88)",fontSize:mobile?14:17,fontWeight:700,cursor:d===""?"default":"pointer",fontFamily:"inherit",visibility:d===""?"hidden":"visible"}}>{d}</button>)}
                 </div>
                 <div style={{height:mobile?15:18,marginTop:5,textAlign:"center"}}>{pinError&&<span style={{fontSize:10,color:"rgba(255,107,107,.9)"}}>Incorrect code</span>}</div>
               </div>
