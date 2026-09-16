@@ -665,10 +665,10 @@ export default function FleetTab() {
   const TD_ = { fontSize:12, padding:"6px 10px", borderBottom:"1px solid "+C.bd2, color:C.dim, whiteSpace:"nowrap",
     overflow:"hidden", textOverflow:"ellipsis", maxWidth:180 };
 
-  function SortTH({ label, k, sortState, onSort, align }) {
+  function SortTH({ label, k, sortState, onSort, align, width }) {
     const active = sortState.key === k;
     return (
-      <th style={{ ...TH_, textAlign: align||"left" }} onClick={() => onSort(k)}>
+      <th style={{ ...TH_, textAlign: align||"left", ...(width?{width,minWidth:width,maxWidth:width}: {}) }} onClick={() => onSort(k)}>
         {label}{active ? (sortState.dir==="asc" ? " ▲" : " ▼") : ""}
       </th>
     );
@@ -982,11 +982,12 @@ export default function FleetTab() {
                 <th style={{...TH_,width:150,maxWidth:150}} onClick={()=>toggleSort("vessel")}>
                   Vessel{sort.key==="vessel" ? (sort.dir==="asc" ? " ▲" : " ▼") : ""}
                 </th>
+                <SortTH label="IMO No." k="imo" sortState={sort} onSort={toggleSort} width={76}/>
                 <SortTH label="Coating" k="coating" sortState={sort} onSort={toggleSort}/>
                 <SortTH label="Segment" k="segment" sortState={sort} onSort={toggleSort}/>
                 <SortTH label="Built" k="built" align="right" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="Age" k="age" align="right" sortState={sort} onSort={toggleSort}/>
-                <SortTH label="DWT" k="dwt" align="right" sortState={sort} onSort={toggleSort}/>
+                <SortTH label="Age" k="age" align="right" sortState={sort} onSort={toggleSort} width={42}/>
+                <SortTH label="DWT" k="dwt" align="right" sortState={sort} onSort={toggleSort} width={64}/>
                 <SortTH label="CBM" k="cbm" align="right" sortState={sort} onSort={toggleSort}/>
                 <SortTH label="LOA" k="loa" align="right" sortState={sort} onSort={toggleSort}/>
                 <SortTH label="Beam" k="beam" align="right" sortState={sort} onSort={toggleSort}/>
@@ -1017,11 +1018,12 @@ export default function FleetTab() {
                         }}/>
                     </td>
                     <td style={{ ...TD_, color:C.tx, fontWeight:600, width:150, maxWidth:150 }} title={r.vessel}>{r.vessel}</td>
+                    <td style={{ ...TD_, width:76, minWidth:76, maxWidth:76, color:C.faint, fontVariantNumeric:"tabular-nums" }} title={r.imo ? String(r.imo) : ""}>{r.imo||"—"}</td>
                     <td style={{ ...TD_, color:COATING_COLORS[r.coating]||C.dim }}>{r.coating||"—"}</td>
                     <td style={{ ...TD_, color:r.segment?.color||C.faint }}>{r.segment?.label||"—"}</td>
                     <td style={{ ...TD_, textAlign:"right" }}>{r.built||"—"}</td>
-                    <td style={{ ...TD_, textAlign:"right" }}>{r.age??"—"}</td>
-                    <td style={{ ...TD_, textAlign:"right", minWidth:78 }}>{fmtFullNumber(r.dwt)}</td>
+                    <td style={{ ...TD_, textAlign:"right", width:42, minWidth:42, maxWidth:42, paddingLeft:5, paddingRight:5 }}>{r.age??"—"}</td>
+                    <td style={{ ...TD_, textAlign:"right", width:64, minWidth:64, maxWidth:64, paddingLeft:5, paddingRight:5 }}>{fmtFullNumber(r.dwt)}</td>
                     <td style={{ ...TD_, textAlign:"right", minWidth:78 }}>{fmtFullNumber(r.cbm)}</td>
                     <td style={{ ...TD_, textAlign:"right" }}>{r.loa||"—"}</td>
                     <td style={{ ...TD_, textAlign:"right" }}>{r.beam||"—"}</td>
@@ -1047,7 +1049,7 @@ export default function FleetTab() {
                 );
               })}
               {!pageRows.length && !loading && (
-                <tr><td style={TD_} colSpan={20}>No vessels match current search/filters.</td></tr>
+                <tr><td style={TD_} colSpan={21}>No vessels match current search/filters.</td></tr>
               )}
             </tbody>
           </table>
