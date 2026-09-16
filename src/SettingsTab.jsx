@@ -216,20 +216,16 @@ function GroupRow({g,editing,onStartEdit,onSaveEdit,onCancelEdit,onDelete,editLa
 
 const NAV_KEY="signal_navigation_config";
 const NAV_CLOUD_KEY="navigation_config";
-const GUEST_TABS_CLOUD_KEY="guest_visible_tabs";
-const GUEST_PIN_CLOUD_KEY="guest_pin";
-const DEFAULT_GUEST_TABS=["pos","cargo","clients"];
-const DEFAULT_GUEST_PIN="0250";
 const UI_ZOOM_KEY="signal_ui_zoom";
 const UI_ZOOM_CLOUD_KEY="ui_zoom";
 const NAV_ITEMS=[
- ["pos","Positions","#58a6ff","⌖"],["cargo","Cargoes","#faa356","▤"],["fix","Fixing","#c792ea","✓"],["tcv","Time Charter","#fb923c","◷"],
+ ["pos","Positions","#58a6ff","⌖"],["cargo","Cargoes","#faa356","▤"],["cargo2","Quotes&Fixtures","#38bdf8","▤"],["fix","Fixing","#c792ea","✓"],["tcv","Time Charter","#fb923c","◷"],
  ["clients","Clients","#a8e6a3","♙"],["matrix","Matrix","#43e97b","▦"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","⚡"],
  ["dash","Dashboard","#43e97b","▥"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▧"],["map","Freight Map","#10b981","⌁"],
  ["cal","Calendar","#4fc3f7","□"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","◈"],["newbuilds","Newbuilds","#fbbf24","△"]
 ];
 function navDefault(){return{mode:"classic",collapsed:false,order:NAV_ITEMS.map(x=>x[0]),hidden:[],groups:[
- {id:"market",label:"Market",tabs:["pos","cargo","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
+ {id:"market",label:"Market",tabs:["pos","cargo","cargo2","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
  {id:"tools",label:"Tools",tabs:["projects","tce","map"]},{id:"reporting",label:"Reporting",tabs:["dash","reports"]},
  {id:"workspace",label:"Workspace",tabs:["clients","notes","cal","settings"]}]};}
 function navNorm(x){
@@ -241,70 +237,6 @@ function navNorm(x){
 }
 function navLoad(){try{return navNorm(JSON.parse(localStorage.getItem(NAV_KEY)||"null"));}catch{return navDefault();}}
 
-
-
-function GuestAccessEditor(){
- const allowed=NAV_ITEMS.filter(([id])=>id!=="settings");
- const [tabs,setTabs]=useState(DEFAULT_GUEST_TABS),[status,setStatus]=useState("");
- const [guestPin,setGuestPin]=useState(DEFAULT_GUEST_PIN),[pinDraft,setPinDraft]=useState(DEFAULT_GUEST_PIN),[pinStatus,setPinStatus]=useState("");
- useEffect(()=>{(async()=>{try{
-   const [{data:tabsData},{data:pinData}]=await Promise.all([
-     supabase.from("tag_settings").select("value").eq("key",GUEST_TABS_CLOUD_KEY).maybeSingle(),
-     supabase.from("tag_settings").select("value").eq("key",GUEST_PIN_CLOUD_KEY).maybeSingle()
-   ]);
-   const raw=tabsData?.value;
-   const next=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
-   if(next)setTabs(next.filter(id=>id!=="settings"));
-   const cloudPin=String(pinData?.value??"").replace(/\D/g,"").slice(0,4);
-   if(cloudPin.length===4){setGuestPin(cloudPin);setPinDraft(cloudPin);}
- }catch{}})()},[]);
- function save(next){
-   next=[...new Set(next)].filter(id=>id!=="settings");
-   setTabs(next);setStatus("Saving…");
-   supabase.from("tag_settings").upsert(
-     {key:GUEST_TABS_CLOUD_KEY,value:next,updated_at:new Date().toISOString()},
-     {onConflict:"key"}
-   ).then(({error})=>{setStatus(error?"Cloud save failed":"Saved");setTimeout(()=>setStatus(""),1600);});
- }
- async function savePin(){
-   const clean=String(pinDraft||"").replace(/\D/g,"").slice(0,4);
-   if(clean.length!==4){setPinStatus("Enter exactly 4 digits");return;}
-   setPinStatus("Saving…");
-   const {error}=await supabase.from("tag_settings").upsert(
-     {key:GUEST_PIN_CLOUD_KEY,value:clean,updated_at:new Date().toISOString()},
-     {onConflict:"key"}
-   );
-   if(error){setPinStatus("Cloud save failed");return;}
-   setGuestPin(clean);setPinDraft(clean);setPinStatus("Saved");
-   setTimeout(()=>setPinStatus(""),1600);
- }
- return <div>
-   <div style={{padding:"10px 12px",marginBottom:12,border:"1px solid "+C.bd2,borderRadius:7,background:C.bg2}}>
-     <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",marginBottom:7}}>Guest code</div>
-     <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
-       <input value={pinDraft} inputMode="numeric" maxLength={4}
-         onChange={e=>setPinDraft(e.target.value.replace(/\D/g,"").slice(0,4))}
-         onKeyDown={e=>e.key==="Enter"&&savePin()}
-         style={{...inp,width:105,textAlign:"center",fontSize:16,fontWeight:800,letterSpacing:5}}/>
-       <button onClick={savePin} style={{fontSize:11,fontWeight:700,padding:"6px 12px",borderRadius:5,border:"1px solid rgba(88,166,255,.5)",background:"rgba(88,166,255,.15)",color:"#9ec5ff",cursor:"pointer",fontFamily:"inherit"}}>Change code</button>
-       <span style={{fontSize:10,color:C.faint}}>{pinStatus}</span>
-     </div>
-     <div style={{fontSize:10,color:C.faint,marginTop:6}}>Current guest code: <b style={{color:"#9ec5ff",letterSpacing:2}}>{guestPin}</b></div>
-   </div>
-   <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",marginBottom:7}}>Guest tabs</div>
-   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:7}}>
-     {allowed.map(([id,label,,icon])=><label key={id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 9px",border:"1px solid "+(tabs.includes(id)?"#58a6ff55":C.bd2),borderRadius:6,background:tabs.includes(id)?"rgba(88,166,255,.08)":C.bg2,color:C.tx,fontSize:11,cursor:"pointer"}}>
-       <input type="checkbox" checked={tabs.includes(id)} onChange={e=>save(e.target.checked?[...tabs,id]:tabs.filter(x=>x!==id))}/>
-       <span>{icon}</span><span>{label}</span>
-     </label>)}
-   </div>
-   <div style={{display:"flex",alignItems:"center",gap:10,marginTop:10}}>
-     <button onClick={()=>save(DEFAULT_GUEST_TABS)} style={{fontSize:10,padding:"4px 9px",borderRadius:5,border:"1px solid "+C.bd2,background:"transparent",color:C.faint,cursor:"pointer"}}>Reset guest tabs</button>
-     <span style={{fontSize:10,color:C.faint}}>{status}</span>
-   </div>
-   <div style={{fontSize:10,color:C.faint,marginTop:8}}>Settings is always hidden from guest users, so colleagues cannot change their own access.</div>
- </div>
-}
 
 function AppScaleControl(){
   const [zoom,setZoom]=useState(()=>{
@@ -473,7 +405,6 @@ export default function SettingsTab() {
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px",fontFamily:"Inter,sans-serif"}}>
       <SectionCard title="Navigation / Menu" subtitle="Choose menu style, order existing tabs, visibility and grouped headings."><NavigationEditor/><AppScaleControl/></SectionCard>
-      <SectionCard title="Guest Access" subtitle="Choose which tabs colleagues can see when they enter the guest code."><GuestAccessEditor/></SectionCard>
 
       <SectionCard title="Fixing">
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
