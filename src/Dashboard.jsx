@@ -502,11 +502,11 @@ function WSChart({data,routes,colors,fill=false}) {
   const hi=hover!=null?hover:null;
   return <div style={{height:fill?"100%":"auto",display:"flex",flexDirection:"column",minHeight:0,position:"relative"}}>
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" onMouseMove={onMove} onMouseLeave={()=>setHover(null)} style={{width:"100%",height:fill?"100%":260,minHeight:0,display:"block",flex:fill?1:"0 0 auto",cursor:"crosshair"}}>
-      <text x="13" y={PT+iH/2} fill="rgba(88,166,255,.78)" fontSize="13" fontWeight="900" letterSpacing=".08em" textAnchor="middle" transform={`rotate(-90 13 ${PT+iH/2})`}>WS</text>
+      <text x="7" y={PT+iH/2} fill="rgba(88,166,255,.72)" fontSize="12.5" fontWeight="900" letterSpacing=".08em" textAnchor="middle" transform={`rotate(-90 7 ${PT+iH/2})`}>WS</text>
       {[0,.5,1].map(t=>{const y=PT+t*iH,v=Math.round(mx-t*range);return <g key={t}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-4} y={y+4} fill="#fff" fontSize="16" fontWeight="800" textAnchor="end">{v}</text></g>})}
       {routes.map(r=>{const pts=series[r.id].map((v,i)=>v!=null?[xs[i],PT+iH-(v-mn)/range*iH]:null);const valid=pts.filter(Boolean);if(valid.length<2)return null;const last=valid.at(-1);return <g key={r.id}><path d={smoothPath(valid)} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>{last&&<text x={Math.min(W-PR+8,last[0]+7)} y={last[1]+4} fill={colors[r.id]||C.dim} fontSize="14" fontWeight="850">{r.id}</text>}{hi!=null&&pts[hi]&&<circle cx={pts[hi][0]} cy={pts[hi][1]} r="4.5" fill={colors[r.id]||C.dim} stroke="none"/>}</g>})}
       {hi!=null&&<line x1={xs[hi]} x2={xs[hi]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
-      {data.map((d,i)=>{const step=Math.max(1,Math.round((data.length-1)/4));const show=i===0||i===data.length-1||i%step===0;return show?<text key={i} x={xs[i]} y={H-PB+20} fill="#fff" fontSize="14" fontWeight="800" textAnchor={i===0?"start":i===data.length-1?"end":"middle"}>{(d.date||"").split(" ").slice(0,2).join(" ")}</text>:null})}
+      {Array.from(new Set([0,1,2,3,4].map(k=>Math.round(k*(data.length-1)/4)))).map((i,ti,arr)=>{const isFirst=ti===0,isLast=ti===arr.length-1;return <text key={i} x={xs[i]} y={H-PB+20} fill="#fff" fontSize="14" fontWeight="800" textAnchor={isFirst?"start":isLast?"end":"middle"}>{(data[i].date||"").split(" ").slice(0,2).join(" ")}</text>})}
     </svg>
     {hi!=null&&<div style={{position:"absolute",top:10,left:`${Math.min(78,Math.max(8,xs[hi]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.94)",border:"1px solid rgba(88,166,255,.35)",borderRadius:6,padding:"6px 8px",pointerEvents:"none",zIndex:4,boxShadow:"0 6px 18px rgba(0,0,0,.28)"}}><div style={{fontSize:9,color:"rgba(205,225,250,.82)",marginBottom:3}}>{data[hi]?.date}</div>{routes.map(r=>series[r.id][hi]!=null?<div key={r.id} style={{fontSize:10,fontWeight:800,color:colors[r.id]||C.tx}}>{r.id}: {series[r.id][hi].toFixed(1)}</div>:null)}</div>}
     <div style={{display:"flex",gap:14,flexWrap:"wrap",justifyContent:"center",marginTop:3}}>{routes.map(r=><span key={r.id} style={{fontSize:13,color:colors[r.id]||C.dim,fontWeight:750}}>● {r.name}</span>)}</div>
@@ -685,7 +685,7 @@ function CommodityTape({data,history,period,selectedId,onSelect}){
   if(!items.length)return null;
   return(
     <div style={{
-      display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gridTemplateRows:"repeat(2,minmax(0,1fr))",gap:8,width:"100%",height:258,alignContent:"stretch"
+      display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gridTemplateRows:"repeat(2,minmax(0,1fr))",gap:8,width:"100%",height:276,alignContent:"stretch"
     }}>
       {items.map(x=>{
         const accent=COMMODITY_ACCENTS[x.id]||"#58a6ff";
@@ -694,7 +694,7 @@ function CommodityTape({data,history,period,selectedId,onSelect}){
         const pct=(Number.isFinite(first)&&Number.isFinite(last)&&first!==0)?((last-first)/first*100):null;
         const selected=selectedId===x.id;
         return <button key={x.id} onClick={()=>onSelect?.(x.id)} style={{
-          minWidth:0,minHeight:125,height:"100%",
+          minWidth:0,minHeight:134,height:"100%",
           background:selected?accent+"16":"#111f35",
           border:"1px solid "+(selected?accent:accent+"55"),
           borderTop:"3px solid "+accent,
@@ -712,7 +712,7 @@ function CommodityTape({data,history,period,selectedId,onSelect}){
             </div>
           </div>
           <div style={{marginTop:"auto",paddingTop:6}}>
-            <MiniCommoditySpark rows={rows} color={accent} height={30}/>
+            <MiniCommoditySpark rows={rows} color={accent} height={35}/>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:8.5,marginTop:2}}>
               <span style={{color:"rgba(140,175,220,.48)"}}>{period}</span>
               <span style={{fontWeight:800,color:pct==null?"rgba(140,175,220,.34)":pct>=0?"#3fb950":"#ff6b6b"}}>
@@ -730,14 +730,14 @@ function VlccSparkline({history,period="1Y"}) {
   let rows=(Array.isArray(history)?history:[]).map(x=>({...x,tce:Number(x.tce)})).filter(x=>Number.isFinite(x.tce)).sort((a,b)=>(a.year||0)-(b.year||0)||(a.week||0)-(b.week||0));
   const n=period==="3M"?13:period==="6M"?26:period==="1Y"?52:rows.length; rows=rows.slice(-n);
   if(!rows.length)return null; const clean=cleanIsolatedValues(rows.map(x=>x.tce));rows=rows.map((x,i)=>({...x,tce:clean[i]}));
-  const W=900,H=315,PL=54,PR=12,PT=4,PB=31,vals=rows.map(x=>x.tce/1000),mn=Math.min(...vals),mx=Math.max(...vals),pad=Math.max(25,(mx-mn)*.14),lo=Math.max(0,mn-pad),hi=mx+pad,range=hi-lo||1;
+  const W=900,H=350,PL=58,PR=12,PT=2,PB=28,vals=rows.map(x=>x.tce/1000),mn=Math.min(...vals),mx=Math.max(...vals),pad=Math.max(25,(mx-mn)*.14),lo=Math.max(0,mn-pad),hi=mx+pad,range=hi-lo||1;
   const pts=rows.map((x,i)=>[PL+i/(rows.length-1||1)*(W-PL-PR),PT+(hi-x.tce/1000)/range*(H-PT-PB)]),ticks=[hi,(hi+lo)/2,lo],labels=[0,Math.floor((rows.length-1)/2),rows.length-1].filter((v,i,a)=>a.indexOf(v)===i);
   const move=e=>{const b=e.currentTarget.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*W;let idx=0,best=1e9;pts.forEach((p,i)=>{const d=Math.abs(p[0]-x);if(d<best){best=d;idx=i}});setHover(idx)};
   return <div style={{height:"100%",position:"relative",display:"flex",flexDirection:"column"}}><svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" onMouseMove={move} onMouseLeave={()=>setHover(null)} style={{width:"100%",height:"100%",minHeight:125,display:"block",cursor:"crosshair"}}>
-    {ticks.map((v,i)=>{const y=PT+i/2*(H-PT-PB);return <g key={i}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke="rgba(88,130,200,.14)"/><text x={PL-8} y={y+4} fill="#e8f2ff" fontSize="12.5" fontWeight="800" textAnchor="end">${Math.round(v)}k</text></g>})}
+    {ticks.map((v,i)=>{const y=PT+i/2*(H-PT-PB);return <g key={i}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke="rgba(88,130,200,.14)"/><text x={PL-8} y={y+4} fill="#e8f2ff" fontSize="14" fontWeight="850" textAnchor="end">${Math.round(v)}k</text></g>})}
     {pts.length>1&&<path d={smoothPath(pts)} fill="none" stroke="#58a6ff" strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>}
     {hover!=null&&<><line x1={pts[hover][0]} x2={pts[hover][0]} y1={PT} y2={H-PB} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/><circle cx={pts[hover][0]} cy={pts[hover][1]} r="5" fill="#58a6ff" stroke="none"/></>}
-    {labels.map(i=><text key={i} x={i===0?pts[i][0]+5:i===rows.length-1?pts[i][0]-5:pts[i][0]} y={H-8} fill="#e8f2ff" fontSize="11.5" fontWeight="800" textAnchor={i===0?"start":i===rows.length-1?"end":"middle"}>{rows[i].date||(`W${rows[i].week||""}`)}</text>)}
+    {labels.map(i=><text key={i} x={i===0?pts[i][0]+5:i===rows.length-1?pts[i][0]-5:pts[i][0]} y={H-8} fill="#e8f2ff" fontSize="12.5" fontWeight="850" textAnchor={i===0?"start":i===rows.length-1?"end":"middle"}>{rows[i].date||(`W${rows[i].week||""}`)}</text>)}
   </svg>{hover!=null&&<div style={{position:"absolute",top:26,left:`${Math.min(82,Math.max(12,pts[hover][0]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.95)",border:"1px solid rgba(88,166,255,.45)",borderRadius:6,padding:"6px 8px",pointerEvents:"none"}}><div style={{fontSize:9,color:"rgba(205,225,250,.82)"}}>{rows[hover].date||`Week ${rows[hover].week||""}`}</div><div style={{fontSize:11,fontWeight:900,color:C.blue}}>${Math.round(rows[hover].tce/1000)}k/day</div>{rows[hover].ws!=null&&<div style={{fontSize:9.5,color:C.tx}}>WS {rows[hover].ws}</div>}</div>}</div>;
 }
 
@@ -1247,8 +1247,8 @@ function Dashboard({vessels, cargoes, history}) {
               </div>
             </div>
             {shippingPriceTab==="vlcc" ? (
-              vlcc?.latest ? <div style={{display:"flex",flexDirection:"column",height:326,minHeight:294}}>
-                <div style={{position:"relative",minHeight:50,margin:"-14px 0 0"}}>
+              vlcc?.latest ? <div style={{display:"flex",flexDirection:"column",height:346,minHeight:314}}>
+                <div style={{position:"relative",minHeight:46,margin:"-14px 0 0"}}>
                   <div style={{position:"absolute",left:0,top:4,fontSize:9.5,fontWeight:850,color:"rgba(185,215,245,.72)",textTransform:"uppercase",letterSpacing:".06em"}}>TD3C MEG → China</div>
                   <div style={{textAlign:"center",paddingTop:0,transform:"translateY(-3px)"}}>
                     <div style={{fontSize:34,fontWeight:900,color:D.tx,lineHeight:1}}>${Math.round(Number(vlcc.latest.tce)/1000)}k<span style={{fontSize:10.5,color:"rgba(190,215,245,.72)",fontWeight:650}}>/day</span></div>
