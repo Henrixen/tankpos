@@ -381,20 +381,22 @@ ${text}`}]
     <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"12px 14px",height:"100%",boxSizing:"border-box",display:"flex",flexDirection:"column",minHeight:0}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8}}>
         {secHead("Worldscale Spot + FFA")}
-        <div style={{display:"flex",gap:4}}>
-          {[["graph","Graph"],["table","Table"],["parse","Parse"]].map(([v,l])=><button key={v} onClick={()=>setWsView(v)} style={{
-            fontSize:9.5,fontWeight:800,padding:"4px 9px",borderRadius:5,cursor:"pointer",fontFamily:"inherit",
-            border:"1px solid "+(wsView===v?C.blue:C.bd),
-            background:wsView===v?"rgba(88,166,255,.14)":C.bg3,
-            color:wsView===v?C.tx:C.dim
-          }}>{l}</button>)}
+        <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end"}}>
+          <div style={{display:"flex",gap:4}}>
+            {[["graph","Graph"],["table","Table"],["parse","Parse"]].map(([v,l])=><button key={v} onClick={()=>setWsView(v)} style={{
+              fontSize:9.5,fontWeight:800,padding:"4px 9px",borderRadius:5,cursor:"pointer",fontFamily:"inherit",
+              border:"1px solid "+(wsView===v?C.blue:C.bd),
+              background:wsView===v?"rgba(88,166,255,.14)":C.bg3,
+              color:wsView===v?C.tx:C.dim
+            }}>{l}</button>)}
+          </div>
+          {wsView==="graph"&&<HorizonButtons value={wsPeriod} onChange={setWsPeriod}/>}
         </div>
       </div>
 
       <div style={{flex:1,minHeight:0}}>
         {wsView==="graph"&&(
           <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
-            <div style={{display:"flex",justifyContent:"flex-end",marginBottom:4}}><HorizonButtons value={wsPeriod} onChange={setWsPeriod}/></div>
           <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:8,flex:1,minHeight:0}}>
             <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
               <div style={{fontSize:11.5,fontWeight:900,color:C.green,textTransform:"uppercase",marginBottom:3,textAlign:"center",letterSpacing:".06em"}}>Handy</div>
@@ -485,7 +487,7 @@ ${text}`}]
 
 function WSChart({data,routes,colors,fill=false}) {
   const [hover,setHover]=useState(null);
-  const W=1120,H=260,PL=68,PR=68,PT=10,PB=30,iW=W-PL-PR,iH=H-PT-PB;
+  const W=1120,H=260,PL=92,PR=82,PT=12,PB=38,iW=W-PL-PR,iH=H-PT-PB;
   const series={};
   routes.forEach(r=>series[r.id]=cleanIsolatedValues(data.map(d=>d.spot?.[r.id]?.ws)));
   const allVals=routes.flatMap(r=>series[r.id]).filter(v=>v!=null);
@@ -495,11 +497,11 @@ function WSChart({data,routes,colors,fill=false}) {
   const onMove=e=>{const box=e.currentTarget.getBoundingClientRect();const x=(e.clientX-box.left)/box.width*W;let idx=0,best=Infinity;xs.forEach((v,i)=>{const d=Math.abs(v-x);if(d<best){best=d;idx=i;}});setHover(idx);};
   const hi=hover!=null?hover:null;
   return <div style={{height:fill?"100%":"auto",display:"flex",flexDirection:"column",minHeight:0,position:"relative"}}>
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" onMouseMove={onMove} onMouseLeave={()=>setHover(null)} style={{width:"100%",height:fill?"100%":260,minHeight:0,display:"block",flex:fill?1:"0 0 auto",cursor:"crosshair"}}>
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" onMouseMove={onMove} onMouseLeave={()=>setHover(null)} style={{width:"100%",height:fill?"100%":260,minHeight:0,display:"block",flex:fill?1:"0 0 auto",cursor:"crosshair"}}>
       {[0,.5,1].map(t=>{const y=PT+t*iH,v=Math.round(mx-t*range);return <g key={t}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-4} y={y+4} fill="#fff" fontSize="12" fontWeight="700" textAnchor="end">{v}</text></g>})}
       {routes.map(r=>{const pts=series[r.id].map((v,i)=>v!=null?[xs[i],PT+iH-(v-mn)/range*iH]:null);const valid=pts.filter(Boolean);if(valid.length<2)return null;const last=valid.at(-1);return <g key={r.id}><path d={smoothPath(valid)} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>{last&&<text x={Math.min(W-PR+8,last[0]+7)} y={last[1]+4} fill={colors[r.id]||C.dim} fontSize="11" fontWeight="800">{r.id}</text>}{hi!=null&&pts[hi]&&<circle cx={pts[hi][0]} cy={pts[hi][1]} r="4.5" fill={colors[r.id]||C.dim} stroke="#fff" strokeWidth="1.5"/>}</g>})}
       {hi!=null&&<line x1={xs[hi]} x2={xs[hi]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
-      {data.map((d,i)=>(i===0||i===data.length-1||data.length<9)&&<text key={i} x={xs[i]} y={H-PB+15} fill="#fff" fontSize="11" fontWeight="700" textAnchor="middle">{(d.date||"").split(" ").slice(0,2).join(" ")}</text>)}
+      {data.map((d,i)=>(i===0||i===data.length-1||data.length<9)&&<text key={i} x={i===0?xs[i]+8:i===data.length-1?xs[i]-8:xs[i]} y={H-PB+18} fill="#fff" fontSize="11" fontWeight="700" textAnchor="middle">{(d.date||"").split(" ").slice(0,2).join(" ")}</text>)}
     </svg>
     {hi!=null&&<div style={{position:"absolute",top:10,left:`${Math.min(78,Math.max(8,xs[hi]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.94)",border:"1px solid rgba(88,166,255,.35)",borderRadius:6,padding:"6px 8px",pointerEvents:"none",zIndex:4,boxShadow:"0 6px 18px rgba(0,0,0,.28)"}}><div style={{fontSize:9,color:C.faint,marginBottom:3}}>{data[hi]?.date}</div>{routes.map(r=>series[r.id][hi]!=null?<div key={r.id} style={{fontSize:10,fontWeight:800,color:colors[r.id]||C.tx}}>{r.id}: {series[r.id][hi].toFixed(1)}</div>:null)}</div>}
     <div style={{display:"flex",gap:14,flexWrap:"wrap",justifyContent:"center",marginTop:3}}>{routes.map(r=><span key={r.id} style={{fontSize:11,color:colors[r.id]||C.dim,fontWeight:700}}>● {r.name}</span>)}</div>
@@ -723,14 +725,14 @@ function VlccSparkline({history}) {
   let rows=(Array.isArray(history)?history:[]).map(x=>({...x,tce:Number(x.tce)})).filter(x=>Number.isFinite(x.tce)).sort((a,b)=>(a.year||0)-(b.year||0)||(a.week||0)-(b.week||0));
   const n=period==="3M"?13:period==="6M"?26:period==="1Y"?52:rows.length; rows=rows.slice(-n);
   if(!rows.length)return null; const clean=cleanIsolatedValues(rows.map(x=>x.tce));rows=rows.map((x,i)=>({...x,tce:clean[i]}));
-  const W=760,H=170,PL=54,PR=18,PT=12,PB=30,vals=rows.map(x=>x.tce/1000),mn=Math.min(...vals),mx=Math.max(...vals),pad=Math.max(25,(mx-mn)*.14),lo=Math.max(0,mn-pad),hi=mx+pad,range=hi-lo||1;
+  const W=760,H=170,PL=66,PR=28,PT=10,PB=34,vals=rows.map(x=>x.tce/1000),mn=Math.min(...vals),mx=Math.max(...vals),pad=Math.max(25,(mx-mn)*.14),lo=Math.max(0,mn-pad),hi=mx+pad,range=hi-lo||1;
   const pts=rows.map((x,i)=>[PL+i/(rows.length-1||1)*(W-PL-PR),PT+(hi-x.tce/1000)/range*(H-PT-PB)]),ticks=[hi,(hi+lo)/2,lo],labels=[0,Math.floor((rows.length-1)/2),rows.length-1].filter((v,i,a)=>a.indexOf(v)===i);
   const move=e=>{const b=e.currentTarget.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*W;let idx=0,best=1e9;pts.forEach((p,i)=>{const d=Math.abs(p[0]-x);if(d<best){best=d;idx=i}});setHover(idx)};
-  return <div style={{height:"100%",position:"relative",display:"flex",flexDirection:"column"}}><div style={{display:"flex",justifyContent:"flex-end",marginBottom:2}}><HorizonButtons value={period} onChange={setPeriod} options={["3M","6M","1Y","ALL"]}/></div><svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" onMouseMove={move} onMouseLeave={()=>setHover(null)} style={{width:"100%",height:"100%",minHeight:125,display:"block",cursor:"crosshair"}}>
+  return <div style={{height:"100%",position:"relative",display:"flex",flexDirection:"column"}}><div style={{position:"absolute",right:0,top:-35,zIndex:5,display:"flex",justifyContent:"flex-end"}}><HorizonButtons value={period} onChange={setPeriod} options={["3M","6M","1Y","ALL"]}/></div><svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" onMouseMove={move} onMouseLeave={()=>setHover(null)} style={{width:"100%",height:"100%",minHeight:125,display:"block",cursor:"crosshair"}}>
     {ticks.map((v,i)=>{const y=PT+i/2*(H-PT-PB);return <g key={i}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke="rgba(88,130,200,.14)"/><text x={PL-8} y={y+4} fill="#e8f2ff" fontSize="10.5" fontWeight="700" textAnchor="end">${Math.round(v)}k</text></g>})}
     {pts.length>1&&<path d={smoothPath(pts)} fill="none" stroke="#58a6ff" strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>}
     {hover!=null&&<><line x1={pts[hover][0]} x2={pts[hover][0]} y1={PT} y2={H-PB} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/><circle cx={pts[hover][0]} cy={pts[hover][1]} r="5" fill="#58a6ff" stroke="#fff" strokeWidth="1.5"/></>}
-    {labels.map(i=><text key={i} x={pts[i][0]} y={H-8} fill="#e8f2ff" fontSize="9.5" fontWeight="700" textAnchor={i===0?"start":i===rows.length-1?"end":"middle"}>{rows[i].date||(`W${rows[i].week||""}`)}</text>)}
+    {labels.map(i=><text key={i} x={i===0?pts[i][0]+5:i===rows.length-1?pts[i][0]-5:pts[i][0]} y={H-8} fill="#e8f2ff" fontSize="9.5" fontWeight="700" textAnchor={i===0?"start":i===rows.length-1?"end":"middle"}>{rows[i].date||(`W${rows[i].week||""}`)}</text>)}
   </svg>{hover!=null&&<div style={{position:"absolute",top:26,left:`${Math.min(82,Math.max(12,pts[hover][0]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.95)",border:"1px solid rgba(88,166,255,.45)",borderRadius:6,padding:"6px 8px",pointerEvents:"none"}}><div style={{fontSize:9,color:C.faint}}>{rows[hover].date||`Week ${rows[hover].week||""}`}</div><div style={{fontSize:11,fontWeight:900,color:C.blue}}>${Math.round(rows[hover].tce/1000)}k/day</div>{rows[hover].ws!=null&&<div style={{fontSize:9.5,color:C.tx}}>WS {rows[hover].ws}</div>}</div>}</div>;
 }
 
@@ -1361,7 +1363,7 @@ function Dashboard({vessels, cargoes, history}) {
 function SegmentFWChart({data,segments,colors}) {
   const [hover,setHover]=useState(null);
   const [presentationClean,setPresentationClean]=useState(false);
-  const W=1000,H=400,PL=72,PR=28,PT=18,PB=42,iW=W-PL-PR,iH=H-PT-PB;
+  const W=1000,H=400,PL=84,PR=36,PT=12,PB=36,iW=W-PL-PR,iH=H-PT-PB;
   const series={};
   segments.forEach(seg=>{
     const raw=data.map(d=>{
@@ -1386,11 +1388,11 @@ function SegmentFWChart({data,segments,colors}) {
       Clean chart <span style={{color:presentationClean?"#8fc5ff":C.faint,opacity:.85}}>· exclude 1-ship data</span>
     </label>
     <div style={{position:"relative",width:"100%",flex:1,minHeight:0}}>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" onMouseMove={move} onMouseLeave={()=>setHover(null)} style={{position:"absolute",inset:0,width:"100%",height:"100%",display:"block",cursor:"crosshair"}}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" onMouseMove={move} onMouseLeave={()=>setHover(null)} style={{position:"absolute",inset:0,width:"100%",height:"100%",display:"block",cursor:"crosshair"}}>
         {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-10} y={y+4} fill="#fff" fontSize="12" fontWeight="700" textAnchor="end">{v}d</text></g>})}
         {segments.map(seg=>{const pts=series[seg].map((v,i)=>v==null||v<0?null:[xs[i],PT+iH-v/range*iH]);const valid=pts.filter(Boolean);return valid.length>1?<g key={seg}><path d={smoothPath(valid)} fill="none" stroke={colors[seg]||C.blue} strokeWidth="2.2" strokeLinejoin="round" opacity=".95"/></g>:null})}
         {hover!=null&&<line x1={xs[hover]} x2={xs[hover]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
-        {data.map((d,i)=>{const step=Math.max(1,Math.floor(data.length/8));return(i===0||i===data.length-1||i%step===0)?<text key={i} x={xs[i]} y={H-10} fill="#fff" fontSize="10.5" fontWeight="700" textAnchor="middle">{fmtDateShort(d.date)}</text>:null})}
+        {data.map((d,i)=>{const step=Math.max(1,Math.floor(data.length/8));return(i===0||i===data.length-1||i%step===0)?<text key={i} x={i===0?xs[i]+5:i===data.length-1?xs[i]-5:xs[i]} y={H-9} fill="#fff" fontSize="10.5" fontWeight="700" textAnchor={i===0?"start":i===data.length-1?"end":"middle"}>{fmtDateShort(d.date)}</text>:null})}
       </svg>
       {/* Marker uses the exact same plot wrapper and coordinate percentages as the SVG. */}
       {hoverMarkers.map(m=><span key={m.seg} style={{position:"absolute",left:`${m.x/W*100}%`,top:`${m.y/H*100}%`,width:10,height:10,borderRadius:"50%",background:m.color,border:"1.5px solid #fff",boxSizing:"border-box",transform:"translate(-50%,-50%)",pointerEvents:"none",zIndex:6,boxShadow:"0 0 0 1px rgba(0,0,0,.22)"}}/>)}
