@@ -86,7 +86,7 @@ function CargoRegionCell({ value, onSave }) {
       ref={wrapRef}
       onClick={!editing?begin:e=>e.stopPropagation()}
       style={{padding:"0 6px",height:34,position:"relative",verticalAlign:"middle",
-        color:C.tx,fontSize:12,fontWeight:700,whiteSpace:"nowrap",cursor:"text"}}
+        color:C.tx,fontSize:12,fontWeight:700,whiteSpace:"nowrap",cursor:"text",borderLeft:"none",borderRight:"none"}}
       title={value||"Click to set region"}
     >
       {!editing ? (
@@ -1483,6 +1483,8 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [cLaycanMonthFilter,setCLaycanMonthFilter]=useState("");
   const [cLaycanYearFilter,setCLaycanYearFilter]=useState("");
   const [cTagFilter,setCTagFilter]=useState("");
+  const [cExRegionFilter,setCExRegionFilter]=useState("");
+  const [cToRegionFilter,setCToRegionFilter]=useState("");
   const [pendingParseTag,setPendingParseTag]=useState("");
   const [customParseTag,setCustomParseTag]=useState("");
 
@@ -1547,6 +1549,8 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   }
   const [cargoVisibleCols,setCargoVisibleCols]=useState(()=>loadVisibleCols("signal_cargo_visible_columns",CARGO_COLUMN_KEYS));
   const [qfVisibleCols,setQfVisibleCols]=useState(()=>loadVisibleCols("signal_qf_visible_columns",QF_DEFAULT_VISIBLE));
+  const [cargoColumnsOpen,setCargoColumnsOpen]=useState(false);
+  const [cargoColumnsPos,setCargoColumnsPos]=useState({top:0,left:0});
   useEffect(()=>{try{localStorage.setItem("signal_cargo_visible_columns",JSON.stringify([...cargoVisibleCols]));}catch{}},[cargoVisibleCols]);
   useEffect(()=>{try{localStorage.setItem("signal_qf_visible_columns",JSON.stringify([...qfVisibleCols]));}catch{}},[qfVisibleCols]);
   const [cSortK,setCsortK]=useState("updated");
@@ -2436,6 +2440,10 @@ const filtV=useMemo(()=>{
     const lastWeekEnd=new Date(thisWeekStart);
     const ytdStart=new Date(now.getFullYear(),0,1);
     let list=cargoes.filter(c=>{
+      if(tab==="cargo2"){
+        if(cExRegionFilter && String(c.ex_region||"")!==cExRegionFilter)return false;
+        if(cToRegionFilter && String(c.to_region||"")!==cToRegionFilter)return false;
+      }
       if(cTimeFilter){
         const d=new Date(c.updated||0);
         if(cTimeFilter==="tw"&&(d<thisWeekStart||d>now))return false;
@@ -2472,7 +2480,7 @@ const filtV=useMemo(()=>{
       }
     }
     return list;
-  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cTagFilter,cGradeFilter]);
+  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cTagFilter,cGradeFilter,tab,cExRegionFilter,cToRegionFilter]);
 
   const FILTER_GROUPS=[
     {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"],["HIDE_EMP","Hide Employed"]]},
@@ -3670,7 +3678,7 @@ const filtV=useMemo(()=>{
                 );
                 return(
                   <div style={{flex:"0 0 auto",width:mobile?"100%":"25%",display:"flex",flexDirection:"column",gap:0,minHeight:0,height:mobile?"auto":260}}>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,padding:"8px 8px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,overflowY:"auto",flex:1,boxSizing:"border-box"}}>
+                    <div style={{display:"grid",gridTemplateColumns:tab==="cargo2"?"repeat(5,1fr)":"repeat(3,1fr)",gap:6,padding:"8px 8px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,overflowY:"auto",flex:1,boxSizing:"border-box"}}>
                       {/* Grade column */}
                       <COL label="Grade" col={C.purple}>
                         {showRaw
@@ -3684,7 +3692,7 @@ const filtV=useMemo(()=>{
                         {[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([v,l])=>(
                           <B key={v||"all"} active={cTimeFilter===v} onClick={()=>setCTimeFilter(v)}>{l}</B>
                         ))}
-                        {(cGradeFilter||cFilter!=="ALL"||cTimeFilter||cTagFilter)&&<B active={false} red onClick={()=>{setCGradeFilter("");setCFilter("ALL");setCTimeFilter("");setCTagFilter("");}}>✕ Clear all</B>}
+                        {(cGradeFilter||cFilter!=="ALL"||cTimeFilter||cTagFilter)&&<B active={false} red onClick={()=>{setCGradeFilter("");setCFilter("ALL");setCTimeFilter("");setCTagFilter("");setCExRegionFilter("");setCToRegionFilter("");}}>✕ Clear all</B>}
                       </COL>
                       {/* Tag column */}
                       <COL label="Tag" col="#f472b6">
@@ -3693,6 +3701,16 @@ const filtV=useMemo(()=>{
                         ))}
                         {cTagFilter&&<B active={false} red onClick={()=>setCTagFilter("")}>✕ Clear</B>}
                       </COL>
+                      {tab==="cargo2"&&<>
+                        <COL label="Ex Region" col={C.blue}>
+                          <B active={!cExRegionFilter} onClick={()=>setCExRegionFilter("")}>All</B>
+                          {CARGO_INTEL_REGIONS.map(r=><B key={r} active={cExRegionFilter===r} onClick={()=>setCExRegionFilter(v=>v===r?"":r)}>{r}</B>)}
+                        </COL>
+                        <COL label="To Region" col={C.blue}>
+                          <B active={!cToRegionFilter} onClick={()=>setCToRegionFilter("")}>All</B>
+                          {CARGO_INTEL_REGIONS.map(r=><B key={r} active={cToRegionFilter===r} onClick={()=>setCToRegionFilter(v=>v===r?"":r)}>{r}</B>)}
+                        </COL>
+                      </>}
                     </div>
                   </div>
                 );
@@ -3775,7 +3793,7 @@ const filtV=useMemo(()=>{
                           {cTagFilter&&<B active={false} red onClick={()=>setCTagFilter("")}>✕ Clear</B>}
                         </COL>
                         {(cGradeFilter||cFilter!=="ALL"||cTimeFilter||cTagFilter)&&(
-                          <button onClick={()=>{setCGradeFilter("");setCFilter("ALL");setCTimeFilter("");setCTagFilter("");}}
+                          <button onClick={()=>{setCGradeFilter("");setCFilter("ALL");setCTimeFilter("");setCTagFilter("");setCExRegionFilter("");setCToRegionFilter("");}}
                             style={{...fb(false),color:C.red,borderColor:C.red+"55",padding:"6px 10px",fontSize:12,alignSelf:"flex-start"}}>
                             ✕ Clear all filters
                           </button>
@@ -3881,13 +3899,17 @@ const filtV=useMemo(()=>{
                   <option value="Freight">Freight</option>
                 </select>
                 <button onClick={()=>setCsortD(d=>d*-1)}
-                  style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",minWidth:28}}>
-                  {cSortD>0?"▲":"▼"}
-                </button>
-              </div>
-              <details style={{position:"relative",flexShrink:0}}>
-                <summary style={{listStyle:"none",fontSize:11,fontWeight:700,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"3px 8px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Columns ▾</summary>
-                <div style={{position:"absolute",right:0,top:"calc(100% + 5px)",zIndex:20050,width:205,maxHeight:390,overflowY:"auto",background:"#071223",border:"1px solid rgba(88,166,255,.34)",borderRadius:7,boxShadow:"0 12px 34px rgba(0,0,0,.72)",padding:7}}>
+                  style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cu              <button onClick={e=>{
+                  const r=e.currentTarget.getBoundingClientRect();
+                  setCargoColumnsPos({top:r.bottom+5,left:Math.max(8,r.right-205)});
+                  setCargoColumnsOpen(v=>!v);
+                }}
+                style={{fontSize:11,fontWeight:700,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"3px 8px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                Columns ▾
+              </button>
+              {cargoColumnsOpen&&<>
+                <div style={{position:"fixed",inset:0,zIndex:29990}} onClick={()=>setCargoColumnsOpen(false)}/>
+                <div style={{position:"fixed",left:cargoColumnsPos.left,top:cargoColumnsPos.top,zIndex:29999,width:205,maxHeight:390,overflowY:"auto",background:"#071223",border:"1px solid rgba(88,166,255,.34)",borderRadius:7,boxShadow:"0 12px 34px rgba(0,0,0,.72)",padding:7}}>
                   <div style={{fontSize:9,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".08em",padding:"2px 4px 6px"}}>{tab==="cargo2"?"Quotes & Fixtures":"Cargoes"} columns</div>
                   {(tab==="cargo2"?quoteFixtureColumns:cargoColumns).filter(c=>!["select","badge","delete"].includes(c.key)).map(col=>{
                     const visible=tab==="cargo2"?qfVisibleCols:cargoVisibleCols;
@@ -3898,8 +3920,10 @@ const filtV=useMemo(()=>{
                     </label>;
                   })}
                   <div style={{height:1,background:C.bd2,margin:"5px 0"}}/>
-                  <button onClick={e=>{e.preventDefault();tab==="cargo2"?setQfVisibleCols(new Set(QF_DEFAULT_VISIBLE)):setCargoVisibleCols(new Set(CARGO_COLUMN_KEYS));}}
+                  <button onClick={()=>tab==="cargo2"?setQfVisibleCols(new Set(QF_DEFAULT_VISIBLE)):setCargoVisibleCols(new Set(CARGO_COLUMN_KEYS))}
                     style={{width:"100%",fontSize:10,fontWeight:700,padding:"5px 7px",borderRadius:4,cursor:"pointer",border:"1px solid "+C.bd,background:C.bg2,color:C.blue,fontFamily:"inherit"}}>Reset default</button>
+                </div>
+              </>}olid "+C.bd,background:C.bg2,color:C.blue,fontFamily:"inherit"}}>Reset default</button>
                 </div>
               </details>
             </div>
@@ -3949,6 +3973,11 @@ const filtV=useMemo(()=>{
             {/* Row hover highlight + mobile no-truncation */}
             <style>{`
               .cargo-table tr:hover td{background:rgba(58,130,246,0.06)!important;}
+              .cargo-table table{width:100%!important;min-width:100%!important;table-layout:fixed!important;}
+              .cargo-table th,.cargo-table td{border-left:none!important;border-right:none!important;box-sizing:border-box!important;}
+              .cargo-table th{padding-left:6px!important;padding-right:6px!important;}
+              .cargo-table td{padding-left:6px!important;padding-right:6px!important;}
+
               .pos-table-wrap tbody tr:hover td{background:rgba(58,130,246,0.06)!important;}
               @media(max-width:900px){
                 .cargo-table td, .cargo-table td>*{overflow:visible!important;text-overflow:unset!important;white-space:nowrap!important;max-width:none!important;}
@@ -3969,7 +3998,7 @@ const filtV=useMemo(()=>{
                 const col=(tab==="cargo2"?quoteFixtureColumns:cargoColumns)[idx];
                 if(col?.sortKey){const d=cSortK===col.sortKey?cSortD*-1:-1;setCsortK(col.sortKey);setCsortD(d);}
               }}>
-            <div style={{...tableWrap,minWidth:mobile?"1200px":0,width:"100%",overflowX:mobile?"auto":"hidden"}} className="cargo-table">
+            <div style={{...tableWrap,minWidth:mobile?"1200px":0,width:"100%",maxWidth:"none",overflowX:mobile?"auto":"hidden"}} className="cargo-table">
               {showAddCargo&&<AddCargoInlineRow onSave={onAddC} onClose={()=>setShowAddCargo(false)}/>}
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
@@ -4020,7 +4049,8 @@ const filtV=useMemo(()=>{
         <CargoRegionCell value={f.to_region||""} onSave={v=>onUpdateC(f.id,"to_region",v)}/>
 
         {/* P&C — same click-to-cycle behaviour as Status: blank → 1 → 2 → 3 → blank */}
-        <td style={{...tdCtr,fontWeight:700,cursor:"pointer",color:f.p_and_c?C.tx:C.faint}}
+        <td style={{...tdCtr,fontWeight:800,cursor:"pointer",borderLeft:"none",borderRight:"none",
+          color:Number(f.p_and_c)===1?"#ff5b5b":Number(f.p_and_c)===2?"#ffad33":Number(f.p_and_c)===3?"#ffffff":C.faint}}
           onClick={e=>{
             e.stopPropagation();
             const opts=[null,1,2,3];
@@ -4031,15 +4061,19 @@ const filtV=useMemo(()=>{
         </td>
 
         {/* Intel — blank by default; click cycles blank → Quote → Fixture → blank */}
-        <td style={{...tdCtr,fontWeight:700,cursor:"pointer",
-          color:f.intelligence==="Fixture"?C.green:f.intelligence==="Quote"?C.blue:C.faint}}
+        <td style={{...tdCtr,fontWeight:700,cursor:"pointer",borderLeft:"none",borderRight:"none"}}
           onClick={e=>{
             e.stopPropagation();
             const opts=["","Quote","Fixture"];
             const cur=opts.indexOf(f.intelligence||"");
             onUpdateC(f.id,"intelligence",opts[(cur+1)%opts.length]);
           }}>
-          {f.intelligence ? String(f.intelligence).toUpperCase() : ""}
+          {f.intelligence ? <span style={{display:"inline-block",minWidth:48,textAlign:"center",padding:"2px 5px",borderRadius:3,fontSize:9,fontWeight:800,
+            color:f.intelligence==="Fixture"?C.green:C.blue,
+            border:"1px solid "+(f.intelligence==="Fixture"?C.green+"88":C.blue+"88"),
+            background:f.intelligence==="Fixture"?C.green+"10":C.blue+"10"}}>
+            {String(f.intelligence).toUpperCase()}
+          </span> : ""}
         </td>
       </>}
 
