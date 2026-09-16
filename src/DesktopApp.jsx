@@ -44,6 +44,104 @@ const CARGO_INTEL_REGIONS=[
   "USAC-GLAKES","USG-CARIBS","WAF-SAF","WC AMERICAS","WCI-AG"
 ];
 
+
+function CargoRegionCell({ value, onSave }) {
+  const [editing,setEditing]=React.useState(false);
+  const [draft,setDraft]=React.useState("");
+  const [active,setActive]=React.useState(0);
+  const wrapRef=React.useRef(null);
+  const inputRef=React.useRef(null);
+
+  const matches=React.useMemo(()=>{
+    const q=(draft||"").trim().toLowerCase();
+    if(!q)return CARGO_INTEL_REGIONS;
+    const starts=CARGO_INTEL_REGIONS.filter(r=>r.toLowerCase().startsWith(q));
+    const contains=CARGO_INTEL_REGIONS.filter(r=>!r.toLowerCase().startsWith(q)&&r.toLowerCase().includes(q));
+    return [...starts,...contains];
+  },[draft]);
+
+  function begin(e){
+    e?.stopPropagation?.();
+    setDraft(value||"");
+    setActive(0);
+    setEditing(true);
+    setTimeout(()=>{inputRef.current?.focus();inputRef.current?.select?.();},0);
+  }
+  function choose(v){
+    onSave(v||null);
+    setDraft(v||"");
+    setEditing(false);
+  }
+  function commitTyped(){
+    const raw=(draft||"").trim();
+    if(!raw){choose("");return;}
+    const exact=CARGO_INTEL_REGIONS.find(r=>r.toLowerCase()===raw.toLowerCase());
+    const prefix=CARGO_INTEL_REGIONS.find(r=>r.toLowerCase().startsWith(raw.toLowerCase()));
+    if(exact||prefix) choose(exact||prefix);
+    else { setDraft(value||""); setEditing(false); }
+  }
+
+  return (
+    <td
+      ref={wrapRef}
+      onClick={!editing?begin:e=>e.stopPropagation()}
+      style={{padding:"0 6px",height:34,position:"relative",verticalAlign:"middle",
+        color:C.tx,fontSize:12,fontWeight:700,whiteSpace:"nowrap",cursor:"text"}}
+      title={value||"Click to set region"}
+    >
+      {!editing ? (
+        <span style={{color:value?C.tx:C.faint,fontWeight:700,fontSize:12,textTransform:"uppercase"}}>
+          {value||""}
+        </span>
+      ) : (
+        <>
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={e=>{setDraft(e.target.value);setActive(0);}}
+            onKeyDown={e=>{
+              e.stopPropagation();
+              if(e.key==="ArrowDown"){e.preventDefault();setActive(a=>Math.min(a+1,Math.max(0,matches.length-1)));return;}
+              if(e.key==="ArrowUp"){e.preventDefault();setActive(a=>Math.max(0,a-1));return;}
+              if(e.key==="Enter"||e.key==="Tab"){
+                e.preventDefault();
+                const raw=(draft||"").trim();
+                const exact=CARGO_INTEL_REGIONS.find(r=>r.toLowerCase()===raw.toLowerCase());
+                const prefix=CARGO_INTEL_REGIONS.find(r=>r.toLowerCase().startsWith(raw.toLowerCase()));
+                choose(exact||matches[active]||prefix||"");
+                return;
+              }
+              if(e.key==="Escape"){e.preventDefault();setDraft(value||"");setEditing(false);}
+            }}
+            onBlur={()=>setTimeout(()=>{
+              if(!wrapRef.current?.contains(document.activeElement))commitTyped();
+            },120)}
+            style={{width:"100%",height:26,boxSizing:"border-box",background:"#071223",
+              border:"1px solid "+C.bd,borderRadius:4,outline:"none",color:C.tx,
+              fontFamily:"inherit",fontSize:12,fontWeight:700,padding:"0 6px",textTransform:"uppercase"}}
+          />
+          {matches.length>0&&(
+            <div style={{position:"absolute",left:3,top:"calc(100% - 2px)",zIndex:1000,minWidth:150,
+              maxHeight:210,overflowY:"auto",background:"#071223",border:"1px solid "+C.bd,
+              borderRadius:5,boxShadow:"0 10px 28px rgba(0,0,0,.55)",padding:"3px"}}>
+              {matches.map((r,idx)=>(
+                <div key={r}
+                  onMouseDown={e=>{e.preventDefault();e.stopPropagation();choose(r);}}
+                  style={{padding:"5px 8px",borderRadius:3,cursor:"pointer",fontSize:11,fontWeight:700,
+                    color:idx===active?"#ffffff":C.tx,
+                    background:idx===active?"rgba(88,166,255,.18)":"transparent",
+                    textTransform:"uppercase",whiteSpace:"nowrap"}}>
+                  {r}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </td>
+  );
+}
+
 const NAV_KEY="signal_navigation_config";
 const NAV_CLOUD_KEY="navigation_config";
 const NAV_ITEMS=[
@@ -1440,6 +1538,17 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   },[]);
   function inRange(dateStr,from,to){if(!dateStr)return false;const d=new Date(dateStr);d.setHours(0,0,0,0);return d>=from&&d<=to;}
   const [mxSearch,setMxSearch]=useState("");
+  const CARGO_COLUMN_KEYS=["select","status","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment","tag","updated","badge","delete"];
+  const QF_COLUMN_KEYS=["select","status","ex_region","to_region","p_and_c","intelligence","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment","tag","source","updated","badge","delete"];
+  const QF_DEFAULT_VISIBLE=["select","status","ex_region","to_region","p_and_c","intelligence","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment","badge","delete"];
+  function loadVisibleCols(key,defaults){
+    try{const raw=JSON.parse(localStorage.getItem(key)||"null");return new Set(Array.isArray(raw)&&raw.length?raw:defaults);}
+    catch{return new Set(defaults);}
+  }
+  const [cargoVisibleCols,setCargoVisibleCols]=useState(()=>loadVisibleCols("signal_cargo_visible_columns",CARGO_COLUMN_KEYS));
+  const [qfVisibleCols,setQfVisibleCols]=useState(()=>loadVisibleCols("signal_qf_visible_columns",QF_DEFAULT_VISIBLE));
+  useEffect(()=>{try{localStorage.setItem("signal_cargo_visible_columns",JSON.stringify([...cargoVisibleCols]));}catch{}},[cargoVisibleCols]);
+  useEffect(()=>{try{localStorage.setItem("signal_qf_visible_columns",JSON.stringify([...qfVisibleCols]));}catch{}},[qfVisibleCols]);
   const [cSortK,setCsortK]=useState("updated");
   const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
   const [bulkCargoTagOpen,setBulkCargoTagOpen]=useState(false);
@@ -1657,10 +1766,10 @@ const cargoColumns = [
 const quoteFixtureColumns = [
   { key: "select", label: "", align: "center", width: 28 },
   { key:"status", sortKey:"Status", label:"Status", align:"left", width:colWidthsC.Status },
-  { key:"ex_region", sortKey:"ex_region", label:"Ex Region", align:"left", width:118 },
-  { key:"to_region", sortKey:"to_region", label:"To Region", align:"left", width:118 },
-  { key:"p_and_c", sortKey:"p_and_c", label:"P&C", align:"center", width:54 },
-  { key:"intelligence", sortKey:"intelligence", label:"Intelligence", align:"center", width:92 },
+  { key:"ex_region", sortKey:"ex_region", label:"Ex Region", align:"left", width:105 },
+  { key:"to_region", sortKey:"to_region", label:"To Region", align:"left", width:105 },
+  { key:"p_and_c", sortKey:"p_and_c", label:"P&C", align:"center", width:42 },
+  { key:"intelligence", sortKey:"intelligence", label:"Intel", align:"center", width:58 },
   ...cargoColumns.slice(2,13),
   { key:"source", sortKey:"source", label:"Source", align:"left", width:120 },
   ...cargoColumns.slice(13),
@@ -2723,7 +2832,7 @@ const filtV=useMemo(()=>{
             }}>{m.label}</span>}
           </button>})}
         </aside>}
-        <div style={{padding:mobile?"8px 8px":"12px 20px",maxWidth:1900,margin:"0 auto",flex:1,minWidth:0,width:"100%"}}>
+        <div style={{padding:mobile?"8px 8px":((tab==="cargo"||tab==="cargo2")?"12px 8px":"12px 20px"),maxWidth:(tab==="cargo"||tab==="cargo2")?"none":1900,margin:"0 auto",flex:1,minWidth:0,width:"100%",boxSizing:"border-box"}}>
       <TabErrorBoundary>
 
         {/* ── POSITIONS ── */}
@@ -3514,10 +3623,6 @@ const filtV=useMemo(()=>{
             Only its table gets the additional intelligence columns. */}
         {(tab==="cargo"||tab==="cargo2")&&(
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {tab==="cargo2"&&<>
-              <datalist id="cargo-ex-region">{CARGO_INTEL_REGIONS.map(r=><option key={r} value={r}/>)}</datalist>
-              <datalist id="cargo-to-region">{CARGO_INTEL_REGIONS.map(r=><option key={r} value={r}/>)}</datalist>
-            </>}
             {/* Parse + filter panel + graph (desktop) */}
             {!mobile && (
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
@@ -3780,6 +3885,23 @@ const filtV=useMemo(()=>{
                   {cSortD>0?"▲":"▼"}
                 </button>
               </div>
+              <details style={{position:"relative",flexShrink:0}}>
+                <summary style={{listStyle:"none",fontSize:11,fontWeight:700,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"3px 8px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Columns ▾</summary>
+                <div style={{position:"absolute",right:0,top:"calc(100% + 5px)",zIndex:20050,width:205,maxHeight:390,overflowY:"auto",background:"#071223",border:"1px solid rgba(88,166,255,.34)",borderRadius:7,boxShadow:"0 12px 34px rgba(0,0,0,.72)",padding:7}}>
+                  <div style={{fontSize:9,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".08em",padding:"2px 4px 6px"}}>{tab==="cargo2"?"Quotes & Fixtures":"Cargoes"} columns</div>
+                  {(tab==="cargo2"?quoteFixtureColumns:cargoColumns).filter(c=>!["select","badge","delete"].includes(c.key)).map(col=>{
+                    const visible=tab==="cargo2"?qfVisibleCols:cargoVisibleCols;
+                    const setter=tab==="cargo2"?setQfVisibleCols:setCargoVisibleCols;
+                    return <label key={col.key} style={{display:"flex",alignItems:"center",gap:8,padding:"5px",borderRadius:4,cursor:"pointer",fontSize:11,color:C.tx,fontWeight:600}}>
+                      <input type="checkbox" checked={visible.has(col.key)} onChange={()=>setter(prev=>{const n=new Set(prev);n.has(col.key)?n.delete(col.key):n.add(col.key);return n;})}/>
+                      <span>{col.label}</span>
+                    </label>;
+                  })}
+                  <div style={{height:1,background:C.bd2,margin:"5px 0"}}/>
+                  <button onClick={e=>{e.preventDefault();tab==="cargo2"?setQfVisibleCols(new Set(QF_DEFAULT_VISIBLE)):setCargoVisibleCols(new Set(CARGO_COLUMN_KEYS));}}
+                    style={{width:"100%",fontSize:10,fontWeight:700,padding:"5px 7px",borderRadius:4,cursor:"pointer",border:"1px solid "+C.bd,background:C.bg2,color:C.blue,fontFamily:"inherit"}}>Reset default</button>
+                </div>
+              </details>
             </div>
 
             {bulkCargoTagOpen&&(
@@ -3832,7 +3954,12 @@ const filtV=useMemo(()=>{
                 .cargo-table td, .cargo-table td>*{overflow:visible!important;text-overflow:unset!important;white-space:nowrap!important;max-width:none!important;}
               }
             `}</style>
-            <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}
+            <style>{(()=>{
+              const cols=tab==="cargo2"?quoteFixtureColumns:cargoColumns;
+              const visible=tab==="cargo2"?qfVisibleCols:cargoVisibleCols;
+              return cols.map((c,i)=>visible.has(c.key)?"":`.cargo-table tr > :nth-child(${i+1}){display:none!important;}`).join("\n");
+            })()}</style>
+            <div style={{width:"100%",overflowX:mobile?"auto":"hidden",WebkitOverflowScrolling:"touch"}}
               onClick={e=>{
                 const th=e.target.closest("th");
                 if(!th) return;
@@ -3842,7 +3969,7 @@ const filtV=useMemo(()=>{
                 const col=(tab==="cargo2"?quoteFixtureColumns:cargoColumns)[idx];
                 if(col?.sortKey){const d=cSortK===col.sortKey?cSortD*-1:-1;setCsortK(col.sortKey);setCsortD(d);}
               }}>
-            <div style={{...tableWrap,minWidth:mobile?"1200px":undefined}} className="cargo-table">
+            <div style={{...tableWrap,minWidth:mobile?"1200px":0,width:"100%",overflowX:mobile?"auto":"hidden"}} className="cargo-table">
               {showAddCargo&&<AddCargoInlineRow onSave={onAddC} onClose={()=>setShowAddCargo(false)}/>}
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
@@ -3888,39 +4015,38 @@ const filtV=useMemo(()=>{
       </td>
 
       {tab==="cargo2"&&<>
-        {/* EX REGION / TO REGION — controlled vocabulary, stored in Supabase cargoes */}
-        {[['ex_region','cargo-ex-region'],['to_region','cargo-to-region']].map(([field,listId])=>(
-          <td key={field} style={{...td2,padding:"2px 4px"}} onClick={e=>e.stopPropagation()}>
-            <input
-              key={(f[field]||"")+f.id}
-              defaultValue={f[field]||""}
-              list={listId}
-              placeholder=""
-              onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab"){const raw=e.currentTarget.value.trim();const hit=CARGO_INTEL_REGIONS.find(r=>r.toLowerCase()===raw.toLowerCase());if(!raw||hit){onUpdateC(f.id,field,hit||null);}else{e.preventDefault();e.currentTarget.value=f[field]||"";}if(e.key==="Enter")e.currentTarget.blur();}}}
-              onBlur={e=>{const raw=e.currentTarget.value.trim();const hit=CARGO_INTEL_REGIONS.find(r=>r.toLowerCase()===raw.toLowerCase());if(!raw){if(f[field])onUpdateC(f.id,field,null);}else if(hit){if(hit!==f[field])onUpdateC(f.id,field,hit);e.currentTarget.value=hit;}else{e.currentTarget.value=f[field]||"";}}}
-              style={{width:"100%",boxSizing:"border-box",background:"transparent",border:"none",outline:"none",color:"#9ec5ff",fontSize:11,fontFamily:"inherit",textTransform:"uppercase"}}
-            />
-          </td>
-        ))}
-        <td style={{...tdCtr,padding:"2px 4px"}} onClick={e=>e.stopPropagation()}>
-          <select value={f.p_and_c??""} onChange={e=>onUpdateC(f.id,"p_and_c",e.target.value?Number(e.target.value):null)}
-            style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:3,color:C.tx,fontSize:11,fontFamily:"inherit",padding:"2px 1px"}}>
-            <option value="">—</option><option value="1">1</option><option value="2">2</option><option value="3">3</option>
-          </select>
+        {/* EX REGION / TO REGION — dark autocomplete; Enter accepts the first prefix match. */}
+        <CargoRegionCell value={f.ex_region||""} onSave={v=>onUpdateC(f.id,"ex_region",v)}/>
+        <CargoRegionCell value={f.to_region||""} onSave={v=>onUpdateC(f.id,"to_region",v)}/>
+
+        {/* P&C — same click-to-cycle behaviour as Status: blank → 1 → 2 → 3 → blank */}
+        <td style={{...tdCtr,fontWeight:700,cursor:"pointer",color:f.p_and_c?C.tx:C.faint}}
+          onClick={e=>{
+            e.stopPropagation();
+            const opts=[null,1,2,3];
+            const cur=opts.findIndex(v=>String(v??"")===String(f.p_and_c??""));
+            onUpdateC(f.id,"p_and_c",opts[(cur+1)%opts.length]);
+          }}>
+          {f.p_and_c??""}
         </td>
-        <td style={{...tdCtr,padding:"2px 4px"}} onClick={e=>{e.stopPropagation();onUpdateC(f.id,"intelligence",f.intelligence==="Quote"?"Fixture":"Quote");}}>
-          <span style={{cursor:"pointer",display:"inline-block",minWidth:58,padding:"2px 6px",borderRadius:3,fontSize:10,fontWeight:800,
-            color:f.intelligence==="Fixture"?C.green:f.intelligence==="Quote"?C.blue:C.faint,
-            border:"1px solid "+(f.intelligence==="Fixture"?C.green+"55":f.intelligence==="Quote"?C.blue+"55":C.bd2),
-            background:f.intelligence==="Fixture"?C.green+"12":f.intelligence==="Quote"?C.blue+"12":"transparent"}}>
-            {f.intelligence||"Quote"}
-          </span>
+
+        {/* Intel — blank by default; click cycles blank → Quote → Fixture → blank */}
+        <td style={{...tdCtr,fontWeight:700,cursor:"pointer",
+          color:f.intelligence==="Fixture"?C.green:f.intelligence==="Quote"?C.blue:C.faint}}
+          onClick={e=>{
+            e.stopPropagation();
+            const opts=["","Quote","Fixture"];
+            const cur=opts.indexOf(f.intelligence||"");
+            onUpdateC(f.id,"intelligence",opts[(cur+1)%opts.length]);
+          }}>
+          {f.intelligence ? String(f.intelligence).toUpperCase() : ""}
         </td>
       </>}
 
       <EC
   value={f.vessel}
   color={C.blue}
+  bold={tab==="cargo2"}
   placeholder="TBN"
   onSave={v2 => onUpdateC(f.id, "vessel", v2)}
   data-cell={`${i}-cvessel`}
