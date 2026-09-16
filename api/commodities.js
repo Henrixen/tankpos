@@ -9,22 +9,43 @@ const ITEMS=[
   {id:"naphtha",label:"Naphtha",slug:"naphtha",unit:"USD/t"},
   {id:"methanol",label:"Methanol",slug:"methanol",unit:"CNY/t"},
   {id:"urea",label:"Urea",slug:"urea",unit:"USD/t"},
-  {id:"eu-carbon",label:"EU Carbon",slug:"carbon",unit:"EUR/t"}
+  {id:"eu-carbon",label:"EU Carbon",slug:"carbon-emissions-allowances",unit:"EUR/t"}
 ];
+
+// Liquid futures with a reliable public daily history feed. The less liquid / regional
+// series keep using Trading Economics current values + our own daily Supabase snapshots.
+const YAHOO={brent:"BZ=F",crude:"CL=F",natgas:"NG=F",gasoline:"RB=F", "heating-oil":"HO=F"};
 function strip(s=""){return String(s).replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/\s+/g," ").trim();}
-function num(s){const n=Number(String(s||"").replace(/,/g,""));return Number.isFinite(n)?n:null;}
 async function fetchOne(item){
   const url=`https://tradingeconomics.com/commodity/${item.slug}`;
   const r=await fetch(url,{headers:{"user-agent":"Mozilla/5.0 (compatible; SignalTankerDashboard/1.0)","accept":"text/html,*/*"}});
   if(!r.ok)throw new Error(item.id+" "+r.status);
-  const txt=strip(await r.text());
-  const actual=txt.match(/\bActual\s+([+-]?[\d,.]+)/i)||txt.match(/\b(?:rose|fell|increased|decreased|traded)\s+(?:to|at)\s+€?\$?([+-]?[\d,.]+)/i);
-  const daily=txt.match(/\bDaily Change\s+([+-]?[\d,.]+)%/i)||txt.match(/\b(?:up|down)\s+([+-]?[\d,.]+)%\s+from the previous day/i);
-  return {...item,price:num(actual?.[1]),changePct:num(daily?.[1]),url};
+  const txt=strip(await r.text()),actual=txt.match(/\bActual\s+([\d,.]+)/i),daily=txt.match(/\bDaily Change\s+([+-]?[\d,.]+)%/i);
+  const price=actual?Number(actual[1].replace(/,/g,"")):null,changePct=daily?Number(daily[1].replace(/,/g,"")):null;
+  return {...item,price:Number.isFinite(price)?price:null,changePct:Number.isFinite(changePct)?changePct:null,url};
+}
+async function fetchHistory(id,symbol){
+  const now=Math.floor(Date.now()/1000),from=now-740*86400;
+  const path=`/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${from}&period2=${now}&interval=1d&events=history`;
+  let lastErr=null;
+  for(const host of ["https://query1.finance.yahoo.com","https://query2.finance.yahoo.com"]){
+    try{
+      const r=await fetch(host+path,{headers:{"user-agent":"Mozilla/5.0","accept":"application/json"}});
+      if(!r.ok){lastErr=new Error(`${id} history ${r.status}`);continue;}
+      const j=await r.json(),x=j?.chart?.result?.[0],ts=x?.timestamp||[],close=x?.indicators?.quote?.[0]?.close||[];
+      const rows=ts.map((t,i)=>({date:new Date(t*1000).toISOString().slice(0,10),price:Number(close[i])})).filter(x=>Number.isFinite(x.price));
+      if(rows.length)return rows;
+    }catch(e){lastErr=e;}
+  }
+  throw lastErr||new Error(`${id} history unavailable`);
 }
 export default async function handler(req,res){
-  const settled=await Promise.allSettled(ITEMS.map(fetchOne));
-  const items=settled.map((r,i)=>r.status==="fulfilled"?r.value:{...ITEMS[i],price:null,changePct:null});
+  const [prices,histories]=await Promise.all([
+    Promise.allSettled(ITEMS.map(fetchOne)),
+    Promise.allSettled(Object.entries(YAHOO).map(async([id,symbol])=>[id,await fetchHistory(id,symbol)]))
+  ]);
+  const items=prices.map((r,i)=>r.status==="fulfilled"?r.value:{...ITEMS[i],price:null,changePct:null});
+  const history={}; for(const r of histories)if(r.status==="fulfilled")history[r.value[0]]=r.value[1];
   res.setHeader("Cache-Control","s-maxage=900, stale-while-revalidate=3600");
-  res.status(200).json({items,updatedAt:new Date().toISOString(),source:"Trading Economics"});
+  res.status(200).json({items,history,updatedAt:new Date().toISOString(),source:"Trading Economics",historySource:"Yahoo Finance · daily futures history"});
 }
