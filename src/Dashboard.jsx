@@ -1242,7 +1242,7 @@ function Dashboard({vessels, cargoes, history}) {
               </div>
             </div>
             {shippingPriceTab==="vlcc" ? (
-              vlcc?.latest ? <div style={{display:"flex",flexDirection:"column",height:270,minHeight:270}}>
+              vlcc?.latest ? <div style={{display:"flex",flexDirection:"column",height:300,minHeight:270}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:14,margin:"-3px 0 6px"}}>
                   <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
                     <div>
@@ -1358,7 +1358,7 @@ function Dashboard({vessels, cargoes, history}) {
 // ─── SVG charts (no dependencies) ────────────────────────────────────────────
 function SegmentFWChart({data,segments,colors}) {
   const [hover,setHover]=useState(null);
-  const [presentationClean,setPresentationClean]=useState(true);
+  const [presentationClean,setPresentationClean]=useState(false);
   const W=1000,H=400,PL=84,PR=36,PT=12,PB=36,iW=W-PL-PR,iH=H-PT-PB;
   const series={};
   const sampleThresholds={};
@@ -1416,8 +1416,8 @@ function RegionCompareChart({rows,colors}) {
     {rows.map(r=><div key={r.region} style={{display:"grid",gridTemplateColumns:"145px 1fr 38px",gap:8,alignItems:"center"}}>
       <span style={{fontSize:10,fontWeight:800,color:colors[r.region]||C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.region}</span>
       <div style={{display:"grid",gap:3}}>
-        <div title={`${r.region} · Current: ${r.now}`} style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden",cursor:"help"}}><div style={{height:"100%",width:Math.max(r.now?2:0,r.now/max*100)+"%",background:"#1769d2",borderRadius:99}}/></div>
-        <div title={`${r.region} · 30d ago: ${r.d30}`} style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden",cursor:"help"}}><div style={{height:"100%",width:Math.max(r.d30?2:0,r.d30/max*100)+"%",background:"rgba(190,202,220,.62)",borderRadius:99}}/></div>
+        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden",cursor:"help"}}><div style={{height:"100%",width:Math.max(r.now?2:0,r.now/max*100)+"%",background:"#1769d2",borderRadius:99}}/></div>
+        <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden",cursor:"help"}}><div style={{height:"100%",width:Math.max(r.d30?2:0,r.d30/max*100)+"%",background:"rgba(190,202,220,.62)",borderRadius:99}}/></div>
       </div>
       <div style={{fontSize:9,textAlign:"right",lineHeight:1.45}}><div style={{color:C.tx,fontWeight:800}}>{r.now}</div><div style={{color:C.faint}}>{r.d30}</div></div>
     </div>)}
