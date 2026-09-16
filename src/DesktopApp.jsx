@@ -28,6 +28,7 @@ const MatrixTable    = React.lazy(()=>import("./components/ui/MatrixTable"));
 const NotesTab       = React.lazy(()=>import("./NotesTab"));
 const CalendarTab    = React.lazy(()=>import("./CalendarTab"));
 const SettingsTab    = React.lazy(()=>import("./SettingsTab"));
+const QuotesFixtures        = React.lazy(()=>import("./QuotesFixtures"));
 const ReportsTab     = React.lazy(()=>import("./ReportsTab"));
 const FreightMapTab  = React.lazy(()=>import("./FreightMapTab"));
 const VesselPopout   = React.lazy(()=>import("./VesselPopout"));
@@ -42,13 +43,13 @@ const TabFallback = ()=>null;
 const NAV_KEY="signal_navigation_config";
 const NAV_CLOUD_KEY="navigation_config";
 const NAV_ITEMS=[
- ["pos","Positions","#58a6ff","🚢"],["cargo","Cargoes","#faa356","🛢"],["fix","Fixing","#c792ea","◎"],["tcv","Time Charter","#fb923c","◷"],
+ ["pos","Positions","#58a6ff","🚢"],["cargo","Cargoes","#faa356","🛢"],["cargo2","Quotes&Fixtures","#38bdf8","▤"],["fix","Fixing","#c792ea","◎"],["tcv","Time Charter","#fb923c","◷"],
  ["clients","Clients","#a8e6a3","♟"],["matrix","Matrix","#43e97b","⌗"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","∑"],
  ["dash","Dashboard","#43e97b","▦"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▤"],["map","Freight Map","#10b981","⌁"],
  ["cal","Calendar","#4fc3f7","◫"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","⚓"],["newbuilds","Newbuilds","#fbbf24","△"]
 ];
 function navDefault(){return{mode:"classic",collapsed:false,order:NAV_ITEMS.map(x=>x[0]),hidden:[],groups:[
- {id:"market",label:"Market",tabs:["pos","cargo","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
+ {id:"market",label:"Market",tabs:["pos","cargo","cargo2","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
  {id:"tools",label:"Tools",tabs:["projects","tce","map"]},{id:"reporting",label:"Reporting",tabs:["dash","reports"]},
  {id:"workspace",label:"Workspace",tabs:["clients","notes","cal","settings"]}]};}
 function navNorm(x){
@@ -3493,6 +3494,13 @@ const filtV=useMemo(()=>{
             )}
           </div>
         )}
+        {/* ── CARGOES 2 ── */}
+        {tab==="cargo2"&&(
+          <Suspense fallback={<TabFallback/>}>
+            <QuotesFixtures cargoes={cargoes} onUpdateC={onUpdateC} onAddC={onAddC} onDelC={onDelC}/>
+          </Suspense>
+        )}
+
         {/* ── CARGOES ── */}
         {tab==="cargo"&&(
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
