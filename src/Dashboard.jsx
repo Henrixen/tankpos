@@ -1360,12 +1360,17 @@ function Dashboard({vessels, cargoes, history}) {
 // ─── SVG charts (no dependencies) ────────────────────────────────────────────
 function SegmentFWChart({data,segments,colors}) {
   const [hover,setHover]=useState(null);
-  const [presentationClean,setPresentationClean]=useState(true);
+  const [presentationClean,setPresentationClean]=useState(false);
   const W=1000,H=400,PL=72,PR=28,PT=18,PB=42,iW=W-PL-PR,iH=H-PT-PB;
   const series={};
   segments.forEach(seg=>{
-    const raw=data.map(d=>d[seg]);
-    series[seg]=presentationClean?cleanPresentationValues(raw):raw.map(v=>Number.isFinite(Number(v))?Number(v):null);
+    const raw=data.map(d=>{
+      const v=Number.isFinite(Number(d[seg]))?Number(d[seg]):null;
+      if(!presentationClean)return v;
+      const ships=Number(d?.[seg+"__ships"]||0);
+      return ships<=1?null:v;
+    });
+    series[seg]=presentationClean?cleanPresentationValues(raw):raw;
   });
   const vals=segments.flatMap(s=>series[s]).filter(v=>v!=null&&v>=0); if(!vals.length)return null;
   const mn=0,mx=Math.max(7,Math.ceil(Math.max(...vals)+2)),range=mx||1,xs=data.map((_,i)=>PL+i/(data.length-1||1)*iW);
@@ -1375,19 +1380,22 @@ function SegmentFWChart({data,segments,colors}) {
     return {seg,x:xs[hover],y:PT+iH-v/range*iH,color:colors[seg]||C.blue};
   }).filter(Boolean);
   return <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0,position:"relative"}}>
-    <label style={{position:"absolute",right:8,top:5,zIndex:7,display:"flex",alignItems:"center",gap:5,fontSize:9,color:presentationClean?C.blue:C.faint,background:"rgba(5,14,30,.78)",border:"1px solid "+(presentationClean?"rgba(88,166,255,.35)":C.bd2),borderRadius:5,padding:"3px 6px",cursor:"pointer",userSelect:"none"}}>
-      <input type="checkbox" checked={presentationClean} onChange={e=>setPresentationClean(e.target.checked)} style={{width:12,height:12,margin:0}}/>
-      Clean outliers
+    <label style={{position:"absolute",right:8,top:5,zIndex:7,display:"flex",alignItems:"center",gap:6,fontSize:9,color:presentationClean?C.blue:C.faint,background:"rgba(5,14,30,.78)",border:"1px solid "+(presentationClean?"rgba(88,166,255,.42)":C.bd2),borderRadius:5,padding:"3px 7px",cursor:"pointer",userSelect:"none"}} title="Presentation mode: removes isolated outliers and observations based on only one ship">
+      <input type="checkbox" checked={presentationClean} onChange={e=>setPresentationClean(e.target.checked)}
+        style={{width:13,height:13,margin:0,accentColor:C.blue,cursor:"pointer"}}/>
+      Clean chart <span style={{color:presentationClean?"#8fc5ff":C.faint,opacity:.85}}>· exclude 1-ship data</span>
     </label>
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" onMouseMove={move} onMouseLeave={()=>setHover(null)} style={{width:"100%",height:"100%",minHeight:0,display:"block",flex:1,cursor:"crosshair"}}>
-      {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-10} y={y+4} fill="#fff" fontSize="12" fontWeight="700" textAnchor="end">{v}d</text></g>})}
-      {segments.map(seg=>{const pts=series[seg].map((v,i)=>v==null||v<0?null:[xs[i],PT+iH-v/range*iH]);const valid=pts.filter(Boolean);return valid.length>1?<g key={seg}><path d={smoothPath(valid)} fill="none" stroke={colors[seg]||C.blue} strokeWidth="2.2" strokeLinejoin="round" opacity=".95"/></g>:null})}
-      {hover!=null&&<line x1={xs[hover]} x2={xs[hover]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
-      {data.map((d,i)=>{const step=Math.max(1,Math.floor(data.length/8));return(i===0||i===data.length-1||i%step===0)?<text key={i} x={xs[i]} y={H-10} fill="#fff" fontSize="10.5" fontWeight="700" textAnchor="middle">{fmtDateShort(d.date)}</text>:null})}
-    </svg>
-    {/* HTML hover markers stay perfectly circular even though the SVG is responsively stretched. */}
-    {hoverMarkers.map(m=><span key={m.seg} style={{position:"absolute",left:`${m.x/W*100}%`,top:`${m.y/H*100}%`,width:10,height:10,borderRadius:"50%",background:m.color,border:"1.5px solid #fff",boxSizing:"border-box",transform:"translate(-50%,-50%)",pointerEvents:"none",zIndex:6,boxShadow:"0 0 0 1px rgba(0,0,0,.22)"}}/>)}
-    {hover!=null&&<div style={{position:"absolute",top:10,left:`${Math.min(82,Math.max(10,xs[hover]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.95)",border:"1px solid rgba(88,166,255,.35)",borderRadius:6,padding:"6px 8px",pointerEvents:"none",zIndex:8}}><div style={{fontSize:9,color:C.faint,marginBottom:3}}>{fmtDateShort(data[hover]?.date)}</div>{segments.map(seg=>series[seg][hover]!=null?<div key={seg} style={{fontSize:10,fontWeight:800,color:colors[seg]||C.tx}}>{seg}: {series[seg][hover].toFixed(1)}d <span style={{color:C.faint,fontWeight:600}}>· {Math.round(Number(data[hover]?.[seg+"__ships"]||0))} ships</span>{presentationClean&&Number(data[hover]?.[seg])!==series[seg][hover]?<span style={{color:"#fbbf24",fontWeight:700}}> · cleaned</span>:null}</div>:null)}</div>}
+    <div style={{position:"relative",width:"100%",flex:1,minHeight:0}}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" onMouseMove={move} onMouseLeave={()=>setHover(null)} style={{position:"absolute",inset:0,width:"100%",height:"100%",display:"block",cursor:"crosshair"}}>
+        {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-10} y={y+4} fill="#fff" fontSize="12" fontWeight="700" textAnchor="end">{v}d</text></g>})}
+        {segments.map(seg=>{const pts=series[seg].map((v,i)=>v==null||v<0?null:[xs[i],PT+iH-v/range*iH]);const valid=pts.filter(Boolean);return valid.length>1?<g key={seg}><path d={smoothPath(valid)} fill="none" stroke={colors[seg]||C.blue} strokeWidth="2.2" strokeLinejoin="round" opacity=".95"/></g>:null})}
+        {hover!=null&&<line x1={xs[hover]} x2={xs[hover]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
+        {data.map((d,i)=>{const step=Math.max(1,Math.floor(data.length/8));return(i===0||i===data.length-1||i%step===0)?<text key={i} x={xs[i]} y={H-10} fill="#fff" fontSize="10.5" fontWeight="700" textAnchor="middle">{fmtDateShort(d.date)}</text>:null})}
+      </svg>
+      {/* Marker uses the exact same plot wrapper and coordinate percentages as the SVG. */}
+      {hoverMarkers.map(m=><span key={m.seg} style={{position:"absolute",left:`${m.x/W*100}%`,top:`${m.y/H*100}%`,width:10,height:10,borderRadius:"50%",background:m.color,border:"1.5px solid #fff",boxSizing:"border-box",transform:"translate(-50%,-50%)",pointerEvents:"none",zIndex:6,boxShadow:"0 0 0 1px rgba(0,0,0,.22)"}}/>)}
+      {hover!=null&&<div style={{position:"absolute",top:10,left:`${Math.min(82,Math.max(10,xs[hover]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.95)",border:"1px solid rgba(88,166,255,.35)",borderRadius:6,padding:"6px 8px",pointerEvents:"none",zIndex:8}}><div style={{fontSize:9,color:C.faint,marginBottom:3}}>{fmtDateShort(data[hover]?.date)}</div>{segments.map(seg=>series[seg][hover]!=null?<div key={seg} style={{fontSize:10,fontWeight:800,color:colors[seg]||C.tx}}>{seg}: {series[seg][hover].toFixed(1)}d <span style={{color:C.faint,fontWeight:600}}>· {Math.round(Number(data[hover]?.[seg+"__ships"]||0))} ships</span>{presentationClean&&Number(data[hover]?.[seg])!==series[seg][hover]?<span style={{color:"#fbbf24",fontWeight:700}}> · cleaned</span>:null}</div>:null)}</div>}
+    </div>
     <div style={{display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center",marginTop:5}}>{segments.map(s=>{const last=[...data].reverse().find(d=>d[s]!=null);const n=Math.round(Number(last?.[s+"__ships"]||0));return <span key={s} style={{fontSize:10.5,color:colors[s]||C.blue,fontWeight:700}}>● {s}{n?` · ${n} ships`:""}</span>})}</div>
   </div>;
 }
