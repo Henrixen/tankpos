@@ -28,7 +28,6 @@ const MatrixTable    = React.lazy(()=>import("./components/ui/MatrixTable"));
 const NotesTab       = React.lazy(()=>import("./NotesTab"));
 const CalendarTab    = React.lazy(()=>import("./CalendarTab"));
 const SettingsTab    = React.lazy(()=>import("./SettingsTab"));
-const QuotesFixtures        = React.lazy(()=>import("./QuotesFixtures"));
 const ReportsTab     = React.lazy(()=>import("./ReportsTab"));
 const FreightMapTab  = React.lazy(()=>import("./FreightMapTab"));
 const VesselPopout   = React.lazy(()=>import("./VesselPopout"));
@@ -39,6 +38,11 @@ const FleetTab       = React.lazy(()=>import("./FleetTab"));
 const OutsidersTab   = React.lazy(()=>import("./OutsidersTab"));
 
 const TabFallback = ()=>null;
+
+const CARGO_INTEL_REGIONS=[
+  "ECI","ECSAM-NEB","Med","MED-BSEA","NEA","NWE-BALTIC","RSEA","SEA",
+  "USAC-GLAKES","USG-CARIBS","WAF-SAF","WC AMERICAS","WCI-AG"
+];
 
 const NAV_KEY="signal_navigation_config";
 const NAV_CLOUD_KEY="navigation_config";
@@ -1649,6 +1653,17 @@ const cargoColumns = [
   { key:"updated",   sortKey:"Updated",   label:"Updated", align:"left", width:colWidthsC.Updated },
   { key:"badge", label:"", align:"center", width:20 },
   { key: "delete", label: "", align: "center", width: 26 },
+];
+const quoteFixtureColumns = [
+  { key: "select", label: "", align: "center", width: 28 },
+  { key:"status", sortKey:"Status", label:"Status", align:"left", width:colWidthsC.Status },
+  { key:"ex_region", sortKey:"ex_region", label:"Ex Region", align:"left", width:118 },
+  { key:"to_region", sortKey:"to_region", label:"To Region", align:"left", width:118 },
+  { key:"p_and_c", sortKey:"p_and_c", label:"P&C", align:"center", width:54 },
+  { key:"intelligence", sortKey:"intelligence", label:"Intelligence", align:"center", width:92 },
+  ...cargoColumns.slice(2,13),
+  { key:"source", sortKey:"source", label:"Source", align:"left", width:120 },
+  ...cargoColumns.slice(13),
 ];
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
   const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
@@ -3494,16 +3509,15 @@ const filtV=useMemo(()=>{
             )}
           </div>
         )}
-        {/* ── CARGOES 2 ── */}
-        {tab==="cargo2"&&(
-          <Suspense fallback={<TabFallback/>}>
-            <QuotesFixtures cargoes={cargoes} onUpdateC={onUpdateC} onAddC={onAddC} onDelC={onDelC}/>
-          </Suspense>
-        )}
-
-        {/* ── CARGOES ── */}
-        {tab==="cargo"&&(
+        {/* ── CARGOES / QUOTES&FIXTURES ──
+            Quotes&Fixtures intentionally uses the exact Cargoes UI and workflow.
+            Only its table gets the additional intelligence columns. */}
+        {(tab==="cargo"||tab==="cargo2")&&(
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {tab==="cargo2"&&<>
+              <datalist id="cargo-ex-region">{CARGO_INTEL_REGIONS.map(r=><option key={r} value={r}/>)}</datalist>
+              <datalist id="cargo-to-region">{CARGO_INTEL_REGIONS.map(r=><option key={r} value={r}/>)}</datalist>
+            </>}
             {/* Parse + filter panel + graph (desktop) */}
             {!mobile && (
             <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
@@ -3825,7 +3839,7 @@ const filtV=useMemo(()=>{
                 const row=th.parentElement;
                 if(!row) return;
                 const idx=Array.from(row.children).indexOf(th);
-                const col=cargoColumns[idx];
+                const col=(tab==="cargo2"?quoteFixtureColumns:cargoColumns)[idx];
                 if(col?.sortKey){const d=cSortK===col.sortKey?cSortD*-1:-1;setCsortK(col.sortKey);setCsortD(d);}
               }}>
             <div style={{...tableWrap,minWidth:mobile?"1200px":undefined}} className="cargo-table">
@@ -3833,7 +3847,7 @@ const filtV=useMemo(()=>{
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
                 : <MatrixTable
-    columns={(()=>{const allTicked=filtC.length>0&&filtC.every(c=>selCargoes.has(c.id));return cargoColumns.map(col=>col.key==="select"?{...col,label:<span style={{fontSize:11,color:allTicked?"#4fc3f7":C.faint,cursor:"pointer",userSelect:"none"}} onClick={e=>{e.stopPropagation();setSelCargoes(allTicked?new Set():new Set(filtC.map(c=>c.id)));}}>{allTicked?"[✓]":"[ ]"}</span>}:col);})()}
+    columns={(()=>{const allTicked=filtC.length>0&&filtC.every(c=>selCargoes.has(c.id));const activeCols=tab==="cargo2"?quoteFixtureColumns:cargoColumns;return activeCols.map(col=>col.key==="select"?{...col,label:<span style={{fontSize:11,color:allTicked?"#4fc3f7":C.faint,cursor:"pointer",userSelect:"none"}} onClick={e=>{e.stopPropagation();setSelCargoes(allTicked?new Set():new Set(filtC.map(c=>c.id)));}}>{allTicked?"[✓]":"[ ]"}</span>}:col);})()}
     data={filtC}
     keyField="id"
     getRowStyle={(row,i)=>selCargoes.has(row.id)?"rgba(88,166,255,0.12)":i%2?"rgba(255,255,255,0.02)":"transparent"}
@@ -3872,6 +3886,37 @@ const filtV=useMemo(()=>{
       >
         {f.status || ""}
       </td>
+
+      {tab==="cargo2"&&<>
+        {/* EX REGION / TO REGION — controlled vocabulary, stored in Supabase cargoes */}
+        {[['ex_region','cargo-ex-region'],['to_region','cargo-to-region']].map(([field,listId])=>(
+          <td key={field} style={{...td2,padding:"2px 4px"}} onClick={e=>e.stopPropagation()}>
+            <input
+              key={(f[field]||"")+f.id}
+              defaultValue={f[field]||""}
+              list={listId}
+              placeholder=""
+              onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab"){const raw=e.currentTarget.value.trim();const hit=CARGO_INTEL_REGIONS.find(r=>r.toLowerCase()===raw.toLowerCase());if(!raw||hit){onUpdateC(f.id,field,hit||null);}else{e.preventDefault();e.currentTarget.value=f[field]||"";}if(e.key==="Enter")e.currentTarget.blur();}}}
+              onBlur={e=>{const raw=e.currentTarget.value.trim();const hit=CARGO_INTEL_REGIONS.find(r=>r.toLowerCase()===raw.toLowerCase());if(!raw){if(f[field])onUpdateC(f.id,field,null);}else if(hit){if(hit!==f[field])onUpdateC(f.id,field,hit);e.currentTarget.value=hit;}else{e.currentTarget.value=f[field]||"";}}}
+              style={{width:"100%",boxSizing:"border-box",background:"transparent",border:"none",outline:"none",color:"#9ec5ff",fontSize:11,fontFamily:"inherit",textTransform:"uppercase"}}
+            />
+          </td>
+        ))}
+        <td style={{...tdCtr,padding:"2px 4px"}} onClick={e=>e.stopPropagation()}>
+          <select value={f.p_and_c??""} onChange={e=>onUpdateC(f.id,"p_and_c",e.target.value?Number(e.target.value):null)}
+            style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:3,color:C.tx,fontSize:11,fontFamily:"inherit",padding:"2px 1px"}}>
+            <option value="">—</option><option value="1">1</option><option value="2">2</option><option value="3">3</option>
+          </select>
+        </td>
+        <td style={{...tdCtr,padding:"2px 4px"}} onClick={e=>{e.stopPropagation();onUpdateC(f.id,"intelligence",f.intelligence==="Quote"?"Fixture":"Quote");}}>
+          <span style={{cursor:"pointer",display:"inline-block",minWidth:58,padding:"2px 6px",borderRadius:3,fontSize:10,fontWeight:800,
+            color:f.intelligence==="Fixture"?C.green:f.intelligence==="Quote"?C.blue:C.faint,
+            border:"1px solid "+(f.intelligence==="Fixture"?C.green+"55":f.intelligence==="Quote"?C.blue+"55":C.bd2),
+            background:f.intelligence==="Fixture"?C.green+"12":f.intelligence==="Quote"?C.blue+"12":"transparent"}}>
+            {f.intelligence||"Quote"}
+          </span>
+        </td>
+      </>}
 
       <EC
   value={f.vessel}
@@ -3996,6 +4041,14 @@ const filtV=useMemo(()=>{
 
       {/* TAG */}
       <TagCell cargoId={f.id} tag={f.tag} onUpdateC={onUpdateC}/>
+
+      {tab==="cargo2"&&<EC
+        value={f.source||""}
+        color={C.dim}
+        placeholder=""
+        onSave={v2=>onUpdateC(f.id,"source",v2)}
+        data-cell={`${i}-source`}
+      />}
 
       {/* UPDATED */}
       <td style={{ ...td2, color: C.faint, textAlign:"left" }}>
