@@ -502,8 +502,8 @@ function WSChart({data,routes,colors,fill=false}) {
   const hi=hover!=null?hover:null;
   return <div style={{height:fill?"100%":"auto",display:"flex",flexDirection:"column",minHeight:0,position:"relative"}}>
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" onMouseMove={onMove} onMouseLeave={()=>setHover(null)} style={{width:"100%",height:fill?"100%":260,minHeight:0,display:"block",flex:fill?1:"0 0 auto",cursor:"crosshair"}}>
-      <text x="7" y={PT+iH/2} fill="rgba(88,166,255,.72)" fontSize="12.5" fontWeight="900" letterSpacing=".08em" textAnchor="middle" transform={`rotate(-90 7 ${PT+iH/2})`}>WS</text>
-      {[0,.5,1].map(t=>{const y=PT+t*iH,v=Math.round(mx-t*range);return <g key={t}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-4} y={y+4} fill="#fff" fontSize="16" fontWeight="800" textAnchor="end">{v}</text></g>})}
+      <text x="6" y={PT+iH/2} fill="rgba(88,166,255,.72)" fontSize="15" fontWeight="900" letterSpacing=".08em" textAnchor="middle" transform={`rotate(-90 6 ${PT+iH/2})`}>WS</text>
+      {[0,.5,1].map(t=>{const y=PT+t*iH,v=Math.round(mx-t*range);return <g key={t}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-4} y={y+5} fill="#fff" fontSize="19" fontWeight="850" textAnchor="end">{v}</text></g>})}
       {routes.map(r=>{const pts=series[r.id].map((v,i)=>v!=null?[xs[i],PT+iH-(v-mn)/range*iH]:null);const valid=pts.filter(Boolean);if(valid.length<2)return null;const last=valid.at(-1);return <g key={r.id}><path d={smoothPath(valid)} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>{last&&<text x={Math.min(W-PR+8,last[0]+7)} y={last[1]+4} fill={colors[r.id]||C.dim} fontSize="14" fontWeight="850">{r.id}</text>}{hi!=null&&pts[hi]&&<circle cx={pts[hi][0]} cy={pts[hi][1]} r="4.5" fill={colors[r.id]||C.dim} stroke="none"/>}</g>})}
       {hi!=null&&<line x1={xs[hi]} x2={xs[hi]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
       {Array.from(new Set([0,1,2,3,4].map(k=>Math.round(k*(data.length-1)/4)))).map((i,ti,arr)=>{const isFirst=ti===0,isLast=ti===arr.length-1;return <text key={i} x={xs[i]} y={H-PB+20} fill="#fff" fontSize="14" fontWeight="800" textAnchor={isFirst?"start":isLast?"end":"middle"}>{(data[i].date||"").split(" ").slice(0,2).join(" ")}</text>})}
@@ -685,7 +685,7 @@ function CommodityTape({data,history,period,selectedId,onSelect}){
   if(!items.length)return null;
   return(
     <div style={{
-      display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gridTemplateRows:"repeat(2,minmax(0,1fr))",gap:8,width:"100%",height:276,alignContent:"stretch"
+      display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",gridTemplateRows:"repeat(2,minmax(0,1fr))",gap:8,width:"100%",height:310,alignContent:"stretch"
     }}>
       {items.map(x=>{
         const accent=COMMODITY_ACCENTS[x.id]||"#58a6ff";
@@ -694,7 +694,7 @@ function CommodityTape({data,history,period,selectedId,onSelect}){
         const pct=(Number.isFinite(first)&&Number.isFinite(last)&&first!==0)?((last-first)/first*100):null;
         const selected=selectedId===x.id;
         return <button key={x.id} onClick={()=>onSelect?.(x.id)} style={{
-          minWidth:0,minHeight:134,height:"100%",
+          minWidth:0,minHeight:151,height:"100%",
           background:selected?accent+"16":"#111f35",
           border:"1px solid "+(selected?accent:accent+"55"),
           borderTop:"3px solid "+accent,
@@ -712,7 +712,7 @@ function CommodityTape({data,history,period,selectedId,onSelect}){
             </div>
           </div>
           <div style={{marginTop:"auto",paddingTop:6}}>
-            <MiniCommoditySpark rows={rows} color={accent} height={35}/>
+            <MiniCommoditySpark rows={rows} color={accent} height={42}/>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:8.5,marginTop:2}}>
               <span style={{color:"rgba(140,175,220,.48)"}}>{period}</span>
               <span style={{fontWeight:800,color:pct==null?"rgba(140,175,220,.34)":pct>=0?"#3fb950":"#ff6b6b"}}>
