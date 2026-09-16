@@ -74,9 +74,17 @@ function cleanIsolatedValues(values){
 }
 function smoothPath(points){
   const p=points.filter(Boolean); if(!p.length)return ""; if(p.length===1)return `M${p[0][0]},${p[0][1]}`;
+  // Catmull-Rom -> cubic Bezier. Unlike the old midpoint quadratic curve,
+  // this smooth curve passes THROUGH every observation, so hover dots sit
+  // exactly on the displayed line.
   let d=`M${p[0][0]},${p[0][1]}`;
-  for(let i=1;i<p.length-1;i++){const mx=(p[i][0]+p[i+1][0])/2,my=(p[i][1]+p[i+1][1])/2;d+=` Q${p[i][0]},${p[i][1]} ${mx},${my}`;}
-  d+=` Q${p[p.length-1][0]},${p[p.length-1][1]} ${p[p.length-1][0]},${p[p.length-1][1]}`; return d;
+  for(let i=0;i<p.length-1;i++){
+    const p0=p[i-1]||p[i], p1=p[i], p2=p[i+1], p3=p[i+2]||p2;
+    const c1x=p1[0]+(p2[0]-p0[0])/6, c1y=p1[1]+(p2[1]-p0[1])/6;
+    const c2x=p2[0]-(p3[0]-p1[0])/6, c2y=p2[1]-(p3[1]-p1[1])/6;
+    d+=` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
+  }
+  return d;
 }
 function HorizonButtons({value,onChange,options=["7D","14D","1M","3M","ALL"]}){
   return <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{options.map(x=><button key={x} onClick={()=>onChange(x)} style={{fontSize:8.5,fontWeight:800,padding:"2px 6px",borderRadius:4,border:"1px solid "+(value===x?C.blue:C.bd),background:value===x?"rgba(88,166,255,.14)":"transparent",color:value===x?C.blue:C.faint,cursor:"pointer",fontFamily:"inherit"}}>{x}</button>)}</div>;
@@ -990,7 +998,10 @@ function Dashboard({vessels, cargoes, history}) {
     for(const row of Object.values(byDate)){
       for(const seg of SEGMENT_ORDER.filter(s=>s!=="All")){
         const a=row["__"+seg];
-        if(a?.ships)row[seg]=a.sum/a.ships;
+        if(a?.ships){
+          row[seg]=a.sum/a.ships;
+          row[seg+"__ships"]=a.ships;
+        }
         delete row["__"+seg];
       }
     }
@@ -1334,7 +1345,7 @@ function SegmentFWChart({data,segments,colors}) {
     {segments.map(seg=>{const pts=series[seg].map((v,i)=>v==null||v<0?null:[xs[i],PT+iH-v/range*iH]);const valid=pts.filter(Boolean);return valid.length>1?<g key={seg}><path d={smoothPath(valid)} fill="none" stroke={colors[seg]||C.blue} strokeWidth="2.2" strokeLinejoin="round" opacity=".95"/>{hover!=null&&pts[hover]&&<circle cx={pts[hover][0]} cy={pts[hover][1]} r="5" fill={colors[seg]||C.blue} stroke="#fff" strokeWidth="1.5"/>}</g>:null})}
     {hover!=null&&<line x1={xs[hover]} x2={xs[hover]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
     {data.map((d,i)=>{const step=Math.max(1,Math.floor(data.length/8));return(i===0||i===data.length-1||i%step===0)?<text key={i} x={xs[i]} y={H-10} fill="#fff" fontSize="10.5" fontWeight="700" textAnchor="middle">{fmtDateShort(d.date)}</text>:null})}
-  </svg>{hover!=null&&<div style={{position:"absolute",top:10,left:`${Math.min(82,Math.max(10,xs[hover]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.95)",border:"1px solid rgba(88,166,255,.35)",borderRadius:6,padding:"6px 8px",pointerEvents:"none",zIndex:5}}><div style={{fontSize:9,color:C.faint,marginBottom:3}}>{fmtDateShort(data[hover]?.date)}</div>{segments.map(seg=>series[seg][hover]!=null?<div key={seg} style={{fontSize:10,fontWeight:800,color:colors[seg]||C.tx}}>{seg}: {series[seg][hover].toFixed(1)}d</div>:null)}</div>}<div style={{display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center",marginTop:5}}>{segments.map(s=><span key={s} style={{fontSize:10.5,color:colors[s]||C.blue,fontWeight:700}}>● {s}</span>)}</div></div>;
+  </svg>{hover!=null&&<div style={{position:"absolute",top:10,left:`${Math.min(82,Math.max(10,xs[hover]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.95)",border:"1px solid rgba(88,166,255,.35)",borderRadius:6,padding:"6px 8px",pointerEvents:"none",zIndex:5}}><div style={{fontSize:9,color:C.faint,marginBottom:3}}>{fmtDateShort(data[hover]?.date)}</div>{segments.map(seg=>series[seg][hover]!=null?<div key={seg} style={{fontSize:10,fontWeight:800,color:colors[seg]||C.tx}}>{seg}: {series[seg][hover].toFixed(1)}d <span style={{color:C.faint,fontWeight:600}}>· {Math.round(Number(data[hover]?.[seg+"__ships"]||0))} ships</span></div>:null)}</div>}<div style={{display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center",marginTop:5}}>{segments.map(s=>{const last=[...data].reverse().find(d=>d[s]!=null);const n=Math.round(Number(last?.[s+"__ships"]||0));return <span key={s} style={{fontSize:10.5,color:colors[s]||C.blue,fontWeight:700}}>● {s}{n?` · ${n} ships`:""}</span>})}</div></div>;
 }
 
 function RegionCompareChart({rows,colors}) {
