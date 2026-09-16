@@ -381,7 +381,12 @@ ${text}`}]
     <div style={{background:C.bg2,border:"1px solid "+C.bd,borderRadius:8,padding:"12px 14px",height:"100%",boxSizing:"border-box",display:"flex",flexDirection:"column",minHeight:0}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:8}}>
         {secHead("Worldscale Spot + FFA")}
-        <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end"}}>
+        <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"nowrap",justifyContent:"flex-end"}}>
+          <div style={{minWidth:184,display:"flex",justifyContent:"flex-end"}}>
+            <div style={{visibility:wsView==="graph"?"visible":"hidden",pointerEvents:wsView==="graph"?"auto":"none"}}>
+              <HorizonButtons value={wsPeriod} onChange={setWsPeriod}/>
+            </div>
+          </div>
           <div style={{display:"flex",gap:4}}>
             {[["graph","Graph"],["table","Table"],["parse","Parse"]].map(([v,l])=><button key={v} onClick={()=>setWsView(v)} style={{
               fontSize:9.5,fontWeight:800,padding:"4px 9px",borderRadius:5,cursor:"pointer",fontFamily:"inherit",
@@ -390,7 +395,6 @@ ${text}`}]
               color:wsView===v?C.tx:C.dim
             }}>{l}</button>)}
           </div>
-          {wsView==="graph"&&<HorizonButtons value={wsPeriod} onChange={setWsPeriod}/>}
         </div>
       </div>
 
@@ -398,7 +402,7 @@ ${text}`}]
         {wsView==="graph"&&(
           <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
           <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:8,flex:1,minHeight:0}}>
-            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 4px",minHeight:0,display:"flex",flexDirection:"column"}}>
+            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"7px 1px 5px",minHeight:0,display:"flex",flexDirection:"column"}}>
               <div style={{fontSize:11.5,fontWeight:900,color:C.green,textTransform:"uppercase",marginBottom:3,textAlign:"center",letterSpacing:".06em"}}>Handy</div>
               <div style={{flex:1,minHeight:0}}>
                 {histData.length>=2
@@ -406,7 +410,7 @@ ${text}`}]
                   : <div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
               </div>
             </div>
-            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 4px",minHeight:0,display:"flex",flexDirection:"column"}}>
+            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"7px 1px 5px",minHeight:0,display:"flex",flexDirection:"column"}}>
               <div style={{fontSize:11.5,fontWeight:900,color:C.blue,textTransform:"uppercase",marginBottom:3,textAlign:"center",letterSpacing:".06em"}}>MR</div>
               <div style={{flex:1,minHeight:0}}>
                 {histData.length>=2
@@ -487,7 +491,7 @@ ${text}`}]
 
 function WSChart({data,routes,colors,fill=false}) {
   const [hover,setHover]=useState(null);
-  const W=1200,H=250,PL=54,PR=42,PT=10,PB=34,iW=W-PL-PR,iH=H-PT-PB;
+  const W=1200,H=250,PL=46,PR=24,PT=10,PB=34,iW=W-PL-PR,iH=H-PT-PB;
   const series={};
   routes.forEach(r=>series[r.id]=cleanIsolatedValues(data.map(d=>d.spot?.[r.id]?.ws)));
   const allVals=routes.flatMap(r=>series[r.id]).filter(v=>v!=null);
@@ -498,6 +502,7 @@ function WSChart({data,routes,colors,fill=false}) {
   const hi=hover!=null?hover:null;
   return <div style={{height:fill?"100%":"auto",display:"flex",flexDirection:"column",minHeight:0,position:"relative"}}>
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" onMouseMove={onMove} onMouseLeave={()=>setHover(null)} style={{width:"100%",height:fill?"100%":260,minHeight:0,display:"block",flex:fill?1:"0 0 auto",cursor:"crosshair"}}>
+      <text x="13" y={PT+iH/2} fill="rgba(88,166,255,.78)" fontSize="13" fontWeight="900" letterSpacing=".08em" textAnchor="middle" transform={`rotate(-90 13 ${PT+iH/2})`}>WS</text>
       {[0,.5,1].map(t=>{const y=PT+t*iH,v=Math.round(mx-t*range);return <g key={t}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-4} y={y+4} fill="#fff" fontSize="16" fontWeight="800" textAnchor="end">{v}</text></g>})}
       {routes.map(r=>{const pts=series[r.id].map((v,i)=>v!=null?[xs[i],PT+iH-(v-mn)/range*iH]:null);const valid=pts.filter(Boolean);if(valid.length<2)return null;const last=valid.at(-1);return <g key={r.id}><path d={smoothPath(valid)} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>{last&&<text x={Math.min(W-PR+8,last[0]+7)} y={last[1]+4} fill={colors[r.id]||C.dim} fontSize="14" fontWeight="850">{r.id}</text>}{hi!=null&&pts[hi]&&<circle cx={pts[hi][0]} cy={pts[hi][1]} r="4.5" fill={colors[r.id]||C.dim} stroke="none"/>}</g>})}
       {hi!=null&&<line x1={xs[hi]} x2={xs[hi]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
@@ -725,14 +730,14 @@ function VlccSparkline({history,period="1Y"}) {
   let rows=(Array.isArray(history)?history:[]).map(x=>({...x,tce:Number(x.tce)})).filter(x=>Number.isFinite(x.tce)).sort((a,b)=>(a.year||0)-(b.year||0)||(a.week||0)-(b.week||0));
   const n=period==="3M"?13:period==="6M"?26:period==="1Y"?52:rows.length; rows=rows.slice(-n);
   if(!rows.length)return null; const clean=cleanIsolatedValues(rows.map(x=>x.tce));rows=rows.map((x,i)=>({...x,tce:clean[i]}));
-  const W=900,H=285,PL=48,PR=16,PT=8,PB=34,vals=rows.map(x=>x.tce/1000),mn=Math.min(...vals),mx=Math.max(...vals),pad=Math.max(25,(mx-mn)*.14),lo=Math.max(0,mn-pad),hi=mx+pad,range=hi-lo||1;
+  const W=900,H=315,PL=54,PR=12,PT=4,PB=31,vals=rows.map(x=>x.tce/1000),mn=Math.min(...vals),mx=Math.max(...vals),pad=Math.max(25,(mx-mn)*.14),lo=Math.max(0,mn-pad),hi=mx+pad,range=hi-lo||1;
   const pts=rows.map((x,i)=>[PL+i/(rows.length-1||1)*(W-PL-PR),PT+(hi-x.tce/1000)/range*(H-PT-PB)]),ticks=[hi,(hi+lo)/2,lo],labels=[0,Math.floor((rows.length-1)/2),rows.length-1].filter((v,i,a)=>a.indexOf(v)===i);
   const move=e=>{const b=e.currentTarget.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*W;let idx=0,best=1e9;pts.forEach((p,i)=>{const d=Math.abs(p[0]-x);if(d<best){best=d;idx=i}});setHover(idx)};
   return <div style={{height:"100%",position:"relative",display:"flex",flexDirection:"column"}}><svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" onMouseMove={move} onMouseLeave={()=>setHover(null)} style={{width:"100%",height:"100%",minHeight:125,display:"block",cursor:"crosshair"}}>
-    {ticks.map((v,i)=>{const y=PT+i/2*(H-PT-PB);return <g key={i}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke="rgba(88,130,200,.14)"/><text x={PL-8} y={y+4} fill="#e8f2ff" fontSize="10.5" fontWeight="700" textAnchor="end">${Math.round(v)}k</text></g>})}
+    {ticks.map((v,i)=>{const y=PT+i/2*(H-PT-PB);return <g key={i}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke="rgba(88,130,200,.14)"/><text x={PL-8} y={y+4} fill="#e8f2ff" fontSize="12.5" fontWeight="800" textAnchor="end">${Math.round(v)}k</text></g>})}
     {pts.length>1&&<path d={smoothPath(pts)} fill="none" stroke="#58a6ff" strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>}
     {hover!=null&&<><line x1={pts[hover][0]} x2={pts[hover][0]} y1={PT} y2={H-PB} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/><circle cx={pts[hover][0]} cy={pts[hover][1]} r="5" fill="#58a6ff" stroke="none"/></>}
-    {labels.map(i=><text key={i} x={i===0?pts[i][0]+5:i===rows.length-1?pts[i][0]-5:pts[i][0]} y={H-8} fill="#e8f2ff" fontSize="9.5" fontWeight="700" textAnchor={i===0?"start":i===rows.length-1?"end":"middle"}>{rows[i].date||(`W${rows[i].week||""}`)}</text>)}
+    {labels.map(i=><text key={i} x={i===0?pts[i][0]+5:i===rows.length-1?pts[i][0]-5:pts[i][0]} y={H-8} fill="#e8f2ff" fontSize="11.5" fontWeight="800" textAnchor={i===0?"start":i===rows.length-1?"end":"middle"}>{rows[i].date||(`W${rows[i].week||""}`)}</text>)}
   </svg>{hover!=null&&<div style={{position:"absolute",top:26,left:`${Math.min(82,Math.max(12,pts[hover][0]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.95)",border:"1px solid rgba(88,166,255,.45)",borderRadius:6,padding:"6px 8px",pointerEvents:"none"}}><div style={{fontSize:9,color:"rgba(205,225,250,.82)"}}>{rows[hover].date||`Week ${rows[hover].week||""}`}</div><div style={{fontSize:11,fontWeight:900,color:C.blue}}>${Math.round(rows[hover].tce/1000)}k/day</div>{rows[hover].ws!=null&&<div style={{fontSize:9.5,color:C.tx}}>WS {rows[hover].ws}</div>}</div>}</div>;
 }
 
@@ -1242,14 +1247,14 @@ function Dashboard({vessels, cargoes, history}) {
               </div>
             </div>
             {shippingPriceTab==="vlcc" ? (
-              vlcc?.latest ? <div style={{display:"flex",flexDirection:"column",height:318,minHeight:286}}>
-                <div style={{position:"relative",minHeight:58,margin:"-12px 0 0"}}>
+              vlcc?.latest ? <div style={{display:"flex",flexDirection:"column",height:326,minHeight:294}}>
+                <div style={{position:"relative",minHeight:50,margin:"-14px 0 0"}}>
                   <div style={{position:"absolute",left:0,top:4,fontSize:9.5,fontWeight:850,color:"rgba(185,215,245,.72)",textTransform:"uppercase",letterSpacing:".06em"}}>TD3C MEG → China</div>
                   <div style={{textAlign:"center",paddingTop:0,transform:"translateY(-3px)"}}>
-                    <div style={{fontSize:31,fontWeight:900,color:D.tx,lineHeight:1}}>${Math.round(Number(vlcc.latest.tce)/1000)}k<span style={{fontSize:10.5,color:"rgba(190,215,245,.72)",fontWeight:650}}>/day</span></div>
+                    <div style={{fontSize:34,fontWeight:900,color:D.tx,lineHeight:1}}>${Math.round(Number(vlcc.latest.tce)/1000)}k<span style={{fontSize:10.5,color:"rgba(190,215,245,.72)",fontWeight:650}}>/day</span></div>
                     <div style={{fontSize:9.5,color:"rgba(190,215,245,.66)",marginTop:3}}>{vlcc.latest.date||""} · {vlcc.latest.ws!=null?"WS "+vlcc.latest.ws:"Baltic weekly"} · {(vlcc.history||[]).length} obs</div>
                   </div>
-                  <div style={{position:"absolute",right:0,top:32}}><HorizonButtons value={vlccPeriod} onChange={setVlccPeriod} options={["3M","6M","1Y","ALL"]}/></div>
+                  <div style={{position:"absolute",right:0,top:29}}><HorizonButtons value={vlccPeriod} onChange={setVlccPeriod} options={["3M","6M","1Y","ALL"]}/></div>
                 </div>
                 <div style={{flex:1,minHeight:0}}><VlccSparkline history={vlcc.history||[]} period={vlccPeriod}/></div>
               </div> : <div style={{fontSize:11,color:vlccError?D.red:D.faint,padding:"10px 0"}}>
