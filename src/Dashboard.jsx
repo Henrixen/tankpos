@@ -1394,7 +1394,16 @@ function SegmentFWChart({data,segments,colors}) {
     <div style={{position:"relative",width:"100%",flex:1,minHeight:0}}>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" onMouseMove={move} onMouseLeave={()=>setHover(null)} style={{position:"absolute",inset:0,width:"100%",height:"100%",display:"block",cursor:"crosshair"}}>
         {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-10} y={y+4} fill="#fff" fontSize="13" fontWeight="750" textAnchor="end">{v}d</text></g>})}
-        {segments.map(seg=>{const pts=series[seg].map((v,i)=>v==null||v<0?null:[xs[i],PT+iH-v/range*iH]);const valid=pts.filter(Boolean);return valid.length>1?<g key={seg}><path d={smoothPath(valid)} fill="none" stroke={colors[seg]||C.blue} strokeWidth="2.2" strokeLinejoin="round" opacity=".95"/></g>:null})}
+        {segments.map(seg=>{
+          const pts=series[seg].map((v,i)=>v==null||v<0?null:[xs[i],PT+iH-v/range*iH]);
+          // Never bridge across excluded / missing regional observations. Bridging those
+          // gaps created artificial diagonals and exaggerated curves when a region had
+          // only a few representative ships on some dates.
+          const runs=[]; let run=[];
+          pts.forEach(p=>{if(p){run.push(p)}else if(run.length){runs.push(run);run=[]}});
+          if(run.length)runs.push(run);
+          return <g key={seg}>{runs.map((r,ri)=>r.length>1?<path key={ri} d={smoothPath(r)} fill="none" stroke={colors[seg]||C.blue} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" opacity=".95"/>:null)}</g>
+        })}
         {hover!=null&&<line x1={xs[hover]} x2={xs[hover]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
         {hoverMarkers.map(m=><circle key={m.seg} cx={m.x} cy={m.y} r="5.2" fill={m.color} stroke="none"/>)}
         {data.map((d,i)=>{const step=Math.max(1,Math.floor(data.length/8));return(i===0||i===data.length-1||i%step===0)?<text key={i} x={i===0?xs[i]+5:i===data.length-1?xs[i]-5:xs[i]} y={H-9} fill="#fff" fontSize="11.5" fontWeight="750" textAnchor={i===0?"start":i===data.length-1?"end":"middle"}>{fmtDateShort(d.date)}</text>:null})}
