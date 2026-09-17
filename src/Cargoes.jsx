@@ -52,7 +52,7 @@ function CargoMonthChart({ data, total }){
   const W=Math.max(counts.length,2);
   const maxC=Math.max(1,...counts.map(b=>b.count));
   const SVG_W=size.w, SVG_H=size.h;
-  const PAD={t:20,r:12,b:28,l:36};
+  const PAD={t:18,r:8,b:20,l:25};
   const iW=Math.max(1,SVG_W-PAD.l-PAD.r);
   const iH=Math.max(1,SVG_H-PAD.t-PAD.b);
   const pts=counts.map((bkt,i)=>({
@@ -68,12 +68,12 @@ function CargoMonthChart({ data, total }){
   const peakIdx=counts.reduce((mx,b,i)=>b.count>counts[mx].count?i:mx,0);
 
   return(
-    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"10px 12px 8px",display:"flex",flexDirection:"column",gap:4,minWidth:0,boxSizing:"border-box",height:260}}>
+    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"7px 7px 4px",display:"flex",flexDirection:"column",gap:2,minWidth:0,boxSizing:"border-box",height:260}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
         <div style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em"}}>Cargoes entered by month</div>
         <div style={{fontSize:11,color:"rgba(88,166,255,0.7)",fontWeight:700}}>{total.toLocaleString()} total</div>
       </div>
-      <div ref={wrapRef} style={{flex:1,minHeight:0,width:"100%"}}>
+      <div ref={wrapRef} style={{flex:1,minHeight:0,width:"100%",height:"100%",overflow:"hidden"}}>
         <svg width={SVG_W} height={SVG_H} viewBox={"0 0 "+SVG_W+" "+SVG_H} style={{display:"block",overflow:"visible"}}>
           <defs>
             <linearGradient id="cgGrad" x1="0" y1="0" x2="0" y2="1">
