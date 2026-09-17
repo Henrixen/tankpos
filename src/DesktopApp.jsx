@@ -3997,9 +3997,34 @@ const filtV=useMemo(()=>{
             {/* Row hover highlight + mobile no-truncation */}
             <style>{`
               .cargo-table tr:hover td{background:rgba(58,130,246,0.06)!important;}
-              .cargo-table table{width:100%!important;min-width:100%!important;table-layout:auto!important;}
+              .cargo-table table{width:100%!important;min-width:100%!important;table-layout:fixed!important;}
               .cargo-table col{width:auto!important;}
               .cargo-table th,.cargo-table td{border-left:none!important;border-right:none!important;box-sizing:border-box!important;}
+
+              /* Quotes & Fixtures: compact short fields and give more room to
+                 Vessel/Charterer/Load/Disch/Freight/Comment. */
+              .cargo-table.qf-table th,.cargo-table.qf-table td{padding-left:6px!important;padding-right:6px!important;}
+              .cargo-table.qf-table col:nth-child(1){width:1.2%!important;}
+              .cargo-table.qf-table col:nth-child(2){width:3.7%!important;}
+              .cargo-table.qf-table col:nth-child(3){width:5.2%!important;}
+              .cargo-table.qf-table col:nth-child(4){width:5.2%!important;}
+              .cargo-table.qf-table col:nth-child(5){width:2.5%!important;}
+              .cargo-table.qf-table col:nth-child(6){width:3.8%!important;}
+              .cargo-table.qf-table col:nth-child(7){width:9.0%!important;}
+              .cargo-table.qf-table col:nth-child(8){width:10.0%!important;}
+              .cargo-table.qf-table col:nth-child(9){width:4.0%!important;}
+              .cargo-table.qf-table col:nth-child(10){width:6.0%!important;}
+              .cargo-table.qf-table col:nth-child(11){width:9.0%!important;}
+              .cargo-table.qf-table col:nth-child(12){width:12.0%!important;}
+              .cargo-table.qf-table col:nth-child(13){width:4.0%!important;}
+              .cargo-table.qf-table col:nth-child(14){width:4.0%!important;}
+              .cargo-table.qf-table col:nth-child(15){width:7.0%!important;}
+              .cargo-table.qf-table col:nth-child(16){width:11.0%!important;}
+              .cargo-table.qf-table col:nth-child(17){width:3.5%!important;}
+              .cargo-table.qf-table col:nth-child(18){width:5.5%!important;}
+              .cargo-table.qf-table col:nth-child(19){width:5.5%!important;}
+              .cargo-table.qf-table col:nth-child(20){width:1.2%!important;}
+              .cargo-table.qf-table col:nth-child(21){width:1.2%!important;}
               .cargo-table th{padding-left:6px!important;padding-right:6px!important;}
               .cargo-table td{padding-left:6px!important;padding-right:6px!important;}
 
@@ -4023,7 +4048,7 @@ const filtV=useMemo(()=>{
                 const col=(tab==="cargo2"?quoteFixtureColumns:cargoColumns)[idx];
                 if(col?.sortKey){const d=cSortK===col.sortKey?cSortD*-1:-1;setCsortK(col.sortKey);setCsortD(d);}
               }}>
-            <div style={{...tableWrap,minWidth:mobile?"1200px":0,width:"100%",maxWidth:"none",overflowX:mobile?"auto":"hidden"}} className="cargo-table">
+            <div style={{...tableWrap,minWidth:mobile?"1200px":0,width:"100%",maxWidth:"none",overflowX:mobile?"auto":"hidden"}} className={"cargo-table"+(tab==="cargo2"?" qf-table":"")}>
               {showAddCargo&&<AddCargoInlineRow onSave={onAddC} onClose={()=>setShowAddCargo(false)}/>}
               {filtC.length===0
                 ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
