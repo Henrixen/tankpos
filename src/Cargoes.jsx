@@ -12,21 +12,229 @@ const REGIONS=["ECI","ECSAM-NEB","Med","MED-BSEA","NEA","NWE-BALTIC","RSEA","SEA
 const PRESET_TAGS=["AG","BASF","CPP","DPP","EX ASIA","MED","OUTSIDER EUROPE","PARCEL","PNC","SPACE ASIA-EUROPE","SUB 10","TA","TAE","TAW","UKC","WAF"];
 function tagList(){try{const x=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");return[...new Set([...PRESET_TAGS,...x].map(v=>String(v||"").toUpperCase()).filter(Boolean))].sort();}catch{return PRESET_TAGS;}}
 const card={background:C.bg2,border:"1px solid "+C.bd,borderRadius:7};
+
+const POS_TH={
+  background:C.bg2,
+  color:C.dim,
+  fontSize:12,
+  fontWeight:700,
+  textTransform:"uppercase",
+  letterSpacing:"0.07em",
+  padding:"6px 8px",
+  borderBottom:"1px solid "+C.bd2,
+  textAlign:"left",
+  whiteSpace:"nowrap",
+  verticalAlign:"middle",
+  fontFamily:"inherit"
+};
+const POS_TD={
+  padding:"4px 7px",
+  color:"#d9e8ff",
+  fontWeight:600,
+  fontSize:12,
+  borderBottom:"1px solid rgba(255,255,255,0.025)",
+  verticalAlign:"middle",
+  whiteSpace:"nowrap",
+  overflow:"hidden",
+  textOverflow:"ellipsis",
+  textTransform:"uppercase",
+  fontFamily:"inherit"
+};
+const POS_ROW=i=>i%2===0?"rgba(11,25,45,0.96)":"rgba(18,34,57,0.96)";
+const POS_TABLE={width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12,tableLayout:"fixed",fontFamily:"inherit"};
+const POS_WRAP={border:"1px solid "+C.bd,borderRadius:8,overflow:"auto",minWidth:0,background:C.bg2,boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)"};
+
 const btn=(active=false)=>({fontSize:10,fontWeight:700,padding:"3px 7px",borderRadius:3,border:"1px solid "+(active?C.blue:C.bd),background:active?"rgba(88,166,255,.18)":C.bg3,color:active?"#d9ecff":"#9fc3f5",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
 const input={background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:11,padding:"6px 7px",outline:"none",boxSizing:"border-box"};
 function weekBounds(offset=0){const n=new Date();n.setHours(0,0,0,0);const dow=(n.getDay()+6)%7;const m=new Date(n);m.setDate(n.getDate()-dow+offset*7);const s=new Date(m);s.setDate(m.getDate()+6);return[m,s];}
-function CargoMonthChart({data,total}){
- const vals=data||[],max=Math.max(1,...vals.map(x=>x.count||0)); const W=520,H=190,L=28,R=10,T=20,B=25,iw=W-L-R,ih=H-T-B;
- const pts=vals.map((d,i)=>({x:L+(vals.length<2?0:i/(vals.length-1))*iw,y:T+ih-(d.count/max)*ih,...d}));
- const path=pts.map((p,i)=>(i?"L":"M")+p.x+" "+p.y).join(" ");
- return <div style={{...card,height:260,padding:"8px 10px",boxSizing:"border-box",minWidth:0,flex:1}}>
-  <div style={{display:"flex",justifyContent:"space-between",fontSize:9,fontWeight:800,color:C.dim,textTransform:"uppercase"}}><span>Cargoes entered by month</span><span style={{color:C.blue}}>{total||0} total</span></div>
-  <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{width:"100%",height:215,display:"block"}}>
-   {[0,.25,.5,.75,1].map(v=><line key={v} x1={L} x2={W-R} y1={T+ih*v} y2={T+ih*v} stroke={C.bd2} strokeDasharray="3 4"/>)}
-   {pts.length>1&&<path d={path} fill="none" stroke={C.blue} strokeWidth="2" vectorEffect="non-scaling-stroke"/>}
-   {pts.map((p,i)=><g key={i}><circle cx={p.x} cy={p.y} r="2.5" fill="#79c0ff"/>{(i===0||i===pts.length-1||i%3===0)&&<text x={p.x} y={H-5} textAnchor="middle" fontSize="9" fill={C.faint}>{new Date(p.year,p.month,1).toLocaleString("en",{month:"short"})}</text>}</g>)}
-  </svg>
- </div>
+function CargoMonthChart({ data, total }){
+  const wrapRef = React.useRef(null);
+  const [size, setSize] = React.useState({ w:520, h:180 });
+  React.useEffect(()=>{
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries=>{
+      const box = entries[0]?.contentRect;
+      if (box && box.width>0 && box.height>0) setSize({ w: box.width, h: box.height });
+    });
+    ro.observe(el);
+    return ()=>ro.disconnect();
+  },[]);
+
+  const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const counts=data||[];
+  if(!counts.length) return null;
+  const W=Math.max(counts.length,2);
+  const maxC=Math.max(1,...counts.map(b=>b.count));
+  const SVG_W=size.w, SVG_H=size.h;
+  const PAD={t:20,r:12,b:28,l:36};
+  const iW=Math.max(1,SVG_W-PAD.l-PAD.r);
+  const iH=Math.max(1,SVG_H-PAD.t-PAD.b);
+  const pts=counts.map((bkt,i)=>({
+    x:PAD.l+(W<=1?0:i*(iW/(W-1))),
+    y:PAD.t+iH-(bkt.count/maxC)*iH,
+    ...bkt
+  }));
+  const pathD=pts.map((p,i)=>(i===0?"M":"L")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
+  const areaD=pathD+" L"+pts[pts.length-1].x.toFixed(1)+","+(PAD.t+iH)+" L"+pts[0].x.toFixed(1)+","+(PAD.t+iH)+" Z";
+  const lineLen=pts.reduce((a,p,i)=>i===0?0:a+Math.hypot(p.x-pts[i-1].x,p.y-pts[i-1].y),0);
+  const step=Math.max(1,Math.ceil(W/8));
+  const yearStarts=pts.filter((p,i)=>i>0&&p.year!==pts[i-1].year);
+  const peakIdx=counts.reduce((mx,b,i)=>b.count>counts[mx].count?i:mx,0);
+
+  return(
+    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"10px 12px 8px",display:"flex",flexDirection:"column",gap:4,minWidth:0,boxSizing:"border-box",height:260}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+        <div style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em"}}>Cargoes entered by month</div>
+        <div style={{fontSize:11,color:"rgba(88,166,255,0.7)",fontWeight:700}}>{total.toLocaleString()} total</div>
+      </div>
+      <div ref={wrapRef} style={{flex:1,minHeight:0,width:"100%"}}>
+        <svg width={SVG_W} height={SVG_H} viewBox={"0 0 "+SVG_W+" "+SVG_H} style={{display:"block",overflow:"visible"}}>
+          <defs>
+            <linearGradient id="cgGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.3"/>
+              <stop offset="100%" stopColor="#58a6ff" stopOpacity="0.02"/>
+            </linearGradient>
+            <style>{`
+              @keyframes cgDraw{from{stroke-dashoffset:${lineLen.toFixed(0)}}to{stroke-dashoffset:0}}
+              .cgLine{stroke-dasharray:${lineLen.toFixed(0)};stroke-dashoffset:${lineLen.toFixed(0)};animation:cgDraw 1.6s ease-out forwards;}
+            `}</style>
+          </defs>
+          {[0,0.25,0.5,0.75,1].map(f=>(
+            <g key={f}>
+              <line x1={PAD.l} y1={PAD.t+iH*(1-f)} x2={PAD.l+iW} y2={PAD.t+iH*(1-f)} stroke="rgba(88,130,200,0.1)" strokeWidth="1" strokeDasharray={f===0?"0":"3,4"}/>
+              <text x={PAD.l-5} y={PAD.t+iH*(1-f)+4} textAnchor="end" fontSize="10" fill="rgba(120,160,200,0.45)">{Math.round(maxC*f)}</text>
+            </g>
+          ))}
+          {yearStarts.map(p=>(
+            <g key={p.year}>
+              <line x1={p.x} y1={PAD.t-4} x2={p.x} y2={PAD.t+iH+20} stroke="rgba(88,166,255,0.22)" strokeWidth="1.5" strokeDasharray="4,3"/>
+              <text x={p.x+3} y={PAD.t-6} fontSize="10" fill="rgba(88,166,255,0.5)" fontWeight="700">{p.year}</text>
+            </g>
+          ))}
+          <path d={areaD} fill="url(#cgGrad)"/>
+          <path d={pathD} fill="none" stroke="#58a6ff" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" className="cgLine"/>
+          {pts.map((p,i)=>{
+            const showLabel=i===0||i===pts.length-1||i%step===0;
+            return(
+              <g key={i}>
+                {p.count>0&&<circle cx={p.x} cy={p.y} r={i===peakIdx?4:2.5} fill={i===peakIdx?"#79c0ff":"#58a6ff"} stroke="#0c1729" strokeWidth="1.5"/>}
+                {i===peakIdx&&(
+                  <text x={p.x} y={p.y-9} textAnchor="middle" fontSize="10" fill="#79c0ff" fontWeight="700">{p.count}</text>
+                )}
+                {showLabel&&(
+                  <text x={p.x} y={PAD.t+iH+16} textAnchor="middle" fontSize="10" fill="rgba(120,160,200,0.5)">{MONTHS[p.month]}</text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+// Stable filter column (module-level so children like RangeBox keep focus)
+function COL({label,col,children}){
+  return (
+    <div style={{display:"flex",flexDirection:"column",minWidth:0,overflow:"hidden",height:"100%"}}>
+      <div style={{fontSize:9,fontWeight:700,color:col,textTransform:"uppercase",letterSpacing:"0.1em",padding:"0 0 4px 0",borderBottom:"1px solid "+C.bd2,marginBottom:4,whiteSpace:"nowrap",flexShrink:0}}>{label}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:1,overflowY:"auto",flex:1,minHeight:0}}>{children}</div>
+    </div>
+  );
+}
+
+// One-time global CSS to hide scrollbars on rows using the hscroll-hide class,
+// while overflow-x:auto still scrolls (native touch drag on iPad/mobile,
+// custom mouse-drag below for desktop).
+function HScrollStyle(){
+  return <style>{`
+    .hscroll-hide{scrollbar-width:none;-ms-overflow-style:none;}
+    .hscroll-hide::-webkit-scrollbar{display:none;}
+  `}</style>;
+}
+
+// Horizontal row with iPhone-style "grab and drag" scrolling for desktop mouse
+// users; touch devices (iPad) get native momentum scroll for free since
+// overflow-x:auto already supports it — no extra code needed for touch.
+function HScrollRow({children,style}){
+  const ref = React.useRef(null);
+  const drag = React.useRef({active:false,startX:0,startScroll:0,moved:false});
+  function onDown(e){
+    const el=ref.current; if(!el) return;
+    drag.current={active:true,startX:e.pageX,startScroll:el.scrollLeft,moved:false};
+  }
+  function onMove(e){
+    if(!drag.current.active) return;
+    const el=ref.current; if(!el) return;
+    const dx=e.pageX-drag.current.startX;
+    if(Math.abs(dx)>3) drag.current.moved=true;
+    el.scrollLeft=drag.current.startScroll-dx;
+  }
+  function endDrag(){ drag.current.active=false; }
+  return (
+    <div
+      ref={ref}
+      className="hscroll-hide"
+      onMouseDown={onDown}
+      onMouseMove={onMove}
+      onMouseUp={endDrag}
+      onMouseLeave={endDrag}
+      // Suppress click-through on chips right after a drag, so dragging
+      // doesn't accidentally toggle whatever chip the cursor lands on.
+      onClickCapture={e=>{ if(drag.current.moved){ e.stopPropagation(); e.preventDefault(); drag.current.moved=false; } }}
+      style={{display:"flex",gap:8,overflowX:"auto",overflowY:"hidden",flex:1,minWidth:0,cursor:"grab",userSelect:"none",WebkitOverflowScrolling:"touch",...style}}
+    >
+      {children}
+    </div>
+  );
+}
+
+// One filter category as a full-width horizontal row: label on the left,
+// chips scrolling horizontally on the right (drag or touch-swipe if they
+// overflow the width — no visible scrollbar).
+function FilterRow({label,col,children}){
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"5px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
+      <div style={{width:80,flexShrink:0,fontSize:10,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em"}}>{label}</div>
+      <HScrollRow style={{gap:6}}>{children}</HScrollRow>
+    </div>
+  );
+}
+
+// Wrapping variant (no horizontal scroll) — for rows with few enough items
+// that wrapping onto a second line reads better than side-scrolling, like
+// DWT/Built which pair a short chip list with two small range inputs.
+function FilterRowWrap({label,col,children}){
+  return (
+    <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"6px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
+      <div style={{width:80,flexShrink:0,fontSize:10,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em",paddingTop:4}}>{label}</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1,minWidth:0,rowGap:6}}>{children}</div>
+    </div>
+  );
+}
+
+// Two-tab panel wrapper (used for Fixing Window History/Open-Segments and
+// AIS Map/Regional Snapshot) — frees up horizontal space by combining what
+// used to be two separate side-by-side boxes into one.
+// One-line tappable header that expands to full content below it — used to
+// give mobile access to sections (Parse, Filters, Fixing Window, Map) that
+// are normally laid out side-by-side on desktop but don't fit that way on a
+// phone/iPad width.
+function MobileCollapse({ title, color="#58a6ff", defaultOpen=false, children }){
+  const [open, setOpen] = React.useState(defaultOpen);
+  return (
+    <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:7, overflow:"hidden" }}>
+      <button onClick={()=>setOpen(o=>!o)}
+        style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between",
+          padding:"10px 12px", background:"transparent", border:"none", cursor:"pointer", fontFamily:"inherit",
+          minHeight:44, boxSizing:"border-box" }}>
+        <span style={{ fontSize:13, fontWeight:700, color }}>{title}</span>
+        <span style={{ fontSize:12, color:C.faint }}>{open?"▾":"▸"}</span>
+      </button>
+      {open && <div style={{ padding:"0 10px 10px" }}>{children}</div>}
+    </div>
+  );
 }
 function BunkerHeader(){
  const [b,setB]=useState(null);
@@ -44,7 +252,7 @@ function useMonthly(){
 function TagCell({id,value,onUpdate}){
  const [open,setOpen]=useState(false),[pos,setPos]=useState({top:0,left:0}),ref=useRef(null);
  function show(){if(ref.current){const r=ref.current.getBoundingClientRect(),z=parseFloat(getComputedStyle(document.body).zoom||"1")||1,w=160*z,h=Math.min(360,72+tagList().length*27)*z,m=12;let l=r.left-w-6;if(l<m)l=r.right+6;l=Math.max(m,Math.min(l,innerWidth-w-m));let t=Math.max(m,Math.min(r.top-8,innerHeight-h-m));setPos({left:l/z,top:t/z});}setOpen(true);}
- return <><td style={{textAlign:"center",padding:"6px 3px"}}><button ref={ref} onClick={show} style={{background:"transparent",border:"1px solid "+C.bd,borderRadius:3,color:value?C.blue:C.faint,fontSize:9,cursor:"pointer",minWidth:20}}>{value||"+"}</button></td>
+ return <><td style={{...POS_TD,textAlign:"center",padding:"0 3px"}}><button ref={ref} onClick={show} style={{background:"transparent",border:"1px solid "+C.bd,borderRadius:3,color:value?C.blue:C.faint,fontSize:9,cursor:"pointer",minWidth:20}}>{value||"+"}</button></td>
  {open&&<><div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"fixed",left:pos.left,top:pos.top,zIndex:19999,width:160,maxHeight:360,overflowY:"auto",background:"#071223",border:"1px solid "+C.bd,borderRadius:7,padding:5,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}>
  {tagList().map(t=><button key={t} onClick={()=>{onUpdate(id,"tag",value===t?"":t);setOpen(false)}} style={{display:"block",width:"100%",textAlign:"left",padding:"6px 7px",marginBottom:2,background:value===t?"rgba(88,166,255,.16)":"transparent",border:"1px solid "+(value===t?C.blue:C.bd2),borderRadius:3,color:value===t?"#fff":"#9fc3f5",fontSize:9,fontWeight:700,cursor:"pointer"}}>{t}</button>)}</div></>}</>;
 }
@@ -53,13 +261,13 @@ function RegionCell({value,onSave}){
  const matches=REGIONS.filter(r=>!draft||r.toLowerCase().startsWith(draft.toLowerCase())||r.toLowerCase().includes(draft.toLowerCase()));
  function commit(){const q=draft.trim(),hit=REGIONS.find(r=>r.toLowerCase()===q.toLowerCase())||REGIONS.find(r=>r.toLowerCase().startsWith(q.toLowerCase()));if(!q)onSave("");else if(hit)onSave(hit);setEdit(false);}
  return <td style={{padding:"6px 7px",fontWeight:700,color:C.tx,position:"relative"}} onClick={()=>{setDraft(value||"");setEdit(true);setTimeout(()=>ref.current?.focus(),0)}}>
- {!edit?value||"":<input ref={ref} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={()=>setTimeout(commit,80)} onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab"){e.preventDefault();commit()}if(e.key==="Escape")setEdit(false)}} style={{...input,width:"100%",height:24,fontWeight:700,textTransform:"uppercase",background:"#071223"}}/>}
+ {!edit?value||"":<input ref={ref} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={()=>setTimeout(commit,80)} onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab"){e.preventDefault();commit()}if(e.key==="Escape")setEdit(false)}} style={{...input,width:"100%",height:24,fontWeight:700,textTransform:"uppercase",fontFamily:"inherit",background:"#071223"}}/>}
  {edit&&matches.length>0&&<div style={{position:"absolute",left:4,top:29,zIndex:15000,minWidth:145,background:"#071223",border:"1px solid "+C.bd,borderRadius:5,padding:3,boxShadow:"0 8px 25px rgba(0,0,0,.65)"}}>{matches.slice(0,8).map(r=><div key={r} onMouseDown={e=>{e.preventDefault();onSave(r);setEdit(false)}} style={{padding:"4px 6px",fontSize:9,fontWeight:700,cursor:"pointer"}}>{r}</div>)}</div>}
  </td>;
 }
 function Editable({value,onSave,color,bold}){
  const [e,setE]=useState(false),[v,setV]=useState(value??"");useEffect(()=>setV(value??""),[value]);
- return <td onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} style={{padding:"6px 7px",color:color||C.tx,fontWeight:bold?700:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+ return <td onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} style={{...POS_TD,color:color||C.tx,fontWeight:bold?700:500}}>
  {e?<input autoFocus value={v} onChange={x=>setV(x.target.value)} onBlur={()=>{setE(false);if(v!==value)onSave(v)}} onKeyDown={x=>{if(x.key==="Enter"){x.currentTarget.blur()}if(x.key==="Escape"){setV(value??"");setE(false)}}} style={{...input,width:"100%",height:24,background:"#071223"}}/>:<span title={String(value||"")}>{value||""}</span>}</td>;
 }
 function AddRow({onSave,onClose,quotes=false}){
@@ -84,8 +292,7 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
   if(search&&!JSON.stringify(c).toLowerCase().includes(search.toLowerCase()))return false;return true;});
   const field=sort==="added"?"added":sort;a=[...a].sort((x,y)=>{let A=x[field]||x.updated||"",B=y[field]||y.updated||"";if(field==="added"||field==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime();}return(A<B?-1:A>B?1:0)*dir});return a;
  },[cargoes,search,status,time,grade,tag,sort,dir]);
- useEffect(()=>{onCargoSearch?.(search)},[search]);
- const widths=["28px","64px","120px","135px","62px","90px","115px","150px","78px","78px","125px","1fr","70px","95px","24px","24px"];
+ const widths=["1.5%","4.5%","8%","8%","4%","6%","7%","8%","4.5%","4.5%","6.5%","15%","4%","6%","1%","1.5%"];
  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
   <div style={{display:"flex",gap:10,height:260}}>
    <div style={{flex:"0 0 25%",display:"flex",flexDirection:"column",gap:4}}>
@@ -108,13 +315,13 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
    <div style={{marginLeft:"auto",display:"flex",gap:5,alignItems:"center"}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search cargoes..." style={{...input,width:210}}/><span style={{fontSize:10,color:C.faint}}>Total <b style={{color:C.tx}}>{cargoTotal||cargoes.length}</b></span><select value={sort} onChange={e=>setSort(e.target.value)} style={input}><option value="added">Added</option><option value="updated">Updated</option><option value="charterer">Charterer</option><option value="from">Laycan</option></select><button onClick={()=>setDir(d=>-d)} style={btn()}>{dir>0?"▲":"▼"}</button></div>
   </div>
   {showAdd&&<AddRow onSave={onAddC} onClose={()=>setShowAdd(false)}/>}
-  <div style={{...card,overflow:"hidden"}}>
-   <table style={{width:"100%",tableLayout:"fixed",borderCollapse:"collapse",fontSize:12,lineHeight:1.25}}>
+  <div style={POS_WRAP}>
+   <table style={POS_TABLE}>
     <colgroup>{widths.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
-    <thead><tr>{["","Status","Vessel","Charterer","Qty","Cargo","Load","Disch","From","To","Freight","Comment","Tag","Updated","",""].map((h,i)=><th key={i} style={{padding:"6px",textAlign:i===0||i>13?"center":"left",color:C.dim,fontSize:12,textTransform:"uppercase",borderBottom:"1px solid "+C.bd}}>{h}</th>)}</tr></thead>
-    <tbody>{filtered.slice(0,200).map((c,i)=><tr key={c.id} style={{background:i%2?"rgba(18,34,57,.96)":"rgba(11,25,45,.96)",height:24}}>
-     <td style={{textAlign:"center",color:C.faint}}>[ ]</td>
-     <td onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{padding:"6px 7px",fontWeight:800,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>
+    <thead><tr>{["","Status","Vessel","Charterer","Qty","Cargo","Load","Disch","From","To","Freight","Comment","Tag","Updated","",""].map((h,i)=><th key={i} style={{...POS_TH,textAlign:i===0||i>13?"center":(["Qty","From","To","Freight"].includes(h)?"right":"left")}}>{h}</th>)}</tr></thead>
+    <tbody>{filtered.slice(0,200).map((c,i)=><tr key={c.id} style={{background:POS_ROW(i),height:27}}>
+     <td style={{...POS_TD,textAlign:"center",color:C.faint,padding:"0 2px"}}>[ ]</td>
+     <td onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:800,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>
      <Editable value={c.vessel||""} color={C.blue} onSave={v=>onUpdateC(c.id,"vessel",v)}/>
      <Editable value={toTCase(c.charterer||"")} bold color="#79c0ff" onSave={v=>onUpdateC(c.id,"charterer",toTCase(v))}/>
      <Editable value={normaliseQty(c.qty)} color={C.amber} onSave={v=>onUpdateC(c.id,"qty",normaliseQty(v))}/>
@@ -126,9 +333,9 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
      <Editable value={fmtFreight(c.freight)||c.freight||""} color="#a8e6a3" onSave={v=>onUpdateC(c.id,"freight",fmtFreight(v)||v)}/>
      <Editable value={c.comment||""} color={C.dim} onSave={v=>onUpdateC(c.id,"comment",v)}/>
      <TagCell id={c.id} value={c.tag} onUpdate={onUpdateC}/>
-     <td style={{padding:"6px 7px",color:C.faint,whiteSpace:"nowrap"}}>{c.updated?new Date(c.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
-     <td style={{textAlign:"center"}}>{(c.entered_by==="H"||c.entered_by==="L")&&<span style={{fontSize:8,color:c.entered_by==="H"?C.blue:C.green}}>{c.entered_by}</span>}</td>
-     <td style={{textAlign:"center"}}><button onClick={()=>confirm("Delete cargo?")&&onDelC(c.id)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td>
+     <td style={{...POS_TD,textAlign:"center",color:C.faint}}>{c.updated?new Date(c.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
+     <td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}>{(c.entered_by==="H"||c.entered_by==="L")&&<span style={{fontSize:8,color:c.entered_by==="H"?C.blue:C.green}}>{c.entered_by}</span>}</td>
+     <td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>confirm("Delete cargo?")&&onDelC(c.id)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td>
     </tr>)}</tbody>
    </table>
   </div>
