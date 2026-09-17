@@ -1402,6 +1402,17 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   // lookup table was always empty. Load it once on mount instead.
   useEffect(()=>{ if(!vesselDBLoaded && !vesselDBLoading && onLoadVesselDB) onLoadVesselDB(); },[]);
 
+  React.useEffect(()=>{
+    const onGuestAccess=e=>{
+      const next=e?.detail||{};
+      if(Array.isArray(next.tabs))setGuestTabs(next.tabs.filter(id=>id!=="settings"));
+      const p=String(next.pin??"").replace(/\D/g,"").slice(0,4);
+      if(p.length===4)setGuestPin(p);
+    };
+    window.addEventListener("guest-access-updated",onGuestAccess);
+    return()=>window.removeEventListener("guest-access-updated",onGuestAccess);
+  },[]);
+
   // No sessionStorage — PIN required on every load/refresh/new tab
 
   function submitPin(p){
@@ -1410,7 +1421,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
       setGuestMode(false);
       setUnlocked(true);
       setPinInput("");
-    } else if(p===GUEST_PIN){
+    } else if(p===guestPin){
       localStorage.setItem("signal_user","L");
       setGuestMode(true);
       setUnlocked(true);
