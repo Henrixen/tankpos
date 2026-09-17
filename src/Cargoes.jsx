@@ -52,7 +52,7 @@ function CargoMonthChart({ data, total }){
   const W=Math.max(counts.length,2);
   const maxC=Math.max(1,...counts.map(b=>b.count));
   const SVG_W=size.w, SVG_H=size.h;
-  const PAD={t:18,r:8,b:20,l:25};
+  const PAD={t:16,r:24,b:8,l:25};
   const iW=Math.max(1,SVG_W-PAD.l-PAD.r);
   const iH=Math.max(1,SVG_H-PAD.t-PAD.b);
   const pts=counts.map((bkt,i)=>({
@@ -68,7 +68,7 @@ function CargoMonthChart({ data, total }){
   const peakIdx=counts.reduce((mx,b,i)=>b.count>counts[mx].count?i:mx,0);
 
   return(
-    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"7px 7px 4px",display:"flex",flexDirection:"column",gap:2,minWidth:0,boxSizing:"border-box",height:260}}>
+    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"7px 7px 1px",display:"flex",flexDirection:"column",gap:1,minWidth:0,boxSizing:"border-box",height:260}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
         <div style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em"}}>Cargoes entered by month</div>
         <div style={{fontSize:11,color:"rgba(88,166,255,0.7)",fontWeight:700}}>{total.toLocaleString()} total</div>
@@ -267,6 +267,7 @@ function AddRow({onSave,onClose,quotes=false}){
 export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,onAddCargoes,onAddC,onDelC,onAddVessels,onCargoSearch}){
  const [search,setSearch]=useState(""),[status,setStatus]=useState("ALL"),[time,setTime]=useState(""),[grade,setGrade]=useState(""),[tag,setTag]=useState(""),[parseTag,setParseTag]=useState(""),[showAdd,setShowAdd]=useState(false),[sort,setSort]=useState("added"),[dir,setDir]=useState(-1);
  const [hoverRowId,setHoverRowId]=useState(null);
+ const [selected,setSelected]=useState(()=>new Set());
  const {week,monthly}=useMonthly();
  const groups=useMemo(()=>{try{return JSON.parse(localStorage.getItem("signal_cargo_filter_groups")||"[]")}catch{return[]}},[cargoes.length]);
  const grades=groups.filter(g=>(g.category||"grade")==="grade");
@@ -306,7 +307,7 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
     <colgroup>{widths.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
     <thead><tr>{["","Status","Vessel","Charterer","Qty","Cargo","Load","Disch","From","To","Freight","Comment","Tag","Updated","",""].map((h,i)=><th key={i} style={{...POS_TH,textAlign:i===0||i>13||["Status","Qty","From","To","Freight","Tag","Updated"].includes(h)?"center":"left"}}>{h}</th>)}</tr></thead>
     <tbody>{filtered.slice(0,200).map((c,i)=>{const rowBg=hoverRowId===c.id?"rgba(28,52,82,.98)":POS_ROW(i);return <tr key={c.id} onMouseEnter={()=>setHoverRowId(c.id)} onMouseLeave={()=>setHoverRowId(null)} style={{background:rowBg,height:32,transition:"background .08s ease"}}>
-     <td style={{...POS_TD,textAlign:"center",color:C.faint,padding:"0 2px"}}>[ ]</td>
+     <td onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} style={{...POS_TD,textAlign:"center",padding:"0 2px",overflow:"visible"}}><input type="checkbox" aria-label="Select row" checked={selected.has(c.id)} onClick={e=>e.stopPropagation()} onChange={e=>{const checked=e.target.checked;setSelected(prev=>{const n=new Set(prev);checked?n.add(c.id):n.delete(c.id);return n})}} style={{display:"block",width:13,height:13,margin:"0 auto",padding:0,cursor:"pointer",accentColor:"#2383e2"}}/></td>
      <td onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:500,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>
      <Editable value={c.vessel||""} color={C.blue} onSave={v=>onUpdateC(c.id,"vessel",v)}/>
      <Editable value={toTCase(c.charterer||"")} bold color="#79c0ff" onSave={v=>onUpdateC(c.id,"charterer",toTCase(v))}/>
