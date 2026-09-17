@@ -272,14 +272,22 @@ function TagCell({cargoId,tag,onUpdateC}){
     setTagColors(getTagColors());
     if(btnRef.current){
       const r=btnRef.current.getBoundingClientRect();
-      const popW=160; const popH=240;
-      // Prefer opening directly below the button, left-aligned
-      let left=r.left;
-      if(left+popW>window.innerWidth-8) left=r.right-popW;
-      left=Math.max(8,Math.min(left,window.innerWidth-popW-8));
-      let top=r.bottom+4;
-      if(top+popH>window.innerHeight-8) top=Math.max(8,r.top-popH-4);
-      setPos({top,left});
+      const rawZoom=parseFloat(getComputedStyle(document.body).zoom||document.body.style.zoom||"1");
+      const zoom=Number.isFinite(rawZoom)&&rawZoom>0?rawZoom:1;
+      const popWVisual=160*zoom;
+      const popHVisual=Math.min(360,72+getTagListFor("cargo").length*27)*zoom;
+      const marginVisual=12;
+
+      // Same behaviour as the Positions tag picker: open beside the clicked cell,
+      // then clamp to the visible viewport. This stays attached at every app zoom.
+      let leftVisual=r.left-popWVisual-6;
+      if(leftVisual<marginVisual) leftVisual=r.right+6;
+      leftVisual=Math.max(marginVisual,Math.min(leftVisual,window.innerWidth-popWVisual-marginVisual));
+
+      let topVisual=r.top-8;
+      topVisual=Math.max(marginVisual,Math.min(topVisual,window.innerHeight-popHVisual-marginVisual));
+
+      setPos({top:topVisual/zoom,left:leftVisual/zoom});
     }
     setOpen(v=>!v);
     setEditMode(null); setColorPick(null);
@@ -3677,8 +3685,8 @@ const filtV=useMemo(()=>{
                   <button onClick={onClick} style={{...fb(active),display:"block",width:"100%",textAlign:"left",padding:"3px 7px",fontSize:11,whiteSpace:"nowrap",color:red?C.red:active?"#d9ecff":"#9fc3f5",borderColor:red?C.red+"55":undefined}}>{children}</button>
                 );
                 return(
-                  <div style={{flex:"0 0 auto",width:mobile?"100%":"25%",display:"flex",flexDirection:"column",gap:0,minHeight:0,height:mobile?"auto":260}}>
-                    <div style={{display:"grid",gridTemplateColumns:tab==="cargo2"?"repeat(5,1fr)":"repeat(3,1fr)",gap:6,padding:"8px 8px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,overflowY:"auto",flex:1,boxSizing:"border-box"}}>
+                  <div style={{flex:"0 0 auto",width:mobile?"100%":tab==="cargo2"?"40%":"36%",display:"flex",flexDirection:"column",gap:0,minHeight:0,height:mobile?"auto":260}}>
+                    <div style={{display:"grid",gridTemplateColumns:tab==="cargo2"?"0.85fr .8fr .9fr 1.7fr 1.7fr":"repeat(3,1fr)",gap:6,padding:"8px 8px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,overflow:"hidden",flex:1,boxSizing:"border-box"}}>
                       {/* Grade column */}
                       <COL label="Grade" col={C.purple}>
                         {showRaw
@@ -3702,34 +3710,31 @@ const filtV=useMemo(()=>{
                         {cTagFilter&&<B active={false} red onClick={()=>setCTagFilter("")}>✕ Clear</B>}
                       </COL>
                       {tab==="cargo2"&&<>
-                        <COL label="Ex Region" col={C.blue}>
-                          <B active={!cExRegionFilter} onClick={()=>setCExRegionFilter("")}>All</B>
-                          {CARGO_INTEL_REGIONS.map(r=><B key={r} active={cExRegionFilter===r} onClick={()=>setCExRegionFilter(v=>v===r?"":r)}>{r}</B>)}
-                        </COL>
-                        <COL label="To Region" col={C.blue}>
-                          <B active={!cToRegionFilter} onClick={()=>setCToRegionFilter("")}>All</B>
-                          {CARGO_INTEL_REGIONS.map(r=><B key={r} active={cToRegionFilter===r} onClick={()=>setCToRegionFilter(v=>v===r?"":r)}>{r}</B>)}
-                        </COL>
+                        <div style={{minWidth:0}}>
+                          <div style={{fontSize:9,fontWeight:700,color:C.blue,textTransform:"uppercase",letterSpacing:"0.1em",padding:"0 0 4px",borderBottom:"1px solid "+C.bd2,marginBottom:4}}>Ex Region</div>
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:2}}>
+                            <B active={!cExRegionFilter} onClick={()=>setCExRegionFilter("")}>All</B>
+                            {CARGO_INTEL_REGIONS.map(r=><B key={r} active={cExRegionFilter===r} onClick={()=>setCExRegionFilter(v=>v===r?"":r)}>{r}</B>)}
+                          </div>
+                        </div>
+                        <div style={{minWidth:0}}>
+                          <div style={{fontSize:9,fontWeight:700,color:C.blue,textTransform:"uppercase",letterSpacing:"0.1em",padding:"0 0 4px",borderBottom:"1px solid "+C.bd2,marginBottom:4}}>To Region</div>
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:2}}>
+                            <B active={!cToRegionFilter} onClick={()=>setCToRegionFilter("")}>All</B>
+                            {CARGO_INTEL_REGIONS.map(r=><B key={r} active={cToRegionFilter===r} onClick={()=>setCToRegionFilter(v=>v===r?"":r)}>{r}</B>)}
+                          </div>
+                        </div>
                       </>}
                     </div>
                   </div>
                 );
               })()}
 
-              {/* Rate Matrix — condensed card, click to expand; moved here from Positions */}
-              {!mobile&&(
-                <div style={{flex: matrixExpanded ? "0 0 50%" : "0 0 25%", position:"relative", transition:"flex-basis .18s ease"}}>
-                  <Suspense fallback={null}>
-                    <RateMatrixCard collapsedHeight={260} bunkerHeader={<Suspense fallback={null}><BunkerHeader/></Suspense>} onExpandChange={setMatrixExpanded}/>
-                  </Suspense>
-                </div>
-              )}
-
-              {/* Right: Cargo count by month — animated, full history (minimized while Rate Matrix is expanded) */}
-              {!matrixExpanded&&!mobile&&(()=>{
+              {/* Right: Cargo count by month — expanded after removing the Rate Matrix card */}
+              {!mobile&&(()=>{
                 const now=new Date();
                 const counts=graphMonthlyData.length>0?graphMonthlyData:[...Array.from({length:3},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-2+i,1);return{year:d.getFullYear(),month:d.getMonth(),count:0};})];
-                return <CargoMonthChart counts={counts} total={cargoTotal||cargoes.length}/>;
+                return <div style={{flex:"1 1 0",minWidth:0}}><CargoMonthChart counts={counts} total={cargoTotal||cargoes.length}/></div>;
               })()}
             </div>
             )}
@@ -3906,7 +3911,20 @@ const filtV=useMemo(()=>{
 
               <button onClick={e=>{
                   const r=e.currentTarget.getBoundingClientRect();
-                  setCargoColumnsPos({top:r.bottom+5,left:Math.max(8,r.right-205)});
+                  const rawZoom=parseFloat(getComputedStyle(document.body).zoom||document.body.style.zoom||"1");
+                  const zoom=Number.isFinite(rawZoom)&&rawZoom>0?rawZoom:1;
+                  const popWVisual=205*zoom;
+                  const popHVisual=Math.min(390,92+(tab==="cargo2"?quoteFixtureColumns:cargoColumns).length*29)*zoom;
+                  const marginVisual=12;
+
+                  let leftVisual=r.right-popWVisual;
+                  leftVisual=Math.max(marginVisual,Math.min(leftVisual,window.innerWidth-popWVisual-marginVisual));
+
+                  let topVisual=r.bottom+5;
+                  if(topVisual+popHVisual>window.innerHeight-marginVisual){
+                    topVisual=Math.max(marginVisual,r.top-popHVisual-5);
+                  }
+                  setCargoColumnsPos({top:topVisual/zoom,left:leftVisual/zoom});
                   setCargoColumnsOpen(v=>!v);
                 }}
                 style={{fontSize:11,fontWeight:700,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"3px 8px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
@@ -3979,7 +3997,8 @@ const filtV=useMemo(()=>{
             {/* Row hover highlight + mobile no-truncation */}
             <style>{`
               .cargo-table tr:hover td{background:rgba(58,130,246,0.06)!important;}
-              .cargo-table table{width:100%!important;min-width:100%!important;table-layout:fixed!important;}
+              .cargo-table table{width:100%!important;min-width:100%!important;table-layout:auto!important;}
+              .cargo-table col{width:auto!important;}
               .cargo-table th,.cargo-table td{border-left:none!important;border-right:none!important;box-sizing:border-box!important;}
               .cargo-table th{padding-left:6px!important;padding-right:6px!important;}
               .cargo-table td{padding-left:6px!important;padding-right:6px!important;}
@@ -3992,7 +4011,7 @@ const filtV=useMemo(()=>{
             <style>{(()=>{
               const cols=tab==="cargo2"?quoteFixtureColumns:cargoColumns;
               const visible=tab==="cargo2"?qfVisibleCols:cargoVisibleCols;
-              return cols.map((c,i)=>visible.has(c.key)?"":`.cargo-table tr > :nth-child(${i+1}){display:none!important;}`).join("\n");
+              return cols.map((c,i)=>visible.has(c.key)?"":`.cargo-table tr > :nth-child(${i+1}), .cargo-table col:nth-child(${i+1}){display:none!important;width:0!important;}`).join("\n");
             })()}</style>
             <div style={{width:"100%",overflowX:mobile?"auto":"hidden",WebkitOverflowScrolling:"touch"}}
               onClick={e=>{
