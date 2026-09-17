@@ -402,7 +402,10 @@ export default function TankPos(){
   const updateC=useCallback(async(id,field,value)=>{
     const editor=localStorage.getItem("signal_user")||"H";
     const nowIso=new Date().toISOString();
-    const dbValue=(field==="from"||field==="to")?toISODate(value):value;
+    const rawDbValue=(field==="from"||field==="to")?toISODate(value):value;
+    const nullableQfFields=new Set(["ex_region","to_region","p_and_c","intelligence","source"]);
+    let dbValue=nullableQfFields.has(field)&&String(rawDbValue??"").trim()===""?null:rawDbValue;
+    if(field==="intelligence"&&dbValue!=null) dbValue=String(dbValue).trim().toUpperCase();
     const displayValue=(field==="from"||field==="to")?(() => {
       const iso=toISODate(value);
       if(!iso) return value;
