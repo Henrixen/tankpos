@@ -308,6 +308,7 @@ export default function NewbuildsTab(){
   const [pasteTab,setPasteTab]=useState("paste"); // paste | list
   const [existingFleet,setExistingFleet]=useState([]);
   const [shipComments,setShipComments]=useState({}); // stableKey -> comment
+  const [commentSaveError,setCommentSaveError]=useState(null);
 
   useEffect(()=>{
     async function fetchMeta(){
@@ -637,13 +638,13 @@ export default function NewbuildsTab(){
   const segCounts=useMemo(()=>{
     const counts={};
     NB_SEGMENTS.forEach(s=>{counts[s.key]={ships:0,dwt:0};});
-    enriched.forEach(n=>{
+    filtered.forEach(n=>{
       if(!n._seg) return;
       counts[n._seg.key].ships++;
       counts[n._seg.key].dwt+=Number(n.dwt)||0;
     });
     return counts;
-  },[enriched]);
+  },[filtered]);
 
 
   const existingSegCounts=useMemo(()=>{
@@ -660,7 +661,7 @@ export default function NewbuildsTab(){
   const segmentCoatingStats=useMemo(()=>{
     const result={};
     NB_SEGMENTS.forEach(seg=>{
-      const nbRows=enriched.filter(n=>n._seg?.key===seg.key);
+      const nbRows=filtered.filter(n=>n._seg?.key===seg.key);
       const fleetRows=existingFleet.filter(r=>Number(r.built)>2000 && segmentFor(Number(r.dwt)||0)?.key===seg.key);
       const names=[...new Set([...nbRows.map(r=>r.coating||"Unknown"),...fleetRows.map(r=>r.coating||"Unknown")])];
       result[seg.key]=names.map(coating=>{
@@ -676,21 +677,19 @@ export default function NewbuildsTab(){
       }).filter(x=>x.ships||x.fleet).sort((a,b)=>b.ships-a.ships);
     });
     return result;
-  },[enriched,existingFleet]);
+  },[filtered,existingFleet]);
 
-  // Chart 1 = all segments by ship count.
-  // Charts 2/3 = coating and owner for the clicked segment (or all segments if none clicked).
-  const chartBase=useMemo(
-    ()=>segFilter ? enriched.filter(n=>n._seg?.key===segFilter) : enriched,
-    [enriched,segFilter]
-  );
+  // All analytical cards share the exact same filtered dataset.
+  // Any delivery-bar, dropdown, segment, coating or owner selection therefore
+  // propagates through Segment Breakdown and every pie chart.
+  const chartBase=filtered;
 
   const chartSegmentData=useMemo(
     ()=>NB_SEGMENTS.map(seg=>({
       label:seg.label,
-      value:enriched.filter(n=>n._seg?.key===seg.key).length,
+      value:filtered.filter(n=>n._seg?.key===seg.key).length,
     })).filter(x=>x.value>0),
-    [enriched]
+    [filtered]
   );
 
   const chartCoatingData=useMemo(()=>{
@@ -1011,7 +1010,7 @@ export default function NewbuildsTab(){
               <PieCard title="Coating" subtitle={selectedSegLabel} data={chartCoatingData} activeLabel={coatingFilter}
                 onSliceClick={label=>setCoatingFilter(prev=>prev===label?null:label)}/>
               <PieCard title="Owner" subtitle={`${selectedSegLabel} · top owners`} data={chartOwnerData} activeLabel={ownerFilter}
-                onSliceClick={label=>setOwnerFilter(prev=>prev===label?null:label)}/>
+                onSliceClick={label=>{if(label==="Other")return;setOwnerFilter(prev=>prev===label?null:label);}}/>
             </div>
       </SectionCard>
 
