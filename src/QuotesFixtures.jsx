@@ -14,31 +14,34 @@ function tagList(){try{const x=JSON.parse(localStorage.getItem("signal_custom_ta
 const card={background:C.bg2,border:"1px solid "+C.bd,borderRadius:7};
 
 const POS_TH={
-  padding:"7px 10px",
-  color:"rgba(120,160,220,0.55)",
+  background:C.bg2,
+  color:C.dim,
+  fontSize:12,
   fontWeight:700,
-  fontSize:11,
   textTransform:"uppercase",
-  letterSpacing:"0.08em",
+  letterSpacing:"0.07em",
+  padding:"6px 8px",
+  borderBottom:"1px solid "+C.bd2,
   textAlign:"left",
-  background:C.bg4,
-  borderBottom:"1px solid rgba(58,130,246,0.14)",
   whiteSpace:"nowrap",
-  verticalAlign:"middle"
+  verticalAlign:"middle",
+  fontFamily:"inherit"
 };
 const POS_TD={
-  padding:"6px 10px",
+  padding:"4px 7px",
   color:"#d9e8ff",
-  fontWeight:500,
+  fontWeight:600,
   fontSize:12,
-  borderBottom:"1px solid rgba(255,255,255,0.035)",
+  borderBottom:"1px solid rgba(255,255,255,0.025)",
   verticalAlign:"middle",
   whiteSpace:"nowrap",
   overflow:"hidden",
-  textOverflow:"ellipsis"
+  textOverflow:"ellipsis",
+  textTransform:"uppercase",
+  fontFamily:"inherit"
 };
-const POS_ROW=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
-const POS_TABLE={width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12,tableLayout:"fixed",fontFamily:"sans-serif"};
+const POS_ROW=i=>i%2===0?"rgba(11,25,45,0.96)":"rgba(18,34,57,0.96)";
+const POS_TABLE={width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12,tableLayout:"fixed",fontFamily:"inherit"};
 const POS_WRAP={border:"1px solid "+C.bd,borderRadius:8,overflow:"auto",minWidth:0,background:C.bg2,boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)"};
 
 const btn=(active=false)=>({fontSize:10,fontWeight:700,padding:"3px 7px",borderRadius:3,border:"1px solid "+(active?C.blue:C.bd),background:active?"rgba(88,166,255,.18)":C.bg3,color:active?"#d9ecff":"#9fc3f5",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
@@ -82,7 +85,7 @@ function RegionCell({value,onSave}){
  const matches=REGIONS.filter(r=>!draft||r.toLowerCase().startsWith(draft.toLowerCase())||r.toLowerCase().includes(draft.toLowerCase()));
  function commit(){const q=draft.trim(),hit=REGIONS.find(r=>r.toLowerCase()===q.toLowerCase())||REGIONS.find(r=>r.toLowerCase().startsWith(q.toLowerCase()));if(!q)onSave("");else if(hit)onSave(hit);setEdit(false);}
  return <td style={{...POS_TD,fontWeight:700,color:C.tx,position:"relative"}} onClick={()=>{setDraft(value||"");setEdit(true);setTimeout(()=>ref.current?.focus(),0)}}>
- {!edit?value||"":<input ref={ref} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={()=>setTimeout(commit,80)} onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab"){e.preventDefault();commit()}if(e.key==="Escape")setEdit(false)}} style={{...input,width:"100%",height:24,fontWeight:700,textTransform:"uppercase",background:"#071223"}}/>}
+ {!edit?value||"":<input ref={ref} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={()=>setTimeout(commit,80)} onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab"){e.preventDefault();commit()}if(e.key==="Escape")setEdit(false)}} style={{...input,width:"100%",height:24,fontWeight:700,textTransform:"uppercase",fontFamily:"inherit",background:"#071223"}}/>}
  {edit&&matches.length>0&&<div style={{position:"absolute",left:4,top:29,zIndex:15000,minWidth:145,background:"#071223",border:"1px solid "+C.bd,borderRadius:5,padding:3,boxShadow:"0 8px 25px rgba(0,0,0,.65)"}}>{matches.slice(0,8).map(r=><div key={r} onMouseDown={e=>{e.preventDefault();onSave(r);setEdit(false)}} style={{padding:"4px 6px",fontSize:9,fontWeight:700,cursor:"pointer"}}>{r}</div>)}</div>}
  </td>;
 }
@@ -134,7 +137,7 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
    <table style={POS_TABLE}>
     <colgroup><col style={{width:"1.4%"}}/>{shown.map(([k,l,w])=><col key={k} style={{width:w+"%"}}/>)}<col style={{width:"1.4%"}}/><col style={{width:"1.4%"}}/></colgroup>
     <thead><tr><th style={{...POS_TH,textAlign:"center"}}></th>{shown.map(([k,l])=><th key={k} style={{...POS_TH,textAlign:["p_and_c","intelligence","from","to","freight"].includes(k)?"center":"left"}}>{l}</th>)}<th style={POS_TH}/><th style={POS_TH}/></tr></thead>
-    <tbody>{filtered.slice(0,200).map((c,i)=><tr key={c.id} style={{background:POS_ROW(i),height:30}}><td style={{...POS_TD,textAlign:"center",color:C.faint,padding:"0 2px"}}>[ ]</td>
+    <tbody>{filtered.slice(0,200).map((c,i)=><tr key={c.id} style={{background:POS_ROW(i),height:27}}><td style={{...POS_TD,textAlign:"center",color:C.faint,padding:"0 2px"}}>[ ]</td>
     {shown.map(([k])=>{
       if(k==="status")return <td key={k} onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:800,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>;
       if(k==="ex_region"||k==="to_region")return <RegionCell key={k} value={c[k]||""} onSave={v=>onUpdateC(c.id,k,v)}/>;
