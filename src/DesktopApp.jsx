@@ -36,8 +36,8 @@ const VesselUploader = React.lazy(()=>import("./VesselUploader"));
 const NewbuildsTab   = React.lazy(()=>import("./NewbuildsTab"));
 const FleetTab       = React.lazy(()=>import("./FleetTab"));
 const OutsidersTab   = React.lazy(()=>import("./OutsidersTab"));
-const CargoesTab      = React.lazy(()=>import("./Cargoes"));
-const QuotesFixtures  = React.lazy(()=>import("./QuotesFixtures"));
+const CargoesTab     = React.lazy(()=>import("./Cargoes"));
+const QuotesFixtures = React.lazy(()=>import("./QuotesFixtures"));
 
 const TabFallback = ()=>null;
 
@@ -2579,10 +2579,10 @@ const filtV=useMemo(()=>{
                   <div style={{display:"flex",gap:mobile?7:9,justifyContent:"center",marginBottom:mobile?10:15}}>
                     {[0,1,2,3].map(i=><div key={i} style={{
                       width:mobile?42:54,height:mobile?36:46,borderRadius:8,
-                      background:pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",
+                      background:pinError?"rgba(255,107,107,.12)":pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",
                       border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.56)":"rgba(88,166,255,.18)"),
-                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:mobile?16:18,color:"#79c0ff"
-                    }}>{pinInput.length>i?"●":""}</div>)}
+                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:mobile?16:18,color:pinError?"#ff6b6b":"#79c0ff"
+                    }}>{pinError?"●":pinInput.length>i?"●":""}</div>)}
                   </div>
 
                   <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:mobile?6:8,maxWidth:mobile?230:270,margin:"0 auto",width:"100%"}}>
@@ -3636,7 +3636,7 @@ const filtV=useMemo(()=>{
             )}
           </div>
         )}
-        {/* ── CARGOES — independent UI component ── */}
+        {/* ── CARGOES — isolated component, restored independently ── */}
         {tab==="cargo"&&(
           <Suspense fallback={<TabFallback/>}>
             <CargoesTab
@@ -3647,7 +3647,7 @@ const filtV=useMemo(()=>{
           </Suspense>
         )}
 
-        {/* ── QUOTES & FIXTURES — independent UI component ── */}
+        {/* ── QUOTES & FIXTURES — isolated component ── */}
         {tab==="cargo2"&&(
           <Suspense fallback={<TabFallback/>}>
             <QuotesFixtures
