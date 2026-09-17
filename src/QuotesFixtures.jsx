@@ -13,7 +13,7 @@ const PRESET_TAGS=["AG","BASF","CPP","DPP","EX ASIA","MED","OUTSIDER EUROPE","PA
 function tagList(){try{const x=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");return[...new Set([...PRESET_TAGS,...x].map(v=>String(v||"").toUpperCase()).filter(Boolean))].sort();}catch{return PRESET_TAGS;}}
 const card={background:C.bg2,border:"1px solid "+C.bd,borderRadius:7};
 const btn=(active=false)=>({fontSize:10,fontWeight:700,padding:"3px 7px",borderRadius:3,border:"1px solid "+(active?C.blue:C.bd),background:active?"rgba(88,166,255,.18)":C.bg3,color:active?"#d9ecff":"#9fc3f5",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
-const input={background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:11,padding:"4px 7px",outline:"none",boxSizing:"border-box"};
+const input={background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:11,padding:"6px 7px",outline:"none",boxSizing:"border-box"};
 function weekBounds(offset=0){const n=new Date();n.setHours(0,0,0,0);const dow=(n.getDay()+6)%7;const m=new Date(n);m.setDate(n.getDate()-dow+offset*7);const s=new Date(m);s.setDate(m.getDate()+6);return[m,s];}
 function CargoMonthChart({data,total}){
  const vals=data||[],max=Math.max(1,...vals.map(x=>x.count||0)); const W=520,H=190,L=28,R=10,T=20,B=25,iw=W-L-R,ih=H-T-B;
@@ -44,22 +44,22 @@ function useMonthly(){
 function TagCell({id,value,onUpdate}){
  const [open,setOpen]=useState(false),[pos,setPos]=useState({top:0,left:0}),ref=useRef(null);
  function show(){if(ref.current){const r=ref.current.getBoundingClientRect(),z=parseFloat(getComputedStyle(document.body).zoom||"1")||1,w=160*z,h=Math.min(360,72+tagList().length*27)*z,m=12;let l=r.left-w-6;if(l<m)l=r.right+6;l=Math.max(m,Math.min(l,innerWidth-w-m));let t=Math.max(m,Math.min(r.top-8,innerHeight-h-m));setPos({left:l/z,top:t/z});}setOpen(true);}
- return <><td style={{textAlign:"center",padding:"0 3px"}}><button ref={ref} onClick={show} style={{background:"transparent",border:"1px solid "+C.bd,borderRadius:3,color:value?C.blue:C.faint,fontSize:9,cursor:"pointer",minWidth:20}}>{value||"+"}</button></td>
+ return <><td style={{textAlign:"center",padding:"6px 3px"}}><button ref={ref} onClick={show} style={{background:"transparent",border:"1px solid "+C.bd,borderRadius:3,color:value?C.blue:C.faint,fontSize:9,cursor:"pointer",minWidth:20}}>{value||"+"}</button></td>
  {open&&<><div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"fixed",left:pos.left,top:pos.top,zIndex:19999,width:160,maxHeight:360,overflowY:"auto",background:"#071223",border:"1px solid "+C.bd,borderRadius:7,padding:5,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}>
- {tagList().map(t=><button key={t} onClick={()=>{onUpdate(id,"tag",value===t?"":t);setOpen(false)}} style={{display:"block",width:"100%",textAlign:"left",padding:"4px 7px",marginBottom:2,background:value===t?"rgba(88,166,255,.16)":"transparent",border:"1px solid "+(value===t?C.blue:C.bd2),borderRadius:3,color:value===t?"#fff":"#9fc3f5",fontSize:9,fontWeight:700,cursor:"pointer"}}>{t}</button>)}</div></>}</>;
+ {tagList().map(t=><button key={t} onClick={()=>{onUpdate(id,"tag",value===t?"":t);setOpen(false)}} style={{display:"block",width:"100%",textAlign:"left",padding:"6px 7px",marginBottom:2,background:value===t?"rgba(88,166,255,.16)":"transparent",border:"1px solid "+(value===t?C.blue:C.bd2),borderRadius:3,color:value===t?"#fff":"#9fc3f5",fontSize:9,fontWeight:700,cursor:"pointer"}}>{t}</button>)}</div></>}</>;
 }
 function RegionCell({value,onSave}){
  const [edit,setEdit]=useState(false),[draft,setDraft]=useState(value||""),ref=useRef(null);
  const matches=REGIONS.filter(r=>!draft||r.toLowerCase().startsWith(draft.toLowerCase())||r.toLowerCase().includes(draft.toLowerCase()));
  function commit(){const q=draft.trim(),hit=REGIONS.find(r=>r.toLowerCase()===q.toLowerCase())||REGIONS.find(r=>r.toLowerCase().startsWith(q.toLowerCase()));if(!q)onSave("");else if(hit)onSave(hit);setEdit(false);}
- return <td style={{padding:"0 6px",fontWeight:700,color:C.tx,position:"relative"}} onClick={()=>{setDraft(value||"");setEdit(true);setTimeout(()=>ref.current?.focus(),0)}}>
+ return <td style={{padding:"6px 7px",fontWeight:700,color:C.tx,position:"relative"}} onClick={()=>{setDraft(value||"");setEdit(true);setTimeout(()=>ref.current?.focus(),0)}}>
  {!edit?value||"":<input ref={ref} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={()=>setTimeout(commit,80)} onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab"){e.preventDefault();commit()}if(e.key==="Escape")setEdit(false)}} style={{...input,width:"100%",height:24,fontWeight:700,textTransform:"uppercase",background:"#071223"}}/>}
  {edit&&matches.length>0&&<div style={{position:"absolute",left:4,top:29,zIndex:15000,minWidth:145,background:"#071223",border:"1px solid "+C.bd,borderRadius:5,padding:3,boxShadow:"0 8px 25px rgba(0,0,0,.65)"}}>{matches.slice(0,8).map(r=><div key={r} onMouseDown={e=>{e.preventDefault();onSave(r);setEdit(false)}} style={{padding:"4px 6px",fontSize:9,fontWeight:700,cursor:"pointer"}}>{r}</div>)}</div>}
  </td>;
 }
 function Editable({value,onSave,color,bold}){
  const [e,setE]=useState(false),[v,setV]=useState(value??"");useEffect(()=>setV(value??""),[value]);
- return <td onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} style={{padding:"0 6px",color:color||C.tx,fontWeight:bold?700:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+ return <td onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} style={{padding:"6px 7px",color:color||C.tx,fontWeight:bold?700:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
  {e?<input autoFocus value={v} onChange={x=>setV(x.target.value)} onBlur={()=>{setE(false);if(v!==value)onSave(v)}} onKeyDown={x=>{if(x.key==="Enter"){x.currentTarget.blur()}if(x.key==="Escape"){setV(value??"");setE(false)}}} style={{...input,width:"100%",height:24,background:"#071223"}}/>:<span title={String(value||"")}>{value||""}</span>}</td>;
 }
 function AddRow({onSave,onClose,quotes=false}){
@@ -103,17 +103,17 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
   </div>
   {showAdd&&<AddRow quotes onSave={onAddC} onClose={()=>setShowAdd(false)}/>}
   <div style={{...card,overflow:"hidden"}}>
-   <table style={{width:"100%",tableLayout:"fixed",borderCollapse:"collapse",fontSize:11}}>
+   <table style={{width:"100%",tableLayout:"fixed",borderCollapse:"collapse",fontSize:12,lineHeight:1.25}}>
     <colgroup><col style={{width:"1.4%"}}/>{shown.map(([k,l,w])=><col key={k} style={{width:w+"%"}}/>)}<col style={{width:"1.4%"}}/><col style={{width:"1.4%"}}/></colgroup>
-    <thead><tr><th style={{padding:6}}></th>{shown.map(([k,l])=><th key={k} style={{padding:"6px",color:C.dim,fontSize:10,textTransform:"uppercase",textAlign:["p_and_c","intelligence"].includes(k)?"center":"left"}}>{l}</th>)}<th/><th/></tr></thead>
-    <tbody>{filtered.slice(0,200).map((c,i)=><tr key={c.id} style={{background:i%2?"rgba(18,34,57,.96)":"rgba(11,25,45,.96)"}}><td style={{textAlign:"center",color:C.faint}}>[ ]</td>
+    <thead><tr><th style={{padding:6}}></th>{shown.map(([k,l])=><th key={k} style={{padding:"6px",color:C.dim,fontSize:12,textTransform:"uppercase",textAlign:["p_and_c","intelligence"].includes(k)?"center":"left"}}>{l}</th>)}<th/><th/></tr></thead>
+    <tbody>{filtered.slice(0,200).map((c,i)=><tr key={c.id} style={{background:i%2?"rgba(18,34,57,.96)":"rgba(11,25,45,.96)",height:24}}><td style={{textAlign:"center",color:C.faint}}>[ ]</td>
     {shown.map(([k])=>{
-      if(k==="status")return <td key={k} onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{padding:"0 6px",fontWeight:800,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>;
+      if(k==="status")return <td key={k} onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{padding:"6px 7px",fontWeight:800,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>;
       if(k==="ex_region"||k==="to_region")return <RegionCell key={k} value={c[k]||""} onSave={v=>onUpdateC(c.id,k,v)}/>;
       if(k==="p_and_c")return <td key={k} onClick={()=>{const o=[null,1,2,3],x=o.findIndex(v=>String(v??"")===String(c.p_and_c??""));onUpdateC(c.id,"p_and_c",o[(x+1)%o.length])}} style={{textAlign:"center",fontWeight:900,cursor:"pointer",color:Number(c.p_and_c)===1?"#ff5b5b":Number(c.p_and_c)===2?"#ffad33":Number(c.p_and_c)===3?"#fff":C.faint}}>{c.p_and_c??""}</td>;
-      if(k==="intelligence")return <td key={k} onClick={()=>{const o=["","Quote","Fixture"],x=o.indexOf(c.intelligence||"");onUpdateC(c.id,"intelligence",o[(x+1)%o.length])}} style={{textAlign:"center",cursor:"pointer"}}>{c.intelligence&&<span style={{display:"inline-block",padding:"2px 5px",borderRadius:3,fontSize:9,fontWeight:800,color:c.intelligence==="Fixture"?C.green:C.blue,border:"1px solid "+(c.intelligence==="Fixture"?C.green+"88":C.blue+"88")}}>{c.intelligence.toUpperCase()}</span>}</td>;
+      if(k==="intelligence")return <td key={k} onClick={()=>{const o=["","Quote","Fixture"],x=o.indexOf(c.intelligence||"");onUpdateC(c.id,"intelligence",o[(x+1)%o.length])}} style={{textAlign:"center",cursor:"pointer",padding:"6px 7px"}}>{c.intelligence&&<span style={{display:"inline-block",padding:"2px 5px",borderRadius:3,fontSize:9,fontWeight:800,color:c.intelligence==="Fixture"?C.green:C.blue,border:"1px solid "+(c.intelligence==="Fixture"?C.green+"88":C.blue+"88")}}>{c.intelligence.toUpperCase()}</span>}</td>;
       if(k==="tag")return <TagCell key={k} id={c.id} value={c.tag} onUpdate={onUpdateC}/>;
-      if(k==="updated")return <td key={k} style={{padding:"0 6px",color:C.faint}}>{c.updated?new Date(c.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>;
+      if(k==="updated")return <td key={k} style={{padding:"6px 7px",color:C.faint}}>{c.updated?new Date(c.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>;
       const val=k==="charterer"?toTCase(c[k]||""):k==="qty"?normaliseQty(c[k]):k==="from"||k==="to"?fmtDateShort(c[k]):k==="freight"?(fmtFreight(c[k])||c[k]||""):c[k]||"";
       return <Editable key={k} value={val} bold={["vessel","charterer","cargo","load","disch","from","to"].includes(k)} color={k==="vessel"?C.blue:k==="charterer"?"#79c0ff":k==="qty"?C.amber:k==="freight"?"#a8e6a3":C.tx} onSave={v=>onUpdateC(c.id,k,k==="charterer"||k==="load"||k==="disch"?toTCase(v):k==="qty"?normaliseQty(v):k==="freight"?(fmtFreight(v)||v):v)}/>;
     })}<td style={{textAlign:"center",fontSize:8,color:c.entered_by==="H"?C.blue:C.green}}>{c.entered_by||""}</td><td style={{textAlign:"center"}}><button onClick={()=>confirm("Delete cargo?")&&onDelC(c.id)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td></tr>)}</tbody>
