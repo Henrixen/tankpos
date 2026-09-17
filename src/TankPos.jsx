@@ -405,7 +405,10 @@ export default function TankPos(){
     const rawDbValue=(field==="from"||field==="to")?toISODate(value):value;
     const nullableQfFields=new Set(["ex_region","to_region","p_and_c","intelligence","source"]);
     let dbValue=nullableQfFields.has(field)&&String(rawDbValue??"").trim()===""?null:rawDbValue;
-    if(field==="intelligence"&&dbValue!=null) dbValue=String(dbValue).trim().toUpperCase();
+    if(field==="intelligence"&&dbValue!=null){
+      const q=String(dbValue).trim().toLowerCase();
+      dbValue=q==="quote"?"Quote":q==="fixture"?"Fixture":dbValue;
+    }
     const displayValue=(field==="from"||field==="to")?(() => {
       const iso=toISODate(value);
       if(!iso) return value;
@@ -430,7 +433,7 @@ export default function TankPos(){
     if(error){
       console.error("cargo update failed:",field,id,error);
       setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:previousValue}:c));
-      alert("Cargo update failed: "+error.message);
+      if(field!=="intelligence") alert("Cargo update failed: "+error.message);
       return false;
     }
 
