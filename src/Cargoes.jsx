@@ -25,7 +25,7 @@ const POS_TD={
   whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
   textTransform:"uppercase",fontFamily:"inherit",lineHeight:"18px"
 };
-const POS_ROW=i=>i%2===0?"rgba(11,25,45,0.96)":"rgba(18,34,57,0.96)";
+const POS_ROW=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
 const POS_TABLE={width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12,tableLayout:"fixed",fontFamily:"inherit"};
 const POS_WRAP={border:"1px solid "+C.bd,borderRadius:8,overflow:"auto",minWidth:0,background:C.bg2,boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)"};
 
@@ -250,10 +250,20 @@ function RegionCell({value,onSave}){
  {edit&&matches.length>0&&<div style={{position:"absolute",left:4,top:29,zIndex:15000,minWidth:145,background:"#071223",border:"1px solid "+C.bd,borderRadius:5,padding:3,boxShadow:"0 8px 25px rgba(0,0,0,.65)"}}>{matches.slice(0,8).map(r=><div key={r} onMouseDown={e=>{e.preventDefault();onSave(r);setEdit(false)}} style={{padding:"4px 6px",fontSize:9,fontWeight:700,cursor:"pointer"}}>{r}</div>)}</div>}
  </td>;
 }
+function editorInitials(v){
+ const x=String(v||"").trim();
+ if(!x)return "";
+ if(x==="H")return "HH";
+ if(x==="L")return "HL";
+ const p=x.split(/\s+/).filter(Boolean);
+ if(p.length>1)return (p[0][0]+p[p.length-1][0]).toUpperCase();
+ return x.slice(0,2).toUpperCase();
+}
+
 function Editable({value,onSave,color,bold,align="left"}){
  const [e,setE]=useState(false),[v,setV]=useState(value??"");useEffect(()=>setV(value??""),[value]);
- return <td onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} style={{...POS_TD,padding:e?"0 8px":POS_TD.padding,color:color||C.tx,fontWeight:bold?700:500,textAlign:align}}>
- {e?<input autoFocus value={v} onChange={x=>setV(x.target.value)} onBlur={()=>{setE(false);if(v!==value)onSave(v)}} onKeyDown={x=>{if(x.key==="Enter"){x.currentTarget.blur()}if(x.key==="Escape"){setV(value??"");setE(false)}}} style={{width:"100%",height:20,lineHeight:"18px",padding:"0 6px",margin:0,border:"1px solid rgba(58,130,246,.32)",borderRadius:4,outline:"none",boxShadow:"none",background:"rgba(20,39,66,.78)",color:color||C.tx,fontFamily:"inherit",fontSize:12,fontWeight:bold?700:500,textTransform:"uppercase",boxSizing:"border-box",textAlign:align}}/>:<span title={String(value||"")}>{value||""}</span>}</td>;
+ return <td onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} style={{...POS_TD,padding:e?"1px 2px":POS_TD.padding,color:color||C.tx,fontWeight:bold?700:500,textAlign:align}}>
+ {e?<input autoFocus value={v} onChange={x=>setV(x.target.value)} onBlur={()=>{setE(false);if(v!==value)onSave(v)}} onKeyDown={x=>{if(x.key==="Enter"){x.currentTarget.blur()}if(x.key==="Escape"){setV(value??"");setE(false)}}} style={{width:"100%",height:27,lineHeight:"25px",padding:"0 5px",margin:0,border:"1px solid rgba(58,130,246,.32)",borderRadius:4,outline:"none",boxShadow:"none",background:"rgba(20,39,66,.78)",color:color||C.tx,fontFamily:"inherit",fontSize:12,fontWeight:bold?700:500,textTransform:"uppercase",boxSizing:"border-box",textAlign:align}}/>:<span title={String(value||"")}>{value||""}</span>}</td>;
 }
 function AddRow({onSave,onClose,quotes=false}){
  const [r,setR]=useState({});const f=(k,p)=><input value={r[k]||""} onChange={e=>setR(x=>({...x,[k]:e.target.value}))} placeholder={p} style={{...input,width:"100%",height:25}}/>;
@@ -305,9 +315,9 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
   <div style={POS_WRAP}>
    <table style={POS_TABLE}>
     <colgroup>{widths.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
-    <thead><tr>{["","Status","Vessel","Charterer","Qty","Cargo","Load","Disch","From","To","Freight","Comment","Tag","Updated","",""].map((h,i)=><th key={i} style={{...POS_TH,textAlign:i===0||i>13||["Status","Qty","From","To","Freight","Tag","Updated"].includes(h)?"center":"left"}}>{h}</th>)}</tr></thead>
-    <tbody>{filtered.slice(0,200).map((c,i)=>{const rowBg=hoverRowId===c.id?"rgba(28,52,82,.98)":POS_ROW(i);return <tr key={c.id} onMouseEnter={()=>setHoverRowId(c.id)} onMouseLeave={()=>setHoverRowId(null)} style={{background:rowBg,height:32,transition:"background .08s ease"}}>
-     <td onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} style={{...POS_TD,textAlign:"center",padding:"0 2px",overflow:"visible"}}><span role="checkbox" aria-checked={selected.has(c.id)} tabIndex={0} onClick={e=>{e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}} onKeyDown={e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}}} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:12,height:12,borderRadius:2,border:"1px solid "+(selected.has(c.id)?"#58a6ff":"rgba(88,166,255,.48)"),background:selected.has(c.id)?"rgba(35,131,226,.78)":"rgba(8,22,39,.72)",boxSizing:"border-box",cursor:"pointer",verticalAlign:"middle",color:"#dbeafe",fontSize:9,fontWeight:800,lineHeight:1,userSelect:"none"}}>{selected.has(c.id)?"✓":""}</span></td>
+    <thead><tr>{["","Status","Vessel","Charterer","Qty","Cargo","Load","Disch","From","To","Freight","Comment","Tag","Updated","",""].map((h,i)=>i===0?<th key={i} onClick={()=>{const ids=filtered.slice(0,200).map(x=>x.id);const all=ids.length>0&&ids.every(id=>selected.has(id));setSelected(p=>{const n=new Set(p);ids.forEach(id=>all?n.delete(id):n.add(id));return n})}} style={{...POS_TH,textAlign:"center",cursor:"pointer",padding:"3px 1px",lineHeight:"11px"}}><div style={{fontSize:11,color:filtered.slice(0,200).length>0&&filtered.slice(0,200).every(x=>selected.has(x.id))?"#4fc3f7":C.faint}}>{filtered.slice(0,200).length>0&&filtered.slice(0,200).every(x=>selected.has(x.id))?"[✓]":"[ ]"}</div><div style={{fontSize:7,color:C.faint}}>ALL</div></th>:<th key={i} style={{...POS_TH,textAlign:i>13||["Status","Qty","From","To","Freight","Tag","Updated"].includes(h)?"center":"left"}}>{h}</th>)}</tr></thead>
+    <tbody>{filtered.slice(0,200).map((c,i)=>{const rowBg=POS_ROW(i);return <tr key={c.id} onMouseEnter={e=>{e.currentTarget.style.background="rgba(31,57,89,.98)"}} onMouseLeave={e=>{e.currentTarget.style.background=rowBg}} style={{background:rowBg,height:32}}>
+     <td onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} style={{...POS_TD,textAlign:"center",padding:"0 2px",overflow:"visible"}}><span role="checkbox" aria-checked={selected.has(c.id)} tabIndex={0} onClick={e=>{e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}} onKeyDown={e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}}} style={{fontSize:12,fontWeight:500,color:selected.has(c.id)?"#4fc3f7":C.faint,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>{selected.has(c.id)?"[✓]":"[ ]"}</span></td>
      <td onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:500,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>
      <Editable value={c.vessel||""} color={C.blue} onSave={v=>onUpdateC(c.id,"vessel",v)}/>
      <Editable value={toTCase(c.charterer||"")} bold color="#79c0ff" onSave={v=>onUpdateC(c.id,"charterer",toTCase(v))}/>
@@ -321,7 +331,7 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
      <Editable value={c.comment||""} color={C.dim} onSave={v=>onUpdateC(c.id,"comment",v)}/>
      <TagCell id={c.id} value={c.tag} onUpdate={onUpdateC}/>
      <td style={{...POS_TD,textAlign:"center",color:C.faint}}>{c.updated?new Date(c.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
-     <td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}>{(c.entered_by==="H"||c.entered_by==="L")&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:15,height:15,borderRadius:"50%",fontSize:8,fontWeight:700,color:c.entered_by==="H"?C.blue:C.green,border:"1px solid "+(c.entered_by==="H"?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:c.entered_by==="H"?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{c.entered_by}</span>}</td>
+     <td style={{...POS_TD,textAlign:"center",padding:"0 2px",verticalAlign:"middle"}}>{editorInitials(c.entered_by)&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:20,height:16,padding:"0 3px",borderRadius:8,fontSize:8,fontWeight:700,lineHeight:"16px",verticalAlign:"middle",position:"relative",top:1,color:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?C.blue:C.green,border:"1px solid "+((c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{editorInitials(c.entered_by)}</span>}</td>
      <td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>confirm("Delete cargo?")&&onDelC(c.id)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td>
     </tr>})}</tbody>
    </table>
