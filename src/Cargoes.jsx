@@ -17,13 +17,13 @@ const POS_TH={
   background:C.bg2,color:"rgba(120,160,220,0.58)",fontSize:10,fontWeight:700,
   textTransform:"uppercase",letterSpacing:"0.06em",padding:"6px 8px",
   borderBottom:"1px solid rgba(58,130,246,0.12)",textAlign:"left",
-  whiteSpace:"nowrap",verticalAlign:"middle",fontFamily:"inherit"
+  whiteSpace:"nowrap",verticalAlign:"middle",fontFamily:"sans-serif"
 };
 const POS_TD={
   padding:"5px 8px",color:C.tx,fontWeight:500,fontSize:12,
   borderBottom:"1px solid rgba(255,255,255,0.018)",verticalAlign:"middle",
   whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
-  textTransform:"uppercase",fontFamily:"inherit",lineHeight:"18px"
+  textTransform:"uppercase",fontFamily:"sans-serif",lineHeight:"18px"
 };
 const POS_ROW=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
 const POS_TABLE={width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12,tableLayout:"fixed",fontFamily:"inherit"};
@@ -316,7 +316,7 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
    <table style={POS_TABLE}>
     <colgroup>{widths.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
     <thead><tr>{["","Status","Vessel","Charterer","Qty","Cargo","Load","Disch","From","To","Freight","Comment","Tag","Updated","",""].map((h,i)=>i===0?<th key={i} onClick={()=>{const ids=filtered.slice(0,200).map(x=>x.id);const all=ids.length>0&&ids.every(id=>selected.has(id));setSelected(p=>{const n=new Set(p);ids.forEach(id=>all?n.delete(id):n.add(id));return n})}} style={{...POS_TH,textAlign:"center",cursor:"pointer",padding:"3px 1px",lineHeight:"11px"}}><div style={{fontSize:11,color:filtered.slice(0,200).length>0&&filtered.slice(0,200).every(x=>selected.has(x.id))?"#4fc3f7":C.faint}}>{filtered.slice(0,200).length>0&&filtered.slice(0,200).every(x=>selected.has(x.id))?"[✓]":"[ ]"}</div><div style={{fontSize:7,color:C.faint}}>ALL</div></th>:<th key={i} style={{...POS_TH,textAlign:i>13||["Status","Qty","From","To","Freight","Tag","Updated"].includes(h)?"center":"left"}}>{h}</th>)}</tr></thead>
-    <tbody>{filtered.slice(0,200).map((c,i)=>{const rowBg=POS_ROW(i);return <tr key={c.id} onMouseEnter={e=>{e.currentTarget.style.background="rgba(31,57,89,.98)"}} onMouseLeave={e=>{e.currentTarget.style.background=rowBg}} style={{background:rowBg,height:32}}>
+    <tbody>{filtered.slice(0,200).map((c,i)=>{const rowBg=POS_ROW(i);return <tr key={c.id} style={{background:rowBg,height:32}}>
      <td onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} style={{...POS_TD,textAlign:"center",padding:"0 2px",overflow:"visible"}}><span role="checkbox" aria-checked={selected.has(c.id)} tabIndex={0} onClick={e=>{e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}} onKeyDown={e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}}} style={{fontSize:12,fontWeight:500,color:selected.has(c.id)?"#4fc3f7":C.faint,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>{selected.has(c.id)?"[✓]":"[ ]"}</span></td>
      <td onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:500,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>
      <Editable value={c.vessel||""} color={C.blue} onSave={v=>onUpdateC(c.id,"vessel",v)}/>
@@ -331,7 +331,7 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
      <Editable value={c.comment||""} color={C.dim} onSave={v=>onUpdateC(c.id,"comment",v)}/>
      <TagCell id={c.id} value={c.tag} onUpdate={onUpdateC}/>
      <td style={{...POS_TD,textAlign:"center",color:C.faint}}>{c.updated?new Date(c.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
-     <td style={{...POS_TD,textAlign:"center",padding:"0 2px",verticalAlign:"middle"}}>{editorInitials(c.entered_by)&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:20,height:16,padding:"0 3px",borderRadius:8,fontSize:8,fontWeight:700,lineHeight:"16px",verticalAlign:"middle",position:"relative",top:1,color:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?C.blue:C.green,border:"1px solid "+((c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{editorInitials(c.entered_by)}</span>}</td>
+     <td style={{...POS_TD,textAlign:"center",padding:0,verticalAlign:"middle",lineHeight:0}}>{editorInitials(c.entered_by)&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,padding:0,margin:0,borderRadius:"50%",boxSizing:"border-box",fontSize:7,fontWeight:700,lineHeight:"18px",textAlign:"center",verticalAlign:"middle",color:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?C.blue:C.green,border:"1px solid "+((c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{editorInitials(c.entered_by)}</span>}</td>
      <td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>confirm("Delete cargo?")&&onDelC(c.id)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td>
     </tr>})}</tbody>
    </table>
