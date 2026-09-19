@@ -402,7 +402,7 @@ function ColorPicker({value,onChange}){
 
 // ── Worklist (persistent right sidebar) ──────────────────────────────────────
 const WL_KEY = "signal_worklist";
-function Worklist() {
+function Worklist({topOffset=0}) {
   const [text, setText] = useState(() => {
     try { return localStorage.getItem(WL_KEY) || ""; } catch { return ""; }
   });
@@ -448,7 +448,7 @@ function Worklist() {
       width:240, flexShrink:0, display:"flex", flexDirection:"column",
       border:"1px solid rgba(58,130,246,0.16)", borderRadius:7,
       background:"rgba(6,13,28,0.97)", overflow:"hidden",
-      position:"sticky", top:0, maxHeight:"calc(100vh - 120px)"
+      position:"sticky", top:56, marginTop:topOffset, maxHeight:"calc(100vh - 120px)"
     }}>
       <div style={{
         padding:"5px 10px", background:"rgba(10,20,42,0.99)",
@@ -684,7 +684,7 @@ export default function NotesTab(){
     return(
       <div style={{background:note.pinned?"rgba(88,166,255,0.05)":"#0c1729",
         border:"1px solid "+(note.color?note.color+"88":(note.pinned?"rgba(88,166,255,0.34)":"rgba(58,130,246,0.24)")),
-        boxSizing:"border-box",boxShadow:"inset 0 0 0 0.5px rgba(88,166,255,0.05)",
+        boxSizing:"border-box",outline:"1px solid rgba(120,145,175,0.18)",outlineOffset:"-1px",boxShadow:"inset 0 0 0 0.5px rgba(88,166,255,0.05)",
         borderRadius:7,overflow:"hidden",cursor:"pointer",
         height:100,display:"flex",flexDirection:"column"}}
         onClick={()=>setExpandedId(note.id)}>
@@ -756,6 +756,7 @@ export default function NotesTab(){
         style={{background:note.pinned?"rgba(88,166,255,0.06)":"#0c1729",
           border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.18)"),
           borderRadius:7,overflow:"hidden",cursor:"pointer",
+          outline:"1px solid rgba(120,145,175,0.18)",outlineOffset:"-1px",
           borderTop:note.color?"3px solid "+note.color:undefined,
           height:200,display:"flex",flexDirection:"column",
           transition:"border-color 0.15s,box-shadow 0.15s",
@@ -1179,7 +1180,7 @@ export default function NotesTab(){
         </div>
 
         {/* Worklist sidebar */}
-        <Worklist/>
+        <Worklist topOffset={pinned.length>0?22:0}/>
       </div>
 
       <style>{`
@@ -1203,7 +1204,7 @@ export default function NotesTab(){
           .notes-worklist [contenteditable]{font-size:12px!important;color:#fff!important;}
           input[type="text"],input[type="datetime-local"]{font-size:16px!important;}
           .notes-content-layout{flex-direction:column!important;gap:8px!important;overflow:visible!important;}
-          .notes-worklist{order:-1!important;width:100%!important;max-height:145px!important;position:relative!important;top:auto!important;flex-shrink:0!important;}
+          .notes-worklist{order:-1!important;width:100%!important;max-height:145px!important;position:relative!important;top:auto!important;margin-top:0!important;flex-shrink:0!important;}
           .notes-list-pane{width:100%!important;overflow-y:visible!important;height:auto!important;}
           .notes-compose-tools{flex-wrap:nowrap!important;overflow-x:auto!important;}
           .notes-compose-tools > div:last-child{margin-left:auto!important;}
