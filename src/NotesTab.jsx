@@ -474,7 +474,7 @@ function Worklist() {
         onKeyDown={handleKey}
         data-placeholder="Tasks, reminders, to-do…"
         style={{
-          flex:1, padding:"10px 12px", color:"#e8f2ff",
+          flex:1, padding:"10px 12px", color:"#ffffff",
           fontFamily:"inherit", fontSize:12, lineHeight:1.45, fontWeight:400,
           outline:"none", overflowY:"auto", caretColor:"#58a6ff",
           whiteSpace:"pre-wrap"
@@ -1115,8 +1115,8 @@ export default function NotesTab(){
         return(
           <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
             {/* Row 1: search + date filters + count + view toggle */}
-            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-              <div style={{position:"relative",flex:"0 0 150px",minWidth:100}}>
+            <div className="notes-filter-row" style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+              <div className="notes-search-wrap" style={{position:"relative",flex:"0 0 150px",minWidth:100}}>
                 <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search notes..."
                   style={{width:"100%",background:"#0c1729",border:"1px solid rgba(58,130,246,0.18)",
                     borderRadius:5,color:"#e8f2ff",fontFamily:"inherit",fontSize:12,
@@ -1126,14 +1126,14 @@ export default function NotesTab(){
                   color:"rgba(110,155,215,0.45)",cursor:"pointer",fontSize:11}}>&#x2715;</button>}
               </div>
               <TopicFilterRow visibleTopics={visibleTopics} hiddenTopics={hiddenTopics} topicFilter={topicFilter} setTopicFilter={setTopicFilter} pill={pill}/>
-              <select value={dateFilter} onChange={e=>setDateFilter(e.target.value)} aria-label="Date filter" style={{
+              <select className="notes-date-filter" value={dateFilter} onChange={e=>setDateFilter(e.target.value)} aria-label="Date filter" style={{
                 background:"#0c1729",border:"1px solid rgba(88,166,255,0.35)",borderRadius:5,
                 color:"#8cc8ff",fontFamily:"inherit",fontSize:11,fontWeight:600,padding:"5px 28px 5px 9px",
                 outline:"none",cursor:"pointer"
               }}>
                 {DATE_FILTERS.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}
               </select>
-              <span style={{marginLeft:"auto",fontSize:11,color:"rgba(110,155,215,0.45)"}}>
+              <span className="notes-filter-count" style={{marginLeft:"auto",fontSize:11,color:"rgba(110,155,215,0.45)"}}>
                 {filtered.length} note{filtered.length!==1?"s":""}
               </span>
               <div style={{display:"flex",gap:0,border:"1px solid rgba(58,130,246,0.18)",borderRadius:4,overflow:"hidden"}}>
@@ -1199,13 +1199,18 @@ export default function NotesTab(){
         .note-preview-html b,.note-preview-html strong{color:#e8f2ff;}
         /* iOS / mobile touch targets */
         @media (max-width:640px){
-          [contenteditable]{font-size:16px!important;} /* prevent iOS zoom */
+          [contenteditable]{font-size:16px!important;} /* prevent iOS zoom in note composer */
+          .notes-worklist [contenteditable]{font-size:12px!important;color:#fff!important;}
           input[type="text"],input[type="datetime-local"]{font-size:16px!important;}
           .notes-content-layout{flex-direction:column!important;gap:8px!important;overflow:visible!important;}
           .notes-worklist{order:-1!important;width:100%!important;max-height:145px!important;position:relative!important;top:auto!important;flex-shrink:0!important;}
           .notes-list-pane{width:100%!important;overflow-y:visible!important;height:auto!important;}
           .notes-compose-tools{flex-wrap:nowrap!important;overflow-x:auto!important;}
           .notes-compose-tools > div:last-child{margin-left:auto!important;}
+          .notes-filter-row{flex-wrap:nowrap!important;width:100%!important;}
+          .notes-search-wrap{flex:1 1 auto!important;min-width:105px!important;}
+          .notes-date-filter{flex:0 0 112px!important;min-width:0!important;padding-right:20px!important;}
+          .notes-filter-count{display:none!important;}
         }
       `}</style>
     </div>
