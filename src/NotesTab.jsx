@@ -11,6 +11,7 @@ const TOPIC_COLORS = {
 const DATE_FILTERS = [
   {label:"All time",value:"all"},{label:"Today",value:"today"},
   {label:"This week",value:"week"},{label:"This month",value:"month"},
+  {label:"Older than 6 months",value:"older6"},
 ];
 const VM_KEY = "notes_viewMode";
 const NOTE_COLORS = [
@@ -31,6 +32,7 @@ function passesDate(iso,filter){
   if(filter==="today")return d.toDateString()===now.toDateString();
   if(filter==="week"){const s=new Date(now);s.setDate(now.getDate()-now.getDay());return d>=s;}
   if(filter==="month")return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
+  if(filter==="older6"){const cutoff=new Date(now);cutoff.setMonth(cutoff.getMonth()-6);return d<cutoff;}
   return true;
 }
 function applyFmt(cmd){document.execCommand(cmd,false,null);}
@@ -197,10 +199,10 @@ function AlertPicker({value, onChange, onClear}){
         background:value?"rgba(88,166,255,0.1)":"transparent",
         border:"1px solid "+(value?"rgba(88,166,255,0.45)":"rgba(58,130,246,0.2)"),
         borderRadius:5,padding:"3px 9px",cursor:"pointer",fontFamily:"inherit",
-        color:value?"#58a6ff":"rgba(110,155,215,0.5)",fontSize:11,fontWeight:600,
-      }}>
-        <span>&#x23F0;</span>
-        <span>{fmtLabel(value)||"Set reminder"}</span>
+        color:value?"#58a6ff":"rgba(110,155,215,0.65)",fontSize:11,fontWeight:600,
+        width:30,height:26,justifyContent:"center",padding:0,
+      }} title={fmtLabel(value)||"Set reminder"}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
       </button>
       {value&&(
         <button onMouseDown={e=>{e.preventDefault();onClear();}} style={{
@@ -297,7 +299,7 @@ export function NotesAlertBanner(){
       {alerts.map(n=>(
         <div key={n.id} style={{background:"rgba(245,166,35,0.12)",border:"1px solid rgba(245,166,35,0.5)",
           borderRadius:6,padding:"8px 12px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-          <span style={{fontSize:15}}>&#x23F0;</span>
+          <span style={{fontSize:15}}>REM</span>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:12,fontWeight:700,color:"#f5a623"}}>{n.title||"Note reminder"}</div>
             <div style={{fontSize:11,color:"rgba(160,200,255,0.65)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
@@ -382,6 +384,22 @@ function TopicFilterRow({visibleTopics,hiddenTopics,topicFilter,setTopicFilter,p
   </div>;
 }
 
+
+function ColorPicker({value,onChange}){
+  const [open,setOpen]=useState(false);
+  const ref=useRef(null);
+  useEffect(()=>{const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false)};document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h)},[]);
+  const selected=NOTE_COLORS.find(x=>x.value===value)||NOTE_COLORS[0];
+  return <div ref={ref} style={{position:"relative",display:"inline-block"}}>
+    <button type="button" onClick={()=>setOpen(v=>!v)} style={{display:"flex",alignItems:"center",gap:6,background:"transparent",border:"1px solid rgba(88,166,255,.28)",borderRadius:5,color:"#8cc8ff",fontFamily:"inherit",fontSize:11,fontWeight:600,padding:"4px 8px",cursor:"pointer"}}>
+      <span style={{width:10,height:10,borderRadius:"50%",background:selected.value||"transparent",border:"1px solid "+(selected.value||"rgba(140,200,255,.45)")}}/> Colour <span style={{fontSize:9}}>▾</span>
+    </button>
+    {open&&<div style={{position:"absolute",left:0,top:"calc(100% + 5px)",zIndex:10000,background:"#091426",border:"1px solid rgba(88,166,255,.28)",borderRadius:7,padding:6,minWidth:120,boxShadow:"0 8px 24px rgba(0,0,0,.55)"}}>
+      {NOTE_COLORS.map(x=><button key={x.name} type="button" onClick={()=>{onChange(x.value);setOpen(false)}} style={{width:"100%",display:"flex",alignItems:"center",gap:7,background:value===x.value?"rgba(88,166,255,.12)":"transparent",border:"none",borderRadius:4,color:"#e8f2ff",fontFamily:"inherit",fontSize:11,padding:"5px 7px",cursor:"pointer",textAlign:"left"}}><span style={{width:10,height:10,borderRadius:"50%",background:x.value||"transparent",border:"1px solid "+(x.value||"rgba(140,200,255,.45)")}}/>{x.name}</button>)}
+    </div>}
+  </div>;
+}
+
 // ── Worklist (persistent right sidebar) ──────────────────────────────────────
 const WL_KEY = "signal_worklist";
 function Worklist() {
@@ -457,7 +475,7 @@ function Worklist() {
         data-placeholder="Tasks, reminders, to-do…"
         style={{
           flex:1, padding:"10px 12px", color:"#e8f2ff",
-          fontFamily:"inherit", fontSize:12, lineHeight:1.7,
+          fontFamily:"inherit", fontSize:12, lineHeight:1.45, fontWeight:400,
           outline:"none", overflowY:"auto", caretColor:"#58a6ff",
           whiteSpace:"pre-wrap"
         }}
@@ -566,16 +584,16 @@ export default function NotesTab(){
     await load();setSaving(false);
   }
 
-  async function saveEdit(id,body,editTitle,editTopics,editImages,editAlertAt,fromClose=false){
+  async function saveEdit(id,body,editTitle,editTopics,editImages,editAlertAt,editColor,fromClose=false){
     const updated_at=new Date().toISOString();
     await supabase.from("notes").update({
       body,title:editTitle||null,topics:editTopics,
-      images:editImages,updated_at,alert_at:editAlertAt||null,
+      images:editImages,updated_at,alert_at:editAlertAt||null,color:editColor||null,
     }).eq("id",id);
     // Only sync React state on close — prevents re-render of NoteModal while typing
     if(fromClose){
       setNotes(prev=>prev.map(n=>n.id===id
-        ?{...n,body,title:editTitle||null,topics:editTopics,images:editImages,updated_at,alert_at:editAlertAt||null}
+        ?{...n,body,title:editTitle||null,topics:editTopics,images:editImages,updated_at,alert_at:editAlertAt||null,color:editColor||null}
         :n));
     }
   }
@@ -665,9 +683,9 @@ export default function NotesTab(){
     const imgs=note.images||[];
     return(
       <div style={{background:note.pinned?"rgba(88,166,255,0.05)":"#0c1729",
-        border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.18)"),
+        border:"1px solid "+(note.color?note.color+"88":(note.pinned?"rgba(88,166,255,0.34)":"rgba(58,130,246,0.24)")),
+        boxSizing:"border-box",boxShadow:"inset 0 0 0 0.5px rgba(88,166,255,0.05)",
         borderRadius:7,overflow:"hidden",cursor:"pointer",
-        borderLeft:note.color?"4px solid "+note.color:undefined,
         height:100,display:"flex",flexDirection:"column"}}
         onClick={()=>setExpandedId(note.id)}>
         <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",padding:"8px 12px",gap:4}}>
@@ -685,7 +703,7 @@ export default function NotesTab(){
             <span style={{fontSize:10,color:"rgba(110,155,215,0.38)",whiteSpace:"nowrap",flexShrink:0}}>
               {fmtTs(note.updated_at||note.created_at)}
             </span>
-            {note.alert_at&&<span title={"Alert: "+fmtTs(note.alert_at)} style={{fontSize:11,opacity:0.55,flexShrink:0}}>&#x23F0;</span>}
+            {note.alert_at&&<span title={"Alert: "+fmtTs(note.alert_at)} style={{fontSize:11,opacity:0.55,flexShrink:0}}>REM</span>}
             {(note.topics||[]).length>0&&(
               <div style={{display:"flex",gap:3,flexWrap:"nowrap",flexShrink:0}}>
                 {(note.topics||[]).slice(0,4).map(t=>{const col=TOPIC_COLORS[t]||"#58a6ff";return(
@@ -749,7 +767,7 @@ export default function NotesTab(){
             <div style={{flex:1,minWidth:0}}>
               <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
                 {note.pinned&&<span style={{fontSize:10,color:"#f5a623",flexShrink:0}}>&#x1F4CC;</span>}
-                {note.alert_at&&<span style={{fontSize:10,flexShrink:0}}>&#x23F0;</span>}
+                {note.alert_at&&<span style={{fontSize:10,flexShrink:0}}>REM</span>}
                 {note.title&&<span style={{fontSize:13,fontWeight:700,color:"#e8f2ff"}}>{note.title}</span>}
               </div>
             </div>
@@ -807,6 +825,8 @@ export default function NotesTab(){
     const alertValueRef=React.useRef(note.alert_at?note.alert_at.slice(0,16):"");
     const topicsRef=React.useRef(note.topics||[]);
     const imgsRef=React.useRef(note.images||[]);
+    const colorRef=React.useRef(note.color||"");
+    const [colorDisplay,setColorDisplay]=React.useState(note.color||"");
     const [topicsDisplay,setTopicsDisplay]=React.useState(note.topics||[]);
     const [imgsDisplay,setImgsDisplay]=React.useState(note.images||[]);
     const [alertDisplay,setAlertDisplay]=React.useState(note.alert_at?note.alert_at.slice(0,16):"");
@@ -829,7 +849,7 @@ export default function NotesTab(){
       const a=alertValueRef.current||"";
       if(!b&&!t.trim())return;
       savedOnce.current=true;
-      saveEdit(note.id,b,t.trim()||null,topicsRef.current,imgsRef.current,a||null,fromClose);
+      saveEdit(note.id,b,t.trim()||null,topicsRef.current,imgsRef.current,a||null,colorRef.current,fromClose);
     }
     function scheduleSave(){clearTimeout(saveTimer.current);saveTimer.current=setTimeout(()=>doSave(false),2000);}
     function closeModal(){clearTimeout(saveTimer.current);doSave(true);setExpandedId(null);}
@@ -911,6 +931,11 @@ export default function NotesTab(){
               onChange={v=>{setAlert(v);scheduleSave();}}
               onClear={()=>{setAlert("");scheduleSave();}}
             />
+          </div>
+
+          {/* Colour — editable for existing notes */}
+          <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 14px",borderBottom:"1px solid rgba(58,130,246,0.08)",flexShrink:0}}>
+            <ColorPicker value={colorDisplay} onChange={v=>{colorRef.current=v;setColorDisplay(v);scheduleSave();}}/>
           </div>
 
           {/* Toolbar */}
@@ -1044,9 +1069,7 @@ export default function NotesTab(){
         {/* Compact compose controls: reminder + colour left, formatting right */}
         <div className="notes-compose-tools" style={{display:"flex",alignItems:"center",gap:8,padding:"5px 12px",borderBottom:"1px solid rgba(58,130,246,0.08)",background:"rgba(4,10,22,0.25)"}}>
           <AlertPicker value={alertAt} onChange={setAlertAt} onClear={()=>setAlertAt("")}/>
-          <div style={{display:"flex",alignItems:"center",gap:3}} title="Note colour">
-            {NOTE_COLORS.map(x=><button key={x.name} onClick={()=>setNoteColor(x.value)} aria-label={x.name} title={x.name} style={{width:14,height:14,borderRadius:"50%",padding:0,cursor:"pointer",background:x.value||"#0c1729",border:"1px solid "+(noteColor===x.value?"#e8f2ff":(x.value||"rgba(88,166,255,.25)")),boxShadow:noteColor===x.value?"0 0 0 1px rgba(88,166,255,.35)":"none"}}/>) }
-          </div>
+          <ColorPicker value={noteColor} onChange={setNoteColor}/>
           <span style={{flex:1}}/>
           <Toolbar onInsertTable={()=>setShowTablePicker(true)}/>
         </div>
@@ -1103,15 +1126,13 @@ export default function NotesTab(){
                   color:"rgba(110,155,215,0.45)",cursor:"pointer",fontSize:11}}>&#x2715;</button>}
               </div>
               <TopicFilterRow visibleTopics={visibleTopics} hiddenTopics={hiddenTopics} topicFilter={topicFilter} setTopicFilter={setTopicFilter} pill={pill}/>
-              {DATE_FILTERS.map(f=>(
-                <button key={f.value} onClick={()=>setDateFilter(f.value)} style={{
-                  fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:3,
-                  border:"1px solid "+(dateFilter===f.value?"rgba(88,166,255,0.5)":"rgba(58,130,246,0.18)"),
-                  background:dateFilter===f.value?"rgba(88,166,255,0.12)":"transparent",
-                  color:dateFilter===f.value?"rgba(140,200,255,0.9)":"rgba(110,155,215,0.45)",
-                  cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
-                }}>{f.label}</button>
-              ))}
+              <select value={dateFilter} onChange={e=>setDateFilter(e.target.value)} aria-label="Date filter" style={{
+                background:"#0c1729",border:"1px solid rgba(88,166,255,0.35)",borderRadius:5,
+                color:"#8cc8ff",fontFamily:"inherit",fontSize:11,fontWeight:600,padding:"5px 28px 5px 9px",
+                outline:"none",cursor:"pointer"
+              }}>
+                {DATE_FILTERS.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}
+              </select>
               <span style={{marginLeft:"auto",fontSize:11,color:"rgba(110,155,215,0.45)"}}>
                 {filtered.length} note{filtered.length!==1?"s":""}
               </span>
