@@ -25,8 +25,8 @@ const POS_TD={
   whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
   textTransform:"uppercase",fontFamily:"sans-serif",lineHeight:"18px"
 };
-const POS_ROW=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
-const POS_TABLE={width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12,tableLayout:"fixed",fontFamily:"inherit"};
+const POS_ROW=i=>i%2===0?"rgba(11,25,45,0.96)":"rgba(18,34,57,0.96)";
+const POS_TABLE={width:"100%",minWidth:"1450px",borderCollapse:"separate",borderSpacing:0,fontSize:12,tableLayout:"fixed",fontFamily:"inherit"};
 const POS_WRAP={border:"1px solid "+C.bd,borderRadius:8,overflow:"auto",minWidth:0,background:C.bg2,boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)"};
 
 const btn=(active=false)=>({fontSize:10,fontWeight:700,padding:"3px 7px",borderRadius:3,border:"1px solid "+(active?C.blue:C.bd),background:active?"rgba(88,166,255,.18)":C.bg3,color:active?"#d9ecff":"#9fc3f5",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
