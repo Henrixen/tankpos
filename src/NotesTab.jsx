@@ -13,6 +13,11 @@ const DATE_FILTERS = [
   {label:"This week",value:"week"},{label:"This month",value:"month"},
 ];
 const VM_KEY = "notes_viewMode";
+const NOTE_COLORS = [
+  {name:"Default",value:""},{name:"Blue",value:"#58a6ff"},{name:"Green",value:"#3fb950"},
+  {name:"Amber",value:"#f5a623"},{name:"Red",value:"#ff6b6b"},{name:"Purple",value:"#a78bfa"},
+  {name:"Cyan",value:"#38bdf8"}
+];
 
 function fmtTs(iso){
   if(!iso)return"";
@@ -42,8 +47,7 @@ function Toolbar({onInsertTable}){
     }}>{label}</button>
   );
   return(
-    <div style={{display:"flex",gap:4,padding:"5px 10px",borderBottom:"1px solid rgba(58,130,246,0.08)",
-      background:"rgba(4,10,22,0.4)",flexWrap:"wrap",alignItems:"center"}}>
+    <div style={{display:"flex",gap:4,padding:0,borderBottom:"none",background:"transparent",flexWrap:"nowrap",alignItems:"center"}}>
       {btn("\u2022 List","insertUnorderedList")}{btn("1. List","insertOrderedList")}
       <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px",height:14}}/>
       <button onMouseDown={e=>{e.preventDefault();onInsertTable&&onInsertTable();}} style={{
@@ -314,7 +318,7 @@ export function NotesAlertBanner(){
 // ── Main component ────────────────────────────────────────────────────────────
 // ── Topic filter row with smart visibility + "+ N more" popout ──────────────
 // ── Compose header: title + active topic tags + "+" for more ────────────────
-function ComposeHeader({title,setTitle,selTopics,setSelTopics,pill}){
+function ComposeHeader({title,setTitle,selTopics,setSelTopics,pill,titleInputRef,onTitleTab}){
   const [showPicker,setShowPicker]=useState(false);
   const ref=useRef(null);
   useEffect(()=>{
@@ -332,7 +336,7 @@ function ComposeHeader({title,setTitle,selTopics,setSelTopics,pill}){
   return(
     <div ref={ref} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",
       borderBottom:"1px solid rgba(58,130,246,0.08)",flexWrap:"wrap"}}>
-      <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Title (optional)..."
+      <input ref={titleInputRef} value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();onTitleTab?.();}}} placeholder="Title (optional)..."
         style={{flex:"1 1 140px",minWidth:100,background:"transparent",border:"none",color:"#e8f2ff",
           fontFamily:"inherit",fontSize:13,fontWeight:600,outline:"none"}}/>
       {/* Active tags inline next to title */}
@@ -365,47 +369,17 @@ function ComposeHeader({title,setTitle,selTopics,setSelTopics,pill}){
 }
 
 function TopicFilterRow({visibleTopics,hiddenTopics,topicFilter,setTopicFilter,pill}){
-  const [showMore,setShowMore]=useState(false);
-  const ref=useRef(null);
-  useEffect(()=>{
-    if(!showMore)return;
-    function h(e){if(ref.current&&!ref.current.contains(e.target))setShowMore(false);}
-    document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);
-  },[showMore]);
-  function getPos(){
-    if(!ref.current)return{position:"fixed",top:60,left:0};
-    const r=ref.current.getBoundingClientRect();
-    return{position:"fixed",top:r.bottom+4,left:Math.min(r.left,window.innerWidth-270),zIndex:9999};
-  }
-  return(
-    <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
-      <button onClick={()=>setTopicFilter(null)} style={{
-        fontSize:10,fontWeight:700,padding:"2px 9px",borderRadius:3,
-        border:"1px solid "+(topicFilter===null?"rgba(88,166,255,0.5)":"rgba(58,130,246,0.18)"),
-        background:topicFilter===null?"rgba(88,166,255,0.12)":"transparent",
-        color:topicFilter===null?"rgba(140,200,255,0.9)":"rgba(110,155,215,0.45)",
-        cursor:"pointer",fontFamily:"inherit",
-      }}>All</button>
-      {visibleTopics.map(t=>pill(t,topicFilter===t,()=>setTopicFilter(p=>p===t?null:t)))}
-      {hiddenTopics.length>0&&(
-        <div ref={ref} style={{position:"relative",display:"inline-block"}}>
-          <button onClick={()=>setShowMore(o=>!o)} style={{
-            fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:3,
-            border:"1px solid rgba(58,130,246,0.2)",
-            background:showMore?"rgba(88,166,255,0.1)":"transparent",
-            color:"rgba(110,155,215,0.5)",cursor:"pointer",fontFamily:"inherit",
-          }}>+ {hiddenTopics.length} more</button>
-          {showMore&&(
-            <div style={{...getPos(),background:"#0c1729",border:"1px solid rgba(88,166,255,0.28)",
-              borderRadius:7,padding:"10px",boxShadow:"0 8px 24px rgba(0,0,0,0.6)",
-              display:"flex",flexWrap:"wrap",gap:4,maxWidth:260}}>
-              {hiddenTopics.map(t=>pill(t,topicFilter===t,()=>{setTopicFilter(p=>p===t?null:t);setShowMore(false);}))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
+  const [open,setOpen]=useState(false); const ref=useRef(null); const btnRef=useRef(null);
+  useEffect(()=>{if(!open)return;const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false)};document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h)},[open]);
+  const all=[...visibleTopics,...hiddenTopics.filter(t=>!visibleTopics.includes(t))];
+  function pos(){if(!btnRef.current)return{position:"fixed",top:60,left:0};const r=btnRef.current.getBoundingClientRect();return{position:"fixed",top:r.bottom+4,left:Math.min(r.left,window.innerWidth-280),zIndex:9999}}
+  return <div ref={ref} style={{position:"relative",display:"inline-flex"}}>
+    <button ref={btnRef} onClick={()=>setOpen(v=>!v)} style={{fontSize:11,fontWeight:700,padding:"4px 10px",borderRadius:4,border:"1px solid "+(topicFilter?"rgba(88,166,255,.5)":"rgba(58,130,246,.18)"),background:topicFilter?"rgba(88,166,255,.12)":"transparent",color:topicFilter?"#8cc8ff":"rgba(110,155,215,.55)",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Tags{topicFilter?` · ${topicFilter}`:" ▾"}</button>
+    {open&&<div style={{...pos(),background:"#0c1729",border:"1px solid rgba(88,166,255,.28)",borderRadius:7,padding:10,boxShadow:"0 8px 24px rgba(0,0,0,.6)",display:"flex",flexWrap:"wrap",gap:5,maxWidth:270}}>
+      <button onClick={()=>{setTopicFilter(null);setOpen(false)}} style={{fontSize:10,fontWeight:700,padding:"2px 9px",borderRadius:3,border:"1px solid rgba(88,166,255,.4)",background:topicFilter===null?"rgba(88,166,255,.12)":"transparent",color:"#8cc8ff",cursor:"pointer"}}>All</button>
+      {all.map(t=>pill(t,topicFilter===t,()=>{setTopicFilter(p=>p===t?null:t);setOpen(false)}))}
+    </div>}
+  </div>;
 }
 
 // ── Worklist (persistent right sidebar) ──────────────────────────────────────
@@ -452,7 +426,7 @@ function Worklist() {
   }
 
   return (
-    <div style={{
+    <div className="notes-worklist" style={{
       width:240, flexShrink:0, display:"flex", flexDirection:"column",
       border:"1px solid rgba(58,130,246,0.16)", borderRadius:7,
       background:"rgba(6,13,28,0.97)", overflow:"hidden",
@@ -503,6 +477,7 @@ export default function NotesTab(){
   const [selTopics,setSelTopics]=useState([]);
   const [title,setTitle]=useState("");
   const [alertAt,setAlertAt]=useState("");
+  const [noteColor,setNoteColor]=useState("");
   const [saving,setSaving]=useState(false);
   const [expandedId,setExpandedId]=useState(null);
   const [confirmDel,setConfirmDel]=useState(null);
@@ -511,6 +486,8 @@ export default function NotesTab(){
   const [lightbox,setLightbox]=useState(null);
   const [showTablePicker,setShowTablePicker]=useState(false);
   const editorRef=useRef(null);
+  const titleInputRef=useRef(null);
+  const saveBtnRef=useRef(null);
   const fileRef=useRef(null);
 
   const setView=v=>{setViewMode(v);localStorage.setItem(VM_KEY,v);};
@@ -581,11 +558,11 @@ export default function NotesTab(){
     await supabase.from("notes").insert({
       title:title.trim()||null,body:html,topics:selTopics,
       images:images.map(i=>i.dataUrl),pinned:false,
-      alert_at:alertAt||null,
+      alert_at:alertAt||null,color:noteColor||null,
       created_at:new Date().toISOString(),updated_at:new Date().toISOString(),
     });
     if(editorRef.current)editorRef.current.innerHTML="";
-    setTitle("");setSelTopics([]);setImages([]);setAlertAt("");
+    setTitle("");setSelTopics([]);setImages([]);setAlertAt("");setNoteColor("");
     await load();setSaving(false);
   }
 
@@ -690,6 +667,7 @@ export default function NotesTab(){
       <div style={{background:note.pinned?"rgba(88,166,255,0.05)":"#0c1729",
         border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.18)"),
         borderRadius:7,overflow:"hidden",cursor:"pointer",
+        borderLeft:note.color?"4px solid "+note.color:undefined,
         height:100,display:"flex",flexDirection:"column"}}
         onClick={()=>setExpandedId(note.id)}>
         <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",padding:"8px 12px",gap:4}}>
@@ -760,6 +738,7 @@ export default function NotesTab(){
         style={{background:note.pinned?"rgba(88,166,255,0.06)":"#0c1729",
           border:"1px solid "+(note.pinned?"rgba(88,166,255,0.28)":"rgba(58,130,246,0.18)"),
           borderRadius:7,overflow:"hidden",cursor:"pointer",
+          borderTop:note.color?"3px solid "+note.color:undefined,
           height:200,display:"flex",flexDirection:"column",
           transition:"border-color 0.15s,box-shadow 0.15s",
           boxShadow:"0 2px 8px rgba(0,0,0,0.3)"}}>
@@ -1060,16 +1039,20 @@ export default function NotesTab(){
         <ComposeHeader
           title={title} setTitle={setTitle}
           selTopics={selTopics} setSelTopics={setSelTopics}
+          titleInputRef={titleInputRef} onTitleTab={()=>editorRef.current?.focus()}
           pill={pill}/>
-        {/* Alert row in compose */}
-        <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 12px",
-          borderBottom:"1px solid rgba(58,130,246,0.08)",background:"rgba(4,10,22,0.25)",flexWrap:"wrap"}}>
+        {/* Compact compose controls: reminder + colour left, formatting right */}
+        <div className="notes-compose-tools" style={{display:"flex",alignItems:"center",gap:8,padding:"5px 12px",borderBottom:"1px solid rgba(58,130,246,0.08)",background:"rgba(4,10,22,0.25)"}}>
           <AlertPicker value={alertAt} onChange={setAlertAt} onClear={()=>setAlertAt("")}/>
+          <div style={{display:"flex",alignItems:"center",gap:3}} title="Note colour">
+            {NOTE_COLORS.map(x=><button key={x.name} onClick={()=>setNoteColor(x.value)} aria-label={x.name} title={x.name} style={{width:14,height:14,borderRadius:"50%",padding:0,cursor:"pointer",background:x.value||"#0c1729",border:"1px solid "+(noteColor===x.value?"#e8f2ff":(x.value||"rgba(88,166,255,.25)")),boxShadow:noteColor===x.value?"0 0 0 1px rgba(88,166,255,.35)":"none"}}/>) }
+          </div>
+          <span style={{flex:1}}/>
+          <Toolbar onInsertTable={()=>setShowTablePicker(true)}/>
         </div>
-        <Toolbar onInsertTable={()=>setShowTablePicker(true)}/>
         <div ref={editorRef} contentEditable suppressContentEditableWarning
           onPaste={handlePaste}
-          onKeyDown={e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))save();}}
+          onKeyDown={e=>{if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();saveBtnRef.current?.focus();return;}if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))save();}}
           data-placeholder="Write your note\u2026 (Ctrl+Enter to save, paste screenshots)"
           style={{minHeight:80,padding:"10px 14px",color:"#e8f2ff",
             fontFamily:"inherit",fontSize:12,outline:"none",lineHeight:1.65,caretColor:"#58a6ff"}}/>
@@ -1090,17 +1073,8 @@ export default function NotesTab(){
         )}
         <div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",
           borderTop:"1px solid rgba(58,130,246,0.08)",background:"rgba(4,10,22,0.4)"}}>
-          <button onClick={()=>fileRef.current?.click()}
-            style={{background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
-              color:"rgba(110,155,215,0.45)",padding:"3px 9px",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>
-            + Image
-          </button>
-          <input ref={fileRef} type="file" accept="image/*" multiple style={{display:"none"}}
-            onChange={e=>{Array.from(e.target.files||[]).forEach(f=>{
-              const r=new FileReader();r.onload=ev=>setImages(p=>[...p,{dataUrl:ev.target.result,name:f.name}]);
-              r.readAsDataURL(f);});e.target.value="";}}/>
           <span style={{flex:1}}/>
-          <button onClick={save} disabled={saving} style={{
+          <button ref={saveBtnRef} onClick={save} disabled={saving} style={{
             background:"transparent",
             border:"1px solid "+(saving?"rgba(88,166,255,0.2)":"rgba(88,166,255,0.55)"),
             borderRadius:4,color:saving?"rgba(88,166,255,0.3)":"rgba(140,200,255,0.9)",
@@ -1128,6 +1102,7 @@ export default function NotesTab(){
                   top:"50%",transform:"translateY(-50%)",background:"none",border:"none",
                   color:"rgba(110,155,215,0.45)",cursor:"pointer",fontSize:11}}>&#x2715;</button>}
               </div>
+              <TopicFilterRow visibleTopics={visibleTopics} hiddenTopics={hiddenTopics} topicFilter={topicFilter} setTopicFilter={setTopicFilter} pill={pill}/>
               {DATE_FILTERS.map(f=>(
                 <button key={f.value} onClick={()=>setDateFilter(f.value)} style={{
                   fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:3,
@@ -1151,21 +1126,14 @@ export default function NotesTab(){
                 ))}
               </div>
             </div>
-            {/* Row 2: All + visible topics + "+ N more" popout */}
-            <TopicFilterRow
-              visibleTopics={visibleTopics}
-              hiddenTopics={hiddenTopics}
-              topicFilter={topicFilter}
-              setTopicFilter={setTopicFilter}
-              pill={pill}/>
           </div>
         );
       })()}
 
       {/* Notes list/grid + Worklist sidebar */}
-      <div style={{flex:1,minHeight:0,display:"flex",gap:12,alignItems:"flex-start"}}>
+      <div className="notes-content-layout" style={{flex:1,minHeight:0,display:"flex",gap:12,alignItems:"flex-start"}}>
         {/* Notes */}
-        <div style={{flex:1,minHeight:0,overflowY:"auto",height:"100%"}}>
+        <div className="notes-list-pane" style={{flex:1,minHeight:0,overflowY:"auto",height:"100%"}}>
           {loading&&<div style={{fontSize:12,color:"rgba(110,155,215,0.45)",padding:"20px",textAlign:"center"}}>Loading...</div>}
           {!loading&&filtered.length===0&&(
             <div style={{fontSize:12,color:"rgba(110,155,215,0.45)",padding:"20px",textAlign:"center",fontStyle:"italic"}}>
@@ -1212,6 +1180,11 @@ export default function NotesTab(){
         @media (max-width:640px){
           [contenteditable]{font-size:16px!important;} /* prevent iOS zoom */
           input[type="text"],input[type="datetime-local"]{font-size:16px!important;}
+          .notes-content-layout{flex-direction:column!important;gap:8px!important;overflow:visible!important;}
+          .notes-worklist{order:-1!important;width:100%!important;max-height:145px!important;position:relative!important;top:auto!important;flex-shrink:0!important;}
+          .notes-list-pane{width:100%!important;overflow-y:visible!important;height:auto!important;}
+          .notes-compose-tools{flex-wrap:nowrap!important;overflow-x:auto!important;}
+          .notes-compose-tools > div:last-child{margin-left:auto!important;}
         }
       `}</style>
     </div>
