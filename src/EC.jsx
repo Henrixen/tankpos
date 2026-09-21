@@ -149,7 +149,7 @@ export default function EC({
                 minWidth: 0,
                 flex: 1,
                 textTransform: "uppercase",
-                padding: "0 6px"
+                padding: 0
               }}
             >
               {value || ""}
