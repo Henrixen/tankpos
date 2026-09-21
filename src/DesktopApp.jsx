@@ -937,7 +937,7 @@ function MobileCollapse({ title, color="#58a6ff", defaultOpen=false, children })
   const [open, setOpen] = React.useState(defaultOpen);
   return (
     <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:7, overflow:"hidden" }}>
-      <button onClick={()=>setOpen(o=>!o)}
+      <button onClick={()=>React.startTransition(()=>setOpen(o=>!o))}
         style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between",
           padding:"10px 12px", background:"transparent", border:"none", cursor:"pointer", fontFamily:"inherit",
           minHeight:44, boxSizing:"border-box" }}>
@@ -1278,7 +1278,7 @@ function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
                 {[80,90,100,110,120].map(z=>(
                   <button key={z}
                     onPointerUp={e=>{e.stopPropagation();document.body.style.zoom=z+"%";}}
-                    style={{fontSize:13,padding:"6px 10px",borderRadius:6,
+                    style={{fontSize:13,padding:"6px 8px",borderRadius:6,
                       border:"1px solid rgba(58,130,246,0.2)",background:"rgba(14,28,58,0.8)",
                       color:"rgba(160,200,255,0.8)",cursor:"pointer",fontFamily:"inherit",
                       WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}>
@@ -2390,10 +2390,10 @@ const filtV=useMemo(()=>{
   // Mobile-specific columns: fixed (not user-resizable) widths so the sticky
   // offsets below are reliable, LOA/Beam/CBM dropped to save width — those
   // are the columns Haakon uses least for a quick scan on a phone.
-  const MOBILE_SELECT_W = 22, MOBILE_OPERATOR_W = 82, MOBILE_VESSEL_W = 88;
+  const MOBILE_SELECT_W = 20, MOBILE_OPERATOR_W = 86, MOBILE_VESSEL_W = 88;
   const posColumnsMobile = [
     {...posColumns[0], width:MOBILE_SELECT_W}, // compact select
-    { key:"operator", sortKey:"operator", label:"Op",      width:MOBILE_OPERATOR_W },
+    { key:"operator", sortKey:"operator", label:"Operator", width:MOBILE_OPERATOR_W },
     { key:"vessel",   sortKey:"vessel",   label:"Vessel",  width:MOBILE_VESSEL_W },
     { key:"ais",      label:"",           align:"center",  width:14 },
     { key:"built",    sortKey:"built",    label:"Blt",     align:"left", width:36 },
@@ -2748,11 +2748,8 @@ const filtV=useMemo(()=>{
               <Suspense fallback={null}><IntelVaultStrip onVaultUpdate={setIntelItems}/></Suspense>
             </div>
           )}
-          {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}          <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0,paddingBottom:10}}>
-            {!mobile&&<AICreditWidget/>}
-            {/* ⚙ Settings dropdown */}
-            <SettingsMenu mobile={mobile} onToggleLayout={onToggleLayout} layoutOverride={layoutOverride}/>
-          </div>
+          {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}
+          {!mobile&&<div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0,paddingBottom:10}}><AICreditWidget/></div>}
         </div>
         {/* Configurable navigation */}
         {navConfig.mode==="classic"&&<div style={{display:"flex",padding:mobile?"0 8px":"0 20px",overflowX:"auto",scrollbarWidth:"none"}}>
@@ -3068,13 +3065,15 @@ const filtV=useMemo(()=>{
             {mobile && (
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                 <MobileCollapse title="📋 Paste positions" color="#58a6ff">
-                  <ParsePanel
-                    vessels={vessels}
-                    onAddVessels={onAddVessels}
-                    onAddCargoes={onAddCargoes}
-                    lockedMode="pos"
-                    vesselDB={{}}
-                  />
+                  <Suspense fallback={<div style={{padding:"14px 10px",fontSize:11,color:C.faint}}>Loading paste section…</div>}>
+                    <ParsePanel
+                      vessels={vessels}
+                      onAddVessels={onAddVessels}
+                      onAddCargoes={onAddCargoes}
+                      lockedMode="pos"
+                      vesselDB={{}}
+                    />
+                  </Suspense>
                 </MobileCollapse>
 
                 <MobileCollapse title="📈 Fixing Window / Segments" color="#c792ea">
