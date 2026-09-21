@@ -1355,6 +1355,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         const tabs=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
         if(alive&&tabs?.length)setGuestTabs(tabs.filter(id=>id!=="settings"));
         const cloudPin=String(pinData?.value??"").replace(/\D/g,"").slice(0,4);
+        // 0250 is the permanent guest fallback. A configured cloud PIN may also work.
         if(alive&&cloudPin.length===4)setGuestPin(cloudPin);
       }catch(_){}
     })();
@@ -1410,7 +1411,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
       setGuestMode(false);
       setUnlocked(true);
       setPinInput("");
-    } else if(p===GUEST_PIN){
+    } else if(p===DEFAULT_GUEST_PIN || p===guestPin){
       localStorage.setItem("signal_user","L");
       setGuestMode(true);
       setUnlocked(true);
@@ -1477,7 +1478,16 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     return()=>window.removeEventListener("navigation-config-updated",h);
   },[]);
   const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
-  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||guestTabs.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode,guestTabs]);
+  const navIds=useMemo(()=>{
+    let ids=navConfig.order.filter(id=>(!guestMode||guestTabs.includes(id))&&!navConfig.hidden.includes(id));
+    // Quotes & Fixtures is a current core tab. Older saved navigation configs pre-date cargo2.
+    if(!guestMode && !ids.includes("cargo2")){
+      const cargoIndex=ids.indexOf("cargo");
+      ids=[...ids];
+      ids.splice(cargoIndex>=0?cargoIndex+1:Math.min(2,ids.length),0,"cargo2");
+    }
+    return ids;
+  },[navConfig,guestMode,guestTabs]);
   const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
   const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set());setMobileNavOpen(false)});
  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
@@ -2378,7 +2388,7 @@ const filtV=useMemo(()=>{
   { key: "loa",       sortKey:"loa",       label: "LOA",           align:"left", width: colWidthsV.LOA },
   { key: "beam",      sortKey:"beam",      label: "Beam",        align:"right", width: colWidthsV.Beam },
   { key: "cbm",       sortKey:"cbm",       label: "CBM",           align:"left", width: colWidthsV.CBM },
-  { key: "date",      sortKey:"date",      label: "Date",        align:"center", width: colWidthsV.Date },
+  { key: "date",      sortKey:"date",      label: "Date",        align:"left", width: colWidthsV.Date },
   { key: "openPort",  sortKey:"openPort",  label: "Open Port", width: colWidthsV.OpenPort },
   { key: "comment",   sortKey:"comment",   label: "Comment",  width: colWidthsV.Comment },
   { key: "updatedAt", sortKey:"fileDate",  label: "Updated", align:"center", width: colWidthsV.FileDate },
@@ -2399,7 +2409,7 @@ const filtV=useMemo(()=>{
     { key:"built",    sortKey:"built",    label:"Blt",     align:"left", width:36 },
     { key:"dwt",      sortKey:"dwt",      label:"DWT",     align:"left", width:48 },
     { key:"coating",  sortKey:"coating",  label:"Coat",    width:44 },
-    { key:"date",     sortKey:"date",     label:"Date",    align:"center", width:44 },
+    { key:"date",     sortKey:"date",     label:"Date",    align:"left", width:44 },
     { key:"openPort", sortKey:"openPort", label:"Port",    width:80 },
     { key:"comment",  sortKey:"comment",  label:"Comment", width:mobile?64:90 },
     { key:"updatedAt", sortKey:"fileDate", label:"Updated", align:"center", width:58 },
@@ -3477,7 +3487,7 @@ const filtV=useMemo(()=>{
 />
 
       {/* UPDATED */}
-      <td style={{ ...tdCtr, color: C.faint, fontSize:mobile?9:12 }}>
+      <td style={{ ...tdCtr, color: C.faint, fontSize:12 }}>
         {v.updatedAt ? new Date(v.updatedAt).toLocaleDateString("en-GB", mobile?{day:"2-digit",month:"short"}:{day:"2-digit",month:"short",year:"numeric"}) : ""}
       </td>
 
