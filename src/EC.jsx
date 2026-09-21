@@ -3,7 +3,7 @@ import { C } from "./constants";
 
 const CELL_HEIGHT = 34;
 const INNER_HEIGHT = 28;
-const H_PAD = 8;
+const H_PAD = 10;
 
 export default function EC({
   value,
