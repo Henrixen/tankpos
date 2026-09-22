@@ -36,19 +36,21 @@ const VesselUploader = React.lazy(()=>import("./VesselUploader"));
 const NewbuildsTab   = React.lazy(()=>import("./NewbuildsTab"));
 const FleetTab       = React.lazy(()=>import("./FleetTab"));
 const OutsidersTab   = React.lazy(()=>import("./OutsidersTab"));
+const QuotesFixtures = React.lazy(()=>import("./QuotesFixtures"));
+const UserManager    = React.lazy(()=>import("./UserManager"));
 
 const TabFallback = ()=>null;
 
 const NAV_KEY="signal_navigation_config";
 const NAV_CLOUD_KEY="navigation_config";
 const NAV_ITEMS=[
- ["pos","Positions","#58a6ff","🚢"],["cargo","Cargoes","#faa356","🛢"],["fix","Fixing","#c792ea","◎"],["tcv","Time Charter","#fb923c","◷"],
+ ["pos","Positions","#58a6ff","🚢"],["cargo","Cargoes","#faa356","🛢"],["cargo2","Quotes&Fixtures","#7dd3fc","▤"],["fix","Fixing","#c792ea","◎"],["tcv","Time Charter","#fb923c","◷"],
  ["clients","Clients","#a8e6a3","♟"],["matrix","Matrix","#43e97b","⌗"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","∑"],
  ["dash","Dashboard","#43e97b","▦"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▤"],["map","Freight Map","#10b981","⌁"],
  ["cal","Calendar","#4fc3f7","◫"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","⚓"],["newbuilds","Newbuilds","#fbbf24","△"]
 ];
 function navDefault(){return{mode:"classic",collapsed:false,order:NAV_ITEMS.map(x=>x[0]),hidden:[],groups:[
- {id:"market",label:"Market",tabs:["pos","cargo","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
+ {id:"market",label:"Market",tabs:["pos","cargo","cargo2","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
  {id:"tools",label:"Tools",tabs:["projects","tce","map"]},{id:"reporting",label:"Reporting",tabs:["dash","reports"]},
  {id:"workspace",label:"Workspace",tabs:["clients","notes","cal","settings"]}]};}
 function navNorm(x){
@@ -62,6 +64,17 @@ function navLoad(){try{return navNorm(JSON.parse(localStorage.getItem(NAV_KEY)||
 
 
 
+
+function getUserDirectory(){try{return JSON.parse(localStorage.getItem("signal_users_cache")||"{}")||{};}catch{return{};}}
+function userMeta(initials){
+  const key=String(initials||"").trim().toUpperCase(),dir=getUserDirectory();
+  return dir[key]||{initials:key,name:key==="H"?"Henriksen":key==="L"?"Løken":key,color:key==="H"?"#79c0ff":key==="L"?"#4ade80":"#79c0ff"};
+}
+function UserInitialBadge({initials,size=18}){
+  const key=String(initials||"").trim().toUpperCase();if(!key)return null;
+  const m=userMeta(key),col=m.color||"#79c0ff";
+  return <span title={m.name||key} style={{width:size,height:size,minWidth:size,minHeight:size,borderRadius:"50%",display:"inline-flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box",padding:0,margin:0,fontSize:key.length>1?Math.max(7,size*.42):Math.max(8,size*.48),fontWeight:800,lineHeight:"1",letterSpacing:0,textAlign:"center",color:col,background:col+"22",border:"1px solid "+col+"88",verticalAlign:"middle",fontFamily:"Inter,system-ui,sans-serif"}}>{key}</span>;
+}
 
 // PanelEC — div-based click-to-edit cell for the vessel popout (EC is <td>-only, breaks in flex)
 function PanelEC({value,color,placeholder,onSave}){
@@ -1217,6 +1230,14 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [pinInput, setPinInput] = React.useState("");
   const [pinError, setPinError] = React.useState(false);
   const [guestMode, setGuestMode] = React.useState(false);
+  const [currentUser,setCurrentUser]=React.useState(()=>{try{return JSON.parse(localStorage.getItem("signal_current_user")||"null");}catch{return null;}});
+  const [,setUserDirectoryRev]=React.useState(0);
+  React.useEffect(()=>{let alive=true;(async()=>{try{
+    const {data,error}=await supabase.from("app_users").select("id,name,initials,color,role,active").eq("active",true);
+    if(error||!alive)return;const map={};(data||[]).forEach(x=>{if(x.initials)map[String(x.initials).toUpperCase()]=x;});
+    localStorage.setItem("signal_users_cache",JSON.stringify(map));setUserDirectoryRev(x=>x+1);
+  }catch(_){}})();return()=>{alive=false;};},[]);
+
 
   // Login-screen live feeds. Fail quietly so the PIN screen always remains usable.
   const [loginMarkets,setLoginMarkets]=React.useState({
@@ -1285,22 +1306,30 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
 
   // No sessionStorage — PIN required on every load/refresh/new tab
 
-  function submitPin(p){
+  async function sha256(text){
+    const bytes=new TextEncoder().encode(String(text)),digest=await crypto.subtle.digest("SHA-256",bytes);
+    return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,"0")).join("");
+  }
+  async function submitPin(p){
+    try{
+      const pinHash=await sha256(p);
+      const {data,error}=await supabase.from("app_users").select("id,name,initials,color,role,active").eq("pin_hash",pinHash).eq("active",true).maybeSingle();
+      if(!error&&data){
+        const initials=String(data.initials||"").trim().toUpperCase().slice(0,2),user={...data,initials};
+        localStorage.setItem("signal_user",initials);localStorage.setItem("signal_user_name",data.name||initials);
+        localStorage.setItem("signal_user_color",data.color||"#79c0ff");localStorage.setItem("signal_user_role",data.role||"user");
+        localStorage.setItem("signal_current_user",JSON.stringify(user));setCurrentUser(user);setGuestMode(data.role==="guest");setUnlocked(true);setPinInput("");return;
+      }
+    }catch(_){}
     if(p===MASTER_PIN){
-      localStorage.setItem("signal_user","H");
-      setGuestMode(false);
-      setUnlocked(true);
-      setPinInput("");
-    } else if(p===GUEST_PIN){
-      localStorage.setItem("signal_user","L");
-      setGuestMode(true);
-      setUnlocked(true);
-      setPinInput("");
-    } else {
-      setPinError(true);
-      setPinInput("");
-      setTimeout(()=>setPinError(false),1200);
-    }
+      const user={name:"Haakon Henriksen",initials:"HH",color:"#79c0ff",role:"admin"};
+      localStorage.setItem("signal_user","HH");localStorage.setItem("signal_user_name",user.name);localStorage.setItem("signal_user_color",user.color);localStorage.setItem("signal_user_role","admin");localStorage.setItem("signal_current_user",JSON.stringify(user));
+      setCurrentUser(user);setGuestMode(false);setUnlocked(true);setPinInput("");
+    }else if(p===GUEST_PIN){
+      const user={name:"Guest",initials:"GU",color:"#4ade80",role:"guest"};
+      localStorage.setItem("signal_user","GU");localStorage.setItem("signal_user_name",user.name);localStorage.setItem("signal_user_color",user.color);localStorage.setItem("signal_user_role","guest");localStorage.setItem("signal_current_user",JSON.stringify(user));
+      setCurrentUser(user);setGuestMode(true);setUnlocked(true);setPinInput("");
+    }else{setPinError(true);setPinInput("");setTimeout(()=>setPinError(false),1200);}
   }
 
   React.useEffect(()=>{
@@ -1358,7 +1387,8 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     return()=>window.removeEventListener("navigation-config-updated",h);
   },[]);
   const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
-  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||GUEST_TABS.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode]);
+  // Navigation visibility/order is global: the Settings choice applies to everybody.
+  const navIds=useMemo(()=>navConfig.order.filter(id=>!navConfig.hidden.includes(id)),[navConfig]);
   const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
   const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set());setMobileNavOpen(false)});
  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
@@ -2305,6 +2335,7 @@ const filtV=useMemo(()=>{
     const lastWeekEnd=new Date(thisWeekStart);
     const ytdStart=new Date(now.getFullYear(),0,1);
     let list=cargoes.filter(c=>{
+      if(String(c.record_type||"").toLowerCase()==="qf")return false;
       if(cTimeFilter){
         const d=new Date(c.updated||0);
         if(cTimeFilter==="tw"&&(d<thisWeekStart||d>now))return false;
@@ -3323,16 +3354,7 @@ const filtV=useMemo(()=>{
               color:savedVessels.has(v.vessel)?"#fbbf24":"rgba(120,160,200,0.15)",lineHeight:1}}>
             {savedVessels.has(v.vessel)?"⭐":"☆"}
           </button>
-          {(v.entered_by==="H"||v.entered_by==="L")&&(
-            <span title={v.entered_by==="H"?"Entered by Henriksen":"Entered by Løken"}
-              style={{display:"inline-flex",alignItems:"center",justifyContent:"center",
-                width:14,height:14,borderRadius:"50%",fontSize:8,fontWeight:700,lineHeight:1,
-                background:v.entered_by==="H"?"rgba(88,166,255,0.25)":"rgba(74,222,128,0.25)",
-                color:v.entered_by==="H"?"#79c0ff":"#4ade80",
-                border:"1px solid "+(v.entered_by==="H"?"rgba(88,166,255,0.5)":"rgba(74,222,128,0.5)")}}>
-              {v.entered_by}
-            </span>
-          )}
+          {v.entered_by&&<UserInitialBadge initials={v.entered_by} size={16}/>} 
           </div>
         </td>
       )}
@@ -3994,16 +4016,7 @@ const filtV=useMemo(()=>{
 
       {/* WHO ENTERED — H (blue) or L (green) badge */}
       <td style={{...tdCtr,width:20,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
-        {(f.entered_by==="H"||f.entered_by==="L")&&(
-          <span title={f.entered_by==="H"?"Entered by Henriksen":"Entered by Løken"}
-            style={{display:"inline-flex",alignItems:"center",justifyContent:"center",
-              width:14,height:14,borderRadius:"50%",fontSize:8,fontWeight:700,lineHeight:1,
-              background:f.entered_by==="H"?"rgba(88,166,255,0.25)":"rgba(74,222,128,0.25)",
-              color:f.entered_by==="H"?"#79c0ff":"#4ade80",
-              border:"1px solid "+(f.entered_by==="H"?"rgba(88,166,255,0.5)":"rgba(74,222,128,0.5)")}}>
-            {f.entered_by}
-          </span>
-        )}
+        {f.entered_by&&<UserInitialBadge initials={f.entered_by} size={16}/>} 
       </td>
       {/* DELETE */}
       <td
@@ -4032,6 +4045,15 @@ const filtV=useMemo(()=>{
             </div>
             </div>{/* end cargo scroll wrapper */}
           </div>
+        )}
+
+        {/* ── QUOTES & FIXTURES ── */}
+        {tab==="cargo2"&&(
+          <Suspense fallback={<TabFallback/>}>
+            <QuotesFixtures vessels={vessels} cargoes={cargoes} cargoTotal={cargoTotal}
+              onUpdateC={onUpdateC} onAddCargoes={onAddCargoes} onAddC={onAddC}
+              onDelC={onDelC} onAddVessels={onAddVessels} onCargoSearch={onCargoSearch}/>
+          </Suspense>
         )}
 
         {/* ── FIXING ── */}
@@ -4158,6 +4180,9 @@ const filtV=useMemo(()=>{
             <div style={{height:1,background:C.bd2,margin:"4px 0"}}/>
             {/* Original settings component */}
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
+            {(currentUser?.role==="admin"||localStorage.getItem("signal_user_role")==="admin")&&(
+              <><div style={{height:1,background:C.bd2,margin:"4px 0"}}/><Suspense fallback={<TabFallback/>}><UserManager/></Suspense></>
+            )}
           </div>
         )}
         {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={Array.from(selCargoes)}/></Suspense></div>}
