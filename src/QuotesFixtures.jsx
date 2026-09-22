@@ -14,85 +14,157 @@ function tagList(){try{const x=JSON.parse(localStorage.getItem("signal_custom_ta
 const card={background:C.bg2,border:"1px solid "+C.bd,borderRadius:7};
 
 const POS_TH={
-  padding:"7px 10px",
-  color:"rgba(120,160,220,0.55)",
-  fontWeight:700,
-  fontSize:11,
-  textTransform:"uppercase",
-  letterSpacing:"0.08em",
-  textAlign:"left",
-  background:C.bg4,
-  borderBottom:"1px solid rgba(58,130,246,0.14)",
-  whiteSpace:"nowrap",
-  verticalAlign:"middle",
-  fontFamily:"sans-serif"
+  background:C.bg2,color:"rgba(120,160,220,0.58)",fontSize:10,fontWeight:700,
+  textTransform:"uppercase",letterSpacing:"0.06em",padding:"6px 8px",
+  borderBottom:"1px solid rgba(58,130,246,0.12)",textAlign:"left",
+  whiteSpace:"nowrap",verticalAlign:"middle",fontFamily:"sans-serif"
 };
 const POS_TD={
-  padding:"6px 10px",
-  color:"#d9e8ff",
-  fontWeight:500,
-  fontSize:12,
-  borderBottom:"1px solid rgba(255,255,255,0.035)",
-  verticalAlign:"middle",
-  whiteSpace:"nowrap",
-  overflow:"hidden",
-  textOverflow:"ellipsis",
-  textTransform:"uppercase",
-  fontFamily:"sans-serif"
+  padding:"5px 8px",color:C.tx,fontWeight:500,fontSize:12,
+  borderBottom:"1px solid rgba(255,255,255,0.018)",verticalAlign:"middle",
+  whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
+  textTransform:"uppercase",fontFamily:"sans-serif",lineHeight:"18px"
 };
-const POS_ROW=i=>i%2?"rgba(255,255,255,0.02)":"transparent";
-const POS_TABLE={width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:11,tableLayout:"fixed",fontFamily:"sans-serif"};
+const POS_ROW=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
+const POS_TABLE={width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12,tableLayout:"fixed",fontFamily:"inherit"};
 const POS_WRAP={border:"1px solid "+C.bd,borderRadius:8,overflow:"auto",minWidth:0,background:C.bg2,boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)"};
 
-const btn=(active=false)=>({fontSize:10,fontWeight:700,padding:"3px 7px",borderRadius:3,border:"1px solid "+(active?C.blue:C.bd),background:active?"rgba(88,166,255,.18)":C.bg3,color:active?"#d9ecff":"#9fc3f5",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
+const btn=(active=false)=>({fontSize:11,fontWeight:700,padding:"3px 7px",borderRadius:3,border:"1px solid "+(active?C.blue:C.bd),background:active?"rgba(88,166,255,.18)":C.bg3,color:active?"#d9ecff":"#9fc3f5",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
 const input={background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:11,padding:"6px 7px",outline:"none",boxSizing:"border-box"};
 function weekBounds(offset=0){const n=new Date();n.setHours(0,0,0,0);const dow=(n.getDay()+6)%7;const m=new Date(n);m.setDate(n.getDate()-dow+offset*7);const s=new Date(m);s.setDate(m.getDate()+6);return[m,s];}
-function CargoMonthChart({data,total}){
- const vals=data||[],max=Math.max(1,...vals.map(x=>x.count||0)); const W=520,H=190,L=28,R=10,T=20,B=25,iw=W-L-R,ih=H-T-B;
- const pts=vals.map((d,i)=>({x:L+(vals.length<2?0:i/(vals.length-1))*iw,y:T+ih-(d.count/max)*ih,...d}));
- const path=pts.map((p,i)=>(i?"L":"M")+p.x+" "+p.y).join(" ");
- return <div style={{...card,height:260,padding:"8px 10px",boxSizing:"border-box",minWidth:0,flex:1}}>
-  <div style={{display:"flex",justifyContent:"space-between",fontSize:9,fontWeight:800,color:C.dim,textTransform:"uppercase"}}><span>Cargoes entered by month</span><span style={{color:C.blue}}>{total||0} total</span></div>
-  <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{width:"100%",height:215,display:"block"}}>
-   {[0,.25,.5,.75,1].map(v=><line key={v} x1={L} x2={W-R} y1={T+ih*v} y2={T+ih*v} stroke={C.bd2} strokeDasharray="3 4"/>)}
-   {pts.length>1&&<path d={path} fill="none" stroke={C.blue} strokeWidth="2" vectorEffect="non-scaling-stroke"/>}
-   {pts.map((p,i)=><g key={i}><circle cx={p.x} cy={p.y} r="2.5" fill="#79c0ff"/>{(i===0||i===pts.length-1||i%3===0)&&<text x={p.x} y={H-5} textAnchor="middle" fontSize="9" fill={C.faint}>{new Date(p.year,p.month,1).toLocaleString("en",{month:"short"})}</text>}</g>)}
-  </svg>
- </div>
+function CargoMonthChart({ data, total }){
+  const wrapRef = React.useRef(null);
+  const [size, setSize] = React.useState({ w:520, h:180 });
+  React.useEffect(()=>{
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries=>{
+      const box = entries[0]?.contentRect;
+      if (box && box.width>0 && box.height>0) setSize({ w: box.width, h: box.height });
+    });
+    ro.observe(el);
+    return ()=>ro.disconnect();
+  },[]);
+
+  const MONTHS=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+  const counts=data||[];
+  if(!counts.length) return null;
+  const W=Math.max(counts.length,2);
+  const maxC=Math.max(1,...counts.map(b=>b.count));
+  const SVG_W=size.w, SVG_H=size.h;
+  const PAD={t:20,r:12,b:28,l:36};
+  const iW=Math.max(1,SVG_W-PAD.l-PAD.r);
+  const iH=Math.max(1,SVG_H-PAD.t-PAD.b);
+  const pts=counts.map((bkt,i)=>({
+    x:PAD.l+(W<=1?0:i*(iW/(W-1))),
+    y:PAD.t+iH-(bkt.count/maxC)*iH,
+    ...bkt
+  }));
+  const pathD=pts.map((p,i)=>(i===0?"M":"L")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
+  const areaD=pathD+" L"+pts[pts.length-1].x.toFixed(1)+","+(PAD.t+iH)+" L"+pts[0].x.toFixed(1)+","+(PAD.t+iH)+" Z";
+  const lineLen=pts.reduce((a,p,i)=>i===0?0:a+Math.hypot(p.x-pts[i-1].x,p.y-pts[i-1].y),0);
+  const step=Math.max(1,Math.ceil(W/8));
+  const yearStarts=pts.filter((p,i)=>i>0&&p.year!==pts[i-1].year);
+  const peakIdx=counts.reduce((mx,b,i)=>b.count>counts[mx].count?i:mx,0);
+
+  return(
+    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"8px 10px 6px",display:"flex",flexDirection:"column",gap:4,minWidth:0,boxSizing:"border-box",height:260}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.dim,textTransform:"uppercase",letterSpacing:"0.07em",fontFamily:"inherit"}}>Cargoes entered by month</div>
+        <div style={{fontSize:10,color:"rgba(88,166,255,0.7)",fontWeight:700,fontFamily:"inherit"}}>{total.toLocaleString()} total</div>
+      </div>
+      <div ref={wrapRef} style={{flex:1,minHeight:0,width:"100%"}}>
+        <svg fontFamily="inherit" width="100%" height="100%" viewBox={"0 0 "+SVG_W+" "+SVG_H} preserveAspectRatio="xMidYMid meet" style={{display:"block",overflow:"visible"}}>
+          <defs>
+            <linearGradient id="cgGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.3"/>
+              <stop offset="100%" stopColor="#58a6ff" stopOpacity="0.02"/>
+            </linearGradient>
+            <style>{`
+              @keyframes cgDraw{from{stroke-dashoffset:${lineLen.toFixed(0)}}to{stroke-dashoffset:0}}
+              .cgLine{stroke-dasharray:${lineLen.toFixed(0)};stroke-dashoffset:${lineLen.toFixed(0)};animation:cgDraw 1.6s ease-out forwards;}
+            `}</style>
+          </defs>
+          {[0,0.25,0.5,0.75,1].map(f=>(
+            <g key={f}>
+              <line x1={PAD.l} y1={PAD.t+iH*(1-f)} x2={PAD.l+iW} y2={PAD.t+iH*(1-f)} stroke="rgba(88,130,200,0.1)" strokeWidth="1" strokeDasharray={f===0?"0":"3,4"}/>
+              <text x={PAD.l-5} y={PAD.t+iH*(1-f)+4} textAnchor="end" fontSize="10" fill="rgba(120,160,200,0.45)">{Math.round(maxC*f)}</text>
+            </g>
+          ))}
+          {yearStarts.map(p=>(
+            <g key={p.year}>
+              <line x1={p.x} y1={PAD.t-4} x2={p.x} y2={PAD.t+iH+20} stroke="rgba(88,166,255,0.22)" strokeWidth="1.5" strokeDasharray="4,3"/>
+              <text x={p.x+3} y={PAD.t-6} fontSize="10" fill="rgba(88,166,255,0.5)" fontWeight="700">{p.year}</text>
+            </g>
+          ))}
+          <path d={areaD} fill="url(#cgGrad)"/>
+          <path d={pathD} fill="none" stroke="#58a6ff" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" className="cgLine"/>
+          {pts.map((p,i)=>{
+            const showLabel=i===0||i===pts.length-1||i%step===0;
+            return(
+              <g key={i}>
+                {p.count>0&&<circle cx={p.x} cy={p.y} r={i===peakIdx?4:2.5} fill={i===peakIdx?"#79c0ff":"#58a6ff"} stroke="#0c1729" strokeWidth="1.5"/>}
+                {i===peakIdx&&(
+                  <text x={p.x} y={p.y-9} textAnchor="middle" fontSize="10" fill="#79c0ff" fontWeight="700">{p.count}</text>
+                )}
+                {showLabel&&(
+                  <text x={p.x} y={PAD.t+iH+16} textAnchor="middle" fontSize="10" fill="rgba(120,160,200,0.5)">{MONTHS[p.month]}</text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
 }
+
 function BunkerHeader(){
  const [b,setB]=useState(null);
  useEffect(()=>{supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle().then(({data})=>setB(data?.value||null));},[]);
  return <div style={{display:"flex",alignItems:"center",gap:5,fontSize:9,color:C.faint}}>BUNKER <Suspense fallback={null}><RateMatrixBunkerInput value={b?.ARA_MGO||b?.ara_mgo||null}/></Suspense></div>;
 }
-function useMonthly(){
- const [week,setWeek]=useState({thisWk:0,lastWk:0}),[monthly,setMonthly]=useState([]);
- useEffect(()=>{(async()=>{const [tm,ts]=weekBounds(0),[lm,ls]=weekBounds(-1),fmt=d=>d.toISOString().slice(0,10);
-  const [{count:a},{count:b}]=await Promise.all([supabase.from("cargoes").select("*",{count:"exact",head:true}).gte("updated",fmt(tm)).lte("updated",fmt(ts)+"T23:59:59"),supabase.from("cargoes").select("*",{count:"exact",head:true}).gte("updated",fmt(lm)).lte("updated",fmt(ls)+"T23:59:59")]);setWeek({thisWk:a||0,lastWk:b||0});
-  const now=new Date(),arr=[];for(let i=23;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1),n=new Date(d.getFullYear(),d.getMonth()+1,1);const {count}=await supabase.from("cargoes").select("*",{count:"exact",head:true}).gte("updated",d.toISOString().slice(0,10)).lt("updated",n.toISOString().slice(0,10));arr.push({year:d.getFullYear(),month:d.getMonth(),count:count||0});}setMonthly(arr);
- })();},[]);
- return {week,monthly};
+function useMonthly(cargoes=[]){
+ return useMemo(()=>{
+  const now=new Date(),[tm,ts]=weekBounds(0),[lm,ls]=weekBounds(-1);
+  ts.setHours(23,59,59,999);ls.setHours(23,59,59,999);
+  const monthMap=new Map();
+  for(let i=23;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);monthMap.set(`${d.getFullYear()}-${d.getMonth()}`,{year:d.getFullYear(),month:d.getMonth(),count:0})}
+  let thisWk=0,lastWk=0;
+  for(const c of cargoes){const raw=c.added||c.updated;if(!raw)continue;const d=new Date(raw);if(Number.isNaN(d.getTime()))continue;if(d>=tm&&d<=ts)thisWk++;if(d>=lm&&d<=ls)lastWk++;const k=`${d.getFullYear()}-${d.getMonth()}`;if(monthMap.has(k))monthMap.get(k).count++;}
+  return {week:{thisWk,lastWk},monthly:[...monthMap.values()]};
+ },[cargoes]);
 }
 function TagCell({id,value,onUpdate}){
  const [open,setOpen]=useState(false),[pos,setPos]=useState({top:0,left:0}),ref=useRef(null);
- function show(){if(ref.current){const r=ref.current.getBoundingClientRect(),z=parseFloat(getComputedStyle(document.body).zoom||"1")||1,w=160*z,h=Math.min(360,72+tagList().length*27)*z,m=12;let l=r.left-w-6;if(l<m)l=r.right+6;l=Math.max(m,Math.min(l,innerWidth-w-m));let t=Math.max(m,Math.min(r.top-8,innerHeight-h-m));setPos({left:l/z,top:t/z});}setOpen(true);}
- return <><td style={{...POS_TD,textAlign:"center",padding:"0 3px"}}><button ref={ref} onClick={show} style={{background:"transparent",border:"1px solid "+C.bd,borderRadius:3,color:value?C.blue:C.faint,fontSize:9,cursor:"pointer",minWidth:20}}>{value||"+"}</button></td>
- {open&&<><div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"fixed",left:pos.left,top:pos.top,zIndex:19999,width:160,maxHeight:360,overflowY:"auto",background:"#071223",border:"1px solid "+C.bd,borderRadius:7,padding:5,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}>
- {tagList().map(t=><button key={t} onClick={()=>{onUpdate(id,"tag",value===t?"":t);setOpen(false)}} style={{display:"block",width:"100%",textAlign:"left",padding:"6px 7px",marginBottom:2,background:value===t?"rgba(88,166,255,.16)":"transparent",border:"1px solid "+(value===t?C.blue:C.bd2),borderRadius:3,color:value===t?"#fff":"#9fc3f5",fontSize:9,fontWeight:700,cursor:"pointer"}}>{t}</button>)}</div></>}</>;
+ function show(){if(ref.current){const r=ref.current.getBoundingClientRect(),z=parseFloat(getComputedStyle(document.body).zoom||"1")||1,w=160*z,h=(16+tagList().length*31)*z,m=12;let l=r.left-w-6;if(l<m)l=r.right+6;l=Math.max(m,Math.min(l,innerWidth-w-m));let t=Math.max(m,Math.min(r.top-8,innerHeight-h-m));setPos({left:l/z,top:t/z});}setOpen(true);}
+ return <><td style={{...POS_TD,textAlign:"center",padding:"0 3px"}}><button ref={ref} onClick={show} style={{background:"transparent",border:"1px solid "+C.bd,borderRadius:3,color:value?C.blue:C.faint,fontSize:11,fontWeight:700,cursor:"pointer",minWidth:24,lineHeight:"15px"}}>{value||"+"}</button></td>
+ {open&&<><div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"fixed",left:pos.left,top:pos.top,zIndex:19999,width:160,overflow:"visible",background:"#071223",border:"1px solid "+C.bd,borderRadius:7,padding:5,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}>
+ {tagList().map(t=><button key={t} onClick={()=>{onUpdate(id,"tag",value===t?"":t);setOpen(false)}} style={{display:"block",width:"100%",textAlign:"left",padding:"6px 7px",marginBottom:2,background:value===t?"rgba(88,166,255,.16)":"transparent",border:"1px solid "+(value===t?C.blue:C.bd2),borderRadius:3,color:value===t?"#fff":"#9fc3f5",fontSize:11,fontWeight:700,cursor:"pointer"}}>{t}</button>)}</div></>}</>;
 }
 function RegionCell({value,onSave}){
  const [edit,setEdit]=useState(false),[draft,setDraft]=useState(value||""),ref=useRef(null);
- const matches=REGIONS.filter(r=>!draft||r.toLowerCase().startsWith(draft.toLowerCase())||r.toLowerCase().includes(draft.toLowerCase()));
- function commit(){const q=draft.trim(),hit=REGIONS.find(r=>r.toLowerCase()===q.toLowerCase())||REGIONS.find(r=>r.toLowerCase().startsWith(q.toLowerCase()));if(!q)onSave("");else if(hit)onSave(hit);setEdit(false);}
- return <td style={{...POS_TD,fontWeight:700,color:C.tx,position:"relative"}} onClick={()=>{setDraft(value||"");setEdit(true);setTimeout(()=>ref.current?.focus(),0)}}>
- {!edit?value||"":<input ref={ref} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={()=>setTimeout(commit,80)} onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab"){e.preventDefault();commit()}if(e.key==="Escape")setEdit(false)}} style={{...input,width:"100%",height:24,fontWeight:700,textTransform:"uppercase",fontFamily:"inherit",background:"#071223"}}/>}
- {edit&&matches.length>0&&<div style={{position:"absolute",left:4,top:29,zIndex:15000,minWidth:145,background:"#071223",border:"1px solid "+C.bd,borderRadius:5,padding:3,boxShadow:"0 8px 25px rgba(0,0,0,.65)"}}>{matches.slice(0,8).map(r=><div key={r} onMouseDown={e=>{e.preventDefault();onSave(r);setEdit(false)}} style={{padding:"4px 6px",fontSize:9,fontWeight:700,cursor:"pointer"}}>{r}</div>)}</div>}
+ function open(e){e?.stopPropagation();setDraft(value||"");setEdit(true);setTimeout(()=>{ref.current?.focus();ref.current?.select()},0)}
+ function commit(raw=draft){const q=String(raw||"").trim(),hit=REGIONS.find(r=>r.toLowerCase()===q.toLowerCase());if(!q)onSave("");else if(hit)onSave(hit);setEdit(false)}
+ return <td style={{...POS_TD,padding:edit?"1px 2px":POS_TD.padding,fontWeight:500,color:C.tx,position:"relative",overflow:"visible"}} onClick={open}>
+   {!edit?value||"":<input ref={ref} value={draft} onClick={e=>e.stopPropagation()} onChange={e=>setDraft(e.target.value)} onBlur={()=>setTimeout(()=>commit(),150)} onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab"){e.preventDefault();commit()}if(e.key==="Escape")setEdit(false)}} style={{width:"100%",height:27,lineHeight:"25px",padding:"0 5px",margin:0,border:"1px solid rgba(58,130,246,.32)",borderRadius:4,outline:"none",boxShadow:"none",background:"rgba(20,39,66,.78)",color:C.tx,fontFamily:"inherit",fontSize:12,fontWeight:500,textTransform:"uppercase",boxSizing:"border-box"}}/>}
+   {edit&&<div onMouseDown={e=>e.preventDefault()} onClick={e=>e.stopPropagation()} style={{position:"absolute",left:8,top:"calc(100% - 1px)",zIndex:99999,minWidth:"calc(100% - 16px)",width:180,background:"#071223",border:"1px solid "+C.bd,borderRadius:5,padding:3,boxShadow:"0 8px 25px rgba(0,0,0,.65)",overflow:"visible"}}>{REGIONS.map(r=><div key={r} onMouseDown={e=>{e.preventDefault();e.stopPropagation();commit(r)}} style={{padding:"5px 7px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",background:r===value?"rgba(58,130,246,.12)":"transparent",color:r===value?"#79c0ff":C.tx}}>{r}</div>)}</div>}
  </td>;
 }
-function Editable({value,onSave,color,bold}){
- const [e,setE]=useState(false),[v,setV]=useState(value??"");useEffect(()=>setV(value??""),[value]);
- return <td onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} style={{...POS_TD,color:color||C.tx,fontWeight:bold?700:500}}>
- {e?<input autoFocus value={v} onChange={x=>setV(x.target.value)} onBlur={()=>{setE(false);if(v!==value)onSave(v)}} onKeyDown={x=>{if(x.key==="Enter"){x.currentTarget.blur()}if(x.key==="Escape"){setV(value??"");setE(false)}}} style={{...input,width:"100%",height:24,background:"#071223"}}/>:<span title={String(value||"")}>{value||""}</span>}</td>;
+function editorInitials(v){
+ const x=String(v||"").trim();
+ if(!x)return "";
+ if(x==="H")return "HH";
+ if(x==="L")return "HL";
+ const p=x.split(/\s+/).filter(Boolean);
+ if(p.length>1)return (p[0][0]+p[p.length-1][0]).toUpperCase();
+ return x.slice(0,2).toUpperCase();
+}
+
+function Editable({value,onSave,color,bold,align="left"}){
+ const[e,setE]=useState(false),[v,setV]=useState(value??"");useEffect(()=>setV(value??""),[value]);
+ return <td onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} style={{...POS_TD,padding:e?"1px 2px":POS_TD.padding,color:color||C.tx,fontWeight:bold?700:500,textAlign:align}}>
+ {e?<input autoFocus value={v} onChange={x=>setV(x.target.value)} onBlur={()=>{setE(false);if(v!==value)onSave(v)}} onKeyDown={x=>{if(x.key==="Enter"){x.currentTarget.blur()}if(x.key==="Escape"){setV(value??"");setE(false)}}} style={{width:"100%",height:27,lineHeight:"25px",padding:"0 5px",margin:0,border:"1px solid rgba(58,130,246,.32)",borderRadius:4,outline:"none",boxShadow:"none",background:"rgba(20,39,66,.78)",color:color||C.tx,fontFamily:"inherit",fontSize:12,fontWeight:bold?700:500,textTransform:"uppercase",boxSizing:"border-box",textAlign:align}}/>:<span title={String(value||"")}>{value||""}</span>}</td>;
 }
 function AddRow({onSave,onClose,quotes=false}){
  const [r,setR]=useState({});const f=(k,p)=><input value={r[k]||""} onChange={e=>setR(x=>({...x,[k]:e.target.value}))} placeholder={p} style={{...input,width:"100%",height:25}}/>;
@@ -105,49 +177,60 @@ function AddRow({onSave,onClose,quotes=false}){
 
 export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,onAddCargoes,onAddC,onDelC,onAddVessels,onCargoSearch}){
  const [search,setSearch]=useState(""),[status,setStatus]=useState("ALL"),[time,setTime]=useState(""),[grade,setGrade]=useState(""),[tag,setTag]=useState(""),[ex,setEx]=useState(""),[toR,setToR]=useState(""),[parseTag,setParseTag]=useState(""),[showAdd,setShowAdd]=useState(false),[sort,setSort]=useState("added"),[dir,setDir]=useState(-1);
- const [visible,setVisible]=useState(()=>{try{return new Set(JSON.parse(localStorage.getItem("signal_qf_visible_columns")||"[]"))}catch{return new Set()}});
+ const [visible,setVisible]=useState(()=>{try{const raw=localStorage.getItem("signal_qf_visible_columns");if(raw){const a=JSON.parse(raw);if(Array.isArray(a)&&a.length)return new Set(a)}}catch{}try{const m=document.cookie.match(/(?:^|; )signal_qf_cols=([^;]*)/);if(m){const a=decodeURIComponent(m[1]).split(",").filter(Boolean);if(a.length)return new Set(a)}}catch{}return new Set()});
  const defaults=["status","ex_region","to_region","p_and_c","intelligence","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment"];
  useEffect(()=>{if(!visible.size)setVisible(new Set(defaults))},[]);
- useEffect(()=>{try{localStorage.setItem("signal_qf_visible_columns",JSON.stringify([...visible]))}catch{}},[visible]);
+ useEffect(()=>{if(!visible.size)return;const a=[...visible];try{localStorage.setItem("signal_qf_visible_columns",JSON.stringify(a))}catch{}try{document.cookie="signal_qf_cols="+encodeURIComponent(a.join(","))+"; path=/; max-age=31536000; SameSite=Lax"}catch{}},[visible]);
  const [colsOpen,setColsOpen]=useState(false),[colsPos,setColsPos]=useState({top:0,left:0});
- const {week,monthly}=useMonthly();
+ const [deleteCargo,setDeleteCargo]=useState(null);
+ const [selected,setSelected]=useState(()=>new Set());
+ const [hoverRowId,setHoverRowId]=useState(null);
+ const {week,monthly}=useMonthly(cargoes);
  const groups=useMemo(()=>{try{return JSON.parse(localStorage.getItem("signal_cargo_filter_groups")||"[]")}catch{return[]}},[cargoes.length]),grades=groups.filter(g=>(g.category||"grade")==="grade"),tags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
- const filtered=useMemo(()=>{let a=cargoes.filter(c=>{if(ex&&c.ex_region!==ex)return false;if(toR&&c.to_region!==toR)return false;if(status!=="ALL"&&c.status!==status)return false;if(tag&&c.tag!==tag)return false;if(grade&&!String(c.cargo||"").toLowerCase().includes(grade.toLowerCase()))return false;if(search&&!JSON.stringify(c).toLowerCase().includes(search.toLowerCase()))return false;return true});const f=sort==="added"?"added":sort;return [...a].sort((x,y)=>{let A=x[f]||x.updated||"",B=y[f]||y.updated||"";if(f==="added"||f==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime()}return(A<B?-1:A>B?1:0)*dir})},[cargoes,search,status,tag,grade,ex,toR,sort,dir]);
+ const filtered=useMemo(()=>{let a=cargoes.filter(c=>{if(ex&&c.ex_region!==ex)return false;if(toR&&c.to_region!==toR)return false;if(status!=="ALL"&&c.status!==status)return false;if(tag&&c.tag!==tag)return false;if(grade&&!String(c.cargo||"").toLowerCase().includes(grade.toLowerCase()))return false;if(search&&!JSON.stringify(c).toLowerCase().includes(search.toLowerCase()))return false;return true});const f=sort==="added"?"added":sort;return [...a].sort((x,y)=>{let A=x[f]||x.updated||"",B=y[f]||y.updated||"";if(f==="added"||f==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime()}const primary=(A<B?-1:A>B?1:0)*dir;if(primary)return primary;
+// Stable tie-breakers: editing Intel/regions/etc must never change row position.
+const xa=new Date(x.added||0).getTime()||0,ya=new Date(y.added||0).getTime()||0;if(xa!==ya)return ya-xa;
+return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,status,tag,grade,ex,toR,sort,dir]);
  const allCols=[["status","Status",4],["ex_region","Ex Region",6],["to_region","To Region",6],["p_and_c","P&C",3],["intelligence","Intel",4],["vessel","Vessel",9],["charterer","Charterer",10],["qty","Qty",4],["cargo","Cargo",6],["load","Load",9],["disch","Disch",12],["from","From",4],["to","To",4],["freight","Freight",7],["comment","Comment",11],["tag","Tag",4],["source","Source",6],["updated","Updated",6]];
  const shown=allCols.filter(([k])=>visible.has(k));
  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
   <div style={{display:"flex",gap:10,height:260}}>
-   <div style={{flex:"0 0 25%",display:"flex",flexDirection:"column",gap:4}}><div style={{...card,padding:"5px 8px",display:"flex",gap:4,flexWrap:"wrap"}}><span style={{fontSize:9,color:C.faint,fontWeight:800}}>TAG ON PARSE</span>{tagList().map(t=><button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={btn(parseTag===t)}>{t}</button>)}</div><div style={{flex:1}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await onAddCargoes(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div>
-   <div style={{flex:"0 0 40%",...card,padding:8,display:"grid",gridTemplateColumns:".8fr .8fr .8fr 1.6fr 1.6fr",gap:6,overflow:"hidden"}}>
-    <div><b style={{fontSize:9,color:C.blue}}>GRADE</b>{grades.slice(0,6).map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={{...btn(grade===g.id),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{g.label}</button>)}</div>
-    <div><b style={{fontSize:9,color:C.dim}}>PERIOD</b>{[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={{...btn(time===k),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{l}</button>)}</div>
-    <div><b style={{fontSize:9,color:C.pink}}>TAG</b>{tags.slice(0,7).map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={{...btn(tag===t),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{t}</button>)}</div>
-    {[["EX REGION",ex,setEx],["TO REGION",toR,setToR]].map(([lab,val,setter])=><div key={lab}><b style={{fontSize:9,color:C.blue}}>{lab}</b><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:2,marginTop:3}}><button onClick={()=>setter("")} style={btn(!val)}>All</button>{REGIONS.map(r=><button key={r} onClick={()=>setter(x=>x===r?"":r)} style={btn(val===r)}>{r}</button>)}</div></div>)}
+   <div style={{flex:"0 0 25%",display:"flex",flexDirection:"column",gap:4}}><div style={{...card,padding:"5px 8px",display:"flex",gap:4,flexWrap:"wrap"}}><span style={{fontSize:11,color:C.faint,fontWeight:700}}>TAG ON PARSE</span>{tagList().map(t=><button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={btn(parseTag===t)}>{t}</button>)}</div><div style={{flex:1}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await onAddCargoes(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div>
+   <div style={{flex:"0 0 40%",...card,padding:8,display:"grid",gridTemplateColumns:".8fr .8fr .8fr 1.6fr 1.6fr",gap:6,overflow:"visible",position:"relative",zIndex:20}}>
+    <div><b style={{fontSize:11,color:C.blue}}>GRADE</b>{grades.slice(0,6).map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={{...btn(grade===g.id),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{g.label}</button>)}</div>
+    <div><b style={{fontSize:11,color:C.dim}}>PERIOD</b>{[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={{...btn(time===k),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{l}</button>)}</div>
+    <div><b style={{fontSize:11,color:C.pink}}>TAG</b>{tags.slice(0,7).map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={{...btn(tag===t),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{t}</button>)}</div>
+    {[["EX REGION",ex,setEx],["TO REGION",toR,setToR]].map(([lab,val,setter])=><div key={lab}><b style={{fontSize:11,color:C.blue}}>{lab}</b><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:2,marginTop:3}}><button onClick={()=>setter("")} style={btn(!val)}>All</button>{REGIONS.map(r=><button key={r} onClick={()=>setter(x=>x===r?"":r)} style={btn(val===r)}>{r}</button>)}</div></div>)}
    </div>
    <CargoMonthChart data={monthly} total={cargoTotal||cargoes.length}/>
   </div>
   <div style={{...card,padding:"5px 8px",display:"flex",gap:6,alignItems:"center",position:"relative",zIndex:100}}>
-   <button onClick={()=>setShowAdd(true)} style={{...btn(),color:C.amber}}>+ Add cargo</button><button style={btn()}>Copy all</button><button style={btn()}>Copy CSV</button><span style={{fontSize:10,color:C.faint}}>This wk <b style={{color:C.blue}}>{week.thisWk}</b>&nbsp; Last wk <b>{week.lastWk}</b></span>
-   <div style={{marginLeft:"auto",display:"flex",gap:5,alignItems:"center"}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search cargoes..." style={{...input,width:210}}/><span style={{fontSize:10,color:C.faint}}>Total <b style={{color:C.tx}}>{cargoTotal||cargoes.length}</b></span><select value={sort} onChange={e=>setSort(e.target.value)} style={input}><option value="added">Added</option><option value="updated">Updated</option><option value="charterer">Charterer</option></select><button onClick={()=>setDir(d=>-d)} style={btn()}>{dir>0?"▲":"▼"}</button>
-   <button onClick={e=>{const r=e.currentTarget.getBoundingClientRect(),z=parseFloat(getComputedStyle(document.body).zoom||"1")||1,w=205*z,h=390*z,m=12;let l=Math.max(m,Math.min(r.right-w,innerWidth-w-m)),t=r.bottom+5;if(t+h>innerHeight-m)t=Math.max(m,r.top-h-5);setColsPos({left:l/z,top:t/z});setColsOpen(v=>!v)}} style={btn()}>Columns⌄</button></div>
-   {colsOpen&&<><div onClick={()=>setColsOpen(false)} style={{position:"fixed",inset:0,zIndex:29990}}/><div style={{position:"fixed",left:colsPos.left,top:colsPos.top,zIndex:29999,width:205,maxHeight:390,overflowY:"auto",background:"#071223",border:"1px solid "+C.bd,borderRadius:7,padding:7,boxShadow:"0 12px 34px rgba(0,0,0,.7)"}}>{allCols.map(([k,l])=><label key={k} style={{display:"flex",gap:7,padding:5,fontSize:10,fontWeight:700}}><input type="checkbox" checked={visible.has(k)} onChange={()=>setVisible(p=>{const n=new Set(p);n.has(k)?n.delete(k):n.add(k);return n})}/>{l}</label>)}</div></>}
+   <button onClick={()=>setShowAdd(true)} style={{...btn(),color:C.amber}}>+ Add cargo</button><button style={btn()}>Copy all</button><button style={btn()}>Copy CSV</button><span style={{fontSize:10,color:C.faint}}>This wk <b style={{color:C.blue}}>{week.thisWk}</b>&nbsp; Last wk <b>{week.lastWk}</b>&nbsp;&nbsp; Total <b style={{color:C.tx}}>{cargoTotal||cargoes.length}</b></span>
+   <div style={{marginLeft:"auto",display:"flex",gap:5,alignItems:"center"}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search cargoes..." style={{...input,width:210}}/><div style={{position:"relative",width:118,height:27}}><select value={sort} onChange={e=>setSort(e.target.value)} style={{...btn(),appearance:"none",WebkitAppearance:"none",width:"100%",height:27,padding:"3px 26px 3px 9px",background:C.bg3,color:"#9fc3f5",textAlign:"left"}}>
+     <option value="added">Added</option>{allCols.map(([k,l])=><option key={k} value={k}>{l}</option>)}
+   </select><span style={{position:"absolute",right:9,top:"50%",transform:"translateY(-52%)",pointerEvents:"none",color:"#9fc3f5",fontSize:11}}>▼</span></div>
+   <button onClick={e=>{const r=e.currentTarget.getBoundingClientRect(),z=parseFloat(getComputedStyle(document.body).zoom||"1")||1,w=205*z,h=520*z,m=12;let l=Math.max(m,Math.min(r.right-w,innerWidth-w-m)),t=r.bottom+5;if(t+h>innerHeight-m)t=Math.max(m,r.top-h-5);setColsPos({left:l/z,top:t/z});setColsOpen(v=>!v)}} style={{...btn(),position:"relative",height:27,width:118,padding:"3px 26px 3px 9px",textAlign:"left"}}>Columns<span style={{position:"absolute",right:9,top:"50%",transform:"translateY(-52%)",fontSize:11}}>▼</span></button></div>
+   {colsOpen&&<><div onClick={()=>setColsOpen(false)} style={{position:"fixed",inset:0,zIndex:29990}}/><div style={{position:"fixed",left:colsPos.left,top:colsPos.top,zIndex:29999,width:205,overflow:"visible",background:"#071223",border:"1px solid "+C.bd,borderRadius:7,padding:7,boxShadow:"0 12px 34px rgba(0,0,0,.7)"}}>{allCols.map(([k,l])=><label key={k} style={{display:"flex",gap:7,padding:5,fontSize:11,fontWeight:600}}><input type="checkbox" checked={visible.has(k)} onChange={()=>setVisible(p=>{const n=new Set(p);n.has(k)?n.delete(k):n.add(k);return n})}/>{l}</label>)}</div></>}
   </div>
   {showAdd&&<AddRow quotes onSave={onAddC} onClose={()=>setShowAdd(false)}/>}
+  {deleteCargo&&<><div onClick={()=>setDeleteCargo(null)} style={{position:"fixed",inset:0,zIndex:64990,background:"rgba(0,0,0,.08)"}}/><div style={{position:"fixed",left:"50%",bottom:28,transform:"translateX(-50%)",zIndex:65000,minWidth:330,background:"#0b1728",border:"1px solid #ff5b5b",borderRadius:8,padding:"12px 14px",boxShadow:"0 14px 40px rgba(0,0,0,.55)",display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:12,fontWeight:700,color:C.tx,marginRight:4}}>Delete {(deleteCargo.vessel||deleteCargo.charterer||"cargo").toUpperCase()}?</span><button onClick={async()=>{const id=deleteCargo.id;setDeleteCargo(null);await onDelC(id)}} style={{...btn(),background:"#ff5b5b",borderColor:"#ff5b5b",color:"#fff",padding:"6px 16px"}}>Delete</button><button onClick={()=>setDeleteCargo(null)} style={{...btn(),padding:"6px 16px"}}>Cancel</button></div></>}
   <div style={POS_WRAP}>
-   <style>{`.qf-position-row:hover td{background:rgba(58,130,246,0.06)!important;}`}</style><table style={POS_TABLE}>
+   <table style={POS_TABLE}>
     <colgroup><col style={{width:"1.4%"}}/>{shown.map(([k,l,w])=><col key={k} style={{width:w+"%"}}/>)}<col style={{width:"1.4%"}}/><col style={{width:"1.4%"}}/></colgroup>
-    <thead><tr><th style={{...POS_TH,textAlign:"center"}}></th>{shown.map(([k,l])=><th key={k} style={{...POS_TH,textAlign:["p_and_c","intelligence","from","to","freight"].includes(k)?"center":"left"}}>{l}</th>)}<th style={POS_TH}/><th style={POS_TH}/></tr></thead>
-    <tbody>{filtered.slice(0,200).map((c,i)=><tr key={c.id} className="qf-position-row" style={{background:POS_ROW(i),height:27}}><td style={{...POS_TD,textAlign:"center",color:C.faint,padding:"0 2px"}}>[ ]</td>
+    <thead><tr><th onClick={()=>{const ids=filtered.slice(0,200).map(x=>x.id);const all=ids.length>0&&ids.every(id=>selected.has(id));setSelected(p=>{const n=new Set(p);ids.forEach(id=>all?n.delete(id):n.add(id));return n})}} style={{...POS_TH,textAlign:"center",cursor:"pointer",padding:"3px 1px",lineHeight:"11px"}}><div style={{fontSize:11,color:filtered.slice(0,200).length>0&&filtered.slice(0,200).every(x=>selected.has(x.id))?"#4fc3f7":C.faint}}>{filtered.slice(0,200).length>0&&filtered.slice(0,200).every(x=>selected.has(x.id))?"[✓]":"[ ]"}</div><div style={{fontSize:7,color:C.faint}}>ALL</div></th>{shown.map(([k,l])=><th key={k} style={{...POS_TH,textAlign:["status","p_and_c","intelligence","from","to","freight","tag","updated"].includes(k)?"center":"left"}}>{l}</th>)}<th style={POS_TH}/><th style={POS_TH}/></tr></thead>
+    <tbody>{filtered.slice(0,200).map((c,i)=>{
+      const rowBg=POS_ROW(i);
+      return <tr key={c.id} style={{background:rowBg,height:32}}><td onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} style={{...POS_TD,textAlign:"center",padding:"0 2px",overflow:"visible"}}><span role="checkbox" aria-checked={selected.has(c.id)} tabIndex={0} onClick={e=>{e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}} onKeyDown={e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}}} style={{fontSize:12,fontWeight:500,color:selected.has(c.id)?"#4fc3f7":C.faint,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>{selected.has(c.id)?"[✓]":"[ ]"}</span></td>
     {shown.map(([k])=>{
-      if(k==="status")return <td key={k} onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:800,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>;
+      if(k==="status")return <td key={k} onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:500,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>;
       if(k==="ex_region"||k==="to_region")return <RegionCell key={k} value={c[k]||""} onSave={v=>onUpdateC(c.id,k,v)}/>;
-      if(k==="p_and_c")return <td key={k} onClick={()=>{const o=[null,1,2,3],x=o.findIndex(v=>String(v??"")===String(c.p_and_c??""));onUpdateC(c.id,"p_and_c",o[(x+1)%o.length])}} style={{...POS_TD,textAlign:"center",fontWeight:900,cursor:"pointer",color:Number(c.p_and_c)===1?"#ff5b5b":Number(c.p_and_c)===2?"#ffad33":Number(c.p_and_c)===3?"#fff":C.faint}}>{c.p_and_c??""}</td>;
-      if(k==="intelligence")return <td key={k} onClick={()=>{const o=["","Quote","Fixture"],x=o.indexOf(c.intelligence||"");onUpdateC(c.id,"intelligence",o[(x+1)%o.length])}} style={{...POS_TD,textAlign:"center",cursor:"pointer"}}>{c.intelligence&&<span style={{display:"inline-block",padding:"2px 5px",borderRadius:3,fontSize:9,fontWeight:800,color:c.intelligence==="Fixture"?C.green:C.blue,border:"1px solid "+(c.intelligence==="Fixture"?C.green+"88":C.blue+"88")}}>{c.intelligence.toUpperCase()}</span>}</td>;
+      if(k==="p_and_c")return <td key={k} onClick={()=>{const o=[null,1,2,3],x=o.findIndex(v=>String(v??"")===String(c.p_and_c??""));onUpdateC(c.id,"p_and_c",o[(x+1)%o.length])}} style={{...POS_TD,textAlign:"center",fontWeight:500,cursor:"pointer",color:Number(c.p_and_c)===1?"#ff5b5b":Number(c.p_and_c)===2?"#ffad33":Number(c.p_and_c)===3?"#fff":C.faint}}>{c.p_and_c??""}</td>;
+      if(k==="intelligence")return <td key={k} onClick={()=>{const cur=String(c.intelligence||"").toUpperCase(),o=[null,"Quote","Fixture"],x=cur==="QUOTE"?1:cur==="FIXTURE"?2:0;onUpdateC(c.id,"intelligence",o[(x+1)%o.length])}} style={{...POS_TD,textAlign:"center",cursor:"pointer"}}>{c.intelligence&&<span style={{display:"inline-block",padding:"2px 5px",borderRadius:3,fontSize:9,fontWeight:800,color:String(c.intelligence).toUpperCase()==="FIXTURE"?C.green:C.blue,border:"1px solid "+(String(c.intelligence).toUpperCase()==="FIXTURE"?C.green+"88":C.blue+"88")}}>{c.intelligence.toUpperCase()}</span>}</td>;
       if(k==="tag")return <TagCell key={k} id={c.id} value={c.tag} onUpdate={onUpdateC}/>;
       if(k==="updated")return <td key={k} style={{...POS_TD,textAlign:"center",color:C.faint}}>{c.updated?new Date(c.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>;
       const val=k==="charterer"?toTCase(c[k]||""):k==="qty"?normaliseQty(c[k]):k==="from"||k==="to"?fmtDateShort(c[k]):k==="freight"?(fmtFreight(c[k])||c[k]||""):c[k]||"";
-      return <Editable key={k} value={val} bold={["vessel","charterer","cargo","load","disch","from","to"].includes(k)} color={k==="vessel"?C.blue:k==="charterer"?"#79c0ff":k==="qty"?C.amber:k==="freight"?"#a8e6a3":C.tx} onSave={v=>onUpdateC(c.id,k,k==="charterer"||k==="load"||k==="disch"?toTCase(v):k==="qty"?normaliseQty(v):k==="freight"?(fmtFreight(v)||v):v)}/>;
-    })}<td style={{...POS_TD,textAlign:"center",padding:"0 2px",fontSize:8,color:c.entered_by==="H"?C.blue:C.green}}>{c.entered_by||""}</td><td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>confirm("Delete cargo?")&&onDelC(c.id)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td></tr>)}</tbody>
+      return <Editable key={k} value={val} align={["from","to","freight"].includes(k)?"center":"left"} bold={k==="charterer"} color={k==="vessel"?C.blue:k==="charterer"?"#79c0ff":k==="qty"?C.amber:k==="freight"?"#a8e6a3":C.tx} onSave={v=>onUpdateC(c.id,k,k==="charterer"||k==="load"||k==="disch"?toTCase(v):k==="qty"?normaliseQty(v):k==="freight"?(fmtFreight(v)||v):v)}/>;
+    })}<td style={{...POS_TD,textAlign:"center",padding:0,verticalAlign:"middle",lineHeight:0}}>{editorInitials(c.entered_by)&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,padding:0,margin:0,borderRadius:"50%",boxSizing:"border-box",fontSize:7,fontWeight:700,lineHeight:"18px",textAlign:"center",verticalAlign:"middle",color:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?C.blue:C.green,border:"1px solid "+((c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{editorInitials(c.entered_by)}</span>}</td><td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>setDeleteCargo(c)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td></tr>})}</tbody>
    </table>
   </div>
  </div>;
