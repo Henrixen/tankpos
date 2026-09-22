@@ -2386,7 +2386,6 @@ const filtV=useMemo(()=>{
     const lastWeekEnd=new Date(thisWeekStart);
     const ytdStart=new Date(now.getFullYear(),0,1);
     let list=cargoes.filter(c=>{
-      if(String(c.record_type||"").toLowerCase()==="qf")return false;
       if(cTimeFilter){
         const d=new Date(c.updated||0);
         if(cTimeFilter==="tw"&&(d<thisWeekStart||d>now))return false;
@@ -2424,6 +2423,12 @@ const filtV=useMemo(()=>{
     }
     return list;
   },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cTagFilter,cGradeFilter]);
+
+  const cargoRowIndex=useMemo(()=>{
+    const m=new Map();
+    filtC.forEach((c,i)=>m.set(c.id,i));
+    return m;
+  },[filtC]);
 
   const FILTER_GROUPS=[
     {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"],["HIDE_EMP","Hide Employed"]]},
@@ -3901,7 +3906,7 @@ const filtV=useMemo(()=>{
     keyField="id"
     getRowStyle={(row,i)=>selCargoes.has(row.id)?"rgba(88,166,255,0.12)":i%2?"rgba(255,255,255,0.02)":"transparent"}
     renderRow={(f, td) => {
-  const i = filtC.findIndex(x => x.id === f.id);
+  const i = cargoRowIndex.get(f.id) ?? 0;
   const sc = f.status==="FIXED" ? C.green : f.status==="SUBS" ? C.purple : f.status==="FAILED" ? C.red : C.faint;
 
   return (
