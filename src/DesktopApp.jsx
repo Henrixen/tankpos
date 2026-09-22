@@ -1220,6 +1220,25 @@ class TabErrorBoundary extends React.Component {
   }
 }
 
+function safeLocalSet(key,value){
+  try{
+    localStorage.setItem(key,value);
+    return true;
+  }catch(err){
+    try{
+      // Remove obsolete large browser caches and retry. Supabase is still the source of truth.
+      localStorage.removeItem("tankpos_positions_v1");
+      localStorage.removeItem("tankpos_positions");
+      localStorage.removeItem("positions_cache");
+      localStorage.setItem(key,value);
+      return true;
+    }catch(_){
+      // Browser cache must never prevent a successful PIN login.
+      return false;
+    }
+  }
+}
+
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
   // ── PIN config ───────────────────────────────────────────────────────────
   const MASTER_PIN = "4524"; // ← your PIN → full access
@@ -1320,21 +1339,21 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     // This also prevents a slow/misconfigured app_users query from freezing login.
     if(clean===MASTER_PIN){
       const user={name:"Haakon Henriksen",initials:"HH",color:"#79c0ff",role:"admin"};
-      localStorage.setItem("signal_user","HH");
-      localStorage.setItem("signal_user_name",user.name);
-      localStorage.setItem("signal_user_color",user.color);
-      localStorage.setItem("signal_user_role","admin");
-      localStorage.setItem("signal_current_user",JSON.stringify(user));
+      safeLocalSet("signal_user","HH");
+      safeLocalSet("signal_user_name",user.name);
+      safeLocalSet("signal_user_color",user.color);
+      safeLocalSet("signal_user_role","admin");
+      safeLocalSet("signal_current_user",JSON.stringify(user));
       setCurrentUser(user);setGuestMode(false);setUnlocked(true);setPinInput("");
       return;
     }
     if(clean===GUEST_PIN){
       const user={name:"Guest",initials:"GU",color:"#4ade80",role:"guest"};
-      localStorage.setItem("signal_user","GU");
-      localStorage.setItem("signal_user_name",user.name);
-      localStorage.setItem("signal_user_color",user.color);
-      localStorage.setItem("signal_user_role","guest");
-      localStorage.setItem("signal_current_user",JSON.stringify(user));
+      safeLocalSet("signal_user","GU");
+      safeLocalSet("signal_user_name",user.name);
+      safeLocalSet("signal_user_color",user.color);
+      safeLocalSet("signal_user_role","guest");
+      safeLocalSet("signal_current_user",JSON.stringify(user));
       setCurrentUser(user);setGuestMode(true);setUnlocked(true);setPinInput("");
       return;
     }
@@ -1351,11 +1370,11 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
       if(!error&&data){
         const initials=String(data.initials||"").trim().toUpperCase().slice(0,2);
         const user={...data,initials};
-        localStorage.setItem("signal_user",initials);
-        localStorage.setItem("signal_user_name",data.name||initials);
-        localStorage.setItem("signal_user_color",data.color||"#79c0ff");
-        localStorage.setItem("signal_user_role",data.role||"user");
-        localStorage.setItem("signal_current_user",JSON.stringify(user));
+        safeLocalSet("signal_user",initials);
+        safeLocalSet("signal_user_name",data.name||initials);
+        safeLocalSet("signal_user_color",data.color||"#79c0ff");
+        safeLocalSet("signal_user_role",data.role||"user");
+        safeLocalSet("signal_current_user",JSON.stringify(user));
         setCurrentUser(user);setGuestMode(data.role==="guest");setUnlocked(true);setPinInput("");
         return;
       }
