@@ -2840,7 +2840,12 @@ const filtV=useMemo(()=>{
           borderRight:"1px solid rgba(58,130,246,.18)",
           background:"linear-gradient(180deg,rgba(7,15,29,.94),rgba(7,15,29,.76))",
           padding:"10px 8px",
-          minHeight:"calc(100vh - 92px)",
+          minHeight:"calc(100vh - 20px)",
+          maxHeight:"calc(100vh - 20px)",
+          overflowY:"auto",
+          position:"sticky",
+          top:10,
+          alignSelf:"flex-start",
           boxShadow:"inset -1px 0 0 rgba(88,166,255,.04)"
         }}>
           <button onClick={()=>{const n={...navConfig,collapsed:!navConfig.collapsed};setNavConfig(n);try{localStorage.setItem(NAV_KEY,JSON.stringify(n))}catch{};supabase.from("tag_settings").upsert({key:NAV_CLOUD_KEY,value:n,updated_at:new Date().toISOString()},{onConflict:"key"}).then(()=>{})}} style={{
