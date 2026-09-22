@@ -40,7 +40,7 @@ const POS_TD={
   textTransform:"uppercase",
   fontFamily:"sans-serif"
 };
-const POS_ROW=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
+const POS_ROW=i=>i%2?"rgba(255,255,255,0.02)":"transparent";
 const POS_TABLE={width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:11,tableLayout:"fixed",fontFamily:"sans-serif"};
 const POS_WRAP={border:"1px solid "+C.bd,borderRadius:8,overflow:"auto",minWidth:0,background:C.bg2,boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)"};
 
@@ -134,10 +134,10 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
   </div>
   {showAdd&&<AddRow quotes onSave={onAddC} onClose={()=>setShowAdd(false)}/>}
   <div style={POS_WRAP}>
-   <table style={POS_TABLE}>
+   <style>{`.qf-position-row:hover td{background:rgba(58,130,246,0.06)!important;}`}</style><table style={POS_TABLE}>
     <colgroup><col style={{width:"1.4%"}}/>{shown.map(([k,l,w])=><col key={k} style={{width:w+"%"}}/>)}<col style={{width:"1.4%"}}/><col style={{width:"1.4%"}}/></colgroup>
     <thead><tr><th style={{...POS_TH,textAlign:"center"}}></th>{shown.map(([k,l])=><th key={k} style={{...POS_TH,textAlign:["p_and_c","intelligence","from","to","freight"].includes(k)?"center":"left"}}>{l}</th>)}<th style={POS_TH}/><th style={POS_TH}/></tr></thead>
-    <tbody>{filtered.slice(0,200).map((c,i)=><tr key={c.id} style={{background:POS_ROW(i),height:27}}><td style={{...POS_TD,textAlign:"center",color:C.faint,padding:"0 2px"}}>[ ]</td>
+    <tbody>{filtered.slice(0,200).map((c,i)=><tr key={c.id} className="qf-position-row" style={{background:POS_ROW(i),height:27}}><td style={{...POS_TD,textAlign:"center",color:C.faint,padding:"0 2px"}}>[ ]</td>
     {shown.map(([k])=>{
       if(k==="status")return <td key={k} onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:800,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>;
       if(k==="ex_region"||k==="to_region")return <RegionCell key={k} value={c[k]||""} onSave={v=>onUpdateC(c.id,k,v)}/>;
