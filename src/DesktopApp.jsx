@@ -1274,6 +1274,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
             ...live,
             mgoAra:Number(live.mgoAra)||Number(savedBunkers?.ARA_MGO)||v.mgoAra,
             mgoSingapore:Number(live.mgoSingapore)||Number(savedBunkers?.SIN_MGO)||v.mgoSingapore,
+            mgoFujairah:Number(live.mgoFujairah)||Number(savedBunkers?.FUJ_MGO)||v.mgoFujairah,
             mgoUsg:Number(live.mgoUsg)||v.mgoUsg,
             bunkerDate:live.bunkerDate||savedBunkers?.date||v.bunkerDate
           }));
@@ -1282,6 +1283,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
             ...v,
             mgoAra:Number(savedBunkers.ARA_MGO)||v.mgoAra,
             mgoSingapore:Number(savedBunkers.SIN_MGO)||v.mgoSingapore,
+            mgoFujairah:Number(savedBunkers.FUJ_MGO)||v.mgoFujairah,
             bunkerDate:savedBunkers.date||v.bunkerDate
           }));
         }
@@ -1311,25 +1313,56 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,"0")).join("");
   }
   async function submitPin(p){
+    const clean=String(p||"").replace(/\D/g,"").slice(0,4);
+    if(clean.length!==4)return;
+
+    // Keep the existing master/guest PINs instant and independent of Supabase.
+    // This also prevents a slow/misconfigured app_users query from freezing login.
+    if(clean===MASTER_PIN){
+      const user={name:"Haakon Henriksen",initials:"HH",color:"#79c0ff",role:"admin"};
+      localStorage.setItem("signal_user","HH");
+      localStorage.setItem("signal_user_name",user.name);
+      localStorage.setItem("signal_user_color",user.color);
+      localStorage.setItem("signal_user_role","admin");
+      localStorage.setItem("signal_current_user",JSON.stringify(user));
+      setCurrentUser(user);setGuestMode(false);setUnlocked(true);setPinInput("");
+      return;
+    }
+    if(clean===GUEST_PIN){
+      const user={name:"Guest",initials:"GU",color:"#4ade80",role:"guest"};
+      localStorage.setItem("signal_user","GU");
+      localStorage.setItem("signal_user_name",user.name);
+      localStorage.setItem("signal_user_color",user.color);
+      localStorage.setItem("signal_user_role","guest");
+      localStorage.setItem("signal_current_user",JSON.stringify(user));
+      setCurrentUser(user);setGuestMode(true);setUnlocked(true);setPinInput("");
+      return;
+    }
+
+    // Colleague PINs are looked up in app_users. Do not let a network/RLS issue
+    // leave the keypad apparently doing nothing.
     try{
-      const pinHash=await sha256(p);
-      const {data,error}=await supabase.from("app_users").select("id,name,initials,color,role,active").eq("pin_hash",pinHash).eq("active",true).maybeSingle();
+      const pinHash=await sha256(clean);
+      const query=supabase.from("app_users")
+        .select("id,name,initials,color,role,active")
+        .eq("pin_hash",pinHash).eq("active",true).maybeSingle();
+      const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error("PIN lookup timeout")),3500));
+      const {data,error}=await Promise.race([query,timeout]);
       if(!error&&data){
-        const initials=String(data.initials||"").trim().toUpperCase().slice(0,2),user={...data,initials};
-        localStorage.setItem("signal_user",initials);localStorage.setItem("signal_user_name",data.name||initials);
-        localStorage.setItem("signal_user_color",data.color||"#79c0ff");localStorage.setItem("signal_user_role",data.role||"user");
-        localStorage.setItem("signal_current_user",JSON.stringify(user));setCurrentUser(user);setGuestMode(data.role==="guest");setUnlocked(true);setPinInput("");return;
+        const initials=String(data.initials||"").trim().toUpperCase().slice(0,2);
+        const user={...data,initials};
+        localStorage.setItem("signal_user",initials);
+        localStorage.setItem("signal_user_name",data.name||initials);
+        localStorage.setItem("signal_user_color",data.color||"#79c0ff");
+        localStorage.setItem("signal_user_role",data.role||"user");
+        localStorage.setItem("signal_current_user",JSON.stringify(user));
+        setCurrentUser(user);setGuestMode(data.role==="guest");setUnlocked(true);setPinInput("");
+        return;
       }
     }catch(_){}
-    if(p===MASTER_PIN){
-      const user={name:"Haakon Henriksen",initials:"HH",color:"#79c0ff",role:"admin"};
-      localStorage.setItem("signal_user","HH");localStorage.setItem("signal_user_name",user.name);localStorage.setItem("signal_user_color",user.color);localStorage.setItem("signal_user_role","admin");localStorage.setItem("signal_current_user",JSON.stringify(user));
-      setCurrentUser(user);setGuestMode(false);setUnlocked(true);setPinInput("");
-    }else if(p===GUEST_PIN){
-      const user={name:"Guest",initials:"GU",color:"#4ade80",role:"guest"};
-      localStorage.setItem("signal_user","GU");localStorage.setItem("signal_user_name",user.name);localStorage.setItem("signal_user_color",user.color);localStorage.setItem("signal_user_role","guest");localStorage.setItem("signal_current_user",JSON.stringify(user));
-      setCurrentUser(user);setGuestMode(true);setUnlocked(true);setPinInput("");
-    }else{setPinError(true);setPinInput("");setTimeout(()=>setPinError(false),1200);}
+
+    setPinError(true);setPinInput("");
+    setTimeout(()=>setPinError(false),1200);
   }
 
   React.useEffect(()=>{
@@ -1387,8 +1420,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     return()=>window.removeEventListener("navigation-config-updated",h);
   },[]);
   const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
-  // Navigation visibility/order is global: the Settings choice applies to everybody.
-  const navIds=useMemo(()=>navConfig.order.filter(id=>!navConfig.hidden.includes(id)),[navConfig]);
+  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||GUEST_TABS.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode]);
   const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
   const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set());setMobileNavOpen(false)});
  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
