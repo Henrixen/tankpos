@@ -442,20 +442,25 @@ export function normaliseCargo(c){
     if(isNaN(dt)) return "";
     return dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
   }
+
+  // Preserve all Supabase fields so Quotes & Fixtures keeps its extra columns.
   return {
-    id:        c.id,
-    status:    c.status    || "",
-    vessel:    c.vessel    || "",
-    charterer: c.charterer || "",
-    cargo:     c.cargo     || "",
-    qty:       c.qty       || "",
-    load:      c.load      || "",
-    disch:     c.disch     || "",
-    from:      fmtDate(c.from),
-    to:        fmtDate(c.to),
-    freight:   c.freight   || "",
-    comment:   c.comment   || "",
-    updated:   c.updated   || "",
+    ...c,
+    id:          c.id,
+    status:      c.status      || "",
+    vessel:      c.vessel      || "",
+    charterer:   c.charterer   || "",
+    cargo:       c.cargo       || "",
+    qty:         c.qty         || "",
+    load:        c.load        || "",
+    disch:       c.disch       || "",
+    from:        fmtDate(c.from),
+    to:          fmtDate(c.to),
+    freight:     c.freight     || "",
+    comment:     c.comment     || "",
+    updated:     c.updated     || "",
+    entered_by:  c.entered_by  || "",
+    record_type: c.record_type || "cargo",
   };
 }
 
