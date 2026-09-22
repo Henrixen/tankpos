@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
+import UserManager from "./UserManager";
 
 const INTERUKC_KEY = "signal_interukc_config";
 const DEFAULT_CONFIG = {
@@ -466,7 +467,9 @@ export default function SettingsTab() {
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px",fontFamily:"Inter,sans-serif"}}>
       <SectionCard title="Navigation / Menu" subtitle="Choose menu style, order existing tabs, visibility and grouped headings."><NavigationEditor/><AppScaleControl/></SectionCard>
-      <SectionCard title="Guest Access" subtitle="Choose which tabs colleagues can see when they enter the guest code."><GuestAccessEditor/></SectionCard>
+      <SectionCard title="Users / Login" subtitle="Add colleagues and manage their initials, colour, PIN and role. Navigation visibility above remains global for everybody.">
+        <UserManager/>
+      </SectionCard>
 
       <SectionCard title="Fixing">
         <div style={{display:"flex",flexDirection:"column",gap:16}}>
