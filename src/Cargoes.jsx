@@ -57,7 +57,7 @@ function CargoMonthChart({ data, total, loading }){
   const W=Math.max(counts.length,2);
   const maxC=Math.max(1,...counts.map(b=>b.count));
   const SVG_W=size.w, SVG_H=size.h;
-  const PAD={t:16,r:24,b:8,l:25};
+  const PAD={t:16,r:24,b:34,l:25};
   const iW=Math.max(1,SVG_W-PAD.l-PAD.r);
   const iH=Math.max(1,SVG_H-PAD.t-PAD.b);
   const pts=counts.map((bkt,i)=>({
@@ -102,6 +102,7 @@ function CargoMonthChart({ data, total, loading }){
               <text x={p.x+3} y={PAD.t-6} fontSize="10" fill="rgba(88,166,255,0.5)" fontWeight="700">{p.year}</text>
             </g>
           ))}
+          <line x1={PAD.l} y1={PAD.t+iH} x2={PAD.l+iW} y2={PAD.t+iH} stroke="rgba(120,160,200,0.28)" strokeWidth="1"/>
           <path d={areaD} fill="url(#cgGrad)"/>
           <path d={pathD} fill="none" stroke="#58a6ff" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" className="cgLine"/>
           {pts.map((p,i)=>{
@@ -113,7 +114,10 @@ function CargoMonthChart({ data, total, loading }){
                   <text x={p.x} y={p.y-9} textAnchor="middle" fontSize="10" fill="#79c0ff" fontWeight="700">{p.count}</text>
                 )}
                 {showLabel&&(
-                  <text x={p.x} y={PAD.t+iH+16} textAnchor="middle" fontSize="10" fill="rgba(120,160,200,0.5)">{MONTHS[p.month]}</text>
+                  <text x={p.x} y={PAD.t+iH+14} textAnchor="middle" fontSize="9" fill="rgba(120,160,200,0.58)">
+                    <tspan x={p.x}>{MONTHS[p.month]}</tspan>
+                    <tspan x={p.x} dy="11" fontSize="8" fill="rgba(120,160,200,0.42)">{p.year}</tspan>
+                  </text>
                 )}
               </g>
             );
@@ -246,7 +250,8 @@ function TagCell({id,value,onUpdate}){
  const list=tagList();
  function show(){if(ref.current){const r=ref.current.getBoundingClientRect(),z=parseFloat(getComputedStyle(document.body).zoom||"1")||1,w=170*z,h=(110+list.length*27)*z,m=12;let l=r.left-w-6;if(l<m)l=r.right+6;l=Math.max(m,Math.min(l,innerWidth-w-m));let t=Math.max(m,Math.min(r.top-8,innerHeight-h-m));setPos({left:l/z,top:t/z});}setOpen(true);}
  function addAndPick(){const t=newTag.trim().toUpperCase();if(!t)return;try{const custom=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");if(!custom.includes(t)&&!PRESET_TAGS.includes(t))localStorage.setItem("signal_custom_tags",JSON.stringify([...custom,t]));}catch{}onUpdate(id,"tag",t);setNewTag("");setOpen(false);}
- return <><td style={{...POS_TD,textAlign:"center",padding:"0 3px"}}><button ref={ref} onClick={show} style={{background:"transparent",border:"1px solid "+C.bd,borderRadius:3,color:value?C.blue:C.faint,fontSize:9,cursor:"pointer",minWidth:20}}>{value||"+"}</button></td>
+ const activeColor=value?tagColor(value):null;
+ return <><td style={{...POS_TD,textAlign:"center",padding:0}}><button ref={ref} onClick={show} style={{width:"100%",height:32,display:"block",boxSizing:"border-box",padding:"0 4px",background:value?(activeColor?activeColor+"2b":"rgba(88,166,255,.14)"):"transparent",border:"none",borderRadius:0,color:value?(activeColor||C.blue):C.faint,fontSize:9,fontWeight:value?800:600,cursor:"pointer",textTransform:"uppercase",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{value?String(value).toUpperCase():"+"}</button></td>
  {open&&<><div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"fixed",left:pos.left,top:pos.top,zIndex:19999,width:170,background:"#071223",border:"1px solid "+C.blue,borderRadius:7,padding:6,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}>
  {list.map(t=>{const tc=tagColor(t);return <button key={t} onClick={()=>{onUpdate(id,"tag",value===t?"":t);setOpen(false)}} style={{display:"flex",alignItems:"center",gap:6,width:"100%",textAlign:"left",padding:"6px 7px",marginBottom:2,background:value===t?"rgba(88,166,255,.16)":"transparent",border:"1px solid "+(value===t?C.blue:C.bd2),borderRadius:3,color:tc||(value===t?"#fff":"#9fc3f5"),fontSize:9,fontWeight:700,cursor:"pointer"}}>{tc&&<span style={{width:6,height:6,borderRadius:"50%",background:tc,flexShrink:0}}/>}{t}</button>;})}
  <input value={newTag} onChange={e=>setNewTag(e.target.value)} onClick={e=>e.stopPropagation()} onKeyDown={e=>e.key==="Enter"&&addAndPick()} placeholder="New tag + Enter"
@@ -292,6 +297,7 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
  const PAGE_SIZE=200;
  const [hoverRowId,setHoverRowId]=useState(null);
  const [selected,setSelected]=useState(()=>new Set());
+ const [bulkTagOpen,setBulkTagOpen]=useState(false);
  const {week,monthly,loading:monthlyLoading}=useMonthly();
  const groups=useMemo(()=>{try{return JSON.parse(localStorage.getItem("signal_cargo_filter_groups")||"[]")}catch{return[]}},[cargoes.length]);
  const grades=groups.filter(g=>(g.category||"grade")==="grade");
@@ -313,9 +319,9 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
     <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const u=localStorage.getItem("signal_user")||"H";const r=await onAddCargoes(p.map(c=>({...c,entered_by:u,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div>
    </div>
    <div style={{flex:"0 0 25%",minWidth:0,...card,padding:8,display:"flex",flexDirection:"column",gap:8,overflow:"hidden"}}>
-    <div><b style={{fontSize:9,color:C.blue}}>GRADE</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{grades.map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={btn(grade===g.id)}>{g.label}</button>)}</div></div>
-    <div><b style={{fontSize:9,color:C.dim}}>PERIOD</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={btn(time===k)}>{l}</button>)}</div></div>
-    <div><b style={{fontSize:9,color:C.pink}}>TAG</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{tags.map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={btn(tag===t)}>{t}</button>)}</div></div>
+    <div style={{minHeight:0}}><b style={{fontSize:9,color:C.blue}}>GRADE</b><div style={{display:"flex",flexDirection:"column",gap:3,marginTop:4,maxHeight:74,overflowY:"auto"}}>{grades.map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={{...btn(grade===g.id),textTransform:"uppercase",textAlign:"left",width:"100%"}}>{String(g.label).toUpperCase()}</button>)}</div></div>
+    <div style={{minHeight:0}}><b style={{fontSize:9,color:C.dim}}>PERIOD</b><div style={{display:"flex",flexDirection:"column",gap:3,marginTop:4,maxHeight:74,overflowY:"auto"}}>{[["","ALL"],["tw","THIS WEEK"],["lw","LAST WEEK"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={{...btn(time===k),textTransform:"uppercase",textAlign:"left",width:"100%"}}>{l}</button>)}</div></div>
+    <div style={{minHeight:0}}><b style={{fontSize:9,color:C.pink}}>TAG</b><div style={{display:"flex",flexDirection:"column",alignItems:"stretch",gap:3,marginTop:4,maxHeight:112,overflowY:"auto"}}>{tags.map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={{...btn(tag===t),textTransform:"uppercase",textAlign:"left",width:"100%"}}>{String(t).toUpperCase()}</button>)}</div></div>
    </div>
    <div style={{flex:"0 0 25%",minWidth:0,alignSelf:"flex-start",position:"relative",zIndex:30}}><Suspense fallback={null}><RateMatrixCard collapsedHeight={260} bunkerHeader={<BunkerHeader/>}/></Suspense></div>
    <div style={{flex:"1 1 25%",minWidth:0,height:"100%",display:"flex",alignSelf:"stretch"}}><CargoMonthChart data={monthly} total={cargoTotal||cargoes.length} loading={monthlyLoading}/></div>
@@ -324,6 +330,12 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
    <button onClick={()=>setShowAdd(true)} style={{...btn(),color:C.amber}}>+ Add cargo</button>
    <button onClick={()=>navigator.clipboard?.writeText(filtered.map(c=>[c.status,c.vessel,c.charterer,c.qty,c.cargo,c.load,c.disch,fmtDateShort(c.from),fmtDateShort(c.to),fmtFreight(c.freight)||c.freight,c.comment].join("\\t")).join("\\n"))} style={btn()}>Copy all</button>
    <button onClick={()=>{const csv=filtered.map(c=>[c.status,c.vessel,c.charterer,c.qty,c.cargo,c.load,c.disch,c.from,c.to,c.freight,c.comment,c.tag,c.updated].map(x=>`"${String(x||"").replaceAll('"','""')}"`).join(",")).join("\\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="cargoes.csv";a.click()}} style={btn()}>Copy CSV</button>
+   {selected.size>0&&<div style={{position:"relative"}}>
+     <button onClick={()=>setBulkTagOpen(v=>!v)} style={{...btn(bulkTagOpen),color:C.blue}}>+ Add tag ({selected.size})</button>
+     {bulkTagOpen&&<><div onClick={()=>setBulkTagOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"absolute",left:0,top:"calc(100% + 4px)",zIndex:19999,width:180,maxHeight:300,overflowY:"auto",background:"#071223",border:"1px solid "+C.blue,borderRadius:6,padding:5,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}>
+       {tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={async()=>{const ids=[...selected];await Promise.all(ids.map(id=>Promise.resolve(onUpdateC(id,"tag",t))));setBulkTagOpen(false)}} style={{display:"flex",alignItems:"center",gap:6,width:"100%",padding:"6px 7px",marginBottom:2,background:"transparent",border:"1px solid "+C.bd2,borderRadius:3,color:tc||"#9fc3f5",fontSize:9,fontWeight:800,cursor:"pointer",textTransform:"uppercase"}}>{tc&&<span style={{width:7,height:7,borderRadius:"50%",background:tc,flexShrink:0}}/>}{String(t).toUpperCase()}</button>})}
+     </div></>}
+   </div>}
    <span style={{fontSize:10,color:C.faint}}>This wk <b style={{color:C.blue}}>{week.thisWk}</b>&nbsp;&nbsp; Last wk <b>{week.lastWk}</b></span>
    <div style={{marginLeft:"auto",display:"flex",gap:5,alignItems:"center"}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search cargoes..." style={{...input,width:210}}/><span style={{fontSize:10,color:C.faint}}>Total <b style={{color:C.tx}}>{cargoTotal||cargoes.length}</b></span><select value={sort} onChange={e=>setSort(e.target.value)} style={input}><option value="added">Added</option><option value="updated">Updated</option><option value="charterer">Charterer</option><option value="from">Laycan</option></select><button onClick={()=>setDir(d=>-d)} style={btn()}>{dir>0?"▲":"▼"}</button></div>
   </div>
