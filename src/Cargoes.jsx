@@ -277,10 +277,17 @@ function editorInitials(v){
  return x.slice(0,2).toUpperCase();
 }
 
-function Editable({value,onSave,color,bold,align="left"}){
+
+function gridMove(e,save,row,col,maxCol,down=false){
+ if(e.key==="Tab"){e.preventDefault();save?.();const next=e.shiftKey?col-1:col+1;if(next<0)focusGrid(row-1,maxCol);else if(next>maxCol)focusGrid(row+1,0);else focusGrid(row,next)}
+ else if(e.key==="Enter"){e.preventDefault();save?.();focusGrid(row+1,col)}
+}
+function focusGrid(row,col){setTimeout(()=>{const el=document.querySelector(`[data-grid-row="${row}"][data-grid-col="${col}"]`);if(el){el.focus();el.click()}},0)}
+
+function Editable({value,onSave,color,bold,align="left",row,col,maxCol}){
  const [e,setE]=useState(false),[v,setV]=useState(value??"");useEffect(()=>setV(value??""),[value]);
- return <td onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} style={{...POS_TD,padding:e?"1px 2px":POS_TD.padding,color:color||C.tx,fontWeight:bold?700:500,textAlign:align}}>
- {e?<input autoFocus value={v} onChange={x=>setV(x.target.value)} onBlur={()=>{setE(false);if(v!==value)onSave(v)}} onKeyDown={x=>{if(x.key==="Enter"){x.currentTarget.blur()}if(x.key==="Escape"){setV(value??"");setE(false)}}} style={{width:"100%",height:27,lineHeight:"25px",padding:"0 5px",margin:0,border:"1px solid rgba(58,130,246,.32)",borderRadius:4,outline:"none",boxShadow:"none",background:"rgba(20,39,66,.78)",color:color||C.tx,fontFamily:"inherit",fontSize:12,fontWeight:bold?700:500,textTransform:"uppercase",boxSizing:"border-box",textAlign:align}}/>:<span title={String(value||"")}>{value||""}</span>}</td>;
+ return <td tabIndex={0} data-grid-row={row} data-grid-col={col} onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} onKeyDown={x=>{if(!e&&(x.key==="Enter"||x.key==="Tab")){x.preventDefault();setE(true)}}} style={{...POS_TD,padding:e?"1px 2px":POS_TD.padding,color:color||C.tx,fontWeight:bold?700:500,textAlign:align}}>
+ {e?<input autoFocus value={v} onChange={x=>setV(x.target.value)} onBlur={()=>{setE(false);if(v!==value)onSave(v)}} onKeyDown={x=>{if(x.key==="Enter"||x.key==="Tab"){gridMove(x,()=>{if(v!==value)onSave(v);setE(false)},row,col,maxCol)}else if(x.key==="Escape"){setV(value??"");setE(false)}}} style={{width:"100%",height:27,lineHeight:"25px",padding:"0 5px",margin:0,border:"1px solid rgba(58,130,246,.32)",borderRadius:4,outline:"none",boxShadow:"none",background:"rgba(20,39,66,.78)",color:color||C.tx,fontFamily:"inherit",fontSize:12,fontWeight:bold?700:500,textTransform:"uppercase",boxSizing:"border-box",textAlign:align}}/>:<span title={String(value||"")}>{value||""}</span>}</td>;
 }
 function AddRow({onSave,onClose,quotes=false}){
  const [r,setR]=useState({});const f=(k,p)=><input value={r[k]||""} onChange={e=>setR(x=>({...x,[k]:e.target.value}))} placeholder={p} style={{...input,width:"100%",height:22,padding:"0 6px"}}/>;
@@ -348,17 +355,17 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
     <thead><tr>{["","Status","Vessel","Charterer","Qty","Cargo","Load","Disch","From","To","Freight","Comment","Tag","Updated","",""].map((h,i)=>i===0?<th key={i} onClick={()=>{const ids=pageRows.map(x=>x.id);const all=ids.length>0&&ids.every(id=>selected.has(id));setSelected(p=>{const n=new Set(p);ids.forEach(id=>all?n.delete(id):n.add(id));return n})}} style={{...POS_TH,textAlign:"center",cursor:"pointer",padding:"3px 1px",lineHeight:"11px"}}><div style={{fontSize:11,color:pageRows.length>0&&pageRows.every(x=>selected.has(x.id))?"#4fc3f7":C.faint}}>{pageRows.length>0&&pageRows.every(x=>selected.has(x.id))?"[✓]":"[ ]"}</div><div style={{fontSize:7,color:C.faint}}>ALL</div></th>:<th key={i} style={{...POS_TH,textAlign:i>13||["Status","From","To","Tag","Updated"].includes(h)?"center":"left"}}>{h}</th>)}</tr></thead>
     <tbody>{pageRows.map((c,i)=>{const rowBg=POS_ROW(i);return <tr key={c.id} style={{background:rowBg,height:32}}>
      <td onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} style={{...POS_TD,textAlign:"center",padding:"0 2px",overflow:"visible"}}><span role="checkbox" aria-checked={selected.has(c.id)} tabIndex={0} onClick={e=>{e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}} onKeyDown={e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}}} style={{fontSize:12,fontWeight:500,color:selected.has(c.id)?"#4fc3f7":C.faint,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>{selected.has(c.id)?"[✓]":"[ ]"}</span></td>
-     <td onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:500,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>
-     <Editable value={c.vessel||""} color={C.blue} onSave={v=>onUpdateC(c.id,"vessel",v)}/>
-     <Editable value={toTCase(c.charterer||"")} bold color="#79c0ff" onSave={v=>onUpdateC(c.id,"charterer",toTCase(v))}/>
-     <Editable value={normaliseQty(c.qty)} align="left" color={C.amber} onSave={v=>onUpdateC(c.id,"qty",normaliseQty(v))}/>
-     <Editable value={c.cargo||""} onSave={v=>onUpdateC(c.id,"cargo",v)}/>
-     <Editable value={toTCase(c.load||"")} onSave={v=>onUpdateC(c.id,"load",toTCase(v))}/>
-     <Editable value={toTCase(c.disch||"")} onSave={v=>onUpdateC(c.id,"disch",toTCase(v))}/>
-     <Editable value={fmtDateShort(c.from)} align="center" onSave={v=>onUpdateC(c.id,"from",v)}/>
-     <Editable value={fmtDateShort(c.to)} align="center" onSave={v=>onUpdateC(c.id,"to",v)}/>
-     <Editable value={fmtFreight(c.freight)||c.freight||""} align="left" color="#a8e6a3" onSave={v=>onUpdateC(c.id,"freight",fmtFreight(v)||v)}/>
-     <Editable value={c.comment||""} color={C.dim} onSave={v=>onUpdateC(c.id,"comment",v)}/>
+     <td tabIndex={0} data-grid-row={i} data-grid-col={0} onKeyDown={e=>gridMove(e,null,i,0,10)} onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:500,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>
+     <Editable row={i} col={1} maxCol={10} value={c.vessel||""} color={C.blue} onSave={v=>onUpdateC(c.id,"vessel",v)}/>
+     <Editable row={i} col={2} maxCol={10} value={toTCase(c.charterer||"")} bold color="#79c0ff" onSave={v=>onUpdateC(c.id,"charterer",toTCase(v))}/>
+     <Editable row={i} col={3} maxCol={10} value={normaliseQty(c.qty)} align="left" color={C.amber} onSave={v=>onUpdateC(c.id,"qty",normaliseQty(v))}/>
+     <Editable row={i} col={4} maxCol={10} value={c.cargo||""} onSave={v=>onUpdateC(c.id,"cargo",v)}/>
+     <Editable row={i} col={5} maxCol={10} value={toTCase(c.load||"")} onSave={v=>onUpdateC(c.id,"load",toTCase(v))}/>
+     <Editable row={i} col={6} maxCol={10} value={toTCase(c.disch||"")} onSave={v=>onUpdateC(c.id,"disch",toTCase(v))}/>
+     <Editable row={i} col={7} maxCol={10} value={fmtDateShort(c.from)} align="center" onSave={v=>onUpdateC(c.id,"from",v)}/>
+     <Editable row={i} col={8} maxCol={10} value={fmtDateShort(c.to)} align="center" onSave={v=>onUpdateC(c.id,"to",v)}/>
+     <Editable row={i} col={9} maxCol={10} value={fmtFreight(c.freight)||c.freight||""} align="left" color="#a8e6a3" onSave={v=>onUpdateC(c.id,"freight",fmtFreight(v)||v)}/>
+     <Editable row={i} col={10} maxCol={10} value={c.comment||""} color={C.dim} onSave={v=>onUpdateC(c.id,"comment",v)}/>
      <TagCell id={c.id} value={c.tag} onUpdate={onUpdateC}/>
      <td style={{...POS_TD,textAlign:"center",color:C.faint}}>{c.updated?new Date(c.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
      <td style={{...POS_TD,textAlign:"center",padding:0,verticalAlign:"middle",lineHeight:0}}>{editorInitials(c.entered_by)&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,padding:0,margin:0,borderRadius:"50%",boxSizing:"border-box",fontSize:7,fontWeight:700,lineHeight:"18px",textAlign:"center",verticalAlign:"middle",color:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?C.blue:C.green,border:"1px solid "+((c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{editorInitials(c.entered_by)}</span>}</td>
