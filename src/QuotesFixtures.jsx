@@ -151,15 +151,15 @@ function TagCell({id,value,onUpdate}){
 }
 function RegionFilterInput({label,value,setter}){
  const [open,setOpen]=useState(false),[q,setQ]=useState("");
- const opts=REGION_OPTIONS.filter(x=>!q||x.toLowerCase().includes(q.toLowerCase()));
+ const opts=REGIONS.filter(x=>!q||x.toLowerCase().includes(q.toLowerCase()));
  function typeRegion(v){
    setQ(v);
    setOpen(true);
    const term=v.trim().toLowerCase();
    if(!term){setter("");return}
-   const exact=REGION_OPTIONS.find(x=>x.toLowerCase()===term);
-   const starts=REGION_OPTIONS.find(x=>x.toLowerCase().startsWith(term));
-   const contains=REGION_OPTIONS.find(x=>x.toLowerCase().includes(term));
+   const exact=REGIONS.find(x=>x.toLowerCase()===term);
+   const starts=REGIONS.find(x=>x.toLowerCase().startsWith(term));
+   const contains=REGIONS.find(x=>x.toLowerCase().includes(term));
    const hit=exact||starts||contains;
    if(hit)setter(hit);
  }
