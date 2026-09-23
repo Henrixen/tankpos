@@ -1674,6 +1674,14 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [showSavedOnly,setShowSavedOnly]=useState(false);
   const [fixingPanelTab,setFixingPanelTab]=useState("Open Segments");
   const [fixingExpanded,setFixingExpanded]=useState(false);
+  useEffect(()=>{
+    if(!fixingExpanded||fixingPanelTab!=="History") return;
+    const id=requestAnimationFrame(()=>{
+      const svg=document.querySelector(".fixing-history-fill svg");
+      if(svg) svg.setAttribute("preserveAspectRatio","none");
+    });
+    return()=>cancelAnimationFrame(id);
+  },[fixingExpanded,fixingPanelTab]);
   const [aisPanelTab,setAisPanelTab]=useState("Map");
   const [posOutsiderView,setPosOutsiderView]=useState(false);
   const [outsiderSyncStatus,setOutsiderSyncStatus]=useState(null);
@@ -2939,12 +2947,18 @@ const filtV=useMemo(()=>{
               opacity: 1 !important;
             }
           `}</style>
-          <Suspense fallback={null}><FixingWindowChart
-            vessels={filtV}
-            filterActive={filtV.length !== vessels.length}
-            tagFilter={cTagFilter||null}
-            fillHeight={fixingExpanded}
-          /></Suspense>
+          <div className={fixingExpanded?"fixing-history-fill":""} style={{height:fixingExpanded?"100%":"auto"}}>
+            {fixingExpanded&&<style>{`
+              .fixing-history-fill > div { height:100% !important; box-sizing:border-box; margin-bottom:0 !important; display:flex !important; flex-direction:column !important; }
+              .fixing-history-fill > div > svg { flex:1 1 auto !important; height:auto !important; min-height:0 !important; width:100% !important; }
+            `}</style>}
+            <Suspense fallback={null}><FixingWindowChart
+              vessels={filtV}
+              filterActive={filtV.length !== vessels.length}
+              tagFilter={cTagFilter||null}
+              fillHeight={fixingExpanded}
+            /></Suspense>
+          </div>
         </>
       ) : (
         <Suspense fallback={null}><OpeningBreakdown
