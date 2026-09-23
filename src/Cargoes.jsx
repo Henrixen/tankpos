@@ -17,16 +17,16 @@ const POS_TH={
   background:"rgba(20,30,50,0.92)",color:"rgba(120,160,220,0.58)",fontSize:11,fontWeight:700,
   textTransform:"uppercase",letterSpacing:"0.08em",padding:"7px 10px",
   borderBottom:"1px solid rgba(58,130,246,0.14)",textAlign:"left",
-  whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"
+  whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",verticalAlign:"middle"
 };
 const POS_TD={
   padding:"6px 10px",color:"#d9e8ff",fontWeight:500,fontSize:12,
   borderBottom:"1px solid rgba(255,255,255,0.035)",verticalAlign:"middle",
   whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
-  textTransform:"uppercase",fontFamily:"sans-serif",lineHeight:"18px"
+  textTransform:"uppercase",lineHeight:"18px"
 };
 const POS_ROW=i=>i%2?"rgba(255,255,255,0.02)":"transparent";
-const POS_TABLE={width:"100%",borderCollapse:"collapse",fontSize:12,tableLayout:"fixed",fontFamily:"inherit"};
+const POS_TABLE={width:"100%",borderCollapse:"collapse",fontSize:12,tableLayout:"fixed"};
 const POS_WRAP={border:"1px solid "+C.bd,borderRadius:8,overflow:"auto",minWidth:0,background:C.bg2,boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)"};
 
 const btn=(active=false)=>({fontSize:10,fontWeight:700,padding:"3px 7px",borderRadius:3,border:"1px solid "+(active?C.blue:C.bd),background:active?"rgba(88,166,255,.18)":C.bg3,color:active?"#d9ecff":"#9fc3f5",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
@@ -272,11 +272,11 @@ function Editable({value,onSave,color,bold,align="left"}){
  {e?<input autoFocus value={v} onChange={x=>setV(x.target.value)} onBlur={()=>{setE(false);if(v!==value)onSave(v)}} onKeyDown={x=>{if(x.key==="Enter"){x.currentTarget.blur()}if(x.key==="Escape"){setV(value??"");setE(false)}}} style={{width:"100%",height:27,lineHeight:"25px",padding:"0 5px",margin:0,border:"1px solid rgba(58,130,246,.32)",borderRadius:4,outline:"none",boxShadow:"none",background:"rgba(20,39,66,.78)",color:color||C.tx,fontFamily:"inherit",fontSize:12,fontWeight:bold?700:500,textTransform:"uppercase",boxSizing:"border-box",textAlign:align}}/>:<span title={String(value||"")}>{value||""}</span>}</td>;
 }
 function AddRow({onSave,onClose,quotes=false}){
- const [r,setR]=useState({});const f=(k,p)=><input value={r[k]||""} onChange={e=>setR(x=>({...x,[k]:e.target.value}))} placeholder={p} style={{...input,width:"100%",height:25}}/>;
+ const [r,setR]=useState({});const f=(k,p)=><input value={r[k]||""} onChange={e=>setR(x=>({...x,[k]:e.target.value}))} placeholder={p} style={{...input,width:"100%",height:22,padding:"0 6px"}}/>;
  const save=async()=>{if(!r.charterer&&!r.cargo)return onClose();await onSave({...r,updated:new Date().toISOString(),intelligence:quotes?(r.intelligence||""):undefined});onClose();};
- return <div style={{...card,padding:6,display:"grid",gridTemplateColumns:quotes?"90px 90px 50px 70px 120px 120px 70px 90px 100px 120px 75px 75px 110px 1fr 50px":"100px 120px 70px 90px 100px 120px 75px 75px 110px 1fr 50px",gap:4}}>
+ return <div style={{...card,padding:"4px 6px",display:"grid",gridTemplateColumns:quotes?"90px 90px 50px 70px 120px 120px 70px 90px 100px 120px 75px 75px 110px 1fr 50px":"100px 120px 70px 90px 100px 120px 75px 75px 110px 1fr 50px",gap:4,alignItems:"center"}}>
  {quotes&&<>{f("ex_region","Ex region")}{f("to_region","To region")}{f("p_and_c","P&C")}{f("intelligence","Intel")}</>}
- {f("vessel","Vessel")}{f("charterer","Charterer")}{f("qty","Qty")}{f("cargo","Cargo")}{f("load","Load")}{f("disch","Disch")}{f("from","From")}{f("to","To")}{f("freight","Freight")}{f("comment","Comment")}<button onClick={save} style={btn(true)}>Save</button>
+ {f("vessel","Vessel")}{f("charterer","Charterer")}{f("qty","Qty")}{f("cargo","Cargo")}{f("load","Load")}{f("disch","Disch")}{f("from","From")}{f("to","To")}{f("freight","Freight")}{f("comment","Comment")}<button onClick={save} style={{...btn(true),height:22,padding:"0 8px"}}>Save</button>
  </div>;
 }
 
@@ -311,7 +311,7 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
     <div><b style={{fontSize:9,color:C.dim}}>PERIOD</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={btn(time===k)}>{l}</button>)}</div></div>
     <div><b style={{fontSize:9,color:C.pink}}>TAG</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{tags.map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={btn(tag===t)}>{t}</button>)}</div></div>
    </div>
-   <div style={{flex:"0 0 25%",minWidth:0}}><Suspense fallback={null}><RateMatrixCard collapsedHeight={260} bunkerHeader={<BunkerHeader/>}/></Suspense></div>
+   <div style={{flex:"0 0 25%",minWidth:0,alignSelf:"flex-start",position:"relative",zIndex:30}}><Suspense fallback={null}><RateMatrixCard collapsedHeight={260} bunkerHeader={<BunkerHeader/>}/></Suspense></div>
    <CargoMonthChart data={monthly} total={cargoTotal||cargoes.length} loading={monthlyLoading}/>
   </div>
   <div style={{...card,padding:"5px 8px",display:"flex",gap:6,alignItems:"center"}}>
