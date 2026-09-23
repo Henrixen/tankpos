@@ -36,19 +36,124 @@ const VesselUploader = React.lazy(()=>import("./VesselUploader"));
 const NewbuildsTab   = React.lazy(()=>import("./NewbuildsTab"));
 const FleetTab       = React.lazy(()=>import("./FleetTab"));
 const OutsidersTab   = React.lazy(()=>import("./OutsidersTab"));
+const CargoesTab     = React.lazy(()=>import("./Cargoes"));
+const QuotesFixtures = React.lazy(()=>import("./QuotesFixtures"));
 
 const TabFallback = ()=>null;
+
+const CARGO_INTEL_REGIONS=[
+  "ECI","ECSAM-NEB","Med","MED-BSEA","NEA","NWE-BALTIC","RSEA","SEA",
+  "USAC-GLAKES","USG-CARIBS","WAF-SAF","WC AMERICAS","WCI-AG"
+];
+
+
+function CargoRegionCell({ value, onSave }) {
+  const [editing,setEditing]=React.useState(false);
+  const [draft,setDraft]=React.useState("");
+  const [active,setActive]=React.useState(0);
+  const wrapRef=React.useRef(null);
+  const inputRef=React.useRef(null);
+
+  const matches=React.useMemo(()=>{
+    const q=(draft||"").trim().toLowerCase();
+    if(!q)return CARGO_INTEL_REGIONS;
+    const starts=CARGO_INTEL_REGIONS.filter(r=>r.toLowerCase().startsWith(q));
+    const contains=CARGO_INTEL_REGIONS.filter(r=>!r.toLowerCase().startsWith(q)&&r.toLowerCase().includes(q));
+    return [...starts,...contains];
+  },[draft]);
+
+  function begin(e){
+    e?.stopPropagation?.();
+    setDraft(value||"");
+    setActive(0);
+    setEditing(true);
+    setTimeout(()=>{inputRef.current?.focus();inputRef.current?.select?.();},0);
+  }
+  function choose(v){
+    onSave(v||null);
+    setDraft(v||"");
+    setEditing(false);
+  }
+  function commitTyped(){
+    const raw=(draft||"").trim();
+    if(!raw){choose("");return;}
+    const exact=CARGO_INTEL_REGIONS.find(r=>r.toLowerCase()===raw.toLowerCase());
+    const prefix=CARGO_INTEL_REGIONS.find(r=>r.toLowerCase().startsWith(raw.toLowerCase()));
+    if(exact||prefix) choose(exact||prefix);
+    else { setDraft(value||""); setEditing(false); }
+  }
+
+  return (
+    <td
+      ref={wrapRef}
+      onClick={!editing?begin:e=>e.stopPropagation()}
+      style={{padding:"0 6px",height:34,position:"relative",verticalAlign:"middle",
+        color:C.tx,fontSize:12,fontWeight:700,whiteSpace:"nowrap",cursor:"text",borderLeft:"none",borderRight:"none"}}
+      title={value||"Click to set region"}
+    >
+      {!editing ? (
+        <span style={{color:value?C.tx:C.faint,fontWeight:700,fontSize:12,textTransform:"uppercase"}}>
+          {value||""}
+        </span>
+      ) : (
+        <>
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={e=>{setDraft(e.target.value);setActive(0);}}
+            onKeyDown={e=>{
+              e.stopPropagation();
+              if(e.key==="ArrowDown"){e.preventDefault();setActive(a=>Math.min(a+1,Math.max(0,matches.length-1)));return;}
+              if(e.key==="ArrowUp"){e.preventDefault();setActive(a=>Math.max(0,a-1));return;}
+              if(e.key==="Enter"||e.key==="Tab"){
+                e.preventDefault();
+                const raw=(draft||"").trim();
+                const exact=CARGO_INTEL_REGIONS.find(r=>r.toLowerCase()===raw.toLowerCase());
+                const prefix=CARGO_INTEL_REGIONS.find(r=>r.toLowerCase().startsWith(raw.toLowerCase()));
+                choose(exact||matches[active]||prefix||"");
+                return;
+              }
+              if(e.key==="Escape"){e.preventDefault();setDraft(value||"");setEditing(false);}
+            }}
+            onBlur={()=>setTimeout(()=>{
+              if(!wrapRef.current?.contains(document.activeElement))commitTyped();
+            },120)}
+            style={{width:"100%",height:26,boxSizing:"border-box",background:"#071223",
+              border:"1px solid "+C.bd,borderRadius:4,outline:"none",color:C.tx,
+              fontFamily:"inherit",fontSize:12,fontWeight:700,padding:"0 6px",textTransform:"uppercase"}}
+          />
+          {matches.length>0&&(
+            <div style={{position:"absolute",left:3,top:"calc(100% - 2px)",zIndex:1000,minWidth:150,
+              maxHeight:210,overflowY:"auto",background:"#071223",border:"1px solid "+C.bd,
+              borderRadius:5,boxShadow:"0 10px 28px rgba(0,0,0,.55)",padding:"3px"}}>
+              {matches.map((r,idx)=>(
+                <div key={r}
+                  onMouseDown={e=>{e.preventDefault();e.stopPropagation();choose(r);}}
+                  style={{padding:"5px 8px",borderRadius:3,cursor:"pointer",fontSize:11,fontWeight:700,
+                    color:idx===active?"#ffffff":C.tx,
+                    background:idx===active?"rgba(88,166,255,.18)":"transparent",
+                    textTransform:"uppercase",whiteSpace:"nowrap"}}>
+                  {r}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </td>
+  );
+}
 
 const NAV_KEY="signal_navigation_config";
 const NAV_CLOUD_KEY="navigation_config";
 const NAV_ITEMS=[
- ["pos","Positions","#58a6ff","🚢"],["cargo","Cargoes","#faa356","🛢"],["fix","Fixing","#c792ea","◎"],["tcv","Time Charter","#fb923c","◷"],
+ ["pos","Positions","#58a6ff","🚢"],["cargo","Cargoes","#faa356","🛢"],["cargo2","Quotes&Fixtures","#38bdf8","▤"],["fix","Fixing","#c792ea","◎"],["tcv","Time Charter","#fb923c","◷"],
  ["clients","Clients","#a8e6a3","♟"],["matrix","Matrix","#43e97b","⌗"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","∑"],
  ["dash","Dashboard","#43e97b","▦"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▤"],["map","Freight Map","#10b981","⌁"],
  ["cal","Calendar","#4fc3f7","◫"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","⚓"],["newbuilds","Newbuilds","#fbbf24","△"]
 ];
 function navDefault(){return{mode:"classic",collapsed:false,order:NAV_ITEMS.map(x=>x[0]),hidden:[],groups:[
- {id:"market",label:"Market",tabs:["pos","cargo","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
+ {id:"market",label:"Market",tabs:["pos","cargo","cargo2","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
  {id:"tools",label:"Tools",tabs:["projects","tce","map"]},{id:"reporting",label:"Reporting",tabs:["dash","reports"]},
  {id:"workspace",label:"Workspace",tabs:["clients","notes","cal","settings"]}]};}
 function navNorm(x){
@@ -169,14 +274,22 @@ function TagCell({cargoId,tag,onUpdateC}){
     setTagColors(getTagColors());
     if(btnRef.current){
       const r=btnRef.current.getBoundingClientRect();
-      const popW=160; const popH=240;
-      // Prefer opening directly below the button, left-aligned
-      let left=r.left;
-      if(left+popW>window.innerWidth-8) left=r.right-popW;
-      left=Math.max(8,Math.min(left,window.innerWidth-popW-8));
-      let top=r.bottom+4;
-      if(top+popH>window.innerHeight-8) top=Math.max(8,r.top-popH-4);
-      setPos({top,left});
+      const rawZoom=parseFloat(getComputedStyle(document.body).zoom||document.body.style.zoom||"1");
+      const zoom=Number.isFinite(rawZoom)&&rawZoom>0?rawZoom:1;
+      const popWVisual=160*zoom;
+      const popHVisual=Math.min(360,72+getTagListFor("cargo").length*27)*zoom;
+      const marginVisual=12;
+
+      // Same behaviour as the Positions tag picker: open beside the clicked cell,
+      // then clamp to the visible viewport. This stays attached at every app zoom.
+      let leftVisual=r.left-popWVisual-6;
+      if(leftVisual<marginVisual) leftVisual=r.right+6;
+      leftVisual=Math.max(marginVisual,Math.min(leftVisual,window.innerWidth-popWVisual-marginVisual));
+
+      let topVisual=r.top-8;
+      topVisual=Math.max(marginVisual,Math.min(topVisual,window.innerHeight-popHVisual-marginVisual));
+
+      setPos({top:topVisual/zoom,left:leftVisual/zoom});
     }
     setOpen(v=>!v);
     setEditMode(null); setColorPick(null);
@@ -193,9 +306,9 @@ function TagCell({cargoId,tag,onUpdateC}){
         style={{background:curCol?curCol+"22":cur?"rgba(88,166,255,0.15)":"transparent",
           border:"1px solid "+(curCol||( cur?"rgba(88,166,255,0.4)":"rgba(88,166,255,0.12)")),
           borderRadius:3,color:curCol||( cur?"#79c0ff":"rgba(120,160,220,0.25)"),
-          fontSize:10,fontWeight:cur?700:400,padding:"2px 5px",cursor:"pointer",
-          fontFamily:"inherit",whiteSpace:"nowrap",width:"100%",minHeight:22,boxSizing:"border-box",overflow:"hidden",textOverflow:"ellipsis",textTransform:"uppercase"}}>
-        {cur?String(cur).toUpperCase():"＋"}
+          fontSize:10,fontWeight:cur?700:400,padding:"1px 5px",cursor:"pointer",
+          fontFamily:"inherit",whiteSpace:"nowrap",maxWidth:76,overflow:"hidden",textOverflow:"ellipsis"}}>
+        {cur||"＋"}
       </button>
       {open&&(
         <>
@@ -666,7 +779,7 @@ function CargoMonthChart({ counts, total }){
   const W=Math.max(counts.length,2);
   const maxC=Math.max(1,...counts.map(b=>b.count));
   const SVG_W=size.w, SVG_H=size.h;
-  const PAD={t:20,r:12,b:42,l:36};
+  const PAD={t:20,r:12,b:28,l:36};
   const iW=Math.max(1,SVG_W-PAD.l-PAD.r);
   const iH=Math.max(1,SVG_H-PAD.t-PAD.b);
   const pts=counts.map((bkt,i)=>({
@@ -705,7 +818,6 @@ function CargoMonthChart({ counts, total }){
               <text x={PAD.l-5} y={PAD.t+iH*(1-f)+4} textAnchor="end" fontSize="10" fill="rgba(120,160,200,0.45)">{Math.round(maxC*f)}</text>
             </g>
           ))}
-          <line x1={PAD.l} y1={PAD.t+iH} x2={PAD.l+iW} y2={PAD.t+iH} stroke="rgba(120,160,220,0.28)" strokeWidth="1"/>
           {yearStarts.map(p=>(
             <g key={p.year}>
               <line x1={p.x} y1={PAD.t-4} x2={p.x} y2={PAD.t+iH+20} stroke="rgba(88,166,255,0.22)" strokeWidth="1.5" strokeDasharray="4,3"/>
@@ -723,10 +835,7 @@ function CargoMonthChart({ counts, total }){
                   <text x={p.x} y={p.y-9} textAnchor="middle" fontSize="10" fill="#79c0ff" fontWeight="700">{p.count}</text>
                 )}
                 {showLabel&&(
-                  <g>
-                    <text x={p.x} y={PAD.t+iH+15} textAnchor="middle" fontSize="10" fill="rgba(145,180,220,0.72)">{MONTHS[p.month]}</text>
-                    <text x={p.x} y={PAD.t+iH+29} textAnchor="middle" fontSize="9" fill="rgba(100,145,195,0.48)">{String(p.year).slice(-2)}</text>
-                  </g>
+                  <text x={p.x} y={PAD.t+iH+16} textAnchor="middle" fontSize="10" fill="rgba(120,160,200,0.5)">{MONTHS[p.month]}</text>
                 )}
               </g>
             );
@@ -840,14 +949,14 @@ function MobileCollapse({ title, color="#58a6ff", defaultOpen=false, children })
   );
 }
 
-function TabbedPanel({tabs,active,onChange,height=460,children}){
+function TabbedPanel({tabs,active,onChange,height=460,children,extraHeader}){
   const fillParent = height==="100%";
   return (
     <div style={{
       ...(fillParent ? {position:"absolute",inset:0} : {height}),
       display:"flex",flexDirection:"column",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden"
     }}>
-      <div style={{display:"flex",flexShrink:0,borderBottom:"1px solid "+C.bd2}}>
+      <div style={{display:"flex",flexShrink:0,borderBottom:"1px solid "+C.bd2,alignItems:"center"}}>
         {tabs.map(t=>(
           <button key={t} onClick={()=>onChange(t)}
             style={{flex:1,padding:"7px 10px",fontSize:11,fontWeight:700,fontFamily:"inherit",cursor:"pointer",
@@ -857,6 +966,7 @@ function TabbedPanel({tabs,active,onChange,height=460,children}){
             {t}
           </button>
         ))}
+        {extraHeader}
       </div>
       <div style={{flex:1,minHeight:0,position:"relative"}}>{children}</div>
     </div>
@@ -1214,20 +1324,43 @@ class TabErrorBoundary extends React.Component {
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
   // ── PIN config ───────────────────────────────────────────────────────────
   const MASTER_PIN = "4524"; // ← your PIN → full access
-  const GUEST_PIN  = "0250"; // ← colleague's PIN → positions + cargoes only
-  const GUEST_TABS = ["pos","cargo","clients"];
+  const DEFAULT_GUEST_PIN = "0250";
+  const GUEST_TABS_KEY = "guest_visible_tabs";
+  const GUEST_PIN_KEY = "guest_pin";
+  const DEFAULT_GUEST_TABS = ["pos","cargo","clients"];
 
   const [unlocked, setUnlocked] = React.useState(false); // always ask on load
+  const [guestPin,setGuestPin] = React.useState(DEFAULT_GUEST_PIN);
+  const [guestTabs,setGuestTabs] = React.useState(DEFAULT_GUEST_TABS);
   const [pinInput, setPinInput] = React.useState("");
   const [pinError, setPinError] = React.useState(false);
   const [guestMode, setGuestMode] = React.useState(false);
 
   // Login-screen live feeds. Fail quietly so the PIN screen always remains usable.
   const [loginMarkets,setLoginMarkets]=React.useState({
-    brent:null,mgoAra:null,mgoSingapore:null,mgoFujairah:null,mgoUsg:null,updatedAt:null
+    brent:null,mgoAra:null,mgoSingapore:null,mgoUsg:null,updatedAt:null
   });
   const [loginNews,setLoginNews]=React.useState([]);
   const [loginFeedLoading,setLoginFeedLoading]=React.useState(true);
+
+  // Guest tab visibility is controlled from Settings and stored in Supabase.
+  React.useEffect(()=>{
+    let alive=true;
+    (async()=>{
+      try{
+        const [{data:tabsData},{data:pinData}]=await Promise.all([
+          supabase.from("tag_settings").select("value").eq("key",GUEST_TABS_KEY).maybeSingle(),
+          supabase.from("tag_settings").select("value").eq("key",GUEST_PIN_KEY).maybeSingle()
+        ]);
+        const raw=tabsData?.value;
+        const tabs=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
+        if(alive&&tabs?.length)setGuestTabs(tabs.filter(id=>id!=="settings"));
+        const cloudPin=String(pinData?.value??"").replace(/\D/g,"").slice(0,4);
+        if(alive&&cloudPin.length===4)setGuestPin(cloudPin);
+      }catch(_){}
+    })();
+    return()=>{alive=false;};
+  },[]);
 
   React.useEffect(()=>{
     if(unlocked)return;
@@ -1240,18 +1373,18 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         ]);
         if(!alive)return;
         if(mktRes.status==="fulfilled"&&mktRes.value)setLoginMarkets(v=>({...v,...mktRes.value}));
-        // Use the exact same persisted bunker snapshot as Dashboard/TCE.
+        // Keep the front-page bunker strip aligned with the latest Dashboard refresh
+        // while retaining the original USG / ARA / Singapore layout.
         try{
           const {data}=await supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle();
           const b=data?.value?(typeof data.value==="string"?JSON.parse(data.value):data.value):null;
           if(b)setLoginMarkets(v=>({...v,
             mgoAra:Number(b.ARA_MGO)||v.mgoAra,
             mgoSingapore:Number(b.SIN_MGO)||v.mgoSingapore,
-            mgoFujairah:Number(b.FUJ_MGO)||v.mgoFujairah,
             bunkerDate:b.date||v.bunkerDate
           }));
         }catch(_){}
-        if(newsRes.status==="fulfilled"&&Array.isArray(newsRes.value?.items))setLoginNews(newsRes.value.items.slice(0,5));
+        if(newsRes.status==="fulfilled"&&Array.isArray(newsRes.value?.items))setLoginNews(newsRes.value.items.slice(0,8));
       }catch(_){}
       finally{if(alive)setLoginFeedLoading(false);}
     };
@@ -1270,6 +1403,17 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   // lookup table was always empty. Load it once on mount instead.
   useEffect(()=>{ if(!vesselDBLoaded && !vesselDBLoading && onLoadVesselDB) onLoadVesselDB(); },[]);
 
+  React.useEffect(()=>{
+    const onGuestAccess=e=>{
+      const next=e?.detail||{};
+      if(Array.isArray(next.tabs))setGuestTabs(next.tabs.filter(id=>id!=="settings"));
+      const p=String(next.pin??"").replace(/\D/g,"").slice(0,4);
+      if(p.length===4)setGuestPin(p);
+    };
+    window.addEventListener("guest-access-updated",onGuestAccess);
+    return()=>window.removeEventListener("guest-access-updated",onGuestAccess);
+  },[]);
+
   // No sessionStorage — PIN required on every load/refresh/new tab
 
   function submitPin(p){
@@ -1278,7 +1422,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
       setGuestMode(false);
       setUnlocked(true);
       setPinInput("");
-    } else if(p===GUEST_PIN){
+    } else if(p===guestPin){
       localStorage.setItem("signal_user","L");
       setGuestMode(true);
       setUnlocked(true);
@@ -1345,7 +1489,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     return()=>window.removeEventListener("navigation-config-updated",h);
   },[]);
   const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
-  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||GUEST_TABS.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode]);
+  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||guestTabs.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode,guestTabs]);
   const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
   const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set());setMobileNavOpen(false)});
  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
@@ -1361,6 +1505,8 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [cLaycanMonthFilter,setCLaycanMonthFilter]=useState("");
   const [cLaycanYearFilter,setCLaycanYearFilter]=useState("");
   const [cTagFilter,setCTagFilter]=useState("");
+  const [cExRegionFilter,setCExRegionFilter]=useState("");
+  const [cToRegionFilter,setCToRegionFilter]=useState("");
   const [pendingParseTag,setPendingParseTag]=useState("");
   const [customParseTag,setCustomParseTag]=useState("");
 
@@ -1416,6 +1562,19 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   },[]);
   function inRange(dateStr,from,to){if(!dateStr)return false;const d=new Date(dateStr);d.setHours(0,0,0,0);return d>=from&&d<=to;}
   const [mxSearch,setMxSearch]=useState("");
+  const CARGO_COLUMN_KEYS=["select","status","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment","tag","updated","badge","delete"];
+  const QF_COLUMN_KEYS=["select","status","ex_region","to_region","p_and_c","intelligence","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment","tag","source","updated","badge","delete"];
+  const QF_DEFAULT_VISIBLE=["select","status","ex_region","to_region","p_and_c","intelligence","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment","badge","delete"];
+  function loadVisibleCols(key,defaults){
+    try{const raw=JSON.parse(localStorage.getItem(key)||"null");return new Set(Array.isArray(raw)&&raw.length?raw:defaults);}
+    catch{return new Set(defaults);}
+  }
+  const [cargoVisibleCols,setCargoVisibleCols]=useState(()=>loadVisibleCols("signal_cargo_visible_columns",CARGO_COLUMN_KEYS));
+  const [qfVisibleCols,setQfVisibleCols]=useState(()=>loadVisibleCols("signal_qf_visible_columns",QF_DEFAULT_VISIBLE));
+  const [cargoColumnsOpen,setCargoColumnsOpen]=useState(false);
+  const [cargoColumnsPos,setCargoColumnsPos]=useState({top:0,left:0});
+  useEffect(()=>{try{localStorage.setItem("signal_cargo_visible_columns",JSON.stringify([...cargoVisibleCols]));}catch{}},[cargoVisibleCols]);
+  useEffect(()=>{try{localStorage.setItem("signal_qf_visible_columns",JSON.stringify([...qfVisibleCols]));}catch{}},[qfVisibleCols]);
   const [cSortK,setCsortK]=useState("updated");
   const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
   const [bulkCargoTagOpen,setBulkCargoTagOpen]=useState(false);
@@ -1513,7 +1672,8 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   }
   // Inter UKC config — loaded from localStorage (editable in Settings)
   const [showSavedOnly,setShowSavedOnly]=useState(false);
-  const [fixingPanelTab,setFixingPanelTab]=useState("History");
+  const [fixingPanelTab,setFixingPanelTab]=useState("Open Segments");
+  const [fixingExpanded,setFixingExpanded]=useState(false);
   const [aisPanelTab,setAisPanelTab]=useState("Map");
   const [posOutsiderView,setPosOutsiderView]=useState(false);
   const [outsiderSyncStatus,setOutsiderSyncStatus]=useState(null);
@@ -1629,6 +1789,17 @@ const cargoColumns = [
   { key:"updated",   sortKey:"Updated",   label:"Updated", align:"left", width:colWidthsC.Updated },
   { key:"badge", label:"", align:"center", width:20 },
   { key: "delete", label: "", align: "center", width: 26 },
+];
+const quoteFixtureColumns = [
+  { key: "select", label: "", align: "center", width: 28 },
+  { key:"status", sortKey:"Status", label:"Status", align:"left", width:colWidthsC.Status },
+  { key:"ex_region", sortKey:"ex_region", label:"Ex Region", align:"left", width:105 },
+  { key:"to_region", sortKey:"to_region", label:"To Region", align:"left", width:105 },
+  { key:"p_and_c", sortKey:"p_and_c", label:"P&C", align:"center", width:42 },
+  { key:"intelligence", sortKey:"intelligence", label:"Intel", align:"center", width:58 },
+  ...cargoColumns.slice(2,13),
+  { key:"source", sortKey:"source", label:"Source", align:"left", width:120 },
+  ...cargoColumns.slice(13),
 ];
   const th={background:C.bg2,color:C.dim,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",padding:"6px 8px",borderBottom:"1px solid "+C.bd2,textAlign:"left",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
   const td={padding:"4px 7px",borderBottom:"1px solid "+C.bg2,verticalAlign:"middle",fontSize:12};
@@ -2292,6 +2463,10 @@ const filtV=useMemo(()=>{
     const lastWeekEnd=new Date(thisWeekStart);
     const ytdStart=new Date(now.getFullYear(),0,1);
     let list=cargoes.filter(c=>{
+      if(tab==="cargo2"){
+        if(cExRegionFilter && String(c.ex_region||"")!==cExRegionFilter)return false;
+        if(cToRegionFilter && String(c.to_region||"")!==cToRegionFilter)return false;
+      }
       if(cTimeFilter){
         const d=new Date(c.updated||0);
         if(cTimeFilter==="tw"&&(d<thisWeekStart||d>now))return false;
@@ -2328,7 +2503,7 @@ const filtV=useMemo(()=>{
       }
     }
     return list;
-  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cTagFilter,cGradeFilter]);
+  },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cTagFilter,cGradeFilter,tab,cExRegionFilter,cToRegionFilter]);
 
   const FILTER_GROUPS=[
     {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"],["HIDE_EMP","Hide Employed"]]},
@@ -2343,155 +2518,151 @@ const filtV=useMemo(()=>{
         ::-webkit-scrollbar { display: none; }
         html { overflow-x: hidden; }
       `}</style>}
-      {/* ── PIN overlay — rendered on top, app loads underneath ── */}
+      {/* ── PIN overlay — modern market terminal / responsive ── */}
       {!unlocked&&(
         <div style={{
-          position:"fixed",inset:0,zIndex:99999,overflowX:"hidden",overflowY:mobile?"auto":"hidden",
-          background:"linear-gradient(rgba(3,12,25,.88),rgba(3,12,25,.94)),url('/login-tanker-bg.png') center/cover no-repeat",
-          display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Inter,system-ui,sans-serif"
+          position:"fixed",inset:0,zIndex:99999,overflowX:"hidden",overflowY:"auto",boxSizing:"border-box",maxWidth:"100vw",
+          background:"radial-gradient(circle at 50% 32%,rgba(25,75,135,.18),transparent 36%),linear-gradient(180deg,rgba(2,10,22,.94),rgba(2,10,22,.985)),url('/login-tanker-bg.png') center/cover no-repeat",
+          fontFamily:"Inter,system-ui,sans-serif",color:"#dcecff"
         }}>
-          <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true"
-            style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",opacity:0.08}}>
-            <defs>
-              <linearGradient id="loginRoute" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.03"/>
-                <stop offset="45%" stopColor="#58a6ff" stopOpacity="0.42"/>
-                <stop offset="100%" stopColor="#43e97b" stopOpacity="0.10"/>
-              </linearGradient>
-              <pattern id="loginGrid" width="44" height="44" patternUnits="userSpaceOnUse">
-                <path d="M44 0H0V44" fill="none" stroke="#58a6ff" strokeOpacity="0.05" strokeWidth="0.7"/>
-              </pattern>
-              <filter id="loginGlow"><feGaussianBlur stdDeviation="2.6"/></filter>
-            </defs>
-            <rect width="1600" height="900" fill="url(#loginGrid)" opacity="0.55"/>
-            <g fill="none" stroke="#7aa8da" strokeOpacity="0.10" strokeWidth="1.2">
-              <path d="M120 315 C225 245 330 255 410 320 C475 374 470 440 414 515 C370 575 330 625 292 700"/>
-              <path d="M515 280 C590 225 680 225 747 270 C805 310 807 365 772 410 C733 458 692 486 658 545"/>
-              <path d="M765 295 C850 230 960 220 1042 262 C1110 298 1153 345 1188 405 C1128 425 1070 430 1022 465 C978 496 953 535 915 575"/>
-              <path d="M1080 575 C1148 535 1222 538 1278 580 C1310 605 1312 645 1292 674 C1240 700 1188 696 1140 672"/>
-            </g>
-            <g fill="none" strokeLinecap="round">
-              <path d="M980 315 C885 365 804 410 716 458 C627 506 533 520 427 500" stroke="url(#loginRoute)" strokeWidth="1.9"/>
-              <path d="M1090 405 C997 414 914 438 836 478 C760 518 683 558 596 578" stroke="#43e97b" strokeOpacity="0.17" strokeWidth="1.25"/>
-              <path d="M428 500 C360 474 293 455 220 463" stroke="#58a6ff" strokeOpacity="0.14" strokeWidth="1.05"/>
-            </g>
-            <g>
-              {[[427,500,"#58a6ff"],[716,458,"#58a6ff"],[980,315,"#43e97b"],[836,478,"#43e97b"],[596,578,"#58a6ff"]].map(([cx,cy,col],i)=>(
-                <g key={i}>
-                  <circle cx={cx} cy={cy} r="3.2" fill={col} opacity="0.9"/>
-                  <circle cx={cx} cy={cy} r="8" fill="none" stroke={col} strokeOpacity="0.18"/>
-                </g>
-              ))}
-            </g>
-          </svg>
+          <div style={{position:"absolute",inset:0,pointerEvents:"none",opacity:.26,
+            backgroundImage:"linear-gradient(rgba(88,166,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(88,166,255,.025) 1px,transparent 1px)",
+            backgroundSize:"42px 42px"}}/>
 
-          <div style={{
-            display:mobile?"none":"block",position:"absolute",right:"clamp(18px,4vw,64px)",top:"50%",transform:"translateY(-50%)",
-            width:310,padding:"16px 17px",borderRadius:12,zIndex:1,
-            background:"rgba(4,16,33,.58)",border:"1px solid rgba(88,166,255,.12)",
-            backdropFilter:"blur(10px)",color:"#dcecff"
-          }}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:11}}>
-              <div style={{fontSize:9,fontWeight:800,letterSpacing:".14em",color:"#58a6ff"}}>LATEST SHIPPING NEWS</div>
-              <div style={{fontSize:8,color:"rgba(175,205,240,.35)"}}>{loginFeedLoading?"UPDATING":"RSS"}</div>
-            </div>
-            {(loginNews.length?loginNews:[
-              {title:"Latest tanker and shipping headlines will appear here",source:"RSS feed"},
-              {title:"Feed refreshes automatically every 10 minutes",source:"Live"}
-            ]).slice(0,5).map((n,i)=><a key={i} href={n.link||undefined} target={n.link?"_blank":undefined} rel="noreferrer"
-              style={{display:"block",textDecoration:"none",color:"inherit",padding:"9px 0",borderTop:i?"1px solid rgba(88,166,255,.08)":"none"}}>
-              <div style={{fontSize:10.5,fontWeight:650,lineHeight:1.35,color:"rgba(225,239,255,.88)"}}>{n.title}</div>
-              <div style={{fontSize:8.5,marginTop:4,color:"rgba(125,178,240,.46)"}}>
-                {n.source||"Shipping"}{n.published?"  ·  "+n.published:""}
-              </div>
-            </a>)}
-          </div>
-
-          <div style={{
-            position:"absolute",left:"50%",bottom:mobile?16:78,transform:"translateX(-50%)",zIndex:3,
-            display:"grid",gridTemplateColumns:mobile?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(115px,1fr))",
-            width:mobile?"calc(100vw - 24px)":"auto",minWidth:mobile?0:"min(650px,calc(100vw - 36px))",
-            border:"1px solid rgba(88,166,255,.11)",borderRadius:10,overflow:"hidden",
-            background:"rgba(4,16,33,.58)",backdropFilter:"blur(7px)"
-          }}>
-            {[
-              ["BRENT",loginMarkets.brent,"USD/BBL"],
-              ["MGO ARA",loginMarkets.mgoAra,"USD/MT"],
-              ["MGO FUJ",loginMarkets.mgoFujairah,"USD/MT"],
-              ["MGO SPORE",loginMarkets.mgoSingapore,"USD/MT"]
-            ].map(([label,val,unit],i)=><div key={label} style={{padding:"9px 12px",textAlign:"center",borderLeft:i&&!mobile?"1px solid rgba(88,166,255,.08)":"none",borderTop:mobile&&i>1?"1px solid rgba(88,166,255,.08)":"none"}}>
-              <div style={{fontSize:10.5,fontWeight:850,letterSpacing:".10em",color:"rgba(125,178,240,.54)"}}>{label}</div>
-              <div style={{fontSize:18,fontWeight:850,color:val!=null?"#eef6ff":"rgba(225,239,255,.30)",marginTop:2}}>
-                {val!=null?(typeof val==="number"?val.toLocaleString(undefined,{maximumFractionDigits:2}):val):"—"}
-              </div>
-              <div style={{fontSize:8.5,color:"rgba(125,178,240,.34)"}}>{unit}</div>
-            </div>)}
-          </div>
-
-          {mobile&&<div style={{position:"absolute",top:18,right:18,zIndex:4,fontSize:9,fontWeight:800,letterSpacing:"0.16em",textTransform:"uppercase",color:"rgba(125,178,240,.55)",textAlign:"right"}}>Tanker Intelligence Platform</div>}
-
-          <div style={{
-            position:"relative",zIndex:2,width:mobile?"calc(100vw - 24px)":410,maxWidth:"calc(100vw - 24px)",marginBottom:mobile?190:0,
-            background:"linear-gradient(180deg,rgba(9,24,46,.94),rgba(6,17,34,.96))",
-            border:"1px solid rgba(88,166,255,.18)",borderRadius:16,padding:mobile?"34px 24px 30px":"30px 34px 26px",
-            boxShadow:"0 20px 60px rgba(0,0,0,.44)",
-            backdropFilter:"blur(18px)",WebkitBackdropFilter:"blur(18px)"
-          }}>
-            <div style={{textAlign:"center",marginBottom:mobile?28:24}}>
-              {mobile ? (
-                <div style={{fontSize:19,fontWeight:800,color:"#eef6ff",letterSpacing:"0.01em"}}>Enter code to access <span style={{color:"#43e97b"}}>Dashboard</span></div>
-              ) : (<>
-                <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.22em",textTransform:"uppercase",color:"rgba(125,178,240,.48)",marginBottom:7}}>Tanker Intelligence Platform</div>
-                <div style={{display:"flex",justifyContent:"center",alignItems:"baseline",gap:7}}>
-                  <span style={{fontSize:25,fontWeight:800,color:"#eef6ff"}}>Broker</span>
-                  <span style={{fontSize:25,fontWeight:800,color:"#43e97b"}}>Dashboard</span>
+          <div style={{position:"relative",zIndex:2,width:mobile?"calc(100vw - 20px)":"min(1460px,calc(100vw - 32px))",maxWidth:"100%",boxSizing:"border-box",margin:"0 auto",padding:mobile?"12px 0 18px":"24px 0 28px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,marginBottom:mobile?14:18}}>
+              <div>
+                <div style={{fontSize:mobile?9:11,fontWeight:800,letterSpacing:".20em",color:"rgba(125,178,240,.48)",textTransform:"uppercase"}}>Tanker Intelligence Platform</div>
+                <div style={{display:"flex",alignItems:"baseline",gap:7,marginTop:4}}>
+                  <span style={{fontSize:mobile?20:29,fontWeight:850,color:"#eef6ff"}}>Broker</span>
+                  <span style={{fontSize:mobile?20:29,fontWeight:850,color:"#43e97b"}}>Dashboard</span>
                 </div>
-                <div style={{fontSize:11,color:"rgba(135,170,215,.42)",marginTop:8,letterSpacing:"0.10em",textTransform:"uppercase"}}>{guestMode?"Guest access":"Secure access"}</div>
-              </>)}
+              </div>
+              <div style={{fontSize:mobile?9:10,fontWeight:800,letterSpacing:".13em",color:"rgba(125,178,240,.42)",textTransform:"uppercase"}}>Live market terminal</div>
             </div>
 
-            <div style={{display:"flex",gap:10,justifyContent:"center",marginBottom:22}}>
-              {[0,1,2,3].map(i=>(
-                <div key={i} style={{
-                  width:mobile?60:52,height:mobile?66:58,borderRadius:10,
-                  background:pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",
-                  border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.56)":"rgba(88,166,255,.18)"),
-                  display:"flex",alignItems:"center",justifyContent:"center",
-                  fontSize:20,color:"#79c0ff",transition:"all .16s"
-                }}>{pinInput.length>i?"●":""}</div>
-              ))}
+            {/* Market pulse — Brent + bunkers in requested order: Houston | ARA | Singapore */}
+            <div style={{display:"grid",gridTemplateColumns:mobile?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:8,marginBottom:mobile?12:16}}>
+              {[
+                ["BRENT",loginMarkets.brent,"USD/BBL"],
+                ["MGO HOUSTON",loginMarkets.mgoUsg,"USD/MT"],
+                ["MGO ARA",loginMarkets.mgoAra,"USD/MT"],
+                ["MGO SPORE",loginMarkets.mgoSingapore,"USD/MT"]
+              ].map(([label,val,unit])=><div key={label} style={{padding:mobile?"11px 12px":"16px 18px",border:"1px solid rgba(88,166,255,.11)",borderRadius:10,background:"linear-gradient(180deg,rgba(8,25,48,.76),rgba(4,16,33,.70))",backdropFilter:"blur(8px)"}}>
+                <div style={{fontSize:mobile?9:10,fontWeight:850,letterSpacing:".12em",color:"rgba(125,178,240,.52)"}}>{label}</div>
+                <div style={{fontSize:mobile?18:25,fontWeight:850,color:val!=null?"#eef6ff":"rgba(225,239,255,.30)",marginTop:3}}>
+                  {val!=null?(typeof val==="number"?val.toLocaleString(undefined,{maximumFractionDigits:2}):val):"—"}
+                </div>
+                <div style={{fontSize:mobile?8:9,color:"rgba(125,178,240,.36)",marginTop:1}}>{unit}</div>
+              </div>)}
             </div>
 
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:9,maxWidth:260,margin:"0 auto"}}>
-              {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=>(
-                <button key={i} disabled={d===""}
-                  onClick={()=>{
-                    if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}
-                    if(d===""||typeof d!=="number")return;
-                    const next=pinInput+String(d);
-                    setPinInput(next);
-                    if(next.length===4) submitPin(next);
-                  }}
-                  style={{
-                    height:mobile?58:50,borderRadius:9,
-                    border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.17)"),
-                    background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.76),rgba(10,27,53,.8))",
-                    color:d===""?"transparent":"rgba(184,216,255,.88)",
-                    fontSize:17,fontWeight:650,cursor:d===""?"default":"pointer",
-                    fontFamily:"inherit",visibility:d===""?"hidden":"visible"
-                  }}>{d}</button>
-              ))}
-            </div>
+            {/* Desktop: news moves up beside access card. Mobile: access remains first. */}
+            <div style={{
+              display:"grid",
+              gridTemplateColumns:mobile?"minmax(0,1fr)":"minmax(0,1.85fr) minmax(390px,.72fr)",
+              gap:mobile?12:16,
+              alignItems:"stretch",
+              width:"100%",
+              minWidth:0
+            }}>
+              {/* Enter Dashboard — first on mobile, right-hand access panel on desktop */}
+              <div style={{
+                order:mobile?1:2,
+                display:"flex",
+                justifyContent:"center",
+                alignItems:"stretch",
+                width:"100%",
+                minWidth:0
+              }}>
+                <div style={{
+                  width:"100%",maxWidth:"100%",boxSizing:"border-box",
+                  border:"1px solid rgba(88,166,255,.18)",borderRadius:14,
+                  padding:mobile?"14px 14px":"22px 26px",
+                  background:"linear-gradient(180deg,rgba(9,24,46,.94),rgba(6,17,34,.96))",
+                  boxShadow:"0 20px 60px rgba(0,0,0,.32)",
+                  display:"flex",flexDirection:"column",justifyContent:"center"
+                }}>
+                  <div style={{textAlign:"center",marginBottom:mobile?10:16}}>
+                    <div style={{fontSize:mobile?9:12,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>ENTER DASHBOARD</div>
+                    <div style={{fontSize:mobile?14:22,fontWeight:800,color:"#eef6ff",marginTop:5}}>Enter your 4-digit access code</div>
+                    <div style={{fontSize:mobile?9:13,color:"rgba(175,205,240,.52)",marginTop:6}}>Personal or colleague guest code</div>
+                  </div>
 
-            <div style={{height:22,marginTop:14,textAlign:"center"}}>
-              {pinError&&<span style={{fontSize:11,color:"rgba(255,107,107,.9)",letterSpacing:"0.05em"}}>Incorrect code</span>}
-            </div>
+                  <div style={{display:"flex",gap:mobile?7:9,justifyContent:"center",marginBottom:mobile?10:15}}>
+                    {[0,1,2,3].map(i=><div key={i} style={{
+                      width:mobile?42:54,height:mobile?36:46,borderRadius:8,
+                      background:pinError?"rgba(255,107,107,.12)":pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",
+                      border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.56)":"rgba(88,166,255,.18)"),
+                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:mobile?16:18,color:pinError?"#ff6b6b":"#79c0ff"
+                    }}>{pinError?"●":pinInput.length>i?"●":""}</div>)}
+                  </div>
 
-            <div style={{borderTop:"1px solid rgba(88,166,255,.10)",marginTop:3,paddingTop:16,textAlign:"center",
-              fontSize:9,fontWeight:700,color:"rgba(120,160,220,.34)",letterSpacing:"0.12em",textTransform:"uppercase"}}>
-              Positions&nbsp;&nbsp;·&nbsp;&nbsp;Cargoes&nbsp;&nbsp;·&nbsp;&nbsp;Freight&nbsp;&nbsp;·&nbsp;&nbsp;Fleet Intelligence
-            </div>
-          </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:mobile?6:8,maxWidth:mobile?230:270,margin:"0 auto",width:"100%"}}>
+                    {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=><button key={i} disabled={d===""} onClick={()=>{
+                      if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}
+                      if(d===""||typeof d!=="number")return;
+                      const next=pinInput+String(d);setPinInput(next);if(next.length===4)submitPin(next);
+                    }} style={{
+                      height:mobile?37:52,borderRadius:8,
+                      border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.19)"),
+                      background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.82),rgba(10,27,53,.86))",
+                      color:d===""?"transparent":"rgba(198,225,255,.94)",
+                      fontSize:mobile?14:19,fontWeight:750,cursor:d===""?"default":"pointer",
+                      fontFamily:"inherit",visibility:d===""?"hidden":"visible"
+                    }}>{d}</button>)}
+                  </div>
+                  <div style={{height:mobile?15:20,marginTop:6,textAlign:"center"}}>
+                    {pinError&&<span style={{fontSize:mobile?10:12,fontWeight:750,color:"rgba(255,107,107,.95)"}}>Incorrect code</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Shipping intelligence — moved up; desktop now shows two rows / 8 headlines */}
+              <div style={{
+                order:mobile?2:1,width:"100%",maxWidth:"100%",boxSizing:"border-box",overflow:"hidden",
+                border:"1px solid rgba(88,166,255,.13)",borderRadius:14,
+                background:"rgba(4,16,33,.72)",backdropFilter:"blur(10px)",
+                padding:mobile?10:18,minWidth:0
+              }}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:mobile?8:13}}>
+                  <div>
+                    <div style={{fontSize:mobile?9:11,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>SHIPPING INTELLIGENCE</div>
+                    <div style={{fontSize:mobile?13:22,fontWeight:800,color:"#eef6ff",marginTop:3}}>Latest tanker & shipping headlines</div>
+                  </div>
+                  <div style={{fontSize:mobile?8:9,color:"rgba(175,205,240,.42)",whiteSpace:"nowrap"}}>{loginFeedLoading?"UPDATING":"LIVE · 10 MIN"}</div>
+                </div>
+                <div style={{
+                  display:"grid",
+                  gridTemplateColumns:mobile?"1fr":"repeat(2,minmax(0,1fr))",
+                  gridTemplateRows:mobile?undefined:"repeat(4,minmax(0,1fr))",
+                  gap:mobile?6:9,
+                  maxHeight:mobile?126:"none",overflow:"hidden"
+                }}>
+                  {(loginNews.length?loginNews:[
+                    {title:"Latest tanker and shipping headlines will appear here",source:"RSS feed"},
+                    {title:"Feed refreshes automatically every 10 minutes",source:"Live"}
+                  ]).slice(0,mobile?2:8).map((n,i)=><a key={i} href={n.link||undefined} target={n.link?"_blank":undefined} rel="noreferrer"
+                    style={{
+                      display:"flex",flexDirection:"column",justifyContent:"space-between",minWidth:0,
+                      textDecoration:"none",color:"inherit",padding:mobile?9:13,borderRadius:9,
+                      border:"1px solid rgba(88,166,255,.10)",
+                      background:i===0?"linear-gradient(135deg,rgba(88,166,255,.12),rgba(4,16,33,.50))":"rgba(8,25,48,.46)",
+                      boxSizing:"border-box",minHeight:mobile?0:76
+                    }}>
+                    <div style={{
+                      fontSize:mobile?10.5:14,fontWeight:i===0?780:680,lineHeight:1.28,
+                      color:"rgba(235,245,255,.94)",display:"-webkit-box",WebkitLineClamp:2,
+                      WebkitBoxOrient:"vertical",overflow:"hidden"
+                    }}>{n.title}</div>
+                    <div style={{
+                      fontSize:mobile?8:9,marginTop:7,color:"rgba(125,178,240,.52)",
+                      whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"
+                    }}>{n.source||"Shipping"}{n.published?"  ·  "+n.published:""}</div>
+                  </a>)}
+                </div>
+              </div>
+            </div>          </div>
         </div>
       )}
       {pendingDel&&(
@@ -2692,7 +2863,7 @@ const filtV=useMemo(()=>{
             }}>{m.label}</span>}
           </button>})}
         </aside>}
-        <div style={{padding:mobile?"8px 8px":"12px 20px",maxWidth:1900,margin:"0 auto",flex:1,minWidth:0,width:"100%"}}>
+        <div style={{padding:mobile?"8px 8px":((tab==="cargo"||tab==="cargo2"||tab==="pos")?"12px 8px":"12px 20px"),maxWidth:(tab==="cargo"||tab==="cargo2"||tab==="pos")?"none":1900,margin:"0 auto",flex:1,minWidth:0,width:"100%",boxSizing:"border-box"}}>
       <TabErrorBoundary>
 
         {/* ── POSITIONS ── */}
@@ -2727,6 +2898,7 @@ const filtV=useMemo(()=>{
               <div
   style={{
     width: mobile ? "100%" : "32%",
+    minWidth: 0,
     height: mobile ? "auto" : 460,
     display: "flex",
     flexDirection: "column",
@@ -2735,6 +2907,7 @@ const filtV=useMemo(()=>{
     minHeight: 0
   }}
 >
+  {!fixingExpanded && (
   <div style={{ flex: "0 0 auto" }}>
     <ParsePanel
       vessels={vessels}
@@ -2744,9 +2917,16 @@ const filtV=useMemo(()=>{
       vesselDB={{}}
     />
   </div>
+  )}
 
   <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position:"relative" }}>
-    <TabbedPanel tabs={["History","Open Segments"]} active={fixingPanelTab} onChange={setFixingPanelTab} height="100%">
+    <TabbedPanel tabs={["History","Open Segments"]} active={fixingPanelTab} onChange={setFixingPanelTab} height="100%"
+      extraHeader={
+        <button onClick={()=>setFixingExpanded(v=>!v)} title={fixingExpanded?"Collapse — show parse panel again":"Expand — fill space taken by parse panel"}
+          style={{ padding:"0 10px", background:"transparent", border:"none", cursor:"pointer", color:fixingExpanded?C.blue:C.faint, fontSize:13, fontWeight:700 }}>
+          {fixingExpanded?"▾":"▴"}
+        </button>
+      }>
       {fixingPanelTab==="History" ? (
         <>
           {/* CSS overrides: vivid opaque bar colours for FixingWindow */}
@@ -2782,7 +2962,7 @@ const filtV=useMemo(()=>{
                   that used to be split between this and the Regional Snapshot placeholder,
                   since Regional Snapshot is now a tab inside the AIS Map panel on the right) */}
               {!mobile&&(
-                <div style={{width:"34%",height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                <div style={{width:"34%",minWidth:0,height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
                   <HScrollStyle/>
                   {(opFilter||bucketFilters.size>0)&&(
                     <div style={{flexShrink:0,padding:"8px 12px 0 12px",display:"flex",flexDirection:"column",gap:4}}>
@@ -2880,7 +3060,7 @@ const filtV=useMemo(()=>{
 
               {/* RIGHT: AIS Map / Regional Position Snapshot (34%) */}
 {!mobile&&(
-  <div style={{width:"34%"}}>
+  <div style={{width:"34%",minWidth:0}}>
     <TabbedPanel tabs={["Map","Regional Snapshot"]} active={aisPanelTab} onChange={setAisPanelTab} height={460}>
       {aisPanelTab==="Map" ? (
         <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels} onAisVesselsChange={setAisVesselSet}/></Suspense>
@@ -3152,7 +3332,8 @@ const filtV=useMemo(()=>{
                     if(col?.sortKey) srt(col.sortKey);
                   }}>
                     {showAddVessel&&<AddVesselInlineRow onSave={onAddV} onClose={()=>setShowAddVessel(false)}/>}
-                  <div style={{...tableWrap,minWidth:mobile?"1400px":undefined}} className={mobile?"pos-table":undefined}>
+                  <div style={{...tableWrap,minWidth:mobile?"1400px":undefined}} className={"pos-hover-rows"+(mobile?" pos-table":"")}>
+                    <style>{`.pos-hover-rows tr:hover{background:rgba(88,166,255,0.07)!important;}`}</style>
                     {mobile&&<style>{`
                       .pos-table td, .pos-table td>*{overflow:visible!important;text-overflow:unset!important;white-space:nowrap!important;max-width:none!important;}
                       .pos-table th, .pos-table td{position:static!important;left:auto!important;right:auto!important;box-shadow:none!important;}
@@ -3478,547 +3659,26 @@ const filtV=useMemo(()=>{
             )}
           </div>
         )}
-        {/* ── CARGOES ── */}
+        {/* ── CARGOES — isolated component, restored independently ── */}
         {tab==="cargo"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {/* Parse + filter panel + graph (desktop) */}
-            {!mobile && (
-            <div style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:mobile?"column":"row"}}>
-              {/* Left: OnParse tag selector + ParsePanel */}
-              <div style={{flex:mobile?"1 1 auto":"0 0 25%",display:"flex",flexDirection:"column",gap:4,height:mobile?"auto":260}}>
-                {/* ON PARSE tag selector — above Parse & Add */}
-                {(()=>{
-                  const usedTags=getTagList();
-                  return(
-                    <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:5,padding:"5px 8px",display:"flex",alignItems:"center",flexWrap:"wrap",gap:4}}>
-                      <span style={{fontSize:9,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.1em",marginRight:2}}>Tag on parse</span>
-                      {usedTags.map(t=>(
-                        <button key={t} onClick={()=>setPendingParseTag(v=>v===t?"":t)} style={fb(pendingParseTag===t)}>{t}</button>
-                      ))}
-                      {pendingParseTag&&<button onClick={()=>setPendingParseTag("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕ {pendingParseTag}</button>}
-                    </div>
-                  );
-                })()}
-                <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels}
-                  onAddCargoes={async(parsed)=>{
-                    const user=localStorage.getItem("signal_user")||"H";
-                    const withMeta=parsed.map(c=>({...c,entered_by:user,tag:pendingParseTag?pendingParseTag:c.tag||""}));
-                    const result=await onAddCargoes(withMeta);
-                    if(pendingParseTag)setPendingParseTag(""); // reset after parse
-                    return result;
-                  }}
-                  lockedMode="cargo" vesselDB={{}}/>
-              </div>
-              {/* Centre: Grade | Period | Tag filter grid — same height as parse section */}
-              {(()=>{
-                let allGroups=[];
-                try{const raw=localStorage.getItem("signal_cargo_filter_groups");allGroups=raw?JSON.parse(raw):[];}catch{}
-                const gradeGroups=allGroups.filter(g=>(g.category||"grade")==="grade");
-                const showRaw=gradeGroups.length===0;
-                const rawGrades=showRaw?[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort().slice(0,20):[];
-                const usedTags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
-                const COL=({label,col,children})=>(
-                  <div style={{display:"flex",flexDirection:"column",gap:0,minWidth:0,flex:1}}>
-                    <div style={{fontSize:9,fontWeight:700,color:col,textTransform:"uppercase",letterSpacing:"0.1em",padding:"0 0 4px 0",borderBottom:"1px solid "+C.bd2,marginBottom:4,whiteSpace:"nowrap"}}>{label}</div>
-                    <div style={{display:"flex",flexDirection:"column",gap:1}}>{children}</div>
-                  </div>
-                );
-                const B=({active,onClick,children,red})=>(
-                  <button onClick={onClick} style={{...fb(active),display:"block",width:"100%",textAlign:"left",padding:"3px 7px",fontSize:11,whiteSpace:"nowrap",color:red?C.red:active?"#d9ecff":"#9fc3f5",borderColor:red?C.red+"55":undefined}}>{children}</button>
-                );
-                return(
-                  <div style={{flex:"0 0 auto",width:mobile?"100%":"25%",display:"flex",flexDirection:"column",gap:0,minHeight:0,height:mobile?"auto":260}}>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,padding:"8px 8px",background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,overflowY:"auto",flex:1,boxSizing:"border-box"}}>
-                      {/* Grade column */}
-                      <COL label="Grade" col={C.purple}>
-                        {showRaw
-                          ?rawGrades.map(g=><B key={g} active={cGradeFilter===g} onClick={()=>setCGradeFilter(v=>v===g?"":g)}>{g}</B>)
-                          :gradeGroups.map(grp=><B key={grp.id} active={cGradeFilter===grp.id} onClick={()=>setCGradeFilter(v=>v===grp.id?"":grp.id)}>{grp.label}</B>)
-                        }
-                        {cGradeFilter&&gradeGroups.some(g=>g.id===cGradeFilter)&&<B active={false} red onClick={()=>setCGradeFilter("")}>✕ Clear</B>}
-                      </COL>
-                      {/* Period column */}
-                      <COL label="Period" col="#94a3b8">
-                        {[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([v,l])=>(
-                          <B key={v||"all"} active={cTimeFilter===v} onClick={()=>setCTimeFilter(v)}>{l}</B>
-                        ))}
-                        {(cGradeFilter||cFilter!=="ALL"||cTimeFilter||cTagFilter)&&<B active={false} red onClick={()=>{setCGradeFilter("");setCFilter("ALL");setCTimeFilter("");setCTagFilter("");}}>✕ Clear all</B>}
-                      </COL>
-                      {/* Tag column */}
-                      <COL label="Tag" col="#f472b6">
-                        {usedTags.map(t=>(
-                          <B key={t} active={cTagFilter===t} onClick={()=>setCTagFilter(v=>v===t?"":t)}>{String(t).toUpperCase()}</B>
-                        ))}
-                        {cTagFilter&&<B active={false} red onClick={()=>setCTagFilter("")}>✕ Clear</B>}
-                      </COL>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Rate Matrix — condensed card, click to expand; moved here from Positions */}
-              {!mobile&&(
-                <div style={{flex: matrixExpanded ? "0 0 50%" : "0 0 25%", position:"relative", transition:"flex-basis .18s ease"}}>
-                  <Suspense fallback={null}>
-                    <RateMatrixCard collapsedHeight={260} bunkerHeader={<Suspense fallback={null}><BunkerHeader/></Suspense>} onExpandChange={setMatrixExpanded}/>
-                  </Suspense>
-                </div>
-              )}
-
-              {/* Right: Cargo count by month — animated, full history (minimized while Rate Matrix is expanded) */}
-              {!matrixExpanded&&!mobile&&(()=>{
-                const now=new Date();
-                const counts=graphMonthlyData.length>0?graphMonthlyData:[...Array.from({length:3},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-2+i,1);return{year:d.getFullYear(),month:d.getMonth(),count:0};})];
-                return <CargoMonthChart counts={counts} total={cargoTotal||cargoes.length}/>;
-              })()}
-            </div>
-            )}
-
-            {/* Mobile: Parse + Filters collapsed into tappable bars */}
-            {mobile && (
-              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                <MobileCollapse title="📋 Paste cargo" color="#faa356">
-                  {(()=>{
-                    const usedTags=getTagList();
-                    return(
-                      <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:5,padding:"5px 8px",display:"flex",alignItems:"center",flexWrap:"wrap",gap:4,marginBottom:8}}>
-                        <span style={{fontSize:9,fontWeight:700,color:"rgba(120,160,220,0.5)",textTransform:"uppercase",letterSpacing:"0.1em",marginRight:2}}>Tag on parse</span>
-                        {usedTags.map(t=>(
-                          <button key={t} onClick={()=>setPendingParseTag(v=>v===t?"":t)} style={fb(pendingParseTag===t)}>{t}</button>
-                        ))}
-                        {pendingParseTag&&<button onClick={()=>setPendingParseTag("")} style={{...fb(false),color:C.red,borderColor:C.red+"55",fontSize:10}}>✕ {pendingParseTag}</button>}
-                      </div>
-                    );
-                  })()}
-                  <ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels}
-                    onAddCargoes={async(parsed)=>{
-                      const user=localStorage.getItem("signal_user")||"H";
-                      const withMeta=parsed.map(c=>({...c,entered_by:user,tag:pendingParseTag?pendingParseTag:c.tag||""}));
-                      const result=await onAddCargoes(withMeta);
-                      if(pendingParseTag)setPendingParseTag("");
-                      return result;
-                    }}
-                    lockedMode="cargo" vesselDB={{}}/>
-                </MobileCollapse>
-
-                <MobileCollapse title="🏷️ Grade / Period / Tag Filters" color="#f472b6">
-                  {(()=>{
-                    let allGroups=[];
-                    try{const raw=localStorage.getItem("signal_cargo_filter_groups");allGroups=raw?JSON.parse(raw):[];}catch{}
-                    const gradeGroups=allGroups.filter(g=>(g.category||"grade")==="grade");
-                    const showRaw=gradeGroups.length===0;
-                    const rawGrades=showRaw?[...new Set(cargoes.map(c=>(c.cargo||"").trim()).filter(Boolean))].sort().slice(0,20):[];
-                    const usedTags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
-                    const B=({active,onClick,children,red})=>(
-                      <button onClick={onClick} style={{...fb(active),padding:"6px 10px",fontSize:12,color:red?C.red:active?"#d9ecff":"#9fc3f5",borderColor:red?C.red+"55":undefined}}>{children}</button>
-                    );
-                    return(
-                      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                        <COL label="Grade" col={C.purple}>
-                          {showRaw
-                            ?rawGrades.map(g=><B key={g} active={cGradeFilter===g} onClick={()=>setCGradeFilter(v=>v===g?"":g)}>{g}</B>)
-                            :gradeGroups.map(grp=><B key={grp.id} active={cGradeFilter===grp.id} onClick={()=>setCGradeFilter(v=>v===grp.id?"":grp.id)}>{grp.label}</B>)
-                          }
-                          {cGradeFilter&&gradeGroups.some(g=>g.id===cGradeFilter)&&<B active={false} red onClick={()=>setCGradeFilter("")}>✕ Clear</B>}
-                        </COL>
-                        <COL label="Period" col="#94a3b8">
-                          {[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([v,l])=>(
-                            <B key={v||"all"} active={cTimeFilter===v} onClick={()=>setCTimeFilter(v)}>{l}</B>
-                          ))}
-                        </COL>
-                        <COL label="Tag" col="#f472b6">
-                          {usedTags.map(t=>(
-                            <B key={t} active={cTagFilter===t} onClick={()=>setCTagFilter(v=>v===t?"":t)}>{String(t).toUpperCase()}</B>
-                          ))}
-                          {cTagFilter&&<B active={false} red onClick={()=>setCTagFilter("")}>✕ Clear</B>}
-                        </COL>
-                        {(cGradeFilter||cFilter!=="ALL"||cTimeFilter||cTagFilter)&&(
-                          <button onClick={()=>{setCGradeFilter("");setCFilter("ALL");setCTimeFilter("");setCTagFilter("");}}
-                            style={{...fb(false),color:C.red,borderColor:C.red+"55",padding:"6px 10px",fontSize:12,alignSelf:"flex-start"}}>
-                            ✕ Clear all filters
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </MobileCollapse>
-              </div>
-            )}
-            {/* Stats + Copy/CSV/Delete */}
-            <div style={{
-              display:"flex",alignItems:"center",gap:8,padding:"5px 10px",
-              background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,
-              flexWrap:"nowrap",minHeight:38,height:38,boxSizing:"border-box",
-              overflowX:"auto",overflowY:"hidden",scrollbarWidth:"thin"
-            }}>
-              <button onClick={()=>setShowAddCargo(v=>!v)}
-                style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
-                  border:showAddCargo?"1px solid rgba(250,163,86,0.5)":"1px solid rgba(250,163,86,0.3)",
-                  background:showAddCargo?"rgba(250,163,86,0.12)":"rgba(250,163,86,0.07)",color:"#faa356"}}>
-                {showAddCargo?"✕ Cancel":"+ Add cargo"}
-              </button>
-              <Suspense fallback={null}><ExportPanel vessels={vessels} cargoes={filtC} mode="cargo" selCargoes={selCargoes} allFilteredCargoes={filtC}
-                onExportAll={async()=>{
-                  // Fetch ALL matching cargoes from DB with current search
-                  const term=cSearch.trim();
-                  let query=supabase.from("cargoes").select("*").order("updated",{ascending:false});
-                  if(term) query=query.or(`charterer.ilike.%${term}%,vessel.ilike.%${term}%,load.ilike.%${term}%,disch.ilike.%${term}%,cargo.ilike.%${term}%`);
-                  // Fetch in batches to get all
-                  let all=[];let from=0;const BATCH=1000;
-                  while(true){
-                    const{data,error}=await query.range(from,from+BATCH-1);
-                    if(error||!data)break;
-                    all=[...all,...data.map(normaliseCargo)];
-                    if(data.length<BATCH)break;
-                    from+=BATCH;
-                  }
-                  // Apply in-memory filters
-                  let list=all;
-                  if(cTagFilter)list=list.filter(c=>(c.tag||"").toLowerCase()===cTagFilter.toLowerCase());
-                  if(cGradeFilter){
-                    let allGroups=[];try{const raw=localStorage.getItem("signal_cargo_filter_groups");allGroups=raw?JSON.parse(raw):[];}catch{}
-                    const grp=allGroups.find(g=>g.id===cGradeFilter);
-                    if(grp){const fm={grade:"cargo",load:"load",disch:"disch",charterer:"charterer",tag:"tag"};const f=fm[grp.category||"grade"]||"cargo";list=list.filter(c=>grp.aliases.some(a=>(c[f]||"").toLowerCase().includes(a.toLowerCase())));}
-                    else list=list.filter(c=>(c.cargo||"").toLowerCase().includes(cGradeFilter.toLowerCase()));
-                  }
-                  return list;
-                }}
-              /></Suspense>
-              {selCargoes.size>0&&(
-                <button onClick={()=>React.startTransition(()=>setTab("reports"))} style={{fontSize:11,fontWeight:600,padding:"2px 9px",borderRadius:4,border:"1px solid #6366f1",background:"rgba(99,102,241,.12)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                  📋 To Report ({selCargoes.size})
-                </button>
-              )}
-              {selCargoes.size>0&&(
-                <button onClick={()=>setPendingDel({type:"allcargo",id:"__SELCARGO__",label:selCargoes.size+" cargo"+(selCargoes.size!==1?"es":"")})}
-                  style={{fontSize:11,fontWeight:600,padding:"2px 9px",borderRadius:4,border:"1px solid rgba(255,107,107,0.4)",background:"rgba(255,107,107,0.1)",color:"#ff6b6b",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                  Delete ({selCargoes.size})
-                </button>
-              )}
-              {selCargoes.size>0&&(
-                <button
-                  ref={bulkCargoTagBtnRef}
-                  onClick={openBulkCargoTags}
-                  title="Add a tag to all selected cargoes"
-                  style={{
-                    fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,
-                    border:"1px solid rgba(88,166,255,0.48)",
-                    background:"rgba(88,166,255,.12)",color:"#79c0ff",
-                    cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0
-                  }}>
-                  + Add to tag ({selCargoes.size})
-                </button>
-              )}
-              <div style={{width:1,height:14,background:C.bd2,flexShrink:0}}/>
-              <div style={{display:"flex",alignItems:"center",gap:12,whiteSpace:"nowrap",flexShrink:0}}>
-                <span style={{fontSize:11,color:C.faint}}>This wk <span style={{color:"#4fc3f7",fontWeight:800}}>{weekCounts.thisWk}</span></span>
-                <span style={{fontSize:11,color:C.faint}}>Last wk <span style={{color:"rgba(160,190,230,.70)",fontWeight:800}}>{weekCounts.lastWk}</span></span>
-              </div>
-              <span style={{flex:"1 0 18px",minWidth:18}}/>
-              {/* Search */}
-              <div style={{position:"relative",flexShrink:0}}>
-                <input value={cSearch} onChange={e=>{const v=e.target.value;setCSearch(v);clearTimeout(window._csTimer);window._csTimer=setTimeout(()=>onCargoSearch(v),350);}} placeholder="Search cargoes…"
-                  style={{width:240,background:C.bg2,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",boxSizing:"border-box"}}/>
-                {cSearch&&<button onClick={()=>{setCSearch("");onCargoSearch("");}} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
-              </div>
-              <span style={{fontSize:11,color:C.faint,whiteSpace:"nowrap"}}>Total <span style={{color:C.tx,fontWeight:800}}>{cargoTotal||cargoes.length}</span></span>
-              <span style={{fontSize:11,color:C.faint,whiteSpace:"nowrap"}}>Showing <span style={{color:C.blue,fontWeight:800}}>{filtC.length}</span></span>
-              {/* Sort dropdown */}
-              <div style={{display:"flex",alignItems:"center",gap:4}}>
-                <span style={{fontSize:11,color:C.faint,whiteSpace:"nowrap"}}>Sort</span>
-                <select value={cSortK} onChange={e=>{setCsortK(e.target.value);setCsortD(-1);}}
-                  style={{fontSize:11,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",colorScheme:"dark"}}>
-                  <option value="Updated">Updated</option>
-                  <option value="Status">Status</option>
-                  <option value="Vessel">Vessel</option>
-                  <option value="Charterer">Charterer</option>
-                  <option value="Cargo">Cargo</option>
-                  <option value="Load">Load</option>
-                  <option value="Disch">Disch</option>
-                  <option value="LaycanStart">From</option>
-                  <option value="Freight">Freight</option>
-                </select>
-                <button onClick={()=>setCsortD(d=>d*-1)}
-                  style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",minWidth:28}}>
-                  {cSortD>0?"▲":"▼"}
-                </button>
-              </div>
-            </div>
-
-            {bulkCargoTagOpen&&(
-              <>
-                <div style={{position:"fixed",inset:0,zIndex:19990}} onClick={()=>setBulkCargoTagOpen(false)}/>
-                <div style={{
-                  position:"fixed",top:bulkCargoTagPos.top,left:bulkCargoTagPos.left,zIndex:19999,
-                  width:190,maxHeight:360,overflowY:"auto",overflowX:"hidden",
-                  background:"#0a1628",border:"1px solid rgba(88,166,255,0.34)",borderRadius:7,
-                  padding:6,boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
-                  display:"flex",flexDirection:"column",gap:3
-                }}>
-                  <div style={{fontSize:9,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",padding:"2px 3px 5px"}}>
-                    Add {selCargoes.size} selected to tag
-                  </div>
-                  {getTagListFor("cargo").map(t=>{
-                    const col=getTagColor(t);
-                    return(
-                      <button key={t} onClick={()=>applyTagToSelectedCargoes(t)}
-                        style={{
-                          fontSize:11,padding:"4px 8px",borderRadius:3,textAlign:"left",
-                          cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
-                          border:"1px solid "+(col?col+"55":"rgba(88,166,255,0.12)"),
-                          background:"transparent",color:col||"rgba(160,200,255,0.78)"
-                        }}>
-                        {col&&<span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:col,marginRight:6,verticalAlign:"middle"}}/>}
-                        {String(t).toUpperCase()}
-                      </button>
-                    );
-                  })}
-                  <div style={{height:1,background:C.bd2,margin:"3px 0"}}/>
-                  <button onClick={()=>applyTagToSelectedCargoes("")}
-                    style={{
-                      fontSize:10,padding:"4px 8px",borderRadius:3,textAlign:"left",
-                      cursor:"pointer",fontFamily:"inherit",
-                      border:"1px solid rgba(255,107,107,.28)",
-                      background:"transparent",color:"rgba(255,107,107,.72)"
-                    }}>
-                    ✕ Clear tag
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* Row hover highlight + mobile no-truncation */}
-            <style>{`
-              .cargo-table tr:hover td{background:rgba(58,130,246,0.06)!important;}
-              .pos-table-wrap tbody tr:hover td{background:rgba(58,130,246,0.06)!important;}
-              @media(max-width:900px){
-                .cargo-table td, .cargo-table td>*{overflow:visible!important;text-overflow:unset!important;white-space:nowrap!important;max-width:none!important;}
-              }
-            `}</style>
-            <div style={{width:"100%",overflowX:"auto",WebkitOverflowScrolling:"touch"}}
-              onClick={e=>{
-                const th=e.target.closest("th");
-                if(!th) return;
-                const row=th.parentElement;
-                if(!row) return;
-                const idx=Array.from(row.children).indexOf(th);
-                const col=cargoColumns[idx];
-                if(col?.sortKey){const d=cSortK===col.sortKey?cSortD*-1:-1;setCsortK(col.sortKey);setCsortD(d);}
-              }}>
-            <div style={{...tableWrap,minWidth:mobile?"1200px":undefined}} className="cargo-table">
-              {showAddCargo&&<AddCargoInlineRow onSave={onAddC} onClose={()=>setShowAddCargo(false)}/>}
-              {filtC.length===0
-                ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>📦</div>No fixtures yet</div>
-                : <MatrixTable
-    columns={(()=>{const allTicked=filtC.length>0&&filtC.every(c=>selCargoes.has(c.id));return cargoColumns.map(col=>col.key==="select"?{...col,label:<span style={{fontSize:11,color:allTicked?"#4fc3f7":C.faint,cursor:"pointer",userSelect:"none"}} onClick={e=>{e.stopPropagation();setSelCargoes(allTicked?new Set():new Set(filtC.map(c=>c.id)));}}>{allTicked?"[✓]":"[ ]"}</span>}:col);})()}
-    data={filtC}
-    keyField="id"
-    getRowStyle={(row,i)=>selCargoes.has(row.id)?"rgba(88,166,255,0.12)":i%2?"rgba(255,255,255,0.02)":"transparent"}
-    renderRow={(f, td) => {
-  const i = filtC.findIndex(x => x.id === f.id);
-  const sc = f.status==="FIXED" ? C.green : f.status==="SUBS" ? C.purple : f.status==="FAILED" ? C.red : C.faint;
-
-  return (
-    <>
-      {/* SELECT */}
-      <td
-        style={{ ...tdCtr, width: 28, padding: "0 2px" }}
-        onClick={e => {
-          e.stopPropagation();
-          setSelCargoes(p => {
-            const n = new Set(p);
-            n.has(f.id) ? n.delete(f.id) : n.add(f.id);
-            return n;
-          });
-        }}
-      >
-        <span style={{ fontSize: 12, color: selCargoes.has(f.id) ? "#4fc3f7" : C.faint }}>
-          {selCargoes.has(f.id) ? "[✓]" : "[ ]"}
-        </span>
-      </td>
-
-      {/* STATUS */}
-      <td
-        style={{ ...tdCtr, color: sc, fontWeight: 700, cursor: "pointer" }}
-        onClick={e => {
-          e.stopPropagation();
-          const opts = ["SUBS","FIXED","FAILED",""];
-          const cur = opts.indexOf(f.status || "");
-          onUpdateC(f.id, "status", opts[(cur + 1) % opts.length]);
-        }}
-      >
-        {f.status || ""}
-      </td>
-
-      <EC
-  value={f.vessel}
-  color={C.blue}
-  placeholder="TBN"
-  onSave={v2 => onUpdateC(f.id, "vessel", v2)}
-  data-cell={`${i}-cvessel`}
-  onTab={() => focusCell(i, "charterer")}
-  onShiftTab={() => focusCell(i, "status")}
-  onDown={() => focusCell(i + 1, "cvessel")}
-  onUp={() => focusCell(i - 1, "cvessel")}
-  style={mobile?{minWidth:'auto',overflow:'visible',whiteSpace:'nowrap'}:undefined}
-/>
-
-<EC
-  value={toTCase(f.charterer)}
-  color={"#79c0ff"}
-  bold
-  placeholder=""
-  onSave={v2 => onUpdateC(f.id, "charterer", toTCase(v2))}
-  data-cell={`${i}-charterer`}
-  onTab={() => focusCell(i, "qty")}
-  onShiftTab={() => focusCell(i, "cvessel")}
-  onDown={() => focusCell(i + 1, "charterer")}
-  onUp={() => focusCell(i - 1, "charterer")}
-  style={mobile?{minWidth:'auto',overflow:'visible',whiteSpace:'nowrap'}:undefined}
-/>
-
-<EC
-  value={normaliseQty(f.qty)}
-  color={C.amber}
-  placeholder=""
-  onSave={v2 => onUpdateC(f.id, "qty", normaliseQty(v2))}
-  data-cell={`${i}-qty`}
-  onTab={() => focusCell(i, "cargo")}
-  onShiftTab={() => focusCell(i, "charterer")}
-  onDown={() => focusCell(i + 1, "qty")}
-  onUp={() => focusCell(i - 1, "qty")}
-/>
-
-<EC
-  value={f.cargo || ""}
-  placeholder=""
-  onSave={v2 => onUpdateC(f.id, "cargo", v2)}
-  data-cell={`${i}-cargo`}
-  onTab={() => focusCell(i, "load")}
-  onShiftTab={() => focusCell(i, "qty")}
-  onDown={() => focusCell(i + 1, "cargo")}
-  onUp={() => focusCell(i - 1, "cargo")}
-/>
-
-<EC
-  value={toTCase(f.load || "")}
-  placeholder=""
-  onSave={v2 => onUpdateC(f.id, "load", toTCase(v2))}
-  data-cell={`${i}-load`}
-  onTab={() => focusCell(i, "disch")}
-  onShiftTab={() => focusCell(i, "cargo")}
-  onDown={() => focusCell(i + 1, "load")}
-  onUp={() => focusCell(i - 1, "load")}
-  style={mobile?{minWidth:'auto',overflow:'visible',whiteSpace:'nowrap'}:undefined}
-/>
-
-<EC
-  value={toTCase(f.disch || "")}
-  placeholder=""
-  onSave={v2 => onUpdateC(f.id, "disch", toTCase(v2))}
-  data-cell={`${i}-disch`}
-  onTab={() => focusCell(i, "from")}
-  onShiftTab={() => focusCell(i, "load")}
-  onDown={() => focusCell(i + 1, "disch")}
-  onUp={() => focusCell(i - 1, "disch")}
-  style={mobile?{minWidth:'auto',overflow:'visible',whiteSpace:'nowrap'}:undefined}
-/>
-
-<EC
-  value={fmtDateShort(f.from)}
-  placeholder=""
-  onSave={v2 => onUpdateC(f.id, "from", v2)}
-  data-cell={`${i}-from`}
-  onTab={() => focusCell(i, "to")}
-  onShiftTab={() => focusCell(i, "disch")}
-  onDown={() => focusCell(i + 1, "from")}
-  onUp={() => focusCell(i - 1, "from")}
-/>
-
-<EC
-  value={fmtDateShort(f.to)}
-  placeholder=""
-  onSave={v2 => onUpdateC(f.id, "to", v2)}
-  data-cell={`${i}-to`}
-  onTab={() => focusCell(i, "freight")}
-  onShiftTab={() => focusCell(i, "from")}
-  onDown={() => focusCell(i + 1, "to")}
-  onUp={() => focusCell(i - 1, "to")}
-/>
-
-<EC
-  value={fmtFreight(f.freight) || f.freight}
-  color={"#a8e6a3"}
-  placeholder=""
-  onSave={v2 => onUpdateC(f.id, "freight", fmtFreight(v2) || v2)}
-  data-cell={`${i}-freight`}
-  onTab={() => focusCell(i, "comment")}
-  onShiftTab={() => focusCell(i, "to")}
-  onDown={() => focusCell(i + 1, "freight")}
-  onUp={() => focusCell(i - 1, "freight")}
-  style={mobile?{minWidth:'auto',overflow:'visible',whiteSpace:'nowrap'}:undefined}
-/>
-
-<EC
-  value={f.comment || ""}
-  color={C.dim}
-  placeholder=""
-  onSave={v2 => onUpdateC(f.id, "comment", v2)}
-  data-cell={`${i}-comment`}
-  onTab={() => focusCell(i + 1, "cvessel")}
-  onShiftTab={() => focusCell(i, "freight")}
-  onDown={() => focusCell(i + 1, "comment")}
-  onUp={() => focusCell(i - 1, "comment")}
-/>
-
-      {/* TAG */}
-      <TagCell cargoId={f.id} tag={f.tag} onUpdateC={onUpdateC}/>
-
-      {/* UPDATED */}
-      <td style={{ ...td2, color: C.faint, textAlign:"left" }}>
-        {f.updated ? new Date(f.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
-      </td>
-
-      {/* WHO ENTERED — H (blue) or L (green) badge */}
-      <td style={{...tdCtr,width:20,padding:"0 2px"}} onClick={e=>e.stopPropagation()}>
-        {(f.entered_by==="H"||f.entered_by==="L")&&(
-          <span title={f.entered_by==="H"?"Entered by Henriksen":"Entered by Løken"}
-            style={{display:"inline-flex",alignItems:"center",justifyContent:"center",
-              width:14,height:14,borderRadius:"50%",fontSize:8,fontWeight:700,lineHeight:1,
-              background:f.entered_by==="H"?"rgba(88,166,255,0.25)":"rgba(74,222,128,0.25)",
-              color:f.entered_by==="H"?"#79c0ff":"#4ade80",
-              border:"1px solid "+(f.entered_by==="H"?"rgba(88,166,255,0.5)":"rgba(74,222,128,0.5)")}}>
-            {f.entered_by}
-          </span>
+          <Suspense fallback={<TabFallback/>}>
+            <CargoesTab
+              vessels={vessels} cargoes={cargoes} cargoTotal={cargoTotal}
+              onUpdateC={onUpdateC} onAddCargoes={onAddCargoes} onAddC={onAddC}
+              onDelC={onDelC} onAddVessels={onAddVessels} onCargoSearch={onCargoSearch}
+            />
+          </Suspense>
         )}
-      </td>
-      {/* DELETE */}
-      <td
-        style={{ ...tdCtr, width: 26, minWidth: 26, maxWidth: 26, padding: "0 2px" }}
-        onClick={e=>e.stopPropagation()}
-      >
-        <button
-          onClick={(e)=>{
-            e.stopPropagation();
-            setPendingDel({type:"cargo",id:f.id,label:f.vessel||"cargo"});
-          }}
-          style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.7}}
-          title="Delete"
-        >
-          ✕
-        </button>
-      </td>
-    </>
-  );
-}}
-  />}
-              {hasMore&&
-              <div style={{textAlign:"center",padding:"12px"}}>
-                <button onClick={onLoadMore} style={{background:"none",border:"1px solid "+C.blue,borderRadius:4,padding:"4px 16px",color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Load more</button>
-              </div>}
-            </div>
-            </div>{/* end cargo scroll wrapper */}
-          </div>
+
+        {/* ── QUOTES & FIXTURES — isolated component ── */}
+        {tab==="cargo2"&&(
+          <Suspense fallback={<TabFallback/>}>
+            <QuotesFixtures
+              vessels={vessels} cargoes={cargoes} cargoTotal={cargoTotal}
+              onUpdateC={onUpdateC} onAddCargoes={onAddCargoes} onAddC={onAddC}
+              onDelC={onDelC} onAddVessels={onAddVessels} onCargoSearch={onCargoSearch}
+            />
+          </Suspense>
         )}
 
         {/* ── FIXING ── */}
