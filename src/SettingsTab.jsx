@@ -475,7 +475,7 @@ export default function SettingsTab() {
       </div>
 
       <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0}}>
-        <SectionCard title="Tag Management" subtitle="Set whether each tag applies to Cargoes, Positions, or Both.">
+        <SectionCard title="Tag Management">
           <TagManagement/>
         </SectionCard>
 
