@@ -949,14 +949,14 @@ function MobileCollapse({ title, color="#58a6ff", defaultOpen=false, children })
   );
 }
 
-function TabbedPanel({tabs,active,onChange,height=460,children}){
+function TabbedPanel({tabs,active,onChange,height=460,children,extraHeader}){
   const fillParent = height==="100%";
   return (
     <div style={{
       ...(fillParent ? {position:"absolute",inset:0} : {height}),
       display:"flex",flexDirection:"column",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden"
     }}>
-      <div style={{display:"flex",flexShrink:0,borderBottom:"1px solid "+C.bd2}}>
+      <div style={{display:"flex",flexShrink:0,borderBottom:"1px solid "+C.bd2,alignItems:"center"}}>
         {tabs.map(t=>(
           <button key={t} onClick={()=>onChange(t)}
             style={{flex:1,padding:"7px 10px",fontSize:11,fontWeight:700,fontFamily:"inherit",cursor:"pointer",
@@ -966,6 +966,7 @@ function TabbedPanel({tabs,active,onChange,height=460,children}){
             {t}
           </button>
         ))}
+        {extraHeader}
       </div>
       <div style={{flex:1,minHeight:0,position:"relative"}}>{children}</div>
     </div>
@@ -1671,7 +1672,8 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   }
   // Inter UKC config — loaded from localStorage (editable in Settings)
   const [showSavedOnly,setShowSavedOnly]=useState(false);
-  const [fixingPanelTab,setFixingPanelTab]=useState("History");
+  const [fixingPanelTab,setFixingPanelTab]=useState("Open Segments");
+  const [fixingExpanded,setFixingExpanded]=useState(false);
   const [aisPanelTab,setAisPanelTab]=useState("Map");
   const [posOutsiderView,setPosOutsiderView]=useState(false);
   const [outsiderSyncStatus,setOutsiderSyncStatus]=useState(null);
@@ -2905,6 +2907,7 @@ const filtV=useMemo(()=>{
     minHeight: 0
   }}
 >
+  {!fixingExpanded && (
   <div style={{ flex: "0 0 auto" }}>
     <ParsePanel
       vessels={vessels}
@@ -2914,9 +2917,16 @@ const filtV=useMemo(()=>{
       vesselDB={{}}
     />
   </div>
+  )}
 
   <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position:"relative" }}>
-    <TabbedPanel tabs={["History","Open Segments"]} active={fixingPanelTab} onChange={setFixingPanelTab} height="100%">
+    <TabbedPanel tabs={["History","Open Segments"]} active={fixingPanelTab} onChange={setFixingPanelTab} height="100%"
+      extraHeader={
+        <button onClick={()=>setFixingExpanded(v=>!v)} title={fixingExpanded?"Collapse — show parse panel again":"Expand — fill space taken by parse panel"}
+          style={{ padding:"0 10px", background:"transparent", border:"none", cursor:"pointer", color:fixingExpanded?C.blue:C.faint, fontSize:13, fontWeight:700 }}>
+          {fixingExpanded?"▾":"▴"}
+        </button>
+      }>
       {fixingPanelTab==="History" ? (
         <>
           {/* CSS overrides: vivid opaque bar colours for FixingWindow */}
