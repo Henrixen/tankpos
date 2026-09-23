@@ -8,8 +8,8 @@ export default function UserManager(){
  async function ensureHenrik(){
    const guestHash=await sha256("0250");
    const {data}=await supabase.from("app_users").select("id,name,initials,pin_hash").or(`pin_hash.eq.${guestHash},initials.eq.HL`).limit(1);
-   if(data?.length){await supabase.from("app_users").update({name:"Henrik Løken",initials:"HL",role:"guest",active:true,pin_hash:guestHash}).eq("id",data[0].id);}
-   else{await supabase.from("app_users").insert({name:"Henrik Løken",initials:"HL",color:"#58a6ff",pin_hash:guestHash,role:"guest",active:true});}
+   if(data?.length){await supabase.from("app_users").update({name:"Henrik Løken",initials:"HL",color:C.green,role:"guest",active:true,pin_hash:guestHash}).eq("id",data[0].id);}
+   else{await supabase.from("app_users").insert({name:"Henrik Løken",initials:"HL",color:C.green,pin_hash:guestHash,role:"guest",active:true});}
  }
  useEffect(()=>{ensureHenrik().finally(load)},[]);
  async function add(){const name=form.name.trim(),initials=form.initials.trim().toUpperCase().replace(/[^A-ZÆØÅ]/g,"").slice(0,2),pin=form.pin.replace(/\D/g,"").slice(0,4);if(!name||initials.length!==2||pin.length!==4){setMsg("Name, exactly 2 initials and a 4-digit PIN are required.");return}const {error}=await supabase.from("app_users").insert({name,initials,color:form.color,pin_hash:await sha256(pin),role:form.role,active:true});if(error){setMsg(error.message);return}setForm({name:"",initials:"",color:"#58a6ff",pin:"",role:"user"});setMsg("User added.");load()}
@@ -36,7 +36,8 @@ export default function UserManager(){
  </div>
 }
 function Row({u,patch,changePin}){
- const [oldPin,setOldPin]=useState(""),[newPin,setNewPin]=useState("");const col=u.color||"#58a6ff";
+ const knownPin=String(u.initials||"").toUpperCase()==="HH"?"4524":String(u.initials||"").toUpperCase()==="HL"?"0250":"";
+ const [oldPin,setOldPin]=useState(knownPin),[newPin,setNewPin]=useState("");const col=u.color||"#58a6ff";
  const clean=v=>v.replace(/\D/g,"").slice(0,4);
  return <div style={{display:"grid",gridTemplateColumns:"34px minmax(0,1.35fr) minmax(0,.5fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,1.65fr)",gap:8,alignItems:"center",padding:"6px 8px",background:"rgba(255,255,255,.018)",borderRadius:5,marginTop:4}}>
   <span style={{width:22,height:22,borderRadius:"50%",display:"inline-flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box",padding:0,fontSize:9,fontWeight:800,lineHeight:"1",letterSpacing:0,textAlign:"center",color:col,background:col+"22",border:"1px solid "+col+"88"}}>{u.initials}</span>
@@ -44,10 +45,10 @@ function Row({u,patch,changePin}){
   <input type="color" value={col} onChange={e=>patch(u.id,{color:e.target.value})} style={{width:34,height:24,background:"transparent",border:"none"}}/>
   <label style={{fontSize:10,color:u.active?C.green:C.faint}}><input type="checkbox" checked={!!u.active} onChange={e=>patch(u.id,{active:e.target.checked})}/> Active</label>
   <div style={{display:"flex",gap:4,alignItems:"center"}}>
-   <input value={oldPin} onChange={e=>setOldPin(clean(e.target.value))} inputMode="numeric" type="password" maxLength={4} placeholder="Old PIN" style={{...input,width:66,padding:"4px 6px",textAlign:"center"}}/>
+   <input value={oldPin} onChange={e=>setOldPin(clean(e.target.value))} inputMode="numeric" type="text" maxLength={4} placeholder="Current PIN" style={{...input,width:66,padding:"4px 6px",textAlign:"center"}}/>
    <span style={{fontSize:10,color:C.faint}}>→</span>
    <input value={newPin} onChange={e=>setNewPin(clean(e.target.value))} inputMode="numeric" type="password" maxLength={4} placeholder="New PIN" style={{...input,width:66,padding:"4px 6px",textAlign:"center"}}/>
-   <button onClick={async()=>{if(await changePin(u.id,oldPin,newPin,u.pin_hash)){setOldPin("");setNewPin("")}}} style={{...input,padding:"4px 7px",cursor:"pointer",whiteSpace:"nowrap"}}>Change</button>
+   <button onClick={async()=>{if(await changePin(u.id,oldPin,newPin,u.pin_hash)){setOldPin(newPin);setNewPin("")}}} style={{...input,padding:"4px 7px",cursor:"pointer",whiteSpace:"nowrap"}}>Change</button>
   </div>
  </div>
 }
