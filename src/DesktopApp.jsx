@@ -2943,6 +2943,7 @@ const filtV=useMemo(()=>{
             vessels={filtV}
             filterActive={filtV.length !== vessels.length}
             tagFilter={cTagFilter||null}
+            fillHeight={fixingExpanded}
           /></Suspense>
         </>
       ) : (
@@ -3801,7 +3802,9 @@ const filtV=useMemo(()=>{
         )}
         {tab==="settings"&&(
           <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px"}}>
-            {/* SettingsTab contains the current Tag Management section */}
+            <TagManager/>
+            <div style={{height:1,background:C.bd2,margin:"4px 0"}}/>
+            {/* Original settings component */}
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
           </div>
         )}
