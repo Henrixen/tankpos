@@ -15,13 +15,13 @@ const card={background:C.bg2,border:"1px solid "+C.bd,borderRadius:7};
 
 const POS_TH={
   background:C.bg2,color:"rgba(120,160,220,0.58)",fontSize:10,fontWeight:700,
-  textTransform:"uppercase",letterSpacing:"0.06em",padding:"6px 8px",
+  textTransform:"uppercase",letterSpacing:"0.06em",padding:"6px 10px",
   borderBottom:"1px solid rgba(58,130,246,0.12)",textAlign:"left",
   whiteSpace:"nowrap",verticalAlign:"middle",fontFamily:"sans-serif"
 };
 const POS_TD={
-  padding:"5px 8px",color:C.tx,fontWeight:500,fontSize:12,
-  borderBottom:"1px solid rgba(255,255,255,0.018)",verticalAlign:"middle",
+  padding:"6px 10px",color:"#d9e8ff",fontWeight:500,fontSize:12,
+  borderBottom:"1px solid rgba(255,255,255,0.035)",verticalAlign:"middle",
   whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
   textTransform:"uppercase",fontFamily:"sans-serif",lineHeight:"18px"
 };
@@ -177,6 +177,8 @@ function AddRow({onSave,onClose,quotes=false}){
 
 export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,onAddCargoes,onAddC,onDelC,onAddVessels,onCargoSearch}){
  const [search,setSearch]=useState(""),[status,setStatus]=useState("ALL"),[time,setTime]=useState(""),[grade,setGrade]=useState(""),[tag,setTag]=useState(""),[ex,setEx]=useState(""),[toR,setToR]=useState(""),[parseTag,setParseTag]=useState(""),[showAdd,setShowAdd]=useState(false),[sort,setSort]=useState("added"),[dir,setDir]=useState(-1);
+ const [page,setPage]=useState(1);
+ const PAGE_SIZE=200;
  const [visible,setVisible]=useState(()=>{try{const raw=localStorage.getItem("signal_qf_visible_columns");if(raw){const a=JSON.parse(raw);if(Array.isArray(a)&&a.length)return new Set(a)}}catch{}try{const m=document.cookie.match(/(?:^|; )signal_qf_cols=([^;]*)/);if(m){const a=decodeURIComponent(m[1]).split(",").filter(Boolean);if(a.length)return new Set(a)}}catch{}return new Set()});
  const defaults=["status","ex_region","to_region","p_and_c","intelligence","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment"];
  useEffect(()=>{if(!visible.size)setVisible(new Set(defaults))},[]);
@@ -191,11 +193,13 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
 // Stable tie-breakers: editing Intel/regions/etc must never change row position.
 const xa=new Date(x.added||0).getTime()||0,ya=new Date(y.added||0).getTime()||0;if(xa!==ya)return ya-xa;
 return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,status,tag,grade,ex,toR,sort,dir]);
+ useEffect(()=>{setPage(1);},[search,status,tag,grade,ex,toR,sort,dir]);
+ const pageRows=useMemo(()=>filtered.slice(0,page*PAGE_SIZE),[filtered,page]);
  const allCols=[["status","Status",4],["ex_region","Ex Region",6],["to_region","To Region",6],["p_and_c","P&C",3],["intelligence","Intel",4],["vessel","Vessel",9],["charterer","Charterer",10],["qty","Qty",4],["cargo","Cargo",6],["load","Load",9],["disch","Disch",12],["from","From",4],["to","To",4],["freight","Freight",7],["comment","Comment",11],["tag","Tag",4],["source","Source",6],["updated","Updated",6]];
  const shown=allCols.filter(([k])=>visible.has(k));
  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
   <div style={{display:"flex",gap:10,height:260}}>
-   <div style={{flex:"0 0 25%",display:"flex",flexDirection:"column",gap:4}}><div style={{...card,padding:"5px 8px",display:"flex",gap:4,flexWrap:"wrap"}}><span style={{fontSize:11,color:C.faint,fontWeight:700}}>TAG ON PARSE</span>{tagList().map(t=><button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={btn(parseTag===t)}>{t}</button>)}</div><div style={{flex:1}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await onAddCargoes(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div>
+   <div style={{flex:"0 0 25%",display:"flex",flexDirection:"column",gap:4}}><div style={{...card,padding:"5px 8px",display:"flex",gap:4,flexWrap:"wrap"}}><span style={{fontSize:11,color:C.faint,fontWeight:700}}>TAG ON PARSE</span>{tagList().map(t=><button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={btn(parseTag===t)}>{t}</button>)}</div><div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await onAddCargoes(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div>
    <div style={{flex:"0 0 40%",...card,padding:8,display:"grid",gridTemplateColumns:".8fr .8fr .8fr 1.6fr 1.6fr",gap:6,overflow:"visible",position:"relative",zIndex:20}}>
     <div><b style={{fontSize:11,color:C.blue}}>GRADE</b>{grades.slice(0,6).map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={{...btn(grade===g.id),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{g.label}</button>)}</div>
     <div><b style={{fontSize:11,color:C.dim}}>PERIOD</b>{[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={{...btn(time===k),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{l}</button>)}</div>
@@ -217,8 +221,8 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,stat
   <div style={POS_WRAP}>
    <table style={POS_TABLE}>
     <colgroup><col style={{width:"1.4%"}}/>{shown.map(([k,l,w])=><col key={k} style={{width:w+"%"}}/>)}<col style={{width:"1.4%"}}/><col style={{width:"1.4%"}}/></colgroup>
-    <thead><tr><th onClick={()=>{const ids=filtered.slice(0,200).map(x=>x.id);const all=ids.length>0&&ids.every(id=>selected.has(id));setSelected(p=>{const n=new Set(p);ids.forEach(id=>all?n.delete(id):n.add(id));return n})}} style={{...POS_TH,textAlign:"center",cursor:"pointer",padding:"3px 1px",lineHeight:"11px"}}><div style={{fontSize:11,color:filtered.slice(0,200).length>0&&filtered.slice(0,200).every(x=>selected.has(x.id))?"#4fc3f7":C.faint}}>{filtered.slice(0,200).length>0&&filtered.slice(0,200).every(x=>selected.has(x.id))?"[✓]":"[ ]"}</div><div style={{fontSize:7,color:C.faint}}>ALL</div></th>{shown.map(([k,l])=><th key={k} style={{...POS_TH,textAlign:["status","p_and_c","intelligence","from","to","freight","tag","updated"].includes(k)?"center":"left"}}>{l}</th>)}<th style={POS_TH}/><th style={POS_TH}/></tr></thead>
-    <tbody>{filtered.slice(0,200).map((c,i)=>{
+    <thead><tr><th onClick={()=>{const ids=pageRows.map(x=>x.id);const all=ids.length>0&&ids.every(id=>selected.has(id));setSelected(p=>{const n=new Set(p);ids.forEach(id=>all?n.delete(id):n.add(id));return n})}} style={{...POS_TH,textAlign:"center",cursor:"pointer",padding:"3px 1px",lineHeight:"11px"}}><div style={{fontSize:11,color:pageRows.length>0&&pageRows.every(x=>selected.has(x.id))?"#4fc3f7":C.faint}}>{pageRows.length>0&&pageRows.every(x=>selected.has(x.id))?"[✓]":"[ ]"}</div><div style={{fontSize:7,color:C.faint}}>ALL</div></th>{shown.map(([k,l])=><th key={k} style={{...POS_TH,textAlign:["status","p_and_c","intelligence","from","to","freight","tag","updated"].includes(k)?"center":"left"}}>{l}</th>)}<th style={POS_TH}/><th style={POS_TH}/></tr></thead>
+    <tbody>{pageRows.map((c,i)=>{
       const rowBg=POS_ROW(i);
       return <tr key={c.id} style={{background:rowBg,height:32}}><td onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} style={{...POS_TD,textAlign:"center",padding:"0 2px",overflow:"visible"}}><span role="checkbox" aria-checked={selected.has(c.id)} tabIndex={0} onClick={e=>{e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}} onKeyDown={e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}}} style={{fontSize:12,fontWeight:500,color:selected.has(c.id)?"#4fc3f7":C.faint,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>{selected.has(c.id)?"[✓]":"[ ]"}</span></td>
     {shown.map(([k])=>{
@@ -233,5 +237,12 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,stat
     })}<td style={{...POS_TD,textAlign:"center",padding:0,verticalAlign:"middle",lineHeight:0}}>{editorInitials(c.entered_by)&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,padding:0,margin:0,borderRadius:"50%",boxSizing:"border-box",fontSize:7,fontWeight:700,lineHeight:"18px",textAlign:"center",verticalAlign:"middle",color:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?C.blue:C.green,border:"1px solid "+((c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{editorInitials(c.entered_by)}</span>}</td><td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>setDeleteCargo(c)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td></tr>})}</tbody>
    </table>
   </div>
+  {filtered.length > pageRows.length && (
+    <div style={{textAlign:"center",padding:"8px 0"}}>
+      <button onClick={()=>setPage(p=>p+1)} style={{...btn(),padding:"6px 18px",fontSize:11}}>
+        Show more ({filtered.length - pageRows.length} remaining)
+      </button>
+    </div>
+  )}
  </div>;
 }
