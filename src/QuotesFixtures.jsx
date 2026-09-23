@@ -205,7 +205,7 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
  const PAGE_SIZE=200;
  const [visible,setVisible]=useState(()=>{try{const raw=localStorage.getItem("signal_qf_visible_columns");if(raw){const a=JSON.parse(raw);if(Array.isArray(a)&&a.length)return new Set(a)}}catch{}try{const m=document.cookie.match(/(?:^|; )signal_qf_cols=([^;]*)/);if(m){const a=decodeURIComponent(m[1]).split(",").filter(Boolean);if(a.length)return new Set(a)}}catch{}return new Set()});
  const defaults=["status","ex_region","to_region","p_and_c","intelligence","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment","tag","updated"];
- useEffect(()=>{if(!visible.size)setVisible(new Set(defaults))},[]);
+ useEffect(()=>{setVisible(prev=>{const n=prev.size?new Set(prev):new Set(defaults);n.add("tag");n.add("updated");return n})},[]);
  useEffect(()=>{if(!visible.size)return;const a=[...visible];try{localStorage.setItem("signal_qf_visible_columns",JSON.stringify(a))}catch{}try{document.cookie="signal_qf_cols="+encodeURIComponent(a.join(","))+"; path=/; max-age=31536000; SameSite=Lax"}catch{}},[visible]);
  const [colsOpen,setColsOpen]=useState(false),[colsPos,setColsPos]=useState({top:0,left:0});
  const [deleteCargo,setDeleteCargo]=useState(null);
@@ -220,7 +220,7 @@ const xa=new Date(x.added||0).getTime()||0,ya=new Date(y.added||0).getTime()||0;
 return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,status,time,tag,grade,ex,toR,sort,dir]);
  useEffect(()=>{setPage(1);},[search,status,time,tag,grade,ex,toR,sort,dir]);
  const pageRows=useMemo(()=>filtered.slice(0,page*PAGE_SIZE),[filtered,page]);
- const allCols=[["status","Status",4],["ex_region","Ex Region",6],["to_region","To Region",6],["p_and_c","P&C",3],["intelligence","Intel",4],["vessel","Vessel",9],["charterer","Charterer",10],["qty","Qty",4],["cargo","Cargo",6],["load","Load",9],["disch","Disch",12],["from","From",4],["to","To",4],["freight","Freight",7],["comment","Comment",11],["tag","Tag",4],["source","Source",6],["updated","Updated",6]];
+ const allCols=[["status","Status",3.5],["ex_region","Ex Region",4.5],["to_region","To Region",4.5],["p_and_c","P&C",3],["intelligence","Intel",4],["vessel","Vessel",7],["charterer","Charterer",7.5],["qty","Qty",4],["cargo","Cargo",6],["load","Load",8],["disch","Disch",8.5],["from","From",4.5],["to","To",4.5],["freight","Freight",7],["comment","Comment",9],["tag","Tag",5],["source","Source",5],["updated","Updated",6.5]];
  const shown=allCols.filter(([k])=>visible.has(k));
  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
   <div style={{display:"flex",gap:10,height:260}}>
