@@ -14,10 +14,10 @@ function tagList(){try{const x=JSON.parse(localStorage.getItem("signal_custom_ta
 const card={background:C.bg2,border:"1px solid "+C.bd,borderRadius:7};
 
 const POS_TH={
-  background:C.bg2,color:"rgba(120,160,220,0.58)",fontSize:10,fontWeight:700,
-  textTransform:"uppercase",letterSpacing:"0.06em",padding:"6px 10px",
-  borderBottom:"1px solid rgba(58,130,246,0.12)",textAlign:"left",
-  whiteSpace:"nowrap",verticalAlign:"middle",fontFamily:"sans-serif"
+  background:"rgba(20,30,50,0.92)",color:"rgba(120,160,220,0.58)",fontSize:11,fontWeight:700,
+  textTransform:"uppercase",letterSpacing:"0.08em",padding:"7px 10px",
+  borderBottom:"1px solid rgba(58,130,246,0.14)",textAlign:"left",
+  whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"
 };
 const POS_TD={
   padding:"6px 10px",color:"#d9e8ff",fontWeight:500,fontSize:12,
@@ -25,8 +25,8 @@ const POS_TD={
   whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
   textTransform:"uppercase",fontFamily:"sans-serif",lineHeight:"18px"
 };
-const POS_ROW=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
-const POS_TABLE={width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12,tableLayout:"fixed",fontFamily:"inherit"};
+const POS_ROW=i=>i%2?"rgba(255,255,255,0.02)":"transparent";
+const POS_TABLE={width:"100%",borderCollapse:"collapse",fontSize:12,tableLayout:"fixed",fontFamily:"inherit"};
 const POS_WRAP={border:"1px solid "+C.bd,borderRadius:8,overflow:"auto",minWidth:0,background:C.bg2,boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)"};
 
 const btn=(active=false)=>({fontSize:11,fontWeight:700,padding:"3px 7px",borderRadius:3,border:"1px solid "+(active?C.blue:C.bd),background:active?"rgba(88,166,255,.18)":C.bg3,color:active?"#d9ecff":"#9fc3f5",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
