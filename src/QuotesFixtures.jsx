@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useRef,useState,Suspense} from "react";
 import { C } from "./constants";
 import { toTCase,normaliseQty,fmtDateShort,fmtFreight } from "./utils";
 import { supabase } from "./supabaseclient";
+import { tagsForScope, tagColor } from "./TagManagement";
 
 const EC=React.lazy(()=>import("./EC"));
 const ParsePanel=React.lazy(()=>import("./ParsePanel"));
@@ -10,7 +11,7 @@ const RateMatrixBunkerInput=React.lazy(()=>import("./RateMatrix").then(m=>({defa
 
 const REGIONS=["ECI","ECSAM-NEB","Med","MED-BSEA","NEA","NWE-BALTIC","RSEA","SEA","USAC-GLAKES","USG-CARIBS","WAF-SAF","WC AMERICAS","WCI-AG"];
 const PRESET_TAGS=["AG","BASF","CPP","DPP","EX ASIA","MED","OUTSIDER EUROPE","PARCEL","PNC","SPACE ASIA-EUROPE","SUB 10","TA","TAE","TAW","UKC","WAF"];
-function tagList(){try{const x=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");return[...new Set([...PRESET_TAGS,...x].map(v=>String(v||"").toUpperCase()).filter(Boolean))].sort();}catch{return PRESET_TAGS;}}
+function tagList(){try{return tagsForScope("cargoes");}catch{return PRESET_TAGS;}}
 const card={background:C.bg2,border:"1px solid "+C.bd,borderRadius:7};
 
 const POS_TH={
@@ -136,11 +137,16 @@ function useMonthly(cargoes=[]){
  },[cargoes]);
 }
 function TagCell({id,value,onUpdate}){
- const [open,setOpen]=useState(false),[pos,setPos]=useState({top:0,left:0}),ref=useRef(null);
- function show(){if(ref.current){const r=ref.current.getBoundingClientRect(),z=parseFloat(getComputedStyle(document.body).zoom||"1")||1,w=160*z,h=(16+tagList().length*31)*z,m=12;let l=r.left-w-6;if(l<m)l=r.right+6;l=Math.max(m,Math.min(l,innerWidth-w-m));let t=Math.max(m,Math.min(r.top-8,innerHeight-h-m));setPos({left:l/z,top:t/z});}setOpen(true);}
+ const [open,setOpen]=useState(false),[pos,setPos]=useState({top:0,left:0}),[newTag,setNewTag]=useState(""),ref=useRef(null);
+ const list=tagList();
+ function show(){if(ref.current){const r=ref.current.getBoundingClientRect(),z=parseFloat(getComputedStyle(document.body).zoom||"1")||1,w=170*z,h=(52+list.length*31)*z,m=12;let l=r.left-w-6;if(l<m)l=r.right+6;l=Math.max(m,Math.min(l,innerWidth-w-m));let t=Math.max(m,Math.min(r.top-8,innerHeight-h-m));setPos({left:l/z,top:t/z});}setOpen(true);}
+ function addAndPick(){const t=newTag.trim().toUpperCase();if(!t)return;try{const custom=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");if(!custom.includes(t)&&!PRESET_TAGS.includes(t))localStorage.setItem("signal_custom_tags",JSON.stringify([...custom,t]));}catch{}onUpdate(id,"tag",t);setNewTag("");setOpen(false);}
  return <><td style={{...POS_TD,textAlign:"center",padding:"0 3px"}}><button ref={ref} onClick={show} style={{background:"transparent",border:"1px solid "+C.bd,borderRadius:3,color:value?C.blue:C.faint,fontSize:11,fontWeight:700,cursor:"pointer",minWidth:24,lineHeight:"15px"}}>{value||"+"}</button></td>
- {open&&<><div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"fixed",left:pos.left,top:pos.top,zIndex:19999,width:160,overflow:"visible",background:"#071223",border:"1px solid "+C.bd,borderRadius:7,padding:5,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}>
- {tagList().map(t=><button key={t} onClick={()=>{onUpdate(id,"tag",value===t?"":t);setOpen(false)}} style={{display:"block",width:"100%",textAlign:"left",padding:"6px 7px",marginBottom:2,background:value===t?"rgba(88,166,255,.16)":"transparent",border:"1px solid "+(value===t?C.blue:C.bd2),borderRadius:3,color:value===t?"#fff":"#9fc3f5",fontSize:11,fontWeight:700,cursor:"pointer"}}>{t}</button>)}</div></>}</>;
+ {open&&<><div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"fixed",left:pos.left,top:pos.top,zIndex:19999,width:170,overflow:"visible",background:"#071223",border:"1px solid "+C.blue,borderRadius:7,padding:6,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}>
+ {list.map(t=>{const tc=tagColor(t);return <button key={t} onClick={()=>{onUpdate(id,"tag",value===t?"":t);setOpen(false)}} style={{display:"flex",alignItems:"center",gap:6,width:"100%",textAlign:"left",padding:"6px 7px",marginBottom:2,background:value===t?"rgba(88,166,255,.16)":"transparent",border:"1px solid "+(value===t?C.blue:C.bd2),borderRadius:3,color:tc||(value===t?"#fff":"#9fc3f5"),fontSize:11,fontWeight:700,cursor:"pointer"}}>{tc&&<span style={{width:6,height:6,borderRadius:"50%",background:tc,flexShrink:0}}/>}{t}</button>;})}
+ <input value={newTag} onChange={e=>setNewTag(e.target.value)} onClick={e=>e.stopPropagation()} onKeyDown={e=>e.key==="Enter"&&addAndPick()} placeholder="New tag + Enter"
+   style={{width:"100%",marginTop:3,background:"#0a1526",border:"1px solid "+C.bd2,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:10,fontWeight:600,padding:"6px 7px",outline:"none",boxSizing:"border-box"}}/>
+ </div></>}</>;
 }
 function RegionFilterInput({label,value,setter}){
  const [query,setQuery]=useState("");
