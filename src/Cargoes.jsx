@@ -50,7 +50,7 @@ function CargoMonthChart({ data, total, loading }){
   const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const counts=data||[];
   if(!counts.length) return (
-    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"7px 7px 1px",display:"flex",alignItems:"center",justifyContent:"center",minWidth:0,boxSizing:"border-box",height:260}}>
+    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"7px 7px 1px",display:"flex",alignItems:"center",justifyContent:"center",minWidth:0,boxSizing:"border-box",width:"100%",height:"100%"}}>
       <span style={{fontSize:11,color:C.faint}}>{loading?"Loading…":"No data"}</span>
     </div>
   );
@@ -73,13 +73,13 @@ function CargoMonthChart({ data, total, loading }){
   const peakIdx=counts.reduce((mx,b,i)=>b.count>counts[mx].count?i:mx,0);
 
   return(
-    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"7px 7px 1px",display:"flex",flexDirection:"column",gap:1,minWidth:0,boxSizing:"border-box",height:260}}>
+    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"7px 7px 1px",display:"flex",flexDirection:"column",gap:1,minWidth:0,boxSizing:"border-box",width:"100%",height:"100%"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
         <div style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em"}}>Cargoes entered by month</div>
         <div style={{fontSize:11,color:"rgba(88,166,255,0.7)",fontWeight:700}}>{total.toLocaleString()} total</div>
       </div>
       <div ref={wrapRef} style={{flex:1,minHeight:0,width:"100%",height:"100%",overflow:"hidden"}}>
-        <svg width={SVG_W} height={SVG_H} viewBox={"0 0 "+SVG_W+" "+SVG_H} style={{display:"block",overflow:"visible"}}>
+        <svg width="100%" height="100%" viewBox={"0 0 "+SVG_W+" "+SVG_H} preserveAspectRatio="none" style={{display:"block",overflow:"visible",width:"100%",height:"100%"}}>
           <defs>
             <linearGradient id="cgGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.3"/>
@@ -308,9 +308,9 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
  const widths=["1.5%","4.5%","11%","10%","4%","6%","8%","11%","4.5%","4.5%","7%","14%","4%","7%","1.5%","1.5%"];
  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
   <div style={{display:"flex",gap:10,height:260}}>
-   <div style={{flex:"0 0 25%",minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
-    <div style={{...card,padding:"14px 10px",display:"flex",gap:5,flexWrap:"wrap",alignContent:"flex-start"}}><span style={{fontSize:9,color:C.faint,fontWeight:800,width:"100%",marginBottom:2}}>TAG ON PARSE</span>{tagList().map(t=><button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={btn(parseTag===t)}>{t}</button>)}</div>
-    <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const u=localStorage.getItem("signal_user")||"H";const r=await onAddCargoes(p.map(c=>({...c,entered_by:u,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div>
+   <div style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}>
+    <div style={{...card,padding:"7px 8px",display:"flex",gap:4,flexWrap:"wrap",alignContent:"flex-start",flex:"0 0 auto",maxHeight:78,overflowY:"auto"}}><span style={{fontSize:9,color:C.faint,fontWeight:800,width:"100%",marginBottom:2}}>TAG ON PARSE</span>{tagList().map(t=><button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={btn(parseTag===t)}>{t}</button>)}</div>
+    <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const u=localStorage.getItem("signal_user")||"H";const r=await onAddCargoes(p.map(c=>({...c,entered_by:u,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div>
    </div>
    <div style={{flex:"0 0 25%",minWidth:0,...card,padding:8,display:"flex",flexDirection:"column",gap:8,overflow:"hidden"}}>
     <div><b style={{fontSize:9,color:C.blue}}>GRADE</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{grades.map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={btn(grade===g.id)}>{g.label}</button>)}</div></div>
@@ -318,7 +318,7 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
     <div><b style={{fontSize:9,color:C.pink}}>TAG</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{tags.map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={btn(tag===t)}>{t}</button>)}</div></div>
    </div>
    <div style={{flex:"0 0 25%",minWidth:0,alignSelf:"flex-start",position:"relative",zIndex:30}}><Suspense fallback={null}><RateMatrixCard collapsedHeight={260} bunkerHeader={<BunkerHeader/>}/></Suspense></div>
-   <CargoMonthChart data={monthly} total={cargoTotal||cargoes.length} loading={monthlyLoading}/>
+   <div style={{flex:"1 1 25%",minWidth:0,height:"100%",display:"flex",alignSelf:"stretch"}}><CargoMonthChart data={monthly} total={cargoTotal||cargoes.length} loading={monthlyLoading}/></div>
   </div>
   <div style={{...card,padding:"5px 8px",display:"flex",gap:6,alignItems:"center"}}>
    <button onClick={()=>setShowAdd(true)} style={{...btn(),color:C.amber}}>+ Add cargo</button>
