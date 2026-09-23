@@ -147,12 +147,12 @@ export default function TagManagement() {
                   onBlur={commitRename} onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenaming(null); }}
                   style={{ background: "#081425", border: "1px solid " + C.blue, borderRadius: 4, color: C.tx, fontFamily: "inherit", fontSize: 12, fontWeight: 700, padding: "2px 6px", width: 140 }} />
               ) : (
-                <span style={{ fontSize: 12, fontWeight: 700, color: C.tx, minWidth: 140 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.tx, width: 150, minWidth: 150 }}>
                   {tag} {preset && <span style={{ fontSize: 10, fontWeight: 400, color: "rgba(160,190,230,0.4)" }}>preset</span>}
                 </span>
               )}
 
-              <div style={{ display: "flex", gap: 4 }}>
+              <div style={{ display: "flex", gap: 4, width: 220, flexShrink: 0 }}>
                 {["both", "cargoes", "positions"].map(s => (
                   <button key={s} onClick={() => setScope(tag, s)} style={rowBtn(scope === s, C.blue)}>
                     {s === "both" ? "Both" : s === "cargoes" ? "Cargoes" : "Positions"}
@@ -160,7 +160,7 @@ export default function TagManagement() {
                 ))}
               </div>
 
-              <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+              <div style={{ display: "flex", gap: 6, width: 42, flexShrink: 0 }}>
                 {!preset && (
                   <>
                     <button onClick={() => startRename(tag)} title="Rename" style={{ background: "none", border: "none", color: "rgba(120,160,220,0.5)", cursor: "pointer", fontSize: 11 }}>✎</button>
