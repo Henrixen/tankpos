@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
 import UserManager from "./UserManager";
+import TagManagement from "./TagManagement";
 
 const INTERUKC_KEY = "signal_interukc_config";
 const DEFAULT_CONFIG = {
@@ -13,7 +14,7 @@ const DEFAULT_CONFIG = {
 // Shared section card wrapper — matches Tag Management styling
 function SectionCard({title,subtitle,children}){
   return(
-    <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:8,padding:"14px 16px",maxWidth:680}}>
+    <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:8,padding:"14px 16px",width:"100%",boxSizing:"border-box",position:"relative"}}>
       <div style={{borderBottom:"1px solid rgba(58,130,246,0.14)",paddingBottom:10,marginBottom:12}}>
         <div style={{fontSize:12,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:4}}>{title}</div>
         {subtitle&&<div style={{fontSize:12,color:"rgba(180,200,230,0.45)"}}>{subtitle}</div>}
@@ -465,139 +466,147 @@ export default function SettingsTab() {
   }
 
   return(
-    <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px",fontFamily:"Inter,sans-serif"}}>
-      <SectionCard title="Navigation / Menu" subtitle="Choose menu style, order existing tabs, visibility and grouped headings."><NavigationEditor/><AppScaleControl/></SectionCard>
-      <SectionCard title="Users / Login" subtitle="Add colleagues and manage their initials, colour, PIN and role. Navigation visibility above remains global for everybody.">
-        <UserManager/>
-      </SectionCard>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1.3fr",gap:16,padding:"0 0 20px",fontFamily:"Inter,sans-serif",alignItems:"start"}}>
+      <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0}}>
+        <SectionCard title="Navigation / Menu" subtitle="Choose menu style, order existing tabs, visibility and grouped headings."><NavigationEditor/><AppScaleControl/></SectionCard>
+        <SectionCard title="Users / Login" subtitle="Add colleagues and manage their initials, colour, PIN and role. Navigation visibility above remains global for everybody.">
+          <UserManager/>
+        </SectionCard>
+      </div>
 
-      <SectionCard title="Fixing">
-        <div style={{display:"flex",flexDirection:"column",gap:16}}>
-          <div>
-            <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:7}}>Segments</div>
-            <FixingListEditor storageKey={FIXING_SEGMENTS_KEY} defaults={DEFAULT_FIXING_SEGMENTS} placeholder="Add segment…"/>
+      <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0}}>
+        <SectionCard title="Tag Management" subtitle="Set whether each tag applies to Cargoes, Positions, or Both.">
+          <TagManagement/>
+        </SectionCard>
+
+        <SectionCard title="Fixing">
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            <div>
+              <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:7}}>Segments</div>
+              <FixingListEditor storageKey={FIXING_SEGMENTS_KEY} defaults={DEFAULT_FIXING_SEGMENTS} placeholder="Add segment…"/>
+            </div>
+            <div style={{paddingTop:12,borderTop:"1px solid "+C.bd2}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:7}}>Tradelanes</div>
+              <FixingListEditor storageKey={FIXING_TRADES_KEY} defaults={DEFAULT_FIXING_TRADELANES} placeholder="Add tradelane…"/>
+            </div>
           </div>
-          <div style={{paddingTop:12,borderTop:"1px solid "+C.bd2}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:7}}>Tradelanes</div>
-            <FixingListEditor storageKey={FIXING_TRADES_KEY} defaults={DEFAULT_FIXING_TRADELANES} placeholder="Add tradelane…"/>
-          </div>
-        </div>
-      </SectionCard>
+        </SectionCard>
 
-      <SectionCard title="Inter UKC Pool" subtitle="Operators and DWT range used by the Inter UKC filter.">
-        <InterUKCEditor/>
-      </SectionCard>
+        <SectionCard title="Inter UKC Pool" subtitle="Operators and DWT range used by the Inter UKC filter.">
+          <InterUKCEditor/>
+        </SectionCard>
 
-      <SectionCard title="Cargo Filter Groups" subtitle="Each group creates a filter button in the Cargoes panel. Pick a category to control which field is matched against your aliases.">
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          {cats.map(cat=>(
-            <div key={cat.id}>
-              <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>
-                {cat.label} <span style={{fontWeight:400,color:"rgba(120,160,220,0.3)",textTransform:"none"}}>— {cat.hint}</span>
+        <SectionCard title="Cargo Filter Groups" subtitle="Each group creates a filter button in the Cargoes panel. Pick a category to control which field is matched against your aliases.">
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            {cats.map(cat=>(
+              <div key={cat.id}>
+                <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6}}>
+                  {cat.label} <span style={{fontWeight:400,color:"rgba(120,160,220,0.3)",textTransform:"none"}}>— {cat.hint}</span>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {groups.filter(g=>(g.category||"grade")===cat.id).map(g=>(
+                    <GroupRow key={g.id} g={g}
+                      editing={editing}
+                      onStartEdit={()=>startEdit(g)}
+                      onSaveEdit={saveEdit}
+                      onCancelEdit={()=>setEditing(null)}
+                      onDelete={()=>del(g.id,g.label)}
+                      editLabel={editLabel} setEditLabel={setEditLabel}
+                      editAliases={editAliases} setEditAliases={setEditAliases}
+                      editCategory={editCategory} setEditCategory={setEditCategory}
+                      categories={CATEGORIES}
+                    />
+                  ))}
+                </div>
               </div>
+            ))}
+
+            {/* Add new group */}
+            <div style={{display:"flex",flexDirection:"column",gap:8,padding:"8px",background:C.bg2,borderRadius:6,border:"1px solid "+C.bd2}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>+ Add new filter group</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
+                <div style={{flex:"0 0 140px"}}>
+                  <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Category</div>
+                  <select value={newCategory} onChange={e=>setNewCategory(e.target.value)} style={sel}>
+                    {CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
+                  </select>
+                </div>
+                <div style={{flex:"0 0 150px"}}>
+                  <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Button label</div>
+                  <input value={newLabel} onChange={e=>setNewLabel(e.target.value)} style={inp} placeholder="e.g. UKC Ports"/>
+                </div>
+                <div style={{flex:1,minWidth:200}}>
+                  <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Aliases (comma-separated)</div>
+                  <input value={newAliases} onChange={e=>setNewAliases(e.target.value)} style={inp} placeholder="e.g. ARA, Rotterdam, Amsterdam"
+                    onKeyDown={e=>e.key==="Enter"&&addGroup()}/>
+                </div>
+                <button onClick={addGroup} style={{fontSize:12,fontWeight:600,padding:"6px 14px",borderRadius:5,border:"1px solid rgba(88,166,255,0.5)",background:"rgba(88,166,255,0.15)",color:"#9ec5ff",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Add group</button>
+              </div>
+            </div>
+
+            {/* Reset + preview */}
+            <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",paddingTop:8,borderTop:"1px solid "+C.bd2}}>
+              <button onClick={()=>{if(window.confirm("Reset all cargo filter groups to defaults? This removes any custom groups you added.")) setGroups(defaultGroups());}}
+                style={{fontSize:11,fontWeight:600,padding:"4px 12px",borderRadius:5,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit"}}>Reset to defaults</button>
+              <span style={{fontSize:11,color:C.faint}}>Preview:</span>
+              {groups.map(g=>(
+                <span key={g.id} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:5,border:"1px solid rgba(88,166,255,0.3)",background:"rgba(88,166,255,0.1)",color:"#c8deff",fontFamily:"inherit"}}>{g.label}</span>
+              ))}
+            </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Region Filter Groups" subtitle="Each group creates a Region filter button in the Positions report. Aliases are matched against the vessel's open port.">
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div>
               <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {groups.filter(g=>(g.category||"grade")===cat.id).map(g=>(
+                {regionGroups.map(g=>(
                   <GroupRow key={g.id} g={g}
-                    editing={editing}
-                    onStartEdit={()=>startEdit(g)}
-                    onSaveEdit={saveEdit}
-                    onCancelEdit={()=>setEditing(null)}
-                    onDelete={()=>del(g.id,g.label)}
-                    editLabel={editLabel} setEditLabel={setEditLabel}
-                    editAliases={editAliases} setEditAliases={setEditAliases}
-                    editCategory={editCategory} setEditCategory={setEditCategory}
-                    categories={CATEGORIES}
+                    editing={regionEditing}
+                    onStartEdit={()=>startRegionEdit(g)}
+                    onSaveEdit={saveRegionEdit}
+                    onCancelEdit={()=>setRegionEditing(null)}
+                    onDelete={()=>delRegion(g.id,g.label)}
+                    editLabel={regionEditLabel} setEditLabel={setRegionEditLabel}
+                    editAliases={regionEditAliases} setEditAliases={setRegionEditAliases}
+                    editCategory="region" setEditCategory={()=>{}}
+                    categories={REGION_CATEGORIES}
                   />
                 ))}
               </div>
             </div>
-          ))}
 
-          {/* Add new group */}
-          <div style={{display:"flex",flexDirection:"column",gap:8,padding:"8px",background:C.bg2,borderRadius:6,border:"1px solid "+C.bd2}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>+ Add new filter group</div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
-              <div style={{flex:"0 0 140px"}}>
-                <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Category</div>
-                <select value={newCategory} onChange={e=>setNewCategory(e.target.value)} style={sel}>
-                  {CATEGORIES.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
-                </select>
+            {/* Add new region */}
+            <div style={{display:"flex",flexDirection:"column",gap:8,padding:"8px",background:C.bg2,borderRadius:6,border:"1px solid "+C.bd2}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>+ Add new region</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
+                <div style={{flex:"0 0 150px"}}>
+                  <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Region label</div>
+                  <input value={regionNewLabel} onChange={e=>setRegionNewLabel(e.target.value)} style={inp} placeholder="e.g. WC US"/>
+                </div>
+                <div style={{flex:1,minWidth:200}}>
+                  <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Aliases (comma-separated port names/keywords)</div>
+                  <input value={regionNewAliases} onChange={e=>setRegionNewAliases(e.target.value)} style={inp} placeholder="e.g. Los Angeles, Long Beach, Oakland"
+                    onKeyDown={e=>e.key==="Enter"&&addRegionGroup()}/>
+                </div>
+                <button onClick={addRegionGroup} style={{fontSize:12,fontWeight:600,padding:"6px 14px",borderRadius:5,border:"1px solid rgba(88,166,255,0.5)",background:"rgba(88,166,255,0.15)",color:"#9ec5ff",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Add region</button>
               </div>
-              <div style={{flex:"0 0 150px"}}>
-                <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Button label</div>
-                <input value={newLabel} onChange={e=>setNewLabel(e.target.value)} style={inp} placeholder="e.g. UKC Ports"/>
-              </div>
-              <div style={{flex:1,minWidth:200}}>
-                <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Aliases (comma-separated)</div>
-                <input value={newAliases} onChange={e=>setNewAliases(e.target.value)} style={inp} placeholder="e.g. ARA, Rotterdam, Amsterdam"
-                  onKeyDown={e=>e.key==="Enter"&&addGroup()}/>
-              </div>
-              <button onClick={addGroup} style={{fontSize:12,fontWeight:600,padding:"6px 14px",borderRadius:5,border:"1px solid rgba(88,166,255,0.5)",background:"rgba(88,166,255,0.15)",color:"#9ec5ff",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Add group</button>
             </div>
-          </div>
 
-          {/* Reset + preview */}
-          <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",paddingTop:8,borderTop:"1px solid "+C.bd2}}>
-            <button onClick={()=>{if(window.confirm("Reset all cargo filter groups to defaults? This removes any custom groups you added.")) setGroups(defaultGroups());}}
-              style={{fontSize:11,fontWeight:600,padding:"4px 12px",borderRadius:5,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit"}}>Reset to defaults</button>
-            <span style={{fontSize:11,color:C.faint}}>Preview:</span>
-            {groups.map(g=>(
-              <span key={g.id} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:5,border:"1px solid rgba(88,166,255,0.3)",background:"rgba(88,166,255,0.1)",color:"#c8deff",fontFamily:"inherit"}}>{g.label}</span>
-            ))}
-          </div>
-        </div>
-      </SectionCard>
-
-      <SectionCard title="Region Filter Groups" subtitle="Each group creates a Region filter button in the Positions report. Aliases are matched against the vessel's open port.">
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <div>
-            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",paddingTop:8,borderTop:"1px solid "+C.bd2}}>
+              <button onClick={()=>{if(window.confirm("Reset all region groups to defaults? This removes any custom regions/aliases you added.")) setRegionGroups(defaultRegionGroups());}}
+                style={{fontSize:11,fontWeight:600,padding:"4px 12px",borderRadius:5,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit"}}>Reset to defaults</button>
+              <span style={{fontSize:11,color:C.faint}}>Preview:</span>
               {regionGroups.map(g=>(
-                <GroupRow key={g.id} g={g}
-                  editing={regionEditing}
-                  onStartEdit={()=>startRegionEdit(g)}
-                  onSaveEdit={saveRegionEdit}
-                  onCancelEdit={()=>setRegionEditing(null)}
-                  onDelete={()=>delRegion(g.id,g.label)}
-                  editLabel={regionEditLabel} setEditLabel={setRegionEditLabel}
-                  editAliases={regionEditAliases} setEditAliases={setRegionEditAliases}
-                  editCategory="region" setEditCategory={()=>{}}
-                  categories={REGION_CATEGORIES}
-                />
+                <span key={g.id} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:5,border:"1px solid rgba(88,166,255,0.3)",background:"rgba(88,166,255,0.1)",color:"#c8deff",fontFamily:"inherit"}}>{g.label}</span>
               ))}
             </div>
-          </div>
-
-          {/* Add new region */}
-          <div style={{display:"flex",flexDirection:"column",gap:8,padding:"8px",background:C.bg2,borderRadius:6,border:"1px solid "+C.bd2}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>+ Add new region</div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
-              <div style={{flex:"0 0 150px"}}>
-                <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Region label</div>
-                <input value={regionNewLabel} onChange={e=>setRegionNewLabel(e.target.value)} style={inp} placeholder="e.g. WC US"/>
-              </div>
-              <div style={{flex:1,minWidth:200}}>
-                <div style={{fontSize:11,color:C.faint,marginBottom:3}}>Aliases (comma-separated port names/keywords)</div>
-                <input value={regionNewAliases} onChange={e=>setRegionNewAliases(e.target.value)} style={inp} placeholder="e.g. Los Angeles, Long Beach, Oakland"
-                  onKeyDown={e=>e.key==="Enter"&&addRegionGroup()}/>
-              </div>
-              <button onClick={addRegionGroup} style={{fontSize:12,fontWeight:600,padding:"6px 14px",borderRadius:5,border:"1px solid rgba(88,166,255,0.5)",background:"rgba(88,166,255,0.15)",color:"#9ec5ff",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Add region</button>
+            <div style={{fontSize:10,color:C.faint,fontStyle:"italic"}}>
+              Note: like Cargo Filter Groups, this is stored on this device only (not synced via Supabase) — set it up again on other devices if you use more than one.
             </div>
           </div>
-
-          <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",paddingTop:8,borderTop:"1px solid "+C.bd2}}>
-            <button onClick={()=>{if(window.confirm("Reset all region groups to defaults? This removes any custom regions/aliases you added.")) setRegionGroups(defaultRegionGroups());}}
-              style={{fontSize:11,fontWeight:600,padding:"4px 12px",borderRadius:5,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit"}}>Reset to defaults</button>
-            <span style={{fontSize:11,color:C.faint}}>Preview:</span>
-            {regionGroups.map(g=>(
-              <span key={g.id} style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:5,border:"1px solid rgba(88,166,255,0.3)",background:"rgba(88,166,255,0.1)",color:"#c8deff",fontFamily:"inherit"}}>{g.label}</span>
-            ))}
-          </div>
-          <div style={{fontSize:10,color:C.faint,fontStyle:"italic"}}>
-            Note: like Cargo Filter Groups, this is stored on this device only (not synced via Supabase) — set it up again on other devices if you use more than one.
-          </div>
-        </div>
-      </SectionCard>
+        </SectionCard>
+      </div>
     </div>
   );
 }
