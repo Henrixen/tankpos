@@ -3801,9 +3801,7 @@ const filtV=useMemo(()=>{
         )}
         {tab==="settings"&&(
           <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px"}}>
-            <TagManager/>
-            <div style={{height:1,background:C.bd2,margin:"4px 0"}}/>
-            {/* Original settings component */}
+            {/* SettingsTab contains the current Tag Management section */}
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
           </div>
         )}
