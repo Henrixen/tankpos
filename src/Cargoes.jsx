@@ -15,13 +15,13 @@ const card={background:C.bg2,border:"1px solid "+C.bd,borderRadius:7};
 
 const POS_TH={
   background:C.bg2,color:"rgba(120,160,220,0.58)",fontSize:10,fontWeight:700,
-  textTransform:"uppercase",letterSpacing:"0.06em",padding:"6px 8px",
+  textTransform:"uppercase",letterSpacing:"0.06em",padding:"6px 10px",
   borderBottom:"1px solid rgba(58,130,246,0.12)",textAlign:"left",
   whiteSpace:"nowrap",verticalAlign:"middle",fontFamily:"sans-serif"
 };
 const POS_TD={
-  padding:"5px 8px",color:C.tx,fontWeight:500,fontSize:12,
-  borderBottom:"1px solid rgba(255,255,255,0.018)",verticalAlign:"middle",
+  padding:"6px 10px",color:"#d9e8ff",fontWeight:500,fontSize:12,
+  borderBottom:"1px solid rgba(255,255,255,0.035)",verticalAlign:"middle",
   whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
   textTransform:"uppercase",fontFamily:"sans-serif",lineHeight:"18px"
 };
@@ -276,6 +276,8 @@ function AddRow({onSave,onClose,quotes=false}){
 
 export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,onAddCargoes,onAddC,onDelC,onAddVessels,onCargoSearch}){
  const [search,setSearch]=useState(""),[status,setStatus]=useState("ALL"),[time,setTime]=useState(""),[grade,setGrade]=useState(""),[tag,setTag]=useState(""),[parseTag,setParseTag]=useState(""),[showAdd,setShowAdd]=useState(false),[sort,setSort]=useState("added"),[dir,setDir]=useState(-1);
+ const [page,setPage]=useState(1);
+ const PAGE_SIZE=200;
  const [hoverRowId,setHoverRowId]=useState(null);
  const [selected,setSelected]=useState(()=>new Set());
  const {week,monthly}=useMonthly();
@@ -289,14 +291,16 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
   if(search&&!JSON.stringify(c).toLowerCase().includes(search.toLowerCase()))return false;return true;});
   const field=sort==="added"?"added":sort;a=[...a].sort((x,y)=>{let A=x[field]||x.updated||"",B=y[field]||y.updated||"";if(field==="added"||field==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime();}return(A<B?-1:A>B?1:0)*dir});return a;
  },[cargoes,search,status,time,grade,tag,sort,dir]);
+ useEffect(()=>{setPage(1);},[search,status,time,grade,tag,sort,dir]);
+ const pageRows=useMemo(()=>filtered.slice(0,page*PAGE_SIZE),[filtered,page]);
  const widths=["1.5%","4.5%","11%","10%","4%","6%","8%","11%","4.5%","4.5%","7%","14%","4%","7%","1.5%","1.5%"];
  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
   <div style={{display:"flex",gap:10,height:260}}>
    <div style={{flex:"0 0 25%",display:"flex",flexDirection:"column",gap:4}}>
     <div style={{...card,padding:"5px 8px",display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:9,color:C.faint,fontWeight:800}}>TAG ON PARSE</span>{tagList().map(t=><button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={btn(parseTag===t)}>{t}</button>)}</div>
-    <div style={{flex:1,minHeight:0}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const u=localStorage.getItem("signal_user")||"H";const r=await onAddCargoes(p.map(c=>({...c,entered_by:u,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div>
+    <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const u=localStorage.getItem("signal_user")||"H";const r=await onAddCargoes(p.map(c=>({...c,entered_by:u,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div>
    </div>
-   <div style={{flex:"0 0 25%",...card,padding:8,display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+   <div style={{flex:"0 0 25%",...card,padding:8,display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,overflow:"auto"}}>
     <div><b style={{fontSize:9,color:C.blue}}>GRADE</b>{grades.map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={{...btn(grade===g.id),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{g.label}</button>)}</div>
     <div><b style={{fontSize:9,color:C.dim}}>PERIOD</b>{[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={{...btn(time===k),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{l}</button>)}</div>
     <div><b style={{fontSize:9,color:C.pink}}>TAG</b>{tags.map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={{...btn(tag===t),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{t}</button>)}</div>
@@ -315,8 +319,8 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
   <div style={POS_WRAP}>
    <table style={POS_TABLE}>
     <colgroup>{widths.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
-    <thead><tr>{["","Status","Vessel","Charterer","Qty","Cargo","Load","Disch","From","To","Freight","Comment","Tag","Updated","",""].map((h,i)=>i===0?<th key={i} onClick={()=>{const ids=filtered.slice(0,200).map(x=>x.id);const all=ids.length>0&&ids.every(id=>selected.has(id));setSelected(p=>{const n=new Set(p);ids.forEach(id=>all?n.delete(id):n.add(id));return n})}} style={{...POS_TH,textAlign:"center",cursor:"pointer",padding:"3px 1px",lineHeight:"11px"}}><div style={{fontSize:11,color:filtered.slice(0,200).length>0&&filtered.slice(0,200).every(x=>selected.has(x.id))?"#4fc3f7":C.faint}}>{filtered.slice(0,200).length>0&&filtered.slice(0,200).every(x=>selected.has(x.id))?"[✓]":"[ ]"}</div><div style={{fontSize:7,color:C.faint}}>ALL</div></th>:<th key={i} style={{...POS_TH,textAlign:i>13||["Status","Qty","From","To","Freight","Tag","Updated"].includes(h)?"center":"left"}}>{h}</th>)}</tr></thead>
-    <tbody>{filtered.slice(0,200).map((c,i)=>{const rowBg=POS_ROW(i);return <tr key={c.id} style={{background:rowBg,height:32}}>
+    <thead><tr>{["","Status","Vessel","Charterer","Qty","Cargo","Load","Disch","From","To","Freight","Comment","Tag","Updated","",""].map((h,i)=>i===0?<th key={i} onClick={()=>{const ids=pageRows.map(x=>x.id);const all=ids.length>0&&ids.every(id=>selected.has(id));setSelected(p=>{const n=new Set(p);ids.forEach(id=>all?n.delete(id):n.add(id));return n})}} style={{...POS_TH,textAlign:"center",cursor:"pointer",padding:"3px 1px",lineHeight:"11px"}}><div style={{fontSize:11,color:pageRows.length>0&&pageRows.every(x=>selected.has(x.id))?"#4fc3f7":C.faint}}>{pageRows.length>0&&pageRows.every(x=>selected.has(x.id))?"[✓]":"[ ]"}</div><div style={{fontSize:7,color:C.faint}}>ALL</div></th>:<th key={i} style={{...POS_TH,textAlign:i>13||["Status","Qty","From","To","Freight","Tag","Updated"].includes(h)?"center":"left"}}>{h}</th>)}</tr></thead>
+    <tbody>{pageRows.map((c,i)=>{const rowBg=POS_ROW(i);return <tr key={c.id} style={{background:rowBg,height:32}}>
      <td onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} style={{...POS_TD,textAlign:"center",padding:"0 2px",overflow:"visible"}}><span role="checkbox" aria-checked={selected.has(c.id)} tabIndex={0} onClick={e=>{e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}} onKeyDown={e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}}} style={{fontSize:12,fontWeight:500,color:selected.has(c.id)?"#4fc3f7":C.faint,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>{selected.has(c.id)?"[✓]":"[ ]"}</span></td>
      <td onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:500,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>
      <Editable value={c.vessel||""} color={C.blue} onSave={v=>onUpdateC(c.id,"vessel",v)}/>
@@ -336,5 +340,12 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
     </tr>})}</tbody>
    </table>
   </div>
+  {filtered.length > pageRows.length && (
+    <div style={{textAlign:"center",padding:"8px 0"}}>
+      <button onClick={()=>setPage(p=>p+1)} style={{...btn(),padding:"6px 18px",fontSize:11}}>
+        Show more ({filtered.length - pageRows.length} remaining)
+      </button>
+    </div>
+  )}
  </div>;
 }
