@@ -167,11 +167,13 @@ function RegionFilterInput({label,value,setter}){
 }
 function RegionCell({value,onSave}){
  const [edit,setEdit]=useState(false),[draft,setDraft]=useState(value||""),ref=useRef(null);
- function open(e){e?.stopPropagation();setDraft(value||"");setEdit(true);setTimeout(()=>{ref.current?.focus();ref.current?.select()},0)}
- function commit(raw=draft){const q=String(raw||"").trim(),hit=REGIONS.find(r=>r.toLowerCase()===q.toLowerCase());if(!q)onSave("");else if(hit)onSave(hit);setEdit(false)}
+ const matches=REGIONS.filter(r=>!draft.trim()||r.toLowerCase().includes(draft.trim().toLowerCase()));
+ function bestMatch(raw=draft){const q=String(raw||"").trim().toLowerCase();if(!q)return null;return REGIONS.find(r=>r.toLowerCase()===q)||REGIONS.find(r=>r.toLowerCase().startsWith(q))||REGIONS.find(r=>r.toLowerCase().includes(q))||null}
+ function open(e){e?.stopPropagation();setDraft("");setEdit(true);setTimeout(()=>{ref.current?.focus()},0)}
+ function commit(raw=draft){const q=String(raw||"").trim(),hit=bestMatch(raw);if(!q)onSave("");else if(hit)onSave(hit);setEdit(false)}
  return <td style={{...POS_TD,padding:edit?"1px 2px":POS_TD.padding,fontWeight:500,color:C.tx,position:"relative",overflow:"visible"}} onClick={open}>
    {!edit?value||"":<input ref={ref} value={draft} onClick={e=>e.stopPropagation()} onChange={e=>setDraft(e.target.value)} onBlur={()=>setTimeout(()=>commit(),150)} onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab"){e.preventDefault();commit()}if(e.key==="Escape")setEdit(false)}} style={{width:"100%",height:27,lineHeight:"25px",padding:"0 5px",margin:0,border:"1px solid rgba(58,130,246,.32)",borderRadius:4,outline:"none",boxShadow:"none",background:"rgba(20,39,66,.78)",color:C.tx,fontFamily:"inherit",fontSize:12,fontWeight:500,textTransform:"uppercase",boxSizing:"border-box"}}/>}
-   {edit&&<div onMouseDown={e=>e.preventDefault()} onClick={e=>e.stopPropagation()} style={{position:"absolute",left:8,top:"calc(100% - 1px)",zIndex:99999,minWidth:"calc(100% - 16px)",width:180,background:"#071223",border:"1px solid "+C.bd,borderRadius:5,padding:3,boxShadow:"0 8px 25px rgba(0,0,0,.65)",overflow:"visible"}}>{REGIONS.map(r=><div key={r} onMouseDown={e=>{e.preventDefault();e.stopPropagation();commit(r)}} style={{padding:"5px 7px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",background:r===value?"rgba(58,130,246,.12)":"transparent",color:r===value?"#79c0ff":C.tx}}>{r}</div>)}</div>}
+   {edit&&<div onMouseDown={e=>e.preventDefault()} onClick={e=>e.stopPropagation()} style={{position:"absolute",left:8,top:"calc(100% - 1px)",zIndex:99999,minWidth:"calc(100% - 16px)",width:180,background:"#071223",border:"1px solid "+C.bd,borderRadius:5,padding:3,boxShadow:"0 8px 25px rgba(0,0,0,.65)",overflow:"visible"}}>{matches.map(r=><div key={r} onMouseDown={e=>{e.preventDefault();e.stopPropagation();commit(r)}} style={{padding:"5px 7px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",background:r===value?"rgba(58,130,246,.12)":"transparent",color:r===value?"#79c0ff":C.tx}}>{r}</div>)}</div>}
  </td>;
 }
 function editorInitials(v){
@@ -228,7 +230,7 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,stat
     <div><b style={{fontSize:11,color:C.blue}}>GRADE</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{grades.slice(0,6).map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={btn(grade===g.id)}>{g.label}</button>)}</div></div>
     <div><b style={{fontSize:11,color:C.dim}}>PERIOD</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={btn(time===k)}>{l}</button>)}</div></div>
     <div><b style={{fontSize:11,color:C.pink}}>TAG</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{tags.slice(0,7).map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={btn(tag===t)}>{t}</button>)}</div></div>
-    {[["EX REGION",ex,setEx],["TO REGION",toR,setToR]].map(([lab,val,setter])=><RegionFilterInput key={lab} label={lab} value={val} setter={setter}/>)}
+    {[["EX REGION",ex,setEx],["TO REGION",toR,setToR]].map(([lab,val,setter])=><div key={lab} style={{minWidth:0}}><b style={{fontSize:9,color:C.blue}}>{lab}</b><div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:4}}><button onClick={()=>setter("")} style={btn(!val)}>ALL</button>{REGIONS.map(r=><button key={r} onClick={()=>setter(val===r?"":r)} style={btn(val===r)}>{r}</button>)}</div></div>)}
    </div>
    <CargoMonthChart data={monthly} total={cargoTotal||cargoes.length}/>
   </div>
