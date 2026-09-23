@@ -14,34 +14,19 @@ function tagList(){try{const x=JSON.parse(localStorage.getItem("signal_custom_ta
 const card={background:C.bg2,border:"1px solid "+C.bd,borderRadius:7};
 
 const POS_TH={
-  padding:"7px 10px",
-  color:"rgba(120,160,220,0.55)",
-  fontWeight:700,
-  fontSize:11,
-  textTransform:"uppercase",
-  letterSpacing:"0.08em",
-  textAlign:"left",
-  background:C.bg4,
-  borderBottom:"1px solid rgba(58,130,246,0.14)",
-  whiteSpace:"nowrap",
-  verticalAlign:"middle",
-  fontFamily:"sans-serif"
+  background:C.bg2,color:"rgba(120,160,220,0.58)",fontSize:10,fontWeight:700,
+  textTransform:"uppercase",letterSpacing:"0.06em",padding:"6px 8px",
+  borderBottom:"1px solid rgba(58,130,246,0.12)",textAlign:"left",
+  whiteSpace:"nowrap",verticalAlign:"middle",fontFamily:"sans-serif"
 };
 const POS_TD={
-  padding:"6px 10px",
-  color:"#d9e8ff",
-  fontWeight:500,
-  fontSize:12,
-  borderBottom:"1px solid rgba(255,255,255,0.035)",
-  verticalAlign:"middle",
-  whiteSpace:"nowrap",
-  overflow:"hidden",
-  textOverflow:"ellipsis",
-  textTransform:"uppercase",
-  fontFamily:"sans-serif"
+  padding:"5px 8px",color:C.tx,fontWeight:500,fontSize:12,
+  borderBottom:"1px solid rgba(255,255,255,0.018)",verticalAlign:"middle",
+  whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
+  textTransform:"uppercase",fontFamily:"sans-serif",lineHeight:"18px"
 };
 const POS_ROW=i=>i%2===0?"rgba(7,15,28,0.96)":"rgba(22,37,64,0.82)";
-const POS_TABLE={width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:11,tableLayout:"fixed",fontFamily:"sans-serif"};
+const POS_TABLE={width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:12,tableLayout:"fixed",fontFamily:"inherit"};
 const POS_WRAP={border:"1px solid "+C.bd,borderRadius:8,overflow:"auto",minWidth:0,background:C.bg2,boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)"};
 
 const btn=(active=false)=>({fontSize:10,fontWeight:700,padding:"3px 7px",borderRadius:3,border:"1px solid "+(active?C.blue:C.bd),background:active?"rgba(88,166,255,.18)":C.bg3,color:active?"#d9ecff":"#9fc3f5",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
@@ -67,7 +52,7 @@ function CargoMonthChart({ data, total }){
   const W=Math.max(counts.length,2);
   const maxC=Math.max(1,...counts.map(b=>b.count));
   const SVG_W=size.w, SVG_H=size.h;
-  const PAD={t:20,r:12,b:28,l:36};
+  const PAD={t:16,r:24,b:8,l:25};
   const iW=Math.max(1,SVG_W-PAD.l-PAD.r);
   const iH=Math.max(1,SVG_H-PAD.t-PAD.b);
   const pts=counts.map((bkt,i)=>({
@@ -83,12 +68,12 @@ function CargoMonthChart({ data, total }){
   const peakIdx=counts.reduce((mx,b,i)=>b.count>counts[mx].count?i:mx,0);
 
   return(
-    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"10px 12px 8px",display:"flex",flexDirection:"column",gap:4,minWidth:0,boxSizing:"border-box",height:260}}>
+    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"7px 7px 1px",display:"flex",flexDirection:"column",gap:1,minWidth:0,boxSizing:"border-box",height:260}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
         <div style={{fontSize:10,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em"}}>Cargoes entered by month</div>
         <div style={{fontSize:11,color:"rgba(88,166,255,0.7)",fontWeight:700}}>{total.toLocaleString()} total</div>
       </div>
-      <div ref={wrapRef} style={{flex:1,minHeight:0,width:"100%"}}>
+      <div ref={wrapRef} style={{flex:1,minHeight:0,width:"100%",height:"100%",overflow:"hidden"}}>
         <svg width={SVG_W} height={SVG_H} viewBox={"0 0 "+SVG_W+" "+SVG_H} style={{display:"block",overflow:"visible"}}>
           <defs>
             <linearGradient id="cgGrad" x1="0" y1="0" x2="0" y2="1">
@@ -261,14 +246,24 @@ function RegionCell({value,onSave}){
  const matches=REGIONS.filter(r=>!draft||r.toLowerCase().startsWith(draft.toLowerCase())||r.toLowerCase().includes(draft.toLowerCase()));
  function commit(){const q=draft.trim(),hit=REGIONS.find(r=>r.toLowerCase()===q.toLowerCase())||REGIONS.find(r=>r.toLowerCase().startsWith(q.toLowerCase()));if(!q)onSave("");else if(hit)onSave(hit);setEdit(false);}
  return <td style={{padding:"6px 7px",fontWeight:700,color:C.tx,position:"relative"}} onClick={()=>{setDraft(value||"");setEdit(true);setTimeout(()=>ref.current?.focus(),0)}}>
- {!edit?value||"":<input ref={ref} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={()=>setTimeout(commit,80)} onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab"){e.preventDefault();commit()}if(e.key==="Escape")setEdit(false)}} style={{...input,width:"100%",height:24,fontWeight:700,textTransform:"uppercase",fontFamily:"inherit",background:"#071223"}}/>}
+ {!edit?value||"":<input ref={ref} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={()=>setTimeout(commit,80)} onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab"){e.preventDefault();commit()}if(e.key==="Escape")setEdit(false)}} style={{...input,width:"100%",height:24,fontWeight:700,textTransform:"uppercase",background:"#071223"}}/>}
  {edit&&matches.length>0&&<div style={{position:"absolute",left:4,top:29,zIndex:15000,minWidth:145,background:"#071223",border:"1px solid "+C.bd,borderRadius:5,padding:3,boxShadow:"0 8px 25px rgba(0,0,0,.65)"}}>{matches.slice(0,8).map(r=><div key={r} onMouseDown={e=>{e.preventDefault();onSave(r);setEdit(false)}} style={{padding:"4px 6px",fontSize:9,fontWeight:700,cursor:"pointer"}}>{r}</div>)}</div>}
  </td>;
 }
-function Editable({value,onSave,color,bold}){
+function editorInitials(v){
+ const x=String(v||"").trim();
+ if(!x)return "";
+ if(x==="H")return "HH";
+ if(x==="L")return "HL";
+ const p=x.split(/\s+/).filter(Boolean);
+ if(p.length>1)return (p[0][0]+p[p.length-1][0]).toUpperCase();
+ return x.slice(0,2).toUpperCase();
+}
+
+function Editable({value,onSave,color,bold,align="left"}){
  const [e,setE]=useState(false),[v,setV]=useState(value??"");useEffect(()=>setV(value??""),[value]);
- return <td onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} style={{...POS_TD,color:color||C.tx,fontWeight:bold?700:500}}>
- {e?<input autoFocus value={v} onChange={x=>setV(x.target.value)} onBlur={()=>{setE(false);if(v!==value)onSave(v)}} onKeyDown={x=>{if(x.key==="Enter"){x.currentTarget.blur()}if(x.key==="Escape"){setV(value??"");setE(false)}}} style={{...input,width:"100%",height:24,background:"#071223"}}/>:<span title={String(value||"")}>{value||""}</span>}</td>;
+ return <td onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} style={{...POS_TD,padding:e?"1px 2px":POS_TD.padding,color:color||C.tx,fontWeight:bold?700:500,textAlign:align}}>
+ {e?<input autoFocus value={v} onChange={x=>setV(x.target.value)} onBlur={()=>{setE(false);if(v!==value)onSave(v)}} onKeyDown={x=>{if(x.key==="Enter"){x.currentTarget.blur()}if(x.key==="Escape"){setV(value??"");setE(false)}}} style={{width:"100%",height:27,lineHeight:"25px",padding:"0 5px",margin:0,border:"1px solid rgba(58,130,246,.32)",borderRadius:4,outline:"none",boxShadow:"none",background:"rgba(20,39,66,.78)",color:color||C.tx,fontFamily:"inherit",fontSize:12,fontWeight:bold?700:500,textTransform:"uppercase",boxSizing:"border-box",textAlign:align}}/>:<span title={String(value||"")}>{value||""}</span>}</td>;
 }
 function AddRow({onSave,onClose,quotes=false}){
  const [r,setR]=useState({});const f=(k,p)=><input value={r[k]||""} onChange={e=>setR(x=>({...x,[k]:e.target.value}))} placeholder={p} style={{...input,width:"100%",height:25}}/>;
@@ -281,6 +276,8 @@ function AddRow({onSave,onClose,quotes=false}){
 
 export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,onAddCargoes,onAddC,onDelC,onAddVessels,onCargoSearch}){
  const [search,setSearch]=useState(""),[status,setStatus]=useState("ALL"),[time,setTime]=useState(""),[grade,setGrade]=useState(""),[tag,setTag]=useState(""),[parseTag,setParseTag]=useState(""),[showAdd,setShowAdd]=useState(false),[sort,setSort]=useState("added"),[dir,setDir]=useState(-1);
+ const [hoverRowId,setHoverRowId]=useState(null);
+ const [selected,setSelected]=useState(()=>new Set());
  const {week,monthly}=useMonthly();
  const groups=useMemo(()=>{try{return JSON.parse(localStorage.getItem("signal_cargo_filter_groups")||"[]")}catch{return[]}},[cargoes.length]);
  const grades=groups.filter(g=>(g.category||"grade")==="grade");
@@ -292,7 +289,7 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
   if(search&&!JSON.stringify(c).toLowerCase().includes(search.toLowerCase()))return false;return true;});
   const field=sort==="added"?"added":sort;a=[...a].sort((x,y)=>{let A=x[field]||x.updated||"",B=y[field]||y.updated||"";if(field==="added"||field==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime();}return(A<B?-1:A>B?1:0)*dir});return a;
  },[cargoes,search,status,time,grade,tag,sort,dir]);
- const widths=["1.5%","4.5%","8%","8%","4%","6%","7%","8%","4.5%","4.5%","6.5%","15%","4%","6%","1%","1.5%"];
+ const widths=["1.5%","4.5%","11%","10%","4%","6%","8%","11%","4.5%","4.5%","7%","14%","4%","7%","1.5%","1.5%"];
  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
   <div style={{display:"flex",gap:10,height:260}}>
    <div style={{flex:"0 0 25%",display:"flex",flexDirection:"column",gap:4}}>
@@ -318,25 +315,25 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
   <div style={POS_WRAP}>
    <table style={POS_TABLE}>
     <colgroup>{widths.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
-    <thead><tr>{["","Status","Vessel","Charterer","Qty","Cargo","Load","Disch","From","To","Freight","Comment","Tag","Updated","",""].map((h,i)=><th key={i} style={{...POS_TH,textAlign:i===0||i>13?"center":(["Qty","From","To","Freight"].includes(h)?"right":"left")}}>{h}</th>)}</tr></thead>
-    <tbody>{filtered.slice(0,200).map((c,i)=><tr key={c.id} style={{background:POS_ROW(i),height:27}}>
-     <td style={{...POS_TD,textAlign:"center",color:C.faint,padding:"0 2px"}}>[ ]</td>
-     <td onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:800,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>
+    <thead><tr>{["","Status","Vessel","Charterer","Qty","Cargo","Load","Disch","From","To","Freight","Comment","Tag","Updated","",""].map((h,i)=>i===0?<th key={i} onClick={()=>{const ids=filtered.slice(0,200).map(x=>x.id);const all=ids.length>0&&ids.every(id=>selected.has(id));setSelected(p=>{const n=new Set(p);ids.forEach(id=>all?n.delete(id):n.add(id));return n})}} style={{...POS_TH,textAlign:"center",cursor:"pointer",padding:"3px 1px",lineHeight:"11px"}}><div style={{fontSize:11,color:filtered.slice(0,200).length>0&&filtered.slice(0,200).every(x=>selected.has(x.id))?"#4fc3f7":C.faint}}>{filtered.slice(0,200).length>0&&filtered.slice(0,200).every(x=>selected.has(x.id))?"[✓]":"[ ]"}</div><div style={{fontSize:7,color:C.faint}}>ALL</div></th>:<th key={i} style={{...POS_TH,textAlign:i>13||["Status","Qty","From","To","Freight","Tag","Updated"].includes(h)?"center":"left"}}>{h}</th>)}</tr></thead>
+    <tbody>{filtered.slice(0,200).map((c,i)=>{const rowBg=POS_ROW(i);return <tr key={c.id} style={{background:rowBg,height:32}}>
+     <td onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} style={{...POS_TD,textAlign:"center",padding:"0 2px",overflow:"visible"}}><span role="checkbox" aria-checked={selected.has(c.id)} tabIndex={0} onClick={e=>{e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}} onKeyDown={e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}}} style={{fontSize:12,fontWeight:500,color:selected.has(c.id)?"#4fc3f7":C.faint,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>{selected.has(c.id)?"[✓]":"[ ]"}</span></td>
+     <td onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:500,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>
      <Editable value={c.vessel||""} color={C.blue} onSave={v=>onUpdateC(c.id,"vessel",v)}/>
      <Editable value={toTCase(c.charterer||"")} bold color="#79c0ff" onSave={v=>onUpdateC(c.id,"charterer",toTCase(v))}/>
-     <Editable value={normaliseQty(c.qty)} color={C.amber} onSave={v=>onUpdateC(c.id,"qty",normaliseQty(v))}/>
+     <Editable value={normaliseQty(c.qty)} align="center" color={C.amber} onSave={v=>onUpdateC(c.id,"qty",normaliseQty(v))}/>
      <Editable value={c.cargo||""} onSave={v=>onUpdateC(c.id,"cargo",v)}/>
      <Editable value={toTCase(c.load||"")} onSave={v=>onUpdateC(c.id,"load",toTCase(v))}/>
      <Editable value={toTCase(c.disch||"")} onSave={v=>onUpdateC(c.id,"disch",toTCase(v))}/>
-     <Editable value={fmtDateShort(c.from)} onSave={v=>onUpdateC(c.id,"from",v)}/>
-     <Editable value={fmtDateShort(c.to)} onSave={v=>onUpdateC(c.id,"to",v)}/>
-     <Editable value={fmtFreight(c.freight)||c.freight||""} color="#a8e6a3" onSave={v=>onUpdateC(c.id,"freight",fmtFreight(v)||v)}/>
+     <Editable value={fmtDateShort(c.from)} align="center" onSave={v=>onUpdateC(c.id,"from",v)}/>
+     <Editable value={fmtDateShort(c.to)} align="center" onSave={v=>onUpdateC(c.id,"to",v)}/>
+     <Editable value={fmtFreight(c.freight)||c.freight||""} align="center" color="#a8e6a3" onSave={v=>onUpdateC(c.id,"freight",fmtFreight(v)||v)}/>
      <Editable value={c.comment||""} color={C.dim} onSave={v=>onUpdateC(c.id,"comment",v)}/>
      <TagCell id={c.id} value={c.tag} onUpdate={onUpdateC}/>
      <td style={{...POS_TD,textAlign:"center",color:C.faint}}>{c.updated?new Date(c.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>
-     <td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}>{(c.entered_by==="H"||c.entered_by==="L")&&<span style={{fontSize:8,color:c.entered_by==="H"?C.blue:C.green}}>{c.entered_by}</span>}</td>
+     <td style={{...POS_TD,textAlign:"center",padding:0,verticalAlign:"middle",lineHeight:0}}>{editorInitials(c.entered_by)&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,padding:0,margin:0,borderRadius:"50%",boxSizing:"border-box",fontSize:7,fontWeight:700,lineHeight:"18px",textAlign:"center",verticalAlign:"middle",color:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?C.blue:C.green,border:"1px solid "+((c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{editorInitials(c.entered_by)}</span>}</td>
      <td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>confirm("Delete cargo?")&&onDelC(c.id)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td>
-    </tr>)}</tbody>
+    </tr>})}</tbody>
    </table>
   </div>
  </div>;
