@@ -32,7 +32,7 @@ const POS_WRAP={border:"1px solid "+C.bd,borderRadius:8,overflow:"auto",minWidth
 const btn=(active=false)=>({fontSize:10,fontWeight:700,padding:"3px 7px",borderRadius:3,border:"1px solid "+(active?C.blue:C.bd),background:active?"rgba(88,166,255,.18)":C.bg3,color:active?"#d9ecff":"#9fc3f5",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
 const input={background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:11,padding:"6px 7px",outline:"none",boxSizing:"border-box"};
 function weekBounds(offset=0){const n=new Date();n.setHours(0,0,0,0);const dow=(n.getDay()+6)%7;const m=new Date(n);m.setDate(n.getDate()-dow+offset*7);const s=new Date(m);s.setDate(m.getDate()+6);return[m,s];}
-function CargoMonthChart({ data, total }){
+function CargoMonthChart({ data, total, loading }){
   const wrapRef = React.useRef(null);
   const [size, setSize] = React.useState({ w:520, h:180 });
   React.useEffect(()=>{
@@ -48,7 +48,11 @@ function CargoMonthChart({ data, total }){
 
   const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const counts=data||[];
-  if(!counts.length) return null;
+  if(!counts.length) return (
+    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"7px 7px 1px",display:"flex",alignItems:"center",justifyContent:"center",minWidth:0,boxSizing:"border-box",height:260}}>
+      <span style={{fontSize:11,color:C.faint}}>{loading?"Loading…":"No data"}</span>
+    </div>
+  );
   const W=Math.max(counts.length,2);
   const maxC=Math.max(1,...counts.map(b=>b.count));
   const SVG_W=size.w, SVG_H=size.h;
@@ -227,12 +231,14 @@ function BunkerHeader(){
  return <div style={{display:"flex",alignItems:"center",gap:5,fontSize:9,color:C.faint}}>BUNKER <Suspense fallback={null}><RateMatrixBunkerInput value={b?.ARA_MGO||b?.ara_mgo||null}/></Suspense></div>;
 }
 function useMonthly(){
- const [week,setWeek]=useState({thisWk:0,lastWk:0}),[monthly,setMonthly]=useState([]);
+ const [week,setWeek]=useState({thisWk:0,lastWk:0}),[monthly,setMonthly]=useState([]),[loading,setLoading]=useState(true);
  useEffect(()=>{(async()=>{const [tm,ts]=weekBounds(0),[lm,ls]=weekBounds(-1),fmt=d=>d.toISOString().slice(0,10);
   const [{count:a},{count:b}]=await Promise.all([supabase.from("cargoes").select("*",{count:"exact",head:true}).gte("updated",fmt(tm)).lte("updated",fmt(ts)+"T23:59:59"),supabase.from("cargoes").select("*",{count:"exact",head:true}).gte("updated",fmt(lm)).lte("updated",fmt(ls)+"T23:59:59")]);setWeek({thisWk:a||0,lastWk:b||0});
-  const now=new Date(),arr=[];for(let i=23;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1),n=new Date(d.getFullYear(),d.getMonth()+1,1);const {count}=await supabase.from("cargoes").select("*",{count:"exact",head:true}).gte("updated",d.toISOString().slice(0,10)).lt("updated",n.toISOString().slice(0,10));arr.push({year:d.getFullYear(),month:d.getMonth(),count:count||0});}setMonthly(arr);
+  const now=new Date(),months=[];for(let i=23;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push(d);}
+  const results=await Promise.all(months.map(d=>{const n=new Date(d.getFullYear(),d.getMonth()+1,1);return supabase.from("cargoes").select("*",{count:"exact",head:true}).gte("updated",d.toISOString().slice(0,10)).lt("updated",n.toISOString().slice(0,10)).then(({count})=>({year:d.getFullYear(),month:d.getMonth(),count:count||0}));}));
+  setMonthly(results);setLoading(false);
  })();},[]);
- return {week,monthly};
+ return {week,monthly,loading};
 }
 function TagCell({id,value,onUpdate}){
  const [open,setOpen]=useState(false),[pos,setPos]=useState({top:0,left:0}),ref=useRef(null);
@@ -280,7 +286,7 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
  const PAGE_SIZE=200;
  const [hoverRowId,setHoverRowId]=useState(null);
  const [selected,setSelected]=useState(()=>new Set());
- const {week,monthly}=useMonthly();
+ const {week,monthly,loading:monthlyLoading}=useMonthly();
  const groups=useMemo(()=>{try{return JSON.parse(localStorage.getItem("signal_cargo_filter_groups")||"[]")}catch{return[]}},[cargoes.length]);
  const grades=groups.filter(g=>(g.category||"grade")==="grade");
  const tags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
@@ -297,16 +303,16 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
   <div style={{display:"flex",gap:10,height:260}}>
    <div style={{flex:"0 0 25%",display:"flex",flexDirection:"column",gap:4}}>
-    <div style={{...card,padding:"5px 8px",display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}><span style={{fontSize:9,color:C.faint,fontWeight:800}}>TAG ON PARSE</span>{tagList().map(t=><button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={btn(parseTag===t)}>{t}</button>)}</div>
+    <div style={{...card,padding:"14px 10px",display:"flex",gap:5,flexWrap:"wrap",alignContent:"flex-start"}}><span style={{fontSize:9,color:C.faint,fontWeight:800,width:"100%",marginBottom:2}}>TAG ON PARSE</span>{tagList().map(t=><button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={btn(parseTag===t)}>{t}</button>)}</div>
     <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const u=localStorage.getItem("signal_user")||"H";const r=await onAddCargoes(p.map(c=>({...c,entered_by:u,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div>
    </div>
-   <div style={{flex:"0 0 25%",...card,padding:8,display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,overflow:"auto"}}>
-    <div><b style={{fontSize:9,color:C.blue}}>GRADE</b>{grades.map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={{...btn(grade===g.id),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{g.label}</button>)}</div>
-    <div><b style={{fontSize:9,color:C.dim}}>PERIOD</b>{[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={{...btn(time===k),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{l}</button>)}</div>
-    <div><b style={{fontSize:9,color:C.pink}}>TAG</b>{tags.map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={{...btn(tag===t),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{t}</button>)}</div>
+   <div style={{flex:"0 0 25%",...card,padding:8,display:"flex",flexDirection:"column",gap:8,overflow:"hidden"}}>
+    <div><b style={{fontSize:9,color:C.blue}}>GRADE</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{grades.map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={btn(grade===g.id)}>{g.label}</button>)}</div></div>
+    <div><b style={{fontSize:9,color:C.dim}}>PERIOD</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={btn(time===k)}>{l}</button>)}</div></div>
+    <div><b style={{fontSize:9,color:C.pink}}>TAG</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{tags.map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={btn(tag===t)}>{t}</button>)}</div></div>
    </div>
    <div style={{flex:"0 0 25%"}}><Suspense fallback={null}><RateMatrixCard collapsedHeight={260} bunkerHeader={<BunkerHeader/>}/></Suspense></div>
-   <CargoMonthChart data={monthly} total={cargoTotal||cargoes.length}/>
+   <CargoMonthChart data={monthly} total={cargoTotal||cargoes.length} loading={monthlyLoading}/>
   </div>
   <div style={{...card,padding:"5px 8px",display:"flex",gap:6,alignItems:"center"}}>
    <button onClick={()=>setShowAdd(true)} style={{...btn(),color:C.amber}}>+ Add cargo</button>
