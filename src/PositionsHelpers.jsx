@@ -416,16 +416,28 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
   const [listSort, setListSort] = React.useState({ key: "vessel", dir: 1 }); // vessel list sort
   const wrapRef = useRef(null);
   const [W, setW] = React.useState(760);
-  const H = 200;
+  const [H, setH] = React.useState(200);
   const PAD = { top: 16, right: 16, bottom: 38, left: 40 };
 
   // responsive width
   useEffect(() => {
     if (!wrapRef.current) return;
-    const ro = new ResizeObserver(entries => {
-      for (const e of entries) setW(Math.max(360, e.contentRect.width));
-    });
-    ro.observe(wrapRef.current);
+    const wrap = wrapRef.current;
+    const parent = wrap.parentElement;
+    const resize = () => {
+      setW(Math.max(360, wrap.getBoundingClientRect().width));
+      // Keep the normal History chart at its existing 200px height. When the
+      // Positions chart panel is expanded (same container used by Open Segments),
+      // use the extra vertical space for the SVG instead of leaving it blank.
+      if (parent) {
+        const available = parent.getBoundingClientRect().height - 82;
+        setH(Math.max(200, Math.floor(available)));
+      }
+    };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(wrap);
+    if (parent) ro.observe(parent);
     return () => ro.disconnect();
   }, []);
 
