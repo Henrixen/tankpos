@@ -150,21 +150,20 @@ function TagCell({id,value,onUpdate}){
  </div></>}</>;
 }
 function RegionFilterInput({label,value,setter}){
- const [query,setQuery]=useState("");
- const matches=REGIONS.filter(r=>!query||r.toLowerCase().includes(query.toLowerCase()));
- function pick(r){setter(x=>x===r?"":r);setQuery("");}
- function onKeyDown(e){
-  if(e.key==="Enter"&&matches.length){e.preventDefault();pick(matches[0]);}
+ const [open,setOpen]=useState(false),[q,setQ]=useState("");
+ const opts=REGION_OPTIONS.filter(x=>!q||x.toLowerCase().includes(q.toLowerCase()));
+ function typeRegion(v){
+   setQ(v);
+   setOpen(true);
+   const term=v.trim().toLowerCase();
+   if(!term){setter("");return}
+   const exact=REGION_OPTIONS.find(x=>x.toLowerCase()===term);
+   const starts=REGION_OPTIONS.find(x=>x.toLowerCase().startsWith(term));
+   const contains=REGION_OPTIONS.find(x=>x.toLowerCase().includes(term));
+   const hit=exact||starts||contains;
+   if(hit)setter(hit);
  }
- return <div>
-  <b style={{fontSize:9,color:C.blue}}>{label}</b>
-  <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={onKeyDown}
-   placeholder={value||"Type to filter…"} style={{...input,width:"100%",marginTop:3,marginBottom:3,height:22,fontSize:10}}/>
-  <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:2}}>
-   <button onClick={()=>{setter("");setQuery("");}} style={btn(!value)}>All</button>
-   {matches.map(r=><button key={r} onClick={()=>pick(r)} style={btn(value===r)}>{r}</button>)}
-  </div>
- </div>;
+ return <div style={{minWidth:0,position:"relative"}}><b style={{fontSize:9,color:C.blue}}>{label}</b><input value={q||value} onFocus={()=>setOpen(true)} onChange={e=>typeRegion(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&opts[0]){setter(opts[0]);setQ("");setOpen(false)}else if(e.key==="Escape"){setOpen(false);setQ("")}}} placeholder="Type to filter..." style={{...input,marginTop:4,width:"100%",boxSizing:"border-box"}}/>{open&&<><div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:1000}}/><div style={{position:"absolute",zIndex:1001,top:42,left:0,right:0,background:C.bg2,border:"1px solid "+C.bd2,borderRadius:4,maxHeight:180,overflowY:"auto",boxShadow:"0 8px 20px #0008"}}><button onMouseDown={e=>e.preventDefault()} onClick={()=>{setter("");setQ("");setOpen(false)}} style={{...btn(!value),display:"block",width:"100%",textAlign:"left"}}>ALL</button>{opts.map(x=><button key={x} onMouseDown={e=>e.preventDefault()} onClick={()=>{setter(x);setQ("");setOpen(false)}} style={{...btn(value===x),display:"block",width:"100%",textAlign:"left"}}>{x}</button>)}</div></>}</div>
 }
 function RegionCell({value,onSave}){
  const [edit,setEdit]=useState(false),[draft,setDraft]=useState(value||""),ref=useRef(null);
@@ -220,7 +219,7 @@ const xa=new Date(x.added||0).getTime()||0,ya=new Date(y.added||0).getTime()||0;
 return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,status,time,tag,grade,ex,toR,sort,dir]);
  useEffect(()=>{setPage(1);},[search,status,time,tag,grade,ex,toR,sort,dir]);
  const pageRows=useMemo(()=>filtered.slice(0,page*PAGE_SIZE),[filtered,page]);
- const allCols=[["status","Status",3.5],["ex_region","Ex Region",4.5],["to_region","To Region",4.5],["p_and_c","P&C",3],["intelligence","Intel",4],["vessel","Vessel",7],["charterer","Charterer",7.5],["qty","Qty",4],["cargo","Cargo",6],["load","Load",8],["disch","Disch",8.5],["from","From",4.5],["to","To",4.5],["freight","Freight",7],["comment","Comment",9],["tag","Tag",5],["source","Source",5],["updated","Updated",6.5]];
+ const allCols=[["status","Status",3.5],["ex_region","Ex Region",5.5],["to_region","To Region",5.5],["p_and_c","P&C",3],["intelligence","Intel",4],["vessel","Vessel",7],["charterer","Charterer",6.5],["qty","Qty",4],["cargo","Cargo",6],["load","Load",8],["disch","Disch",7.5],["from","From",4.5],["to","To",4.5],["freight","Freight",7],["comment","Comment",9],["tag","Tag",5],["source","Source",5],["updated","Updated",6.5]];
  const shown=allCols.filter(([k])=>visible.has(k));
  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
   <div style={{display:"flex",gap:10,height:260}}>
