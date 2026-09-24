@@ -282,7 +282,7 @@ function gridMove(e,save,row,col,maxCol,down=false){
  if(e.key==="Tab"){e.preventDefault();save?.();const next=e.shiftKey?col-1:col+1;if(next<0)focusGrid(row-1,maxCol);else if(next>maxCol)focusGrid(row+1,0);else focusGrid(row,next)}
  else if(e.key==="Enter"){e.preventDefault();save?.();focusGrid(row+1,col)}
 }
-function focusGrid(row,col){setTimeout(()=>{const el=document.querySelector(`[data-grid-row="${row}"][data-grid-col="${col}"]`);if(el){el.focus();el.click()}},0)}
+function focusGrid(row,col){setTimeout(()=>{const el=document.querySelector(`[data-grid-row="${row}"][data-grid-col="${col}"]`);if(el)el.focus()},0)}
 
 function Editable({value,onSave,color,bold,align="left",row,col,maxCol}){
  const [e,setE]=useState(false),[v,setV]=useState(value??"");useEffect(()=>setV(value??""),[value]);
