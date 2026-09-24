@@ -26,15 +26,15 @@ async function fetchWeek(year,week){
   const txt=strip(await getText(url));
   const section=(txt.match(/\bVLCC\b([\s\S]{0,6500}?)(?:\bSuezmax\b|\bAframax\b|\bClean\b|$)/i)||[])[1]||txt;
   const wsM=
-    section.match(/TD3C[\s\S]{0,1400}?\bWS\s*([0-9]+(?:\.[0-9]+)?)/i) ||
-    section.match(/Middle East[\s\S]{0,1400}?\bWS\s*([0-9]+(?:\.[0-9]+)?)/i);
+    section.match(/TD3C[\s\S]{0,1400}?\bWS\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i) ||
+    section.match(/Middle East[\s\S]{0,1400}?\bWS\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i);
   const tceM=
     section.match(/TD3C[\s\S]{0,2200}?(?:daily\s+round-trip\s+TCE|round-trip\s+TCE|TCE)[^$0-9]{0,220}\$?\s*([0-9][0-9,]+)/i) ||
     section.match(/(?:daily\s+round-trip\s+TCE|round-trip\s+TCE|TCE)[^$0-9]{0,220}\$?\s*([0-9][0-9,]+)/i);
   const dateM=txt.match(/\b(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+20\d{2})\b/i);
   const tce=tceM?Number(tceM[1].replace(/,/g,"")):null;
   if(!Number.isFinite(tce))throw new Error(`${year}-W${week} parse`);
-  return {year,week,tce,ws:wsM?Number(wsM[1]):null,date:dateM?.[1]||`W${week} ${year}`,url};
+  return {year,week,tce,ws:wsM?Number(wsM[1].replace(/,/g,"")):null,date:dateM?.[1]||`W${week} ${year}`,url};
 }
 async function fetchTarget(t){
   for(const shift of [0,-1,1]){
@@ -51,11 +51,12 @@ export default async function handler(req,res){
   // Verified recent Baltic reports, used only if the source blocks the cloud fetch.
   const verified=[
     {year:2026,week:36,tce:704000,ws:677.22,date:"04 Sep 2026",url:"https://www.balticexchange.com/en/data-services/WeeklyRoundup/tanker/news/2026/tanker-report-week-36.html"},
-    {year:2026,week:37,tce:862150,ws:821.11,date:"11 Sep 2026",url:"https://www.balticexchange.com/en/data-services/WeeklyRoundup/tanker/news/2026/tanker-report-week-37.html"}
+    {year:2026,week:37,tce:862150,ws:821.11,date:"11 Sep 2026",url:"https://www.balticexchange.com/en/data-services/WeeklyRoundup/tanker/news/2026/tanker-report-week-37.html"},
+    {year:2026,week:38,tce:1212503,ws:1140,date:"18 Sep 2026",url:"https://www.balticexchange.com/en/data-services/WeeklyRoundup/tanker/news/2026/tanker-report-week-38.html"}
   ];
   points=[...points,...verified];
 
   const history=[...new Map(points.map(p=>[`${p.year}-${p.week}`,p])).values()].sort((a,b)=>a.year-b.year||a.week-b.week);
-  res.setHeader("Cache-Control","s-maxage=21600, stale-while-revalidate=43200");
+  res.setHeader("Cache-Control","s-maxage=900, stale-while-revalidate=3600");
   res.status(200).json({latest:history.at(-1)||null,history,source:"Baltic Exchange weekly tanker reports",updatedAt:new Date().toISOString()});
 }
