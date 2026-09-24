@@ -471,6 +471,9 @@ export default function SettingsTab() {
         <SectionCard title="Navigation / Menu" subtitle="Choose menu style, order existing tabs, visibility and grouped headings."><NavigationEditor/><AppScaleControl/></SectionCard>
         <SectionCard title="Users / Login" subtitle="Add colleagues and manage their initials, colour, PIN and role. Navigation visibility above remains global for everybody.">
           <UserManager/>
+          <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid "+C.bd2}}>
+            <GuestAccessEditor/>
+          </div>
         </SectionCard>
       </div>
 
