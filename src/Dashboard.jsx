@@ -628,7 +628,11 @@ const COMMODITY_ACCENTS={
 };
 
 function commodityWindowRows(history,id,period){
-  const rows=(Array.isArray(history)?history:[]).map(s=>({date:s.date,price:Number(s.items?.[id]?.price)})).filter(x=>x.date&&Number.isFinite(x.price)).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const rows=(Array.isArray(history)?history:[]).map(s=>{
+    const raw=s.items?.[id]?.price;
+    const price=(raw===null||raw===undefined||raw==="")?NaN:Number(raw);
+    return {date:s.date,price};
+  }).filter(x=>x.date&&Number.isFinite(x.price)&&x.price>0).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   if(!rows.length||period==="ALL")return rows;
   const end=new Date(rows.at(-1).date); if(Number.isNaN(end.getTime()))return rows;
   let start=new Date(end);
@@ -787,7 +791,10 @@ function Dashboard({vessels, cargoes, history}) {
           });
         }
         const itemsObj={};
-        for(const x of Array.isArray(j?.items)?j.items:[])itemsObj[x.id]={price:x.price,unit:x.unit,label:x.label};
+        for(const x of Array.isArray(j?.items)?j.items:[]){
+          const p=(x?.price===null||x?.price===undefined||x?.price==="")?NaN:Number(x.price);
+          if(Number.isFinite(p)&&p>0)itemsObj[x.id]={price:p,unit:x.unit,label:x.label};
+        }
         const day=new Date().toISOString().slice(0,10);
         const snap={date:day,items:itemsObj};
         setCommodityHistory(prev=>{
@@ -1396,13 +1403,10 @@ function SegmentFWChart({data,segments,colors}) {
         {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-10} y={y+4} fill="#fff" fontSize="13" fontWeight="750" textAnchor="end">{v}d</text></g>})}
         {segments.map(seg=>{
           const pts=series[seg].map((v,i)=>v==null||v<0?null:[xs[i],PT+iH-v/range*iH]);
-          // Never bridge across excluded / missing regional observations. Bridging those
-          // gaps created artificial diagonals and exaggerated curves when a region had
-          // only a few representative ships on some dates.
-          const runs=[]; let run=[];
-          pts.forEach(p=>{if(p){run.push(p)}else if(run.length){runs.push(run);run=[]}});
-          if(run.length)runs.push(run);
-          return <g key={seg}>{runs.map((r,ri)=>r.length>1?<path key={ri} d={smoothPath(r)} fill="none" stroke={colors[seg]||C.blue} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" opacity=".95"/>:null)}</g>
+          // Missing/weekend/low-sample dates are skipped, but the surrounding valid
+          // observations stay connected so the trend remains continuous.
+          const validPts=pts.filter(Boolean);
+          return <g key={seg}>{validPts.length>1?<path d={smoothPath(validPts)} fill="none" stroke={colors[seg]||C.blue} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" opacity=".95"/>:null}</g>
         })}
         {hover!=null&&<line x1={xs[hover]} x2={xs[hover]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
         {hoverMarkers.map(m=><circle key={m.seg} cx={m.x} cy={m.y} r="5.2" fill={m.color} stroke="none"/>)}
