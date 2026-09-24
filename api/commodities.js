@@ -9,12 +9,10 @@ const ITEMS=[
   {id:"naphtha",label:"Naphtha",slug:"naphtha",unit:"USD/t"},
   {id:"methanol",label:"Methanol",slug:"methanol",unit:"CNY/t"},
   {id:"urea",label:"Urea",slug:"urea",unit:"USD/t"},
-  {id:"eu-carbon",label:"EU Carbon",slug:"carbon-emissions-allowances",unit:"EUR/t"}
+  {id:"eu-carbon",label:"EU Carbon",slug:"carbon",unit:"EUR/t"}
 ];
 
-// Liquid futures with a reliable public daily history feed. The less liquid / regional
-// series keep using Trading Economics current values + our own daily Supabase snapshots.
-const YAHOO={brent:"BZ=F",crude:"CL=F",natgas:"NG=F",gasoline:"RB=F", "heating-oil":"HO=F"};
+const YAHOO={brent:"BZ=F",crude:"CL=F",natgas:"NG=F",gasoline:"RB=F","heating-oil":"HO=F"};
 function strip(s=""){return String(s).replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/\s+/g," ").trim();}
 async function fetchOne(item){
   const url=`https://tradingeconomics.com/commodity/${item.slug}`;
@@ -22,7 +20,7 @@ async function fetchOne(item){
   if(!r.ok)throw new Error(item.id+" "+r.status);
   const txt=strip(await r.text()),actual=txt.match(/\bActual\s+([\d,.]+)/i),daily=txt.match(/\bDaily Change\s+([+-]?[\d,.]+)%/i);
   const price=actual?Number(actual[1].replace(/,/g,"")):null,changePct=daily?Number(daily[1].replace(/,/g,"")):null;
-  return {...item,price:Number.isFinite(price)?price:null,changePct:Number.isFinite(changePct)?changePct:null,url};
+  return {...item,price:Number.isFinite(price)&&price>0?price:null,changePct:Number.isFinite(changePct)?changePct:null,url};
 }
 async function fetchHistory(id,symbol){
   const now=Math.floor(Date.now()/1000),from=now-740*86400;
@@ -33,7 +31,7 @@ async function fetchHistory(id,symbol){
       const r=await fetch(host+path,{headers:{"user-agent":"Mozilla/5.0","accept":"application/json"}});
       if(!r.ok){lastErr=new Error(`${id} history ${r.status}`);continue;}
       const j=await r.json(),x=j?.chart?.result?.[0],ts=x?.timestamp||[],close=x?.indicators?.quote?.[0]?.close||[];
-      const rows=ts.map((t,i)=>({date:new Date(t*1000).toISOString().slice(0,10),price:Number(close[i])})).filter(x=>Number.isFinite(x.price));
+      const rows=ts.map((t,i)=>({date:new Date(t*1000).toISOString().slice(0,10),price:Number(close[i])})).filter(x=>Number.isFinite(x.price)&&x.price>0);
       if(rows.length)return rows;
     }catch(e){lastErr=e;}
   }
