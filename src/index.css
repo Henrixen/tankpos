@@ -56,3 +56,15 @@ input, textarea, select, button {
   background: #162540 !important;
   color: #58a6ff !important;
 }
+
+
+/* Clear, high-contrast text selection across the dashboard */
+::selection {
+  background: #2f81f7;
+  color: #ffffff;
+}
+
+::-moz-selection {
+  background: #2f81f7;
+  color: #ffffff;
+}
