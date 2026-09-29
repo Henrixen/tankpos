@@ -1,128 +1,66 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { supabase } from "./supabaseclient";
-import { C, SEGMENTS } from "./constants";
-import { classifyRegion, daysBetween, stripHtml } from "./utils";
-import { loadFixingJobs, saveFixingJob, deleteFixingJob, loadClients, saveClient, deleteClient } from "./supabaseHelpers";
-import { isMobile } from "./constants";
-
-const JOB_STATUS = ["OPEN","WORKING","SUBS","FIXED","FAILED","WDWF"];
-const JOB_STATUS_COL = {OPEN:C.blue,WORKING:C.amber,SUBS:C.purple,FIXED:C.green,FAILED:C.red,WDWF:"rgba(148,163,184,0.85)"};
-const TRADES = ["UKC","Med","EU Feast","AG","TA West","Ex US","Asia"];
-const EDIT_FIELDS = ["cargo_details","notes","indications","subs_fixed"];
-
-// Manually curated client logos — key = lowercase client name, value = image URL
-const CLIENT_LOGOS = {
-  "aramco": "https://companieslogo.com/img/orig/2222.SR-99009d53.png?t=1720244490",
-  "basf": "https://logos-world.net/wp-content/uploads/2022/06/BASF-Logo.png",
-  "circle k": "https://upload.wikimedia.org/wikipedia/commons/1/16/Circle_k_logo_detail.png",
-  "css sa": "https://logos-world.net/wp-content/uploads/2023/05/TotalEnergies-Logo.png",
-  "equinor": "https://1000logos.net/wp-content/uploads/2024/12/Equinor-Emblem.png",
-  "exxon": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fd/Exxon_logo_2016.svg/1280px-Exxon_logo_2016.svg.png",
-  "trafigura": "https://logos-world.net/wp-content/uploads/2025/01/Trafigura-Logo.jpg",
-};
-
-function focusJobField(jobId, field){
-  const el = document.querySelector(`[data-job-field="${jobId}-${field}"]`);
-  if (el) { el.focus(); if (el.select) el.select(); }
-}
-function cycleJobField(jobId, currentField, backwards=false){
-  const idx = EDIT_FIELDS.indexOf(currentField);
-  if (idx === -1) return;
-  const nextIdx = backwards ? (idx-1+EDIT_FIELDS.length)%EDIT_FIELDS.length : (idx+1)%EDIT_FIELDS.length;
-  focusJobField(jobId, EDIT_FIELDS[nextIdx]);
-}
-
-// RichEditor — height is tracked in state (displayHeight) so React renders stay in sync.
-// onToggleExpand(expanded, savedH, expandedH) lets the parent sync siblings.
-// One-line tappable header that expands to full content below it — local
-// copy matching the one in DesktopApp.jsx (kept separate deliberately, since
-// this file is lazy-loaded independently and importing across the two would
-// risk a circular dependency).
-function MobileCollapse({ title, color="#58a6ff", defaultOpen=false, children }){
-  const [open, setOpen] = React.useState(defaultOpen);
-  return (
-    <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:7, overflow:"hidden" }}>
-      <button onClick={()=>React.startTransition(()=>setOpen(o=>!o))}
-        style={{ width:"100%", display:"flex", alignItems:"center", gap:8, justifyContent:"space-between",
-          padding:"10px 12px", background:"transparent", border:"none", cursor:"pointer", fontFamily:"inherit",
-          minHeight:44, boxSizing:"border-box" }}>
-        <span style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <span style={{ width:6, height:6, borderRadius:"50%", background:color, flexShrink:0 }}/>
-          <span style={{ fontSize:12, fontWeight:700, color, textTransform:"uppercase", letterSpacing:"0.05em" }}>{title}</span>
-        </span>
-        <span style={{ fontSize:10, color:C.faint, transform:open?"rotate(90deg)":"none", transition:"transform 0.15s" }}>▸</span>
-      </button>
-      {open && <div style={{ padding:"0 10px 10px" }}>{children}</div>}
-    </div>
-  );
-}
-
-function RichEditor({ jobId, field, title, titleRight, value, onChange, onResizeSave, height=120, placeholder="", color=C.tx, onToggleExpand=null, alwaysExpanded=false, expandState=null, fillHeight=false }){
-  const editorRef = React.useRef(null);
-  const wrapRef = React.useRef(null);
-  const [isExpanded, setIsExpanded] = React.useState(false);
-  const [lightboxSrc, setLightboxSrc] = React.useState(null);
-  // displayHeight drives the wrapper height via React state — never fight the render cycle
-  const [displayHeight, setDisplayHeight] = React.useState(height);
-  const savedHeightRef = React.useRef(height);
-  const progResizing = React.useRef(false);
-
-  // Click-to-enlarge for pasted images — event delegation on the editor
-  // container so it works for every image regardless of when it was pasted.
-  function handleEditorClick(e){
-    if (e.target && e.target.tagName === "IMG"){
-      e.preventDefault();
-      e.stopPropagation();
-      setLightboxSrc(e.target.getAttribute("src"));
-    }
-  }
-
-  // Keep saved height in sync when height prop changes (e.g. from drag-save) while collapsed
-  React.useEffect(()=>{
-    if (!isExpanded && !alwaysExpanded) {
-      savedHeightRef.current = height;
-      setDisplayHeight(height);
-    }
-  }, [height]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  React.useEffect(()=>{
-    const el = editorRef.current;
-    if (!el || document.activeElement === el) return;
-    const next = value || "";
-    if (el.innerHTML !== next) el.innerHTML = next;
-  }, [value]);
-
-  // alwaysExpanded: auto-size to content, no collapse
-  React.useEffect(()=>{
-    if (!alwaysExpanded) return;
-    const el = editorRef.current;
-    const wrap = wrapRef.current;
-    if (!el || !wrap) return;
-    wrap.style.resize = "none";
-    const newH = Math.max(height, el.scrollHeight + 60);
-    setDisplayHeight(newH);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function calcExpandedH(){
-    const el = editorRef.current;
-    if (!el) return 200;
-    // Temporarily remove minHeight to get true content scrollHeight
-    const prev = el.style.minHeight;
-    el.style.minHeight = "0";
-    const h = Math.max(120, el.scrollHeight + 60);
-    el.style.minHeight = prev;
-    return h;
-  }
-
-  function toggleExpand(){
-    if (alwaysExpanded) return;
-    if (!isExpanded) {
-      // expanding
-      savedHeightRef.current = displayHeight;
-      const newH = calcExpandedH();
-      setDisplayHeight(newH);
-      setIsExpanded(true);
-      // Re-measure after paint in case content wasn't fully laid out
-      setTimeout(()=>{
-        const remeasured = calcExpandedH();
+18:36:56.744 Running build in Washington, D.C., USA (East) – iad1
+18:36:56.745 Build machine configuration: 2 cores, 8 GB
+18:36:56.872 Cloning github.com/Henrixen/tankpos (Branch: main, Commit: fc7e5ec)
+18:36:57.532 Cloning completed: 660.000ms
+18:36:57.606 Restored build cache from previous deployment (BCHFyfFfmJAHXY12nNKBLEUC3NVu)
+18:36:58.010 Running "vercel build"
+18:36:58.026 Vercel CLI 60.1.3
+18:36:58.879 Installing dependencies...
+18:37:01.973 
+18:37:01.974 up to date in 3s
+18:37:01.974 
+18:37:01.974 8 packages are looking for funding
+18:37:01.974   run `npm fund` for details
+18:37:01.975 npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+18:37:01.975 npm warn install-scripts   esbuild@0.21.5 (postinstall: node install.js)
+18:37:01.975 npm warn install-scripts
+18:37:01.975 npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+18:37:03.160 
+18:37:03.162 up to date, audited 126 packages in 1s
+18:37:03.162 
+18:37:03.162 8 packages are looking for funding
+18:37:03.163   run `npm fund` for details
+18:37:03.169 
+18:37:03.169 4 vulnerabilities (2 moderate, 2 high)
+18:37:03.169 
+18:37:03.169 To address all issues possible (including breaking changes), run:
+18:37:03.170   npm audit fix --force
+18:37:03.170 
+18:37:03.170 Some issues need review, and may require choosing
+18:37:03.170 a different dependency.
+18:37:03.170 
+18:37:03.170 Run `npm audit` for details.
+18:37:03.170 npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+18:37:03.170 npm warn install-scripts   esbuild@0.21.5 (postinstall: node install.js)
+18:37:03.170 npm warn install-scripts
+18:37:03.170 npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+18:37:03.284 
+18:37:03.285 > tankpos@0.0.0 build
+18:37:03.285 > vite build
+18:37:03.285 
+18:37:03.510 vite v5.4.21 building for production...
+18:37:03.567 transforming...
+18:37:04.291 ✓ 66 modules transformed.
+18:37:04.292 x Build failed in 751ms
+18:37:04.292 error during build:
+18:37:04.292 [vite:esbuild] Transform failed with 1 error:
+18:37:04.292 /vercel/path0/src/FixingTab.jsx:129:0: ERROR: Unexpected end of file
+18:37:04.292 file: /vercel/path0/src/FixingTab.jsx:129:0
+18:37:04.292 
+18:37:04.292 Unexpected end of file
+18:37:04.292 127|        setTimeout(()=>{
+18:37:04.292 128|          const remeasured = calcExpandedH();
+18:37:04.292 129|  
+18:37:04.292    |  ^
+18:37:04.292 
+18:37:04.292     at failureErrorWithLog (/vercel/path0/node_modules/esbuild/lib/main.js:1472:15)
+18:37:04.292     at /vercel/path0/node_modules/esbuild/lib/main.js:755:50
+18:37:04.292     at responseCallbacks.<computed> (/vercel/path0/node_modules/esbuild/lib/main.js:622:9)
+18:37:04.292     at handleIncomingPacket (/vercel/path0/node_modules/esbuild/lib/main.js:677:12)
+18:37:04.292     at Socket.readFromStdout (/vercel/path0/node_modules/esbuild/lib/main.js:600:7)
+18:37:04.292     at Socket.emit (node:events:514:28)
+18:37:04.292     at addChunk (node:internal/streams/readable:568:12)
+18:37:04.292     at readableAddChunkPushByteMode (node:internal/streams/readable:519:3)
+18:37:04.292     at Readable.push (node:internal/streams/readable:399:5)
+18:37:04.292     at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
+18:37:04.325 Error: Command "npm install && npm run build" exited with 1
