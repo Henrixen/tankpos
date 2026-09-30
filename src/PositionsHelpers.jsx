@@ -47,7 +47,14 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
 
   const comparison=React.useMemo(()=>{
     const byDay={};
+    // Use the same currently filtered vessel universe as the Positions table.
+    // This makes Tags / Updated / Region / Status / Segment / DWT / Built filters
+    // flow through to both the current and 30-day comparison bars.
+    const filteredNames = Array.isArray(filteredVessels)
+      ? new Set(filteredVessels.map(v=>String(v.vessel||"").toUpperCase()).filter(Boolean))
+      : null;
     for(const r of historyRows){
+      if(filteredNames && !filteredNames.has(String(r.vessel_name||"").toUpperCase())) continue;
       const report=new Date(r.last_update_spotship),open=new Date(r.open_date);
       if(isNaN(report)||isNaN(open)||!r.vessel_name)continue;
       const dwt=Number(r.dwt)||0;
@@ -88,7 +95,7 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
       currentLabel:latest7.length?shortDate(latest7[0])+"–"+shortDate(latest7[latest7.length-1]):"—",
       oldLabel:old7.length?shortDate(old7[0])+"–"+shortDate(old7[old7.length-1]):"—"
     };
-  },[historyRows,activeSeg]);
+  },[historyRows,activeSeg,filteredVessels]);
 
   const maxCount=Math.max(1,...(comparison?[...comparison.current,...comparison.old]:[1]));
 
@@ -117,18 +124,18 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
             const curH=cur?Math.max(5,(cur/maxCount)*100):0;
             const oldH=old?Math.max(3,(old/maxCount)*100):0;
             const active=bucketFilters.has(b.sublabel);
+            const axisLabel = b.sublabel==="PPT" ? "PPT" : b.sublabel==="2-4d" ? "2-4 days" : b.sublabel==="4-8d" ? "4-8 days" : ">8 days";
             return <div key={b.sublabel} onClick={()=>onBucketFilter&&onBucketFilter(b.sublabel)}
               style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",cursor:"pointer",borderRadius:6,padding:"2px 7px 0",outline:active?"2px solid "+b.col:"2px solid transparent"}}>
-              <div style={{width:"100%",flex:1,minHeight:110,display:"flex",alignItems:"flex-end",justifyContent:"center",position:"relative"}}>
-                <div style={{width:"78%",maxWidth:74,height:curH+"%",minHeight:cur?5:0,background:b.col,borderRadius:"4px 4px 2px 2px",boxShadow:cur?"0 0 8px "+b.col+"55":"none",position:"relative"}}>
-                  <div style={{position:"absolute",left:"50%",top:-18,transform:"translateX(-50%)",fontSize:11,fontWeight:800,color:b.col}}>{cur}</div>
-                  {old>0&&<div title={"30 days ago: "+old} style={{position:"absolute",left:"100%",bottom:`calc(${oldH}% - 6px)`,marginLeft:3,display:"flex",alignItems:"center",whiteSpace:"nowrap",fontSize:10,fontWeight:700,color:"rgba(190,205,225,0.78)"}}>
-                    <span style={{fontSize:12,lineHeight:1,marginRight:2}}>◀</span>{old}
-                  </div>}
-                </div>
+              <div style={{width:"100%",flex:1,minHeight:110,position:"relative"}}>
+                {/* Current bar and old-period marker share the SAME full chart scale. */}
+                <div style={{position:"absolute",left:"50%",bottom:0,transform:"translateX(-50%)",width:"78%",maxWidth:74,height:curH+"%",minHeight:cur?5:0,background:b.col,borderRadius:"4px 4px 2px 2px",boxShadow:cur?"0 0 8px "+b.col+"55":"none"}} />
+                {cur>0&&<div style={{position:"absolute",left:"50%",bottom:`calc(${curH}% + 5px)`,transform:"translateX(-50%)",fontSize:11,fontWeight:800,color:b.col}}>{cur}</div>}
+                {old>0&&<div title={"30 days ago: "+old} style={{position:"absolute",left:"calc(50% + min(39%, 40px))",bottom:`calc(${oldH}% - 6px)`,display:"flex",alignItems:"center",whiteSpace:"nowrap",fontSize:10,fontWeight:700,color:"rgba(190,205,225,0.78)"}}>
+                  <span style={{fontSize:12,lineHeight:1,marginRight:2}}>◀</span>{old}
+                </div>}
               </div>
-              <div style={{fontSize:12,color:b.col,fontWeight:700,textAlign:"center",marginTop:7}}>{b.sublabel}</div>
-              <div style={{fontSize:10,color:C.faint,textAlign:"center",marginTop:3,lineHeight:1.25}}>{b.label}</div>
+              <div style={{fontSize:12,color:b.col,fontWeight:700,textAlign:"center",marginTop:7}}>{axisLabel}</div>
             </div>;
           })}
         </div>
@@ -494,33 +501,35 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
   const wrapRef = useRef(null);
   const [W, setW] = React.useState(760);
   const [H, setH] = React.useState(200);
-  const PAD = { top: 16, right: 16, bottom: 38, left: 40 };
+  const PAD = { top: 8, right: 16, bottom: 24, left: 40 };
 
   // responsive width
   useEffect(() => {
     if (!wrapRef.current) return;
     const wrap = wrapRef.current;
     const parent = wrap.parentElement;
-    const resize = () => {
+    let resizeTimer = null;
+    const applySize = () => {
       setW(Math.max(360, wrap.getBoundingClientRect().width));
-      // Keep the normal History chart at its existing 200px height. When the
-      // Positions chart panel is expanded (same container used by Open Segments),
-      // use the extra vertical space for the SVG instead of leaving it blank.
       if (parent) {
         const parentH = parent.getBoundingClientRect().height;
-        // Break the resize feedback loop: in normal/collapsed mode use a fixed compact
-        // chart height; only consume the extra height when the panel is genuinely expanded.
+        // Size only after the expand/collapse animation has settled. Re-drawing the
+        // SVG on every animation frame was what made the lines fall below the panel.
         const nextH = parentH > 340
-          ? Math.max(200, Math.floor(parentH - 76))
-          : Math.max(120, Math.min(150, Math.floor(parentH - 72)));
+          ? Math.max(220, Math.floor(parentH - 58))
+          : Math.max(155, Math.floor(parentH - 50));
         setH(nextH);
       }
     };
-    resize();
+    const resize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(applySize, 140);
+    };
+    applySize();
     const ro = new ResizeObserver(resize);
     ro.observe(wrap);
     if (parent) ro.observe(parent);
-    return () => ro.disconnect();
+    return () => { clearTimeout(resizeTimer); ro.disconnect(); };
   }, []);
 
   // Fetch fixing-window history only when this lookback has not already been
@@ -689,46 +698,24 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
 
   return (
     <div ref={wrapRef} style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px", marginBottom: 10, position: "relative" }}>
-      {/* Header row: title + segment toggles */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, flexWrap: "wrap", minHeight: 22 }}>
-        {tagFilter && (
-          <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, border: "1px solid rgba(88,166,255,0.3)", color: "#79c0ff", background: "rgba(88,166,255,0.1)" }}>{tagFilter}</span>
-        )}
-        <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {FW_SEGMENTS.map(s => {
-            const on = activeSeg.has(s.key);
-            return (
-              <button key={s.key} onClick={() => setActiveSeg(prev => { const n = new Set(prev); n.has(s.key) ? n.delete(s.key) : n.add(s.key); return n; })}
-                style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, cursor: "pointer", fontFamily: "inherit", border: "1px solid " + (on ? s.color : "rgba(88,166,255,0.15)"), background: on ? s.color + "22" : "transparent", color: on ? s.color : "rgba(140,170,210,0.35)" }}>
-                {s.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Sub-header: avg/count + range + vessel-list toggle (own line, below buttons) */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, marginTop: -1, fontSize: 10, color: "rgba(150,180,220,0.6)" }}>
-        {avgFW != null && <span>Avg <span style={{ color: "#58a6ff", fontWeight: 700 }}>{avgFW}d</span></span>}
-        <span>{vesselCount} vessels in chart</span>
-        {range && (
-          <span style={{ color: "#79c0ff", cursor: "pointer" }} onClick={() => setRange(null)}>
-            {fmtWeek(range.from)}–{fmtWeek(range.to)} ✕ clear range
-          </span>
-        )}
-        <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
-          <span style={{ color: "rgba(120,150,190,0.45)" }}>History:</span>
-          {[[14, "2w"], [28, "4w"], [56, "8w"], [84, "12w"]].map(([d, l]) => (
-            <button key={d} onClick={() => setLookback(d)} style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 3, cursor: "pointer", fontFamily: "inherit", border: "1px solid " + (lookback === d ? "#58a6ff" : "rgba(88,166,255,0.15)"), background: lookback === d ? "rgba(88,166,255,0.15)" : "transparent", color: lookback === d ? "#79c0ff" : "rgba(140,170,210,0.5)" }}>{l}</button>
+      {/* Compact top row: metrics at far left, segment toggles at right */}
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2, minHeight:22, whiteSpace:"nowrap" }}>
+        {tagFilter && <span style={{fontSize:10,padding:"2px 7px",borderRadius:4,border:"1px solid rgba(88,166,255,0.3)",color:"#79c0ff",background:"rgba(88,166,255,0.1)"}}>{tagFilter}</span>}
+        {avgFW != null && <span style={{fontSize:10,color:"rgba(150,180,220,0.6)"}}>Avg <span style={{color:"#58a6ff",fontWeight:700}}>{avgFW}d</span></span>}
+        <span style={{fontSize:10,color:"rgba(150,180,220,0.6)"}}>{vesselCount} vessels</span>
+        <span style={{fontSize:10,color:"rgba(120,150,190,0.45)"}}>History:</span>
+        <div style={{display:"flex",gap:3,alignItems:"center"}}>
+          {[[14,"2w"],[28,"4w"],[56,"8w"],[84,"12w"]].map(([d,l])=>(
+            <button key={d} onClick={()=>setLookback(d)} style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:3,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(lookback===d?"#58a6ff":"rgba(88,166,255,0.15)"),background:lookback===d?"rgba(88,166,255,0.15)":"transparent",color:lookback===d?"#79c0ff":"rgba(140,170,210,0.5)"}}>{l}</button>
           ))}
         </div>
-        <div style={{ flex: 1 }} />
-        <button onClick={() => setShowList(v => !v)} style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, cursor: "pointer", fontFamily: "inherit", border: "1px solid rgba(88,166,255,0.25)", background: showList ? "rgba(88,166,255,0.12)" : "transparent", color: "#79c0ff" }}>
-          {showList ? "Hide vessels" : `Vessels (${vesselCount})`}
-        </button>
+        {range&&<span style={{fontSize:10,color:"#79c0ff",cursor:"pointer"}} onClick={()=>setRange(null)}>{fmtWeek(range.from)}–{fmtWeek(range.to)} ✕</span>}
+        <div style={{flex:1,minWidth:4}}/>
+        <div style={{display:"flex",gap:4,alignItems:"center"}}>
+          {FW_SEGMENTS.map(s=>{const on=activeSeg.has(s.key);return <button key={s.key} onClick={()=>setActiveSeg(prev=>{const n=new Set(prev);n.has(s.key)?n.delete(s.key):n.add(s.key);return n;})} style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(on?s.color:"rgba(88,166,255,0.15)"),background:on?s.color+"22":"transparent",color:on?s.color:"rgba(140,170,210,0.35)"}}>{s.label}</button>})}
+          <button onClick={()=>setShowList(v=>!v)} style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",border:"1px solid rgba(88,166,255,0.25)",background:showList?"rgba(88,166,255,0.12)":"transparent",color:"#79c0ff"}}>{showList?"Hide vessels":`Vessels (${vesselCount})`}</button>
+        </div>
       </div>
-
       {loading ? (
         <div style={{ height: H, display: "flex", alignItems: "center", justifyContent: "center", color: C.faint, fontSize: 12 }}>Loading…</div>
       ) : chartData.length === 0 ? (
@@ -786,7 +773,6 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
         </div>
       )}
 
-      <div style={{ fontSize: 9, color: "rgba(120,150,190,0.45)", marginTop: 2 }}>Drag across the chart to select a date range · hover for values</div>
 
       {/* vessel list — fixed overlay anchored below chart (escapes overflow:hidden clipping) */}
       {showList && (() => {
