@@ -4,61 +4,132 @@ import { daysBetween, isOpenPPT, normaliseQty } from "./utils";
 import { supabase } from "./supabaseclient";
 
 function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), onBucketFilter}){
-  // Use filteredVessels for the bar chart when a filter is active, fall back to all vessels
-  const displayVessels = filteredVessels || vessels;
-  const isFiltered = filteredVessels && filteredVessels.length !== vessels.length;
-  const open = displayVessels.filter(v=>v.openPort&&v.openPort!=="EMPLOYED"&&v.date);
-  const total = vessels.length;
-  const displayTotal = displayVessels.length;
+  // Market-pressure comparison: average vessel counts across the latest 7 actual
+  // position-report dates versus 7 report dates ending around 30 days earlier.
+  // Historical rows stay in Supabase; only the required ~45-day window is fetched.
+  const [historyRows,setHistoryRows]=React.useState([]);
+  const [loadingHistory,setLoadingHistory]=React.useState(true);
 
-  // Bucket vessels by days until open
-  const ppt=[], d24=[], d48=[], d48plus=[], nodate=[];
-  for(const v of open){
-    const d=daysBetween(v.date);
-    if(d===null){nodate.push(v);continue;}
-    if(d<=1)ppt.push(v);
-    else if(d<=4)d24.push(v);
-    else if(d<=8)d48.push(v);
-    else d48plus.push(v);
-  }
-  const employed=displayVessels.filter(v=>v.openPort==="EMPLOYED");
-  const nodateOpen=displayVessels.filter(v=>v.openPort&&v.openPort!=="EMPLOYED"&&!v.date);
+  React.useEffect(()=>{
+    let alive=true;
+    (async()=>{
+      setLoadingHistory(true);
+      const since=new Date();
+      since.setHours(0,0,0,0);
+      since.setDate(since.getDate()-45);
+      const PAGE=1000;
+      let all=[],from=0,done=false;
+      while(!done&&alive){
+        const {data,error}=await supabase.from("positions_external")
+          .select("vessel_name,open_date,last_update_spotship")
+          .gte("last_update_spotship",since.toISOString())
+          .not("open_date","is",null)
+          .not("last_update_spotship","is",null)
+          .order("last_update_spotship",{ascending:false})
+          .range(from,from+PAGE-1);
+        if(error){console.error("OpeningBreakdown history fetch:",error);break;}
+        all=all.concat(data||[]);
+        if(!data||data.length<PAGE)done=true;else from+=PAGE;
+        if(from>80000)done=true;
+      }
+      if(alive){setHistoryRows(all);setLoadingHistory(false);}
+    })();
+    return()=>{alive=false;};
+  },[]);
 
-  const buckets=[
-    {label:"Open today/tomorrow",sublabel:"PPT",vessels:ppt,col:"#2ecc71"},
-    {label:"2-4 days",sublabel:"2-4d",vessels:d24,col:"#f5a623"},
-    {label:"4-8 days",sublabel:"4-8d",vessels:d48,col:"#e8603c"},
-    {label:">8 days",sublabel:">8d",vessels:d48plus,col:"#58a6ff"},
+  const bucketDefs=[
+    {label:"Open today/tomorrow",sublabel:"PPT",col:"#2ecc71",test:d=>d<=1},
+    {label:"2-4 days",sublabel:"2-4d",col:"#f5a623",test:d=>d>=2&&d<=4},
+    {label:"4-8 days",sublabel:"4-8d",col:"#e8603c",test:d=>d>=5&&d<=8},
+    {label:">8 days",sublabel:">8d",col:"#58a6ff",test:d=>d>8},
   ];
-  const maxCount=Math.max(1,...buckets.map(b=>b.vessels.length));
-  const totalCount = buckets.reduce((sum, b) => sum + b.vessels.length, 0) || 1;
+
+  const comparison=React.useMemo(()=>{
+    const byDay={};
+    // One vessel per report day. If duplicates exist, keep the latest row that day.
+    for(const r of historyRows){
+      const report=new Date(r.last_update_spotship),open=new Date(r.open_date);
+      if(isNaN(report)||isNaN(open)||!r.vessel_name)continue;
+      const day=r.last_update_spotship.slice(0,10);
+      const key=String(r.vessel_name).toUpperCase();
+      if(!byDay[day])byDay[day]={};
+      const prev=byDay[day][key];
+      if(!prev||new Date(prev.last_update_spotship)<report)byDay[day][key]=r;
+    }
+    const dates=Object.keys(byDay).sort();
+    if(!dates.length)return null;
+    const latest7=dates.slice(-7);
+    const latestDate=new Date(dates[dates.length-1]+"T12:00:00");
+    const target=new Date(latestDate);target.setDate(target.getDate()-30);
+    const oldEligible=dates.filter(d=>new Date(d+"T12:00:00")<=target);
+    const old7=oldEligible.slice(-7);
+
+    const countsFor=day=>{
+      const counts=[0,0,0,0];
+      const report=new Date(day+"T00:00:00");
+      for(const r of Object.values(byDay[day]||{})){
+        const open=new Date(r.open_date);
+        const d=Math.round((open-report)/86400000);
+        if(!isFinite(d)||d<0)continue;
+        const i=bucketDefs.findIndex(b=>b.test(d));
+        if(i>=0)counts[i]++;
+      }
+      return counts;
+    };
+    const avg=ds=>{
+      if(!ds.length)return [0,0,0,0];
+      const sums=[0,0,0,0];
+      ds.forEach(d=>countsFor(d).forEach((v,i)=>sums[i]+=v));
+      return sums.map(v=>v/ds.length);
+    };
+    return{current:avg(latest7),old:avg(old7),latest7,old7};
+  },[historyRows]);
+
+  const maxCount=Math.max(1,...(comparison?[...comparison.current,...comparison.old]:[1]));
+  const fmt=v=>Number.isInteger(v)?String(v):v.toFixed(1);
+  const fmtDay=d=>d?new Date(d+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short"}):"";
 
   return(
-    <div style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:7,padding:"10px 14px 14px 14px",flex:1,boxSizing:"border-box",display:"flex",flexDirection:"column",minHeight:220,height:"100%"}}>
-      {nodateOpen.length>0&&<div style={{fontSize:11,color:C.faint,marginBottom:8,textAlign:"right"}}>{nodateOpen.length} no date</div>}
-      {/* Bar chart */}
-      <div style={{display:"flex",gap:8,flex:1}}>
-        {buckets.map(b=>{
-          const pct = b.vessels.length / totalCount;
-const barH = Math.max(pct * 100, b.vessels.length > 0 ? 4 : 0);
-          return(
-            <div key={b.label} onClick={()=>onBucketFilter&&onBucketFilter(b.sublabel)}
-              style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",cursor:b.vessels.length>0?"pointer":"default",borderRadius:6,padding:"2px 2px 0 2px",outline:bucketFilters.has(b.sublabel)?"2px solid "+b.col:"2px solid transparent",transition:"outline 0.15s"}}
-              title={b.vessels.length>0?b.vessels.map(v=>v.vessel).join(", "):b.sublabel}>
-              <div style={{fontSize:13,fontWeight:800,color:b.vessels.length>0?b.col:"transparent",marginBottom:3,minHeight:18}}>{b.vessels.length>0?b.vessels.length:""}</div>
-              <div style={{width:"100%",background:"rgba(255,255,255,0.06)",borderRadius:4,flex:1,display:"flex",alignItems:"flex-end",overflow:"hidden",minHeight:120,height:"100%"}}>
-                <div style={{width:"100%",height:b.vessels.length>0?Math.max(barH,8)+"%":"4%",background:b.vessels.length>0?b.col:"rgba(255,255,255,0.08)",borderRadius:4,transition:"height 0.3s",boxShadow:b.vessels.length>0?"0 0 8px "+b.col+"88":"none"}}/>
-              </div>
-              <div style={{fontSize:12,color:b.vessels.length>0?b.col:C.faint,fontWeight:700,textAlign:"center",marginTop:7,lineHeight:1.2}}>{b.sublabel}</div>
-              <div style={{fontSize:10,color:C.faint,textAlign:"center",marginTop:3,lineHeight:1.3,maxWidth:"100%",wordBreak:"break-word"}}>{b.label}</div>
-            </div>
-          );
-        })}
+    <div style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:7,padding:"10px 14px 14px",flex:1,boxSizing:"border-box",display:"flex",flexDirection:"column",minHeight:220,height:"100%",overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8,fontSize:10,color:C.faint}}>
+        <span style={{fontWeight:700,color:C.tx}}>OPEN SEGMENTS · 7D AVG</span>
+        {comparison&&<>
+          <span><span style={{display:"inline-block",width:8,height:8,borderRadius:2,background:"#58a6ff",marginRight:4}}/>Current {fmtDay(comparison.latest7[0])}–{fmtDay(comparison.latest7.at(-1))}</span>
+          <span><span style={{display:"inline-block",width:8,height:8,borderRadius:2,background:"rgba(160,180,210,0.45)",marginRight:4}}/>30d ago {fmtDay(comparison.old7[0])}–{fmtDay(comparison.old7.at(-1))}</span>
+        </>}
       </div>
+      {loadingHistory?(
+        <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:C.faint}}>Loading 7-day comparison…</div>
+      ):!comparison?(
+        <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:C.faint}}>No historical positions available</div>
+      ):(
+        <div style={{display:"flex",gap:10,flex:1,minHeight:0}}>
+          {bucketDefs.map((b,i)=>{
+            const cur=comparison.current[i],old=comparison.old[i];
+            const curH=cur?Math.max(5,(cur/maxCount)*100):0;
+            const oldH=old?Math.max(5,(old/maxCount)*100):0;
+            const active=bucketFilters.has(b.sublabel);
+            return <div key={b.sublabel} onClick={()=>onBucketFilter&&onBucketFilter(b.sublabel)}
+              style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",cursor:"pointer",borderRadius:6,padding:"2px",outline:active?"2px solid "+b.col:"2px solid transparent"}}>
+              <div style={{display:"flex",gap:6,alignItems:"flex-end",justifyContent:"center",width:"100%",flex:1,minHeight:110}}>
+                <div style={{height:"100%",flex:1,maxWidth:34,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center"}}>
+                  <div style={{fontSize:11,fontWeight:800,color:b.col,marginBottom:3}}>{fmt(cur)}</div>
+                  <div style={{width:"100%",height:curH+"%",minHeight:cur?4:0,background:b.col,borderRadius:"4px 4px 2px 2px",boxShadow:cur?"0 0 8px "+b.col+"66":"none"}}/>
+                </div>
+                <div style={{height:"100%",flex:1,maxWidth:34,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"rgba(190,205,225,0.72)",marginBottom:3}}>{fmt(old)}</div>
+                  <div style={{width:"100%",height:oldH+"%",minHeight:old?4:0,background:"rgba(160,180,210,0.45)",borderRadius:"4px 4px 2px 2px"}}/>
+                </div>
+              </div>
+              <div style={{fontSize:12,color:b.col,fontWeight:700,textAlign:"center",marginTop:7}}>{b.sublabel}</div>
+              <div style={{fontSize:10,color:C.faint,textAlign:"center",marginTop:3,lineHeight:1.25}}>{b.label}</div>
+            </div>;
+          })}
+        </div>
+      )}
     </div>
   );
 }
-
 
 function FixingWindow({vessels, fileDate, opFilter, onOpFilter}){
   const openVessels = vessels.filter(v => v.date && v.openPort && v.openPort !== "EMPLOYED");
@@ -431,7 +502,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
       // use the extra vertical space for the SVG instead of leaving it blank.
       if (parent) {
         const available = parent.getBoundingClientRect().height - 82;
-        setH(Math.max(200, Math.floor(available)));
+        setH(Math.max(110, Math.floor(available)));
       }
     };
     resize();
