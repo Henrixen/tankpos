@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { C, OP_COLORS } from "./constants";
 import { daysBetween, isOpenPPT, normaliseQty } from "./utils";
 import { supabase } from "./supabaseclient";
@@ -81,14 +82,24 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
       ds.forEach(d=>countsFor(d).forEach((v,i)=>sums[i]+=v));
       return sums.map(v=>Math.round(v/ds.length));
     };
-    return{current:avg(latest7),old:avg(old7)};
+    const shortDate=d=>{const x=new Date(d+"T12:00:00");return x.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});};
+    return{
+      current:avg(latest7),old:avg(old7),
+      currentLabel:latest7.length?shortDate(latest7[0])+"–"+shortDate(latest7[latest7.length-1]):"—",
+      oldLabel:old7.length?shortDate(old7[0])+"–"+shortDate(old7[old7.length-1]):"—"
+    };
   },[historyRows,activeSeg]);
 
   const maxCount=Math.max(1,...(comparison?[...comparison.current,...comparison.old]:[1]));
 
   return(
     <div style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:7,padding:"8px 14px 12px",flex:1,boxSizing:"border-box",display:"flex",flexDirection:"column",minHeight:220,height:"100%",overflow:"hidden"}}>
-      <div style={{display:"flex",justifyContent:"flex-end",gap:4,flexWrap:"wrap",marginBottom:7}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:7}}>
+        {!loadingHistory&&comparison&&<div style={{fontSize:9,color:"rgba(150,180,220,0.62)",whiteSpace:"nowrap"}}>
+          <span style={{color:"#58a6ff",fontWeight:700}}>■</span> Current 7 reports {comparison.currentLabel}
+          <span style={{marginLeft:10,color:"rgba(190,205,225,0.78)",fontWeight:700}}>◀</span> 30d ago {comparison.oldLabel}
+        </div>}
+        <div style={{flex:1}}/>
         {FW_SEGMENTS.map(s=>{
           const on=activeSeg.has(s.key);
           return <button key={s.key} onClick={()=>setActiveSeg(prev=>{const n=new Set(prev);n.has(s.key)?n.delete(s.key):n.add(s.key);return n;})}
@@ -109,7 +120,7 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
             return <div key={b.sublabel} onClick={()=>onBucketFilter&&onBucketFilter(b.sublabel)}
               style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",cursor:"pointer",borderRadius:6,padding:"2px 7px 0",outline:active?"2px solid "+b.col:"2px solid transparent"}}>
               <div style={{width:"100%",flex:1,minHeight:110,display:"flex",alignItems:"flex-end",justifyContent:"center",position:"relative"}}>
-                <div style={{width:"56%",maxWidth:48,height:curH+"%",minHeight:cur?5:0,background:b.col,borderRadius:"4px 4px 2px 2px",boxShadow:cur?"0 0 8px "+b.col+"55":"none",position:"relative"}}>
+                <div style={{width:"78%",maxWidth:74,height:curH+"%",minHeight:cur?5:0,background:b.col,borderRadius:"4px 4px 2px 2px",boxShadow:cur?"0 0 8px "+b.col+"55":"none",position:"relative"}}>
                   <div style={{position:"absolute",left:"50%",top:-18,transform:"translateX(-50%)",fontSize:11,fontWeight:800,color:b.col}}>{cur}</div>
                   {old>0&&<div title={"30 days ago: "+old} style={{position:"absolute",left:"100%",bottom:`calc(${oldH}% - 6px)`,marginLeft:3,display:"flex",alignItems:"center",whiteSpace:"nowrap",fontSize:10,fontWeight:700,color:"rgba(190,205,225,0.78)"}}>
                     <span style={{fontSize:12,lineHeight:1,marginRight:2}}>◀</span>{old}
@@ -496,10 +507,13 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
       // Positions chart panel is expanded (same container used by Open Segments),
       // use the extra vertical space for the SVG instead of leaving it blank.
       if (parent) {
-        const available = parent.getBoundingClientRect().height - 82;
-        // Clamp to the space that actually exists after expand/collapse. This prevents
-        // the SVG keeping its expanded height and being clipped below the normal panel.
-        setH(Math.max(150, Math.floor(available)));
+        const parentH = parent.getBoundingClientRect().height;
+        // Break the resize feedback loop: in normal/collapsed mode use a fixed compact
+        // chart height; only consume the extra height when the panel is genuinely expanded.
+        const nextH = parentH > 340
+          ? Math.max(200, Math.floor(parentH - 76))
+          : Math.max(120, Math.min(150, Math.floor(parentH - 72)));
+        setH(nextH);
       }
     };
     resize();
@@ -676,10 +690,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
   return (
     <div ref={wrapRef} style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px", marginBottom: 10, position: "relative" }}>
       {/* Header row: title + segment toggles */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em" }}>
-          📈 Fixing Window History
-        </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, flexWrap: "wrap", minHeight: 22 }}>
         {tagFilter && (
           <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, border: "1px solid rgba(88,166,255,0.3)", color: "#79c0ff", background: "rgba(88,166,255,0.1)" }}>{tagFilter}</span>
         )}
@@ -698,7 +709,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
       </div>
 
       {/* Sub-header: avg/count + range + vessel-list toggle (own line, below buttons) */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, fontSize: 10, color: "rgba(150,180,220,0.6)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, marginTop: -1, fontSize: 10, color: "rgba(150,180,220,0.6)" }}>
         {avgFW != null && <span>Avg <span style={{ color: "#58a6ff", fontWeight: 700 }}>{avgFW}d</span></span>}
         <span>{vesselCount} vessels in chart</span>
         {range && (
@@ -783,8 +794,10 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
         const left = r ? r.left : 20;
         const top = r ? r.bottom - 2 : 200;
         const width = r ? r.width : 360;
-        return (
-          <div style={{ position: "fixed", left, top, width, zIndex: 200, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, boxShadow: "0 18px 55px rgba(0,0,0,0.75)", maxHeight: 340, overflowY: "auto" }}>
+        if (typeof document === "undefined") return null;
+        const popupTop = Math.min(top, Math.max(12, window.innerHeight - 360));
+        return createPortal(
+          <div style={{ position: "fixed", left, top:popupTop, width, zIndex: 10000, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, boxShadow: "0 18px 55px rgba(0,0,0,0.75)", maxHeight: 340, overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid " + C.bd, position: "sticky", top: 0, background: C.bg2 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: C.tx }}>{vesselCount} in chart{excluded.size > 0 ? ` · ${excluded.size} excluded` : ""}</span>
               <div style={{ display: "flex", gap: 6 }}>
@@ -831,7 +844,8 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
                   })}
               </tbody>
             </table>
-          </div>
+          </div>,
+          document.body
         );
       })()}
     </div>
