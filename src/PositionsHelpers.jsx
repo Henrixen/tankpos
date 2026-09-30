@@ -4,11 +4,11 @@ import { daysBetween, isOpenPPT, normaliseQty } from "./utils";
 import { supabase } from "./supabaseclient";
 
 function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), onBucketFilter}){
-  // Market-pressure comparison: average vessel counts across the latest 7 actual
-  // position-report dates versus 7 report dates ending around 30 days earlier.
-  // Historical rows stay in Supabase; only the required ~45-day window is fetched.
+  // Four forward-opening bars. Each bar is the current 7-report average;
+  // the small arrow marks the equivalent 7-report average around 30 days ago.
   const [historyRows,setHistoryRows]=React.useState([]);
   const [loadingHistory,setLoadingHistory]=React.useState(true);
+  const [activeSeg,setActiveSeg]=React.useState(new Set(FW_SEGMENTS.map(s=>s.key)));
 
   React.useEffect(()=>{
     let alive=true;
@@ -21,7 +21,7 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
       let all=[],from=0,done=false;
       while(!done&&alive){
         const {data,error}=await supabase.from("positions_external")
-          .select("vessel_name,open_date,last_update_spotship")
+          .select("vessel_name,dwt,open_date,last_update_spotship")
           .gte("last_update_spotship",since.toISOString())
           .not("open_date","is",null)
           .not("last_update_spotship","is",null)
@@ -46,11 +46,13 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
 
   const comparison=React.useMemo(()=>{
     const byDay={};
-    // One vessel per report day. If duplicates exist, keep the latest row that day.
     for(const r of historyRows){
       const report=new Date(r.last_update_spotship),open=new Date(r.open_date);
       if(isNaN(report)||isNaN(open)||!r.vessel_name)continue;
-      const day=r.last_update_spotship.slice(0,10);
+      const dwt=Number(r.dwt)||0;
+      const seg=FW_SEGMENTS.find(s=>dwt>=s.dwt[0]&&dwt<=s.dwt[1]);
+      if(!seg||!activeSeg.has(seg.key))continue;
+      const day=String(r.last_update_spotship).slice(0,10);
       const key=String(r.vessel_name).toUpperCase();
       if(!byDay[day])byDay[day]={};
       const prev=byDay[day][key];
@@ -61,15 +63,12 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
     const latest7=dates.slice(-7);
     const latestDate=new Date(dates[dates.length-1]+"T12:00:00");
     const target=new Date(latestDate);target.setDate(target.getDate()-30);
-    const oldEligible=dates.filter(d=>new Date(d+"T12:00:00")<=target);
-    const old7=oldEligible.slice(-7);
-
+    const old7=dates.filter(d=>new Date(d+"T12:00:00")<=target).slice(-7);
     const countsFor=day=>{
       const counts=[0,0,0,0];
       const report=new Date(day+"T00:00:00");
       for(const r of Object.values(byDay[day]||{})){
-        const open=new Date(r.open_date);
-        const d=Math.round((open-report)/86400000);
+        const d=Math.round((new Date(r.open_date)-report)/86400000);
         if(!isFinite(d)||d<0)continue;
         const i=bucketDefs.findIndex(b=>b.test(d));
         if(i>=0)counts[i]++;
@@ -80,45 +79,41 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
       if(!ds.length)return [0,0,0,0];
       const sums=[0,0,0,0];
       ds.forEach(d=>countsFor(d).forEach((v,i)=>sums[i]+=v));
-      return sums.map(v=>v/ds.length);
+      return sums.map(v=>Math.round(v/ds.length));
     };
-    return{current:avg(latest7),old:avg(old7),latest7,old7};
-  },[historyRows]);
+    return{current:avg(latest7),old:avg(old7)};
+  },[historyRows,activeSeg]);
 
   const maxCount=Math.max(1,...(comparison?[...comparison.current,...comparison.old]:[1]));
-  const fmt=v=>Number.isInteger(v)?String(v):v.toFixed(1);
-  const fmtDay=d=>d?new Date(d+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short"}):"";
 
   return(
-    <div style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:7,padding:"10px 14px 14px",flex:1,boxSizing:"border-box",display:"flex",flexDirection:"column",minHeight:220,height:"100%",overflow:"hidden"}}>
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8,fontSize:10,color:C.faint}}>
-        <span style={{fontWeight:700,color:C.tx}}>OPEN SEGMENTS · 7D AVG</span>
-        {comparison&&<>
-          <span><span style={{display:"inline-block",width:8,height:8,borderRadius:2,background:"#58a6ff",marginRight:4}}/>Current {fmtDay(comparison.latest7[0])}–{fmtDay(comparison.latest7.at(-1))}</span>
-          <span><span style={{display:"inline-block",width:8,height:8,borderRadius:2,background:"rgba(160,180,210,0.45)",marginRight:4}}/>30d ago {fmtDay(comparison.old7[0])}–{fmtDay(comparison.old7.at(-1))}</span>
-        </>}
+    <div style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:7,padding:"8px 14px 12px",flex:1,boxSizing:"border-box",display:"flex",flexDirection:"column",minHeight:220,height:"100%",overflow:"hidden"}}>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:4,flexWrap:"wrap",marginBottom:7}}>
+        {FW_SEGMENTS.map(s=>{
+          const on=activeSeg.has(s.key);
+          return <button key={s.key} onClick={()=>setActiveSeg(prev=>{const n=new Set(prev);n.has(s.key)?n.delete(s.key):n.add(s.key);return n;})}
+            style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(on?s.color:"rgba(88,166,255,0.15)"),background:on?s.color+"22":"transparent",color:on?s.color:"rgba(140,170,210,0.35)"}}>{s.label}</button>;
+        })}
       </div>
       {loadingHistory?(
-        <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:C.faint}}>Loading 7-day comparison…</div>
+        <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:C.faint}}>Loading…</div>
       ):!comparison?(
         <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:C.faint}}>No historical positions available</div>
       ):(
-        <div style={{display:"flex",gap:10,flex:1,minHeight:0}}>
+        <div style={{display:"flex",gap:12,flex:1,minHeight:0,padding:"0 10px"}}>
           {bucketDefs.map((b,i)=>{
             const cur=comparison.current[i],old=comparison.old[i];
             const curH=cur?Math.max(5,(cur/maxCount)*100):0;
-            const oldH=old?Math.max(5,(old/maxCount)*100):0;
+            const oldH=old?Math.max(3,(old/maxCount)*100):0;
             const active=bucketFilters.has(b.sublabel);
             return <div key={b.sublabel} onClick={()=>onBucketFilter&&onBucketFilter(b.sublabel)}
-              style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",cursor:"pointer",borderRadius:6,padding:"2px",outline:active?"2px solid "+b.col:"2px solid transparent"}}>
-              <div style={{display:"flex",gap:6,alignItems:"flex-end",justifyContent:"center",width:"100%",flex:1,minHeight:110}}>
-                <div style={{height:"100%",flex:1,maxWidth:34,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center"}}>
-                  <div style={{fontSize:11,fontWeight:800,color:b.col,marginBottom:3}}>{fmt(cur)}</div>
-                  <div style={{width:"100%",height:curH+"%",minHeight:cur?4:0,background:b.col,borderRadius:"4px 4px 2px 2px",boxShadow:cur?"0 0 8px "+b.col+"66":"none"}}/>
-                </div>
-                <div style={{height:"100%",flex:1,maxWidth:34,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center"}}>
-                  <div style={{fontSize:11,fontWeight:700,color:"rgba(190,205,225,0.72)",marginBottom:3}}>{fmt(old)}</div>
-                  <div style={{width:"100%",height:oldH+"%",minHeight:old?4:0,background:"rgba(160,180,210,0.45)",borderRadius:"4px 4px 2px 2px"}}/>
+              style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",cursor:"pointer",borderRadius:6,padding:"2px 7px 0",outline:active?"2px solid "+b.col:"2px solid transparent"}}>
+              <div style={{width:"100%",flex:1,minHeight:110,display:"flex",alignItems:"flex-end",justifyContent:"center",position:"relative"}}>
+                <div style={{width:"56%",maxWidth:48,height:curH+"%",minHeight:cur?5:0,background:b.col,borderRadius:"4px 4px 2px 2px",boxShadow:cur?"0 0 8px "+b.col+"55":"none",position:"relative"}}>
+                  <div style={{position:"absolute",left:"50%",top:-18,transform:"translateX(-50%)",fontSize:11,fontWeight:800,color:b.col}}>{cur}</div>
+                  {old>0&&<div title={"30 days ago: "+old} style={{position:"absolute",left:"100%",bottom:`calc(${oldH}% - 6px)`,marginLeft:3,display:"flex",alignItems:"center",whiteSpace:"nowrap",fontSize:10,fontWeight:700,color:"rgba(190,205,225,0.78)"}}>
+                    <span style={{fontSize:12,lineHeight:1,marginRight:2}}>◀</span>{old}
+                  </div>}
                 </div>
               </div>
               <div style={{fontSize:12,color:b.col,fontWeight:700,textAlign:"center",marginTop:7}}>{b.sublabel}</div>
@@ -502,7 +497,9 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
       // use the extra vertical space for the SVG instead of leaving it blank.
       if (parent) {
         const available = parent.getBoundingClientRect().height - 82;
-        setH(Math.max(110, Math.floor(available)));
+        // Clamp to the space that actually exists after expand/collapse. This prevents
+        // the SVG keeping its expanded height and being clipped below the normal panel.
+        setH(Math.max(150, Math.floor(available)));
       }
     };
     resize();
