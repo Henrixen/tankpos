@@ -1483,18 +1483,18 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()+Number(offset||0));
     return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
   };
+  const openDateRailRef=useRef(null);
   const OpenDateRangeSlider=()=>{
     const lo=Math.min(openDateSliderFrom??openDateBounds.min,openDateSliderTo??openDateBounds.max);
     const hi=Math.max(openDateSliderFrom??openDateBounds.min,openDateSliderTo??openDateBounds.max);
     const span=Math.max(1,openDateBounds.max-openDateBounds.min);
     const leftPct=((lo-openDateBounds.min)/span)*100;
     const rightPct=((hi-openDateBounds.min)/span)*100;
-    const railRef=useRef(null);
     const dragHandle=(which,e)=>{
       e.preventDefault();
       e.currentTarget.setPointerCapture?.(e.pointerId);
       const move=(ev)=>{
-        const rect=railRef.current?.getBoundingClientRect();
+        const rect=openDateRailRef.current?.getBoundingClientRect();
         if(!rect||!rect.width)return;
         const pct=Math.max(0,Math.min(1,(ev.clientX-rect.left)/rect.width));
         let n=Math.round(openDateBounds.min+pct*span);
@@ -1512,9 +1512,9 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
       window.addEventListener("pointermove",move);
       window.addEventListener("pointerup",up);
     };
-    return <div style={{display:"flex",alignItems:"center",gap:8,minWidth:300,maxWidth:430,flex:"1 1 350px"}}>
+    return <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,maxWidth:"100%",width:"100%",flex:"1 1 240px"}}>
       <span style={{fontSize:10,color:"#7dd3fc",minWidth:38,textAlign:"right",whiteSpace:"nowrap"}}>{openDateLabel(lo)}</span>
-      <div ref={railRef} style={{position:"relative",height:20,flex:1,minWidth:145,touchAction:"none"}}>
+      <div ref={openDateRailRef} style={{position:"relative",height:20,flex:"1 1 120px",minWidth:70,touchAction:"none"}}>
         <div style={{position:"absolute",left:0,right:0,top:9,height:2,background:"rgba(88,166,255,.20)",borderRadius:2}}/>
         <div style={{position:"absolute",left:`${leftPct}%`,width:`${Math.max(0,rightPct-leftPct)}%`,top:9,height:2,background:"#38bdf8",borderRadius:2}}/>
         <button type="button" aria-label="Earliest open date" onPointerDown={e=>dragHandle("low",e)}
