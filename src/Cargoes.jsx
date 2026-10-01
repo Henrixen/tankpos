@@ -320,18 +320,37 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
  const pageRows=useMemo(()=>filtered.slice(0,page*PAGE_SIZE),[filtered,page]);
  const widths=["1.5%","4.5%","11%","10%","4%","6%","8%","11%","4.5%","4.5%","7%","14%","4%","7%","1.5%","1.5%"];
  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
-  <div style={{display:"flex",gap:10,height:260}}>
-   <div style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}>
-    <div style={{...card,padding:"6px 8px",display:"flex",gap:4,flexWrap:"wrap",alignContent:"flex-start",flex:"0 0 auto",overflow:"visible"}}><span style={{fontSize:9,color:C.faint,fontWeight:800,width:"100%",marginBottom:1}}>TAG ON PARSE</span>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={{...btn(parseTag===t),color:tc||"#9fc3f5",borderColor:parseTag===t?(tc||C.blue):C.bd,background:parseTag===t?(tc?tc+"22":"rgba(88,166,255,.18)"):C.bg3}}>{t}</button>})}</div>
+  <style>{`
+    @media (max-width: 1500px){
+      .cargo-top{gap:6px!important;}
+      .cargo-parse{flex-basis:24%!important;}
+      .cargo-filters{flex-basis:28%!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;grid-auto-rows:min-content!important;}
+      .cargo-filter-tags{grid-column:1 / -1!important;}
+      .cargo-filter-tags > div{grid-template-columns:repeat(4,minmax(0,1fr))!important;max-height:112px!important;}
+      .cargo-rate{flex-basis:24%!important;}
+      .cargo-chart{flex-basis:24%!important;}
+      .cargo-parse-tags{max-height:96px!important;overflow-y:auto!important;}
+    }
+    @media (max-width: 1250px){
+      .cargo-filters{flex-basis:30%!important;}
+      .cargo-filter-tags > div{grid-template-columns:repeat(3,minmax(0,1fr))!important;}
+      .cargo-parse{flex-basis:23%!important;}
+      .cargo-rate{flex-basis:23%!important;}
+      .cargo-chart{flex-basis:24%!important;}
+    }
+  `}</style>
+  <div className="cargo-top" style={{display:"flex",gap:10,height:260}}>
+   <div className="cargo-parse" style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}>
+    <div className="cargo-parse-tags" style={{...card,padding:"6px 8px",display:"flex",gap:4,flexWrap:"wrap",alignContent:"flex-start",flex:"0 0 auto",overflow:"visible"}}><span style={{fontSize:9,color:C.faint,fontWeight:800,width:"100%",marginBottom:1}}>TAG ON PARSE</span>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={{...btn(parseTag===t),color:tc||"#9fc3f5",borderColor:parseTag===t?(tc||C.blue):C.bd,background:parseTag===t?(tc?tc+"22":"rgba(88,166,255,.18)"):C.bg3}}>{t}</button>})}</div>
     <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const u=localStorage.getItem("signal_user")||"H";const r=await onAddCargoes(p.map(c=>({...c,entered_by:u,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div>
    </div>
-   <div style={{flex:"0 0 25%",minWidth:0,...card,padding:8,display:"grid",gridTemplateColumns:"0.9fr 0.9fr 1.6fr",gap:8,overflow:"hidden",alignItems:"start"}}>
+   <div className="cargo-filters" style={{flex:"0 0 25%",minWidth:0,...card,padding:8,display:"grid",gridTemplateColumns:"0.9fr 0.9fr 1.6fr",gap:8,overflow:"hidden",alignItems:"start"}}>
     <div style={{minWidth:0}}><b style={{fontSize:9,color:C.blue}}>GRADE</b><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:3,marginTop:4}}>{grades.map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={{...btn(grade===g.id),textTransform:"uppercase",textAlign:"left",width:"100%",overflow:"hidden",textOverflow:"ellipsis"}}>{String(g.label).toUpperCase()}</button>)}</div></div>
     <div style={{minWidth:0}}><b style={{fontSize:9,color:C.dim}}>PERIOD</b><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:3,marginTop:4}}>{[["","ALL"],["tw","THIS WEEK"],["lw","LAST WEEK"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={{...btn(time===k),textTransform:"uppercase",textAlign:"left",width:"100%"}}>{l}</button>)}</div></div>
-    <div style={{minWidth:0}}><b style={{fontSize:9,color:C.pink}}>TAG</b><div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:3,marginTop:4,maxHeight:228,overflowY:"auto"}}>{tags.map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={{...btn(tag===t),textTransform:"uppercase",textAlign:"left",width:"100%",overflow:"hidden",textOverflow:"ellipsis"}}>{String(t).toUpperCase()}</button>)}</div></div>
+    <div className="cargo-filter-tags" style={{minWidth:0}}><b style={{fontSize:9,color:C.pink}}>TAG</b><div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:3,marginTop:4,maxHeight:228,overflowY:"auto"}}>{tags.map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={{...btn(tag===t),textTransform:"uppercase",textAlign:"left",width:"100%",overflow:"hidden",textOverflow:"ellipsis"}}>{String(t).toUpperCase()}</button>)}</div></div>
    </div>
-   <div style={{flex:"0 0 25%",minWidth:0,alignSelf:"flex-start",position:"relative",zIndex:30}}><Suspense fallback={null}><RateMatrixCard collapsedHeight={260} bunkerHeader={<BunkerHeader/>}/></Suspense></div>
-   <div style={{flex:"1 1 25%",minWidth:0,height:"100%",display:"flex",alignSelf:"stretch"}}><CargoMonthChart data={monthly} total={cargoTotal||cargoes.length} loading={monthlyLoading}/></div>
+   <div className="cargo-rate" style={{flex:"0 0 25%",minWidth:0,alignSelf:"flex-start",position:"relative",zIndex:30}}><Suspense fallback={null}><RateMatrixCard collapsedHeight={260} bunkerHeader={<BunkerHeader/>}/></Suspense></div>
+   <div className="cargo-chart" style={{flex:"1 1 25%",minWidth:0,height:"100%",display:"flex",alignSelf:"stretch"}}><CargoMonthChart data={monthly} total={cargoTotal||cargoes.length} loading={monthlyLoading}/></div>
   </div>
   <div style={{...card,padding:"5px 8px",display:"flex",gap:6,alignItems:"center"}}>
    <button onClick={()=>setShowAdd(true)} style={{...btn(),color:C.amber}}>+ Add cargo</button>
