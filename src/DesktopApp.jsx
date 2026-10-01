@@ -380,8 +380,11 @@ function TagCellV({vesselName,tag,onUpdateV}){
       const zoom=Number.isFinite(rawZoom)&&rawZoom>0 ? rawZoom : 1;
 
       const popWVisual=190*zoom;
-      const popHVisual=340*zoom;
+      // Estimate the real menu height from the tag count and keep it inside
+      // the visible viewport, even when the clicked row is near the bottom.
+      const estimatedCssH=Math.min(420,96+getTagListFor("position").length*31);
       const marginVisual=12;
+      const popHVisual=Math.min(estimatedCssH*zoom,window.innerHeight-marginVisual*2);
 
       const viewportW=window.innerWidth;
       const viewportH=window.innerHeight;
@@ -446,7 +449,10 @@ function TagCellV({vesselName,tag,onUpdateV}){
             padding:"6px",boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
             display:"flex",flexDirection:"column",gap:3,width:190,
             maxWidth:"calc(100vw - 20px)",
-            maxHeight:`calc(100vh - ${pos.top+10}px)`,overflowY:"auto",overflowX:"hidden"
+            // Explicit zoom-aware px height prevents the popup extending below
+            // the dashboard. If needed, the menu itself scrolls instead.
+            maxHeight:`${Math.max(120,(window.innerHeight/((parseFloat(getComputedStyle(document.body).zoom||document.body.style.zoom||"1")||1))-pos.top-12))}px`,
+            overflowY:"auto",overflowX:"hidden"
           }}>
             {cur&&(
               <button onClick={()=>{onUpdateV(vesselName,"tag","");setOpen(false);}}
@@ -1458,6 +1464,52 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [posTagFilter,setPosTagFilter]=useState(new Set());
   const [dwtRange,setDwtRange]=useState({min:"",max:""});
   const [builtRange,setBuiltRange]=useState({min:"",max:""});
+  const [openDateFilter,setOpenDateFilter]=useState({quick:"",from:"",to:""});
+
+  // Range of open dates currently available in Positions.
+  const openDateBounds=useMemo(()=>{
+    const vals=(vessels||[]).map(v=>daysBetween(v.date)).filter(d=>d!==null&&isFinite(d));
+    if(!vals.length) return {min:0,max:1};
+    return {min:Math.min(...vals),max:Math.max(...vals)};
+  },[vessels]);
+  const isoFromDayOffset=useCallback((offset)=>{
+    const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()+Number(offset||0));
+    const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${day}`;
+  },[]);
+  const openDateSliderFrom=openDateFilter.from?daysBetween(openDateFilter.from):openDateBounds.min;
+  const openDateSliderTo=openDateFilter.to?daysBetween(openDateFilter.to):openDateBounds.max;
+  const openDateLabel=(offset)=>{
+    const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()+Number(offset||0));
+    return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+  };
+  const OpenDateRangeSlider=()=>{
+    const lo=Math.min(openDateSliderFrom??openDateBounds.min,openDateSliderTo??openDateBounds.max);
+    const hi=Math.max(openDateSliderFrom??openDateBounds.min,openDateSliderTo??openDateBounds.max);
+    const span=Math.max(1,openDateBounds.max-openDateBounds.min);
+    const leftPct=((lo-openDateBounds.min)/span)*100;
+    const rightPct=((hi-openDateBounds.min)/span)*100;
+    return <div style={{display:"flex",alignItems:"center",gap:8,minWidth:300,maxWidth:430,flex:"1 1 350px"}}>
+      <span style={{fontSize:10,color:"#7dd3fc",minWidth:38,textAlign:"right",whiteSpace:"nowrap"}}>{openDateLabel(lo)}</span>
+      <div style={{position:"relative",height:20,flex:1,minWidth:145}}>
+        <div style={{position:"absolute",left:0,right:0,top:9,height:2,background:"rgba(88,166,255,.20)",borderRadius:2}}/>
+        <div style={{position:"absolute",left:`${leftPct}%`,width:`${Math.max(0,rightPct-leftPct)}%`,top:9,height:2,background:"#38bdf8",borderRadius:2}}/>
+        <input className="open-date-range open-date-range-low" type="range" min={openDateBounds.min} max={openDateBounds.max} step="1" value={lo}
+          onChange={e=>{const n=Math.min(Number(e.target.value),hi);setOpenDateFilter({quick:"",from:n<=openDateBounds.min?"":isoFromDayOffset(n),to:hi>=openDateBounds.max?"":isoFromDayOffset(hi)});setPosPage(1);}}/>
+        <input className="open-date-range open-date-range-high" type="range" min={openDateBounds.min} max={openDateBounds.max} step="1" value={hi}
+          onChange={e=>{const n=Math.max(Number(e.target.value),lo);setOpenDateFilter({quick:"",from:lo<=openDateBounds.min?"":isoFromDayOffset(lo),to:n>=openDateBounds.max?"":isoFromDayOffset(n)});setPosPage(1);}}/>
+      </div>
+      <span style={{fontSize:10,color:"#7dd3fc",minWidth:38,whiteSpace:"nowrap"}}>{openDateLabel(hi)}</span>
+      {(openDateFilter.from||openDateFilter.to)&&<button onClick={()=>{setOpenDateFilter({quick:"",from:"",to:""});setPosPage(1);}} style={{background:"transparent",border:"1px solid rgba(255,107,107,.35)",color:C.red,borderRadius:4,fontSize:10,cursor:"pointer",padding:"2px 5px"}}>✕</button>}
+      <style>{`
+        .open-date-range{position:absolute;left:0;top:0;width:100%;height:20px;margin:0;background:transparent;appearance:none;-webkit-appearance:none;pointer-events:none;outline:none;}
+        .open-date-range::-webkit-slider-runnable-track{height:2px;background:transparent}.open-date-range::-moz-range-track{height:2px;background:transparent}
+        .open-date-range::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#38bdf8;border:2px solid #b9e8ff;box-shadow:0 0 0 2px rgba(56,189,248,.16);margin-top:-5px;pointer-events:auto;cursor:ew-resize}
+        .open-date-range::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:#38bdf8;border:2px solid #b9e8ff;box-shadow:0 0 0 2px rgba(56,189,248,.16);pointer-events:auto;cursor:ew-resize}
+        .open-date-range-low{z-index:2}.open-date-range-high{z-index:3}
+      `}</style>
+    </div>;
+  };
   const [sortK,setSortK]=useState("fileDate");
   const [sortD,setSortD]=useState(-1);
   const [sel,setSel]=useState(null);
@@ -2217,6 +2269,22 @@ const filtV=useMemo(()=>{
       return vesselTags.some(t=>selectedTags.has(t));
     });
   }
+  // Open-date filter. Uses the same daysBetween parser already used by Positions,
+  // so displayed dates such as "10 OCT" and ISO date inputs are compared consistently.
+  if(openDateFilter.quick||openDateFilter.from||openDateFilter.to){
+    const fromDays=openDateFilter.from?daysBetween(openDateFilter.from):null;
+    const toDays=openDateFilter.to?daysBetween(openDateFilter.to):null;
+    list=list.filter(v=>{
+      if(v.openPort==="EMPLOYED") return false;
+      const d=daysBetween(v.date);
+      if(d===null||!isFinite(d)) return false;
+      if(openDateFilter.quick==="ppt" && !(d>=0&&d<=1)) return false;
+      if(fromDays!==null&&isFinite(fromDays)&&d<fromDays) return false;
+      if(toDays!==null&&isFinite(toDays)&&d>toDays) return false;
+      return true;
+    });
+  }
+
   // Custom DWT range (in tonnes). Handles "8K"/raw numbers.
   const parseDwt=(raw)=>{if(raw==null||raw==="")return null;if(typeof raw==="number")return raw;const s=String(raw).trim().toUpperCase().replace(/\s/g,"");if(/^\d+(\.\d+)?K$/.test(s))return parseFloat(s)*1000;const n=parseFloat(s.replace(/[^\d.]/g,""));return isFinite(n)?n:null;};
   if(dwtRange.min!==""||dwtRange.max!==""){
@@ -2340,6 +2408,7 @@ const filtV=useMemo(()=>{
   opFilter,
   bucketFilters,
   updFilter,
+  openDateFilter.quick,openDateFilter.from,openDateFilter.to,
   posFileDaysBack,
   superRegionFilter,
   segmentFilter,
@@ -2428,7 +2497,7 @@ const filtV=useMemo(()=>{
   ];
 
   // Reset page when filters change
-  useEffect(()=>{setPosPage(1);},[vessels,filters,search,sortK,opFilter,bucketFilters,updFilter,posFileDaysBack,superRegionFilter]);
+  useEffect(()=>{setPosPage(1);},[vessels,filters,search,sortK,opFilter,bucketFilters,updFilter,openDateFilter.quick,openDateFilter.from,openDateFilter.to,posFileDaysBack,superRegionFilter]);
 
   const stats={total:vessels.length,ppt:filtV.filter(v=>isOpenPPT(v.date)).length,subs:filtV.filter(v=>v.openPort==="EMPLOYED").length};
   const vessels14d=useMemo(()=>{
@@ -2962,8 +3031,8 @@ const filtV=useMemo(()=>{
         </>
       ) : (
         <Suspense fallback={null}><OpeningBreakdown
-          vessels={vessels14d.filter(v=>vesselsTodayUpdated.has(v.vessel))}
-          filteredVessels={filtV.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+          vessels={vessels14d}
+          filteredVessels={filtV}
           bucketFilters={bucketFilters}
           onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
           fillHeight={true}
@@ -3017,6 +3086,11 @@ const filtV=useMemo(()=>{
                           {/* Updated */}
                           <FilterRow label="Updated" col={C.blue}>
                             {[["","All"],["today","Today"],["week","This week"],["7d","7 days"],["14d","14 days"],["30d","30 days"]].map(([v,l])=>(<Chip key={v||"all"} col={C.blue} active={updFilter===v&&(v!==""||updFilter==="")} onClick={()=>setUpdFilter(v)}>{l}</Chip>))}
+                          </FilterRow>
+                          {/* Open Date */}
+                          <FilterRow label="Open Date" col="#38bdf8">
+                            <Chip col="#38bdf8" active={openDateFilter.quick==="ppt"} onClick={()=>{setOpenDateFilter(r=>({quick:r.quick==="ppt"?"":"ppt",from:"",to:""}));setPosPage(1);}}>Today/Tomorrow</Chip>
+                            <OpenDateRangeSlider/>
                           </FilterRow>
                           {/* Region */}
                           <FilterRow label="Region" col="#7dd3fc">
@@ -3162,6 +3236,10 @@ const filtV=useMemo(()=>{
                         <COL label="Tags" col="#79c0ff">
                           {(()=>{const available=getTagListFor("position");return available.length?available.map(t=>(<B key={t} active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t.toUpperCase()}</B>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>NONE</span>;})()}
                           {posTagFilter.size>0&&<B active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
+                        </COL>
+                        <COL label="Open Date" col="#38bdf8">
+                          <B active={openDateFilter.quick==="ppt"} onClick={()=>{setOpenDateFilter(r=>({quick:r.quick==="ppt"?"":"ppt",from:"",to:""}));setPosPage(1);}}>Today/Tomorrow</B>
+                          <OpenDateRangeSlider/>
                         </COL>
                         <COL label="Status" col={C.amber}>
                           {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
