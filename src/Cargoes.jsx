@@ -321,19 +321,19 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
  const widths=["1.5%","4.5%","11%","10%","4%","6%","8%","11%","4.5%","4.5%","7%","14%","4%","7%","1.5%","1.5%"];
  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
   <style>{`
-    @media (max-width: 1500px){
+    @media (max-width: 1800px){
       .cargo-top{gap:6px!important;}
       .cargo-parse{flex-basis:24%!important;}
       .cargo-filters{flex-basis:28%!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;grid-auto-rows:min-content!important;}
       .cargo-filter-tags{grid-column:1 / -1!important;}
-      .cargo-filter-tags > div{grid-template-columns:repeat(4,minmax(0,1fr))!important;max-height:112px!important;}
+      .cargo-filter-tags > div{grid-template-columns:repeat(3,minmax(0,1fr))!important;max-height:126px!important;}
       .cargo-rate{flex-basis:24%!important;}
       .cargo-chart{flex-basis:24%!important;}
       .cargo-parse-tags{max-height:96px!important;overflow-y:auto!important;}
     }
-    @media (max-width: 1250px){
+    @media (max-width: 1450px){
       .cargo-filters{flex-basis:30%!important;}
-      .cargo-filter-tags > div{grid-template-columns:repeat(3,minmax(0,1fr))!important;}
+      .cargo-filter-tags > div{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
       .cargo-parse{flex-basis:23%!important;}
       .cargo-rate{flex-basis:23%!important;}
       .cargo-chart{flex-basis:24%!important;}
