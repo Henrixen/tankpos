@@ -101,16 +101,11 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
 
   return(
     <div style={{background:C.bg2,border:"1px solid "+C.bd2,borderRadius:7,padding:"8px 14px 12px",flex:1,boxSizing:"border-box",display:"flex",flexDirection:"column",minHeight:220,height:"100%",overflow:"hidden"}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:7}}>
-        {!loadingHistory&&comparison&&<div style={{fontSize:9,color:"rgba(150,180,220,0.62)",whiteSpace:"nowrap"}}>
-          <span style={{color:"#58a6ff",fontWeight:700}}>■</span> Current 7 reports {comparison.currentLabel}
-          <span style={{marginLeft:10,color:"rgba(190,205,225,0.78)",fontWeight:700}}>◀</span> 30d ago {comparison.oldLabel}
-        </div>}
-        <div style={{flex:1}}/>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:6,flexWrap:"nowrap",marginBottom:4,minHeight:23,overflow:"hidden"}}>
         {FW_SEGMENTS.map(s=>{
           const on=activeSeg.has(s.key);
           return <button key={s.key} onClick={()=>setActiveSeg(prev=>{const n=new Set(prev);n.has(s.key)?n.delete(s.key):n.add(s.key);return n;})}
-            style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(on?s.color:"rgba(88,166,255,0.15)"),background:on?s.color+"22":"transparent",color:on?s.color:"rgba(140,170,210,0.35)"}}>{s.label}</button>;
+            style={{fontSize:10,fontWeight:700,padding:"2px 7px",flex:"0 0 auto",borderRadius:4,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(on?s.color:"rgba(88,166,255,0.15)"),background:on?s.color+"22":"transparent",color:on?s.color:"rgba(140,170,210,0.35)"}}>{s.label}</button>;
         })}
       </div>
       {loadingHistory?(
@@ -121,8 +116,9 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
         <div style={{display:"flex",gap:12,flex:1,minHeight:0,padding:"0 10px"}}>
           {bucketDefs.map((b,i)=>{
             const cur=comparison.current[i],old=comparison.old[i];
-            const curH=cur?Math.max(5,(cur/maxCount)*100):0;
-            const oldH=old?Math.max(3,(old/maxCount)*100):0;
+            const PLOT_MAX=82; // reserve headroom so values/markers never collide with segment controls
+            const curH=cur?Math.max(5,(cur/maxCount)*PLOT_MAX):0;
+            const oldH=old?Math.max(3,(old/maxCount)*PLOT_MAX):0;
             const active=bucketFilters.has(b.sublabel);
             const axisLabel = b.sublabel==="PPT" ? "PPT" : b.sublabel==="2-4d" ? "2-4 days" : b.sublabel==="4-8d" ? "4-8 days" : ">8 days";
             return <div key={b.sublabel} onClick={()=>onBucketFilter&&onBucketFilter(b.sublabel)}
@@ -135,11 +131,15 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
                   <span style={{fontSize:12,lineHeight:1,marginRight:2}}>◀</span>{old}
                 </div>}
               </div>
-              <div style={{fontSize:12,color:b.col,fontWeight:700,textAlign:"center",marginTop:7}}>{axisLabel}</div>
+              <div style={{fontSize:12,color:b.col,fontWeight:700,textAlign:"center",marginTop:3}}>{axisLabel}</div>
             </div>;
           })}
         </div>
       )}
+      {!loadingHistory&&comparison&&<div style={{fontSize:8.5,color:"rgba(150,180,220,0.62)",whiteSpace:"nowrap",marginTop:2,lineHeight:"11px",minHeight:11}}>
+        <span style={{color:"#58a6ff",fontWeight:700}}>■</span> Current 7 reports {comparison.currentLabel}
+        <span style={{marginLeft:9,color:"rgba(190,205,225,0.78)",fontWeight:700}}>◀</span> 30d ago {comparison.oldLabel}
+      </div>}
     </div>
   );
 }
@@ -486,7 +486,7 @@ function mean(arr) {
 // Keyed by lookback so switching Cargoes <-> Positions does not refetch Supabase.
 const FW_HISTORY_CACHE = new Map();
 
-function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
+function FixingWindowChart({ vessels = [], tagFilter, filterActive = false, fillHeight = false }) {
   const initialCachedRows = FW_HISTORY_CACHE.get(14);
   const [rows, setRows] = React.useState(() => initialCachedRows || []);
   const [loading, setLoading] = React.useState(() => !initialCachedRows);
@@ -503,7 +503,9 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
   const [H, setH] = React.useState(200);
   const PAD = { top: 8, right: 16, bottom: 24, left: 40 };
 
-  // responsive width
+  // Responsive width. Normal/collapsed mode uses a fixed chart height so an
+  // expanded parent height can never leak into the collapsed panel. Only expanded
+  // mode follows the available parent height.
   useEffect(() => {
     if (!wrapRef.current) return;
     const wrap = wrapRef.current;
@@ -511,26 +513,25 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false }) {
     let resizeTimer = null;
     const applySize = () => {
       setW(Math.max(360, wrap.getBoundingClientRect().width));
+      if (!fillHeight) {
+        setH(176);
+        return;
+      }
       if (parent) {
         const parentH = parent.getBoundingClientRect().height;
-        // Size only after the expand/collapse animation has settled. Re-drawing the
-        // SVG on every animation frame was what made the lines fall below the panel.
-        const nextH = parentH > 340
-          ? Math.max(220, Math.floor(parentH - 58))
-          : Math.max(155, Math.floor(parentH - 50));
-        setH(nextH);
+        setH(Math.max(220, Math.floor(parentH - 58)));
       }
     };
     const resize = () => {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(applySize, 140);
+      resizeTimer = setTimeout(applySize, 80);
     };
     applySize();
     const ro = new ResizeObserver(resize);
     ro.observe(wrap);
-    if (parent) ro.observe(parent);
+    if (fillHeight && parent) ro.observe(parent);
     return () => { clearTimeout(resizeTimer); ro.disconnect(); };
-  }, []);
+  }, [fillHeight]);
 
   // Fetch fixing-window history only when this lookback has not already been
   // loaded during the current app session. The module-level cache survives
