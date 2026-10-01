@@ -1466,11 +1466,11 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [builtRange,setBuiltRange]=useState({min:"",max:""});
   const [openDateFilter,setOpenDateFilter]=useState({quick:"",from:"",to:""});
 
-  // Range of open dates currently available in Positions.
+  // Open-date slider is forward-looking only: today -> latest future open position.
   const openDateBounds=useMemo(()=>{
-    const vals=(vessels||[]).map(v=>daysBetween(v.date)).filter(d=>d!==null&&isFinite(d));
+    const vals=(vessels||[]).map(v=>daysBetween(v.date)).filter(d=>d!==null&&isFinite(d)&&d>=0);
     if(!vals.length) return {min:0,max:1};
-    return {min:Math.min(...vals),max:Math.max(...vals)};
+    return {min:0,max:Math.max(1,...vals)};
   },[vessels]);
   const isoFromDayOffset=useCallback((offset)=>{
     const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()+Number(offset||0));
@@ -1489,25 +1489,41 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     const span=Math.max(1,openDateBounds.max-openDateBounds.min);
     const leftPct=((lo-openDateBounds.min)/span)*100;
     const rightPct=((hi-openDateBounds.min)/span)*100;
+    const railRef=useRef(null);
+    const dragHandle=(which,e)=>{
+      e.preventDefault();
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      const move=(ev)=>{
+        const rect=railRef.current?.getBoundingClientRect();
+        if(!rect||!rect.width)return;
+        const pct=Math.max(0,Math.min(1,(ev.clientX-rect.left)/rect.width));
+        let n=Math.round(openDateBounds.min+pct*span);
+        if(which==="low") n=Math.min(n,hi); else n=Math.max(n,lo);
+        const nextLo=which==="low"?n:lo;
+        const nextHi=which==="high"?n:hi;
+        setOpenDateFilter({
+          quick:"",
+          from:nextLo<=openDateBounds.min?"":isoFromDayOffset(nextLo),
+          to:nextHi>=openDateBounds.max?"":isoFromDayOffset(nextHi)
+        });
+        setPosPage(1);
+      };
+      const up=()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);};
+      window.addEventListener("pointermove",move);
+      window.addEventListener("pointerup",up);
+    };
     return <div style={{display:"flex",alignItems:"center",gap:8,minWidth:300,maxWidth:430,flex:"1 1 350px"}}>
       <span style={{fontSize:10,color:"#7dd3fc",minWidth:38,textAlign:"right",whiteSpace:"nowrap"}}>{openDateLabel(lo)}</span>
-      <div style={{position:"relative",height:20,flex:1,minWidth:145}}>
+      <div ref={railRef} style={{position:"relative",height:20,flex:1,minWidth:145,touchAction:"none"}}>
         <div style={{position:"absolute",left:0,right:0,top:9,height:2,background:"rgba(88,166,255,.20)",borderRadius:2}}/>
         <div style={{position:"absolute",left:`${leftPct}%`,width:`${Math.max(0,rightPct-leftPct)}%`,top:9,height:2,background:"#38bdf8",borderRadius:2}}/>
-        <input className="open-date-range open-date-range-low" type="range" min={openDateBounds.min} max={openDateBounds.max} step="1" value={lo}
-          onChange={e=>{const n=Math.min(Number(e.target.value),hi);setOpenDateFilter({quick:"",from:n<=openDateBounds.min?"":isoFromDayOffset(n),to:hi>=openDateBounds.max?"":isoFromDayOffset(hi)});setPosPage(1);}}/>
-        <input className="open-date-range open-date-range-high" type="range" min={openDateBounds.min} max={openDateBounds.max} step="1" value={hi}
-          onChange={e=>{const n=Math.max(Number(e.target.value),lo);setOpenDateFilter({quick:"",from:lo<=openDateBounds.min?"":isoFromDayOffset(lo),to:n>=openDateBounds.max?"":isoFromDayOffset(n)});setPosPage(1);}}/>
+        <button type="button" aria-label="Earliest open date" onPointerDown={e=>dragHandle("low",e)}
+          style={{position:"absolute",left:`${leftPct}%`,top:4,transform:"translateX(-50%)",width:12,height:12,borderRadius:"50%",padding:0,background:"#38bdf8",border:"2px solid #b9e8ff",boxShadow:"0 0 0 2px rgba(56,189,248,.16)",cursor:"ew-resize",zIndex:3}}/>
+        <button type="button" aria-label="Latest open date" onPointerDown={e=>dragHandle("high",e)}
+          style={{position:"absolute",left:`${rightPct}%`,top:4,transform:"translateX(-50%)",width:12,height:12,borderRadius:"50%",padding:0,background:"#38bdf8",border:"2px solid #b9e8ff",boxShadow:"0 0 0 2px rgba(56,189,248,.16)",cursor:"ew-resize",zIndex:4}}/>
       </div>
       <span style={{fontSize:10,color:"#7dd3fc",minWidth:38,whiteSpace:"nowrap"}}>{openDateLabel(hi)}</span>
       {(openDateFilter.from||openDateFilter.to)&&<button onClick={()=>{setOpenDateFilter({quick:"",from:"",to:""});setPosPage(1);}} style={{background:"transparent",border:"1px solid rgba(255,107,107,.35)",color:C.red,borderRadius:4,fontSize:10,cursor:"pointer",padding:"2px 5px"}}>✕</button>}
-      <style>{`
-        .open-date-range{position:absolute;left:0;top:0;width:100%;height:20px;margin:0;background:transparent;appearance:none;-webkit-appearance:none;pointer-events:none;outline:none;}
-        .open-date-range::-webkit-slider-runnable-track{height:2px;background:transparent}.open-date-range::-moz-range-track{height:2px;background:transparent}
-        .open-date-range::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#38bdf8;border:2px solid #b9e8ff;box-shadow:0 0 0 2px rgba(56,189,248,.16);margin-top:-5px;pointer-events:auto;cursor:ew-resize}
-        .open-date-range::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:#38bdf8;border:2px solid #b9e8ff;box-shadow:0 0 0 2px rgba(56,189,248,.16);pointer-events:auto;cursor:ew-resize}
-        .open-date-range-low{z-index:2}.open-date-range-high{z-index:3}
-      `}</style>
     </div>;
   };
   const [sortK,setSortK]=useState("fileDate");
