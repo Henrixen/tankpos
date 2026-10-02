@@ -330,6 +330,11 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
       .cargo-rate{flex-basis:24%!important;}
       .cargo-chart{flex-basis:24%!important;}
       .cargo-parse-tags{max-height:96px!important;overflow-y:auto!important;}
+      /* Let TAG ON PARSE consume vertical room by shrinking the free-text parser,
+         never by pushing Parse & Add outside the fixed top panel. */
+      .cargo-parse > div:last-child > div{height:100%!important;display:flex!important;flex-direction:column!important;min-height:0!important;}
+      .cargo-parse > div:last-child textarea{flex:1 1 auto!important;min-height:0!important;height:auto!important;}
+      .cargo-parse > div:last-child textarea + div{flex:0 0 auto!important;}
     }
     @media (max-width: 1450px){
       .cargo-filters{flex-basis:30%!important;}
