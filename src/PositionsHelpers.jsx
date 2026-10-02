@@ -136,7 +136,7 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
           })}
         </div>
       )}
-      {!loadingHistory&&comparison&&<div style={{fontSize:8.5,color:"rgba(150,180,220,0.62)",whiteSpace:"nowrap",marginTop:2,lineHeight:"11px",minHeight:11}}>
+      {!loadingHistory&&comparison&&<div style={{fontSize:8.5,color:"rgba(150,180,220,0.62)",whiteSpace:"nowrap",marginTop:2,lineHeight:"11px",minHeight:11,textAlign:"center",width:"100%"}}>
         <span style={{color:"#58a6ff",fontWeight:700}}>■</span> Current 7 reports {comparison.currentLabel}
         <span style={{marginLeft:9,color:"rgba(190,205,225,0.78)",fontWeight:700}}>◀</span> 30d ago {comparison.oldLabel}
       </div>}
@@ -514,7 +514,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false, fill
     const applySize = () => {
       setW(Math.max(360, wrap.getBoundingClientRect().width));
       if (!fillHeight) {
-        setH(176);
+        setH(196);
         return;
       }
       if (parent) {
@@ -698,23 +698,12 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false, fill
   const AX = "rgba(210,225,245,0.85)";   // brighter axis text
 
   return (
-    <div ref={wrapRef} style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px", marginBottom: 10, position: "relative" }}>
-      {/* Compact top row: metrics at far left, segment toggles at right */}
-      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2, minHeight:22, whiteSpace:"nowrap" }}>
-        {tagFilter && <span style={{fontSize:10,padding:"2px 7px",borderRadius:4,border:"1px solid rgba(88,166,255,0.3)",color:"#79c0ff",background:"rgba(88,166,255,0.1)"}}>{tagFilter}</span>}
-        {avgFW != null && <span style={{fontSize:10,color:"rgba(150,180,220,0.6)"}}>Avg <span style={{color:"#58a6ff",fontWeight:700}}>{avgFW}d</span></span>}
-        <span style={{fontSize:10,color:"rgba(150,180,220,0.6)"}}>{vesselCount} vessels</span>
-        <span style={{fontSize:10,color:"rgba(120,150,190,0.45)"}}>History:</span>
-        <div style={{display:"flex",gap:3,alignItems:"center"}}>
-          {[[14,"2w"],[28,"4w"],[56,"8w"],[84,"12w"]].map(([d,l])=>(
-            <button key={d} onClick={()=>setLookback(d)} style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:3,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(lookback===d?"#58a6ff":"rgba(88,166,255,0.15)"),background:lookback===d?"rgba(88,166,255,0.15)":"transparent",color:lookback===d?"#79c0ff":"rgba(140,170,210,0.5)"}}>{l}</button>
-          ))}
-        </div>
-        {range&&<span style={{fontSize:10,color:"#79c0ff",cursor:"pointer"}} onClick={()=>setRange(null)}>{fmtWeek(range.from)}–{fmtWeek(range.to)} ✕</span>}
-        <div style={{flex:1,minWidth:4}}/>
-        <div style={{display:"flex",gap:4,alignItems:"center"}}>
-          {FW_SEGMENTS.map(s=>{const on=activeSeg.has(s.key);return <button key={s.key} onClick={()=>setActiveSeg(prev=>{const n=new Set(prev);n.has(s.key)?n.delete(s.key):n.add(s.key);return n;})} style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(on?s.color:"rgba(88,166,255,0.15)"),background:on?s.color+"22":"transparent",color:on?s.color:"rgba(140,170,210,0.35)"}}>{s.label}</button>})}
-          <button onClick={()=>setShowList(v=>!v)} style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",border:"1px solid rgba(88,166,255,0.25)",background:showList?"rgba(88,166,255,0.12)":"transparent",color:"#79c0ff"}}>{showList?"Hide vessels":`Vessels (${vesselCount})`}</button>
+    <div ref={wrapRef} style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "6px 12px 4px", marginBottom: 4, position: "relative" }}>
+      {/* Keep the top row exclusively for segment controls so they never get pushed out. */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:4, marginBottom:1, minHeight:22, whiteSpace:"nowrap", overflow:"hidden" }}>
+        <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"nowrap"}}>
+          {FW_SEGMENTS.map(s=>{const on=activeSeg.has(s.key);return <button key={s.key} onClick={()=>setActiveSeg(prev=>{const n=new Set(prev);n.has(s.key)?n.delete(s.key):n.add(s.key);return n;})} style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(on?s.color:"rgba(88,166,255,0.15)"),background:on?s.color+"22":"transparent",color:on?s.color:"rgba(140,170,210,0.35)",flex:"0 0 auto"}}>{s.label}</button>})}
+          <button onClick={()=>setShowList(v=>!v)} style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",border:"1px solid rgba(88,166,255,0.25)",background:showList?"rgba(88,166,255,0.12)":"transparent",color:"#79c0ff",flex:"0 0 auto"}}>{showList?"Hide vessels":`Vessels (${vesselCount})`}</button>
         </div>
       </div>
       {loading ? (
@@ -776,7 +765,20 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false, fill
 
 
       {/* vessel list — fixed overlay anchored below chart (escapes overflow:hidden clipping) */}
-      {showList && (() => {
+            <div style={{display:"flex",alignItems:"center",gap:7,minHeight:20,marginTop:1,whiteSpace:"nowrap",overflow:"hidden"}}>
+        {tagFilter && <span style={{fontSize:10,padding:"1px 6px",borderRadius:4,border:"1px solid rgba(88,166,255,0.3)",color:"#79c0ff",background:"rgba(88,166,255,0.1)"}}>{tagFilter}</span>}
+        {avgFW != null && <span style={{fontSize:10,color:"rgba(150,180,220,0.6)"}}>Avg <span style={{color:"#58a6ff",fontWeight:700}}>{avgFW}d</span></span>}
+        <span style={{fontSize:10,color:"rgba(150,180,220,0.6)"}}>{vesselCount} vessels</span>
+        <span style={{fontSize:10,color:"rgba(120,150,190,0.45)"}}>History:</span>
+        <div style={{display:"flex",gap:3,alignItems:"center"}}>
+          {[[14,"2w"],[28,"4w"],[56,"8w"],[84,"12w"]].map(([d,l])=>(
+            <button key={d} onClick={()=>setLookback(d)} style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:3,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(lookback===d?"#58a6ff":"rgba(88,166,255,0.15)"),background:lookback===d?"rgba(88,166,255,0.15)":"transparent",color:lookback===d?"#79c0ff":"rgba(140,170,210,0.5)"}}>{l}</button>
+          ))}
+        </div>
+        {range&&<span style={{fontSize:10,color:"#79c0ff",cursor:"pointer"}} onClick={()=>setRange(null)}>{fmtWeek(range.from)}–{fmtWeek(range.to)} ✕</span>}
+      </div>
+
+{showList && (() => {
         const r = wrapRef.current ? wrapRef.current.getBoundingClientRect() : null;
         const left = r ? r.left : 20;
         const top = r ? r.bottom - 2 : 200;
