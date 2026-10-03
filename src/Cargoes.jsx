@@ -315,6 +315,12 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
  const PAGE_SIZE=200;
  const [hoverRowId,setHoverRowId]=useState(null);
  const [selected,setSelected]=useState(()=>new Set());
+ const cargoCols=[["status","Status"],["vessel","Vessel"],["charterer","Charterer"],["qty","Qty"],["cargo","Cargo"],["load","Load"],["disch","Disch"],["from","From"],["to","To"],["freight","Freight"],["comment","Comment"],["tag","Tag"],["updated","Updated"]];
+ const cargoUser=localStorage.getItem("signal_user")||"H";
+ const cargoColsKey="signal_cargo_visible_columns_"+cargoUser;
+ const [visibleCols,setVisibleCols]=useState(()=>{try{const a=JSON.parse(localStorage.getItem(cargoColsKey)||"[]");if(Array.isArray(a)&&a.length)return new Set(a)}catch{}return new Set(cargoCols.map(x=>x[0]))});
+ const [colsOpen,setColsOpen]=useState(false),[colsPos,setColsPos]=useState({top:0,left:0});
+ useEffect(()=>{try{localStorage.setItem(cargoColsKey,JSON.stringify([...visibleCols]))}catch{}},[cargoColsKey,visibleCols]);
  const [bulkTagOpen,setBulkTagOpen]=useState(false);
  const {week,monthly,loading:monthlyLoading}=useMonthly();
  const groups=useMemo(()=>{try{return JSON.parse(localStorage.getItem("signal_cargo_filter_groups")||"[]")}catch{return[]}},[cargoes.length]);
@@ -362,8 +368,21 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
       .cargo-mobile-fold > summary::-webkit-details-marker{display:none;}
       .cargo-mobile-fold > summary::after{content:"▸";color:#6f86a8;}
       .cargo-mobile-fold[open] > summary::after{content:"▾";}
-      .cargo-mobile-fold > div{width:100%!important;height:auto!important;min-height:220px!important;box-sizing:border-box;}
-      .cargo-mobile-fold .cargo-parse{height:300px!important;}
+      .cargo-mobile-fold > div{width:100%!important;height:auto!important;min-height:0!important;box-sizing:border-box;}
+      .cargo-mobile-fold .cargo-parse{height:auto!important;min-height:0!important;}
+      .cargo-mobile-fold .cargo-parse > div:last-child{flex:1 1 auto!important;min-height:0!important;}
+      .cargo-mobile-fold .cargo-parse > div:last-child > div{height:auto!important;min-height:0!important;}
+      .cargo-mobile-fold .cargo-parse textarea{min-height:150px!important;height:150px!important;flex:0 0 150px!important;}
+      .cargo-actions{display:block!important;padding:7px!important;}
+      .cargo-actions-main{display:flex!important;gap:5px!important;align-items:center!important;overflow-x:auto!important;padding-bottom:6px!important;}
+      .cargo-actions-search{display:flex!important;width:100%!important;gap:5px!important;align-items:center!important;}
+      .cargo-actions-search input{flex:1!important;width:auto!important;min-width:0!important;}
+      .cargo-mobile-controls{display:block!important;margin-top:6px!important;background:${C.bg2};border:1px solid ${C.bd};border-radius:7px;overflow:hidden;}
+      .cargo-mobile-controls > summary{display:flex!important;align-items:center;justify-content:space-between;list-style:none;padding:9px 11px;color:#79c0ff;font-size:11px;font-weight:800;cursor:pointer;}
+      .cargo-mobile-controls > summary::-webkit-details-marker{display:none;}
+      .cargo-mobile-controls > summary::after{content:"▸";color:#6f86a8;}
+      .cargo-mobile-controls[open] > summary::after{content:"▾";}
+      .cargo-mobile-controls-body{display:flex!important;gap:5px!important;flex-wrap:wrap!important;padding:0 8px 8px!important;}
       .cargo-mobile-fold .cargo-filters{display:grid!important;grid-template-columns:1fr 1fr!important;overflow:visible!important;min-height:0!important;}
       .cargo-mobile-fold .cargo-filter-tags{grid-column:1 / -1!important;}
       .cargo-mobile-fold .cargo-rate{min-height:260px!important;}
@@ -374,22 +393,28 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
     @media (min-width: 701px){
       .cargo-mobile-fold{display:contents!important;}
       .cargo-mobile-fold > summary{display:none!important;}
+      .cargo-mobile-controls{display:contents!important;}
+      .cargo-mobile-controls > summary{display:none!important;}
+      .cargo-mobile-controls-body{display:contents!important;}
+      .cargo-actions{display:flex!important;}
+      .cargo-actions-main,.cargo-actions-search{display:contents!important;}
     }
   `}</style>
   <div className="cargo-top" style={{display:"flex",gap:10,height:260}}>
-   <details className="cargo-mobile-fold"><summary>Paste / Parse</summary><div className="cargo-parse" style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}>
+   <details className="cargo-mobile-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Paste / Parse</summary><div className="cargo-parse" style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}>
     <div className="cargo-parse-tags" style={{...card,padding:"6px 8px",display:"flex",gap:4,flexWrap:"wrap",alignContent:"flex-start",flex:"0 0 auto",overflow:"visible"}}><span style={{fontSize:9,color:C.faint,fontWeight:800,width:"100%",marginBottom:1}}>TAG ON PARSE</span>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={{...btn(parseTag===t),color:tc||"#9fc3f5",borderColor:parseTag===t?(tc||C.blue):C.bd,background:parseTag===t?(tc?tc+"22":"rgba(88,166,255,.18)"):C.bg3}}>{t}</button>})}</div>
     <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const u=localStorage.getItem("signal_user")||"H";const r=await onAddCargoes(p.map(c=>({...c,entered_by:u,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div>
    </div></details>
-   <details className="cargo-mobile-fold"><summary>Filters</summary><div className="cargo-filters" style={{flex:"0 0 25%",minWidth:0,...card,padding:8,display:"grid",gridTemplateColumns:"0.9fr 0.9fr 1.6fr",gap:8,overflow:"hidden",alignItems:"start"}}>
+   <details className="cargo-mobile-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Filters</summary><div className="cargo-filters" style={{flex:"0 0 25%",minWidth:0,...card,padding:8,display:"grid",gridTemplateColumns:"0.9fr 0.9fr 1.6fr",gap:8,overflow:"hidden",alignItems:"start"}}>
     <div style={{minWidth:0}}><b style={{fontSize:9,color:C.blue}}>GRADE</b><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:3,marginTop:4}}>{grades.map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={{...btn(grade===g.id),textTransform:"uppercase",textAlign:"left",width:"100%",overflow:"hidden",textOverflow:"ellipsis"}}>{String(g.label).toUpperCase()}</button>)}</div></div>
     <div style={{minWidth:0}}><b style={{fontSize:9,color:C.dim}}>PERIOD</b><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:3,marginTop:4}}>{[["","ALL"],["tw","THIS WEEK"],["lw","LAST WEEK"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={{...btn(time===k),textTransform:"uppercase",textAlign:"left",width:"100%"}}>{l}</button>)}</div></div>
     <div className="cargo-filter-tags" style={{minWidth:0}}><b style={{fontSize:9,color:C.pink}}>TAG</b><div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:3,marginTop:4,maxHeight:228,overflowY:"auto"}}>{tags.map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={{...btn(tag===t),textTransform:"uppercase",textAlign:"left",width:"100%",overflow:"hidden",textOverflow:"ellipsis"}}>{String(t).toUpperCase()}</button>)}</div></div>
    </div></details>
-   <details className="cargo-mobile-fold"><summary>Rate Matrix</summary><div className="cargo-rate" style={{flex:"0 0 25%",minWidth:0,alignSelf:"flex-start",position:"relative",zIndex:30}}><Suspense fallback={null}><RateMatrixCard collapsedHeight={260} bunkerHeader={<BunkerHeader/>}/></Suspense></div></details>
-   <details className="cargo-mobile-fold"><summary>Cargo Graph / Count</summary><div className="cargo-chart" style={{flex:"1 1 25%",minWidth:0,height:"100%",display:"flex",alignSelf:"stretch"}}><CargoMonthChart data={monthly} total={cargoTotal||cargoes.length} loading={monthlyLoading}/></div></details>
+   <details className="cargo-mobile-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Rate Matrix</summary><div className="cargo-rate" style={{flex:"0 0 25%",minWidth:0,alignSelf:"flex-start",position:"relative",zIndex:30}}><Suspense fallback={null}><RateMatrixCard collapsedHeight={260} bunkerHeader={<BunkerHeader/>}/></Suspense></div></details>
+   <details className="cargo-mobile-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Cargo Graph / Count</summary><div className="cargo-chart" style={{flex:"1 1 25%",minWidth:0,height:"100%",display:"flex",alignSelf:"stretch"}}><CargoMonthChart data={monthly} total={cargoTotal||cargoes.length} loading={monthlyLoading}/></div></details>
   </div>
-  <div style={{...card,padding:"5px 8px",display:"flex",gap:6,alignItems:"center"}}>
+  <div className="cargo-actions" style={{...card,padding:"5px 8px",display:"flex",gap:6,alignItems:"center"}}>
+   <div className="cargo-actions-main">
    <button onClick={()=>setShowAdd(true)} style={{...btn(),color:C.amber}}>+ Add cargo</button>
    <button onClick={()=>navigator.clipboard?.writeText(filtered.map(c=>[c.status,c.vessel,c.charterer,c.qty,c.cargo,c.load,c.disch,fmtDateShort(c.from),fmtDateShort(c.to),fmtFreight(c.freight)||c.freight,c.comment].join("\\t")).join("\\n"))} style={btn()}>Copy all</button>
    <button onClick={()=>{const csv=filtered.map(c=>[c.status,c.vessel,c.charterer,c.qty,c.cargo,c.load,c.disch,c.from,c.to,c.freight,c.comment,c.tag,c.updated].map(x=>`"${String(x||"").replaceAll('"','""')}"`).join(",")).join("\\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="cargoes.csv";a.click()}} style={btn()}>Copy CSV</button>
@@ -401,9 +426,12 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
      </div></>}
    </div>}
    <span style={{fontSize:10,color:C.faint}}>This wk <b style={{color:C.blue}}>{week.thisWk}</b>&nbsp;&nbsp; Last wk <b>{week.lastWk}</b></span>
-   <div style={{marginLeft:"auto",display:"flex",gap:5,alignItems:"center"}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search cargoes..." style={{...input,width:210}}/><span style={{fontSize:10,color:C.faint}}>Total <b style={{color:C.tx}}>{cargoTotal||cargoes.length}</b></span><select value={sort} onChange={e=>setSort(e.target.value)} style={input}><option value="added">Added</option><option value="updated">Updated</option><option value="charterer">Charterer</option><option value="from">Laycan</option></select><button onClick={()=>setDir(d=>-d)} style={btn()}>{dir>0?"▲":"▼"}</button></div>
+   </div>
+   <div className="cargo-actions-search"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search cargoes..." style={{...input,width:210}}/><span style={{fontSize:10,color:C.faint}}>Total <b style={{color:C.tx}}>{cargoTotal||cargoes.length}</b></span><select value={sort} onChange={e=>setSort(e.target.value)} style={input}><option value="added">Added</option><option value="updated">Updated</option><option value="charterer">Charterer</option><option value="from">Laycan</option></select><button onClick={()=>setDir(d=>-d)} style={btn()}>{dir>0?"▲":"▼"}</button></div>
   </div>
+  {colsOpen&&<><div onClick={()=>setColsOpen(false)} style={{position:"fixed",inset:0,zIndex:29990}}/><div style={{position:"fixed",left:colsPos.left,top:colsPos.top,zIndex:29999,width:210,maxHeight:"calc(100vh - 32px)",overflowY:"auto",background:"#071223",border:"1px solid "+C.bd,borderRadius:7,padding:7,boxShadow:"0 12px 34px rgba(0,0,0,.7)"}}>{cargoCols.map(([k,l])=><label key={k} style={{display:"flex",gap:7,padding:5,fontSize:11,fontWeight:600}}><input type="checkbox" checked={visibleCols.has(k)} onChange={()=>setVisibleCols(p=>{const n=new Set(p);n.has(k)?n.delete(k):n.add(k);return n})}/>{l}</label>)}</div></>}
   {showAdd&&<AddRow onSave={onAddC} onClose={()=>setShowAdd(false)}/>}
+  <style>{{cargoCols.map(([k],i)=>!visibleCols.has(k)?`.cargo-table th:nth-child(${i+2}),.cargo-table td:nth-child(${i+2}){display:none!important;}`:"").join("")}}</style>
   <div style={POS_WRAP} className="pos-hover-rows cargo-table-wrap">
    <style>{`.pos-hover-rows tr:hover{background:rgba(88,166,255,0.07)!important;}`}</style>
    <table className="cargo-table" style={POS_TABLE}>
