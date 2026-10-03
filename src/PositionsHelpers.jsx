@@ -765,7 +765,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false, fill
 
 
       {/* vessel list — fixed overlay anchored below chart (escapes overflow:hidden clipping) */}
-            <div style={{display:"flex",alignItems:"center",gap:7,minHeight:20,marginTop:1,whiteSpace:"nowrap",overflow:"hidden"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:7,minHeight:20,marginTop:-3,whiteSpace:"nowrap",overflow:"hidden"}}>
         {tagFilter && <span style={{fontSize:10,padding:"1px 6px",borderRadius:4,border:"1px solid rgba(88,166,255,0.3)",color:"#79c0ff",background:"rgba(88,166,255,0.1)"}}>{tagFilter}</span>}
         {avgFW != null && <span style={{fontSize:10,color:"rgba(150,180,220,0.6)"}}>Avg <span style={{color:"#58a6ff",fontWeight:700}}>{avgFW}d</span></span>}
         <span style={{fontSize:10,color:"rgba(150,180,220,0.6)"}}>{vesselCount} vessels</span>
