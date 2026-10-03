@@ -249,16 +249,36 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,stat
       .qf-chart{flex-basis:10%!important;}
       .qf-filters button{font-size:9px!important;padding:3px 5px!important;}
     }
+
+    @media (max-width: 700px){
+      .qf-top{height:auto!important;display:block!important;}
+      .qf-mobile-fold{display:block!important;margin-bottom:6px;background:${C.bg2};border:1px solid ${C.bd};border-radius:7px;overflow:hidden;}
+      .qf-mobile-fold > summary{display:flex!important;align-items:center;justify-content:space-between;list-style:none;padding:10px 12px;color:#79c0ff;font-size:12px;font-weight:800;cursor:pointer;}
+      .qf-mobile-fold > summary::-webkit-details-marker{display:none;}
+      .qf-mobile-fold > summary::after{content:"▸";color:#6f86a8;}
+      .qf-mobile-fold[open] > summary::after{content:"▾";}
+      .qf-mobile-fold > div{width:100%!important;height:auto!important;box-sizing:border-box;}
+      .qf-mobile-fold .qf-parse{height:300px!important;}
+      .qf-mobile-fold .qf-filters{display:grid!important;grid-template-columns:1fr 1fr!important;overflow:visible!important;min-height:0!important;}
+      .qf-mobile-fold .qf-grade,.qf-mobile-fold .qf-period,.qf-mobile-fold .qf-tags,.qf-mobile-fold .qf-region{grid-column:auto!important;}
+      .qf-mobile-fold .qf-chart{height:260px!important;min-height:260px!important;}
+      .qf-table{min-width:1450px!important;width:1450px!important;table-layout:fixed!important;}
+      .qf-table-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;}
+    }
+    @media (min-width: 701px){
+      .qf-mobile-fold{display:contents!important;}
+      .qf-mobile-fold > summary{display:none!important;}
+    }
   `}</style>
   <div className="qf-top" style={{display:"flex",gap:10,height:260}}>
-   <div className="qf-parse" style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}><div className="qf-parse-tags" style={{...card,padding:"6px 8px",display:"flex",gap:4,flexWrap:"wrap",alignContent:"flex-start",flex:"0 0 auto",overflow:"visible"}}><span style={{fontSize:9,color:C.faint,fontWeight:800,width:"100%",marginBottom:1}}>TAG ON PARSE</span>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={{...btn(parseTag===t),color:tc||"#9fc3f5",borderColor:parseTag===t?(tc||C.blue):C.bd,background:parseTag===t?(tc?tc+"22":"rgba(88,166,255,.18)"):C.bg3}}>{t}</button>})}</div><div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await onAddCargoes(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div>
-   <div className="qf-filters" style={{flex:"0 0 40%",minWidth:0,...card,padding:8,display:"grid",gridTemplateColumns:".8fr .8fr .8fr 1.6fr 1.6fr",gap:6,overflow:"hidden",position:"relative",zIndex:20}}>
+   <details className="qf-mobile-fold"><summary>Paste / Parse</summary><div className="qf-parse" style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}><div className="qf-parse-tags" style={{...card,padding:"6px 8px",display:"flex",gap:4,flexWrap:"wrap",alignContent:"flex-start",flex:"0 0 auto",overflow:"visible"}}><span style={{fontSize:9,color:C.faint,fontWeight:800,width:"100%",marginBottom:1}}>TAG ON PARSE</span>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={{...btn(parseTag===t),color:tc||"#9fc3f5",borderColor:parseTag===t?(tc||C.blue):C.bd,background:parseTag===t?(tc?tc+"22":"rgba(88,166,255,.18)"):C.bg3}}>{t}</button>})}</div><div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await onAddCargoes(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div></details>
+   <details className="qf-mobile-fold"><summary>Filters</summary><div className="qf-filters" style={{flex:"0 0 40%",minWidth:0,...card,padding:8,display:"grid",gridTemplateColumns:".8fr .8fr .8fr 1.6fr 1.6fr",gap:6,overflow:"hidden",position:"relative",zIndex:20}}>
     <div className="qf-grade"><b style={{fontSize:11,color:C.blue}}>GRADE</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{grades.slice(0,6).map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={btn(grade===g.id)}>{g.label}</button>)}</div></div>
     <div className="qf-period"><b style={{fontSize:11,color:C.dim}}>PERIOD</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={btn(time===k)}>{l}</button>)}</div></div>
     <div className="qf-tags"><b style={{fontSize:11,color:C.pink}}>TAG</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{tags.slice(0,7).map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={btn(tag===t)}>{t}</button>)}</div></div>
     {[["EX REGION",ex,setEx],["TO REGION",toR,setToR]].map(([lab,val,setter])=><div key={lab} className="qf-region" style={{minWidth:0}}><b style={{fontSize:9,color:C.blue}}>{lab}</b><div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:4}}><button onClick={()=>setter("")} style={btn(!val)}>ALL</button>{REGIONS.map(r=><button key={r} onClick={()=>setter(val===r?"":r)} style={btn(val===r)}>{r}</button>)}</div></div>)}
-   </div>
-   <div className="qf-chart" style={{flex:"1 1 35%",minWidth:0,height:"100%",display:"flex"}}><CargoMonthChart data={monthly} total={cargoTotal||cargoes.length}/></div>
+   </div></details>
+   <details className="qf-mobile-fold"><summary>Cargo Graph / Count</summary><div className="qf-chart" style={{flex:"1 1 35%",minWidth:0,height:"100%",display:"flex"}}><CargoMonthChart data={monthly} total={cargoTotal||cargoes.length}/></div></details>
   </div>
   <div style={{...card,padding:"5px 8px",display:"flex",gap:6,alignItems:"center",position:"relative",zIndex:100}}>
    <button onClick={()=>setShowAdd(true)} style={{...btn(),color:C.amber}}>+ Add cargo</button><button style={btn()}>Copy all</button><button style={btn()}>Copy CSV</button>{selected.size>0&&<div style={{position:"relative"}}><button onClick={()=>setBulkTagOpen(v=>!v)} style={{...btn(bulkTagOpen),color:C.blue}}>+ Add tag ({selected.size})</button>{bulkTagOpen&&<><div onClick={()=>setBulkTagOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"absolute",left:0,top:"calc(100% + 4px)",zIndex:19999,width:180,maxHeight:300,overflowY:"auto",background:"#071223",border:"1px solid "+C.blue,borderRadius:6,padding:5,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}><button onClick={async()=>{await Promise.all([...selected].map(id=>Promise.resolve(onUpdateC(id,"tag",""))));setBulkTagOpen(false)}} style={{display:"block",width:"100%",padding:"6px 7px",marginBottom:5,background:"rgba(255,255,255,.025)",border:"1px solid "+C.bd2,borderRadius:3,color:C.faint,fontSize:10,fontWeight:800,cursor:"pointer",textTransform:"uppercase",textAlign:"left"}}>× Clear tag(s)</button>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={async()=>{await Promise.all([...selected].map(id=>Promise.resolve(onUpdateC(id,"tag",t))));setBulkTagOpen(false)}} style={{display:"flex",alignItems:"center",gap:6,width:"100%",padding:"6px 7px",marginBottom:2,background:"transparent",border:"1px solid "+C.bd2,borderRadius:3,color:tc||"#9fc3f5",fontSize:11,fontWeight:800,cursor:"pointer",textTransform:"uppercase"}}>{tc&&<span style={{width:7,height:7,borderRadius:"50%",background:tc}}/>}{String(t).toUpperCase()}</button>})}</div></>}</div>}<span style={{fontSize:10,color:C.faint}}>This wk <b style={{color:C.blue}}>{week.thisWk}</b>&nbsp; Last wk <b>{week.lastWk}</b>&nbsp;&nbsp; Total <b style={{color:C.tx}}>{cargoTotal||cargoes.length}</b></span>
@@ -270,9 +290,9 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,stat
   </div>
   {showAdd&&<AddRow quotes onSave={onAddC} onClose={()=>setShowAdd(false)}/>}
   {deleteCargo&&<><div onClick={()=>setDeleteCargo(null)} style={{position:"fixed",inset:0,zIndex:64990,background:"rgba(0,0,0,.08)"}}/><div style={{position:"fixed",left:"50%",bottom:28,transform:"translateX(-50%)",zIndex:65000,minWidth:330,background:"#0b1728",border:"1px solid #ff5b5b",borderRadius:8,padding:"12px 14px",boxShadow:"0 14px 40px rgba(0,0,0,.55)",display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:12,fontWeight:700,color:C.tx,marginRight:4}}>Delete {(deleteCargo.vessel||deleteCargo.charterer||"cargo").toUpperCase()}?</span><button onClick={async()=>{const id=deleteCargo.id;setDeleteCargo(null);await onDelC(id)}} style={{...btn(),background:"#ff5b5b",borderColor:"#ff5b5b",color:"#fff",padding:"6px 16px"}}>Delete</button><button onClick={()=>setDeleteCargo(null)} style={{...btn(),padding:"6px 16px"}}>Cancel</button></div></>}
-  <div style={POS_WRAP} className="pos-hover-rows">
+  <div style={POS_WRAP} className="pos-hover-rows qf-table-wrap">
    <style>{`.pos-hover-rows tr:hover{background:rgba(88,166,255,0.07)!important;}`}</style>
-   <table style={POS_TABLE}>
+   <table className="qf-table" style={POS_TABLE}>
     <colgroup><col style={{width:"1.4%"}}/>{shown.map(([k,l,w])=><col key={k} style={{width:w+"%"}}/>)}<col style={{width:"1.4%"}}/><col style={{width:"1.4%"}}/></colgroup>
     <thead><tr><th onClick={()=>{const ids=pageRows.map(x=>x.id);const all=ids.length>0&&ids.every(id=>selected.has(id));setSelected(p=>{const n=new Set(p);ids.forEach(id=>all?n.delete(id):n.add(id));return n})}} style={{...POS_TH,textAlign:"center",cursor:"pointer",padding:"3px 1px",lineHeight:"11px"}}><div style={{fontSize:11,color:pageRows.length>0&&pageRows.every(x=>selected.has(x.id))?"#4fc3f7":C.faint}}>{pageRows.length>0&&pageRows.every(x=>selected.has(x.id))?"[✓]":"[ ]"}</div><div style={{fontSize:7,color:C.faint}}>ALL</div></th>{shown.map(([k,l])=><th key={k} style={{...POS_TH,textAlign:["status","p_and_c","intelligence","from","to","tag","updated"].includes(k)?"center":"left"}}>{l}</th>)}<th style={POS_TH}/><th style={POS_TH}/></tr></thead>
     <tbody>{pageRows.map((c,i)=>{
