@@ -431,7 +431,7 @@ export default function Cargoes({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,on
   </div>
   {colsOpen&&<><div onClick={()=>setColsOpen(false)} style={{position:"fixed",inset:0,zIndex:29990}}/><div style={{position:"fixed",left:colsPos.left,top:colsPos.top,zIndex:29999,width:210,maxHeight:"calc(100vh - 32px)",overflowY:"auto",background:"#071223",border:"1px solid "+C.bd,borderRadius:7,padding:7,boxShadow:"0 12px 34px rgba(0,0,0,.7)"}}>{cargoCols.map(([k,l])=><label key={k} style={{display:"flex",gap:7,padding:5,fontSize:11,fontWeight:600}}><input type="checkbox" checked={visibleCols.has(k)} onChange={()=>setVisibleCols(p=>{const n=new Set(p);n.has(k)?n.delete(k):n.add(k);return n})}/>{l}</label>)}</div></>}
   {showAdd&&<AddRow onSave={onAddC} onClose={()=>setShowAdd(false)}/>}
-  <style>{{cargoCols.map(([k],i)=>!visibleCols.has(k)?`.cargo-table th:nth-child(${i+2}),.cargo-table td:nth-child(${i+2}){display:none!important;}`:"").join("")}}</style>
+  <style>{cargoCols.map(([k],i)=>!visibleCols.has(k)?`.cargo-table th:nth-child(${i+2}),.cargo-table td:nth-child(${i+2}){display:none!important;}`:"").join("")}</style>
   <div style={POS_WRAP} className="pos-hover-rows cargo-table-wrap">
    <style>{`.pos-hover-rows tr:hover{background:rgba(88,166,255,0.07)!important;}`}</style>
    <table className="cargo-table" style={POS_TABLE}>
