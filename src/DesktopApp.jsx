@@ -36,8 +36,8 @@ const VesselUploader = React.lazy(()=>import("./VesselUploader"));
 const NewbuildsTab   = React.lazy(()=>import("./NewbuildsTab"));
 const FleetTab       = React.lazy(()=>import("./FleetTab"));
 const OutsidersTab   = React.lazy(()=>import("./OutsidersTab"));
-const CargoesTab     = React.lazy(()=>import("./Cargoes"));
-const QuotesFixtures = React.lazy(()=>import("./QuotesFixtures"));
+const CargoesTab      = React.lazy(()=>import("./Cargoes"));
+const QuotesFixtures  = React.lazy(()=>import("./QuotesFixtures"));
 
 const TabFallback = ()=>null;
 
@@ -301,7 +301,7 @@ function TagCell({cargoId,tag,onUpdateC}){
   const cur=tag||"";
   const curCol=cur?getTagColor(cur):null;
   return(
-    <td style={{padding:"2px 4px",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.035)"}} onClick={e=>e.stopPropagation()}>
+    <td style={{padding:"2px 4px",verticalAlign:"middle",borderBottom:"none"}} onClick={e=>e.stopPropagation()}>
       <button ref={btnRef} onClick={openPick}
         style={{background:curCol?curCol+"22":cur?"rgba(88,166,255,0.15)":"transparent",
           border:"1px solid "+(curCol||( cur?"rgba(88,166,255,0.4)":"rgba(88,166,255,0.12)")),
@@ -380,11 +380,8 @@ function TagCellV({vesselName,tag,onUpdateV}){
       const zoom=Number.isFinite(rawZoom)&&rawZoom>0 ? rawZoom : 1;
 
       const popWVisual=190*zoom;
-      // Estimate the real menu height from the tag count and keep it inside
-      // the visible viewport, even when the clicked row is near the bottom.
-      const estimatedCssH=Math.min(420,96+getTagListFor("position").length*31);
+      const popHVisual=340*zoom;
       const marginVisual=12;
-      const popHVisual=Math.min(estimatedCssH*zoom,window.innerHeight-marginVisual*2);
 
       const viewportW=window.innerWidth;
       const viewportH=window.innerHeight;
@@ -449,10 +446,7 @@ function TagCellV({vesselName,tag,onUpdateV}){
             padding:"6px",boxShadow:"0 10px 32px rgba(0,0,0,0.78)",
             display:"flex",flexDirection:"column",gap:3,width:190,
             maxWidth:"calc(100vw - 20px)",
-            // Explicit zoom-aware px height prevents the popup extending below
-            // the dashboard. If needed, the menu itself scrolls instead.
-            maxHeight:`${Math.max(120,(window.innerHeight/((parseFloat(getComputedStyle(document.body).zoom||document.body.style.zoom||"1")||1))-pos.top-12))}px`,
-            overflowY:"auto",overflowX:"hidden"
+            maxHeight:`calc(100vh - ${pos.top+10}px)`,overflowY:"auto",overflowX:"hidden"
           }}>
             {cur&&(
               <button onClick={()=>{onUpdateV(vesselName,"tag","");setOpen(false);}}
@@ -943,7 +937,7 @@ function MobileCollapse({ title, color="#58a6ff", defaultOpen=false, children })
   const [open, setOpen] = React.useState(defaultOpen);
   return (
     <div style={{ background:C.bg2, border:"1px solid "+C.bd, borderRadius:7, overflow:"hidden" }}>
-      <button onClick={()=>setOpen(o=>!o)}
+      <button onClick={()=>React.startTransition(()=>setOpen(o=>!o))}
         style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between",
           padding:"10px 12px", background:"transparent", border:"none", cursor:"pointer", fontFamily:"inherit",
           minHeight:44, boxSizing:"border-box" }}>
@@ -955,14 +949,14 @@ function MobileCollapse({ title, color="#58a6ff", defaultOpen=false, children })
   );
 }
 
-function TabbedPanel({tabs,active,onChange,height=460,children,extraHeader}){
+function TabbedPanel({tabs,active,onChange,height=460,children}){
   const fillParent = height==="100%";
   return (
     <div style={{
       ...(fillParent ? {position:"absolute",inset:0} : {height}),
       display:"flex",flexDirection:"column",background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden"
     }}>
-      <div style={{display:"flex",flexShrink:0,borderBottom:"1px solid "+C.bd2,alignItems:"center"}}>
+      <div style={{display:"flex",flexShrink:0,borderBottom:"1px solid "+C.bd2}}>
         {tabs.map(t=>(
           <button key={t} onClick={()=>onChange(t)}
             style={{flex:1,padding:"7px 10px",fontSize:11,fontWeight:700,fontFamily:"inherit",cursor:"pointer",
@@ -972,7 +966,6 @@ function TabbedPanel({tabs,active,onChange,height=460,children,extraHeader}){
             {t}
           </button>
         ))}
-        {extraHeader}
       </div>
       <div style={{flex:1,minHeight:0,position:"relative"}}>{children}</div>
     </div>
@@ -1285,7 +1278,7 @@ function SettingsMenu({mobile,onToggleLayout,layoutOverride}){
                 {[80,90,100,110,120].map(z=>(
                   <button key={z}
                     onPointerUp={e=>{e.stopPropagation();document.body.style.zoom=z+"%";}}
-                    style={{fontSize:13,padding:"6px 10px",borderRadius:6,
+                    style={{fontSize:13,padding:"6px 8px",borderRadius:6,
                       border:"1px solid rgba(58,130,246,0.2)",background:"rgba(14,28,58,0.8)",
                       color:"rgba(160,200,255,0.8)",cursor:"pointer",fontFamily:"inherit",
                       WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}>
@@ -1362,6 +1355,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         const tabs=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
         if(alive&&tabs?.length)setGuestTabs(tabs.filter(id=>id!=="settings"));
         const cloudPin=String(pinData?.value??"").replace(/\D/g,"").slice(0,4);
+        // 0250 is the permanent guest fallback. A configured cloud PIN may also work.
         if(alive&&cloudPin.length===4)setGuestPin(cloudPin);
       }catch(_){}
     })();
@@ -1409,17 +1403,6 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   // lookup table was always empty. Load it once on mount instead.
   useEffect(()=>{ if(!vesselDBLoaded && !vesselDBLoading && onLoadVesselDB) onLoadVesselDB(); },[]);
 
-  React.useEffect(()=>{
-    const onGuestAccess=e=>{
-      const next=e?.detail||{};
-      if(Array.isArray(next.tabs))setGuestTabs(next.tabs.filter(id=>id!=="settings"));
-      const p=String(next.pin??"").replace(/\D/g,"").slice(0,4);
-      if(p.length===4)setGuestPin(p);
-    };
-    window.addEventListener("guest-access-updated",onGuestAccess);
-    return()=>window.removeEventListener("guest-access-updated",onGuestAccess);
-  },[]);
-
   // No sessionStorage — PIN required on every load/refresh/new tab
 
   function submitPin(p){
@@ -1428,7 +1411,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
       setGuestMode(false);
       setUnlocked(true);
       setPinInput("");
-    } else if(p===guestPin){
+    } else if(p===DEFAULT_GUEST_PIN || p===guestPin){
       localStorage.setItem("signal_user","L");
       setGuestMode(true);
       setUnlocked(true);
@@ -1464,68 +1447,6 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [posTagFilter,setPosTagFilter]=useState(new Set());
   const [dwtRange,setDwtRange]=useState({min:"",max:""});
   const [builtRange,setBuiltRange]=useState({min:"",max:""});
-  const [openDateFilter,setOpenDateFilter]=useState({quick:"",from:"",to:""});
-
-  // Open-date slider is forward-looking only: today -> latest future open position.
-  const openDateBounds=useMemo(()=>{
-    const vals=(vessels||[]).map(v=>daysBetween(v.date)).filter(d=>d!==null&&isFinite(d)&&d>=0);
-    if(!vals.length) return {min:0,max:1};
-    return {min:0,max:Math.max(1,...vals)};
-  },[vessels]);
-  const isoFromDayOffset=useCallback((offset)=>{
-    const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()+Number(offset||0));
-    const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");
-    return `${y}-${m}-${day}`;
-  },[]);
-  const openDateSliderFrom=openDateFilter.from?daysBetween(openDateFilter.from):openDateBounds.min;
-  const openDateSliderTo=openDateFilter.to?daysBetween(openDateFilter.to):openDateBounds.max;
-  const openDateLabel=(offset)=>{
-    const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()+Number(offset||0));
-    return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
-  };
-  const openDateRailRef=useRef(null);
-  const OpenDateRangeSlider=()=>{
-    const lo=Math.min(openDateSliderFrom??openDateBounds.min,openDateSliderTo??openDateBounds.max);
-    const hi=Math.max(openDateSliderFrom??openDateBounds.min,openDateSliderTo??openDateBounds.max);
-    const span=Math.max(1,openDateBounds.max-openDateBounds.min);
-    const leftPct=((lo-openDateBounds.min)/span)*100;
-    const rightPct=((hi-openDateBounds.min)/span)*100;
-    const dragHandle=(which,e)=>{
-      e.preventDefault();
-      e.currentTarget.setPointerCapture?.(e.pointerId);
-      const move=(ev)=>{
-        const rect=openDateRailRef.current?.getBoundingClientRect();
-        if(!rect||!rect.width)return;
-        const pct=Math.max(0,Math.min(1,(ev.clientX-rect.left)/rect.width));
-        let n=Math.round(openDateBounds.min+pct*span);
-        if(which==="low") n=Math.min(n,hi); else n=Math.max(n,lo);
-        const nextLo=which==="low"?n:lo;
-        const nextHi=which==="high"?n:hi;
-        setOpenDateFilter({
-          quick:"",
-          from:nextLo<=openDateBounds.min?"":isoFromDayOffset(nextLo),
-          to:nextHi>=openDateBounds.max?"":isoFromDayOffset(nextHi)
-        });
-        setPosPage(1);
-      };
-      const up=()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);};
-      window.addEventListener("pointermove",move);
-      window.addEventListener("pointerup",up);
-    };
-    return <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,maxWidth:"100%",width:"100%",flex:"1 1 240px"}}>
-      <span style={{fontSize:10,color:"#7dd3fc",minWidth:38,textAlign:"right",whiteSpace:"nowrap"}}>{openDateLabel(lo)}</span>
-      <div ref={openDateRailRef} style={{position:"relative",height:20,flex:"1 1 120px",minWidth:70,touchAction:"none"}}>
-        <div style={{position:"absolute",left:0,right:0,top:9,height:2,background:"rgba(88,166,255,.20)",borderRadius:2}}/>
-        <div style={{position:"absolute",left:`${leftPct}%`,width:`${Math.max(0,rightPct-leftPct)}%`,top:9,height:2,background:"#38bdf8",borderRadius:2}}/>
-        <button type="button" aria-label="Earliest open date" onPointerDown={e=>dragHandle("low",e)}
-          style={{position:"absolute",left:`${leftPct}%`,top:4,transform:"translateX(-50%)",width:12,height:12,borderRadius:"50%",padding:0,background:"#38bdf8",border:"2px solid #b9e8ff",boxShadow:"0 0 0 2px rgba(56,189,248,.16)",cursor:"ew-resize",zIndex:3}}/>
-        <button type="button" aria-label="Latest open date" onPointerDown={e=>dragHandle("high",e)}
-          style={{position:"absolute",left:`${rightPct}%`,top:4,transform:"translateX(-50%)",width:12,height:12,borderRadius:"50%",padding:0,background:"#38bdf8",border:"2px solid #b9e8ff",boxShadow:"0 0 0 2px rgba(56,189,248,.16)",cursor:"ew-resize",zIndex:4}}/>
-      </div>
-      <span style={{fontSize:10,color:"#7dd3fc",minWidth:38,whiteSpace:"nowrap"}}>{openDateLabel(hi)}</span>
-      {(openDateFilter.from||openDateFilter.to)&&<button onClick={()=>{setOpenDateFilter({quick:"",from:"",to:""});setPosPage(1);}} style={{background:"transparent",border:"1px solid rgba(255,107,107,.35)",color:C.red,borderRadius:4,fontSize:10,cursor:"pointer",padding:"2px 5px"}}>✕</button>}
-    </div>;
-  };
   const [sortK,setSortK]=useState("fileDate");
   const [sortD,setSortD]=useState(-1);
   const [sel,setSel]=useState(null);
@@ -1557,7 +1478,16 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     return()=>window.removeEventListener("navigation-config-updated",h);
   },[]);
   const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
-  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||guestTabs.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode,guestTabs]);
+  const navIds=useMemo(()=>{
+    let ids=navConfig.order.filter(id=>(!guestMode||guestTabs.includes(id))&&!navConfig.hidden.includes(id));
+    // Quotes & Fixtures is a current core tab. Older saved navigation configs pre-date cargo2.
+    if(!guestMode && !ids.includes("cargo2")){
+      const cargoIndex=ids.indexOf("cargo");
+      ids=[...ids];
+      ids.splice(cargoIndex>=0?cargoIndex+1:Math.min(2,ids.length),0,"cargo2");
+    }
+    return ids;
+  },[navConfig,guestMode,guestTabs]);
   const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
   const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set());setMobileNavOpen(false)});
  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
@@ -1740,16 +1670,7 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   }
   // Inter UKC config — loaded from localStorage (editable in Settings)
   const [showSavedOnly,setShowSavedOnly]=useState(false);
-  const [fixingPanelTab,setFixingPanelTab]=useState("Open Segments");
-  const [fixingExpanded,setFixingExpanded]=useState(false);
-  useEffect(()=>{
-    if(!fixingExpanded||fixingPanelTab!=="History") return;
-    const id=requestAnimationFrame(()=>{
-      const svg=document.querySelector(".fixing-history-fill svg");
-      if(svg) svg.setAttribute("preserveAspectRatio","none");
-    });
-    return()=>cancelAnimationFrame(id);
-  },[fixingExpanded,fixingPanelTab]);
+  const [fixingPanelTab,setFixingPanelTab]=useState("History");
   const [aisPanelTab,setAisPanelTab]=useState("Map");
   const [posOutsiderView,setPosOutsiderView]=useState(false);
   const [outsiderSyncStatus,setOutsiderSyncStatus]=useState(null);
@@ -2285,22 +2206,6 @@ const filtV=useMemo(()=>{
       return vesselTags.some(t=>selectedTags.has(t));
     });
   }
-  // Open-date filter. Uses the same daysBetween parser already used by Positions,
-  // so displayed dates such as "10 OCT" and ISO date inputs are compared consistently.
-  if(openDateFilter.quick||openDateFilter.from||openDateFilter.to){
-    const fromDays=openDateFilter.from?daysBetween(openDateFilter.from):null;
-    const toDays=openDateFilter.to?daysBetween(openDateFilter.to):null;
-    list=list.filter(v=>{
-      if(v.openPort==="EMPLOYED") return false;
-      const d=daysBetween(v.date);
-      if(d===null||!isFinite(d)) return false;
-      if(openDateFilter.quick==="ppt" && !(d>=0&&d<=1)) return false;
-      if(fromDays!==null&&isFinite(fromDays)&&d<fromDays) return false;
-      if(toDays!==null&&isFinite(toDays)&&d>toDays) return false;
-      return true;
-    });
-  }
-
   // Custom DWT range (in tonnes). Handles "8K"/raw numbers.
   const parseDwt=(raw)=>{if(raw==null||raw==="")return null;if(typeof raw==="number")return raw;const s=String(raw).trim().toUpperCase().replace(/\s/g,"");if(/^\d+(\.\d+)?K$/.test(s))return parseFloat(s)*1000;const n=parseFloat(s.replace(/[^\d.]/g,""));return isFinite(n)?n:null;};
   if(dwtRange.min!==""||dwtRange.max!==""){
@@ -2424,7 +2329,6 @@ const filtV=useMemo(()=>{
   opFilter,
   bucketFilters,
   updFilter,
-  openDateFilter.quick,openDateFilter.from,openDateFilter.to,
   posFileDaysBack,
   superRegionFilter,
   segmentFilter,
@@ -2473,10 +2377,10 @@ const filtV=useMemo(()=>{
       </div>
     ), 
     align: "center", 
-    width: 40 
+    width: 30 
   },
-  { key: "operator",  sortKey:"operator",  label: "Operator",  width: colWidthsV.Operator },
-  { key: "vessel",    sortKey:"vessel",    label: "Vessel",    width: colWidthsV.Vessel },
+  { key: "operator",  sortKey:"operator",  label: "Operator", align:"left", width: colWidthsV.Operator },
+  { key: "vessel",    sortKey:"vessel",    label: "Vessel", align:"left", width: colWidthsV.Vessel },
   { key: "ais",       label: "",           align:"center",     width: 18 },
   { key: "built",     sortKey:"built",     label: "Built",     align:"left", width: colWidthsV.Built },
   { key: "dwt",       sortKey:"dwt",       label: "DWT",           align:"left", width: colWidthsV.DWT },
@@ -2484,7 +2388,7 @@ const filtV=useMemo(()=>{
   { key: "loa",       sortKey:"loa",       label: "LOA",           align:"left", width: colWidthsV.LOA },
   { key: "beam",      sortKey:"beam",      label: "Beam",        align:"right", width: colWidthsV.Beam },
   { key: "cbm",       sortKey:"cbm",       label: "CBM",           align:"left", width: colWidthsV.CBM },
-  { key: "date",      sortKey:"date",      label: "Date",        align:"center", width: colWidthsV.Date },
+  { key: "date",      sortKey:"date",      label: "Date",        align:"left", width: colWidthsV.Date },
   { key: "openPort",  sortKey:"openPort",  label: "Open Port", width: colWidthsV.OpenPort },
   { key: "comment",   sortKey:"comment",   label: "Comment",  width: colWidthsV.Comment },
   { key: "updatedAt", sortKey:"fileDate",  label: "Updated", align:"center", width: colWidthsV.FileDate },
@@ -2496,24 +2400,25 @@ const filtV=useMemo(()=>{
   // Mobile-specific columns: fixed (not user-resizable) widths so the sticky
   // offsets below are reliable, LOA/Beam/CBM dropped to save width — those
   // are the columns Haakon uses least for a quick scan on a phone.
-  const MOBILE_SELECT_W = 24, MOBILE_OPERATOR_W = 84, MOBILE_VESSEL_W = 84;
+  const MOBILE_SELECT_W = 20, MOBILE_OPERATOR_W = 86, MOBILE_VESSEL_W = 88;
   const posColumnsMobile = [
-    posColumns[0], // select — compact, scrolls with the table
-    { key:"operator", sortKey:"operator", label:"Op",      width:MOBILE_OPERATOR_W },
+    {...posColumns[0], width:MOBILE_SELECT_W}, // compact select
+    { key:"operator", sortKey:"operator", label:"Operator", width:MOBILE_OPERATOR_W },
     { key:"vessel",   sortKey:"vessel",   label:"Vessel",  width:MOBILE_VESSEL_W },
     { key:"ais",      label:"",           align:"center",  width:14 },
     { key:"built",    sortKey:"built",    label:"Blt",     align:"left", width:36 },
     { key:"dwt",      sortKey:"dwt",      label:"DWT",     align:"left", width:48 },
     { key:"coating",  sortKey:"coating",  label:"Coat",    width:44 },
-    { key:"date",     sortKey:"date",     label:"Date",    align:"center", width:44 },
+    { key:"date",     sortKey:"date",     label:"Date",    align:"left", width:44 },
     { key:"openPort", sortKey:"openPort", label:"Port",    width:80 },
-    { key:"comment",  sortKey:"comment",  label:"Comment", width:90 },
+    { key:"comment",  sortKey:"comment",  label:"Comment", width:mobile?64:90 },
+    { key:"updatedAt", sortKey:"fileDate", label:"Updated", align:"center", width:58 },
     { key:"tag",      label:"Tag",        align:"center",  width:50 },
     { key:"delete",   label:"",           align:"center",  width:22 },
   ];
 
   // Reset page when filters change
-  useEffect(()=>{setPosPage(1);},[vessels,filters,search,sortK,opFilter,bucketFilters,updFilter,openDateFilter.quick,openDateFilter.from,openDateFilter.to,posFileDaysBack,superRegionFilter]);
+  useEffect(()=>{setPosPage(1);},[vessels,filters,search,sortK,opFilter,bucketFilters,updFilter,posFileDaysBack,superRegionFilter]);
 
   const stats={total:vessels.length,ppt:filtV.filter(v=>isOpenPPT(v.date)).length,subs:filtV.filter(v=>v.openPort==="EMPLOYED").length};
   const vessels14d=useMemo(()=>{
@@ -2623,32 +2528,41 @@ const filtV=useMemo(()=>{
             backgroundSize:"42px 42px"}}/>
 
           <div style={{position:"relative",zIndex:2,width:mobile?"calc(100vw - 20px)":"min(1460px,calc(100vw - 32px))",maxWidth:"100%",boxSizing:"border-box",margin:"0 auto",padding:mobile?"12px 0 18px":"24px 0 28px"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,marginBottom:mobile?14:18}}>
-              <div>
-                <div style={{fontSize:mobile?9:11,fontWeight:800,letterSpacing:".20em",color:"rgba(125,178,240,.48)",textTransform:"uppercase"}}>Tanker Intelligence Platform</div>
-                <div style={{display:"flex",alignItems:"baseline",gap:7,marginTop:4}}>
-                  <span style={{fontSize:mobile?20:29,fontWeight:850,color:"#eef6ff"}}>Broker</span>
-                  <span style={{fontSize:mobile?20:29,fontWeight:850,color:"#43e97b"}}>Dashboard</span>
-                </div>
+            {mobile ? (
+              <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",marginBottom:12}}>
+                <div style={{fontSize:9,fontWeight:800,letterSpacing:".16em",color:"rgba(125,178,240,.48)",textTransform:"uppercase"}}>Tanker Intelligence Platform</div>
               </div>
-              <div style={{fontSize:mobile?9:10,fontWeight:800,letterSpacing:".13em",color:"rgba(125,178,240,.42)",textTransform:"uppercase"}}>Live market terminal</div>
-            </div>
+            ) : (
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,marginBottom:18}}>
+                <div>
+                  <div style={{fontSize:11,fontWeight:800,letterSpacing:".20em",color:"rgba(125,178,240,.48)",textTransform:"uppercase"}}>Tanker Intelligence Platform</div>
+                  <div style={{display:"flex",alignItems:"baseline",gap:7,marginTop:4}}>
+                    <span style={{fontSize:29,fontWeight:850,color:"#eef6ff"}}>Broker</span>
+                    <span style={{fontSize:29,fontWeight:850,color:"#43e97b"}}>Dashboard</span>
+                  </div>
+                </div>
+                <div style={{fontSize:10,fontWeight:800,letterSpacing:".13em",color:"rgba(125,178,240,.42)",textTransform:"uppercase"}}>Live market terminal</div>
+              </div>
+            )}
 
             {/* Market pulse — Brent + bunkers in requested order: Houston | ARA | Singapore */}
-            <div style={{display:"grid",gridTemplateColumns:mobile?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:8,marginBottom:mobile?12:16}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:8,marginBottom:mobile?12:16}}>
               {[
                 ["BRENT",loginMarkets.brent,"USD/BBL"],
                 ["MGO HOUSTON",loginMarkets.mgoUsg,"USD/MT"],
                 ["MGO ARA",loginMarkets.mgoAra,"USD/MT"],
                 ["MGO SPORE",loginMarkets.mgoSingapore,"USD/MT"]
-              ].map(([label,val,unit])=><div key={label} style={{padding:mobile?"11px 12px":"16px 18px",border:"1px solid rgba(88,166,255,.11)",borderRadius:10,background:"linear-gradient(180deg,rgba(8,25,48,.76),rgba(4,16,33,.70))",backdropFilter:"blur(8px)"}}>
-                <div style={{fontSize:mobile?9:10,fontWeight:850,letterSpacing:".12em",color:"rgba(125,178,240,.52)"}}>{label}</div>
-                <div style={{fontSize:mobile?18:25,fontWeight:850,color:val!=null?"#eef6ff":"rgba(225,239,255,.30)",marginTop:3}}>
+              ].map(([label,val,unit])=><div key={label} style={{padding:mobile?"8px 7px":"16px 18px",border:"1px solid rgba(88,166,255,.11)",borderRadius:10,background:"linear-gradient(180deg,rgba(8,25,48,.76),rgba(4,16,33,.70))",backdropFilter:"blur(8px)"}}>
+                <div style={{fontSize:mobile?8:10,fontWeight:850,letterSpacing:".12em",color:"rgba(125,178,240,.52)"}}>{label}</div>
+                <div style={{fontSize:mobile?16:25,fontWeight:850,color:val!=null?"#eef6ff":"rgba(225,239,255,.30)",marginTop:3}}>
                   {val!=null?(typeof val==="number"?val.toLocaleString(undefined,{maximumFractionDigits:2}):val):"—"}
                 </div>
-                <div style={{fontSize:mobile?8:9,color:"rgba(125,178,240,.36)",marginTop:1}}>{unit}</div>
+                <div style={{fontSize:mobile?7:9,color:"rgba(125,178,240,.36)",marginTop:1}}>{unit}</div>
               </div>)}
             </div>
+            {loginMarkets.updatedAt&&<div style={{fontSize:mobile?8:9,color:"rgba(125,178,240,.38)",textAlign:"right",marginTop:mobile?-7:-10,marginBottom:mobile?9:11}}>
+              Feed updated {new Date(loginMarkets.updatedAt).toLocaleString(undefined,{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}
+            </div>}
 
             {/* Desktop: news moves up beside access card. Mobile: access remains first. */}
             <div style={{
@@ -2671,37 +2585,41 @@ const filtV=useMemo(()=>{
                 <div style={{
                   width:"100%",maxWidth:"100%",boxSizing:"border-box",
                   border:"1px solid rgba(88,166,255,.18)",borderRadius:14,
-                  padding:mobile?"14px 14px":"22px 26px",
+                  padding:mobile?"20px 16px":"22px 26px",
                   background:"linear-gradient(180deg,rgba(9,24,46,.94),rgba(6,17,34,.96))",
                   boxShadow:"0 20px 60px rgba(0,0,0,.32)",
                   display:"flex",flexDirection:"column",justifyContent:"center"
                 }}>
-                  <div style={{textAlign:"center",marginBottom:mobile?10:16}}>
-                    <div style={{fontSize:mobile?9:12,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>ENTER DASHBOARD</div>
-                    <div style={{fontSize:mobile?14:22,fontWeight:800,color:"#eef6ff",marginTop:5}}>Enter your 4-digit access code</div>
-                    <div style={{fontSize:mobile?9:13,color:"rgba(175,205,240,.52)",marginTop:6}}>Personal or colleague guest code</div>
+                  <div style={{textAlign:"center",marginBottom:mobile?8:16}}>
+                    {mobile ? (
+                      <div style={{fontSize:10,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>ENTER DASHBOARD</div>
+                    ) : (<>
+                      <div style={{fontSize:12,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>ENTER DASHBOARD</div>
+                      <div style={{fontSize:22,fontWeight:800,color:"#eef6ff",marginTop:5}}>Enter your 4-digit access code</div>
+                      <div style={{fontSize:13,color:"rgba(175,205,240,.52)",marginTop:6}}>Personal or colleague guest code</div>
+                    </>)}
                   </div>
 
-                  <div style={{display:"flex",gap:mobile?7:9,justifyContent:"center",marginBottom:mobile?10:15}}>
+                  <div style={{display:"flex",gap:mobile?9:9,justifyContent:"center",marginBottom:mobile?12:15}}>
                     {[0,1,2,3].map(i=><div key={i} style={{
-                      width:mobile?42:54,height:mobile?36:46,borderRadius:8,
-                      background:pinError?"rgba(255,107,107,.12)":pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",
+                      width:mobile?68:54,height:mobile?58:46,borderRadius:8,
+                      background:pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",
                       border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.56)":"rgba(88,166,255,.18)"),
-                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:mobile?16:18,color:pinError?"#ff6b6b":"#79c0ff"
-                    }}>{pinError?"●":pinInput.length>i?"●":""}</div>)}
+                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:mobile?16:18,color:"#79c0ff"
+                    }}>{pinInput.length>i?"●":""}</div>)}
                   </div>
 
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:mobile?6:8,maxWidth:mobile?230:270,margin:"0 auto",width:"100%"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:mobile?8:8,maxWidth:mobile?300:270,margin:"0 auto",width:"100%"}}>
                     {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=><button key={i} disabled={d===""} onClick={()=>{
                       if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}
                       if(d===""||typeof d!=="number")return;
                       const next=pinInput+String(d);setPinInput(next);if(next.length===4)submitPin(next);
                     }} style={{
-                      height:mobile?37:52,borderRadius:8,
+                      height:mobile?50:52,borderRadius:8,
                       border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.19)"),
                       background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.82),rgba(10,27,53,.86))",
                       color:d===""?"transparent":"rgba(198,225,255,.94)",
-                      fontSize:mobile?14:19,fontWeight:750,cursor:d===""?"default":"pointer",
+                      fontSize:mobile?18:19,fontWeight:750,cursor:d===""?"default":"pointer",
                       fontFamily:"inherit",visibility:d===""?"hidden":"visible"
                     }}>{d}</button>)}
                   </div>
@@ -2843,11 +2761,8 @@ const filtV=useMemo(()=>{
               <Suspense fallback={null}><IntelVaultStrip onVaultUpdate={setIntelItems}/></Suspense>
             </div>
           )}
-          {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}          <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0,paddingBottom:10}}>
-            {!mobile&&<AICreditWidget/>}
-            {/* ⚙ Settings dropdown */}
-            <SettingsMenu mobile={mobile} onToggleLayout={onToggleLayout} layoutOverride={layoutOverride}/>
-          </div>
+          {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}
+          {!mobile&&<div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0,paddingBottom:10}}><AICreditWidget/></div>}
         </div>
         {/* Configurable navigation */}
         {navConfig.mode==="classic"&&<div style={{display:"flex",padding:mobile?"0 8px":"0 20px",overflowX:"auto",scrollbarWidth:"none"}}>
@@ -2928,7 +2843,12 @@ const filtV=useMemo(()=>{
           borderRight:"1px solid rgba(58,130,246,.18)",
           background:"linear-gradient(180deg,rgba(7,15,29,.94),rgba(7,15,29,.76))",
           padding:"10px 8px",
-          minHeight:"calc(100vh - 92px)",
+          minHeight:"calc(100vh - 20px)",
+          maxHeight:"calc(100vh - 20px)",
+          overflowY:"auto",
+          position:"sticky",
+          top:10,
+          alignSelf:"flex-start",
           boxShadow:"inset -1px 0 0 rgba(88,166,255,.04)"
         }}>
           <button onClick={()=>{const n={...navConfig,collapsed:!navConfig.collapsed};setNavConfig(n);try{localStorage.setItem(NAV_KEY,JSON.stringify(n))}catch{};supabase.from("tag_settings").upsert({key:NAV_CLOUD_KEY,value:n,updated_at:new Date().toISOString()},{onConflict:"key"}).then(()=>{})}} style={{
@@ -2956,7 +2876,7 @@ const filtV=useMemo(()=>{
             }}>{m.label}</span>}
           </button>})}
         </aside>}
-        <div style={{padding:mobile?"8px 8px":((tab==="cargo"||tab==="cargo2"||tab==="pos")?"12px 8px":"12px 20px"),maxWidth:(tab==="cargo"||tab==="cargo2"||tab==="pos")?"none":1900,margin:"0 auto",flex:1,minWidth:0,width:"100%",boxSizing:"border-box"}}>
+        <div style={{padding:mobile?"8px 8px":((tab==="cargo"||tab==="cargo2")?"12px 8px":"12px 20px"),maxWidth:(tab==="cargo"||tab==="cargo2")?"none":1900,margin:"0 auto",flex:1,minWidth:0,width:"100%",boxSizing:"border-box"}}>
       <TabErrorBoundary>
 
         {/* ── POSITIONS ── */}
@@ -2991,7 +2911,6 @@ const filtV=useMemo(()=>{
               <div
   style={{
     width: mobile ? "100%" : "32%",
-    minWidth: 0,
     height: mobile ? "auto" : 460,
     display: "flex",
     flexDirection: "column",
@@ -3000,7 +2919,6 @@ const filtV=useMemo(()=>{
     minHeight: 0
   }}
 >
-  {!fixingExpanded && (
   <div style={{ flex: "0 0 auto" }}>
     <ParsePanel
       vessels={vessels}
@@ -3010,16 +2928,9 @@ const filtV=useMemo(()=>{
       vesselDB={{}}
     />
   </div>
-  )}
 
   <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position:"relative" }}>
-    <TabbedPanel tabs={["History","Open Segments"]} active={fixingPanelTab} onChange={setFixingPanelTab} height="100%"
-      extraHeader={
-        <button onClick={()=>setFixingExpanded(v=>!v)} title={fixingExpanded?"Collapse — show parse panel again":"Expand — fill space taken by parse panel"}
-          style={{ padding:"0 10px", background:"transparent", border:"none", cursor:"pointer", color:fixingExpanded?C.blue:C.faint, fontSize:13, fontWeight:700 }}>
-          {fixingExpanded?"▾":"▴"}
-        </button>
-      }>
+    <TabbedPanel tabs={["History","Open Segments"]} active={fixingPanelTab} onChange={setFixingPanelTab} height="100%">
       {fixingPanelTab==="History" ? (
         <>
           {/* CSS overrides: vivid opaque bar colours for FixingWindow */}
@@ -3032,23 +2943,16 @@ const filtV=useMemo(()=>{
               opacity: 1 !important;
             }
           `}</style>
-          <div className={fixingExpanded?"fixing-history-fill":""} style={{height:fixingExpanded?"100%":"auto"}}>
-            {fixingExpanded&&<style>{`
-              .fixing-history-fill > div { height:100% !important; box-sizing:border-box; margin-bottom:0 !important; display:flex !important; flex-direction:column !important; }
-              .fixing-history-fill > div > svg { flex:1 1 auto !important; height:auto !important; min-height:0 !important; width:100% !important; }
-            `}</style>}
-            <Suspense fallback={null}><FixingWindowChart
-              vessels={filtV}
-              filterActive={filtV.length !== vessels.length}
-              tagFilter={cTagFilter||null}
-              fillHeight={fixingExpanded}
-            /></Suspense>
-          </div>
+          <Suspense fallback={null}><FixingWindowChart
+            vessels={filtV}
+            filterActive={filtV.length !== vessels.length}
+            tagFilter={cTagFilter||null}
+          /></Suspense>
         </>
       ) : (
         <Suspense fallback={null}><OpeningBreakdown
-          vessels={vessels14d}
-          filteredVessels={filtV}
+          vessels={vessels14d.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+          filteredVessels={filtV.filter(v=>vesselsTodayUpdated.has(v.vessel))}
           bucketFilters={bucketFilters}
           onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
           fillHeight={true}
@@ -3062,7 +2966,7 @@ const filtV=useMemo(()=>{
                   that used to be split between this and the Regional Snapshot placeholder,
                   since Regional Snapshot is now a tab inside the AIS Map panel on the right) */}
               {!mobile&&(
-                <div style={{width:"34%",minWidth:0,height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                <div style={{width:"34%",height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
                   <HScrollStyle/>
                   {(opFilter||bucketFilters.size>0)&&(
                     <div style={{flexShrink:0,padding:"8px 12px 0 12px",display:"flex",flexDirection:"column",gap:4}}>
@@ -3102,11 +3006,6 @@ const filtV=useMemo(()=>{
                           {/* Updated */}
                           <FilterRow label="Updated" col={C.blue}>
                             {[["","All"],["today","Today"],["week","This week"],["7d","7 days"],["14d","14 days"],["30d","30 days"]].map(([v,l])=>(<Chip key={v||"all"} col={C.blue} active={updFilter===v&&(v!==""||updFilter==="")} onClick={()=>setUpdFilter(v)}>{l}</Chip>))}
-                          </FilterRow>
-                          {/* Open Date */}
-                          <FilterRow label="Open Date" col="#38bdf8">
-                            <Chip col="#38bdf8" active={openDateFilter.quick==="ppt"} onClick={()=>{setOpenDateFilter(r=>({quick:r.quick==="ppt"?"":"ppt",from:"",to:""}));setPosPage(1);}}>Today/Tomorrow</Chip>
-                            <OpenDateRangeSlider/>
                           </FilterRow>
                           {/* Region */}
                           <FilterRow label="Region" col="#7dd3fc">
@@ -3165,7 +3064,7 @@ const filtV=useMemo(()=>{
 
               {/* RIGHT: AIS Map / Regional Position Snapshot (34%) */}
 {!mobile&&(
-  <div style={{width:"34%",minWidth:0}}>
+  <div style={{width:"34%"}}>
     <TabbedPanel tabs={["Map","Regional Snapshot"]} active={aisPanelTab} onChange={setAisPanelTab} height={460}>
       {aisPanelTab==="Map" ? (
         <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels} onAisVesselsChange={setAisVesselSet}/></Suspense>
@@ -3184,13 +3083,15 @@ const filtV=useMemo(()=>{
             {mobile && (
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                 <MobileCollapse title="📋 Paste positions" color="#58a6ff">
-                  <ParsePanel
-                    vessels={vessels}
-                    onAddVessels={onAddVessels}
-                    onAddCargoes={onAddCargoes}
-                    lockedMode="pos"
-                    vesselDB={{}}
-                  />
+                  <Suspense fallback={<div style={{padding:"14px 10px",fontSize:11,color:C.faint}}>Loading paste section…</div>}>
+                    <ParsePanel
+                      vessels={vessels}
+                      onAddVessels={onAddVessels}
+                      onAddCargoes={onAddCargoes}
+                      lockedMode="pos"
+                      vesselDB={{}}
+                    />
+                  </Suspense>
                 </MobileCollapse>
 
                 <MobileCollapse title="📈 Fixing Window / Segments" color="#c792ea">
@@ -3253,10 +3154,6 @@ const filtV=useMemo(()=>{
                           {(()=>{const available=getTagListFor("position");return available.length?available.map(t=>(<B key={t} active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t.toUpperCase()}</B>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>NONE</span>;})()}
                           {posTagFilter.size>0&&<B active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
                         </COL>
-                        <COL label="Open Date" col="#38bdf8">
-                          <B active={openDateFilter.quick==="ppt"} onClick={()=>{setOpenDateFilter(r=>({quick:r.quick==="ppt"?"":"ppt",from:"",to:""}));setPosPage(1);}}>Today/Tomorrow</B>
-                          <OpenDateRangeSlider/>
-                        </COL>
                         <COL label="Status" col={C.amber}>
                           {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
                           {filters.size>0&&<B active={false} onClick={()=>setFilters(new Set())}><span style={{color:C.red}}>✕ Clear</span></B>}
@@ -3300,12 +3197,20 @@ const filtV=useMemo(()=>{
             {vessels.length > 0 && (
               <>
                 {/* MOVED: Fleet count + Export + Search to same row */}
-                <div style={{
+                <div className="pos-actionbar" style={{
                   display:"flex",alignItems:"center",gap:8,padding:"6px 10px",
                   background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,
                   flexWrap:"nowrap",minHeight:38,boxSizing:"border-box",
-                  overflowX:"auto",overflowY:"hidden",scrollbarWidth:"thin"
+                  overflowX:"hidden",overflowY:"hidden",scrollbarWidth:"thin"
                 }}>
+                  <style>{`
+                    .pos-actionbar{white-space:nowrap}
+                    .pos-actionbar > *{flex-shrink:0}
+                    .pos-actionbar > div:first-of-type{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important;gap:5px!important}
+                    @media (max-width:1200px){
+                      .pos-action-search{width:145px!important;min-width:110px!important;max-width:180px!important;flex:1 1 145px!important}
+                    }
+                  `}</style>
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
                   <CopyPositionsButton filtV={filtV} fmtDateShort={fmtDateShort}/>
@@ -3355,7 +3260,7 @@ const filtV=useMemo(()=>{
                   <span style={{color:C.faint}}>Selected <span style={{color:"#4fc3f7",fontWeight:700}}>{selVessels.size}</span></span>
                   
                   {/* MOVED SEARCH FIELD HERE */}
-                  <div style={{position:"relative",marginLeft:"auto",display:"flex",alignItems:"center",gap:4,width:270,minWidth:270,maxWidth:270,flex:"0 0 270px"}}>
+                  <div className="pos-action-search" style={{position:"relative",marginLeft:"auto",display:"flex",alignItems:"center",gap:4,width:270,minWidth:110,maxWidth:270,flex:"1 1 270px"}}>
                     <input
                       value={search}
                       onChange={e=>setSearch(e.target.value)}
@@ -3424,6 +3329,7 @@ const filtV=useMemo(()=>{
                 )}
 
                 {/* Vessel Table + Side panel row */}
+                <style>{`.pos-table-wrap td{border-bottom:none!important}.pos-table-wrap th{vertical-align:middle!important}`}</style>
                 <div ref={(el)=>{window.__posRow=el;}} style={{display:"flex",gap:10,alignItems:"flex-start",position:"relative"}}>
                 {/* Vessel Table */}
                 <div className="pos-table-wrap" style={{
@@ -3441,11 +3347,12 @@ const filtV=useMemo(()=>{
                     if(col?.sortKey) srt(col.sortKey);
                   }}>
                     {showAddVessel&&<AddVesselInlineRow onSave={onAddV} onClose={()=>setShowAddVessel(false)}/>}
-                  <div style={{...tableWrap,minWidth:mobile?"1400px":undefined}} className={"pos-hover-rows"+(mobile?" pos-table":"")}>
-                    <style>{`.pos-hover-rows tr:hover{background:rgba(88,166,255,0.07)!important;}`}</style>
+                  <div style={{...tableWrap,minWidth:undefined}} className={mobile?"pos-table":undefined}>
                     {mobile&&<style>{`
-                      .pos-table td, .pos-table td>*{overflow:visible!important;text-overflow:unset!important;white-space:nowrap!important;max-width:none!important;}
-                      .pos-table th, .pos-table td{position:static!important;left:auto!important;right:auto!important;box-shadow:none!important;}
+                      .pos-table{min-width:0!important;width:100%!important;}
+                      .pos-table table{min-width:0!important;width:100%!important;table-layout:fixed!important;}
+                      .pos-table td, .pos-table td>*{text-overflow:ellipsis!important;white-space:nowrap!important;}
+                      .pos-table th, .pos-table td{position:static!important;left:auto!important;right:auto!important;box-shadow:none!important;border-bottom:none!important;}
                     `}</style>}
                     <MatrixTable
   key={`positions-${search}-${displayPosRows.length}-${sortK}-${sortD}-${posPage}-${[...filters].join("|")}-${[...posTagFilter].join("|")}`}
@@ -3469,12 +3376,16 @@ const filtV=useMemo(()=>{
   renderRow={(v, td, i) => {
   const isSel = sel === v.vessel;
   const ppt = isOpenPPT(v.date);
+  const mobileDate = (()=>{
+    const m=String(v.date||"").trim().match(/^(\d{1,2})\s+([A-Za-z]{3})/);
+    return m ? String(parseInt(m[1],10)).padStart(2,"0")+" "+m[2].slice(0,3).toLowerCase().replace(/^./,c=>c.toUpperCase()) : (v.date||"");
+  })();
 
   return (
     <>
       {/* SELECT */}
       <td
-        style={{ ...tdCtr, width: 40, minWidth:40, maxWidth:40, padding: "0 2px" }}
+        style={{ ...tdCtr, width: mobile?MOBILE_SELECT_W:30, minWidth:mobile?MOBILE_SELECT_W:30, maxWidth:mobile?MOBILE_SELECT_W:30, padding: "0 1px", borderBottom:"none" }}
         onClick={e => {
           e.stopPropagation();
           setSelVessels(p => {
@@ -3532,7 +3443,7 @@ const filtV=useMemo(()=>{
 
       {/* DATE */}
       <EC
-  value={v.date}
+  value={mobile ? mobileDate : v.date}
   color={ppt ? "#a8e6a3" : "#79c0ff"}
   placeholder="Date"
   onSave={val => {
@@ -3584,11 +3495,9 @@ const filtV=useMemo(()=>{
 />
 
       {/* UPDATED */}
-      {!mobile && (
-        <td style={{ ...tdCtr, color: C.faint }}>
-          {v.updatedAt ? new Date(v.updatedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : ""}
-        </td>
-      )}
+      <td style={{ ...tdCtr, color: C.faint, fontSize:12 }}>
+        {v.updatedAt ? new Date(v.updatedAt).toLocaleDateString("en-GB", mobile?{day:"2-digit",month:"short"}:{day:"2-digit",month:"short",year:"numeric"}) : ""}
+      </td>
 
       {/* WHO ENTERED badge + SAVE star */}
       {!mobile && (
@@ -3768,7 +3677,7 @@ const filtV=useMemo(()=>{
             )}
           </div>
         )}
-        {/* ── CARGOES — isolated component, restored independently ── */}
+        {/* ── CARGOES — independent UI component ── */}
         {tab==="cargo"&&(
           <Suspense fallback={<TabFallback/>}>
             <CargoesTab
@@ -3779,7 +3688,7 @@ const filtV=useMemo(()=>{
           </Suspense>
         )}
 
-        {/* ── QUOTES & FIXTURES — isolated component ── */}
+        {/* ── QUOTES & FIXTURES — independent UI component ── */}
         {tab==="cargo2"&&(
           <Suspense fallback={<TabFallback/>}>
             <QuotesFixtures
