@@ -1485,6 +1485,11 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
   };
   const openDateRailRef=useRef(null);
+  const openDateLowRef=useRef(null);
+  const openDateHighRef=useRef(null);
+  const openDateFillRef=useRef(null);
+  const openDateLowLabelRef=useRef(null);
+  const openDateHighLabelRef=useRef(null);
   const OpenDateRangeSlider=()=>{
     const lo=Math.min(openDateSliderFrom??openDateBounds.min,openDateSliderTo??openDateBounds.max);
     const hi=Math.max(openDateSliderFrom??openDateBounds.min,openDateSliderTo??openDateBounds.max);
@@ -1493,37 +1498,48 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     const rightPct=((hi-openDateBounds.min)/span)*100;
     const dragHandle=(which,e)=>{
       e.preventDefault();
-      e.currentTarget.setPointerCapture?.(e.pointerId);
+      const target=e.currentTarget;
+      target.setPointerCapture?.(e.pointerId);
+      let pending=which==="low"?lo:hi;
       const move=(ev)=>{
         const rect=openDateRailRef.current?.getBoundingClientRect();
         if(!rect||!rect.width)return;
         const pct=Math.max(0,Math.min(1,(ev.clientX-rect.left)/rect.width));
         let n=Math.round(openDateBounds.min+pct*span);
         if(which==="low") n=Math.min(n,hi); else n=Math.max(n,lo);
-        const nextLo=which==="low"?n:lo;
-        const nextHi=which==="high"?n:hi;
-        setOpenDateFilter({
-          quick:"",
-          from:nextLo<=openDateBounds.min?"":isoFromDayOffset(nextLo),
-          to:nextHi>=openDateBounds.max?"":isoFromDayOffset(nextHi)
-        });
+        pending=n;
+        const p=((n-openDateBounds.min)/span)*100;
+        if(which==="low"){
+          if(openDateLowRef.current) openDateLowRef.current.style.left=p+"%";
+          if(openDateLowLabelRef.current) openDateLowLabelRef.current.textContent=openDateLabel(n);
+          if(openDateFillRef.current){openDateFillRef.current.style.left=p+"%";openDateFillRef.current.style.width=Math.max(0,rightPct-p)+"%";}
+        }else{
+          if(openDateHighRef.current) openDateHighRef.current.style.left=p+"%";
+          if(openDateHighLabelRef.current) openDateHighLabelRef.current.textContent=openDateLabel(n);
+          if(openDateFillRef.current) openDateFillRef.current.style.width=Math.max(0,p-leftPct)+"%";
+        }
+      };
+      const up=()=>{
+        window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);
+        const nextLo=which==="low"?pending:lo;
+        const nextHi=which==="high"?pending:hi;
+        setOpenDateFilter({quick:"",from:nextLo<=openDateBounds.min?"":isoFromDayOffset(nextLo),to:nextHi>=openDateBounds.max?"":isoFromDayOffset(nextHi)});
         setPosPage(1);
       };
-      const up=()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);};
-      window.addEventListener("pointermove",move);
-      window.addEventListener("pointerup",up);
+      window.addEventListener("pointermove",move,{passive:false});
+      window.addEventListener("pointerup",up,{once:true});
     };
     return <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,maxWidth:"100%",width:"100%",flex:"1 1 240px"}}>
-      <span style={{fontSize:10,color:"#7dd3fc",minWidth:38,textAlign:"right",whiteSpace:"nowrap"}}>{openDateLabel(lo)}</span>
+      <span ref={openDateLowLabelRef} style={{fontSize:10,color:"#7dd3fc",minWidth:46,textAlign:"right",whiteSpace:"nowrap",marginRight:4}}>{openDateLabel(lo)}</span>
       <div ref={openDateRailRef} style={{position:"relative",height:20,flex:"1 1 120px",minWidth:70,touchAction:"none"}}>
         <div style={{position:"absolute",left:0,right:0,top:9,height:2,background:"rgba(88,166,255,.20)",borderRadius:2}}/>
-        <div style={{position:"absolute",left:`${leftPct}%`,width:`${Math.max(0,rightPct-leftPct)}%`,top:9,height:2,background:"#38bdf8",borderRadius:2}}/>
-        <button type="button" aria-label="Earliest open date" onPointerDown={e=>dragHandle("low",e)}
-          style={{position:"absolute",left:`${leftPct}%`,top:4,transform:"translateX(-50%)",width:12,height:12,borderRadius:"50%",padding:0,background:"#38bdf8",border:"2px solid #b9e8ff",boxShadow:"0 0 0 2px rgba(56,189,248,.16)",cursor:"ew-resize",zIndex:3}}/>
-        <button type="button" aria-label="Latest open date" onPointerDown={e=>dragHandle("high",e)}
-          style={{position:"absolute",left:`${rightPct}%`,top:4,transform:"translateX(-50%)",width:12,height:12,borderRadius:"50%",padding:0,background:"#38bdf8",border:"2px solid #b9e8ff",boxShadow:"0 0 0 2px rgba(56,189,248,.16)",cursor:"ew-resize",zIndex:4}}/>
+        <div ref={openDateFillRef} style={{position:"absolute",left:`${leftPct}%`,width:`${Math.max(0,rightPct-leftPct)}%`,top:9,height:2,background:"#38bdf8",borderRadius:2}}/>
+        <button ref={openDateLowRef} type="button" aria-label="Earliest open date" onPointerDown={e=>dragHandle("low",e)}
+          style={{position:"absolute",left:`${leftPct}%`,top:2,transform:"translateX(-50%)",width:16,height:16,borderRadius:"50%",padding:0,background:C.bg2,border:"2px solid #7dd3fc",boxShadow:"0 0 0 2px rgba(56,189,248,.10)",cursor:"ew-resize",zIndex:3,touchAction:"none"}}/>
+        <button ref={openDateHighRef} type="button" aria-label="Latest open date" onPointerDown={e=>dragHandle("high",e)}
+          style={{position:"absolute",left:`${rightPct}%`,top:2,transform:"translateX(-50%)",width:16,height:16,borderRadius:"50%",padding:0,background:C.bg2,border:"2px solid #7dd3fc",boxShadow:"0 0 0 2px rgba(56,189,248,.10)",cursor:"ew-resize",zIndex:4,touchAction:"none"}}/>
       </div>
-      <span style={{fontSize:10,color:"#7dd3fc",minWidth:38,whiteSpace:"nowrap"}}>{openDateLabel(hi)}</span>
+      <span ref={openDateHighLabelRef} style={{fontSize:10,color:"#7dd3fc",minWidth:46,whiteSpace:"nowrap",marginLeft:4}}>{openDateLabel(hi)}</span>
       {(openDateFilter.from||openDateFilter.to)&&<button onClick={()=>{setOpenDateFilter({quick:"",from:"",to:""});setPosPage(1);}} style={{background:"transparent",border:"1px solid rgba(255,107,107,.35)",color:C.red,borderRadius:4,fontSize:10,cursor:"pointer",padding:"2px 5px"}}>✕</button>}
     </div>;
   };
@@ -3356,7 +3372,7 @@ const filtV=useMemo(()=>{
                   )}
                   {outsiderSyncStatus&&<span style={{fontSize:11,color:outsiderSyncStatus.startsWith("✓")?"#43e97b":C.faint,whiteSpace:"nowrap"}}>{outsiderSyncStatus}</span>}
                   <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{vessels.length}</span></span>
-                  <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{Math.min(displayPosRows.length, posPage*POS_PAGE_SIZE)}</span></span>
+                  <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{displayPosRows.length}</span></span>
                   <span style={{color:C.faint}}>Selected <span style={{color:"#4fc3f7",fontWeight:700}}>{selVessels.size}</span></span>
                   
                   {/* MOVED SEARCH FIELD HERE */}
@@ -3763,7 +3779,7 @@ const filtV=useMemo(()=>{
                         fontWeight:700
                       }}
                     >
-                      Show more ({filtV.length - posPage * POS_PAGE_SIZE} remaining)
+                      Show more ({displayPosRows.length - posPage * POS_PAGE_SIZE} remaining)
                     </button>
                   </div>
                 )}
