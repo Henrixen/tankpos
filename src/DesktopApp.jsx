@@ -2628,7 +2628,7 @@ const filtV=useMemo(()=>{
                 <div style={{fontSize:mobile?9:11,fontWeight:800,letterSpacing:".20em",color:"rgba(125,178,240,.48)",textTransform:"uppercase"}}>Tanker Intelligence Platform</div>
                 <div style={{display:"flex",alignItems:"baseline",gap:7,marginTop:4}}>
                   <span style={{fontSize:mobile?20:29,fontWeight:850,color:"#eef6ff"}}>Broker</span>
-                  <span style={{fontSize:mobile?20:29,fontWeight:850,color:"#43e97b"}}>Dashboard</span>
+                  <span style={{fontSize:mobile?20:29,fontWeight:850,color:"#58a6ff"}}>Dashboard</span>
                 </div>
               </div>
               <div style={{fontSize:mobile?9:10,fontWeight:800,letterSpacing:".13em",color:"rgba(125,178,240,.42)",textTransform:"uppercase"}}>Live market terminal</div>
@@ -2679,29 +2679,33 @@ const filtV=useMemo(()=>{
                   <div style={{textAlign:"center",marginBottom:mobile?10:16}}>
                     <div style={{fontSize:mobile?9:12,fontWeight:850,letterSpacing:".14em",color:"#58a6ff"}}>ENTER DASHBOARD</div>
                     <div style={{fontSize:mobile?14:22,fontWeight:800,color:"#eef6ff",marginTop:5}}>Enter your 4-digit access code</div>
-                    <div style={{fontSize:mobile?9:13,color:"rgba(175,205,240,.52)",marginTop:6}}>Personal or colleague guest code</div>
                   </div>
 
-                  <div style={{display:"flex",gap:mobile?7:9,justifyContent:"center",marginBottom:mobile?10:15}}>
+                  <div style={{display:"flex",gap:mobile?9:11,justifyContent:"center",marginBottom:mobile?12:17}}>
                     {[0,1,2,3].map(i=><div key={i} style={{
-                      width:mobile?42:54,height:mobile?36:46,borderRadius:8,
-                      background:pinError?"rgba(255,107,107,.12)":pinInput.length>i?"rgba(88,166,255,.14)":"rgba(5,14,30,.72)",
-                      border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.56)":"rgba(88,166,255,.18)"),
-                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:mobile?16:18,color:pinError?"#ff6b6b":"#79c0ff"
-                    }}>{pinError?"●":pinInput.length>i?"●":""}</div>)}
+                      width:mobile?50:62,height:mobile?46:54,borderRadius:9,
+                      background:pinError?"rgba(255,107,107,.12)":pinInput.length>i?"rgba(88,166,255,.18)":"rgba(5,14,30,.72)",
+                      border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.72)":"rgba(88,166,255,.18)"),
+                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:mobile?21:24,fontWeight:850,color:pinError?"#ff6b6b":"#79c0ff",
+                      boxShadow:pinInput.length>i&&!pinError?"0 0 18px rgba(88,166,255,.12)":"none"
+                    }}>{pinInput[i]||""}</div>)}
                   </div>
 
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:mobile?6:8,maxWidth:mobile?230:270,margin:"0 auto",width:"100%"}}>
-                    {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=><button key={i} disabled={d===""} onClick={()=>{
+                  <style>{`
+                    .login-pin-key{transition:transform .08s ease,background .08s ease,border-color .08s ease,box-shadow .08s ease;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+                    .login-pin-key:active{transform:scale(.94);background:rgba(88,166,255,.24)!important;border-color:rgba(88,166,255,.72)!important;box-shadow:0 0 0 2px rgba(88,166,255,.10)}
+                  `}</style>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:mobile?8:9,maxWidth:mobile?270:300,margin:"0 auto",width:"100%"}}>
+                    {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((d,i)=><button className="login-pin-key" key={i} disabled={d===""} onClick={()=>{
                       if(d==="⌫"){setPinInput(p=>p.slice(0,-1));return;}
                       if(d===""||typeof d!=="number")return;
                       const next=pinInput+String(d);setPinInput(next);if(next.length===4)submitPin(next);
                     }} style={{
-                      height:mobile?37:52,borderRadius:8,
+                      height:mobile?46:58,borderRadius:9,
                       border:"1px solid "+(d===""?"transparent":"rgba(88,166,255,.19)"),
                       background:d===""?"transparent":"linear-gradient(180deg,rgba(17,39,73,.82),rgba(10,27,53,.86))",
                       color:d===""?"transparent":"rgba(198,225,255,.94)",
-                      fontSize:mobile?14:19,fontWeight:750,cursor:d===""?"default":"pointer",
+                      fontSize:mobile?18:21,fontWeight:800,cursor:d===""?"default":"pointer",
                       fontFamily:"inherit",visibility:d===""?"hidden":"visible"
                     }}>{d}</button>)}
                   </div>
