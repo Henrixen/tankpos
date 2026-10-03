@@ -1474,8 +1474,9 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   },[vessels]);
   const isoFromDayOffset=useCallback((offset)=>{
     const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()+Number(offset||0));
-    const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");
-    return `${y}-${m}-${day}`;
+    const day=String(d.getDate()).padStart(2,"0");
+    const mon=d.toLocaleDateString("en-GB",{month:"short"});
+    return `${day} ${mon}`;
   },[]);
   const openDateSliderFrom=openDateFilter.from?daysBetween(openDateFilter.from):openDateBounds.min;
   const openDateSliderTo=openDateFilter.to?daysBetween(openDateFilter.to):openDateBounds.max;
