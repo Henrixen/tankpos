@@ -3356,9 +3356,9 @@ const filtV=useMemo(()=>{
                       style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"7px 30px 7px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
                     {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:7,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>}
                   </div>}
-                  {mobile&&<details style={{width:"100%",border:"1px solid "+C.bd,borderRadius:5,background:C.bg2}}>
-                    <summary style={{padding:"7px 9px",cursor:"pointer",color:C.blue,fontWeight:700,listStyle:"none"}}>Position controls</summary>
-                    <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",padding:"0 8px 8px"}}>}
+                  <details open={!mobile} style={{width:mobile?"100%":"auto",border:mobile?"1px solid "+C.bd:"none",borderRadius:mobile?5:0,background:mobile?C.bg2:"transparent",display:mobile?"block":"contents"}}>
+                    <summary style={{display:mobile?"block":"none",padding:"7px 9px",cursor:"pointer",color:C.blue,fontWeight:700,listStyle:"none"}}>Position controls</summary>
+                    <div style={{display:mobile?"flex":"contents",gap:6,alignItems:"center",flexWrap:"wrap",padding:mobile?"0 8px 8px":0}}>
 
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
@@ -3438,7 +3438,7 @@ const filtV=useMemo(()=>{
                     style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",minWidth:28,flexShrink:0}}>
                     {sortD>0?"▲":"▼"}
                   </button>
-                  {mobile&&<></div></details></>}
+                  </div></details>
                 </div>
 
                 {bulkPosTagOpen&&(
