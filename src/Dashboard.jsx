@@ -503,7 +503,7 @@ function WSChart({data,routes,colors,fill=false}) {
   const hi=hover!=null?hover:null;
   return <div style={{height:fill?"100%":"auto",display:"flex",flexDirection:"column",minHeight:0,position:"relative"}}>
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" onPointerMove={onMove} onPointerDown={e=>{e.currentTarget.setPointerCapture?.(e.pointerId);onMove(e)}} onPointerLeave={()=>setHover(null)} style={{width:"100%",height:fill?"100%":260,minHeight:0,display:"block",flex:fill?1:"0 0 auto",cursor:"crosshair",touchAction:"pan-y"}}>
-      <text x="6" y={PT+iH/2} fill="rgba(88,166,255,.72)" fontSize="15" fontWeight="900" letterSpacing=".08em" textAnchor="middle" transform={`rotate(-90 6 ${PT+iH/2})`}>WS</text>
+      <text x={compact?-12:6} y={PT+iH/2} fill="rgba(88,166,255,.72)" fontSize="15" fontWeight="900" letterSpacing=".08em" textAnchor="middle" transform={`rotate(-90 ${compact?-12:6} ${PT+iH/2})`}>WS</text>
       {[0,.5,1].map(t=>{const y=PT+t*iH,v=Math.round(mx-t*range);return <g key={t}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-4} y={y+5} fill="#fff" fontSize="19" fontWeight="850" textAnchor="end">{v}</text></g>})}
       {routes.map(r=>{const pts=series[r.id].map((v,i)=>v!=null?[xs[i],PT+iH-(v-mn)/range*iH]:null);const valid=pts.filter(Boolean);if(valid.length<2)return null;const last=valid.at(-1);return <g key={r.id}><path d={`M ${valid.map(p=>p.join(" ")).join(" L ")}`} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>{last&&<text x={Math.min(W-PR+8,last[0]+7)} y={last[1]+4} fill={colors[r.id]||C.dim} fontSize="14" fontWeight="850">{r.id}</text>}{hi!=null&&pts[hi]&&<circle cx={pts[hi][0]} cy={pts[hi][1]} r="4.5" fill={colors[r.id]||C.dim} stroke="none"/>}</g>})}
       {hi!=null&&<line x1={xs[hi]} x2={xs[hi]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
@@ -1263,13 +1263,16 @@ function Dashboard({vessels, cargoes, history}) {
 
           /* Fixing window: compact mobile heading and tighter graph placement */
           .dash-fixing-title-desktop{display:none!important}
-          .dash-fixing-title-mobile{display:inline!important}
+          .dash-fixing-title-mobile{display:block!important;white-space:nowrap!important;flex:0 0 auto!important}
+          .dash-fixing-title-mobile > *{white-space:nowrap!important;margin:0!important;line-height:1!important}
+          .dash-fixing-grid > .dash-panel > div > div:first-child{min-height:20px!important;margin:0!important}
+          .dash-fixing-note{display:none!important}
           .dash-fixing-desktop-controls{display:none!important}
-          .dash-fixing-mobile-controls{display:grid!important;grid-template-columns:1fr 1fr;gap:7px;margin:-7px 0 0}
+          .dash-fixing-mobile-controls{display:grid!important;grid-template-columns:1fr 1fr;gap:7px;margin:-12px 0 -8px}
           .dash-fixing-mobile-controls select{width:100%;min-width:0;height:31px;padding:0 8px;border-radius:5px;border:1px solid rgba(88,166,255,.34);background:#0d2038;color:#dbeafe;font-size:10px;font-weight:700;outline:none}
 
           /* Compact segment legend: all segments on one row, count underneath */
-          .dash-fixing-legend{width:100%!important;display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:2px!important;padding-right:0!important;align-items:start!important}
+          .dash-fixing-legend{width:100%!important;display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:2px!important;padding-right:0!important;align-items:start!important;margin-top:-5px!important}
           .dash-fixing-legend span{min-width:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;gap:1px!important;font-size:8px!important;line-height:1.05!important;white-space:nowrap!important}
           .dash-fixing-legend small{display:block!important;font-size:7px!important;font-weight:650!important;opacity:.78}
         }
@@ -1409,7 +1412,7 @@ function Dashboard({vessels, cargoes, history}) {
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
               <span className="dash-fixing-title-desktop">{secHead(`Fixing window by vessel size · days until open${fixingRegionFilter!=="All"?" · "+fixingRegionFilter:""}`)}</span>
               <span className="dash-fixing-title-mobile">{secHead("Fixing window")}</span>
-              <span style={{fontSize:9,color:D.faint}}>past positions · negative values excluded</span>
+              <span className="dash-fixing-note" style={{fontSize:9,color:D.faint}}>past positions · negative values excluded</span>
             </div>
             <div className="dash-fixing-desktop-controls" style={{display:"flex",gap:5,flexWrap:"wrap",margin:"-2px 0 8px"}}>
               <div style={{display:"flex",gap:5,flexWrap:"wrap",flex:1}}>{SEGMENT_ORDER.map(seg=>{const active=segmentFilter===seg;return <button key={seg} onClick={()=>setSegmentFilter(seg)} style={{background:active?"rgba(88,166,255,.18)":D.bg3,border:"1px solid "+(active?D.blue:D.border2),borderRadius:5,color:active?D.tx:D.dim,fontFamily:"inherit",fontSize:10,fontWeight:active?800:600,padding:"4px 8px",cursor:"pointer"}}>{seg}</button>})}</div><HorizonButtons value={fixingPeriod} onChange={setFixingPeriod}/>
@@ -1490,7 +1493,7 @@ function SegmentFWChart({data,segments,colors}) {
   const [hover,setHover]=useState(null);
   const [presentationClean,setPresentationClean]=useState(false);
   const compact=typeof window!=="undefined"&&window.innerWidth<=700;
-  const W=compact?620:1120,H=compact?330:430,PL=compact?40:54,PR=compact?12:14,PT=compact?8:10,PB=compact?30:34,iW=W-PL-PR,iH=H-PT-PB;
+  const W=compact?620:1120,H=compact?330:430,PL=compact?40:54,PR=compact?12:14,PT=compact?0:10,PB=compact?12:34,iW=W-PL-PR,iH=H-PT-PB;
   const series={};
   const sampleThresholds={};
   segments.forEach(seg=>{
@@ -1536,7 +1539,7 @@ function SegmentFWChart({data,segments,colors}) {
       </svg>
       {hover!=null&&<div style={{position:"absolute",top:10,left:`${Math.min(82,Math.max(10,xs[hover]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.95)",border:"1px solid rgba(88,166,255,.35)",borderRadius:6,padding:"6px 8px",pointerEvents:"none",zIndex:8}}><div style={{fontSize:9,color:"rgba(205,225,250,.82)",marginBottom:3}}>{fmtDateShort(data[hover]?.date)}</div>{segments.map(seg=>{const ships=Math.round(Number(data[hover]?.[seg+"__ships"]||0));const excluded=Number.isFinite(Number(data[hover]?.[seg]))&&series[seg][hover]==null;return series[seg][hover]!=null?<div key={seg} style={{fontSize:10,fontWeight:800,color:colors[seg]||C.tx}}>{seg}: {series[seg][hover].toFixed(1)}d <span style={{color:"rgba(205,225,250,.76)",fontWeight:650}}>· {ships} ships</span></div>:excluded?<div key={seg} style={{fontSize:9.5,fontWeight:700,color:"rgba(205,225,250,.60)"}}>{seg}: excluded · {ships} ships <span style={{color:"#fbbf24"}}>(min {sampleThresholds[seg]?.minShips||3})</span></div>:null})}</div>}
     </div>
-    <div style={{position:"relative",minHeight:24,marginTop:4,display:"flex",alignItems:"center",justifyContent:"center",paddingRight:125}}>
+    <div style={{position:"relative",minHeight:22,marginTop:0,display:"flex",alignItems:"center",justifyContent:"center",paddingRight:125}}>
       <div className="dash-fixing-legend" style={{display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center"}}>{segments.map(s=>{const last=[...data].reverse().find(d=>d[s]!=null);const n=Math.round(Number(last?.[s+"__ships"]||0));return <span key={s} style={{fontSize:10.5,color:colors[s]||C.blue,fontWeight:700}}>● <b>{s}</b>{n?<small>{n}</small>:null}</span>})}</div>
       <label style={{position:"absolute",right:2,bottom:0,display:"flex",alignItems:"center",gap:6,fontSize:9,color:presentationClean?C.blue:C.faint,background:"rgba(5,14,30,.62)",border:"1px solid "+(presentationClean?"rgba(88,166,255,.36)":C.bd2),borderRadius:5,padding:"3px 7px",cursor:"pointer",userSelect:"none"}} title="Exclude unusually small fleet samples and isolated statistical outliers">
         <input type="checkbox" checked={presentationClean} onChange={e=>setPresentationClean(e.target.checked)} style={{width:13,height:13,margin:0,accentColor:C.blue,cursor:"pointer"}}/>
