@@ -1403,7 +1403,9 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
                 t=Date.parse(`${m[1]} ${m[2]} ${y} ${m[4]||"00"}:${m[5]||"00"}`);
               }
             }
-            return !Number.isFinite(t)||t<=now+futureGrace;
+            if(!Number.isFinite(t)) return false;
+            const age=now-t,maxAge=14*24*60*60*1000;
+            return t<=now+futureGrace&&age<=maxAge;
           });
           setLoginNews(safeItems.slice(0,8));
         }
