@@ -491,7 +491,8 @@ ${text}`}]
 
 function WSChart({data,routes,colors,fill=false}) {
   const [hover,setHover]=useState(null);
-  const W=1200,H=250,PL=46,PR=24,PT=10,PB=34,iW=W-PL-PR,iH=H-PT-PB;
+  const compact=typeof window!=="undefined"&&window.innerWidth<=700;
+  const W=compact?620:1200,H=compact?300:250,PL=compact?38:46,PR=compact?18:24,PT=compact?8:10,PB=compact?30:34,iW=W-PL-PR,iH=H-PT-PB;
   const series={};
   routes.forEach(r=>series[r.id]=cleanIsolatedValues(data.map(d=>d.spot?.[r.id]?.ws)));
   const allVals=routes.flatMap(r=>series[r.id]).filter(v=>v!=null);
@@ -1194,8 +1195,8 @@ function Dashboard({vessels, cargoes, history}) {
             width:100%!important;gap:10px!important;
           }
           .dash-fixing-grid{height:auto!important}
-          .dash-fixing-grid > .dash-panel{height:390px!important;min-height:390px!important}
-          .dash-ws-wrap{height:600px!important;min-height:600px!important;width:100%!important}
+          .dash-fixing-grid > .dash-panel{height:390px!important;min-height:390px!important;order:2!important}
+          .dash-ws-wrap{height:600px!important;min-height:600px!important;width:100%!important;order:1!important}
           .dash-ws-tracker{width:100%!important;min-width:0!important;padding:10px!important}
 
           /* Commodity tiles fit phone rather than retaining six desktop columns */
@@ -1255,8 +1256,8 @@ function Dashboard({vessels, cargoes, history}) {
           .dash-vlcc-head > div:last-child{top:54px!important;right:0!important}
 
           /* Worldscale charts: fuller graph area, less dead space */
-          .dash-ws-wrap{height:440px!important;min-height:440px!important}
-          .dash-ws-tracker{height:440px!important;min-height:440px!important}
+          .dash-ws-wrap{height:430px!important;min-height:430px!important}
+          .dash-ws-tracker{height:430px!important;min-height:430px!important}
           .dash-ws-legend{margin-top:0!important;gap:10px!important;flex-wrap:nowrap!important}
           .dash-ws-legend span{font-size:9px!important}
 
@@ -1485,7 +1486,8 @@ function Dashboard({vessels, cargoes, history}) {
 function SegmentFWChart({data,segments,colors}) {
   const [hover,setHover]=useState(null);
   const [presentationClean,setPresentationClean]=useState(false);
-  const W=1120,H=430,PL=54,PR=14,PT=10,PB=34,iW=W-PL-PR,iH=H-PT-PB;
+  const compact=typeof window!=="undefined"&&window.innerWidth<=700;
+  const W=compact?620:1120,H=compact?330:430,PL=compact?40:54,PR=compact?12:14,PT=compact?8:10,PB=compact?30:34,iW=W-PL-PR,iH=H-PT-PB;
   const series={};
   const sampleThresholds={};
   segments.forEach(seg=>{
