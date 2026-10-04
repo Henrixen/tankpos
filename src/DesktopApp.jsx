@@ -3438,7 +3438,7 @@ const filtV=useMemo(()=>{
                     style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",minWidth:28,flexShrink:0}}>
                     {sortD>0?"▲":"▼"}
                   </button>
-                  {mobile&&</div></details>}
+                  {mobile&&<></div></details></>}
                 </div>
 
                 {bulkPosTagOpen&&(
