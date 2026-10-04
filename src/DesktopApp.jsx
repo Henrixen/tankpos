@@ -1390,7 +1390,23 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
             bunkerDate:b.date||v.bunkerDate
           }));
         }catch(_){}
-        if(newsRes.status==="fulfilled"&&Array.isArray(newsRes.value?.items))setLoginNews(newsRes.value.items.slice(0,8));
+        if(newsRes.status==="fulfilled"&&Array.isArray(newsRes.value?.items)){
+          const now=Date.now(),futureGrace=6*60*60*1000;
+          const safeItems=newsRes.value.items.filter(n=>{
+            if(!n?.published)return true;
+            const raw=String(n.published).trim();
+            let t=Date.parse(raw);
+            if(!Number.isFinite(t)){
+              const m=raw.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s*(?:[,.]\s*)?(\d{4})?(?:[,\s]+(\d{1,2}):(\d{2}))?/);
+              if(m){
+                const y=Number(m[3]||new Date().getFullYear());
+                t=Date.parse(`${m[1]} ${m[2]} ${y} ${m[4]||"00"}:${m[5]||"00"}`);
+              }
+            }
+            return !Number.isFinite(t)||t<=now+futureGrace;
+          });
+          setLoginNews(safeItems.slice(0,8));
+        }
       }catch(_){}
       finally{if(alive)setLoginFeedLoading(false);}
     };
@@ -2642,25 +2658,25 @@ const filtV=useMemo(()=>{
           <div style={{position:"relative",zIndex:2,width:mobile?"calc(100vw - 20px)":"min(1460px,calc(100vw - 32px))",maxWidth:"100%",boxSizing:"border-box",margin:"0 auto",padding:mobile?"12px 0 18px":"24px 0 28px"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,marginBottom:mobile?14:18}}>
               <div>
-                <div style={{fontSize:mobile?9:11,fontWeight:800,letterSpacing:".20em",color:"rgba(125,178,240,.48)",textTransform:"uppercase"}}>Tanker Intelligence Platform</div>
+                {!mobile&&<div style={{fontSize:11,fontWeight:800,letterSpacing:".20em",color:"rgba(125,178,240,.48)",textTransform:"uppercase"}}>Tanker Intelligence Platform</div>}
                 <div style={{display:"flex",alignItems:"baseline",gap:7,marginTop:4}}>
                   <span style={{fontSize:mobile?20:29,fontWeight:850,color:"#eef6ff"}}>Broker</span>
                   <span style={{fontSize:mobile?20:29,fontWeight:850,color:"#58a6ff"}}>Dashboard</span>
                 </div>
               </div>
-              <div style={{fontSize:mobile?9:10,fontWeight:800,letterSpacing:".13em",color:"rgba(125,178,240,.42)",textTransform:"uppercase"}}>Live market terminal</div>
+              {!mobile&&<div style={{fontSize:10,fontWeight:800,letterSpacing:".13em",color:"rgba(125,178,240,.42)",textTransform:"uppercase"}}>Live market terminal</div>}
             </div>
 
             {/* Market pulse — Brent + bunkers in requested order: Houston | ARA | Singapore */}
-            <div style={{display:"grid",gridTemplateColumns:mobile?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:8,marginBottom:mobile?12:16}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:8,marginBottom:mobile?12:16}}>
               {[
                 ["BRENT",loginMarkets.brent,"USD/BBL"],
-                ["MGO HOUSTON",loginMarkets.mgoUsg,"USD/MT"],
+                [mobile?"MGO HOU":"MGO HOUSTON",loginMarkets.mgoUsg,"USD/MT"],
                 ["MGO ARA",loginMarkets.mgoAra,"USD/MT"],
                 ["MGO SPORE",loginMarkets.mgoSingapore,"USD/MT"]
-              ].map(([label,val,unit])=><div key={label} style={{padding:mobile?"11px 12px":"16px 18px",border:"1px solid rgba(88,166,255,.11)",borderRadius:10,background:"linear-gradient(180deg,rgba(8,25,48,.76),rgba(4,16,33,.70))",backdropFilter:"blur(8px)"}}>
+              ].map(([label,val,unit])=><div key={label} style={{padding:mobile?"8px 6px":"16px 18px",border:"1px solid rgba(88,166,255,.11)",borderRadius:10,background:"linear-gradient(180deg,rgba(8,25,48,.76),rgba(4,16,33,.70))",backdropFilter:"blur(8px)"}}>
                 <div style={{fontSize:mobile?9:10,fontWeight:850,letterSpacing:".12em",color:"rgba(125,178,240,.52)"}}>{label}</div>
-                <div style={{fontSize:mobile?18:25,fontWeight:850,color:val!=null?"#eef6ff":"rgba(225,239,255,.30)",marginTop:3}}>
+                <div style={{fontSize:mobile?15:25,fontWeight:850,color:val!=null?"#eef6ff":"rgba(225,239,255,.30)",marginTop:3}}>
                   {val!=null?(typeof val==="number"?val.toLocaleString(undefined,{maximumFractionDigits:2}):val):"—"}
                 </div>
                 <div style={{fontSize:mobile?8:9,color:"rgba(125,178,240,.36)",marginTop:1}}>{unit}</div>
@@ -2705,7 +2721,7 @@ const filtV=useMemo(()=>{
                       border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.72)":"rgba(88,166,255,.18)"),
                       display:"flex",alignItems:"center",justifyContent:"center",fontSize:mobile?21:24,fontWeight:850,color:pinError?"#ff6b6b":"#79c0ff",
                       boxShadow:pinInput.length>i&&!pinError?"0 0 18px rgba(88,166,255,.12)":"none"
-                    }}>{pinInput[i]||""}</div>)}
+                    }}> {pinInput.length>i?"*":""}</div>)}
                   </div>
 
                   <style>{`
