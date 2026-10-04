@@ -1163,7 +1163,7 @@ function Dashboard({vessels, cargoes, history}) {
     <div className="dash-mobile-root" style={{display:"flex",flexDirection:"column",gap:14,background:D.bg,borderRadius:10,padding:"16px",fontFamily:"Inter,sans-serif"}}>
 
       <style>{`
-        .dash-fixing-mobile-controls{display:none}
+        .dash-fixing-title-mobile{display:none}\n        .dash-fixing-mobile-controls{display:none}
         @media (max-width:700px){
           .dash-mobile-root{
             width:100%!important;max-width:100%!important;box-sizing:border-box!important;
@@ -1195,7 +1195,7 @@ function Dashboard({vessels, cargoes, history}) {
             width:100%!important;gap:10px!important;
           }
           .dash-fixing-grid{height:auto!important}
-          .dash-fixing-grid > .dash-panel{height:390px!important;min-height:390px!important;order:2!important}
+          .dash-fixing-grid > .dash-panel{height:350px!important;min-height:350px!important;order:2!important}
           .dash-ws-wrap{height:600px!important;min-height:600px!important;width:100%!important;order:1!important}
           .dash-ws-tracker{width:100%!important;min-width:0!important;padding:10px!important}
 
@@ -1261,9 +1261,11 @@ function Dashboard({vessels, cargoes, history}) {
           .dash-ws-legend{margin-top:0!important;gap:10px!important;flex-wrap:nowrap!important}
           .dash-ws-legend span{font-size:9px!important}
 
-          /* Fixing window: compact dropdown controls on mobile only */
+          /* Fixing window: compact mobile heading and tighter graph placement */
+          .dash-fixing-title-desktop{display:none!important}
+          .dash-fixing-title-mobile{display:inline!important}
           .dash-fixing-desktop-controls{display:none!important}
-          .dash-fixing-mobile-controls{display:grid!important;grid-template-columns:1fr 1fr;gap:7px;margin:-2px 0 7px}
+          .dash-fixing-mobile-controls{display:grid!important;grid-template-columns:1fr 1fr;gap:7px;margin:-7px 0 0}
           .dash-fixing-mobile-controls select{width:100%;min-width:0;height:31px;padding:0 8px;border-radius:5px;border:1px solid rgba(88,166,255,.34);background:#0d2038;color:#dbeafe;font-size:10px;font-weight:700;outline:none}
 
           /* Compact segment legend: all segments on one row, count underneath */
@@ -1405,7 +1407,8 @@ function Dashboard({vessels, cargoes, history}) {
 {panel(
           <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
-              {secHead(`Fixing window by vessel size · days until open${fixingRegionFilter!=="All"?" · "+fixingRegionFilter:""}`)}
+              <span className="dash-fixing-title-desktop">{secHead(`Fixing window by vessel size · days until open${fixingRegionFilter!=="All"?" · "+fixingRegionFilter:""}`)}</span>
+              <span className="dash-fixing-title-mobile">{secHead("Fixing window")}</span>
               <span style={{fontSize:9,color:D.faint}}>past positions · negative values excluded</span>
             </div>
             <div className="dash-fixing-desktop-controls" style={{display:"flex",gap:5,flexWrap:"wrap",margin:"-2px 0 8px"}}>
