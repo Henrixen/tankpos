@@ -1384,11 +1384,16 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         try{
           const {data}=await supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle();
           const b=data?.value?(typeof data.value==="string"?JSON.parse(data.value):data.value):null;
-          if(b)setLoginMarkets(v=>({...v,
-            mgoAra:Number(b.ARA_MGO)||v.mgoAra,
-            mgoSingapore:Number(b.SIN_MGO)||v.mgoSingapore,
-            bunkerDate:b.date||v.bunkerDate
-          }));
+          if(b)setLoginMarkets(v=>{
+            const apiTs=Date.parse(v.updatedAt||"");
+            const bunkerTs=Date.parse(b.date||"");
+            const useBunker=Number.isFinite(bunkerTs)&&(!Number.isFinite(apiTs)||bunkerTs>apiTs);
+            return useBunker?{...v,
+              mgoAra:Number(b.ARA_MGO)||v.mgoAra,
+              mgoSingapore:Number(b.SIN_MGO)||v.mgoSingapore,
+              bunkerDate:b.date||v.bunkerDate
+            }:v;
+          });
         }catch(_){}
         if(newsRes.status==="fulfilled"&&Array.isArray(newsRes.value?.items)){
           const now=Date.now(),futureGrace=6*60*60*1000;
@@ -3342,9 +3347,19 @@ const filtV=useMemo(()=>{
                 <div style={{
                   display:"flex",alignItems:"center",gap:8,padding:"6px 10px",
                   background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,
-                  flexWrap:"nowrap",minHeight:38,boxSizing:"border-box",
-                  overflowX:"auto",overflowY:"hidden",scrollbarWidth:"thin"
+                  flexWrap:mobile?"wrap":"nowrap",minHeight:38,boxSizing:"border-box",
+                  overflowX:"visible",overflowY:"visible",scrollbarWidth:"thin"
                 }}>
+                  {mobile&&<div style={{position:"relative",display:"flex",alignItems:"center",width:"100%"}}>
+                    <input value={search} onChange={e=>setSearch(e.target.value)}
+                      placeholder="🔍 Multi-search: e.g. belfast ulsd 1A"
+                      style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"7px 30px 7px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
+                    {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:7,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>}
+                  </div>}
+                  {mobile&&<details style={{width:"100%",border:"1px solid "+C.bd,borderRadius:5,background:C.bg2}}>
+                    <summary style={{padding:"7px 9px",cursor:"pointer",color:C.blue,fontWeight:700,listStyle:"none"}}>Position controls</summary>
+                    <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",padding:"0 8px 8px"}}>}
+
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
                   <CopyPositionsButton filtV={filtV} fmtDateShort={fmtDateShort}/>
@@ -3394,7 +3409,7 @@ const filtV=useMemo(()=>{
                   <span style={{color:C.faint}}>Selected <span style={{color:"#4fc3f7",fontWeight:700}}>{selVessels.size}</span></span>
                   
                   {/* MOVED SEARCH FIELD HERE */}
-                  <div style={{position:"relative",marginLeft:"auto",display:"flex",alignItems:"center",gap:4,width:270,minWidth:270,maxWidth:270,flex:"0 0 270px"}}>
+                  <div style={{position:"relative",marginLeft:"auto",display:mobile?"none":"flex",alignItems:"center",gap:4,width:270,minWidth:270,maxWidth:270,flex:"0 0 270px"}}>
                     <input
                       value={search}
                       onChange={e=>setSearch(e.target.value)}
@@ -3423,6 +3438,7 @@ const filtV=useMemo(()=>{
                     style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",minWidth:28,flexShrink:0}}>
                     {sortD>0?"▲":"▼"}
                   </button>
+                  {mobile&&</div></details>}
                 </div>
 
                 {bulkPosTagOpen&&(
