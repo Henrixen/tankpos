@@ -1400,14 +1400,15 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
           const safeItems=newsRes.value.items.filter(n=>{
             if(!n?.published)return true;
             const raw=String(n.published).trim();
-            let t=Date.parse(raw);
-            if(!Number.isFinite(t)){
-              const m=raw.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s*(?:[,.]\s*)?(\d{4})?(?:[,\s]+(\d{1,2}):(\d{2}))?/);
-              if(m){
-                const y=Number(m[3]||new Date().getFullYear());
-                t=Date.parse(`${m[1]} ${m[2]} ${y} ${m[4]||"00"}:${m[5]||"00"}`);
-              }
+            // Feed commonly returns "04 Oct, 07:31" without a year.
+            // Parse that ourselves first; Date.parse may otherwise assign an old default year.
+            const m=raw.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s*(?:[,.]\s*)?(\d{4})?(?:[,\s]+(\d{1,2}):(\d{2}))?/);
+            let t=NaN;
+            if(m){
+              const y=Number(m[3]||new Date().getFullYear());
+              t=Date.parse(`${m[1]} ${m[2]} ${y} ${m[4]||"00"}:${m[5]||"00"}`);
             }
+            if(!Number.isFinite(t))t=Date.parse(raw);
             if(!Number.isFinite(t)) return false;
             const age=now-t,maxAge=14*24*60*60*1000;
             return t<=now+futureGrace&&age<=maxAge;
