@@ -855,7 +855,44 @@ function Dashboard({vessels, cargoes, history}) {
   const [fixingPeriod,setFixingPeriod]=useState("1M");
   const [fixingSegmentHistory,setFixingSegmentHistory]=useState([]);
   const [fixingSegmentError,setFixingSegmentError]=useState(null);
-  useEffect(()=>{let alive=true;(async()=>{try{const {data,error}=await supabase.rpc("dashboard_fixing_window_segments");if(error)throw error;if(alive)setFixingSegmentHistory(data||[]);}catch(e){if(alive)setFixingSegmentError(e.message||"RPC failed");}})();return()=>{alive=false;};},[]);
+  useEffect(()=>{
+    let alive=true;
+    const cacheKey="dashboard-fixing-window-segments-v1";
+    const load=async()=>{
+      // Keep the last successful chart visible if Supabase has a transient statement timeout.
+      try{
+        const cached=localStorage.getItem(cacheKey);
+        if(cached&&alive){
+          const parsed=JSON.parse(cached);
+          if(Array.isArray(parsed)&&parsed.length)setFixingSegmentHistory(parsed);
+        }
+      }catch{}
+      let lastError=null;
+      for(let attempt=0;attempt<3&&alive;attempt++){
+        try{
+          const {data,error}=await supabase.rpc("dashboard_fixing_window_segments");
+          if(error)throw error;
+          const rows=Array.isArray(data)?data:[];
+          if(alive){
+            setFixingSegmentHistory(rows);
+            setFixingSegmentError(null);
+          }
+          try{localStorage.setItem(cacheKey,JSON.stringify(rows));}catch{}
+          return;
+        }catch(e){
+          lastError=e;
+          if(attempt<2)await new Promise(r=>setTimeout(r,800*(attempt+1)));
+        }
+      }
+      // Only surface a non-timeout error. A DB timeout is transient and the cached
+      // successful history (if available) remains on screen instead of wiping the chart.
+      if(alive&&lastError&&!/statement timeout|canceling statement/i.test(lastError.message||"")){
+        setFixingSegmentError(lastError.message||"RPC failed");
+      }
+    };
+    load();
+    return()=>{alive=false;};
+  },[]);
 
   // Part 5: Fetch all history entries from Supabase
   useEffect(() => {
