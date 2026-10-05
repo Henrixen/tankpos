@@ -1369,8 +1369,8 @@ function FixingTab({vessels}){
           })}
         </div>
 
-        {/* Owner Directory — wider */}
-        {!mobile&&<div style={{flex:"0 0 460px",width:460,display:"flex",flexDirection:"column",gap:6}}>
+        {/* Owner Directory — desktop unchanged; on mobile it sits below all clients and is collapsed by default */}
+        <div style={{flex:mobile?"0 0 auto":"0 0 460px",width:mobile?"100%":460,display:"flex",flexDirection:"column",gap:6}}>
           {pendingDelOwner&&(
             <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:C.bg2,border:"1px solid "+C.red,borderRadius:8,padding:"12px 20px",zIndex:9999,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.5)",fontFamily:"sans-serif",fontSize:12,minWidth:280}}>
               <span style={{color:C.tx,flex:1}}>Remove <strong>{owners.find(o=>o.id===pendingDelOwner)?.company||"entry"}</strong>?</span>
@@ -1402,7 +1402,7 @@ function FixingTab({vessels}){
                 ))}
               </div>
               {/* Add company / first PIC */}
-              <div style={{display:"grid",gridTemplateColumns:"135px 1fr 90px 1fr auto",gap:3,alignItems:"center"}}>
+              <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"135px 1fr 90px 1fr auto",gap:3,alignItems:"center"}}>
                 <input value={newOwnerEntry.company} onChange={e=>setNewOwnerEntry(p=>({...p,company:e.target.value}))} placeholder="Company" style={{...inpS,padding:"2px 4px",fontSize:11}}/>
                 <MultiSelectDropdown options={fixingSegments} selected={newOwnerEntry.segments||[]} onChange={v=>setNewOwnerEntry(p=>({...p,segments:v}))} placeholder="Segment…" color="rgba(88,166,255,0.8)"/>
                 <input value={newOwnerEntry.pic} onChange={e=>setNewOwnerEntry(p=>({...p,pic:e.target.value}))} placeholder="PIC" style={{...inpS,padding:"2px 4px",fontSize:11}}/>
@@ -1466,7 +1466,7 @@ function FixingTab({vessels}){
                           {isOpen&&(
                             <div style={{padding:"9px 10px 11px 36px",background:"rgba(88,166,255,0.025)"}}>
                               {/* Company name is edited directly. Segment choices come from Settings. */}
-                              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                              <div style={{display:"flex",alignItems:mobile?"stretch":"center",flexDirection:mobile?"column":"row",gap:6,marginBottom:8}}>
                                 <input
                                   defaultValue={g.name}
                                   onBlur={e=>{
@@ -1492,7 +1492,7 @@ function FixingTab({vessels}){
                               </div>
 
                               {/* Quick-edit PIC table — no extra edit/save buttons */}
-                              <div style={{display:"grid",gridTemplateColumns:"minmax(105px,0.9fr) minmax(130px,1.1fr) minmax(145px,1.4fr)",gap:3,alignItems:"center",marginBottom:3}}>
+                              <div style={{display:mobile?"none":"grid",gridTemplateColumns:"minmax(105px,0.9fr) minmax(130px,1.1fr) minmax(145px,1.4fr)",gap:3,alignItems:"center",marginBottom:3}}>
                                 <div style={{fontSize:9,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>PIC</div>
                                 <div style={{fontSize:9,fontWeight:800,color:"rgba(250,163,86,0.7)",textTransform:"uppercase",letterSpacing:"0.06em"}}>Trade</div>
                                 <div style={{fontSize:9,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>Notes</div>
@@ -1502,7 +1502,7 @@ function FixingTab({vessels}){
                                 {g.rows.map(o=>{
                                   const trs=o.trades||(o.trade?[o.trade]:[]);
                                   return(
-                                    <div key={o.id} style={{display:"grid",gridTemplateColumns:"minmax(105px,0.9fr) minmax(130px,1.1fr) minmax(145px,1.4fr)",gap:3,alignItems:"center"}}>
+                                    <div key={o.id} style={{display:"grid",gridTemplateColumns:mobile?"1fr":"minmax(105px,0.9fr) minmax(130px,1.1fr) minmax(145px,1.4fr)",gap:3,alignItems:"center"}}>
                                       <input value={o.pic||""}
                                         onChange={e=>updateOwnerEntry(o.id,"pic",e.target.value)}
                                         placeholder="PIC"
@@ -1538,7 +1538,7 @@ function FixingTab({vessels}){
               })()}
             </div>
           )}
-        </div>}
+        </div>
       </div>
     </div>
   );
