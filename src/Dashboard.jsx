@@ -1195,7 +1195,7 @@ function Dashboard({vessels, cargoes, history}) {
             width:100%!important;gap:10px!important;
           }
           .dash-fixing-grid{height:auto!important}
-          .dash-fixing-grid > .dash-panel{height:350px!important;min-height:350px!important;order:2!important}
+          .dash-fixing-grid > .dash-panel{height:380px!important;min-height:380px!important;order:2!important}
           .dash-ws-wrap{height:600px!important;min-height:600px!important;width:100%!important;order:1!important}
           .dash-ws-tracker{width:100%!important;min-width:0!important;padding:10px!important}
 
@@ -1265,16 +1265,19 @@ function Dashboard({vessels, cargoes, history}) {
           .dash-fixing-title-desktop{display:none!important}
           .dash-fixing-title-mobile{display:block!important;white-space:nowrap!important;flex:0 0 auto!important}
           .dash-fixing-title-mobile > *{white-space:nowrap!important;margin:0!important;line-height:1!important}
-          .dash-fixing-grid > .dash-panel > div > div:first-child{min-height:20px!important;margin:0!important}
+          .dash-fixing-grid > .dash-panel > div > div:first-child{height:22px!important;min-height:22px!important;margin:0 0 3px!important;overflow:visible!important}
           .dash-fixing-note{display:none!important}
           .dash-fixing-desktop-controls{display:none!important}
-          .dash-fixing-mobile-controls{display:grid!important;grid-template-columns:1fr 1fr;gap:7px;margin:-12px 0 -8px}
+          .dash-fixing-mobile-controls{display:grid!important;grid-template-columns:1fr 1fr;gap:7px;margin:0 0 2px!important;flex:0 0 31px!important}
           .dash-fixing-mobile-controls select{width:100%;min-width:0;height:31px;padding:0 8px;border-radius:5px;border:1px solid rgba(88,166,255,.34);background:#0d2038;color:#dbeafe;font-size:10px;font-weight:700;outline:none}
 
           /* Compact segment legend: all segments on one row, count underneath */
-          .dash-fixing-legend{width:100%!important;display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:2px!important;padding-right:0!important;align-items:start!important;margin-top:-5px!important}
+          .dash-fixing-legend{width:100%!important;display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:2px!important;padding-right:0!important;align-items:start!important;margin-top:-10px!important}
           .dash-fixing-legend span{min-width:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;gap:1px!important;font-size:8px!important;line-height:1.05!important;white-space:nowrap!important}
           .dash-fixing-legend small{display:block!important;font-size:7px!important;font-weight:650!important;opacity:.78}
+          .dash-fixing-chart{flex:1!important;min-height:0!important;margin:0!important}
+          .dash-fixing-chart-svg{inset:0!important}
+          .dash-fixing-legend-row{min-height:20px!important;height:20px!important;margin-top:-2px!important}
         }
       `}</style>
 
@@ -1425,7 +1428,7 @@ function Dashboard({vessels, cargoes, history}) {
               ? <div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Fixing-window history unavailable: {fixingSegmentError}</div>
               : fixingSegmentDisplayData.length<2
                 ? <div style={{color:D.faint,fontSize:12,padding:"24px 0",textAlign:"center"}}>Not enough observations in this period.</div>
-                : <div style={{flex:1,minHeight:0}}><SegmentFWChart data={fixingSegmentDisplayData} segments={activeFixingSegments} colors={SEGMENT_COLORS}/></div>}
+                : <div className="dash-fixing-chart" style={{flex:1,minHeight:0}}><SegmentFWChart data={fixingSegmentDisplayData} segments={activeFixingSegments} colors={SEGMENT_COLORS}/></div>}
           </div>,
           {minWidth:0,height:"100%",boxSizing:"border-box"}
         )}
@@ -1524,7 +1527,7 @@ function SegmentFWChart({data,segments,colors}) {
   }).filter(Boolean);
   return <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0,position:"relative"}}>
     <div style={{position:"relative",width:"100%",flex:1,minHeight:0}}>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio={compact?"none":"xMidYMid meet"} onPointerMove={move} onPointerDown={e=>{e.currentTarget.setPointerCapture?.(e.pointerId);move(e)}} onPointerLeave={()=>setHover(null)} style={{position:"absolute",inset:0,width:"100%",height:"100%",display:"block",cursor:"crosshair",touchAction:"pan-y"}}>
+      <svg className="dash-fixing-chart-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio={compact?"none":"xMidYMid meet"} onPointerMove={move} onPointerDown={e=>{e.currentTarget.setPointerCapture?.(e.pointerId);move(e)}} onPointerLeave={()=>setHover(null)} style={{position:"absolute",inset:0,width:"100%",height:"100%",display:"block",cursor:"crosshair",touchAction:"pan-y"}}>
         {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-10} y={y+4} fill="#fff" fontSize="13" fontWeight="750" textAnchor="end">{v}d</text></g>})}
         {segments.map(seg=>{
           const pts=series[seg].map((v,i)=>v==null||v<0?null:[xs[i],PT+iH-v/range*iH]);
@@ -1539,7 +1542,7 @@ function SegmentFWChart({data,segments,colors}) {
       </svg>
       {hover!=null&&<div style={{position:"absolute",top:10,left:`${Math.min(82,Math.max(10,xs[hover]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.95)",border:"1px solid rgba(88,166,255,.35)",borderRadius:6,padding:"6px 8px",pointerEvents:"none",zIndex:8}}><div style={{fontSize:9,color:"rgba(205,225,250,.82)",marginBottom:3}}>{fmtDateShort(data[hover]?.date)}</div>{segments.map(seg=>{const ships=Math.round(Number(data[hover]?.[seg+"__ships"]||0));const excluded=Number.isFinite(Number(data[hover]?.[seg]))&&series[seg][hover]==null;return series[seg][hover]!=null?<div key={seg} style={{fontSize:10,fontWeight:800,color:colors[seg]||C.tx}}>{seg}: {series[seg][hover].toFixed(1)}d <span style={{color:"rgba(205,225,250,.76)",fontWeight:650}}>· {ships} ships</span></div>:excluded?<div key={seg} style={{fontSize:9.5,fontWeight:700,color:"rgba(205,225,250,.60)"}}>{seg}: excluded · {ships} ships <span style={{color:"#fbbf24"}}>(min {sampleThresholds[seg]?.minShips||3})</span></div>:null})}</div>}
     </div>
-    <div style={{position:"relative",minHeight:22,marginTop:0,display:"flex",alignItems:"center",justifyContent:"center",paddingRight:125}}>
+    <div className="dash-fixing-legend-row" style={{position:"relative",minHeight:22,marginTop:0,display:"flex",alignItems:"center",justifyContent:"center",paddingRight:125}}>
       <div className="dash-fixing-legend" style={{display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center"}}>{segments.map(s=>{const last=[...data].reverse().find(d=>d[s]!=null);const n=Math.round(Number(last?.[s+"__ships"]||0));return <span key={s} style={{fontSize:10.5,color:colors[s]||C.blue,fontWeight:700}}>● <b>{s}</b>{n?<small>{n}</small>:null}</span>})}</div>
       <label style={{position:"absolute",right:2,bottom:0,display:"flex",alignItems:"center",gap:6,fontSize:9,color:presentationClean?C.blue:C.faint,background:"rgba(5,14,30,.62)",border:"1px solid "+(presentationClean?"rgba(88,166,255,.36)":C.bd2),borderRadius:5,padding:"3px 7px",cursor:"pointer",userSelect:"none"}} title="Exclude unusually small fleet samples and isolated statistical outliers">
         <input type="checkbox" checked={presentationClean} onChange={e=>setPresentationClean(e.target.checked)} style={{width:13,height:13,margin:0,accentColor:C.blue,cursor:"pointer"}}/>
