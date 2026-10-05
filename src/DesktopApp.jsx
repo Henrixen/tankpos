@@ -1400,15 +1400,14 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
           const safeItems=newsRes.value.items.filter(n=>{
             if(!n?.published)return true;
             const raw=String(n.published).trim();
-            // Feed commonly returns "04 Oct, 07:31" without a year.
-            // Parse that ourselves first; Date.parse may otherwise assign an old default year.
-            const m=raw.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s*(?:[,.]\s*)?(\d{4})?(?:[,\s]+(\d{1,2}):(\d{2}))?/);
-            let t=NaN;
-            if(m){
-              const y=Number(m[3]||new Date().getFullYear());
-              t=Date.parse(`${m[1]} ${m[2]} ${y} ${m[4]||"00"}:${m[5]||"00"}`);
+            let t=Date.parse(raw);
+            if(!Number.isFinite(t)){
+              const m=raw.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s*(?:[,.]\s*)?(\d{4})?(?:[,\s]+(\d{1,2}):(\d{2}))?/);
+              if(m){
+                const y=Number(m[3]||new Date().getFullYear());
+                t=Date.parse(`${m[1]} ${m[2]} ${y} ${m[4]||"00"}:${m[5]||"00"}`);
+              }
             }
-            if(!Number.isFinite(t))t=Date.parse(raw);
             if(!Number.isFinite(t)) return false;
             const age=now-t,maxAge=14*24*60*60*1000;
             return t<=now+futureGrace&&age<=maxAge;
@@ -1814,6 +1813,12 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
   // Use mobile state from TankPos (reactive, with manual override) — must be before colWidths
   const mobile = mobileProp !== undefined ? mobileProp : isMobile();
+  const PositionControlsWrap = ({children}) => mobile ? (
+    <details style={{width:"100%",border:"1px solid "+C.bd,borderRadius:5,background:C.bg2,display:"block"}}>
+      <summary style={{display:"block",padding:"7px 9px",cursor:"pointer",color:C.blue,fontWeight:700,listStyle:"none"}}>Position controls</summary>
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",padding:"0 8px 8px"}}>{children}</div>
+    </details>
+  ) : <>{children}</>;
 
   // Mobile: hide the top header while scrolling down and slide it back in
   // as soon as the user scrolls up. Keep it visible near the top or while
@@ -3349,7 +3354,7 @@ const filtV=useMemo(()=>{
                   display:"flex",alignItems:"center",gap:8,padding:"6px 10px",
                   background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,
                   flexWrap:mobile?"wrap":"nowrap",minHeight:38,boxSizing:"border-box",
-                  overflowX:"visible",overflowY:"visible",scrollbarWidth:"thin"
+                  overflowX:mobile?"visible":"auto",overflowY:mobile?"visible":"hidden",scrollbarWidth:"thin"
                 }}>
                   {mobile&&<div style={{position:"relative",display:"flex",alignItems:"center",width:"100%"}}>
                     <input value={search} onChange={e=>setSearch(e.target.value)}
@@ -3357,9 +3362,7 @@ const filtV=useMemo(()=>{
                       style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"7px 30px 7px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
                     {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:7,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>}
                   </div>}
-                  <details open={!mobile} style={{width:mobile?"100%":"auto",border:mobile?"1px solid "+C.bd:"none",borderRadius:mobile?5:0,background:mobile?C.bg2:"transparent",display:mobile?"block":"contents"}}>
-                    <summary style={{display:mobile?"block":"none",padding:"7px 9px",cursor:"pointer",color:C.blue,fontWeight:700,listStyle:"none"}}>Position controls</summary>
-                    <div style={{display:mobile?"flex":"contents",gap:6,alignItems:"center",flexWrap:"wrap",padding:mobile?"0 8px 8px":0}}>
+                  <PositionControlsWrap>
 
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
@@ -3439,7 +3442,7 @@ const filtV=useMemo(()=>{
                     style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",minWidth:28,flexShrink:0}}>
                     {sortD>0?"▲":"▼"}
                   </button>
-                  </div></details>
+                  </PositionControlsWrap>
                 </div>
 
                 {bulkPosTagOpen&&(
