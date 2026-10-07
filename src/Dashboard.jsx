@@ -851,6 +851,8 @@ function Dashboard({vessels, cargoes, history}) {
   const [regionHistoryError,setRegionHistoryError]=useState(null);
   useEffect(()=>{let alive=true;(async()=>{try{const {data,error}=await supabase.rpc("dashboard_region_history");if(error)throw error;if(alive)setRegionHistory(data||[]);}catch(e){if(alive)setRegionHistoryError(e.message||"RPC failed");}finally{if(alive)setRegionHistoryLoading(false);}})();return()=>{alive=false;};},[]);
   const [segmentFilter,setSegmentFilter]=useState("All");
+  const [regionCoatingFilter,setRegionCoatingFilter]=useState([]);
+  const [regionCoatingOpen,setRegionCoatingOpen]=useState(false);
   const [fixingRegionFilter,setFixingRegionFilter]=useState("All");
   const [fixingPeriod,setFixingPeriod]=useState("1M");
   const [fixingSegmentHistory,setFixingSegmentHistory]=useState([]);
@@ -1002,6 +1004,25 @@ function Dashboard({vessels, cargoes, history}) {
   const withDays = openVessels.map(v => ({ ...v, days: calcFixingWindow(v) })).filter(v => v.days !== null && v.days >= 0);
   const fleetAvg = withDays.length ? Math.round(withDays.reduce((a,b)=>a+b.days,0)/withDays.length) : null;
 
+  const normalizeCoating=(value)=>{
+    const raw=String(value||"").trim();
+    if(!raw)return "Unspecified";
+    const u=raw.toUpperCase().replace(/[_-]+/g," ").replace(/\s+/g," ").trim();
+    if(u.includes("STAINLESS")||u==="SS"||u.includes("STST"))return "Stainless";
+    if(u.includes("MARINELINE")||u.includes("MARINE LINE")||u==="ML")return "Marineline";
+    if(u.includes("ZINC"))return "Zinc";
+    if(u.includes("EPOXY"))return "Epoxy";
+    return raw.replace(/\b\w/g,c=>c.toUpperCase());
+  };
+  const regionCoatingOptions=[...new Set(openVessels.map(v=>normalizeCoating(v.coating||v.coating_type_2||v.coated)))].sort((a,b)=>a.localeCompare(b));
+  const coatingMatches=v=>!regionCoatingFilter.length||regionCoatingFilter.includes(normalizeCoating(v.coating||v.coating_type_2||v.coated));
+  const liveRegionCount=(region)=>openVessels.filter(v=>{
+    if(!coatingMatches(v))return false;
+    if(classifyRegion(v.openPort)!==region)return false;
+    if(segmentFilter!=="All" && String(v.segment||v.sizeSegment||"")!==segmentFilter)return false;
+    return true;
+  }).length;
+
   const regionByLabel={};
   const safeRegionHistory=Array.isArray(regionHistory)?regionHistory:[];
   for(const row of safeRegionHistory){
@@ -1017,7 +1038,7 @@ function Dashboard({vessels, cargoes, history}) {
     return segmentFilter==="All" ? Number(r.ships||0) : Number(r.segments?.[segmentFilter]||0);
   };
   const currentRegionRows=REGION_ORDER.map(region=>({
-    region,now:getRegionCount("NOW",region),d14:getRegionCount("14D",region),d30:getRegionCount("30D",region),d90:getRegionCount("90D",region)
+    region,now:regionCoatingFilter.length?liveRegionCount(region):getRegionCount("NOW",region),d14:getRegionCount("14D",region),d30:getRegionCount("30D",region),d90:getRegionCount("90D",region)
   })).filter(x=>x.now||x.d14||x.d30||x.d90);
   const regionTotals={
     now:currentRegionRows.reduce((a,x)=>a+x.now,0),
@@ -1485,9 +1506,21 @@ function Dashboard({vessels, cargoes, history}) {
           <>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
               {secHead("Open fleet by main region · vessel count")}
-              <span style={{fontSize:9,color:fixingRegionFilter!=="All"?D.blue:D.faint}}>
-                {fixingRegionFilter!=="All" ? `Fixing filter: ${fixingRegionFilter} · click again to clear` : "click a region to filter fixing window"}
-              </span>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{position:"relative"}}>
+                  <button onClick={()=>setRegionCoatingOpen(v=>!v)} style={{background:regionCoatingFilter.length?"rgba(88,166,255,.16)":D.bg3,border:"1px solid "+(regionCoatingFilter.length?D.blue:D.border2),borderRadius:5,color:regionCoatingFilter.length?D.tx:D.dim,fontFamily:"inherit",fontSize:9.5,fontWeight:800,padding:"4px 8px",cursor:"pointer",whiteSpace:"nowrap"}}>
+                    COATING{regionCoatingFilter.length?` · ${regionCoatingFilter.length}`:""} ▾
+                  </button>
+                  {regionCoatingOpen&&<div style={{position:"absolute",right:0,top:"calc(100% + 5px)",zIndex:30,minWidth:170,maxHeight:230,overflowY:"auto",background:"#0b1628",border:"1px solid "+D.border2,borderRadius:6,boxShadow:"0 10px 28px rgba(0,0,0,.45)",padding:6}}>
+                    <div onClick={()=>setRegionCoatingFilter([])} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 6px",fontSize:9.5,color:!regionCoatingFilter.length?D.blue:D.tx,cursor:"pointer",fontWeight:800}}><input type="checkbox" readOnly checked={!regionCoatingFilter.length}/>All coatings</div>
+                    {regionCoatingOptions.map(coating=>{const checked=regionCoatingFilter.includes(coating);return <label key={coating} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 6px",fontSize:9.5,color:checked?D.tx:D.dim,cursor:"pointer"}}><input type="checkbox" checked={checked} onChange={()=>setRegionCoatingFilter(prev=>checked?prev.filter(x=>x!==coating):[...prev,coating])}/><span>{coating}</span></label>})}
+                    {regionCoatingFilter.length>0&&<div style={{borderTop:"1px solid "+D.border,marginTop:4,padding:"5px 6px 1px",fontSize:8.5,color:D.faint}}>Filters current NOW count</div>}
+                  </div>}
+                </div>
+                <span style={{fontSize:9,color:fixingRegionFilter!=="All"?D.blue:D.faint}}>
+                  {fixingRegionFilter!=="All" ? `Fixing filter: ${fixingRegionFilter} · click again to clear` : "click a region to filter fixing window"}
+                </span>
+              </div>
             </div>
             {regionHistoryLoading?<div style={{fontSize:11,color:D.faint,padding:"12px 0"}}>Loading historical fleet…</div>:regionHistoryError?<div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Run updated Supabase RPC SQL: {regionHistoryError}</div>:<>
               <div className="dash-region-table-head" style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"1px 2px 7px",fontSize:10.5,fontWeight:900,color:D.dim,textTransform:"uppercase",letterSpacing:".04em"}}><span>Region</span><span style={{textAlign:"right",color:D.tx}}>NOW</span><span style={{textAlign:"right"}}>14D</span><span style={{textAlign:"right"}}>30D</span><span style={{textAlign:"right"}}>90D</span></div>
