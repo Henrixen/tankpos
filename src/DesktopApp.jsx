@@ -1329,14 +1329,18 @@ class TabErrorBoundary extends React.Component {
 
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
   // ── PIN config ───────────────────────────────────────────────────────────
-  const DEFAULT_USER_TABS = ["pos","cargo","clients"];
+  const MASTER_PIN = "4524"; // ← your PIN → full access
+  const DEFAULT_GUEST_PIN = "0250";
+  const GUEST_TABS_KEY = "guest_visible_tabs";
+  const GUEST_PIN_KEY = "guest_pin";
+  const DEFAULT_GUEST_TABS = ["pos","cargo","clients"];
 
   const [unlocked, setUnlocked] = React.useState(false); // always ask on load
-  const [userTabs,setUserTabs] = React.useState(DEFAULT_USER_TABS);
+  const [guestPin,setGuestPin] = React.useState(DEFAULT_GUEST_PIN);
+  const [guestTabs,setGuestTabs] = React.useState(DEFAULT_GUEST_TABS);
   const [pinInput, setPinInput] = React.useState("");
   const [pinError, setPinError] = React.useState(false);
-  const [guestMode, setGuestMode] = React.useState(false); // true = restricted User (kept name to avoid unrelated navigation changes)
-  const [currentAppUser,setCurrentAppUser] = React.useState(null);
+  const [guestMode, setGuestMode] = React.useState(false);
 
   // Login-screen live feeds. Fail quietly so the PIN screen always remains usable.
   const [loginMarkets,setLoginMarkets]=React.useState({
@@ -1345,12 +1349,24 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [loginNews,setLoginNews]=React.useState([]);
   const [loginFeedLoading,setLoginFeedLoading]=React.useState(true);
 
-  // Per-user tab access is loaded after that user's PIN is accepted.
+  // Guest tab visibility is controlled from Settings and stored in Supabase.
   React.useEffect(()=>{
-    const onUserAccess=e=>{if(currentAppUser?.id===e.detail?.userId&&Array.isArray(e.detail?.tabs))setUserTabs(e.detail.tabs.filter(id=>id!=="settings"));};
-    window.addEventListener("user-access-updated",onUserAccess);
-    return()=>window.removeEventListener("user-access-updated",onUserAccess);
-  },[currentAppUser?.id]);
+    let alive=true;
+    (async()=>{
+      try{
+        const [{data:tabsData},{data:pinData}]=await Promise.all([
+          supabase.from("tag_settings").select("value").eq("key",GUEST_TABS_KEY).maybeSingle(),
+          supabase.from("tag_settings").select("value").eq("key",GUEST_PIN_KEY).maybeSingle()
+        ]);
+        const raw=tabsData?.value;
+        const tabs=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
+        if(alive&&tabs?.length)setGuestTabs(tabs.filter(id=>id!=="settings"));
+        const cloudPin=String(pinData?.value??"").replace(/\D/g,"").slice(0,4);
+        if(alive&&cloudPin.length===4)setGuestPin(cloudPin);
+      }catch(_){}
+    })();
+    return()=>{alive=false;};
+  },[]);
 
   React.useEffect(()=>{
     if(unlocked)return;
@@ -1416,28 +1432,34 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   // lookup table was always empty. Load it once on mount instead.
   useEffect(()=>{ if(!vesselDBLoaded && !vesselDBLoading && onLoadVesselDB) onLoadVesselDB(); },[]);
 
-
+  React.useEffect(()=>{
+    const onGuestAccess=e=>{
+      const next=e?.detail||{};
+      if(Array.isArray(next.tabs))setGuestTabs(next.tabs.filter(id=>id!=="settings"));
+      const p=String(next.pin??"").replace(/\D/g,"").slice(0,4);
+      if(p.length===4)setGuestPin(p);
+    };
+    window.addEventListener("guest-access-updated",onGuestAccess);
+    return()=>window.removeEventListener("guest-access-updated",onGuestAccess);
+  },[]);
 
   // No sessionStorage — PIN required on every load/refresh/new tab
 
-  async function submitPin(p){
-    try{
-      const enc=new TextEncoder().encode(String(p));
-      const dig=await crypto.subtle.digest("SHA-256",enc);
-      const hash=[...new Uint8Array(dig)].map(x=>x.toString(16).padStart(2,"0")).join("");
-      const {data:user,error}=await supabase.from("app_users").select("id,name,initials,role,active,pin_hash").eq("pin_hash",hash).eq("active",true).maybeSingle();
-      if(error||!user)throw new Error("invalid");
-      const isAdmin=user.role==="admin";
-      let tabs=DEFAULT_USER_TABS;
-      if(!isAdmin){
-        const {data:access}=await supabase.from("tag_settings").select("value").eq("key","user_tabs_"+user.id).maybeSingle();
-        const raw=access?.value, configured=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
-        tabs=(configured||DEFAULT_USER_TABS).filter(id=>id!=="settings");
-      }
-      localStorage.setItem("signal_user",String(user.initials||"").toUpperCase());
-      setCurrentAppUser(user); setUserTabs(tabs); setGuestMode(!isAdmin); setUnlocked(true); setPinInput("");
-    }catch(_){
-      setPinError(true); setPinInput(""); setTimeout(()=>setPinError(false),1200);
+  function submitPin(p){
+    if(p===MASTER_PIN){
+      localStorage.setItem("signal_user","H");
+      setGuestMode(false);
+      setUnlocked(true);
+      setPinInput("");
+    } else if(p===guestPin){
+      localStorage.setItem("signal_user","L");
+      setGuestMode(true);
+      setUnlocked(true);
+      setPinInput("");
+    } else {
+      setPinError(true);
+      setPinInput("");
+      setTimeout(()=>setPinError(false),1200);
     }
   }
 
@@ -1575,7 +1597,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     return()=>window.removeEventListener("navigation-config-updated",h);
   },[]);
   const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
-  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||userTabs.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode,userTabs]);
+  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||guestTabs.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode,guestTabs]);
   const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
   const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set());setMobileNavOpen(false)});
  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
@@ -2843,7 +2865,7 @@ const filtV=useMemo(()=>{
                 <span style={{fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:4,
                   background:"rgba(250,163,86,0.12)",border:"1px solid rgba(250,163,86,0.3)",
                   color:"rgba(250,163,86,0.8)",letterSpacing:"0.1em",textTransform:"uppercase",marginLeft:4}}>
-                  User
+                  Guest
                 </span>
               )}
             </div>
