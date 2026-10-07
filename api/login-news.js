@@ -73,13 +73,13 @@ export default async function handler(req,res){
   }));
 
   let items=results.flat();
-  if(items.length<5){
-    try{
-      const q=encodeURIComponent("tanker shipping maritime when:2d");
-      const url=`https://news.google.com/rss/search?q=${q}&hl=en&gl=US&ceid=US:en`;
-      items.push(...parseFeed(await fetchText(url),"Google News"));
-    }catch(e){console.warn("login-news: Google fallback failed:",e?.message||e);}
-  }
+  // Always merge a Google News RSS search. This makes the start page resilient
+  // when publisher RSS endpoints block serverless requests or change format.
+  try{
+    const q=encodeURIComponent("tanker shipping maritime oil chemical tanker when:3d");
+    const url=`https://news.google.com/rss/search?q=${q}&hl=en&gl=US&ceid=US:en`;
+    items.push(...parseFeed(await fetchText(url),"Google News"));
+  }catch(e){console.warn("login-news: Google fallback failed:",e?.message||e);}
 
   const seen=new Set();
   items=items.sort((a,b)=>(b.ts||0)-(a.ts||0)).filter(x=>{
@@ -88,6 +88,7 @@ export default async function handler(req,res){
   }).slice(0,8).map(({ts,...x})=>x);
 
   res.setHeader("Cache-Control","s-maxage=300, stale-while-revalidate=600");
+  res.setHeader("Content-Type","application/json; charset=utf-8");
   res.status(200).json({
     items,
     sources:["gCaptain","Splash247","TradeWinds","Maritime Executive","Seatrade Maritime","Google News fallback"],
