@@ -259,12 +259,12 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,stat
       .qf-table-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;}
     }
     @media (min-width: 701px){
-      .qf-mobile-fold{display:block!important;height:100%!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;overflow:hidden!important;}
+      .qf-mobile-fold{display:block!important;position:relative!important;height:100%!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;overflow:hidden!important;}
       .qf-parse-fold{flex:0 0 25%!important;}
       .qf-filter-fold{flex:0 0 40%!important;}
       .qf-chart-fold{flex:1 1 35%!important;}
       .qf-mobile-fold > summary{display:none!important;}
-      .qf-mobile-fold > div{width:100%!important;height:100%!important;min-height:0!important;box-sizing:border-box!important;overflow:hidden!important;}
+      .qf-mobile-fold > div{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important;box-sizing:border-box!important;overflow:hidden!important;}
       .qf-mobile-fold .qf-parse,.qf-mobile-fold .qf-filters,.qf-mobile-fold .qf-chart{flex:none!important;width:100%!important;height:100%!important;min-height:0!important;overflow:hidden!important;}
       .qf-mobile-fold .qf-filters{align-items:stretch!important;align-content:stretch!important;grid-auto-rows:1fr!important;}
       .qf-mobile-fold .qf-filters > div{height:100%!important;min-height:0!important;display:flex!important;flex-direction:column!important;}
