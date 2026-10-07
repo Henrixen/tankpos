@@ -233,24 +233,6 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,stat
  const shown=allCols.filter(([k])=>visible.has(k));
  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
   <style>{`
-    @media (max-width: 1800px){
-      .qf-top{gap:6px!important;}
-      .qf-parse{flex-basis:34%!important;}
-      .qf-parse-tags{max-height:96px!important;overflow-y:auto!important;}
-      .qf-filters{flex-basis:52%!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:5px!important;}
-      .qf-grade{grid-column:span 2!important;}
-      .qf-period{grid-column:span 2!important;}
-      .qf-tags{grid-column:span 2!important;}
-      .qf-region{grid-column:span 3!important;}
-      .qf-chart{flex-basis:14%!important;}
-    }
-    @media (max-width: 1450px){
-      .qf-parse{flex-basis:36%!important;}
-      .qf-filters{flex-basis:54%!important;}
-      .qf-chart{flex-basis:10%!important;}
-      .qf-filters button{font-size:9px!important;padding:3px 5px!important;}
-    }
-
     @media (max-width: 700px){
       .qf-top{height:auto!important;display:block!important;}
       .qf-mobile-fold{display:block!important;margin-bottom:6px;background:${C.bg2};border:1px solid ${C.bd};border-radius:7px;overflow:hidden;}
