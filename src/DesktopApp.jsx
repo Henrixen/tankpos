@@ -2312,7 +2312,7 @@ const filtV=useMemo(()=>{
   }
   if(coatingFilter.size>0){
     const selectedCoatings=new Set([...coatingFilter].map(c=>String(c||"").trim().toUpperCase()));
-    list=list.filter(v=>selectedCoatings.has(String(v.coating||"").trim().toUpperCase()));
+    list=list.filter(v=>selectedCoatings.has(String(fmtCoating(v.coating)||"").trim().toUpperCase()));
   }
   // Open-date filter. Uses the same daysBetween parser already used by Positions,
   // so displayed dates such as "10 OCT" and ISO date inputs are compared consistently.
@@ -3135,8 +3135,8 @@ const filtV=useMemo(()=>{
                           </FilterRow>
                           {/* Coating */}
                           <FilterRow label="Coating" col="#2dd4bf">
-                            {[...new Set(vessels.map(v=>String(v.coating||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(c=>(
-                              <Chip key={c} col="#2dd4bf" active={coatingFilter.has(c)} onClick={()=>{setCoatingFilter(prev=>{const n=new Set(prev);n.has(c)?n.delete(c):n.add(c);return n;});setPosPage(1);}}>{fmtCoating(c)}</Chip>
+                            {[...new Set(vessels.map(v=>String(fmtCoating(v.coating)||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(c=>(
+                              <Chip key={c} col="#2dd4bf" active={coatingFilter.has(c)} onClick={()=>{setCoatingFilter(prev=>{const n=new Set(prev);n.has(c)?n.delete(c):n.add(c);return n;});setPosPage(1);}}>{c}</Chip>
                             ))}
                             {coatingFilter.size>0&&<Chip col={C.red} active={false} onClick={()=>{setCoatingFilter(new Set());setPosPage(1);}}>✕</Chip>}
                           </FilterRow>
@@ -3295,8 +3295,8 @@ const filtV=useMemo(()=>{
                           {posTagFilter.size>0&&<B active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
                         </COL>
                         <COL label="Coating" col="#2dd4bf">
-                          {[...new Set(vessels.map(v=>String(v.coating||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(c=>(
-                            <B key={c} active={coatingFilter.has(c)} onClick={()=>{setCoatingFilter(prev=>{const n=new Set(prev);n.has(c)?n.delete(c):n.add(c);return n;});setPosPage(1);}}>{fmtCoating(c)}</B>
+                          {[...new Set(vessels.map(v=>String(fmtCoating(v.coating)||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(c=>(
+                            <B key={c} active={coatingFilter.has(c)} onClick={()=>{setCoatingFilter(prev=>{const n=new Set(prev);n.has(c)?n.delete(c):n.add(c);return n;});setPosPage(1);}}>{c}</B>
                           ))}
                           {coatingFilter.size>0&&<B active={false} onClick={()=>{setCoatingFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
                         </COL>
