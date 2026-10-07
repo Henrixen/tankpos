@@ -75,7 +75,7 @@ function CargoMonthChart({ data, total }){
         <div style={{fontSize:10,color:"rgba(88,166,255,0.7)",fontWeight:700,fontFamily:"inherit"}}>{total.toLocaleString()} total</div>
       </div>
       <div ref={wrapRef} style={{flex:1,minHeight:0,width:"100%"}}>
-        <svg fontFamily="inherit" width="100%" height="100%" viewBox={"0 0 "+SVG_W+" "+SVG_H} preserveAspectRatio="xMidYMid meet" style={{display:"block",overflow:"visible"}}>
+        <svg fontFamily="inherit" width="100%" height="100%" viewBox={"0 0 "+SVG_W+" "+SVG_H} preserveAspectRatio="xMidYMid meet" style={{display:"block",overflow:"hidden"}}>
           <defs>
             <linearGradient id="cgGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.3"/>
@@ -259,13 +259,13 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,stat
       .qf-table-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;}
     }
     @media (min-width: 701px){
-      .qf-mobile-fold{display:block!important;height:100%!important;min-width:0!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;overflow:visible!important;}
+      .qf-mobile-fold{display:block!important;height:100%!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;overflow:hidden!important;}
       .qf-parse-fold{flex:0 0 25%!important;}
       .qf-filter-fold{flex:0 0 40%!important;}
       .qf-chart-fold{flex:1 1 35%!important;}
       .qf-mobile-fold > summary{display:none!important;}
-      .qf-mobile-fold > div{width:100%!important;height:100%!important;box-sizing:border-box!important;}
-      .qf-mobile-fold .qf-parse,.qf-mobile-fold .qf-filters,.qf-mobile-fold .qf-chart{flex:none!important;width:100%!important;height:100%!important;}
+      .qf-mobile-fold > div{width:100%!important;height:100%!important;min-height:0!important;box-sizing:border-box!important;overflow:hidden!important;}
+      .qf-mobile-fold .qf-parse,.qf-mobile-fold .qf-filters,.qf-mobile-fold .qf-chart{flex:none!important;width:100%!important;height:100%!important;min-height:0!important;overflow:hidden!important;}
       .qf-mobile-fold .qf-filters{align-content:space-between!important;grid-auto-rows:min-content!important;}
       .qf-mobile-fold .qf-parse-tags{padding:5px 8px!important;gap:3px!important;}
       .qf-mobile-fold .qf-parse textarea{min-height:48px!important;height:48px!important;padding-top:5px!important;padding-bottom:5px!important;}
@@ -278,7 +278,7 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,stat
       .qf-actions-main,.qf-actions-search{display:contents!important;}
     }
   `}</style>
-  <div className="qf-top" style={{display:"flex",gap:10,height:"clamp(158px, 18vh, 184px)"}}>
+  <div className="qf-top" style={{display:"flex",gap:10,height:"clamp(136px, 15vh, 158px)",minHeight:0,overflow:"hidden"}}>
    <details className="qf-mobile-fold qf-parse-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Paste / Parse</summary><div className="qf-parse" style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}><div className="qf-parse-tags" style={{...card,padding:"6px 8px",display:"flex",gap:4,flexWrap:"wrap",alignContent:"flex-start",flex:"0 0 auto",overflow:"visible"}}><span style={{fontSize:9,color:C.faint,fontWeight:800,width:"100%",marginBottom:1}}>TAG ON PARSE</span>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={{...btn(parseTag===t),color:tc||"#9fc3f5",borderColor:parseTag===t?(tc||C.blue):C.bd,background:parseTag===t?(tc?tc+"22":"rgba(88,166,255,.18)"):C.bg3}}>{t}</button>})}</div><div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await onAddCargoes(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div></details>
    <details className="qf-mobile-fold qf-filter-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Filters</summary><div className="qf-filters" style={{flex:"0 0 40%",minWidth:0,...card,padding:8,display:"grid",gridTemplateColumns:".8fr .8fr .8fr 1.6fr 1.6fr",gap:6,overflow:"hidden",position:"relative",zIndex:20}}>
     <div className="qf-grade"><b style={{fontSize:11,color:C.blue}}>GRADE</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{grades.slice(0,6).map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={btn(grade===g.id)}>{g.label}</button>)}</div></div>
