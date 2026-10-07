@@ -320,6 +320,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [dwtFilter, setDwtFilter] = useState(new Set());
   const [dwtRange, setDwtRange] = useState({ min: "", max: "" });
   const [builtFilter, setBuiltFilter] = useState(new Set());
+  const [coatingFilter, setCoatingFilter] = useState(new Set());
   const [builtRange, setBuiltRange] = useState({ min: "", max: "" });
   const [dateFilter, setDateFilter] = useState("all");
   const [poolSearch, setPoolSearch] = useState("");
@@ -758,6 +759,10 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         const inCustomRange = (builtRange.min !== "" || builtRange.max !== "") ? inRange(v.built, builtRange) : false;
         if (!inBucket && !inCustomRange) return false;
       }
+      if (coatingFilter.size > 0) {
+        const coating = String(v.coating || "").trim().toUpperCase();
+        if (![...coatingFilter].some(c => coating === String(c).toUpperCase())) return false;
+      }
       if (dateFilter !== "all" && v.updatedAt) {
         const diff = (now - new Date(v.updatedAt)) / 86400000;
         if (dateFilter === "today" && diff > 1) return false;
@@ -766,7 +771,31 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       }
       return true;
     });
-  }, [allVessels, reportedNames, tagFilter, segmentFilter, superRegionFilter, regionFilter, dwtFilter, dwtRange, builtFilter, builtRange, poolSearch, dateFilter]);
+  }, [allVessels, reportedNames, tagFilter, segmentFilter, superRegionFilter, regionFilter, dwtFilter, dwtRange, builtFilter, builtRange, coatingFilter, poolSearch, dateFilter]);
+
+  function renameRegionBucket(bucket, rows) {
+    if (posGroupBy !== "region" || !rows?.length) return;
+    const modeKey = regionMode === "region" ? "region" : "superRegion";
+    const existing = rows[0]?._reportRegionNames?.[modeKey]?.[bucket] || bucket;
+    const next = window.prompt(`Rename ${regionMode === "region" ? "region" : "super region"}`, existing);
+    if (next === null) return;
+    const clean = next.trim();
+    if (!clean) return;
+    const ids = new Set(rows.map(r => r._rid || r.vessel));
+    setReportVessels(prev => prev.map(v => ids.has(v._rid || v.vessel) ? {
+      ...v,
+      _reportRegionNames: {
+        ...(v._reportRegionNames || {}),
+        [modeKey]: { ...((v._reportRegionNames || {})[modeKey] || {}), [bucket]: clean }
+      }
+    } : v));
+  }
+
+  function displayRegionBucket(bucket, rows) {
+    if (posGroupBy !== "region" || !rows?.length) return bucket;
+    const modeKey = regionMode === "region" ? "region" : "superRegion";
+    return rows[0]?._reportRegionNames?.[modeKey]?.[bucket] || bucket;
+  }
 
   // ── Actions ───────────────────────────────────────────────────────────────
   function addFromPool(v) {
@@ -1628,7 +1657,12 @@ Any direction`}</pre>
                   {Object.entries(posGrouped).map(([bucket, rows]) => (
                     <div key={bucket}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(88,166,255,0.14)", borderTop: "1px solid rgba(88,166,255,0.25)", borderBottom: "1px solid rgba(88,166,255,0.25)" }}>
-                        <span style={{ color: "#9fc4f0", fontSize: 11, fontWeight: 700, padding: "5px 8px", letterSpacing: 0.5, textTransform: "uppercase" }}>{bucket}</span>
+                        <span
+                          onClick={() => posGroupBy === "region" && renameRegionBucket(bucket, rows)}
+                          title={posGroupBy === "region" ? `Click to rename this ${regionMode === "region" ? "region" : "super region"} in the report` : undefined}
+                          className={posGroupBy === "region" ? "no-export-click" : undefined}
+                          style={{ color: "#9fc4f0", fontSize: 11, fontWeight: 700, padding: "5px 8px", letterSpacing: 0.5, textTransform: "uppercase", cursor: posGroupBy === "region" ? "text" : "default" }}
+                        >{displayRegionBucket(bucket, rows)}</span>
                         <button onClick={() => addManualVessel(bucket)} className="no-export" title={`Add a vessel to ${bucket}`}
                           style={{ background: "none", border: "none", color: "#9fc4f0", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: "0 8px", lineHeight: 1 }}>+</button>
                       </div>
@@ -1716,7 +1750,7 @@ Any direction`}</pre>
           </div>
 
           {/* ── Controls — paste, then the same category structure as the Positions tab filter panel ── */}
-          <div style={{ width: 280, flexShrink: 0, borderLeft: "1px solid " + C.bd, display: "flex", flexDirection: "column", overflowY: "auto", padding: "10px 12px", gap: 8 }}>
+          <div style={{ width: 280, flexShrink: 0, borderLeft: "1px solid " + C.bd, display: "flex", flexDirection: "column", overflowY: "auto", padding: "7px 10px", gap: 5 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em" }}>Add vessels</div>
 
             <button onClick={() => setPosPasteOpen(o => !o)}
@@ -1744,13 +1778,13 @@ Any direction`}</pre>
             {/* Same category structure/colors as the Positions tab filter panel — stacked vertically here since this sidebar is narrower than that full-width grid */}
             {(() => {
               const RCOL = ({ label, col, children }) => (
-                <div style={{ marginBottom: 4 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: col, textTransform: "uppercase", letterSpacing: "0.1em", paddingBottom: 3, borderBottom: "1px solid " + C.bd, marginBottom: 4 }}>{label}</div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>{children}</div>
+                <div style={{ marginBottom: 2 }}>
+                  <div style={{ fontSize: 8, fontWeight: 700, color: col, textTransform: "uppercase", letterSpacing: "0.08em", paddingBottom: 1, borderBottom: "1px solid " + C.bd, marginBottom: 2 }}>{label}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 2 }}>{children}</div>
                 </div>
               );
               const RB = ({ active, onClick, children }) => (
-                <button onClick={onClick} style={{ fontSize: 10, fontWeight: 600, padding: "3px 7px", borderRadius: 3, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                <button onClick={onClick} style={{ fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
                   border: "1px solid " + (active ? C.blue : "rgba(120,160,220,0.35)"), background: active ? "rgba(88,166,255,.22)" : C.bg3, color: active ? "#d9ecff" : "#9fc3f5" }}>
                   {children}
                 </button>
@@ -1761,6 +1795,7 @@ Any direction`}</pre>
               const usedSegments = [...new Set(allVessels.map(v => v.segment).filter(Boolean))]
                 .sort((a, b) => ["Sub 10k","City","Inter","J19","Flexi","Handy","MR"].indexOf(a) - ["Sub 10k","City","Inter","J19","Flexi","Handy","MR"].indexOf(b));
               const usedSuperRegions = [...new Set(allVessels.map(v => v.superRegion).filter(Boolean))].sort();
+              const usedCoatings = [...new Set(allVessels.map(v => String(v.coating || "").trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b));
 
               return (
                 <>
@@ -1791,6 +1826,12 @@ Any direction`}</pre>
                     <RCOL label="Segment" col={C.green}>
                       {usedSegments.map(s => (<RB key={s} active={segmentFilter.has(s)} onClick={() => toggleIn(setSegmentFilter)(s)}>{s}</RB>))}
                       {segmentFilter.size > 0 && <RB active={false} onClick={() => setSegmentFilter(new Set())}><span style={{ color: C.red }}>✕</span></RB>}
+                    </RCOL>
+                  )}
+                  {usedCoatings.length > 0 && (
+                    <RCOL label="Coating" col="#f5a623">
+                      {usedCoatings.map(c => (<RB key={c} active={coatingFilter.has(c)} onClick={() => toggleIn(setCoatingFilter)(c)}>{c.toUpperCase()}</RB>))}
+                      {coatingFilter.size > 0 && <RB active={false} onClick={() => setCoatingFilter(new Set())}><span style={{ color: C.red }}>✕</span></RB>}
                     </RCOL>
                   )}
                   <RCOL label="DWT" col="#f59e0b">
