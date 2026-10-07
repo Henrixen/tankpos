@@ -1,10 +1,11 @@
 export default async function handler(req, res) {
   try {
-    const response = await fetch("https://pbt-international.com/price-quotes", {
+    const response = await fetch("https://pbt-international.com/price-quotes?ts=" + Date.now(), {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml",
-      }
+      },
+      cache: "no-store"
     });
     const html = await response.text();
 
@@ -58,6 +59,7 @@ export default async function handler(req, res) {
     };
 
     res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
     res.status(200).json({
       date,
       ...fallback,   // fallback first
@@ -65,6 +67,7 @@ export default async function handler(req, res) {
     });
 
   } catch(e) {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
     res.status(200).json({
       date: new Date().toISOString().slice(0,10),
       ARA_HSFO:600, ARA_VLSFO:650, ARA_MGO:1075,
