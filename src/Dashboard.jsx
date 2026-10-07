@@ -1016,9 +1016,32 @@ function Dashboard({vessels, cargoes, history}) {
   };
   const regionCoatingOptions=[...new Set(openVessels.map(v=>normalizeCoating(v.coating||v.coating_type_2||v.coated)))].sort((a,b)=>a.localeCompare(b));
   const coatingMatches=v=>!regionCoatingFilter.length||regionCoatingFilter.includes(normalizeCoating(v.coating||v.coating_type_2||v.coated));
+  // Dashboard history uses broad MAIN regions, while utils.classifyRegion() returns
+  // the older detailed European groups (WCUK/ECUK/CANAL/etc.). Prefer the
+  // position's superRegion and translate it to the same labels used by the table.
+  const vesselMainRegion=(v)=>{
+    const raw=String(v?.superRegion||v?.super_region||v?.mainRegion||v?.main_region||"").trim();
+    const r=raw.toLowerCase();
+    if(r){
+      if(/nwe|north west europe|wcuk|ecuk|canal|biscay|skaw|ukc/.test(r))return "NWE / UKC";
+      if(/baltic/.test(r))return "Baltic";
+      if(/med|black sea/.test(r))return "Med / Black Sea";
+      if(/usg|usec|usac|wc us|west coast us|united states|north america/.test(r))return "USG / USEC / USAC";
+      if(/carib/.test(r))return "Caribs";
+      if(/meg|arabian gulf|suez|india|red sea|wci|middle east/.test(r))return "MEG / WCI / Red Sea";
+      if(/sea-fea|sea \/ fea|south-east-asia|far east|west pacific|pacific|asia/.test(r))return "SEA / FEA";
+      if(/africa|waf/.test(r))return "Africa";
+      if(/south america|sam|brazil|argentina|wc sam|ec sam/.test(r))return "South America";
+    }
+    const detailed=classifyRegion(v?.openPort);
+    if(["WCUK","ECUK","CANAL","BISCAY","SKAW"].includes(detailed))return "NWE / UKC";
+    if(detailed==="BALTIC")return "Baltic";
+    if(detailed==="MED")return "Med / Black Sea";
+    return "Other";
+  };
   const liveRegionCount=(region)=>openVessels.filter(v=>{
     if(!coatingMatches(v))return false;
-    if(classifyRegion(v.openPort)!==region)return false;
+    if(vesselMainRegion(v)!==region)return false;
     if(segmentFilter!=="All" && String(v.segment||v.sizeSegment||"")!==segmentFilter)return false;
     return true;
   }).length;
@@ -1504,10 +1527,10 @@ function Dashboard({vessels, cargoes, history}) {
       <div className="dash-region-grid" style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12}}>
         {panel(
           <>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,position:"relative"}}>
               {secHead("Open fleet by main region · vessel count")}
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{position:"relative"}}>
+                <div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",zIndex:31}}>
                   <button onClick={()=>setRegionCoatingOpen(v=>!v)} style={{background:regionCoatingFilter.length?"rgba(88,166,255,.16)":D.bg3,border:"1px solid "+(regionCoatingFilter.length?D.blue:D.border2),borderRadius:5,color:regionCoatingFilter.length?D.tx:D.dim,fontFamily:"inherit",fontSize:9.5,fontWeight:800,padding:"4px 8px",cursor:"pointer",whiteSpace:"nowrap"}}>
                     COATING{regionCoatingFilter.length?` · ${regionCoatingFilter.length}`:""} ▾
                   </button>
