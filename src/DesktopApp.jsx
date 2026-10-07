@@ -913,9 +913,9 @@ function HScrollRow({children,style}){
 // overflow the width — no visible scrollbar).
 function FilterRow({label,col,children}){
   return (
-    <div style={{display:"flex",alignItems:"center",gap:8,padding:"2px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
-      <div style={{width:74,flexShrink:0,fontSize:9,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em"}}>{label}</div>
-      <HScrollRow style={{gap:4}}>{children}</HScrollRow>
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"5px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
+      <div style={{width:80,flexShrink:0,fontSize:10,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em"}}>{label}</div>
+      <HScrollRow style={{gap:6}}>{children}</HScrollRow>
     </div>
   );
 }
@@ -925,9 +925,9 @@ function FilterRow({label,col,children}){
 // DWT/Built which pair a short chip list with two small range inputs.
 function FilterRowWrap({label,col,children}){
   return (
-    <div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"2px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
-      <div style={{width:74,flexShrink:0,fontSize:9,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em",paddingTop:2}}>{label}</div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:4,flex:1,minWidth:0,rowGap:3}}>{children}</div>
+    <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"6px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
+      <div style={{width:80,flexShrink:0,fontSize:10,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em",paddingTop:4}}>{label}</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1,minWidth:0,rowGap:6}}>{children}</div>
     </div>
   );
 }
@@ -1463,7 +1463,6 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [search,setSearch]=useState("");
   const [filters,setFilters]=useState(new Set());
   const [posTagFilter,setPosTagFilter]=useState(new Set());
-  const [coatingFilter,setCoatingFilter]=useState(new Set());
   const [dwtRange,setDwtRange]=useState({min:"",max:""});
   const [builtRange,setBuiltRange]=useState({min:"",max:""});
   const [openDateFilter,setOpenDateFilter]=useState({quick:"",from:"",to:""});
@@ -2310,10 +2309,6 @@ const filtV=useMemo(()=>{
       return vesselTags.some(t=>selectedTags.has(t));
     });
   }
-  if(coatingFilter.size>0){
-    const selectedCoatings=new Set([...coatingFilter].map(c=>String(c||"").trim().toUpperCase()));
-    list=list.filter(v=>selectedCoatings.has(String(v.coating||"").trim().toUpperCase()));
-  }
   // Open-date filter. Uses the same daysBetween parser already used by Positions,
   // so displayed dates such as "10 OCT" and ISO date inputs are compared consistently.
   if(openDateFilter.quick||openDateFilter.from||openDateFilter.to){
@@ -2458,7 +2453,6 @@ const filtV=useMemo(()=>{
   superRegionFilter,
   segmentFilter,
   [...posTagFilter].join(),
-  [...coatingFilter].join(),
   dwtRange.min,dwtRange.max,builtRange.min,builtRange.max,
   [...dwtFilter].join(),
   [...builtFilter].join(),
@@ -3113,7 +3107,7 @@ const filtV=useMemo(()=>{
                       )}
                     </div>
                   )}
-                  <div style={{flex:1,minHeight:0,overflowY:"hidden",padding:"2px 12px",display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+                  <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"4px 12px",display:"flex",flexDirection:"column",justifyContent:"space-evenly"}}>
                     {(()=>{
                       const Chip=({active,onClick,col,children})=>(
                         <button onClick={onClick} style={{...fbBig(active,col),textTransform:"uppercase"}}>{children}</button>
@@ -3132,13 +3126,6 @@ const filtV=useMemo(()=>{
                               </button>
                             )}
                             {outsiderSyncStatus&&<span style={{ fontSize:11, color:C.faint }}>{outsiderSyncStatus}</span>}
-                          </FilterRow>
-                          {/* Coating */}
-                          <FilterRow label="Coating" col="#2dd4bf">
-                            {[...new Set(vessels.map(v=>String(v.coating||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(c=>(
-                              <Chip key={c} col="#2dd4bf" active={coatingFilter.has(c)} onClick={()=>{setCoatingFilter(prev=>{const n=new Set(prev);n.has(c)?n.delete(c):n.add(c);return n;});setPosPage(1);}}>{fmtCoating(c)}</Chip>
-                            ))}
-                            {coatingFilter.size>0&&<Chip col={C.red} active={false} onClick={()=>{setCoatingFilter(new Set());setPosPage(1);}}>✕</Chip>}
                           </FilterRow>
                           {/* Updated */}
                           <FilterRow label="Updated" col={C.blue}>
@@ -3294,12 +3281,6 @@ const filtV=useMemo(()=>{
                           {(()=>{const available=getTagListFor("position");return available.length?available.map(t=>(<B key={t} active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t.toUpperCase()}</B>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>NONE</span>;})()}
                           {posTagFilter.size>0&&<B active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
                         </COL>
-                        <COL label="Coating" col="#2dd4bf">
-                          {[...new Set(vessels.map(v=>String(v.coating||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(c=>(
-                            <B key={c} active={coatingFilter.has(c)} onClick={()=>{setCoatingFilter(prev=>{const n=new Set(prev);n.has(c)?n.delete(c):n.add(c);return n;});setPosPage(1);}}>{fmtCoating(c)}</B>
-                          ))}
-                          {coatingFilter.size>0&&<B active={false} onClick={()=>{setCoatingFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
-                        </COL>
                         <COL label="Open Date" col="#38bdf8">
                           <B active={openDateFilter.quick==="ppt"} onClick={()=>{setOpenDateFilter(r=>({quick:r.quick==="ppt"?"":"ppt",from:"",to:""}));setPosPage(1);}}>Today/Tomorrow</B>
                           <OpenDateRangeSlider/>
@@ -3372,7 +3353,7 @@ const filtV=useMemo(()=>{
                       >
                         🗑 Delete ({selVessels.size})
                       </button>
-                      <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setCoatingFilter(new Set());setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());setSelVessels(new Set());setOpFilter(null);}}
+                      <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());setSelVessels(new Set());setOpFilter(null);}}
                         style={{fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",border:"1px solid "+C.bd,background:C.bg2,color:C.tx}}>
                         ✕ Clear all
                       </button>
