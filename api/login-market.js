@@ -27,7 +27,7 @@ export default async function handler(req,res){
   // Ship & Bunker publishes a Top Ports table with explicit columns:
   // Port | VLSFO | +/- | MGO | +/-. We read the MGO column directly.
   try{
-    const r=await fetchWithTimeout("https://shipandbunker.com/prices/us-usa",{
+    const r=await fetchWithTimeout("https://shipandbunker.com/prices?ts="+Date.now(),{
       headers:{
         "User-Agent":"Mozilla/5.0 (compatible; BrokerDashboard/1.0)",
         "Accept":"text/html,application/xhtml+xml"
@@ -66,7 +66,7 @@ export default async function handler(req,res){
     }
   }catch(e){console.warn("login-market: Ship & Bunker fetch failed:",e?.message||e);}
 
-  res.setHeader("Cache-Control","s-maxage=300, stale-while-revalidate=600");
+  res.setHeader("Cache-Control","no-store, no-cache, must-revalidate, max-age=0");
   res.status(200).json({
     brent,
     mgoAra,
@@ -74,7 +74,7 @@ export default async function handler(req,res){
     mgoUsg,
     brentSource:"Yahoo Finance BZ=F",
     bunkerSource:"Ship & Bunker Top Ports / MGO column",
-    bunkerSourceUrl:"https://shipandbunker.com/prices/us-usa",
+    bunkerSourceUrl:"https://shipandbunker.com/prices",
     bunkerMethod:"explicit-table-column",
     updatedAt:new Date().toISOString()
   });
