@@ -218,10 +218,7 @@ function GroupRow({g,editing,onStartEdit,onSaveEdit,onCancelEdit,onDelete,editLa
 
 const NAV_KEY="signal_navigation_config";
 const NAV_CLOUD_KEY="navigation_config";
-const GUEST_TABS_CLOUD_KEY="guest_visible_tabs";
-const GUEST_PIN_CLOUD_KEY="guest_pin";
-const DEFAULT_GUEST_TABS=["pos","cargo","clients"];
-const DEFAULT_GUEST_PIN="0250";
+const DEFAULT_USER_TABS=["pos","cargo","clients"];
 const UI_ZOOM_KEY="signal_ui_zoom";
 const UI_ZOOM_CLOUD_KEY="ui_zoom";
 const NAV_ITEMS=[
@@ -245,59 +242,44 @@ function navLoad(){try{return navNorm(JSON.parse(localStorage.getItem(NAV_KEY)||
 
 
 
-function GuestAccessEditor(){
+function UserAccessEditor(){
  const allowed=NAV_ITEMS.filter(([id])=>id!=="settings");
- const [tabs,setTabs]=useState(DEFAULT_GUEST_TABS),[status,setStatus]=useState("");
- const [guestPin,setGuestPin]=useState(DEFAULT_GUEST_PIN),[pinDraft,setPinDraft]=useState(DEFAULT_GUEST_PIN),[pinStatus,setPinStatus]=useState("");
- useEffect(()=>{(async()=>{try{
-   const [{data:tabsData},{data:pinData}]=await Promise.all([
-     supabase.from("tag_settings").select("value").eq("key",GUEST_TABS_CLOUD_KEY).maybeSingle(),
-     supabase.from("tag_settings").select("value").eq("key",GUEST_PIN_CLOUD_KEY).maybeSingle()
-   ]);
-   const raw=tabsData?.value;
-   const next=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
-   if(next)setTabs(next.filter(id=>id!=="settings"));
-   const cloudPin=String(pinData?.value??"").replace(/\D/g,"").slice(0,4);
-   if(cloudPin.length===4){setGuestPin(cloudPin);setPinDraft(cloudPin);}
- }catch{}})()},[]);
- function save(next){
-   next=[...new Set(next)].filter(id=>id!=="settings");
-   setTabs(next);setStatus("Saving…");
-   supabase.from("tag_settings").upsert(
-     {key:GUEST_TABS_CLOUD_KEY,value:next,updated_at:new Date().toISOString()},
-     {onConflict:"key"}
-   ).then(({error})=>{setStatus(error?"Cloud save failed":"Saved");setTimeout(()=>setStatus(""),1600);});
+ const [users,setUsers]=useState([]),[selected,setSelected]=useState(""),[tabs,setTabs]=useState([]),[status,setStatus]=useState("");
+ async function loadUsers(){
+   const {data}=await supabase.from("app_users").select("id,name,initials,role,active").eq("active",true).order("name");
+   const rows=(data||[]).filter(u=>u.role!=="admin"); setUsers(rows); if(!selected&&rows[0])setSelected(rows[0].id);
  }
- async function savePin(){
-   const clean=String(pinDraft||"").replace(/\D/g,"").slice(0,4);
-   if(clean.length!==4){setPinStatus("Enter exactly 4 digits");return;}
-   setPinStatus("Saving…");
-   const {error}=await supabase.from("tag_settings").upsert(
-     {key:GUEST_PIN_CLOUD_KEY,value:clean,updated_at:new Date().toISOString()},
-     {onConflict:"key"}
-   );
-   if(error){setPinStatus("Cloud save failed");return;}
-   setGuestPin(clean);setPinDraft(clean);setPinStatus("Saved");
-   setTimeout(()=>setPinStatus(""),1600);
+ useEffect(()=>{loadUsers();},[]);
+ useEffect(()=>{if(!selected)return;(async()=>{
+   const {data}=await supabase.from("tag_settings").select("value").eq("key","user_tabs_"+selected).maybeSingle();
+   const raw=data?.value, next=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
+   setTabs((next||DEFAULT_USER_TABS).filter(id=>id!=="settings"));
+ })();},[selected]);
+ async function save(next){
+   next=[...new Set(next)].filter(id=>id!=="settings"); setTabs(next); setStatus("Saving…");
+   const {error}=await supabase.from("tag_settings").upsert({key:"user_tabs_"+selected,value:next,updated_at:new Date().toISOString()},{onConflict:"key"});
+   setStatus(error?"Cloud save failed":"Saved");
+   if(!error)window.dispatchEvent(new CustomEvent("user-access-updated",{detail:{userId:selected,tabs:next}}));
+   setTimeout(()=>setStatus(""),1600);
  }
+ const u=users.find(x=>x.id===selected);
  return <div>
-   <div style={{padding:"10px 12px",marginBottom:12,border:"1px solid "+C.bd2,borderRadius:7,background:C.bg2}}>
-     <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",marginBottom:7}}>Guest code</div>
-     <div style={{fontSize:16,fontWeight:800,color:"#9ec5ff",letterSpacing:5}}>0250</div>
-     <div style={{fontSize:10,color:C.faint,marginTop:6}}>Guest login is active. Only the tabs selected below are available to guest users.</div>
+   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+     <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em"}}>User tab access</div>
+     <select value={selected} onChange={e=>setSelected(e.target.value)} style={{...inp,width:"auto",minWidth:180,marginLeft:"auto"}}>
+       {users.map(x=><option key={x.id} value={x.id}>{x.name} ({x.initials})</option>)}
+     </select>
    </div>
-   <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".06em",marginBottom:7}}>Guest tabs</div>
-   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:7}}>
-     {allowed.map(([id,label,,icon])=><label key={id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 9px",border:"1px solid "+(tabs.includes(id)?"#58a6ff55":C.bd2),borderRadius:6,background:tabs.includes(id)?"rgba(88,166,255,.08)":C.bg2,color:C.tx,fontSize:11,cursor:"pointer"}}>
-       <input type="checkbox" checked={tabs.includes(id)} onChange={e=>save(e.target.checked?[...tabs,id]:tabs.filter(x=>x!==id))}/>
-       <span>{icon}</span><span>{label}</span>
-     </label>)}
-   </div>
-   <div style={{display:"flex",alignItems:"center",gap:10,marginTop:10}}>
-     <button onClick={()=>save(DEFAULT_GUEST_TABS)} style={{fontSize:10,padding:"4px 9px",borderRadius:5,border:"1px solid "+C.bd2,background:"transparent",color:C.faint,cursor:"pointer"}}>Reset guest tabs</button>
-     <span style={{fontSize:10,color:C.faint}}>{status}</span>
-   </div>
-   <div style={{fontSize:10,color:C.faint,marginTop:8}}>Settings is always hidden from guest users, so colleagues cannot change their own access.</div>
+   {u?<>
+     <div style={{fontSize:10,color:C.faint,marginBottom:8}}>Choose exactly which tabs {u.name} can open. Settings is reserved for Admin.</div>
+     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:7}}>
+       {allowed.map(([id,label,,icon])=><label key={id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 9px",border:"1px solid "+(tabs.includes(id)?"#58a6ff55":C.bd2),borderRadius:6,background:tabs.includes(id)?"rgba(88,166,255,.08)":C.bg2,color:C.tx,fontSize:11,cursor:"pointer"}}>
+         <input type="checkbox" checked={tabs.includes(id)} onChange={e=>save(e.target.checked?[...tabs,id]:tabs.filter(x=>x!==id))}/>
+         <span>{icon}</span><span>{label}</span>
+       </label>)}
+     </div>
+     <div style={{display:"flex",alignItems:"center",gap:10,marginTop:10}}><span style={{fontSize:10,color:C.faint}}>{status}</span></div>
+   </>:<div style={{fontSize:10,color:C.faint}}>Add an active User to configure tab access.</div>}
  </div>
 }
 
@@ -469,10 +451,10 @@ export default function SettingsTab() {
     <div style={{display:"grid",gridTemplateColumns:"1fr 1.3fr",gap:16,padding:"0 0 20px",fontFamily:"Inter,sans-serif",alignItems:"start"}}>
       <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0}}>
         <SectionCard title="Navigation / Menu" subtitle="Choose menu style, order existing tabs, visibility and grouped headings."><NavigationEditor/><AppScaleControl/></SectionCard>
-        <SectionCard title="Users / Login" subtitle="Add colleagues and manage their initials, colour, PIN and role. Navigation visibility above remains global for everybody.">
+        <SectionCard title="Users / Login" subtitle="Add colleagues with separate PINs. Admin has full access; each User can have individual tab access.">
           <UserManager/>
           <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid "+C.bd2}}>
-            <GuestAccessEditor/>
+            <UserAccessEditor/>
           </div>
         </SectionCard>
       </div>
