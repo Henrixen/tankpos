@@ -1362,41 +1362,38 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
           fetch("/api/login-news",{cache:"no-store"}).then(r=>r.ok?r.json():null)
         ]);
         if(!alive)return;
-        if(mktRes.status==="fulfilled"&&mktRes.value)setLoginMarkets(v=>({...v,...mktRes.value}));
-        // Keep the front-page bunker strip aligned with the latest Dashboard refresh
-        // while retaining the original USG / ARA / Singapore layout.
+        const liveMarket=mktRes.status==="fulfilled"&&mktRes.value?mktRes.value:null;
+        if(liveMarket)setLoginMarkets(v=>({...v,...liveMarket}));
+
+        // Keep start-page bunkers aligned with a Dashboard/TCE bunker refresh.
+        // A saved bunker set from TODAY wins for ARA/Singapore; older saved data
+        // is only a fallback, so it can never pin today's ARA to yesterday's value.
         try{
           const {data}=await supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle();
           const b=data?.value?(typeof data.value==="string"?JSON.parse(data.value):data.value):null;
-          if(b)setLoginMarkets(v=>{
-            const apiTs=Date.parse(v.updatedAt||"");
-            const bunkerTs=Date.parse(b.date||"");
-            const useBunker=Number.isFinite(bunkerTs)&&(!Number.isFinite(apiTs)||bunkerTs>apiTs);
-            return useBunker?{...v,
-              mgoAra:Number(b.ARA_MGO)||v.mgoAra,
-              mgoSingapore:Number(b.SIN_MGO)||v.mgoSingapore,
-              bunkerDate:b.date||v.bunkerDate
-            }:v;
-          });
+          if(b){
+            const savedDay=String(b.date||"").slice(0,10);
+            const todayIso=new Date().toISOString().slice(0,10);
+            const savedDate=new Date(b.date||"");
+            const sameLocalDay=Number.isFinite(savedDate.getTime())&&
+              savedDate.getFullYear()===new Date().getFullYear()&&
+              savedDate.getMonth()===new Date().getMonth()&&
+              savedDate.getDate()===new Date().getDate();
+            const savedIsToday=savedDay===todayIso||sameLocalDay;
+            setLoginMarkets(v=>({
+              ...v,
+              mgoAra:savedIsToday?(Number(b.ARA_MGO)||v.mgoAra):(v.mgoAra||Number(b.ARA_MGO)||null),
+              mgoSingapore:savedIsToday?(Number(b.SIN_MGO)||v.mgoSingapore):(v.mgoSingapore||Number(b.SIN_MGO)||null),
+              bunkerDate:savedIsToday?(b.date||v.bunkerDate):(v.bunkerDate||b.date)
+            }));
+          }
         }catch(_){}
+
+        // The API already returns newest-first news. Do not re-parse the display
+        // date in the browser: locale-formatted RSS dates were being rejected,
+        // leaving only the two placeholder cards on the start page.
         if(newsRes.status==="fulfilled"&&Array.isArray(newsRes.value?.items)){
-          const now=Date.now(),futureGrace=6*60*60*1000;
-          const safeItems=newsRes.value.items.filter(n=>{
-            if(!n?.published)return true;
-            const raw=String(n.published).trim();
-            let t=Date.parse(raw);
-            if(!Number.isFinite(t)){
-              const m=raw.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s*(?:[,.]\s*)?(\d{4})?(?:[,\s]+(\d{1,2}):(\d{2}))?/);
-              if(m){
-                const y=Number(m[3]||new Date().getFullYear());
-                t=Date.parse(`${m[1]} ${m[2]} ${y} ${m[4]||"00"}:${m[5]||"00"}`);
-              }
-            }
-            if(!Number.isFinite(t)) return false;
-            const age=now-t,maxAge=14*24*60*60*1000;
-            return t<=now+futureGrace&&age<=maxAge;
-          });
-          setLoginNews(safeItems.slice(0,8));
+          setLoginNews(newsRes.value.items.filter(n=>n&&n.title).slice(0,8));
         }
       }catch(_){}
       finally{if(alive)setLoginFeedLoading(false);}
@@ -2718,7 +2715,7 @@ const filtV=useMemo(()=>{
                       border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.72)":"rgba(88,166,255,.18)"),
                       display:"flex",alignItems:"center",justifyContent:"center",fontSize:mobile?21:24,fontWeight:850,color:pinError?"#ff6b6b":"#79c0ff",
                       boxShadow:pinInput.length>i&&!pinError?"0 0 18px rgba(88,166,255,.12)":"none"
-                    }}> {pinInput.length>i?"*":""}</div>)}
+                    }}><span style={{display:"block",fontSize:mobile?31:36,lineHeight:1,transform:"translateY(-1px)"}}>{pinInput.length>i?"★":""}</span></div>)}
                   </div>
 
                   <style>{`
