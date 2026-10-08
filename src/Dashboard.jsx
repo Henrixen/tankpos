@@ -608,7 +608,7 @@ ${text}`}]
 function WSChart({data,routes,colors,fill=false}) {
   const [hover,setHover]=useState(null);
   const compact=typeof window!=="undefined"&&window.innerWidth<=700;
-  const W=compact?360:1200,H=compact?154:450,PL=compact?68:105,PR=compact?24:24,PT=compact?8:16,PB=compact?24:32,iW=W-PL-PR,iH=H-PT-PB;
+  const W=compact?360:1200,H=compact?154:450,PL=compact?55:72,PR=compact?24:24,PT=compact?8:16,PB=compact?24:32,iW=W-PL-PR,iH=H-PT-PB;
   const series={};
   routes.forEach(r=>series[r.id]=cleanIsolatedValues(data.map(d=>d.spot?.[r.id]?.ws)));
   const allVals=routes.flatMap(r=>series[r.id]).filter(v=>v!=null);
@@ -624,12 +624,12 @@ function WSChart({data,routes,colors,fill=false}) {
       {hi!=null&&<line x1={xs[hi]} x2={xs[hi]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
     </svg>
     {/* Axis labels are HTML overlays: unlike SVG text, they never stretch when the chart fills its panel. */}
-    <div style={{position:"absolute",left:compact?3:8,top:0,height:fill?"calc(100% - 25px)":235,width:compact?61:92,pointerEvents:"none",fontSize:compact?10:11,fontWeight:750,color:"#d9e9ff"}}>
+    <div style={{position:"absolute",left:compact?3:8,top:0,height:fill?"calc(100% - 25px)":235,width:compact?48:59,pointerEvents:"none",fontSize:compact?10:11,fontWeight:750,color:"#d9e9ff"}}>
       <span style={{position:"absolute",left:0,top:"50%",transform:"translateY(-50%) rotate(-90deg)",transformOrigin:"center",fontSize:11,fontWeight:850,color:"#58a6ff"}}>WS</span>
       {[0,.5,1].map(t=><span key={t} style={{position:"absolute",right:0,top:`${(PT+t*iH)/H*100}%`,transform:t===1?"translateY(-145%)":"translateY(-50%)",fontVariantNumeric:"tabular-nums"}}>{Math.round(mx-t*range)}</span>)}
     </div>
     <div style={{position:"absolute",left:0,right:0,bottom:fill?25:25,height:17,pointerEvents:"none",fontSize:compact?9:10,fontWeight:750,color:"#d9e9ff"}}>
-      {Array.from(new Set([0,1,2,3,4].map(k=>Math.round(k*(data.length-1)/4)))).map((i,ti,arr)=><span key={i} style={{position:"absolute",left:`${xs[i]/W*100}%`,transform:ti===0?"translateX(0)":ti===arr.length-1?"translateX(-100%)":"translateX(-50%)",whiteSpace:"nowrap"}}>{(data[i].date||"").split(" ").slice(0,2).join(" ")}</span>)}
+      {Array.from(new Set([0,1,2,3,4].map(k=>Math.round(k*(data.length-1)/4)))).map((i,ti,arr)=><span key={i} style={{position:"absolute",left:`${(ti===0&&xs.length>1?xs[1]:xs[i])/W*100}%`,transform:ti===0?"translateX(0)":ti===arr.length-1?"translateX(-100%)":"translateX(-50%)",whiteSpace:"nowrap"}}>{(data[i].date||"").split(" ").slice(0,2).join(" ")}</span>)}
     </div>
     {hi!=null&&<div style={{position:"absolute",top:10,left:`${Math.min(78,Math.max(8,xs[hi]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.94)",border:"1px solid rgba(88,166,255,.35)",borderRadius:6,padding:"6px 8px",pointerEvents:"none",zIndex:4,boxShadow:"0 6px 18px rgba(0,0,0,.28)"}}><div style={{fontSize:9,color:"rgba(205,225,250,.82)",marginBottom:3}}>{data[hi]?.date}</div>{routes.map(r=>series[r.id][hi]!=null?<div key={r.id} style={{fontSize:10,fontWeight:800,color:colors[r.id]||C.tx}}>{r.id}: {series[r.id][hi].toFixed(1)}</div>:null)}</div>}
     <div className="dash-ws-legend" style={{display:"flex",gap:14,flexWrap:"wrap",justifyContent:"center",marginTop:3}}>{routes.map(r=><span key={r.id} style={{fontSize:13,color:colors[r.id]||C.dim,fontWeight:750}}>● {r.name}</span>)}</div>
