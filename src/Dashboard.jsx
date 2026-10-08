@@ -608,7 +608,7 @@ ${text}`}]
 function WSChart({data,routes,colors,fill=false}) {
   const [hover,setHover]=useState(null);
   const compact=typeof window!=="undefined"&&window.innerWidth<=700;
-  const W=compact?360:1200,H=compact?154:450,PL=compact?55:72,PR=compact?24:24,PT=compact?8:16,PB=compact?24:32,iW=W-PL-PR,iH=H-PT-PB;
+  const W=compact?360:1200,H=compact?154:450,PL=compact?68:105,PR=compact?24:24,PT=compact?8:16,PB=compact?24:32,iW=W-PL-PR,iH=H-PT-PB;
   const series={};
   routes.forEach(r=>series[r.id]=cleanIsolatedValues(data.map(d=>d.spot?.[r.id]?.ws)));
   const allVals=routes.flatMap(r=>series[r.id]).filter(v=>v!=null);
@@ -624,12 +624,12 @@ function WSChart({data,routes,colors,fill=false}) {
       {hi!=null&&<line x1={xs[hi]} x2={xs[hi]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
     </svg>
     {/* Axis labels are HTML overlays: unlike SVG text, they never stretch when the chart fills its panel. */}
-    <div style={{position:"absolute",left:compact?3:8,top:0,height:fill?"calc(100% - 25px)":235,width:compact?50:61,pointerEvents:"none",fontSize:compact?10:11,fontWeight:750,color:"#d9e9ff"}}>
+    <div style={{position:"absolute",left:compact?3:8,top:0,height:fill?"calc(100% - 25px)":235,width:compact?61:92,pointerEvents:"none",fontSize:compact?10:11,fontWeight:750,color:"#d9e9ff"}}>
       <span style={{position:"absolute",left:0,top:"50%",transform:"translateY(-50%) rotate(-90deg)",transformOrigin:"center",fontSize:11,fontWeight:850,color:"#58a6ff"}}>WS</span>
-      {[0,.5,1].map(t=><span key={t} style={{position:"absolute",right:0,top:`${(PT+t*iH)/H*100}%`,transform:"translateY(-50%)",fontVariantNumeric:"tabular-nums"}}>{Math.round(mx-t*range)}</span>)}
+      {[0,.5,1].map(t=><span key={t} style={{position:"absolute",right:0,top:`${(PT+t*iH)/H*100}%`,transform:t===1?"translateY(-145%)":"translateY(-50%)",fontVariantNumeric:"tabular-nums"}}>{Math.round(mx-t*range)}</span>)}
     </div>
     <div style={{position:"absolute",left:0,right:0,bottom:fill?25:25,height:17,pointerEvents:"none",fontSize:compact?9:10,fontWeight:750,color:"#d9e9ff"}}>
-      {Array.from(new Set([0,1,2,3,4].map(k=>Math.round(k*(data.length-1)/4)))).map((i,ti,arr)=><span key={i} style={{position:"absolute",left:`${xs[i]/W*100}%`,transform:ti===0?"none":ti===arr.length-1?"translateX(-100%)":"translateX(-50%)",whiteSpace:"nowrap"}}>{(data[i].date||"").split(" ").slice(0,2).join(" ")}</span>)}
+      {Array.from(new Set([0,1,2,3,4].map(k=>Math.round(k*(data.length-1)/4)))).map((i,ti,arr)=><span key={i} style={{position:"absolute",left:`${xs[i]/W*100}%`,transform:ti===0?"translateX(0)":ti===arr.length-1?"translateX(-100%)":"translateX(-50%)",whiteSpace:"nowrap"}}>{(data[i].date||"").split(" ").slice(0,2).join(" ")}</span>)}
     </div>
     {hi!=null&&<div style={{position:"absolute",top:10,left:`${Math.min(78,Math.max(8,xs[hi]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.94)",border:"1px solid rgba(88,166,255,.35)",borderRadius:6,padding:"6px 8px",pointerEvents:"none",zIndex:4,boxShadow:"0 6px 18px rgba(0,0,0,.28)"}}><div style={{fontSize:9,color:"rgba(205,225,250,.82)",marginBottom:3}}>{data[hi]?.date}</div>{routes.map(r=>series[r.id][hi]!=null?<div key={r.id} style={{fontSize:10,fontWeight:800,color:colors[r.id]||C.tx}}>{r.id}: {series[r.id][hi].toFixed(1)}</div>:null)}</div>}
     <div className="dash-ws-legend" style={{display:"flex",gap:14,flexWrap:"wrap",justifyContent:"center",marginTop:3}}>{routes.map(r=><span key={r.id} style={{fontSize:13,color:colors[r.id]||C.dim,fontWeight:750}}>● {r.name}</span>)}</div>
@@ -1766,7 +1766,7 @@ function SegmentFWChart({data,segments,colors}) {
   return <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0,position:"relative"}}>
     <div style={{position:"relative",width:"100%",flex:1,minHeight:0}}>
       <svg className="dash-fixing-chart-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" onPointerMove={move} onPointerDown={e=>{e.currentTarget.setPointerCapture?.(e.pointerId);move(e)}} onPointerLeave={()=>setHover(null)} style={{position:"absolute",inset:0,width:"100%",height:"100%",display:"block",cursor:"crosshair",touchAction:"pan-y"}}>
-        {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-10} y={y+4} fill="#fff" fontSize={compact?8.5:13} fontWeight="750" textAnchor="end">{v}d</text></g>})}
+        {[0,.5,1].map(fr=>{const v=Math.round(mx*(1-fr)),y=PT+fr*iH;return <g key={fr}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/></g>})}
         {segments.map(seg=>{
           const pts=series[seg].map((v,i)=>v==null||v<0?null:[xs[i],PT+iH-v/range*iH]);
           // Missing/weekend/low-sample dates are skipped, but the surrounding valid
@@ -1776,8 +1776,11 @@ function SegmentFWChart({data,segments,colors}) {
         })}
         {hover!=null&&<line x1={xs[hover]} x2={xs[hover]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
         {hoverMarkers.map(m=><circle key={m.seg} cx={m.x} cy={m.y} r="5.2" fill={m.color} stroke="none"/>)}
-        {data.map((d,i)=>{const step=Math.max(1,Math.floor(data.length/8));return(i===0||i===data.length-1||i%step===0)?<text key={i} x={i===0?xs[i]+5:i===data.length-1?xs[i]-5:xs[i]} y={H-9} fill="#fff" fontSize={compact?7.5:11.5} fontWeight="750" textAnchor={i===0?"start":i===data.length-1?"end":"middle"}>{fmtDateShort(d.date)}</text>:null})}
+        
       </svg>
+      {/* Fixed-size HTML axis labels avoid distortion from the responsive SVG. */}
+      {[0,.5,1].map(fr=><span key={fr} style={{position:"absolute",left:0,width:`${(PL-10)/W*100}%`,top:`${(PT+fr*iH)/H*100}%`,transform:fr===1?"translateY(-110%)":"translateY(-50%)",textAlign:"right",fontSize:compact?9:11,fontWeight:750,color:"#fff",pointerEvents:"none",fontVariantNumeric:"tabular-nums"}}>{Math.round(mx*(1-fr))}d</span>)}
+      {data.map((d,i)=>{const step=Math.max(1,Math.floor(data.length/8));return(i===0||i===data.length-1||i%step===0)?<span key={i} style={{position:"absolute",left:`${xs[i]/W*100}%`,bottom:5,transform:i===0?"none":i===data.length-1?"translateX(-100%)":"translateX(-50%)",whiteSpace:"nowrap",fontSize:compact?8:10,fontWeight:750,color:"#fff",pointerEvents:"none"}}>{fmtDateShort(d.date)}</span>:null})}
       {hover!=null&&<div style={{position:"absolute",top:10,left:`${Math.min(82,Math.max(10,xs[hover]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.95)",border:"1px solid rgba(88,166,255,.35)",borderRadius:6,padding:"6px 8px",pointerEvents:"none",zIndex:8}}><div style={{fontSize:9,color:"rgba(205,225,250,.82)",marginBottom:3}}>{fmtDateShort(data[hover]?.date)}</div>{segments.map(seg=>{const ships=Math.round(Number(data[hover]?.[seg+"__ships"]||0));const excluded=Number.isFinite(Number(data[hover]?.[seg]))&&series[seg][hover]==null;return series[seg][hover]!=null?<div key={seg} style={{fontSize:10,fontWeight:800,color:colors[seg]||C.tx}}>{seg}: {series[seg][hover].toFixed(1)}d <span style={{color:"rgba(205,225,250,.76)",fontWeight:650}}>· {ships} ships</span></div>:excluded?<div key={seg} style={{fontSize:9.5,fontWeight:700,color:"rgba(205,225,250,.60)"}}>{seg}: excluded · {ships} ships <span style={{color:"#fbbf24"}}>(min {sampleThresholds[seg]?.minShips||3})</span></div>:null})}</div>}
     </div>
     <div className="dash-fixing-legend-row" style={{position:"relative",minHeight:22,marginTop:0,display:"flex",alignItems:"center",justifyContent:"center",paddingRight:125}}>
