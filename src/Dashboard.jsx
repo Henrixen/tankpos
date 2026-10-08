@@ -127,6 +127,8 @@ function WSTracker() {
   const [wsDraftRows,setWsDraftRows] = useState([]);
   const [wsEditedHistory,setWsEditedHistory] = useState({});
   const [wsNote,   setWsNote]  = useState("");
+  const [wsMrNote,setWsMrNote] = useState("");
+  const [wsMrNoteImg,setWsMrNoteImg] = useState(null);
   const [wsNoteImg,setWsNoteImg] = useState(null);
   const [wsNoteSavedAt,setWsNoteSavedAt] = useState(null);
   const [wsNoteSaveState,setWsNoteSaveState] = useState("loading");
@@ -183,7 +185,9 @@ function WSTracker() {
           try{
             const parsed=typeof raw==="string"?JSON.parse(raw):raw;
             if(parsed && typeof parsed==="object"){
-              setWsNote(parsed.text||"");
+              setWsNote(parsed.handy?.text??parsed.text??"");
+              setWsMrNote(parsed.mr?.text||"");
+              setWsMrNoteImg(parsed.mr?.imageDataUrl||null);
               setWsNoteImg(parsed.imageDataUrl||null);
               setWsNoteSavedAt(parsed.updatedAt||null);
             }else{
@@ -210,7 +214,7 @@ function WSTracker() {
     setWsNoteSaveState("saving");
     const timer=setTimeout(async()=>{
       const updatedAt=new Date().toISOString();
-      const payload={text:wsNote||"",imageDataUrl:wsNoteImg||null,updatedAt};
+      const payload={text:wsNote||"",imageDataUrl:wsNoteImg||null,handy:{text:wsNote||"",imageDataUrl:wsNoteImg||null},mr:{text:wsMrNote||"",imageDataUrl:wsMrNoteImg||null},updatedAt};
       const {error}=await supabase.from("dashboard").upsert(
         {key:"ws-note",value:JSON.stringify(payload)},
         {onConflict:"key"}
@@ -224,7 +228,7 @@ function WSTracker() {
       }
     },700);
     return()=>clearTimeout(timer);
-  },[wsNote,wsNoteImg]);
+  },[wsNote,wsNoteImg,wsMrNote,wsMrNoteImg]);
 
   // Load from Supabase
   useEffect(()=>{
@@ -255,7 +259,8 @@ function WSTracker() {
   }
   async function saveWS(d) {
     const clean={...d,ffa:normalisePeriodKeys(d.ffa)};
-    try{await supabase.from("dashboard").upsert({key:WS_STORE,value:JSON.stringify(clean)},{onConflict:"key"});}catch(_){}
+    const {error}=await supabase.from("dashboard").upsert({key:WS_STORE,value:JSON.stringify(clean)},{onConflict:"key"});
+    if(error){console.error("Save Worldscale history failed:",error);throw new Error("Supabase save failed: "+error.message);}
     setData(clean);
   }
 
@@ -289,10 +294,12 @@ function WSTracker() {
       if(idx>=0)history[idx]={...existing,spot};else history.push({...existing,spot});
     }
     history.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
-    await saveWS({...data,history});
-    setWsDraftRows([]);
-    setWsEditedHistory({});
-    setStatus({t:"success",m:"Worldscale history saved"});
+    try {
+      await saveWS({...data,history});
+      setWsDraftRows([]);
+      setWsEditedHistory({});
+      setStatus({t:"success",m:"Worldscale history saved to Supabase"});
+    } catch(e) {setStatus({t:"error",m:e.message||"Failed to save Worldscale history"});}
   }
   async function parseWS() {
     if (!pasteText.trim() && !img) { setStatus({t:"error",m:"Paste text or attach an image"}); return; }
@@ -512,7 +519,7 @@ ${text}`}]
           <div style={{height:"100%",minHeight:0,display:"flex",flexDirection:"column"}}>
             <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"9px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
               <div style={{fontSize:10,color:C.dim,marginBottom:5,display:"flex",justifyContent:"space-between",alignItems:"center",fontWeight:800,textTransform:"uppercase",letterSpacing:".05em",gap:8}}>
-                <span>Daily market notes / gossip</span>
+                <span>Daily market notes / gossip · Handy</span>
                 <span style={{fontSize:9,textTransform:"none",letterSpacing:0,fontWeight:500,color:wsNoteSaveState==="error"?C.red:wsNoteSaveState==="saving"?C.amber:C.faint,whiteSpace:"nowrap"}}>
                   {wsNoteSaveState==="saving"?"Saving…":wsNoteSaveState==="error"?"Save failed":wsNoteSavedAt?"Saved "+new Date(wsNoteSavedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"Saved in Supabase"}
                 </span>
@@ -529,7 +536,10 @@ ${text}`}]
                 <span style={{fontSize:9,color:C.faint}}>pasted thumbnail stored with note</span>
               </div>}
             </div>
-
+            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"9px 10px",marginTop:8,minHeight:0,display:"flex",flexDirection:"column"}}>
+              <div style={{fontSize:10,color:C.dim,marginBottom:5,fontWeight:800,textTransform:"uppercase",letterSpacing:".05em"}}>Daily market notes / gossip · MR</div>
+              <textarea value={wsMrNote} onChange={e=>setWsMrNote(e.target.value)} placeholder="MR market colour, fixing activity, owner sentiment…" style={{width:"100%",minHeight:92,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"7px 8px",resize:"vertical",boxSizing:"border-box",outline:"none"}}/>
+            </div>
           </div>
         )}
 
@@ -916,6 +926,8 @@ function Dashboard({vessels, cargoes, history}) {
   const [regionHistoryError,setRegionHistoryError]=useState(null);
   useEffect(()=>{let alive=true;(async()=>{try{const {data,error}=await supabase.rpc("dashboard_region_history");if(error)throw error;if(alive)setRegionHistory(data||[]);}catch(e){if(alive)setRegionHistoryError(e.message||"RPC failed");}finally{if(alive)setRegionHistoryLoading(false);}})();return()=>{alive=false;};},[]);
   const [segmentFilter,setSegmentFilter]=useState("All");
+  const [fixingSegments,setFixingSegments]=useState([]);
+  const toggleFixingSegment=seg=>setFixingSegments(prev=>seg==="All"?[]:prev.includes(seg)?prev.filter(x=>x!==seg):[...prev,seg]);
   const [regionCoatingFilter,setRegionCoatingFilter]=useState([]);
   const [regionCoatingOpen,setRegionCoatingOpen]=useState(false);
   const [fixingRegionFilter,setFixingRegionFilter]=useState("All");
@@ -1126,7 +1138,7 @@ function Dashboard({vessels, cargoes, history}) {
     return segmentFilter==="All" ? Number(r.ships||0) : Number(r.segments?.[segmentFilter]||0);
   };
   const currentRegionRows=REGION_ORDER.map(region=>({
-    region,now:regionCoatingFilter.length?liveRegionCount(region):getRegionCount("NOW",region),d14:getRegionCount("14D",region),d30:getRegionCount("30D",region),d90:getRegionCount("90D",region)
+    region,now:regionCoatingFilter.length?liveRegionCount(region):getRegionCount("NOW",region),d14:regionCoatingFilter.length?null:getRegionCount("14D",region),d30:regionCoatingFilter.length?null:getRegionCount("30D",region),d90:regionCoatingFilter.length?null:getRegionCount("90D",region)
   })).filter(x=>x.now||x.d14||x.d30||x.d90);
   const regionTotals={
     now:currentRegionRows.reduce((a,x)=>a+x.now,0),
@@ -1166,7 +1178,7 @@ function Dashboard({vessels, cargoes, history}) {
 
   const fixingSegmentChartData=(()=>{
     const byDate={};
-    const rows=(Array.isArray(fixingSegmentHistory)?fixingSegmentHistory:[])
+    const rows=(regionCoatingFilter.length?[]:(Array.isArray(fixingSegmentHistory)?fixingSegmentHistory:[]))
       .filter(r=>fixingRegionFilter==="All" || r.region===fixingRegionFilter);
     for(const r of rows){
       const d=r.snapshot_date; if(!d)continue;
@@ -1193,7 +1205,7 @@ function Dashboard({vessels, cargoes, history}) {
     }
     return Object.values(byDate).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   })();
-  const activeFixingSegments=(segmentFilter==="All"?SEGMENT_ORDER.filter(s=>s!=="All"): [segmentFilter]).filter(s=>fixingSegmentChartData.some(d=>d[s]!=null));
+  const activeFixingSegments=(fixingSegments.length?fixingSegments:SEGMENT_ORDER.filter(s=>s!=="All")).filter(s=>fixingSegmentChartData.some(d=>d[s]!=null));
   const fixingSegmentDisplayData=horizonRows(fixingSegmentChartData,fixingPeriod);
 
   const marketSummary=(()=>{
@@ -1571,13 +1583,13 @@ function Dashboard({vessels, cargoes, history}) {
               <span className="dash-fixing-note" style={{fontSize:9,color:D.faint}}>past positions · negative values excluded</span>
             </div>
             <div className="dash-fixing-desktop-controls" style={{display:"flex",gap:5,flexWrap:"wrap",margin:"-2px 0 8px"}}>
-              <div style={{display:"flex",gap:5,flexWrap:"wrap",flex:1}}>{SEGMENT_ORDER.map(seg=>{const active=segmentFilter===seg;return <button key={seg} onClick={()=>setSegmentFilter(seg)} style={{background:active?"rgba(88,166,255,.18)":D.bg3,border:"1px solid "+(active?D.blue:D.border2),borderRadius:5,color:active?D.tx:D.dim,fontFamily:"inherit",fontSize:10,fontWeight:active?800:600,padding:"4px 8px",cursor:"pointer"}}>{seg}</button>})}</div><HorizonButtons value={fixingPeriod} onChange={setFixingPeriod}/>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap",flex:1}}>{SEGMENT_ORDER.map(seg=>{const active=seg==="All"?!fixingSegments.length:fixingSegments.includes(seg);return <button key={seg} onClick={()=>toggleFixingSegment(seg)} style={{background:active?"rgba(88,166,255,.18)":D.bg3,border:"1px solid "+(active?D.blue:D.border2),borderRadius:5,color:active?D.tx:D.dim,fontFamily:"inherit",fontSize:10,fontWeight:active?800:600,padding:"4px 8px",cursor:"pointer"}}>{seg}</button>})}</div><HorizonButtons value={fixingPeriod} onChange={setFixingPeriod}/>
             </div>
             <div className="dash-fixing-mobile-controls">
-              <select value={segmentFilter} onChange={e=>setSegmentFilter(e.target.value)}>{SEGMENT_ORDER.map(seg=><option key={seg} value={seg}>{seg}</option>)}</select>
+              <select value={fixingSegments.length===1?fixingSegments[0]:"All"} onChange={e=>toggleFixingSegment(e.target.value)}>{SEGMENT_ORDER.map(seg=><option key={seg} value={seg}>{seg}</option>)}</select>
               <select value={fixingPeriod} onChange={e=>setFixingPeriod(e.target.value)}>{["7D","14D","1M","3M","ALL"].map(p=><option key={p} value={p}>{p}</option>)}</select>
             </div>
-            {fixingSegmentError
+            {regionCoatingFilter.length ? <div style={{fontSize:11,color:D.dim,padding:"12px 0"}}>Historical fixing-window snapshots do not contain coating. Filtered live fleet: {openVessels.filter(v=>coatingMatches(v)&&(fixingRegionFilter==="All"||vesselMainRegion(v)===fixingRegionFilter)&&(fixingSegments.length===0||fixingSegments.includes(String(v.segment||v.sizeSegment||"")))).length} vessels. Coating-specific historical graph requires coating in Supabase snapshots.</div> : fixingSegmentError
               ? <div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Fixing-window history unavailable: {fixingSegmentError}</div>
               : fixingSegmentDisplayData.length<2
                 ? <div style={{color:D.faint,fontSize:12,padding:"24px 0",textAlign:"center"}}>Not enough observations in this period.</div>
@@ -1603,7 +1615,7 @@ function Dashboard({vessels, cargoes, history}) {
                   {regionCoatingOpen&&<div style={{position:"absolute",right:0,top:"calc(100% + 5px)",zIndex:1001,minWidth:170,maxHeight:230,overflowY:"auto",background:"#0b1628",border:"1px solid "+D.border2,borderRadius:6,boxShadow:"0 10px 28px rgba(0,0,0,.45)",padding:6}}>
                     <div onClick={()=>setRegionCoatingFilter([])} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 6px",fontSize:11,color:!regionCoatingFilter.length?D.blue:D.tx,cursor:"pointer",fontWeight:800}}><span style={{width:13,height:13,border:"1px solid "+D.blue,borderRadius:2,background:!regionCoatingFilter.length?D.blue:"transparent",color:"#081421",textAlign:"center",fontSize:11,lineHeight:"12px"}}>{!regionCoatingFilter.length?"✓":""}</span>All coatings</div>
                     {regionCoatingOptions.map(coating=>{const checked=regionCoatingFilter.includes(coating);return <label key={coating} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 6px",fontSize:11,color:checked?D.tx:D.dim,cursor:"pointer"}}><input type="checkbox" checked={checked} onChange={()=>setRegionCoatingFilter(prev=>checked?prev.filter(x=>x!==coating):[...prev,coating])} style={{width:13,height:13,accentColor:D.blue,borderRadius:2,margin:0}}/><span>{coating}</span></label>})}
-                    {regionCoatingFilter.length>0&&<div style={{borderTop:"1px solid "+D.border,marginTop:4,padding:"5px 6px 1px",fontSize:8.5,color:D.faint}}>Filters current NOW count</div>}
+                    {regionCoatingFilter.length>0&&<div style={{borderTop:"1px solid "+D.border,marginTop:4,padding:"5px 6px 1px",fontSize:8.5,color:D.faint}}>Current fleet only · historical snapshots lack coating</div>}
                   </div>}
                 </div>
 
@@ -1627,9 +1639,9 @@ function Dashboard({vessels, cargoes, history}) {
                   }}>
                   <span style={{fontSize:11,fontWeight:800,color:REGION_COLORS[region]||D.dim}}>{region}</span>
                   <span style={{fontSize:11,textAlign:"right",color:D.tx,fontWeight:850}}>{now}</span>
-                  <span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d14}</span>
-                  <span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d30}</span>
-                  <span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d90}</span>
+                  <span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d14==null?"—":d14}</span>
+                  <span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d30==null?"—":d30}</span>
+                  <span style={{fontSize:10,textAlign:"right",color:D.dim}}>{d90==null?"—":d90}</span>
                 </div>;
               })}
               <div className="dash-region-table-total" style={{display:"grid",gridTemplateColumns:"minmax(190px,1fr) 64px 64px 64px 64px",gap:8,padding:"7px 2px 0",borderTop:"1px solid "+D.border2,fontSize:10,fontWeight:850}}><span style={{color:D.faint}}>{segmentFilter==="All"?"TOTAL FLEET":"TOTAL · "+segmentFilter}</span><span style={{textAlign:"right",color:D.tx}}>{regionTotals.now}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d14}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d30}</span><span style={{textAlign:"right",color:D.dim}}>{regionTotals.d90}</span></div>
@@ -1726,7 +1738,7 @@ function RegionCompareChart({rows,colors}) {
         <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden",cursor:"default"}}><div style={{height:"100%",width:Math.max(r.now?2:0,r.now/max*100)+"%",background:"#1769d2",borderRadius:99}}/></div>
         <div style={{height:7,background:C.bg4,borderRadius:99,overflow:"hidden",cursor:"default"}}><div style={{height:"100%",width:Math.max(r.d30?2:0,r.d30/max*100)+"%",background:"rgba(190,202,220,.62)",borderRadius:99}}/></div>
       </div>
-      <div style={{fontSize:9,textAlign:"right",lineHeight:1.45}}><div style={{color:C.tx,fontWeight:800}}>{r.now}</div><div style={{color:C.faint}}>{r.d30}</div></div>
+      <div style={{fontSize:9,textAlign:"right",lineHeight:1.45}}><div style={{color:C.tx,fontWeight:800}}>{r.now}</div><div style={{color:C.faint}}>{r.d30==null?"—":r.d30}</div></div>
     </div>)}
   </div>;
 }
