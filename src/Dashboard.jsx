@@ -124,8 +124,7 @@ function WSTracker() {
   const [wsPeriod,setWsPeriod] = useState("3M");
   const [expandedWS,setExpandedWS] = useState(null);
   const [editWSDate,setEditWSDate] = useState(new Date().toISOString().slice(0,10));
-  const [editWSRoute,setEditWSRoute] = useState("TC2");
-  const [editWSValue,setEditWSValue] = useState("");
+  const [wsDraftRows,setWsDraftRows] = useState([]);
   const [wsNote,   setWsNote]  = useState("");
   const [wsNoteImg,setWsNoteImg] = useState(null);
   const [wsNoteSavedAt,setWsNoteSavedAt] = useState(null);
@@ -259,19 +258,31 @@ function WSTracker() {
     setData(clean);
   }
 
-  async function addManualWS(){
-    const val=Number(editWSValue);
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(editWSDate)||!editWSValue.trim()||!Number.isFinite(val)||val<=0){setStatus({t:"error",m:"Enter a valid date and positive WS value"});return;}
+  function addWSRow(){
+    setWsDraftRows(rows=>[{id:Date.now()+Math.random(),date:editWSDate,values:{}},...rows]);
+  }
+  function updateWSRow(id,key,value){
+    setWsDraftRows(rows=>rows.map(row=>row.id===id?(key==="date"?{...row,date:value}:{...row,values:{...row.values,[key]:value}}):row));
+  }
+  async function saveWSRows(){
+    if(!wsDraftRows.length)return;
     const history=[...(data?.history||[])];
-    const idx=history.findIndex(r=>r.date===editWSDate);
-    const existing=idx>=0?history[idx]:{date:editWSDate,spot:{}};
-    const updated={...existing,spot:{...(existing.spot||{}),[editWSRoute]:{...(existing.spot?.[editWSRoute]||{}),ws:val}}};
-    if(idx>=0)history[idx]=updated;else history.push(updated);
+    for(const row of wsDraftRows){
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(row.date)||Number.isNaN(Date.parse(row.date))){setStatus({t:"error",m:"Enter a valid date for every new row"});return;}
+      const entries=Object.entries(row.values).filter(([,v])=>String(v).trim()!=="");
+      if(!entries.length){setStatus({t:"error",m:"Enter at least one WS value in each new row"});return;}
+      for(const [,v] of entries){if(!Number.isFinite(Number(v))||Number(v)<=0){setStatus({t:"error",m:"WS values must be positive numbers"});return;}}
+      const idx=history.findIndex(r=>r.date===row.date);
+      const existing=idx>=0?history[idx]:{date:row.date,spot:{}};
+      const spot={...(existing.spot||{})};
+      entries.forEach(([route,value])=>{spot[route]={...(spot[route]||{}),ws:Number(value)};});
+      if(idx>=0)history[idx]={...existing,spot};else history.push({...existing,spot});
+    }
     history.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
     await saveWS({...data,history});
-    setEditWSValue("");setStatus({t:"success",m:`Saved ${editWSRoute} for ${editWSDate}`});
+    setWsDraftRows([]);
+    setStatus({t:"success",m:"Worldscale history saved"});
   }
-
   async function parseWS() {
     if (!pasteText.trim() && !img) { setStatus({t:"error",m:"Paste text or attach an image"}); return; }
     setParsing(true); setStatus({t:"info",m:img?"Reading image…":"Parsing…"});
@@ -405,7 +416,7 @@ ${text}`}]
             </div>
           </div>
           <div style={{display:"flex",gap:4}}>
-            {[["graph","Graph"],["table","Table"],["parse","Parse"]].map(([v,l])=><button key={v} onClick={()=>setWsView(v)} style={{
+            {[["graph","Graph"],["table","Table"],["parse","Parse"],["notes","Notes"]].map(([v,l])=><button key={v} onClick={()=>setWsView(v)} style={{
               fontSize:9.5,fontWeight:800,padding:"4px 9px",borderRadius:5,cursor:"pointer",fontFamily:"inherit",
               border:"1px solid "+(wsView===v?C.blue:C.bd),
               background:wsView===v?"rgba(88,166,255,.14)":C.bg3,
@@ -440,7 +451,7 @@ ${text}`}]
         )}
 
         {wsView==="table"&&(
-          <div style={{display:"grid",gridTemplateRows:"auto minmax(0,1fr) minmax(0,1fr)",gap:8,height:"100%",minHeight:0}}>
+          <div style={{display:"grid",gridTemplateRows:"auto minmax(0,1fr)",gap:8,height:"100%",minHeight:0}}>
             <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:6}}>
                 <div style={{fontSize:10,color:C.faint,fontWeight:900,textTransform:"uppercase",letterSpacing:".06em"}}>Current spot + FFA</div>
@@ -463,16 +474,31 @@ ${text}`}]
               </table> : <div style={{fontSize:11,color:C.faint,padding:"14px 4px"}}>No parsed market data yet.</div>}
             </div>
 
-            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:9,minHeight:0,overflowY:"auto"}}>
-              <div style={{fontSize:10,fontWeight:800,color:C.dim,marginBottom:7}}>HISTORICAL WS VALUES · ADD / CORRECT ANY DATE</div>
-              <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:7}}>
-                <input type="date" value={editWSDate} onChange={e=>setEditWSDate(e.target.value)} style={{background:C.bg2,color:C.tx,border:"1px solid "+C.bd,borderRadius:4}}/>
-                <select value={editWSRoute} onChange={e=>setEditWSRoute(e.target.value)} style={{background:C.bg2,color:C.tx,border:"1px solid "+C.bd}}>{ROUTES.map(r=><option key={r.id} value={r.id}>{r.id}</option>)}</select>
-                <input type="number" step="0.01" min="0" placeholder="WS value" value={editWSValue} onChange={e=>setEditWSValue(e.target.value)} style={{width:90,background:C.bg2,color:C.tx,border:"1px solid "+C.bd,borderRadius:4}}/>
-                <button onClick={addManualWS} style={{background:C.blue,color:"#081421",border:0,borderRadius:4,padding:"4px 9px",cursor:"pointer",fontWeight:800}}>Save value</button>
+            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:9,minHeight:0,overflowY:"auto",gridRow:"span 2"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,gap:8}}>
+                <div style={{fontSize:10,fontWeight:800,color:C.dim}}>HISTORICAL WS VALUES · EDIT DIRECTLY</div>
+                <div style={{display:"flex",gap:5}}>
+                  <button onClick={addWSRow} style={{background:C.bg2,color:C.blue,border:"1px solid "+C.blue,borderRadius:4,padding:"5px 10px",cursor:"pointer",fontWeight:800}}>+ Add row</button>
+                  <button onClick={saveWSRows} disabled={!wsDraftRows.length} style={{background:wsDraftRows.length?C.blue:C.bd,color:"#081421",border:0,borderRadius:4,padding:"5px 10px",cursor:wsDraftRows.length?"pointer":"default",fontWeight:800}}>Save changes</button>
+                </div>
               </div>
-              <div style={{overflowY:"auto",maxHeight:160}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}><thead><tr><th style={{textAlign:"left"}}>Date</th>{ROUTES.map(r=><th key={r.id}>{r.id}</th>)}</tr></thead><tbody>{[...histRows].sort((a,b)=>parseChartDate(b.date)-parseChartDate(a.date)).map((row,i)=><tr key={i}><td>{row.date}</td>{ROUTES.map(r=><td key={r.id} style={{textAlign:"right",padding:3}}>{row.spot?.[r.id]?.ws??"—"}</td>)}</tr>)}</tbody></table></div>
+              <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
+                <thead><tr><th style={{textAlign:"left",padding:5}}>Date</th>{ROUTES.map(r=><th key={r.id} style={{padding:5}}>{r.id}</th>)}<th style={{width:24}}/></tr></thead>
+                <tbody>
+                  {wsDraftRows.map(row=><tr key={row.id} style={{background:"rgba(88,166,255,.07)"}}>
+                    <td style={{padding:3}}><input type="date" value={row.date} onChange={e=>updateWSRow(row.id,"date",e.target.value)} style={{width:122,background:C.bg2,color:C.tx,border:"1px solid "+C.bd,borderRadius:3,fontSize:10}}/></td>
+                    {ROUTES.map(r=><td key={r.id} style={{padding:3}}><input type="number" step="0.01" min="0" placeholder="—" value={row.values[r.id]??""} onChange={e=>updateWSRow(row.id,r.id,e.target.value)} style={{width:"100%",minWidth:55,maxWidth:100,boxSizing:"border-box",textAlign:"right",background:C.bg2,color:C.tx,border:"1px solid "+C.bd,borderRadius:3,fontSize:10}}/></td>)}
+                    <td><button onClick={()=>setWsDraftRows(rows=>rows.filter(x=>x.id!==row.id))} style={{background:"none",border:0,color:C.red,cursor:"pointer"}}>×</button></td>
+                  </tr>)}
+                  {[...histRows].sort((a,b)=>parseChartDate(b.date)-parseChartDate(a.date)).map((row,i)=><tr key={i}><td style={{padding:"5px 3px"}}>{row.date}</td>{ROUTES.map(r=><td key={r.id} style={{textAlign:"right",padding:5}}>{row.spot?.[r.id]?.ws??"—"}</td>)}<td/></tr>)}
+                </tbody>
+              </table></div>
             </div>
+          </div>
+        )}
+
+        {wsView==="notes"&&(
+          <div style={{height:"100%",minHeight:0,display:"flex",flexDirection:"column"}}>
             <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"9px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
               <div style={{fontSize:10,color:C.dim,marginBottom:5,display:"flex",justifyContent:"space-between",alignItems:"center",fontWeight:800,textTransform:"uppercase",letterSpacing:".05em",gap:8}}>
                 <span>Daily market notes / gossip</span>
@@ -492,6 +518,7 @@ ${text}`}]
                 <span style={{fontSize:9,color:C.faint}}>pasted thumbnail stored with note</span>
               </div>}
             </div>
+
           </div>
         )}
 
@@ -1561,8 +1588,8 @@ function Dashboard({vessels, cargoes, history}) {
                   <button onClick={()=>setRegionCoatingOpen(v=>!v)} style={{background:regionCoatingFilter.length?"rgba(88,166,255,.16)":D.bg3,border:"1px solid "+(regionCoatingFilter.length?D.blue:D.border2),borderRadius:5,color:regionCoatingFilter.length?D.tx:D.dim,fontFamily:"inherit",fontSize:9.5,fontWeight:800,padding:"4px 8px",cursor:"pointer",whiteSpace:"nowrap"}}>
                     COATING{regionCoatingFilter.length?` · ${regionCoatingFilter.length}`:""} ▾
                   </button>
-                  {regionCoatingOpen&&<div onClick={()=>setRegionCoatingOpen(false)} style={{position:"fixed",inset:0,zIndex:29}}/>}
-                  {regionCoatingOpen&&<div style={{position:"absolute",right:0,top:"calc(100% + 5px)",zIndex:30,minWidth:170,maxHeight:230,overflowY:"auto",background:"#0b1628",border:"1px solid "+D.border2,borderRadius:6,boxShadow:"0 10px 28px rgba(0,0,0,.45)",padding:6}}>
+                  {regionCoatingOpen&&<div onMouseDown={()=>setRegionCoatingOpen(false)} style={{position:"fixed",inset:0,zIndex:1000,background:"transparent"}}/>}
+                  {regionCoatingOpen&&<div style={{position:"absolute",right:0,top:"calc(100% + 5px)",zIndex:1001,minWidth:170,maxHeight:230,overflowY:"auto",background:"#0b1628",border:"1px solid "+D.border2,borderRadius:6,boxShadow:"0 10px 28px rgba(0,0,0,.45)",padding:6}}>
                     <div onClick={()=>setRegionCoatingFilter([])} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 6px",fontSize:11,color:!regionCoatingFilter.length?D.blue:D.tx,cursor:"pointer",fontWeight:800}}><span style={{width:13,height:13,border:"1px solid "+D.blue,borderRadius:2,background:!regionCoatingFilter.length?D.blue:"transparent",color:"#081421",textAlign:"center",fontSize:11,lineHeight:"12px"}}>{!regionCoatingFilter.length?"✓":""}</span>All coatings</div>
                     {regionCoatingOptions.map(coating=>{const checked=regionCoatingFilter.includes(coating);return <label key={coating} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 6px",fontSize:11,color:checked?D.tx:D.dim,cursor:"pointer"}}><input type="checkbox" checked={checked} onChange={()=>setRegionCoatingFilter(prev=>checked?prev.filter(x=>x!==coating):[...prev,coating])} style={{width:13,height:13,accentColor:D.blue,borderRadius:2,margin:0}}/><span>{coating}</span></label>})}
                     {regionCoatingFilter.length>0&&<div style={{borderTop:"1px solid "+D.border,marginTop:4,padding:"5px 6px 1px",fontSize:8.5,color:D.faint}}>Filters current NOW count</div>}
