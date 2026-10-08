@@ -122,6 +122,10 @@ function WSTracker() {
   const [status,   setStatus]  = useState(null);
   const [wsView,setWsView] = useState("graph");
   const [wsPeriod,setWsPeriod] = useState("3M");
+  const [expandedWS,setExpandedWS] = useState(null);
+  const [editWSDate,setEditWSDate] = useState(new Date().toISOString().slice(0,10));
+  const [editWSRoute,setEditWSRoute] = useState("TC2");
+  const [editWSValue,setEditWSValue] = useState("");
   const [wsNote,   setWsNote]  = useState("");
   const [wsNoteImg,setWsNoteImg] = useState(null);
   const [wsNoteSavedAt,setWsNoteSavedAt] = useState(null);
@@ -255,6 +259,19 @@ function WSTracker() {
     setData(clean);
   }
 
+  async function addManualWS(){
+    const val=Number(editWSValue);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(editWSDate)||!editWSValue.trim()||!Number.isFinite(val)||val<=0){setStatus({t:"error",m:"Enter a valid date and positive WS value"});return;}
+    const history=[...(data?.history||[])];
+    const idx=history.findIndex(r=>r.date===editWSDate);
+    const existing=idx>=0?history[idx]:{date:editWSDate,spot:{}};
+    const updated={...existing,spot:{...(existing.spot||{}),[editWSRoute]:{...(existing.spot?.[editWSRoute]||{}),ws:val}}};
+    if(idx>=0)history[idx]=updated;else history.push(updated);
+    history.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    await saveWS({...data,history});
+    setEditWSValue("");setStatus({t:"success",m:`Saved ${editWSRoute} for ${editWSDate}`});
+  }
+
   async function parseWS() {
     if (!pasteText.trim() && !img) { setStatus({t:"error",m:"Paste text or attach an image"}); return; }
     setParsing(true); setStatus({t:"info",m:img?"Reading image…":"Parsing…"});
@@ -311,7 +328,7 @@ ${text}`}]
       }
       const snap = {date:today, spot: stampedSpot};
       const prevHistory = (Array.isArray(existing.history)?existing.history:[]).filter(h=>h.date!==today);
-      const newHistory = [...prevHistory, snap].slice(-90);
+      const newHistory = [...prevHistory, snap];
 
        const next = {
         spot: (()=>{
@@ -370,7 +387,7 @@ ${text}`}]
   const histRows = Array.isArray(data?.history) ? data.history : [];
   const histData = [...histRows]
     .sort((a,b)=>parseChartDate(a.date)-parseChartDate(b.date))
-    .slice(-30);
+    ;
   const routeColors = {TC2:C.blue,TC6:C.green,TC14:C.amber,TC23:C.purple,TC178:"#ff9f43"};
 
   const secHead = t=>(<div style={{fontSize:12.5,fontWeight:900,color:"rgba(130,180,245,.82)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:9,display:"flex",alignItems:"center",gap:7}}><span style={{display:"inline-block",width:2,height:14,background:C.blue,borderRadius:2}}/>{t}</div>);
@@ -401,17 +418,17 @@ ${text}`}]
       <div style={{flex:1,minHeight:0}}>
         {wsView==="graph"&&(
           <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
-          <div style={{display:"grid",gridTemplateRows:"1fr 1fr",gap:8,flex:1,minHeight:0}}>
-            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"7px 1px 5px",minHeight:0,display:"flex",flexDirection:"column"}}>
-              <div style={{fontSize:11.5,fontWeight:900,color:C.green,textTransform:"uppercase",marginBottom:3,textAlign:"center",letterSpacing:".06em"}}>Handy</div>
+          <div style={{display:"grid",gridTemplateRows:expandedWS?"minmax(0,1fr)":"minmax(0,1fr) minmax(0,1fr)",gap:8,flex:1,minHeight:0}}>
+            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"7px 1px 5px",minHeight:0,display:expandedWS==="MR"?"none":"flex",flexDirection:"column"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"center",position:"relative",marginBottom:3}}><span style={{fontSize:11.5,fontWeight:900,color:C.green,textTransform:"uppercase",letterSpacing:".06em"}}>Handy</span><button onClick={()=>setExpandedWS(v=>v==="Handy"?null:"Handy")} style={{position:"absolute",right:7,background:"transparent",border:"1px solid "+C.bd,color:C.dim,borderRadius:3,cursor:"pointer",fontSize:10}}>{expandedWS==="Handy"?"↙ Collapse":"⤢ Expand"}</button></div>
               <div style={{flex:1,minHeight:0}}>
                 {histData.length>=2
                   ? <WSChart data={histData} routes={ROUTES.filter(r=>["TC6","TC23"].includes(r.id))} colors={routeColors} fill/>
                   : <div style={{fontSize:11,color:C.faint,padding:12}}>Paste updates to build history.</div>}
               </div>
             </div>
-            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"7px 1px 5px",minHeight:0,display:"flex",flexDirection:"column"}}>
-              <div style={{fontSize:11.5,fontWeight:900,color:C.blue,textTransform:"uppercase",marginBottom:3,textAlign:"center",letterSpacing:".06em"}}>MR</div>
+            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"7px 1px 5px",minHeight:0,display:expandedWS==="Handy"?"none":"flex",flexDirection:"column"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"center",position:"relative",marginBottom:3}}><span style={{fontSize:11.5,fontWeight:900,color:C.blue,textTransform:"uppercase",letterSpacing:".06em"}}>MR</span><button onClick={()=>setExpandedWS(v=>v==="MR"?null:"MR")} style={{position:"absolute",right:7,background:"transparent",border:"1px solid "+C.bd,color:C.dim,borderRadius:3,cursor:"pointer",fontSize:10}}>{expandedWS==="MR"?"↙ Collapse":"⤢ Expand"}</button></div>
               <div style={{flex:1,minHeight:0}}>
                 {histData.length>=2
                   ? <WSChart data={histData} routes={ROUTES.filter(r=>["TC2","TC14"].includes(r.id))} colors={routeColors} fill/>
@@ -423,7 +440,7 @@ ${text}`}]
         )}
 
         {wsView==="table"&&(
-          <div style={{display:"grid",gridTemplateRows:"auto minmax(0,1fr)",gap:8,height:"100%",minHeight:0}}>
+          <div style={{display:"grid",gridTemplateRows:"auto minmax(0,1fr) minmax(0,1fr)",gap:8,height:"100%",minHeight:0}}>
             <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"8px 10px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:6}}>
                 <div style={{fontSize:10,color:C.faint,fontWeight:900,textTransform:"uppercase",letterSpacing:".06em"}}>Current spot + FFA</div>
@@ -446,6 +463,16 @@ ${text}`}]
               </table> : <div style={{fontSize:11,color:C.faint,padding:"14px 4px"}}>No parsed market data yet.</div>}
             </div>
 
+            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:9,minHeight:0,overflowY:"auto"}}>
+              <div style={{fontSize:10,fontWeight:800,color:C.dim,marginBottom:7}}>HISTORICAL WS VALUES · ADD / CORRECT ANY DATE</div>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:7}}>
+                <input type="date" value={editWSDate} onChange={e=>setEditWSDate(e.target.value)} style={{background:C.bg2,color:C.tx,border:"1px solid "+C.bd,borderRadius:4}}/>
+                <select value={editWSRoute} onChange={e=>setEditWSRoute(e.target.value)} style={{background:C.bg2,color:C.tx,border:"1px solid "+C.bd}}>{ROUTES.map(r=><option key={r.id} value={r.id}>{r.id}</option>)}</select>
+                <input type="number" step="0.01" min="0" placeholder="WS value" value={editWSValue} onChange={e=>setEditWSValue(e.target.value)} style={{width:90,background:C.bg2,color:C.tx,border:"1px solid "+C.bd,borderRadius:4}}/>
+                <button onClick={addManualWS} style={{background:C.blue,color:"#081421",border:0,borderRadius:4,padding:"4px 9px",cursor:"pointer",fontWeight:800}}>Save value</button>
+              </div>
+              <div style={{overflowY:"auto",maxHeight:160}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}><thead><tr><th style={{textAlign:"left"}}>Date</th>{ROUTES.map(r=><th key={r.id}>{r.id}</th>)}</tr></thead><tbody>{[...histRows].sort((a,b)=>parseChartDate(b.date)-parseChartDate(a.date)).map((row,i)=><tr key={i}><td>{row.date}</td>{ROUTES.map(r=><td key={r.id} style={{textAlign:"right",padding:3}}>{row.spot?.[r.id]?.ws??"—"}</td>)}</tr>)}</tbody></table></div>
+            </div>
             <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"9px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
               <div style={{fontSize:10,color:C.dim,marginBottom:5,display:"flex",justifyContent:"space-between",alignItems:"center",fontWeight:800,textTransform:"uppercase",letterSpacing:".05em",gap:8}}>
                 <span>Daily market notes / gossip</span>
@@ -503,7 +530,7 @@ function WSChart({data,routes,colors,fill=false}) {
   const hi=hover!=null?hover:null;
   return <div style={{height:fill?"100%":"auto",display:"flex",flexDirection:"column",minHeight:0,position:"relative"}}>
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio={compact?"none":"xMidYMid meet"} onPointerMove={onMove} onPointerDown={e=>{e.currentTarget.setPointerCapture?.(e.pointerId);onMove(e)}} onPointerLeave={()=>setHover(null)} style={{width:"100%",height:fill?"100%":260,minHeight:0,display:"block",flex:fill?1:"0 0 auto",cursor:"crosshair",touchAction:"pan-y"}}>
-      <text x={compact?8:6} y={PT+iH/2} fill="rgba(88,166,255,.72)" fontSize="15" fontWeight="900" letterSpacing=".08em" textAnchor="middle" transform={`rotate(-90 ${compact?8:6} ${PT+iH/2})`}>WS</text>
+      <text x={compact?11:9} y={PT+iH/2} fill="rgba(88,166,255,.72)" fontSize="15" fontWeight="900" letterSpacing=".08em" textAnchor="middle" transform={`rotate(-90 ${compact?11:9} ${PT+iH/2})`}>WS</text>
       {[0,.5,1].map(t=>{const y=PT+t*iH,v=Math.round(mx-t*range);return <g key={t}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-4} y={y+5} fill="#fff" fontSize={compact?10:19} fontWeight="850" textAnchor="end">{v}</text></g>})}
       {routes.map(r=>{const pts=series[r.id].map((v,i)=>v!=null?[xs[i],PT+iH-(v-mn)/range*iH]:null);const valid=pts.filter(Boolean);if(valid.length<2)return null;const last=valid.at(-1);return <g key={r.id}><path d={`M ${valid.map(p=>p.join(" ")).join(" L ")}`} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>{last&&<text x={Math.min(W-PR+8,last[0]+7)} y={last[1]+4} fill={colors[r.id]||C.dim} fontSize={compact?8:14} fontWeight="850">{r.id}</text>}{hi!=null&&pts[hi]&&<circle cx={pts[hi][0]} cy={pts[hi][1]} r="4.5" fill={colors[r.id]||C.dim} stroke="none"/>}</g>})}
       {hi!=null&&<line x1={xs[hi]} x2={xs[hi]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
@@ -1534,15 +1561,14 @@ function Dashboard({vessels, cargoes, history}) {
                   <button onClick={()=>setRegionCoatingOpen(v=>!v)} style={{background:regionCoatingFilter.length?"rgba(88,166,255,.16)":D.bg3,border:"1px solid "+(regionCoatingFilter.length?D.blue:D.border2),borderRadius:5,color:regionCoatingFilter.length?D.tx:D.dim,fontFamily:"inherit",fontSize:9.5,fontWeight:800,padding:"4px 8px",cursor:"pointer",whiteSpace:"nowrap"}}>
                     COATING{regionCoatingFilter.length?` · ${regionCoatingFilter.length}`:""} ▾
                   </button>
+                  {regionCoatingOpen&&<div onClick={()=>setRegionCoatingOpen(false)} style={{position:"fixed",inset:0,zIndex:29}}/>}
                   {regionCoatingOpen&&<div style={{position:"absolute",right:0,top:"calc(100% + 5px)",zIndex:30,minWidth:170,maxHeight:230,overflowY:"auto",background:"#0b1628",border:"1px solid "+D.border2,borderRadius:6,boxShadow:"0 10px 28px rgba(0,0,0,.45)",padding:6}}>
-                    <div onClick={()=>setRegionCoatingFilter([])} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 6px",fontSize:9.5,color:!regionCoatingFilter.length?D.blue:D.tx,cursor:"pointer",fontWeight:800}}><input type="checkbox" readOnly checked={!regionCoatingFilter.length}/>All coatings</div>
-                    {regionCoatingOptions.map(coating=>{const checked=regionCoatingFilter.includes(coating);return <label key={coating} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 6px",fontSize:9.5,color:checked?D.tx:D.dim,cursor:"pointer"}}><input type="checkbox" checked={checked} onChange={()=>setRegionCoatingFilter(prev=>checked?prev.filter(x=>x!==coating):[...prev,coating])}/><span>{coating}</span></label>})}
+                    <div onClick={()=>setRegionCoatingFilter([])} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 6px",fontSize:11,color:!regionCoatingFilter.length?D.blue:D.tx,cursor:"pointer",fontWeight:800}}><span style={{width:13,height:13,border:"1px solid "+D.blue,borderRadius:2,background:!regionCoatingFilter.length?D.blue:"transparent",color:"#081421",textAlign:"center",fontSize:11,lineHeight:"12px"}}>{!regionCoatingFilter.length?"✓":""}</span>All coatings</div>
+                    {regionCoatingOptions.map(coating=>{const checked=regionCoatingFilter.includes(coating);return <label key={coating} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 6px",fontSize:11,color:checked?D.tx:D.dim,cursor:"pointer"}}><input type="checkbox" checked={checked} onChange={()=>setRegionCoatingFilter(prev=>checked?prev.filter(x=>x!==coating):[...prev,coating])} style={{width:13,height:13,accentColor:D.blue,borderRadius:2,margin:0}}/><span>{coating}</span></label>})}
                     {regionCoatingFilter.length>0&&<div style={{borderTop:"1px solid "+D.border,marginTop:4,padding:"5px 6px 1px",fontSize:8.5,color:D.faint}}>Filters current NOW count</div>}
                   </div>}
                 </div>
-                <span style={{fontSize:9,color:fixingRegionFilter!=="All"?D.blue:D.faint}}>
-                  {fixingRegionFilter!=="All" ? `Fixing filter: ${fixingRegionFilter} · click again to clear` : "click a region to filter fixing window"}
-                </span>
+
               </div>
             </div>
             {regionHistoryLoading?<div style={{fontSize:11,color:D.faint,padding:"12px 0"}}>Loading historical fleet…</div>:regionHistoryError?<div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Run updated Supabase RPC SQL: {regionHistoryError}</div>:<>
