@@ -874,8 +874,10 @@ function Dashboard({vessels, cargoes, history}) {
         const day=new Date().toISOString().slice(0,10);
         const snap={date:day,items:itemsObj};
         setCommodityHistory(prev=>{
-          const rows=(Array.isArray(prev)?prev:[]).filter(x=>x.date!==day);
-          return [...rows,snap].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+          const byDate=new Map((Array.isArray(prev)?prev:[]).filter(x=>x?.date).map(x=>[x.date,x]));
+          const existing=byDate.get(day);
+          byDate.set(day,{...existing,...snap,items:{...(existing?.items||{}),...snap.items}});
+          return [...byDate.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
         });
         try{
           await supabase.from("dashboard").upsert({key:"commodity-hist-"+day,value:JSON.stringify(snap)},{onConflict:"key"});
@@ -906,14 +908,28 @@ function Dashboard({vessels, cargoes, history}) {
     let alive=true;
     (async()=>{
       try{
-        const {data,error}=await supabase.from("dashboard").select("key,value").ilike("key","commodity-hist-%");
-        if(error)throw error;
-        const rows=(data||[]).map(r=>{
+        // Read the complete snapshot range in batches (Supabase defaults to 1,000 rows).
+        const saved=[];
+        for(let offset=0;;offset+=500){
+          const {data,error}=await supabase.from("dashboard")
+            .select("key,value").like("key","commodity-hist-%")
+            .order("key",{ascending:true}).range(offset,offset+499);
+          if(error)throw error;
+          saved.push(...(data||[]));
+          if(!data||data.length<500)break;
+        }
+        const rows=saved.map(r=>{
           try{return typeof r.value==="string"?JSON.parse(r.value):r.value;}catch{return null;}
-        }).filter(Boolean).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+        }).filter(x=>x?.date&&x?.items).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
         if(alive)setCommodityHistory(prev=>{
           const byDate=new Map();
-          for(const x of [...rows,...(Array.isArray(prev)?prev:[])]) if(x?.date) byDate.set(x.date,x);
+          // Merge individual commodity prices, not whole day objects: API history
+          // can contain only some instruments and must not erase stored observations.
+          for(const x of [...rows,...(Array.isArray(prev)?prev:[])]){
+            if(!x?.date)continue;
+            const existing=byDate.get(x.date);
+            byDate.set(x.date,{...existing,...x,items:{...(existing?.items||{}),...(x.items||{})}});
+          }
           return [...byDate.values()].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
         });
       }catch(e){console.warn("commodity history load:",e);}
