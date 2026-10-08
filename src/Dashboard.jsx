@@ -1194,7 +1194,7 @@ function Dashboard({vessels, cargoes, history}) {
 
   const fixingSegmentChartData=(()=>{
     const byDate={};
-    const rows=(regionCoatingFilter.length?[]:(Array.isArray(fixingSegmentHistory)?fixingSegmentHistory:[]))
+    const rows=(Array.isArray(fixingSegmentHistory)?fixingSegmentHistory:[])
       .filter(r=>fixingRegionFilter==="All" || r.region===fixingRegionFilter);
     for(const r of rows){
       const d=r.snapshot_date; if(!d)continue;
@@ -1605,7 +1605,7 @@ function Dashboard({vessels, cargoes, history}) {
               <select value={fixingSegments.length===1?fixingSegments[0]:"All"} onChange={e=>toggleFixingSegment(e.target.value)}>{SEGMENT_ORDER.map(seg=><option key={seg} value={seg}>{seg}</option>)}</select>
               <select value={fixingPeriod} onChange={e=>setFixingPeriod(e.target.value)}>{["7D","14D","1M","3M","ALL"].map(p=><option key={p} value={p}>{p}</option>)}</select>
             </div>
-            {regionCoatingFilter.length ? <div style={{fontSize:11,color:D.dim,padding:"12px 0"}}>Historical fixing-window snapshots do not contain coating. Filtered live fleet: {openVessels.filter(v=>coatingMatches(v)&&(fixingRegionFilter==="All"||vesselMainRegion(v)===fixingRegionFilter)&&(fixingSegments.length===0||fixingSegments.includes(String(v.segment||v.sizeSegment||"")))).length} vessels. Coating-specific historical graph requires coating in Supabase snapshots.</div> : fixingSegmentError
+            {fixingSegmentError
               ? <div style={{fontSize:10,color:D.red,padding:"8px 0"}}>Fixing-window history unavailable: {fixingSegmentError}</div>
               : fixingSegmentDisplayData.length<2
                 ? <div style={{color:D.faint,fontSize:12,padding:"24px 0",textAlign:"center"}}>Not enough observations in this period.</div>
