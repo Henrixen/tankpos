@@ -160,11 +160,11 @@ function WSTracker() {
     });
   }
 
-  async function setNoteImageFile(file){
+  async function setNoteImageFile(file, section="handy"){
     if(!file)return;
     try{
       const dataUrl=await compressNoteImage(file);
-      setWsNoteImg(dataUrl);
+      if(section==="mr")setWsMrNoteImg(dataUrl);else setWsNoteImg(dataUrl);
     }catch(e){
       console.error("WS note image:",e);
       setWsNoteSaveState("error");
@@ -188,7 +188,7 @@ function WSTracker() {
               setWsNote(parsed.handy?.text??parsed.text??"");
               setWsMrNote(parsed.mr?.text||"");
               setWsMrNoteImg(parsed.mr?.imageDataUrl||null);
-              setWsNoteImg(parsed.imageDataUrl||null);
+              setWsNoteImg(parsed.handy?.imageDataUrl||parsed.imageDataUrl||null);
               setWsNoteSavedAt(parsed.updatedAt||null);
             }else{
               setWsNote(String(raw||""));
@@ -516,30 +516,24 @@ ${text}`}]
         )}
 
         {wsView==="notes"&&(
-          <div style={{height:"100%",minHeight:0,display:"flex",flexDirection:"column"}}>
-            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"9px 10px",minHeight:0,display:"flex",flexDirection:"column"}}>
-              <div style={{fontSize:10,color:C.dim,marginBottom:5,display:"flex",justifyContent:"space-between",alignItems:"center",fontWeight:800,textTransform:"uppercase",letterSpacing:".05em",gap:8}}>
-                <span>Daily market notes / gossip · Handy</span>
-                <span style={{fontSize:9,textTransform:"none",letterSpacing:0,fontWeight:500,color:wsNoteSaveState==="error"?C.red:wsNoteSaveState==="saving"?C.amber:C.faint,whiteSpace:"nowrap"}}>
-                  {wsNoteSaveState==="saving"?"Saving…":wsNoteSaveState==="error"?"Save failed":wsNoteSavedAt?"Saved "+new Date(wsNoteSavedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"Saved in Supabase"}
-                </span>
-              </div>
-              <textarea value={wsNote} onChange={e=>setWsNote(e.target.value)}
-                onPaste={e=>{const imageItem=Array.from(e.clipboardData?.items||[]).find(it=>it.type?.startsWith("image/"));if(imageItem){e.preventDefault();setNoteImageFile(imageItem.getAsFile());}}}
-                placeholder="Latest gossip, broker colour, market direction, cargo rumours, owner sentiment… paste a screenshot directly if useful."
-                style={{width:"100%",flex:1,minHeight:92,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"7px 8px",resize:"none",boxSizing:"border-box",outline:"none"}}/>
-              {wsNoteImg&&<div style={{display:"flex",alignItems:"center",gap:7,marginTop:6}}>
-                <div style={{position:"relative",height:40,width:68,borderRadius:4,overflow:"hidden",border:"1px solid "+C.bd,background:C.bg2}}>
-                  <img src={wsNoteImg} alt="Market note" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                  <button onClick={()=>setWsNoteImg(null)} title="Remove image" style={{position:"absolute",top:1,right:1,width:15,height:15,borderRadius:"50%",border:"none",background:"rgba(0,0,0,.72)",color:"#fff",fontSize:9,lineHeight:"15px",padding:0,cursor:"pointer"}}>×</button>
+          <div style={{height:"100%",minHeight:0,display:"grid",gridTemplateRows:"minmax(0,1fr) minmax(0,1fr)",gap:10}}>
+            {[{id:"handy",title:"HANDY",accent:"#22c55e",value:wsNote,setValue:setWsNote,image:wsNoteImg,setImage:setWsNoteImg},{id:"mr",title:"MR",accent:"#58a6ff",value:wsMrNote,setValue:setWsMrNote,image:wsMrNoteImg,setImage:setWsMrNoteImg}].map(note=>(
+              <div key={note.id} style={{background:C.bg3,border:"1px solid "+C.bd,borderLeft:"3px solid "+note.accent,borderRadius:6,padding:"9px 11px",minHeight:0,display:"flex",flexDirection:"column",gap:7}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+                  <span style={{fontSize:12,fontWeight:900,letterSpacing:".08em",color:note.accent}}>{note.title} <span style={{fontSize:9,fontWeight:600,color:C.dim}}>· MARKET NOTES / GOSSIP</span></span>
+                  <span style={{fontSize:9,color:wsNoteSaveState==="error"?C.red:wsNoteSaveState==="saving"?C.amber:C.faint}}>{wsNoteSaveState==="saving"?"Saving…":wsNoteSaveState==="error"?"Save failed":wsNoteSavedAt?"Saved "+new Date(wsNoteSavedAt).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"Saved in Supabase"}</span>
                 </div>
-                <span style={{fontSize:9,color:C.faint}}>pasted thumbnail stored with note</span>
-              </div>}
-            </div>
-            <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,padding:"9px 10px",marginTop:8,minHeight:0,display:"flex",flexDirection:"column"}}>
-              <div style={{fontSize:10,color:C.dim,marginBottom:5,fontWeight:800,textTransform:"uppercase",letterSpacing:".05em"}}>Daily market notes / gossip · MR</div>
-              <textarea value={wsMrNote} onChange={e=>setWsMrNote(e.target.value)} placeholder="MR market colour, fixing activity, owner sentiment…" style={{width:"100%",minHeight:92,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:10.5,padding:"7px 8px",resize:"vertical",boxSizing:"border-box",outline:"none"}}/>
-            </div>
+                <textarea value={note.value} onChange={e=>note.setValue(e.target.value)}
+                  onPaste={e=>{const item=Array.from(e.clipboardData?.items||[]).find(it=>it.type?.startsWith("image/"));if(item){e.preventDefault();setNoteImageFile(item.getAsFile(),note.id);}}}
+                  placeholder={note.id==="handy"?"Handy market direction, cargo rumours, broker colour, owner sentiment…":"MR market direction, fixing activity, broker colour, owner sentiment…"}
+                  style={{width:"100%",flex:1,minHeight:0,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:11,padding:"9px 10px",resize:"none",boxSizing:"border-box",outline:"none"}}/>
+                <div style={{display:"flex",alignItems:"center",gap:8,minHeight:24,flexShrink:0}}>
+                  <label style={{cursor:"pointer",fontSize:9.5,color:C.blue,border:"1px solid "+C.bd,borderRadius:4,padding:"4px 7px"}}>+ Add image<input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{setNoteImageFile(e.target.files?.[0],note.id);e.target.value="";}}/></label>
+                  <span style={{fontSize:9,color:C.faint}}>Paste screenshot (Ctrl+V) or upload · compressed thumbnail saved in Supabase</span>
+                  {note.image&&<div style={{position:"relative",width:58,height:35,flexShrink:0,marginLeft:"auto"}}><a href={note.image} target="_blank" rel="noreferrer" title="Open image"><img src={note.image} alt={note.title+" note"} style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:3,border:"1px solid "+C.bd}}/></a><button onClick={()=>note.setImage(null)} title="Remove image" style={{position:"absolute",right:-5,top:-5,border:0,borderRadius:10,background:"#17283d",color:"white",cursor:"pointer",fontSize:11}}>×</button></div>}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -567,7 +561,7 @@ ${text}`}]
 function WSChart({data,routes,colors,fill=false}) {
   const [hover,setHover]=useState(null);
   const compact=typeof window!=="undefined"&&window.innerWidth<=700;
-  const W=compact?360:1200,H=compact?154:450,PL=compact?42:46,PR=compact?24:24,PT=compact?8:16,PB=compact?24:32,iW=W-PL-PR,iH=H-PT-PB;
+  const W=compact?360:1200,H=compact?154:450,PL=compact?55:72,PR=compact?24:24,PT=compact?8:16,PB=compact?24:32,iW=W-PL-PR,iH=H-PT-PB;
   const series={};
   routes.forEach(r=>series[r.id]=cleanIsolatedValues(data.map(d=>d.spot?.[r.id]?.ws)));
   const allVals=routes.flatMap(r=>series[r.id]).filter(v=>v!=null);
@@ -578,12 +572,18 @@ function WSChart({data,routes,colors,fill=false}) {
   const hi=hover!=null?hover:null;
   return <div style={{height:fill?"100%":"auto",display:"flex",flexDirection:"column",minHeight:0,position:"relative"}}>
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" onPointerMove={onMove} onPointerDown={e=>{e.currentTarget.setPointerCapture?.(e.pointerId);onMove(e)}} onPointerLeave={()=>setHover(null)} style={{width:"100%",height:fill?"100%":260,minHeight:0,display:"block",flex:fill?1:"0 0 auto",cursor:"crosshair",touchAction:"pan-y"}}>
-      <text x={compact?11:9} y={PT+iH/2} fill="rgba(88,166,255,.72)" fontSize="15" fontWeight="900" letterSpacing=".08em" textAnchor="middle" transform={`rotate(-90 ${compact?11:9} ${PT+iH/2})`}>WS</text>
-      {[0,.5,1].map(t=>{const y=PT+t*iH,v=Math.round(mx-t*range);return <g key={t}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/><text x={PL-4} y={y+5} fill="#fff" fontSize={compact?10:19} fontWeight="850" textAnchor="end">{v}</text></g>})}
+      {[0,.5,1].map(t=>{const y=PT+t*iH,v=Math.round(mx-t*range);return <g key={t}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/></g>})}
       {routes.map(r=>{const pts=series[r.id].map((v,i)=>v!=null?[xs[i],PT+iH-(v-mn)/range*iH]:null);const valid=pts.filter(Boolean);if(valid.length<2)return null;const last=valid.at(-1);return <g key={r.id}><path d={`M ${valid.map(p=>p.join(" ")).join(" L ")}`} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>{last&&<text x={Math.min(W-PR+8,last[0]+7)} y={last[1]+4} fill={colors[r.id]||C.dim} fontSize={compact?8:14} fontWeight="850">{r.id}</text>}{hi!=null&&pts[hi]&&<circle cx={pts[hi][0]} cy={pts[hi][1]} r="4.5" fill={colors[r.id]||C.dim} stroke="none"/>}</g>})}
       {hi!=null&&<line x1={xs[hi]} x2={xs[hi]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
-      {Array.from(new Set([0,1,2,3,4].map(k=>Math.round(k*(data.length-1)/4)))).map((i,ti,arr)=>{const isFirst=ti===0,isLast=ti===arr.length-1;return <text key={i} x={xs[i]} y={H-PB+20} fill="#fff" fontSize={compact?8:14} fontWeight="800" textAnchor={isFirst?"start":isLast?"end":"middle"}>{(data[i].date||"").split(" ").slice(0,2).join(" ")}</text>})}
     </svg>
+    {/* Axis labels are HTML overlays: unlike SVG text, they never stretch when the chart fills its panel. */}
+    <div style={{position:"absolute",left:compact?3:8,top:0,height:fill?"calc(100% - 25px)":235,width:compact?50:61,pointerEvents:"none",fontSize:compact?10:11,fontWeight:750,color:"#d9e9ff"}}>
+      <span style={{position:"absolute",left:0,top:"50%",transform:"translateY(-50%) rotate(-90deg)",transformOrigin:"center",fontSize:11,fontWeight:850,color:"#58a6ff"}}>WS</span>
+      {[0,.5,1].map(t=><span key={t} style={{position:"absolute",right:0,top:`${(PT+t*iH)/H*100}%`,transform:"translateY(-50%)",fontVariantNumeric:"tabular-nums"}}>{Math.round(mx-t*range)}</span>)}
+    </div>
+    <div style={{position:"absolute",left:0,right:0,bottom:fill?25:25,height:17,pointerEvents:"none",fontSize:compact?9:10,fontWeight:750,color:"#d9e9ff"}}>
+      {Array.from(new Set([0,1,2,3,4].map(k=>Math.round(k*(data.length-1)/4)))).map((i,ti,arr)=><span key={i} style={{position:"absolute",left:`${xs[i]/W*100}%`,transform:ti===0?"none":ti===arr.length-1?"translateX(-100%)":"translateX(-50%)",whiteSpace:"nowrap"}}>{(data[i].date||"").split(" ").slice(0,2).join(" ")}</span>)}
+    </div>
     {hi!=null&&<div style={{position:"absolute",top:10,left:`${Math.min(78,Math.max(8,xs[hi]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.94)",border:"1px solid rgba(88,166,255,.35)",borderRadius:6,padding:"6px 8px",pointerEvents:"none",zIndex:4,boxShadow:"0 6px 18px rgba(0,0,0,.28)"}}><div style={{fontSize:9,color:"rgba(205,225,250,.82)",marginBottom:3}}>{data[hi]?.date}</div>{routes.map(r=>series[r.id][hi]!=null?<div key={r.id} style={{fontSize:10,fontWeight:800,color:colors[r.id]||C.tx}}>{r.id}: {series[r.id][hi].toFixed(1)}</div>:null)}</div>}
     <div className="dash-ws-legend" style={{display:"flex",gap:14,flexWrap:"wrap",justifyContent:"center",marginTop:3}}>{routes.map(r=><span key={r.id} style={{fontSize:13,color:colors[r.id]||C.dim,fontWeight:750}}>● {r.name}</span>)}</div>
   </div>;
@@ -1628,10 +1628,9 @@ function Dashboard({vessels, cargoes, history}) {
                     COATING{regionCoatingFilter.length?` · ${regionCoatingFilter.length}`:""} ▾
                   </button>
                   {regionCoatingOpen&&<div onMouseDown={()=>setRegionCoatingOpen(false)} style={{position:"fixed",inset:0,zIndex:1000,background:"transparent"}}/>}
-                  {regionCoatingOpen&&<div style={{position:"absolute",right:0,top:"calc(100% + 5px)",zIndex:1001,minWidth:170,maxHeight:230,overflowY:"auto",background:"#0b1628",border:"1px solid "+D.border2,borderRadius:6,boxShadow:"0 10px 28px rgba(0,0,0,.45)",padding:6}}>
+                  {regionCoatingOpen&&<div style={{position:"absolute",right:0,top:"calc(100% + 5px)",zIndex:1001,minWidth:170,background:"#0b1628",border:"1px solid "+D.border2,borderRadius:6,boxShadow:"0 10px 28px rgba(0,0,0,.45)",padding:6}}>
                     <div onClick={()=>setRegionCoatingFilter([])} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 6px",fontSize:11,color:!regionCoatingFilter.length?D.blue:D.tx,cursor:"pointer",fontWeight:800}}><span style={{width:13,height:13,border:"1px solid "+D.blue,borderRadius:2,background:!regionCoatingFilter.length?D.blue:"transparent",color:"#081421",textAlign:"center",fontSize:11,lineHeight:"12px"}}>{!regionCoatingFilter.length?"✓":""}</span>All coatings</div>
                     {regionCoatingOptions.map(coating=>{const checked=regionCoatingFilter.includes(coating);return <label key={coating} style={{display:"flex",alignItems:"center",gap:7,padding:"5px 6px",fontSize:11,color:checked?D.tx:D.dim,cursor:"pointer"}}><input type="checkbox" checked={checked} onChange={()=>setRegionCoatingFilter(prev=>checked?prev.filter(x=>x!==coating):[...prev,coating])} style={{width:13,height:13,accentColor:D.blue,borderRadius:2,margin:0}}/><span>{coating}</span></label>})}
-                    {regionCoatingFilter.length>0&&<div style={{borderTop:"1px solid "+D.border,marginTop:4,padding:"5px 6px 1px",fontSize:8.5,color:D.faint}}>Current fleet only · historical snapshots lack coating</div>}
                   </div>}
                 </div>
 
