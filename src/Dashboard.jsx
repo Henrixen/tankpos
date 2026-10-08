@@ -130,6 +130,8 @@ function WSTracker() {
   const [wsMrNote,setWsMrNote] = useState("");
   const [wsMrNoteImg,setWsMrNoteImg] = useState(null);
   const [wsNoteImg,setWsNoteImg] = useState(null);
+  const [wsImagePreview,setWsImagePreview] = useState(null);
+  const [wsDeleteConfirm,setWsDeleteConfirm] = useState(null);
   const [wsNoteSavedAt,setWsNoteSavedAt] = useState(null);
   const [wsNoteSaveState,setWsNoteSaveState] = useState("loading");
   const wsNoteLoadedRef = useRef(false);
@@ -300,6 +302,30 @@ function WSTracker() {
       setWsEditedHistory({});
       setStatus({t:"success",m:"Worldscale history saved to Supabase"});
     } catch(e) {setStatus({t:"error",m:e.message||"Failed to save Worldscale history"});}
+  }
+  async function confirmWSDeletion(){
+    const target=wsDeleteConfirm;
+    if(!target)return;
+    if(target.type==="image"){
+      (target.noteId==="handy"?setWsNoteImg:setWsMrNoteImg)(null);
+      setWsImagePreview(null);
+      setWsDeleteConfirm(null);
+      return;
+    }
+    if(target.type==="draft"){
+      setWsDraftRows(rows=>rows.filter(row=>row.id!==target.id));
+      setWsDeleteConfirm(null);
+      return;
+    }
+    if(target.type==="history"){
+      try{
+        const history=(data?.history||[]).filter((_,i)=>i!==target.index);
+        await saveWS({...data,history});
+        setWsEditedHistory(prev=>Object.fromEntries(Object.entries(prev).filter(([key])=>Number(key)!==target.index).map(([key,value])=>[Number(key)>target.index?String(Number(key)-1):key,value])));
+        setStatus({t:"success",m:"Worldscale row deleted from Supabase"});
+        setWsDeleteConfirm(null);
+      }catch(e){setStatus({t:"error",m:e.message||"Failed to delete Worldscale row"});}
+    }
   }
   async function parseWS() {
     if (!pasteText.trim() && !img) { setStatus({t:"error",m:"Paste text or attach an image"}); return; }
@@ -506,9 +532,9 @@ ${text}`}]
                   {wsDraftRows.map(row=><tr key={row.id} style={{background:"rgba(88,166,255,.07)"}}>
                     <td style={{padding:3}}><input type="date" value={row.date} onChange={e=>updateWSRow(row.id,"date",e.target.value)} style={{width:122,background:C.bg2,color:C.tx,border:"1px solid "+C.bd,borderRadius:3,fontSize:10}}/></td>
                     {ROUTES.map(r=><td key={r.id} style={{padding:3}}><input type="text" inputMode="decimal" placeholder="—" value={row.values[r.id]??""} onChange={e=>updateWSRow(row.id,r.id,e.target.value)} style={{width:"100%",minWidth:55,maxWidth:100,boxSizing:"border-box",textAlign:"right",background:C.bg2,color:C.tx,border:"1px solid "+C.bd,borderRadius:3,fontSize:10}}/></td>)}
-                    <td><button onClick={()=>setWsDraftRows(rows=>rows.filter(x=>x.id!==row.id))} style={{background:"none",border:0,color:C.red,cursor:"pointer"}}>×</button></td>
+                    <td><button onClick={()=>setWsDeleteConfirm({type:"draft",id:row.id,label:row.date})} style={{background:"none",border:0,color:C.red,cursor:"pointer"}}>×</button></td>
                   </tr>)}
-                  {histRows.map((row,i)=>({row,i})).sort((a,b)=>parseChartDate(b.row.date)-parseChartDate(a.row.date)).map(({row,i})=><tr key={i}><td style={{padding:"5px 3px",whiteSpace:"nowrap"}}>{row.date}</td>{ROUTES.map(r=><td key={r.id} style={{padding:3}}><input type="text" inputMode="decimal" placeholder="—" value={wsEditedHistory[i]?.[r.id]??row.spot?.[r.id]?.ws??""} onChange={e=>setWsEditedHistory(prev=>({...prev,[i]:{...prev[i],[r.id]:e.target.value}}))} style={{width:"100%",minWidth:55,maxWidth:100,boxSizing:"border-box",textAlign:"right",background:C.bg2,color:C.tx,border:"1px solid "+C.bd,borderRadius:3,fontSize:10,padding:"3px 5px"}}/></td>)}<td/></tr>)}
+                  {histRows.map((row,i)=>({row,i})).sort((a,b)=>parseChartDate(b.row.date)-parseChartDate(a.row.date)).map(({row,i})=><tr key={i}><td style={{padding:"5px 3px",whiteSpace:"nowrap"}}>{row.date}</td>{ROUTES.map(r=><td key={r.id} style={{padding:3}}><input type="text" inputMode="decimal" placeholder="—" value={wsEditedHistory[i]?.[r.id]??row.spot?.[r.id]?.ws??""} onChange={e=>setWsEditedHistory(prev=>({...prev,[i]:{...prev[i],[r.id]:e.target.value}}))} style={{width:"100%",minWidth:55,maxWidth:100,boxSizing:"border-box",textAlign:"right",background:C.bg2,color:C.tx,border:"1px solid "+C.bd,borderRadius:3,fontSize:10,padding:"3px 5px"}}/></td> )}<td style={{textAlign:"center"}}><button type="button" title="Delete historical row" onClick={()=>setWsDeleteConfirm({type:"history",index:i,label:row.date})} style={{background:"none",border:0,color:C.red,cursor:"pointer",fontSize:15}}>×</button></td></tr>)}
                 </tbody>
               </table></div>
             </div>
@@ -530,10 +556,31 @@ ${text}`}]
                 <div style={{display:"flex",alignItems:"center",gap:8,minHeight:24,flexShrink:0}}>
                   <label style={{cursor:"pointer",fontSize:9.5,color:C.blue,border:"1px solid "+C.bd,borderRadius:4,padding:"4px 7px"}}>+ Add image<input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{setNoteImageFile(e.target.files?.[0],note.id);e.target.value="";}}/></label>
                   <span style={{fontSize:9,color:C.faint}}>Paste screenshot (Ctrl+V) or upload · compressed thumbnail saved in Supabase</span>
-                  {note.image&&<div style={{position:"relative",width:58,height:35,flexShrink:0,marginLeft:"auto"}}><a href={note.image} target="_blank" rel="noreferrer" title="Open image"><img src={note.image} alt={note.title+" note"} style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:3,border:"1px solid "+C.bd}}/></a><button onClick={()=>note.setImage(null)} title="Remove image" style={{position:"absolute",right:-5,top:-5,border:0,borderRadius:10,background:"#17283d",color:"white",cursor:"pointer",fontSize:11}}>×</button></div>}
+                  {note.image&&<div style={{position:"relative",width:58,height:35,flexShrink:0,marginLeft:"auto"}}><button type="button" onClick={()=>setWsImagePreview({src:note.image,title:note.title})} title="Enlarge image inside Dashboard" style={{display:"block",width:"100%",height:"100%",padding:0,background:"none",border:0,cursor:"zoom-in"}}><img src={note.image} alt={note.title+" note"} style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:3,border:"1px solid "+C.bd,boxSizing:"border-box"}}/></button><button onClick={()=>setWsDeleteConfirm({type:"image",noteId:note.id,label:note.title+" image"})} title="Remove image" style={{position:"absolute",right:-5,top:-5,border:0,borderRadius:10,background:"#17283d",color:"white",cursor:"pointer",fontSize:11}}>×</button></div>}
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {wsDeleteConfirm&&(
+          <div role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setWsDeleteConfirm(null);}} style={{position:"fixed",inset:0,zIndex:10020,background:"rgba(2,8,18,.82)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div role="alertdialog" aria-modal="true" aria-label="Confirm deletion" style={{width:"min(380px,94vw)",background:C.bg3,border:"1px solid "+C.bd,borderRadius:9,padding:20,boxShadow:"0 18px 55px rgba(0,0,0,.55)"}}>
+              <div style={{fontSize:15,fontWeight:900,color:C.tx,marginBottom:9}}>Delete {wsDeleteConfirm.type==="image"?"picture":"Worldscale row"}?</div>
+              <div style={{fontSize:12,color:C.dim,lineHeight:1.6,marginBottom:20}}>Are you sure you want to delete <strong style={{color:C.tx}}>{wsDeleteConfirm.label}</strong>? {wsDeleteConfirm.type==="history"?"This will remove the historical row from Supabase.":wsDeleteConfirm.type==="image"?"The image will be removed from the note and synced to Supabase.":"This unsaved row will be removed."}</div>
+              <div style={{display:"flex",justifyContent:"flex-end",gap:9}}>
+                <button type="button" onClick={()=>setWsDeleteConfirm(null)} style={{padding:"8px 14px",border:"1px solid "+C.bd,borderRadius:5,background:C.bg2,color:C.tx,cursor:"pointer",fontWeight:700}}>Cancel</button>
+                <button type="button" onClick={confirmWSDeletion} style={{padding:"8px 14px",border:0,borderRadius:5,background:"#dc2626",color:"white",cursor:"pointer",fontWeight:800}}>Delete</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {wsImagePreview&&(
+          <div role="presentation" onClick={()=>setWsImagePreview(null)} style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(2,8,18,.88)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,boxSizing:"border-box",cursor:"zoom-out"}}>
+            <div role="dialog" aria-modal="true" aria-label={wsImagePreview.title+" image preview"} onClick={e=>e.stopPropagation()} style={{position:"relative",maxWidth:"min(1100px,96vw)",maxHeight:"94vh",display:"flex",flexDirection:"column",gap:9,cursor:"default"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",color:C.tx,fontWeight:800,fontSize:13}}><span>{wsImagePreview.title} · Image preview</span><button type="button" onClick={()=>setWsImagePreview(null)} aria-label="Close image preview" style={{background:C.bg3,color:C.tx,border:"1px solid "+C.bd,borderRadius:5,padding:"5px 10px",cursor:"pointer"}}>✕ Close</button></div>
+              <img src={wsImagePreview.src} alt={wsImagePreview.title+" note enlarged"} style={{display:"block",maxWidth:"100%",maxHeight:"calc(94vh - 50px)",width:"auto",height:"auto",objectFit:"contain",border:"1px solid "+C.bd,borderRadius:6}}/>
+            </div>
           </div>
         )}
 
