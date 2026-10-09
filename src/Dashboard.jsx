@@ -608,19 +608,20 @@ ${text}`}]
 function WSChart({data,routes,colors,fill=false}) {
   const [hover,setHover]=useState(null);
   const compact=typeof window!=="undefined"&&window.innerWidth<=700;
-  const W=compact?360:1200,H=compact?154:450,PL=compact?55:72,PR=compact?24:24,PT=compact?8:16,PB=compact?24:32,iW=W-PL-PR,iH=H-PT-PB;
+  const W=compact?360:1200,H=compact?154:450,PL=compact?55:72,PR=compact?36:85,PT=compact?8:16,PB=compact?24:32,iW=W-PL-PR,iH=H-PT-PB;
   const series={};
   routes.forEach(r=>series[r.id]=cleanIsolatedValues(data.map(d=>d.spot?.[r.id]?.ws)));
   const allVals=routes.flatMap(r=>series[r.id]).filter(v=>v!=null);
   if(!allVals.length)return null;
   const mn=Math.min(...allVals)*0.95,mx=Math.max(...allVals)*1.05,range=mx-mn||1;
   const xs=data.map((_,i)=>PL+i/(data.length-1||1)*iW);
+  const firstDrawnIndex=data.findIndex((_,i)=>routes.some(r=>series[r.id][i]!=null));
   const onMove=e=>{const box=e.currentTarget.getBoundingClientRect();const clientX=e.clientX??e.touches?.[0]?.clientX;if(clientX==null)return;const x=(clientX-box.left)/box.width*W;let idx=0,best=Infinity;xs.forEach((v,i)=>{const d=Math.abs(v-x);if(d<best){best=d;idx=i;}});setHover(idx);};
   const hi=hover!=null?hover:null;
   return <div style={{height:fill?"100%":"auto",display:"flex",flexDirection:"column",minHeight:0,position:"relative"}}>
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" onPointerMove={onMove} onPointerDown={e=>{e.currentTarget.setPointerCapture?.(e.pointerId);onMove(e)}} onPointerLeave={()=>setHover(null)} style={{width:"100%",height:fill?"100%":260,minHeight:0,display:"block",flex:fill?1:"0 0 auto",cursor:"crosshair",touchAction:"pan-y"}}>
       {[0,.5,1].map(t=>{const y=PT+t*iH,v=Math.round(mx-t*range);return <g key={t}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke={C.bd2}/></g>})}
-      {routes.map(r=>{const pts=series[r.id].map((v,i)=>v!=null?[xs[i],PT+iH-(v-mn)/range*iH]:null);const valid=pts.filter(Boolean);if(valid.length<2)return null;const last=valid.at(-1);return <g key={r.id}><path d={`M ${valid.map(p=>p.join(" ")).join(" L ")}`} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>{last&&<text x={Math.min(W-PR+8,last[0]+7)} y={last[1]+4} fill={colors[r.id]||C.dim} fontSize={compact?8:14} fontWeight="850">{r.id}</text>}{hi!=null&&pts[hi]&&<circle cx={pts[hi][0]} cy={pts[hi][1]} r="4.5" fill={colors[r.id]||C.dim} stroke="none"/>}</g>})}
+      {routes.map(r=>{const pts=series[r.id].map((v,i)=>v!=null?[xs[i],PT+iH-(v-mn)/range*iH]:null);const valid=pts.filter(Boolean);if(valid.length<2)return null;const last=valid.at(-1);return <g key={r.id}><path d={`M ${valid.map(p=>p.join(" ")).join(" L ")}`} fill="none" stroke={colors[r.id]||C.dim} strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>{last&&!compact&&<text x={W-PR+9} y={Math.min(PT+iH-12,Math.max(PT+12,last[1]+4))} fill={colors[r.id]||C.dim} fontSize={compact?8:12} fontWeight="850">{r.id}</text>}{hi!=null&&pts[hi]&&<circle cx={pts[hi][0]} cy={pts[hi][1]} r="4.5" fill={colors[r.id]||C.dim} stroke="none"/>}</g>})}
       {hi!=null&&<line x1={xs[hi]} x2={xs[hi]} y1={PT} y2={PT+iH} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/>}
     </svg>
     {/* Axis labels are HTML overlays: unlike SVG text, they never stretch when the chart fills its panel. */}
@@ -628,8 +629,8 @@ function WSChart({data,routes,colors,fill=false}) {
       <span style={{position:"absolute",left:0,top:"50%",transform:"translateY(-50%) rotate(-90deg)",transformOrigin:"center",fontSize:11,fontWeight:850,color:"#58a6ff"}}>WS</span>
       {[0,.5,1].map(t=><span key={t} style={{position:"absolute",right:0,top:`${(PT+t*iH)/H*100}%`,transform:t===1?"translateY(-145%)":"translateY(-50%)",fontVariantNumeric:"tabular-nums"}}>{Math.round(mx-t*range)}</span>)}
     </div>
-    <div style={{position:"absolute",left:0,right:0,bottom:fill?25:25,height:17,pointerEvents:"none",fontSize:compact?9:10,fontWeight:750,color:"#d9e9ff"}}>
-      {Array.from(new Set([0,1,2,3,4].map(k=>Math.round(k*(data.length-1)/4)))).map((i,ti,arr)=><span key={i} style={{position:"absolute",left:`${(ti===0&&xs.length>1?xs[1]:xs[i])/W*100}%`,transform:ti===0?"translateX(0)":ti===arr.length-1?"translateX(-100%)":"translateX(-50%)",whiteSpace:"nowrap"}}>{(data[i].date||"").split(" ").slice(0,2).join(" ")}</span>)}
+    <div style={{position:"absolute",left:0,right:0,bottom:fill?15:15,height:17,pointerEvents:"none",fontSize:compact?9:10,fontWeight:750,color:"#d9e9ff"}}>
+      {Array.from(new Set([0,1,2,3,4].map(k=>Math.round(k*(data.length-1)/4)))).map((i,ti,arr)=><span key={i} style={{position:"absolute",left:`${xs[i]/W*100}%`,transform:ti===0?"translateX(-5%)":ti===arr.length-1?"translateX(-50%)":"translateX(-50%)",whiteSpace:"nowrap"}}>{(data[i].date||"").split(" ").slice(0,2).join(" ")}</span>)}
     </div>
     {hi!=null&&<div style={{position:"absolute",top:10,left:`${Math.min(78,Math.max(8,xs[hi]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.94)",border:"1px solid rgba(88,166,255,.35)",borderRadius:6,padding:"6px 8px",pointerEvents:"none",zIndex:4,boxShadow:"0 6px 18px rgba(0,0,0,.28)"}}><div style={{fontSize:9,color:"rgba(205,225,250,.82)",marginBottom:3}}>{data[hi]?.date}</div>{routes.map(r=>series[r.id][hi]!=null?<div key={r.id} style={{fontSize:10,fontWeight:800,color:colors[r.id]||C.tx}}>{r.id}: {series[r.id][hi].toFixed(1)}</div>:null)}</div>}
     <div className="dash-ws-legend" style={{display:"flex",gap:14,flexWrap:"wrap",justifyContent:"center",marginTop:3}}>{routes.map(r=><span key={r.id} style={{fontSize:13,color:colors[r.id]||C.dim,fontWeight:750}}>● {r.name}</span>)}</div>
@@ -1501,9 +1502,9 @@ function Dashboard({vessels, cargoes, history}) {
           .dash-fixing-legend{width:100%!important;display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:1px!important;padding-right:0!important;align-items:start!important;margin-top:0!important}
           .dash-fixing-legend span{min-width:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;gap:1px!important;font-size:8px!important;line-height:1.05!important;white-space:nowrap!important}
           .dash-fixing-legend small{display:block!important;font-size:7px!important;font-weight:650!important;opacity:.78}
-          .dash-fixing-chart{flex:1!important;min-height:0!important;margin:0!important;overflow:hidden!important}
-          .dash-fixing-chart > div{height:100%!important;min-height:0!important}
-          .dash-fixing-chart > div > div:first-child{min-height:0!important;flex:1 1 auto!important}
+          .dash-fixing-chart{flex:1 1 auto!important;height:245px!important;min-height:245px!important;margin:0!important;overflow:hidden!important}
+          .dash-fixing-chart > div{height:100%!important;min-height:245px!important}
+          .dash-fixing-chart > div > div:first-child{min-height:205px!important;height:205px!important;flex:1 1 auto!important}
           .dash-fixing-chart-svg{inset:0!important;width:100%!important;height:100%!important}
           .dash-fixing-legend-row{min-height:25px!important;height:25px!important;margin-top:0!important;flex:0 0 25px!important}
         }
@@ -1756,7 +1757,7 @@ function SegmentFWChart({data,segments,colors}) {
     // Checkbox OFF = raw representative samples. ON = additionally clean isolated value outliers.
     series[seg]=presentationClean?cleanPresentationValues(raw):raw;
   });
-  const vals=segments.flatMap(s=>series[s]).filter(v=>v!=null&&v>=0); if(!vals.length)return null;
+  const vals=segments.flatMap(s=>series[s]).filter(v=>v!=null&&v>=0); if(!vals.length)return <div style={{padding:16,color:C.dim,fontSize:11}}>No representative fixing-window observations for this selection.</div>;
   const mn=0,mx=Math.max(7,Math.ceil(Math.max(...vals)+2)),range=mx||1,xs=data.map((_,i)=>PL+i/(data.length-1||1)*iW);
   const move=e=>{const b=e.currentTarget.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*W;let idx=0,best=1e9;xs.forEach((v,i)=>{const d=Math.abs(v-x);if(d<best){best=d;idx=i}});setHover(idx)};
   const hoverMarkers=hover==null?[]:segments.map(seg=>{
