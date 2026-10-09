@@ -1596,9 +1596,10 @@ function Dashboard({vessels, cargoes, history}) {
           <div className="dash-shipping-prices">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
               {secHead("Shipping Prices")}
-              <div style={{display:"flex",gap:4}}>
-                {[["vlcc","VLCC"],["bunkers","Bunkers"]].map(([v,l])=><button key={v} onClick={()=>setShippingPriceTab(v)} style={{
-                  fontSize:9.5,fontWeight:800,padding:"4px 8px",borderRadius:5,cursor:"pointer",fontFamily:"inherit",
+              <div style={{display:"flex",gap:6,position:"relative",zIndex:5,flexShrink:0}}>
+                {[["vlcc","VLCC"],["bunkers","Bunkers"]].map(([v,l])=><button key={v} type="button" onClick={()=>setShippingPriceTab(v)} style={{
+                  position:"relative",zIndex:1,pointerEvents:"auto",display:"inline-flex",alignItems:"center",justifyContent:"center",minHeight:32,minWidth:v==="bunkers"?76:56,boxSizing:"border-box",touchAction:"manipulation",
+                  fontSize:10,fontWeight:800,padding:"7px 12px",borderRadius:5,cursor:"pointer",fontFamily:"inherit",
                   border:"1px solid "+(shippingPriceTab===v?D.blue:D.border2),
                   background:shippingPriceTab===v?"rgba(88,166,255,.14)":D.bg3,
                   color:shippingPriceTab===v?D.tx:D.dim
