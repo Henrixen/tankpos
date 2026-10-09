@@ -1365,29 +1365,9 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         const liveMarket=mktRes.status==="fulfilled"&&mktRes.value?mktRes.value:null;
         if(liveMarket)setLoginMarkets(v=>({...v,...liveMarket}));
 
-        // Keep start-page bunkers aligned with a Dashboard/TCE bunker refresh.
-        // A saved bunker set from TODAY wins for ARA/Singapore; older saved data
-        // is only a fallback, so it can never pin today's ARA to yesterday's value.
-        try{
-          const {data}=await supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle();
-          const b=data?.value?(typeof data.value==="string"?JSON.parse(data.value):data.value):null;
-          if(b){
-            const savedDay=String(b.date||"").slice(0,10);
-            const todayIso=new Date().toISOString().slice(0,10);
-            const savedDate=new Date(b.date||"");
-            const sameLocalDay=Number.isFinite(savedDate.getTime())&&
-              savedDate.getFullYear()===new Date().getFullYear()&&
-              savedDate.getMonth()===new Date().getMonth()&&
-              savedDate.getDate()===new Date().getDate();
-            const savedIsToday=savedDay===todayIso||sameLocalDay;
-            setLoginMarkets(v=>({
-              ...v,
-              mgoAra:savedIsToday?(Number(b.ARA_MGO)||v.mgoAra):(v.mgoAra||Number(b.ARA_MGO)||null),
-              mgoSingapore:savedIsToday?(Number(b.SIN_MGO)||v.mgoSingapore):(v.mgoSingapore||Number(b.SIN_MGO)||null),
-              bunkerDate:savedIsToday?(b.date||v.bunkerDate):(v.bunkerDate||b.date)
-            }));
-          }
-        }catch(_){}
+        // Do not overwrite the live market response with a cached bunker price.
+        // If the live feed cannot provide a port, display unavailable rather
+        // than an old quote that looks current.
 
         // The API already returns newest-first news. Do not re-parse the display
         // date in the browser: locale-formatted RSS dates were being rejected,
@@ -2715,7 +2695,7 @@ const filtV=useMemo(()=>{
                       border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.72)":"rgba(88,166,255,.18)"),
                       display:"flex",alignItems:"center",justifyContent:"center",fontSize:mobile?21:24,fontWeight:850,color:pinError?"#ff6b6b":"#79c0ff",
                       boxShadow:pinInput.length>i&&!pinError?"0 0 18px rgba(88,166,255,.12)":"none"
-                    }}><span style={{display:"block",fontSize:mobile?31:36,lineHeight:1,transform:"translateY(-1px)"}}>{pinInput.length>i?"★":""}</span></div>)}
+                    }}><span style={{display:"block",fontSize:mobile?31:36,lineHeight:1,transform:"translateY(-1px)"}}>{pinInput.length>i?"*":""}</span></div>)}
                   </div>
 
                   <style>{`
