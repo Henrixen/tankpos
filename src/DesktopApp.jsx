@@ -1358,7 +1358,13 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     const loadLoginFeeds=async()=>{
       try{
         const [mktRes,newsRes]=await Promise.allSettled([
-          fetch("/api/login-market",{cache:"no-store"}).then(r=>r.ok?r.json():null),
+          Promise.all([
+            fetch("/api/login-market",{cache:"no-store"}).then(r=>r.ok?r.json():null).catch(()=>null),
+            fetch("/api/bunkers",{cache:"no-store"}).then(r=>r.ok?r.json():null).catch(()=>null)
+          ]).then(([market,bunker])=>{
+            const valid=v=>v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v))&&Number(v)>0?Number(v):null;
+            return {...(market||{}),mgoAra:valid(bunker?.ARA_MGO),mgoSingapore:valid(bunker?.SIN_MGO),mgoUsg:valid(bunker?.HOU_MGO),bunkerDate:bunker?.date||null};
+          }),
           fetch("/api/login-news",{cache:"no-store"}).then(r=>r.ok?r.json():null)
         ]);
         if(!alive)return;
