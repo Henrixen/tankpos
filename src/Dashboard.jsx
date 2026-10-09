@@ -1069,33 +1069,35 @@ function Dashboard({vessels, cargoes, history}) {
     loadSaved();
   }, []);
 
-  // ── Bunker prices: fetch live from PBT via web_search, fallback to last known ──
+  // Bunker-only update: use the shared PBT endpoint; never store invented prices.
   async function fetchBunkersPBT() {
-  setBLoading(true); setBError(null);
-  try {
-    const res = await fetch("/api/bunkers");
-    const p = await res.json();
-    const newBunkers = {
-      date: p.date || new Date().toLocaleDateString("en-GB"),
-      ARA_HSFO: p.ARA_HSFO, ARA_VLSFO: p.ARA_VLSFO, ARA_MGO: p.ARA_MGO,
-      FUJ_HSFO: p.FUJ_HSFO, FUJ_VLSFO: p.FUJ_VLSFO, FUJ_MGO: p.FUJ_MGO,
-      SIN_HSFO: p.SIN_HSFO, SIN_VLSFO: p.SIN_VLSFO, SIN_MGO: p.SIN_MGO,
-    };
-
-    setBunkers(newBunkers);
-    setBFetched(true);
-
-    // PERSIST: Save latest so refresh doesn't wipe it
-    await supabase.from("dashboard").upsert({ key: "last-bunker-prices", value: JSON.stringify(newBunkers) }, { onConflict: "key" });
-
-    // HISTORY: Save a snapshot for the graph
-    const histKey = `bunker-hist-${newBunkers.date.replaceAll("/", "-").replaceAll(" ", "-")}`;
-    await supabase.from("dashboard").upsert({ key: histKey, value: JSON.stringify(newBunkers) }, { onConflict: "key" });
-
-  } catch(e) {
-    setBError("Fetch failed. Using fallback.");
-  } finally { setBLoading(false); }
-}
+    setBLoading(true); setBError(null);
+    try {
+      const res=await fetch('/api/bunkers',{cache:'no-store'});
+      const p=await res.json();
+      if(!res.ok||!p.available)throw new Error(p.error||'PBT quotes unavailable');
+      const keys=['ARA_HSFO', 'ARA_VLSFO', 'ARA_MGO', 'FUJ_HSFO', 'FUJ_VLSFO', 'FUJ_MGO', 'SIN_HSFO', 'SIN_VLSFO', 'SIN_MGO', 'HOU_HSFO', 'HOU_VLSFO', 'HOU_MGO', 'GIB_HSFO', 'GIB_VLSFO', 'GIB_MGO', 'PAN_HSFO', 'PAN_VLSFO', 'PAN_MGO', 'HKG_HSFO', 'HKG_VLSFO', 'HKG_MGO', 'DUR_HSFO', 'DUR_VLSFO', 'DUR_MGO'];
+      const clean={date:p.date||null,source:p.source||'PBT International'};
+      let valid=0;
+      for(const key of keys){
+        const value=p[key];
+        const n=value===null||value===undefined||value===''?NaN:Number(value);
+        clean[key]=Number.isFinite(n)&&n>0?n:null;
+        if(clean[key]!==null)valid++;
+      }
+      if(!valid)throw new Error('No verified PBT quotes returned');
+      setBunkers(previous=>({...previous,...clean}));
+      setBFetched(true);
+      const {error}=await supabase.from('dashboard').upsert({key:'last-bunker-prices',value:JSON.stringify(clean)},{onConflict:'key'});
+      if(error)console.warn('Bunker cache save:',error);
+      if(p.date&&/^\d{4}-\d{2}-\d{2}$/.test(p.date)){
+        const histKey=`bunker-hist-${p.date}`;
+        const {error:histError}=await supabase.from('dashboard').upsert({key:histKey,value:JSON.stringify(clean)},{onConflict:'key'});
+        if(histError)console.warn('Bunker history save:',histError);
+      }
+    }catch(e){setBError('Live PBT feed unavailable: '+(e.message||e));}
+    finally{setBLoading(false);}
+  }
 
   function BunkerChart({ history }) {
   if (!history || history.length < 2) return null;
@@ -1623,10 +1625,10 @@ function Dashboard({vessels, cargoes, history}) {
                 {bLoading&&<div style={{color:D.blue,fontSize:11,padding:"8px",textAlign:"center"}}>⟳ Fetching…</div>}
                 {bError&&<div style={{color:D.red,fontSize:10,padding:"4px 0"}}>{bError}</div>}
                 {bunkers&&<>
-                  <div style={{fontSize:9,color:D.faint,marginBottom:5}}>Updated {bunkers.date}</div>
+                  <div style={{fontSize:9,color:D.faint,marginBottom:5}}>Quote date {bunkers.date||"unavailable"} · PBT International</div>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:10.5}}>
                     <thead><tr style={{background:D.bg4}}><th style={{padding:"4px 6px",textAlign:"left",color:D.faint}}>PORT</th><th style={{padding:"4px 6px",textAlign:"right",color:D.amber}}>HSFO</th><th style={{padding:"4px 6px",textAlign:"right",color:D.green}}>VLSFO</th><th style={{padding:"4px 6px",textAlign:"right",color:D.blue}}>MGO</th></tr></thead>
-                    <tbody>{[["ARA",bunkers.ARA_HSFO,bunkers.ARA_VLSFO,bunkers.ARA_MGO],["Fujairah",bunkers.FUJ_HSFO,bunkers.FUJ_VLSFO,bunkers.FUJ_MGO],["Singapore",bunkers.SIN_HSFO,bunkers.SIN_VLSFO,bunkers.SIN_MGO]].map(([port,a,v,m],i)=><tr key={port} style={{background:i%2?D.bg4:"transparent",borderBottom:"1px solid "+D.border}}><td style={{padding:"5px 6px",color:D.dim,fontWeight:700}}>{port}</td><td style={{padding:"5px 6px",textAlign:"right",color:D.amber,fontWeight:800}}>{a?"$"+a:"—"}</td><td style={{padding:"5px 6px",textAlign:"right",color:D.green,fontWeight:800}}>{v?"$"+v:"—"}</td><td style={{padding:"5px 6px",textAlign:"right",color:D.blue,fontWeight:800}}>{m?"$"+m:"—"}</td></tr>)}</tbody>
+                    <tbody>{[["ARA (Rotterdam)",bunkers.ARA_HSFO,bunkers.ARA_VLSFO,bunkers.ARA_MGO],["Fujairah",bunkers.FUJ_HSFO,bunkers.FUJ_VLSFO,bunkers.FUJ_MGO],["Singapore",bunkers.SIN_HSFO,bunkers.SIN_VLSFO,bunkers.SIN_MGO],["Houston",bunkers.HOU_HSFO,bunkers.HOU_VLSFO,bunkers.HOU_MGO],["Gibraltar",bunkers.GIB_HSFO,bunkers.GIB_VLSFO,bunkers.GIB_MGO],["Panama",bunkers.PAN_HSFO,bunkers.PAN_VLSFO,bunkers.PAN_MGO],["Hong Kong",bunkers.HKG_HSFO,bunkers.HKG_VLSFO,bunkers.HKG_MGO],["Durban",bunkers.DUR_HSFO,bunkers.DUR_VLSFO,bunkers.DUR_MGO]].map(([port,a,v,m],i)=><tr key={port} style={{background:i%2?D.bg4:"transparent",borderBottom:"1px solid "+D.border}}><td style={{padding:"5px 6px",color:D.dim,fontWeight:700}}>{port}</td><td style={{padding:"5px 6px",textAlign:"right",color:D.amber,fontWeight:800}}>{a?"$"+a:"—"}</td><td style={{padding:"5px 6px",textAlign:"right",color:D.green,fontWeight:800}}>{v?"$"+v:"—"}</td><td style={{padding:"5px 6px",textAlign:"right",color:D.blue,fontWeight:800}}>{m?"$"+m:"—"}</td></tr>)}</tbody>
                   </table>
                   <button onClick={fetchBunkersPBT} style={{marginTop:5,background:"none",border:"1px solid "+D.border,borderRadius:4,color:D.faint,fontSize:9.5,padding:"2px 7px",cursor:"pointer"}}>↻ Refresh</button>
                 </>}
