@@ -51,8 +51,19 @@ export default async function handler(req,res){
     ['mgoSingapore','https://shipandbunker.com/prices/apac/sea/sg-sin-singapore','Singapore']
   ];
   const diagnostics={};
+  const inspectHtml=html=>{
+    const clean=s=>text(s).slice(0,220);
+    const headingPos=html.search(/Latest\s*(?:<[^>]+>\s*)*Prices\s*,?\s*MGO/i);
+    const tables=[...html.matchAll(/<table\b[\s\S]*?<\/table>/gi)];
+    return {
+      mgoHeadingContext:headingPos>=0?clean(html.slice(Math.max(0,headingPos-180),headingPos+1400)):null,
+      mgoMentions:(html.match(/\bMGO\b/gi)||[]).length,
+      tableSamples:tables.map((m,i)=>({index:i,nearMgo:/\bMGO\b/i.test(m[0]),rows:(m[0].match(/<tr\b[\s\S]*?<\/tr>/gi)||[]).slice(0,4).map(clean)})).filter(x=>x.nearMgo).slice(0,5),
+      nearbyTables:headingPos>=0?tables.filter(m=>m.index>=headingPos).slice(0,2).map(m=>(m[0].match(/<tr\b[\s\S]*?<\/tr>/gi)||[]).slice(0,6).map(clean)):[]
+    };
+  };
   const results=await Promise.all(ports.map(async([key,url,port])=>{
-    try{const html=await fetchPage(url);const value=portMgo(html)??tableMgo(html,port);diagnostics[key]={htmlLength:html.length,hasMgoHeading:/Latest\s*(?:<[^>]+>\s*)*Prices\s*,?\s*MGO/i.test(html),tableCount:(html.match(/<table\b/gi)||[]).length,parsed:value,blocked:/captcha|cloudflare|access denied|verify you are human/i.test(html)};return [key,value];}
+    try{const html=await fetchPage(url);const value=portMgo(html)??tableMgo(html,port);diagnostics[key]={htmlLength:html.length,hasMgoHeading:/Latest\s*(?:<[^>]+>\s*)*Prices\s*,?\s*MGO/i.test(html),tableCount:(html.match(/<table\b/gi)||[]).length,parsed:value,possibleBotChallenge:/captcha|cloudflare|access denied|verify you are human/i.test(html),...(req.query?.debug==='1'?{htmlInspection:inspectHtml(html)}:{})};return [key,value];}
     catch(e){console.warn('MGO feed',port,e.message);diagnostics[key]={error:e.message};return [key,null];}
   }));
   for(const [key,value] of results){if(key==='mgoAra')mgoAra=value;else if(key==='mgoUsg')mgoUsg=value;else mgoSingapore=value;}
