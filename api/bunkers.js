@@ -2,7 +2,7 @@
 const PORTS = [
   ['ARA','Rotterdam|Amsterdam|ARA'],['FUJ','Fujairah'],['SIN','Singapore'],
   ['HOU','Houston'],['GIB','Gibraltar'],['PAN','Panama|Balboa|Cristobal'],
-  ['HKG','Hong Kong'],['DUR','Durban']
+  ['SHA','Shanghai'],['DUR','Durban']
 ];
 const strip=s=>String(s||'').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,' ').replace(/<[^>]*>/g,' ').replace(/&nbsp;|&#160;/gi,' ').replace(/&amp;/gi,'&').replace(/\s+/g,' ').trim();
 const number=s=>{const v=Number(String(s||'').replace(/,/g,'').match(/\b\d{2,4}(?:\.\d{1,2})?\b/)?.[0]);return Number.isFinite(v)&&v>=100&&v<=4000?v:null;};
