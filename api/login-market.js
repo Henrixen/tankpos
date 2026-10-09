@@ -50,10 +50,11 @@ export default async function handler(req,res){
     ['mgoUsg','https://shipandbunker.com/prices/amers/nac/usa-hou-houston','Houston'],
     ['mgoSingapore','https://shipandbunker.com/prices/apac/sea/sg-sin-singapore','Singapore']
   ];
+  const diagnostics={};
   const results=await Promise.all(ports.map(async([key,url,port])=>{
-    try{const html=await fetchPage(url);return [key,portMgo(html)??tableMgo(html,port)];}
-    catch(e){console.warn('MGO feed',port,e.message);return [key,null];}
+    try{const html=await fetchPage(url);const value=portMgo(html)??tableMgo(html,port);diagnostics[key]={htmlLength:html.length,hasMgoHeading:/Latest\s*(?:<[^>]+>\s*)*Prices\s*,?\s*MGO/i.test(html),tableCount:(html.match(/<table\b/gi)||[]).length,parsed:value,blocked:/captcha|cloudflare|access denied|verify you are human/i.test(html)};return [key,value];}
+    catch(e){console.warn('MGO feed',port,e.message);diagnostics[key]={error:e.message};return [key,null];}
   }));
   for(const [key,value] of results){if(key==='mgoAra')mgoAra=value;else if(key==='mgoUsg')mgoUsg=value;else mgoSingapore=value;}
-  res.status(200).json({brent,mgoAra,mgoUsg,mgoSingapore,bunkerSource:'Ship & Bunker',bunkerSourceUrl:'https://shipandbunker.com/prices/emea/nwe/nl-rtm-rotterdam#MGO',updatedAt:new Date().toISOString()});
+  res.status(200).json({brent,mgoAra,mgoUsg,mgoSingapore,bunkerSource:'Ship & Bunker',bunkerSourceUrl:'https://shipandbunker.com/prices/emea/nwe/nl-rtm-rotterdam#MGO',updatedAt:new Date().toISOString(),...(req.query?.debug==='1'?{diagnostics}:{})});
 }
