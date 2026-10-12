@@ -2973,7 +2973,7 @@ const filtV=useMemo(()=>{
             }}>{m.label}</span>}
           </button>})}
         </aside>}
-        <div style={{padding:mobile?"8px 8px":((tab==="cargo"||tab==="cargo2"||tab==="pos"||tab==="dash"||tab==="notes")?"12px 8px":"12px 20px"),maxWidth:(tab==="cargo"||tab==="cargo2"||tab==="pos"||tab==="dash"||tab==="notes")?"none":1900,margin:"0 auto",flex:1,minWidth:0,width:"100%",boxSizing:"border-box"}}>
+        <div style={{padding:mobile?"8px 8px":"12px 8px",maxWidth:"none",margin:"0 auto",flex:1,minWidth:0,width:"100%",boxSizing:"border-box"}}>
       <TabErrorBoundary>
 
         {/* ── POSITIONS ── */}
