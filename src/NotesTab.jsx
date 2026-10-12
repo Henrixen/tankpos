@@ -38,6 +38,22 @@ function passesDate(iso,filter){
 function applyFmt(cmd){document.execCommand(cmd,false,null);}
 function stripHtml(h){return(h||"").replace(/<[^>]+>/g,"");}
 
+// All text pasted into notes is plain text. Email/Word HTML styling is discarded.
+// Images still follow the existing screenshot attachment flow.
+function pasteNoteContent(e,onImage){
+  for(const item of Array.from(e.clipboardData?.items||[])){
+    if(item.type.startsWith("image/")){
+      e.preventDefault();
+      const file=item.getAsFile();
+      if(file){const reader=new FileReader();reader.onload=ev=>onImage(ev.target.result);reader.readAsDataURL(file);}
+      return;
+    }
+  }
+  e.preventDefault();
+  const text=e.clipboardData?.getData("text/plain")||"";
+  if(text)document.execCommand("insertText",false,text.replace(/\r\n?/g,"\n"));
+}
+
 // ── Toolbar ──────────────────────────────────────────────────────────────────
 function Toolbar({onInsertTable}){
   const btn=(label,action)=>(
@@ -468,10 +484,12 @@ function Worklist({topOffset=0}) {
       <div
         ref={ref}
         contentEditable
+        className="notes-plain-content"
         suppressContentEditableWarning
         onInput={handleInput}
         onBlur={syncDB}
         onKeyDown={handleKey}
+        onPaste={e=>pasteNoteContent(e,()=>{})}
         data-placeholder="Tasks, reminders, to-do…"
         style={{
           flex:1, padding:"10px 12px", color:"#ffffff",
@@ -527,35 +545,9 @@ export default function NotesTab(){
       +`</table><p></p>`;
   }
 
+  // Paste unformatted text (like a chat input), while retaining screenshot support.
   function handlePaste(e){
-    for(const item of Array.from(e.clipboardData?.items||[])){
-      if(item.type.startsWith("image/")){
-        e.preventDefault();
-        const r=new FileReader();
-        r.onload=ev=>setImages(p=>[...p,{dataUrl:ev.target.result}]);
-        r.readAsDataURL(item.getAsFile());return;
-      }
-    }
-    const html=e.clipboardData?.getData("text/html");
-    if(html){
-      e.preventDefault();
-      const tmp=document.createElement("div");
-      tmp.innerHTML=html;
-      tmp.querySelectorAll("*").forEach(el=>{
-        el.removeAttribute("style");el.removeAttribute("color");
-        el.removeAttribute("face");el.removeAttribute("size");
-        el.removeAttribute("bgcolor");el.removeAttribute("class");
-      });
-      tmp.querySelectorAll("font").forEach(el=>{
-        const span=document.createElement("span");span.innerHTML=el.innerHTML;el.replaceWith(span);
-      });
-      ["h1","h2","h3","h4","h5","h6"].forEach(tag=>{
-        tmp.querySelectorAll(tag).forEach(el=>{
-          const b=document.createElement("b");b.innerHTML=el.innerHTML;el.replaceWith(b);
-        });
-      });
-      document.execCommand("insertHTML",false,tmp.innerHTML);
-    }
+    pasteNoteContent(e, dataUrl=>setImages(p=>[...p,{dataUrl}]));
   }
 
   function handleDrop(e){
@@ -720,7 +712,7 @@ export default function NotesTab(){
           {/* Row 2: body — fills all remaining height, thumbnail absolutely at bottom-right */}
           <div style={{flex:1,minHeight:0,overflow:"hidden",position:"relative"}}>
             {hasContent&&(
-              <div className="note-preview-html"
+              <div className="note-preview-html notes-plain-content"
                 style={{fontSize:12,color:"rgba(160,200,255,0.65)",lineHeight:1.5,
                   height:"100%",overflow:"hidden",pointerEvents:"none"}}
                 dangerouslySetInnerHTML={{__html:note.body}}/>
@@ -785,7 +777,7 @@ export default function NotesTab(){
           {/* 2: body — fills all middle space, clipped */}
           <div style={{flex:1,minHeight:0,overflow:"hidden"}}>
             {hasContent&&(
-              <div className="note-preview-html"
+              <div className="note-preview-html notes-plain-content"
                 style={{fontSize:12,color:"rgba(160,200,255,0.65)",lineHeight:1.45,
                   height:"100%",overflow:"hidden",pointerEvents:"none"}}
                 dangerouslySetInnerHTML={{__html:note.body}}/>
@@ -857,14 +849,11 @@ export default function NotesTab(){
     React.useEffect(()=>()=>{clearTimeout(saveTimer.current);doSave(true);},[]);
 
     function modalPaste(e){
-      for(const item of Array.from(e.clipboardData?.items||[])){
-        if(item.type.startsWith("image/")){
-          e.preventDefault();
-          const r=new FileReader();
-          r.onload=ev=>{const next=[...imgsRef.current,ev.target.result];imgsRef.current=next;setImgsDisplay(next);scheduleSave();};
-          r.readAsDataURL(item.getAsFile());return;
-        }
-      }
+      pasteNoteContent(e,dataUrl=>{
+        const next=[...imgsRef.current,dataUrl];
+        imgsRef.current=next;setImgsDisplay(next);scheduleSave();
+      });
+      scheduleSave();
     }
 
     function insertModalTable(rows,cols){
@@ -943,7 +932,7 @@ export default function NotesTab(){
           <Toolbar onInsertTable={()=>setShowTblPicker(true)}/>
 
           {/* Body */}
-          <div ref={bodyRef} contentEditable suppressContentEditableWarning
+          <div ref={bodyRef} className="notes-plain-content" contentEditable suppressContentEditableWarning
             onInput={scheduleSave}
             onPaste={modalPaste}
             style={{flex:1,overflowY:"auto",padding:"12px 16px",color:"#e8f2ff",
@@ -1074,7 +1063,7 @@ export default function NotesTab(){
           <span style={{flex:1}}/>
           <Toolbar onInsertTable={()=>setShowTablePicker(true)}/>
         </div>
-        <div ref={editorRef} contentEditable suppressContentEditableWarning
+        <div ref={editorRef} className="notes-plain-content" contentEditable suppressContentEditableWarning
           onPaste={handlePaste}
           onKeyDown={e=>{if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();saveBtnRef.current?.focus();return;}if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))save();}}
           data-placeholder="Write your note\u2026 (Ctrl+Enter to save, paste screenshots)"
