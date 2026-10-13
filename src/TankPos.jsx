@@ -138,6 +138,38 @@ export default function TankPos(){
     setHasMore(false);
   }
 
+  // Shared live cargo changes for Cargoes and Quotes & Fixtures.
+  // Apply row-level changes instead of re-downloading the entire cargo table.
+  useEffect(()=>{
+    const channel=supabase.channel("tankpos-cargoes-live")
+      .on("postgres_changes",{event:"*",schema:"public",table:"cargoes"},payload=>{
+        const row=payload.new;
+        const oldId=payload.old?.id;
+        if(payload.eventType==="DELETE"){
+          if(oldId==null)return;
+          setCargoes(prev=>prev.filter(c=>String(c.id)!==String(oldId)));
+          setCargoTotal(n=>Math.max(0,n-1));
+          return;
+        }
+        if(!row?.id)return;
+        const next={...normaliseCargo(row),entered_by:row.entered_by,
+          added:row.added,changed:row.changed,ex_region:row.ex_region,
+          to_region:row.to_region,p_and_c:row.p_and_c,
+          intelligence:row.intelligence,source:row.source};
+        setCargoes(prev=>{
+          const index=prev.findIndex(c=>String(c.id)===String(row.id));
+          if(index<0){
+            setCargoTotal(n=>n+1);
+            return [next,...prev];
+          }
+          const copy=prev.slice();
+          copy[index]={...copy[index],...next};
+          return copy;
+        });
+      }).subscribe();
+    return ()=>{supabase.removeChannel(channel);};
+  },[]);
+
   // Retry wrapper for transient Supabase pool-timeout / gateway errors
   // (PGRST003, connection pool exhaustion, 504s). Retries with backoff;
   // returns the last result/error if all attempts fail.
