@@ -2,31 +2,10 @@ import React, { useState, useEffect, useRef } from "react";
 import { C, TCE_DEFAULTS } from "./constants";
 import { loadRates, saveRates } from "./supabaseHelpers";
 import { calcTCE, calcEuEts } from "./TCECalculator";
-import { supabase } from "./supabaseclient";
 
 function getBunkerState(){
   if(!window._bunkerState)window._bunkerState={val:TCE_DEFAULTS.bunker,listeners:[]};
   return window._bunkerState;
-}
-
-function extractLatestAraMgo(payload){
-  const root=payload?.value ?? payload?.data ?? payload?.prices ?? payload;
-  const rows=Array.isArray(root) ? root
-    : Array.isArray(root?.data) ? root.data
-    : Array.isArray(root?.prices) ? root.prices
-    : Array.isArray(root?.bunkers) ? root.bunkers : [];
-  const ara=rows.find(r=>String(r?.port ?? r?.name ?? r?.location ?? "").trim().toUpperCase()==="ARA");
-  const raw=ara?.mgo ?? ara?.MGO ?? ara?.mgo_price ?? ara?.mgoPrice;
-  const n=Number(String(raw ?? "").replace(/[^0-9.-]/g,""));
-  return Number.isFinite(n)&&n>0 ? n : null;
-}
-
-async function loadLatestDashboardBunker(){
-  try{
-    const {data,error}=await supabase.from("dashboard").select("*").eq("key","last-bunker-prices").maybeSingle();
-    if(error||!data)return null;
-    return extractLatestAraMgo(data?.value ?? data?.data ?? data);
-  }catch{return null;}
 }
 function RateMatrixBunkerInput(){
   const bs=getBunkerState();
@@ -35,16 +14,8 @@ function RateMatrixBunkerInput(){
     const bs=getBunkerState();
     const cb=v=>{setVal(v);};
     bs.listeners.push(cb);
-    // Load saved value first, then sync to the latest Dashboard-refreshed ARA MGO.
-    loadRates().then(async d=>{
-      if(d?.__matrixBunker){bs.val=d.__matrixBunker;bs.listeners.forEach(c=>c(d.__matrixBunker));}
-      const latest=await loadLatestDashboardBunker();
-      if(latest){
-        bs.val=latest;
-        bs.listeners.forEach(c=>c(latest));
-        if(d && Number(d.__matrixBunker)!==latest)saveRates({...d,__matrixBunker:latest});
-      }
-    });
+    // Load saved bunker on mount
+    loadRates().then(d=>{if(d?.__matrixBunker){bs.val=d.__matrixBunker;bs.listeners.forEach(c=>c(d.__matrixBunker));}});
     return()=>{bs.listeners=bs.listeners.filter(x=>x!==cb);};
   },[]);
   return(
@@ -53,7 +24,7 @@ function RateMatrixBunkerInput(){
       defaultValue={val}
       onBlur={e=>{const n=parseFloat(e.target.value.replace(/[^0-9.]/g,""));if(!isNaN(n)&&n>0){const bs=getBunkerState();bs.val=n;bs.listeners.forEach(cb=>cb(n));}else{e.target.value=val;}}}
       onKeyDown={e=>{if(e.key==="Enter"){e.target.blur();}if(e.key==="Escape"){e.target.value=val;e.target.blur();}}}
-      style={{width:60,background:C.bg3,border:"1px solid "+C.amber,borderRadius:4,color:C.amber,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"2px 6px",outline:"none",textAlign:"right"}}
+      style={{width:60,background:"#162540",border:"1px solid "+C.amber,borderRadius:4,color:C.amber,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"2px 6px",outline:"none",textAlign:"right"}}
       title="Bunker price used for TCE auto-calculation"/>
   );
 }
@@ -104,9 +75,9 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
     const raw=matrixRef.current[ck]?.rate||"";
     const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));
     el.value=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;
-    el.style.background="transparent";
+    el.style.background=raw?c+"33":"transparent";
     el.style.color=raw?"#fff":C.faint;
-    el.style.fontWeight="400";
+    el.style.fontWeight=raw?"700":"400";
   },[extRev,ck]);
   const vRaw=matrixRef.current[ck]?.rate||"";
   const vNum=parseFloat(vRaw.replace(/[^0-9.\-]/g,""));
@@ -115,7 +86,7 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
     <input ref={inputRef} data-ck={ck}
       defaultValue={v}
       onFocus={e=>{e.target.style.outline="1px solid rgba(88,166,255,.5)";e.target.style.background="rgba(88,166,255,.07)";const raw=matrixRef.current[ck]?.rate||"";e.target.value=raw;e.target.select();}}
-      onBlur={e=>{e.target.style.outline="none";const raw=e.target.value.trim();const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));const display=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;e.target.value=display;e.target.style.background="transparent";e.target.style.color=raw?"#fff":C.faint;e.target.style.fontWeight="400";onSave(ck,raw);}}
+      onBlur={e=>{e.target.style.outline="none";const raw=e.target.value.trim();const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));const display=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;e.target.value=display;e.target.style.background=raw?c+"33":"transparent";e.target.style.color=raw?"#fff":C.faint;e.target.style.fontWeight=raw?"700":"400";onSave(ck,raw);}}
       onKeyDown={e=>{
         if(e.key==="Tab"||e.key==="Enter"){
           e.preventDefault();
@@ -139,43 +110,8 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
         padding:"3px 3px",textAlign:"center",boxSizing:"border-box",minWidth:0}}/>
   );
 }
-// CommentCell: free text (accepts text and numbers), shows per-row datestamp
-function CommentCell({ck,matrixRef,onSave,rev:extRev=0}){
-  const inputRef=useRef(null);
-  useEffect(()=>{
-    const el=inputRef.current;
-    if(!el||document.activeElement===el)return;
-    const val=matrixRef.current[ck]?.rate||"";
-    el.value=val;
-    el.style.color=val?"rgba(200,220,255,0.75)":C.faint;
-  },[extRev,ck]);
-  const val=matrixRef.current[ck]?.rate||"";
-  const ts=matrixRef.current[ck]?.ts||"";
-  return(
-    <div style={{display:"flex",alignItems:"center",width:"100%"}}>
-      <input ref={inputRef} data-ck={ck}
-        defaultValue={val}
-        
-        onFocus={e=>{e.target.style.outline="1px solid rgba(88,166,255,.4)";e.target.style.background="rgba(88,166,255,.06)";e.target.value=matrixRef.current[ck]?.rate||"";}}
-        onBlur={e=>{e.target.style.outline="none";e.target.style.background="transparent";const v=e.target.value.trim();e.target.style.color=v?"rgba(200,220,255,0.75)":C.faint;onSave(ck,v);}}
-        onKeyDown={e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape"){e.target.value=matrixRef.current[ck]?.rate||"";e.target.blur();}}}
-        style={{flex:1,background:"transparent",border:"none",outline:"none",
-          color:val?"rgba(200,220,255,0.75)":C.faint,fontFamily:"inherit",fontSize:11,
-          padding:"3px 4px",minWidth:0,width:"100%"}}/>
-      {ts&&<span style={{fontSize:9,color:"rgba(140,185,240,0.65)",whiteSpace:"nowrap",paddingRight:4,flexShrink:0,fontStyle:"italic"}}>{ts}</span>}
-    </div>
-  );
-}
-
-function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
+function RateMatrix({onBunkerChange}){
   const [rev,forceUpdate]=useState(0);
-  const [lastSaved,setLastSaved]=useState(()=>localStorage.getItem("signal_matrix_lastsaved")||null);
-
-  function markSaved(){
-    const now=new Date().toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
-    setLastSaved(now);
-    localStorage.setItem("signal_matrix_lastsaved",now);
-  }
   const matrixRef=useRef(defaultRateMatrix());
   const loadedRef=useRef(false);
 
@@ -189,21 +125,6 @@ function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
       }
       loadedRef.current=true;
       forceUpdate(n=>n+1);
-
-      // Dashboard bunker refresh is authoritative for Rate Matrix/TCE.
-      loadLatestDashboardBunker().then(latest=>{
-        if(!latest)return;
-        const current=Number(matrixRef.current.__matrixBunker);
-        setMatrixBunker(latest);
-        const bs=getBunkerState();
-        bs.val=latest;
-        bs.listeners.forEach(cb=>cb(latest));
-        if(current!==latest){
-          matrixRef.current.__matrixBunker=latest;
-          saveRates(matrixRef.current);
-          markSaved();
-        }
-      });
     });
   },[]);
   const [editComment,setEditComment]=useState(null);
@@ -225,7 +146,7 @@ function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
   function saveMatrixBunker(val){
     matrixRef.current.__matrixBunker=val;
     if(window._bunkerState){window._bunkerState.val=val;window._bunkerState.listeners.forEach(cb=>cb(val));}
-    if(loadedRef.current){saveRates(matrixRef.current);markSaved();}
+    if(loadedRef.current)saveRates(matrixRef.current);
   }
 
   // Re-calc all EU route TCEs when bunker price changes
@@ -249,13 +170,13 @@ function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
         },30);
       }
     });
-    if(loadedRef.current){saveRates(matrixRef.current);markSaved();}
+    if(loadedRef.current)saveRates(matrixRef.current);
   },[matrixBunker]);
 
   function saveRoutes(euR,rateR){
     matrixRef.current.__euRoutes=euR;
     matrixRef.current.__rateRoutes=rateR;
-    if(loadedRef.current){saveRates(matrixRef.current);markSaved();}
+    if(loadedRef.current)saveRates(matrixRef.current);
   }
   function updateEuRoute(i,field,val){
     const next=euRoutes.map((r,idx)=>idx===i?{...r,[field]:val}:r);
@@ -266,98 +187,37 @@ function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
     setRateRoutes(next);saveRoutes(euRoutes,next);
   }
 
-  // Save both route fields in one parent update. This avoids a re-render
-  // between FROM and TO while tabbing, which would otherwise remount the
-  // inline RouteLabel component and auto-focus FROM again.
-  function updateRoutePair(section,rgIdx,rtIdx,fromVal,toVal){
-    if(section==="eu"){
-      const next=euRoutes.map((r,idx)=>idx===rtIdx?{...r,from:fromVal,to:toVal}:r);
-      setEuRoutes(next);
-      saveRoutes(next,rateRoutes);
-    }else{
-      const next=rateRoutes.map((rg,ri)=>ri!==rgIdx?rg:{
-        ...rg,
-        routes:rg.routes.map((r,rti)=>rti!==rtIdx?r:{...r,from:fromVal,to:toVal})
-      });
-      setRateRoutes(next);
-      saveRoutes(euRoutes,next);
-    }
-  }
-
   function RouteLabel({section,rgIdx,rtIdx,from,to}){
     const key=section+"-"+rgIdx+"-"+rtIdx;
     const isEdit=editingRoute===key;
-    const fromRef=useRef(null);
-    const toRef=useRef(null);
-
-    function commitPair(){
-      const fromVal=fromRef.current?.value ?? from;
-      const toVal=toRef.current?.value ?? to;
-      updateRoutePair(section,rgIdx,rtIdx,fromVal,toVal);
-    }
-
     if(isEdit){
       return(
         <span style={{display:"inline-flex",gap:2,alignItems:"center"}}>
-          <input ref={fromRef} autoFocus defaultValue={from}
-            onBlur={e=>{
-              // Native Tab FROM -> TO: do not save/re-render while focus
-              // is moving inside the pair.
-              if(e.relatedTarget===toRef.current)return;
-              commitPair();
-              setEditingRoute(null);
-            }}
-            onKeyDown={e=>{
-              if(e.key==="Enter"){
-                e.preventDefault();
-                commitPair();
-                setEditingRoute(null);
-              }
-              if(e.key==="Escape"){
-                e.preventDefault();
-                setEditingRoute(null);
-              }
-              // Tab is deliberately not prevented.
-            }}
-            style={{width:52,background:C.bg3,border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"0 3px",outline:"none"}}/>
-          <span style={{color:C.faint,fontSize:12}}>→</span>
-          <input ref={toRef} defaultValue={to}
-            onBlur={e=>{
-              // Native Shift+Tab TO -> FROM: stay in edit mode.
-              if(e.relatedTarget===fromRef.current)return;
-              commitPair();
-              setEditingRoute(null);
-            }}
-            onKeyDown={e=>{
-              if(e.key==="Enter"){
-                e.preventDefault();
-                commitPair();
-                setEditingRoute(null);
-              }
-              if(e.key==="Escape"){
-                e.preventDefault();
-                setEditingRoute(null);
-              }
-              // Tab / Shift+Tab use normal browser focus order.
-            }}
-            style={{width:52,background:C.bg3,border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"0 3px",outline:"none"}}/>
+          <input autoFocus defaultValue={from}
+            onBlur={e=>{section==="eu"?updateEuRoute(rtIdx,"from",e.target.value):updateRgRoute(rgIdx,rtIdx,"from",e.target.value);setEditingRoute(null);}}
+            onKeyDown={e=>{if(e.key==="Tab"||e.key==="Enter"){e.preventDefault();const v=e.target.value;section==="eu"?updateEuRoute(rtIdx,"from",v):updateRgRoute(rgIdx,rtIdx,"from",v);e.target.blur();}if(e.key==="Escape")setEditingRoute(null);}}
+            style={{width:52,background:"#162540",border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"0 3px",outline:"none"}}/>
+          <span style={{color:"rgba(120,160,220,0.45)",fontSize:12}}>→</span>
+          <input defaultValue={to}
+            onBlur={e=>{section==="eu"?updateEuRoute(rtIdx,"to",e.target.value):updateRgRoute(rgIdx,rtIdx,"to",e.target.value);setEditingRoute(null);}}
+            onKeyDown={e=>{if(e.key==="Enter"||e.key==="Escape"){section==="eu"?updateEuRoute(rtIdx,"to",e.target.value):updateRgRoute(rgIdx,rtIdx,"to",e.target.value);setEditingRoute(null);}}}
+            style={{width:52,background:"#162540",border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"0 3px",outline:"none"}}/>
         </span>
       );
     }
     return(
       <span onClick={()=>setEditingRoute(key)} style={{cursor:"pointer"}} title="Click to edit route">
-        <span style={{fontWeight:600,fontSize:12,color:C.dim}}>{from}</span>
-        <span style={{color:C.faint,fontSize:12}}> → </span>
-        <span style={{fontWeight:600,fontSize:12,color:C.dim}}>{to}</span>
-        <span style={{color:C.faint,fontSize:8,marginLeft:3,opacity:0.5}}>✎</span>
+        <span style={{fontWeight:600,fontSize:12,color:"rgba(160,200,255,0.6)"}}>{from}</span>
+        <span style={{color:"rgba(120,160,220,0.45)",fontSize:12}}> → </span>
+        <span style={{fontWeight:600,fontSize:12,color:"rgba(160,200,255,0.6)"}}>{to}</span>
+        <span style={{color:"rgba(120,160,220,0.45)",fontSize:8,marginLeft:3,opacity:0.5}}>✎</span>
       </span>
     );
   }
 
   function onSave(key,val){
     const prev=matrixRef.current[key]||{};
-    const ts=(val&&val.trim())?new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short"}):(prev.ts||"");
-    matrixRef.current={...matrixRef.current,[key]:{...prev,rate:val,ts}};
+    matrixRef.current={...matrixRef.current,[key]:{...prev,rate:val,...(String(prev.rate??"")!==String(val??"")?{changed_at:new Date().toISOString()}:{})}};
     // Auto-calc TCE for EU routes when rate is entered
     if(key.endsWith("-rate")){
       const rtId=key.slice(0,-5);
@@ -381,25 +241,25 @@ function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
         }
       }
     }
-    if(loadedRef.current){saveRates(matrixRef.current);markSaved();forceUpdate(n=>n+1);}
+    if(loadedRef.current){saveRates(matrixRef.current);forceUpdate(n=>n+1);}
   }
   function onComment(key){setEditComment(key);}
   function updComment(key,val){
     const prev=matrixRef.current[key]||{};
-    matrixRef.current={...matrixRef.current,[key]:{...prev,comment:val}};
-    if(loadedRef.current){saveRates(matrixRef.current);markSaved();}
+    matrixRef.current={...matrixRef.current,[key]:{...prev,comment:val,...(String(prev.comment??"")!==String(val??"")?{changed_at:new Date().toISOString()}:{})}};
+    if(loadedRef.current)saveRates(matrixRef.current);
   }
 
-  const thS={padding:"4px 5px",fontSize:12,fontWeight:700,color:C.faint,background:C.bg,textAlign:"center",whiteSpace:"nowrap",borderBottom:"1px solid "+C.bd2};
-  const tdR={fontSize:12,padding:"1px 2px",borderBottom:"1px solid "+C.bg,verticalAlign:"middle",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"};
+  const thS={padding:"4px 5px",fontSize:12,fontWeight:700,color:"rgba(120,160,220,0.45)",background:C.bg,textAlign:"center",whiteSpace:"nowrap",borderBottom:"1px solid "+C.bd2};
+  const tdR={fontSize:12,padding:"1px 2px",borderBottom:"1px solid "+C.bg,verticalAlign:"middle"};
 
   // RCell is defined outside this component (see above)
 
   return(
-    <div style={{display:"flex",flexDirection:"column",gap:9,flex:1,overflowY:"auto"}}>
+    <div style={{display:"flex",flexDirection:"column",gap:9}}>
       {editComment&&(
-        <div style={{display:"flex",gap:4,alignItems:"center",background:C.bg3,border:"1px solid "+C.blue,borderRadius:4,padding:"3px 6px"}}>
-          <span style={{fontSize:12,color:C.faint}}>Comment for {editComment}:</span>
+        <div style={{display:"flex",gap:4,alignItems:"center",background:"#162540",border:"1px solid "+C.blue,borderRadius:4,padding:"3px 6px"}}>
+          <span style={{fontSize:12,color:"rgba(120,160,220,0.45)"}}>Comment for {editComment}:</span>
           <input defaultValue={matrixRef.current[editComment]?.comment||""}
             autoFocus
             onBlur={e=>{updComment(editComment,e.target.value.trim());setEditComment(null);}}
@@ -409,51 +269,48 @@ function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
       )}
 
       {/* Intra Europe: Rate + TCE columns */}
-      {(!sectionFilter || sectionFilter==="Europe") && (
       <div>
-        <div style={{display:"flex",alignItems:"center",fontSize:12,fontWeight:700,color:REGION_COLORS.Europe,textTransform:"uppercase",letterSpacing:"0.07em",padding:"3px 5px",background:REGION_COLORS.Europe+"18",borderLeft:"2px solid "+REGION_COLORS.Europe,marginBottom:2}}>
-          <span style={{flex:1}}>Intra Europe</span>
-          {bunkerHeader&&<div onClick={e=>e.stopPropagation()}>{bunkerHeader}</div>}
+        <div style={{fontSize:12,fontWeight:700,color:REGION_COLORS.Europe,textTransform:"uppercase",letterSpacing:"0.07em",padding:"3px 5px",background:REGION_COLORS.Europe+"18",borderLeft:"2px solid "+REGION_COLORS.Europe,marginBottom:2}}>
+          Intra Europe
         </div>
         <table style={{borderCollapse:"collapse",width:"100%"}}>
           <thead><tr>
-            <th style={{...thS,textAlign:"left",width:"35%"}}>Route</th>
-            <th style={{...thS,width:"15%",color:"#79c0ff"}}>Rate ($ lsum)</th>
+            <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
+            <th style={{...thS,width:"15%"}}>Rate ($ lsum)</th>
             <th style={{...thS,width:"15%",color:C.green}}>TCE $/day</th>
-            <th style={{...thS,width:"30%",textAlign:"left"}}><span>Comment</span></th>
+            <th style={{...thS,width:"40%"}}>Comment</th>
           </tr></thead>
           <tbody>
             {euRoutes.map((rt,i)=>(
-              <tr key={rt.id||i} style={{background:i%2?"rgba(255,255,255,0.02)":"transparent"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(58,130,246,0.06)"} onMouseLeave={e=>e.currentTarget.style.background=i%2?"rgba(255,255,255,0.02)":"transparent"}>
-                <td style={{...tdR,color:C.dim,paddingLeft:4}}>
+              <tr key={rt.id||i} style={{background:i%2===0?C.bg:C.bg2}}>
+                <td style={{...tdR,color:"rgba(160,200,255,0.6)",paddingLeft:4}}>
                   <RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/>
                 </td>
                 <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-rate"} col={REGION_COLORS.Europe} rev={rev}/></td>
                 <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-tce"} col={C.green} rev={rev}/></td>
-                <td style={{...tdR,padding:0}}><CommentCell matrixRef={matrixRef} onSave={onSave} ck={rt.id+"-comment"} rev={rev}/></td>
+                <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-comment"} col={C.faint} rev={rev}/></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      )}
 
       {/* Asia + TA: by size */}
-      {rateRoutes.map((rg,rgIdx)=>({rg,rgIdx})).filter(({rg})=>!sectionFilter||sectionFilter===rg.region).map(({rg,rgIdx})=>(
+      {rateRoutes.map((rg,rgIdx)=>(
         <div key={rg.region}>
           <div style={{fontSize:12,fontWeight:700,color:REGION_COLORS[rg.region],textTransform:"uppercase",letterSpacing:"0.07em",padding:"3px 5px",background:REGION_COLORS[rg.region]+"18",borderLeft:"2px solid "+REGION_COLORS[rg.region],marginBottom:2}}>
             {rg.label}
           </div>
           <table style={{borderCollapse:"collapse",width:"100%"}}>
             <thead><tr>
-              <th style={{...thS,textAlign:"left",width:"35%"}}>Route</th>
-              {RATE_SIZES.map(sz=>(<th key={sz} style={{...thS,width:"9%"}}>{sz}</th>))}
-              <th style={{...thS,width:"30%",textAlign:"left"}}>Comment</th>
+              <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
+              {RATE_SIZES.map(sz=>(<th key={sz} style={{...thS,width:"11.67%"}}>{sz}</th>))}
+              <th style={{...thS,width:"40%"}}>Comment</th>
             </tr></thead>
             <tbody>
               {rg.routes.map((rt,rtIdx)=>(
-                <tr key={rt.id||rtIdx} style={{background:rtIdx%2?"rgba(255,255,255,0.02)":"transparent"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(58,130,246,0.06)"} onMouseLeave={e=>e.currentTarget.style.background=rtIdx%2?"rgba(255,255,255,0.02)":"transparent"}>
-                  <td style={{...tdR,color:C.dim,paddingLeft:4}}>
+                <tr key={rt.id||rtIdx} style={{background:rtIdx%2===0?C.bg:C.bg2}}>
+                  <td style={{...tdR,color:"rgba(160,200,255,0.6)",paddingLeft:4}}>
                     <RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/>
                   </td>
                   {RATE_SIZES.map(sz=>(
@@ -461,7 +318,7 @@ function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
                       <RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-"+sz} col={REGION_COLORS[rg.region]} rev={rev}/>
                     </td>
                   ))}
-                  <td style={{...tdR,padding:0}}><CommentCell matrixRef={matrixRef} onSave={onSave} ck={rt.id+"-comment"} rev={rev}/></td>
+                  <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-comment"} col={C.faint} rev={rev}/></td>
                 </tr>
               ))}
             </tbody>
@@ -474,84 +331,5 @@ function RateMatrix({onBunkerChange, bunkerHeader, sectionFilter=null}){
 
 // ─── Intel Vault ──────────────────────────────────────────────────────────────
 
-// ─── Rate Matrix Card — condensed by default, expands to full matrix ─────────
-// Sits alongside other same-height panels (e.g. the Parsing section) when
-// collapsed; click the arrow (or click elsewhere) to expand/collapse.
-// The settings gear flips the card to choose which section shows when minimized.
-const MINIMIZED_SECTION_KEY = "signal_matrix_minimized_section";
-const SECTION_OPTIONS = [
-  { key: "Europe", label: "Intra Europe" },
-  { key: "Asia", label: "Asia → Europe" },
-  { key: "TA", label: "Transatlantic" },
-];
-
-function RateMatrixCard({ collapsedHeight = 460, bunkerHeader, onExpandChange }) {
-  const [expanded, setExpandedRaw] = useState(false);
-  const setExpanded = (v) => { setExpandedRaw(v); onExpandChange?.(v); };
-  const [showSettings, setShowSettings] = useState(false);
-  const [minimizedSection, setMinimizedSection] = useState(() => localStorage.getItem(MINIMIZED_SECTION_KEY) || "Europe");
-  const cardRef = useRef(null);
-
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (expanded && cardRef.current && !cardRef.current.contains(e.target)) {
-        setExpanded(false);
-        setShowSettings(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [expanded]);
-
-  function chooseSection(key) {
-    setMinimizedSection(key);
-    localStorage.setItem(MINIMIZED_SECTION_KEY, key);
-    setShowSettings(false);
-  }
-
-  return (
-    <div ref={cardRef} style={{
-      background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden",
-      display: "flex", flexDirection: "column",
-      height: expanded ? "auto" : collapsedHeight,
-      maxHeight: expanded ? 720 : collapsedHeight,
-      width: "100%",
-      transition: "max-height .18s ease",
-    }}>
-      <div style={{ padding: "7px 10px", background: C.bg3, borderBottom: "1px solid " + C.bd2, display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: C.tx, flex: 1 }}>Rate Matrix</span>
-        <button onClick={() => setShowSettings(s => !s)} title="Choose minimized view"
-          style={{ background: "none", border: "none", color: C.faint, cursor: "pointer", fontSize: 13 }}>⚙</button>
-        <button onClick={() => { setExpanded(!expanded); setShowSettings(false); }} title={expanded ? "Collapse" : "Expand"}
-          style={{ background: "none", border: "none", color: C.blue, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
-          {expanded ? "▾ collapse" : "▸ expand"}
-        </button>
-      </div>
-
-      {showSettings ? (
-        <div style={{ padding: 14, flex: 1, overflowY: "auto" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
-            Show when minimized
-          </div>
-          {SECTION_OPTIONS.map(opt => (
-            <button key={opt.key} onClick={() => chooseSection(opt.key)}
-              style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 10px", marginBottom: 5, borderRadius: 5, cursor: "pointer",
-                border: "1px solid " + (minimizedSection === opt.key ? REGION_COLORS[opt.key] : C.bd),
-                background: minimizedSection === opt.key ? REGION_COLORS[opt.key] + "18" : "transparent",
-                color: minimizedSection === opt.key ? REGION_COLORS[opt.key] : C.dim, fontFamily: "inherit", fontSize: 12, fontWeight: 600 }}>
-              {minimizedSection === opt.key ? "✓ " : ""}{opt.label}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div style={{ flex: 1, overflow: "hidden", padding: 8 }}>
-          <RateMatrix bunkerHeader={bunkerHeader} sectionFilter={expanded ? null : minimizedSection} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-
-export { RateMatrix, RateMatrixCard, RateMatrixBunkerInput, getBunkerState, defaultRateMatrix };
+export { RateMatrix, RateMatrixBunkerInput, getBunkerState, defaultRateMatrix };
 export default RateMatrix;
