@@ -102,14 +102,21 @@ function ConfirmModal({ message, onConfirm, onCancel }) {
 
 // Supabase .in() URLs become unwieldy with a large roster.
 // Query in modest chunks while still keeping the number of requests low.
-async function fetchInChunks(table, select, column, values, chunkSize=120) {
+const isTransientTimeout = e => /statement timeout|canceling statement|57014|gateway timeout|fetch failed/i.test(String(e?.message||e||""));
+const wait = ms => new Promise(resolve=>setTimeout(resolve,ms));
+async function fetchInChunks(table, select, column, values, chunkSize=60) {
   const clean = [...new Set(values.filter(Boolean))];
   if (!clean.length) return [];
   const out = [];
   for (let i=0; i<clean.length; i+=chunkSize) {
     const chunk = clean.slice(i,i+chunkSize);
-    const {data,error} = await supabase.from(table).select(select).in(column,chunk);
-    if (error) throw error;
+    let data;
+    for (let attempt=0; attempt<3; attempt++) {
+      const result = await supabase.from(table).select(select).in(column,chunk);
+      if (!result.error) { data=result.data; break; }
+      if (!isTransientTimeout(result.error) || attempt===2) throw result.error;
+      await wait(350 * (attempt+1));
+    }
     if (data?.length) out.push(...data);
   }
   return out;
@@ -298,7 +305,9 @@ export default function OutsidersTab({ compact=false }) {
 
   async function fetchLivePositions(roster) {
     const imos = roster.map(r=>normIMO(r.imo)).filter(Boolean);
-    const names = roster.map(r=>r.vessel).filter(Boolean);
+    // Names are only needed for vessels without an IMO. Avoid querying
+    // the same positions_latest records twice for the rest of the roster.
+    const names = roster.filter(r=>!normIMO(r.imo)).map(r=>r.vessel).filter(Boolean);
 
     let pData = [];
     try {
