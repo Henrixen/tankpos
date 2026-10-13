@@ -25,7 +25,6 @@ const IntelVault     = React.lazy(()=>import("./IntelVault"));
 const IntelVaultStrip = React.lazy(()=>import("./IntelVault").then(m=>({default:m.IntelVaultStrip})));
 const AISMap         = React.lazy(()=>import("./AISMap"));
 const MatrixTable    = React.lazy(()=>import("./components/ui/MatrixTable"));
-const VoyageMatrix   = React.lazy(()=>import("./VoyageMatrix"));
 const NotesTab       = React.lazy(()=>import("./NotesTab"));
 const CalendarTab    = React.lazy(()=>import("./CalendarTab"));
 const SettingsTab    = React.lazy(()=>import("./SettingsTab"));
@@ -914,9 +913,9 @@ function HScrollRow({children,style}){
 // overflow the width — no visible scrollbar).
 function FilterRow({label,col,children}){
   return (
-    <div style={{display:"flex",alignItems:"center",gap:8,padding:"2px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
-      <div style={{width:74,flexShrink:0,fontSize:9,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em"}}>{label}</div>
-      <HScrollRow style={{gap:4}}>{children}</HScrollRow>
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"5px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
+      <div style={{width:80,flexShrink:0,fontSize:10,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em"}}>{label}</div>
+      <HScrollRow style={{gap:6}}>{children}</HScrollRow>
     </div>
   );
 }
@@ -926,9 +925,9 @@ function FilterRow({label,col,children}){
 // DWT/Built which pair a short chip list with two small range inputs.
 function FilterRowWrap({label,col,children}){
   return (
-    <div style={{display:"flex",alignItems:"flex-start",gap:8,padding:"2px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
-      <div style={{width:74,flexShrink:0,fontSize:9,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em",paddingTop:2}}>{label}</div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:4,flex:1,minWidth:0,rowGap:3}}>{children}</div>
+    <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"6px 2px",borderBottom:"1px solid "+C.bd2,minWidth:0}}>
+      <div style={{width:80,flexShrink:0,fontSize:10,fontWeight:800,color:col,textTransform:"uppercase",letterSpacing:"0.04em",paddingTop:4}}>{label}</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,flex:1,minWidth:0,rowGap:6}}>{children}</div>
     </div>
   );
 }
@@ -1328,16 +1327,54 @@ class TabErrorBoundary extends React.Component {
   }
 }
 
+// Stable search component: typing stays local, and the large Positions table
+// only recalculates after a short pause. Defined outside DesktopApp so React
+// never remounts the input during parent renders.
+const PositionSearchInput = React.memo(function PositionSearchInput({value,onSearch,mobile=false}) {
+  const [draft,setDraft] = React.useState(value || "");
+  const timer = React.useRef(null);
+  React.useEffect(() => {
+    setDraft(value || "");
+  }, [value]);
+  React.useEffect(() => () => clearTimeout(timer.current), []);
+  const change = (next) => {
+    setDraft(next);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => onSearch(next), 180);
+  };
+  const clear = () => {
+    clearTimeout(timer.current);
+    setDraft("");
+    onSearch("");
+  };
+  return (
+    <div style={mobile
+      ? {position:"relative",display:"flex",alignItems:"center",width:"100%"}
+      : {position:"relative",marginLeft:"auto",display:"flex",alignItems:"center",gap:4,width:270,minWidth:270,maxWidth:270,flex:"0 0 270px"}}>
+      <input value={draft} onChange={e => change(e.target.value)}
+        placeholder="🔍 Multi-search: e.g. belfast ulsd 1A"
+        aria-label="Search positions"
+        style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:mobile?"7px 30px 7px 10px":"5px 28px 5px 10px",outline:"none",width:"100%",boxSizing:"border-box"}} />
+      {draft && <button type="button" onClick={clear} aria-label="Clear positions search"
+        style={{position:"absolute",right:mobile?7:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>✕</button>}
+    </div>
+  );
+});
+
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
   // ── PIN config ───────────────────────────────────────────────────────────
-  const DEFAULT_USER_TABS = ["pos","cargo","clients"];
+  const MASTER_PIN = "4524"; // ← your PIN → full access
+  const DEFAULT_GUEST_PIN = "0250";
+  const GUEST_TABS_KEY = "guest_visible_tabs";
+  const GUEST_PIN_KEY = "guest_pin";
+  const DEFAULT_GUEST_TABS = ["pos","cargo","clients"];
 
   const [unlocked, setUnlocked] = React.useState(false); // always ask on load
-  const [userTabs,setUserTabs] = React.useState(DEFAULT_USER_TABS);
+  const [guestPin,setGuestPin] = React.useState(DEFAULT_GUEST_PIN);
+  const [guestTabs,setGuestTabs] = React.useState(DEFAULT_GUEST_TABS);
   const [pinInput, setPinInput] = React.useState("");
   const [pinError, setPinError] = React.useState(false);
-  const [guestMode, setGuestMode] = React.useState(false); // true = restricted User (kept name to avoid unrelated navigation changes)
-  const [currentAppUser,setCurrentAppUser] = React.useState(null);
+  const [guestMode, setGuestMode] = React.useState(false);
 
   // Login-screen live feeds. Fail quietly so the PIN screen always remains usable.
   const [loginMarkets,setLoginMarkets]=React.useState({
@@ -1346,12 +1383,24 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [loginNews,setLoginNews]=React.useState([]);
   const [loginFeedLoading,setLoginFeedLoading]=React.useState(true);
 
-  // Per-user tab access is loaded after that user's PIN is accepted.
+  // Guest tab visibility is controlled from Settings and stored in Supabase.
   React.useEffect(()=>{
-    const onUserAccess=e=>{if(currentAppUser?.id===e.detail?.userId&&Array.isArray(e.detail?.tabs))setUserTabs(e.detail.tabs.filter(id=>id!=="settings"));};
-    window.addEventListener("user-access-updated",onUserAccess);
-    return()=>window.removeEventListener("user-access-updated",onUserAccess);
-  },[currentAppUser?.id]);
+    let alive=true;
+    (async()=>{
+      try{
+        const [{data:tabsData},{data:pinData}]=await Promise.all([
+          supabase.from("tag_settings").select("value").eq("key",GUEST_TABS_KEY).maybeSingle(),
+          supabase.from("tag_settings").select("value").eq("key",GUEST_PIN_KEY).maybeSingle()
+        ]);
+        const raw=tabsData?.value;
+        const tabs=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
+        if(alive&&tabs?.length)setGuestTabs(tabs.filter(id=>id!=="settings"));
+        const cloudPin=String(pinData?.value??"").replace(/\D/g,"").slice(0,4);
+        if(alive&&cloudPin.length===4)setGuestPin(cloudPin);
+      }catch(_){}
+    })();
+    return()=>{alive=false;};
+  },[]);
 
   React.useEffect(()=>{
     if(unlocked)return;
@@ -1359,28 +1408,45 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     const loadLoginFeeds=async()=>{
       try{
         const [mktRes,newsRes]=await Promise.allSettled([
-          Promise.all([
-            fetch("/api/login-market",{cache:"no-store"}).then(r=>r.ok?r.json():null).catch(()=>null),
-            fetch("/api/bunkers",{cache:"no-store"}).then(r=>r.ok?r.json():null).catch(()=>null)
-          ]).then(([market,bunker])=>{
-            const valid=v=>v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v))&&Number(v)>0?Number(v):null;
-            return {...(market||{}),mgoAra:valid(bunker?.ARA_MGO),mgoSingapore:valid(bunker?.SIN_MGO),mgoUsg:valid(bunker?.HOU_MGO),bunkerDate:bunker?.date||null};
-          }),
+          fetch("/api/login-market",{cache:"no-store"}).then(r=>r.ok?r.json():null),
           fetch("/api/login-news",{cache:"no-store"}).then(r=>r.ok?r.json():null)
         ]);
         if(!alive)return;
-        const liveMarket=mktRes.status==="fulfilled"&&mktRes.value?mktRes.value:null;
-        if(liveMarket)setLoginMarkets(v=>({...v,...liveMarket}));
-
-        // Do not overwrite the live market response with a cached bunker price.
-        // If the live feed cannot provide a port, display unavailable rather
-        // than an old quote that looks current.
-
-        // The API already returns newest-first news. Do not re-parse the display
-        // date in the browser: locale-formatted RSS dates were being rejected,
-        // leaving only the two placeholder cards on the start page.
+        if(mktRes.status==="fulfilled"&&mktRes.value)setLoginMarkets(v=>({...v,...mktRes.value}));
+        // Keep the front-page bunker strip aligned with the latest Dashboard refresh
+        // while retaining the original USG / ARA / Singapore layout.
+        try{
+          const {data}=await supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle();
+          const b=data?.value?(typeof data.value==="string"?JSON.parse(data.value):data.value):null;
+          if(b)setLoginMarkets(v=>{
+            const apiTs=Date.parse(v.updatedAt||"");
+            const bunkerTs=Date.parse(b.date||"");
+            const useBunker=Number.isFinite(bunkerTs)&&(!Number.isFinite(apiTs)||bunkerTs>apiTs);
+            return useBunker?{...v,
+              mgoAra:Number(b.ARA_MGO)||v.mgoAra,
+              mgoSingapore:Number(b.SIN_MGO)||v.mgoSingapore,
+              bunkerDate:b.date||v.bunkerDate
+            }:v;
+          });
+        }catch(_){}
         if(newsRes.status==="fulfilled"&&Array.isArray(newsRes.value?.items)){
-          setLoginNews(newsRes.value.items.filter(n=>n&&n.title).slice(0,8));
+          const now=Date.now(),futureGrace=6*60*60*1000;
+          const safeItems=newsRes.value.items.filter(n=>{
+            if(!n?.published)return true;
+            const raw=String(n.published).trim();
+            let t=Date.parse(raw);
+            if(!Number.isFinite(t)){
+              const m=raw.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s*(?:[,.]\s*)?(\d{4})?(?:[,\s]+(\d{1,2}):(\d{2}))?/);
+              if(m){
+                const y=Number(m[3]||new Date().getFullYear());
+                t=Date.parse(`${m[1]} ${m[2]} ${y} ${m[4]||"00"}:${m[5]||"00"}`);
+              }
+            }
+            if(!Number.isFinite(t)) return false;
+            const age=now-t,maxAge=14*24*60*60*1000;
+            return t<=now+futureGrace&&age<=maxAge;
+          });
+          setLoginNews(safeItems.slice(0,8));
         }
       }catch(_){}
       finally{if(alive)setLoginFeedLoading(false);}
@@ -1400,28 +1466,34 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   // lookup table was always empty. Load it once on mount instead.
   useEffect(()=>{ if(!vesselDBLoaded && !vesselDBLoading && onLoadVesselDB) onLoadVesselDB(); },[]);
 
-
+  React.useEffect(()=>{
+    const onGuestAccess=e=>{
+      const next=e?.detail||{};
+      if(Array.isArray(next.tabs))setGuestTabs(next.tabs.filter(id=>id!=="settings"));
+      const p=String(next.pin??"").replace(/\D/g,"").slice(0,4);
+      if(p.length===4)setGuestPin(p);
+    };
+    window.addEventListener("guest-access-updated",onGuestAccess);
+    return()=>window.removeEventListener("guest-access-updated",onGuestAccess);
+  },[]);
 
   // No sessionStorage — PIN required on every load/refresh/new tab
 
-  async function submitPin(p){
-    try{
-      const enc=new TextEncoder().encode(String(p));
-      const dig=await crypto.subtle.digest("SHA-256",enc);
-      const hash=[...new Uint8Array(dig)].map(x=>x.toString(16).padStart(2,"0")).join("");
-      const {data:user,error}=await supabase.from("app_users").select("id,name,initials,role,active,pin_hash").eq("pin_hash",hash).eq("active",true).maybeSingle();
-      if(error||!user)throw new Error("invalid");
-      const isAdmin=user.role==="admin";
-      let tabs=DEFAULT_USER_TABS;
-      if(!isAdmin){
-        const {data:access}=await supabase.from("tag_settings").select("value").eq("key","user_tabs_"+user.id).maybeSingle();
-        const raw=access?.value, configured=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
-        tabs=(configured||DEFAULT_USER_TABS).filter(id=>id!=="settings");
-      }
-      localStorage.setItem("signal_user",String(user.initials||"").toUpperCase());
-      setCurrentAppUser(user); setUserTabs(tabs); setGuestMode(!isAdmin); setUnlocked(true); setPinInput("");
-    }catch(_){
-      setPinError(true); setPinInput(""); setTimeout(()=>setPinError(false),1200);
+  function submitPin(p){
+    if(p===MASTER_PIN){
+      localStorage.setItem("signal_user","H");
+      setGuestMode(false);
+      setUnlocked(true);
+      setPinInput("");
+    } else if(p===guestPin){
+      localStorage.setItem("signal_user","L");
+      setGuestMode(true);
+      setUnlocked(true);
+      setPinInput("");
+    } else {
+      setPinError(true);
+      setPinInput("");
+      setTimeout(()=>setPinError(false),1200);
     }
   }
 
@@ -1447,7 +1519,6 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [search,setSearch]=useState("");
   const [filters,setFilters]=useState(new Set());
   const [posTagFilter,setPosTagFilter]=useState(new Set());
-  const [coatingFilter,setCoatingFilter]=useState(new Set());
   const [dwtRange,setDwtRange]=useState({min:"",max:""});
   const [builtRange,setBuiltRange]=useState({min:"",max:""});
   const [openDateFilter,setOpenDateFilter]=useState({quick:"",from:"",to:""});
@@ -1560,7 +1631,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     return()=>window.removeEventListener("navigation-config-updated",h);
   },[]);
   const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
-  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||userTabs.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode,userTabs]);
+  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||guestTabs.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode,guestTabs]);
   const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
   const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set());setMobileNavOpen(false)});
  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
@@ -1632,6 +1703,7 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
   function inRange(dateStr,from,to){if(!dateStr)return false;const d=new Date(dateStr);d.setHours(0,0,0,0);return d>=from&&d<=to;}
+  const [mxSearch,setMxSearch]=useState("");
   const CARGO_COLUMN_KEYS=["select","status","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment","tag","updated","badge","delete"];
   const QF_COLUMN_KEYS=["select","status","ex_region","to_region","p_and_c","intelligence","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment","tag","source","updated","badge","delete"];
   const QF_DEFAULT_VISIBLE=["select","status","ex_region","to_region","p_and_c","intelligence","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment","badge","delete"];
@@ -1775,12 +1847,6 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
   // Use mobile state from TankPos (reactive, with manual override) — must be before colWidths
   const mobile = mobileProp !== undefined ? mobileProp : isMobile();
-  const PositionControlsWrap = ({children}) => mobile ? (
-    <details style={{width:"100%",border:"1px solid "+C.bd,borderRadius:5,background:C.bg2,display:"block"}}>
-      <summary style={{display:"block",padding:"7px 9px",cursor:"pointer",color:C.blue,fontWeight:700,listStyle:"none"}}>Position controls</summary>
-      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",padding:"0 8px 8px"}}>{children}</div>
-    </details>
-  ) : <>{children}</>;
 
   // Mobile: hide the top header while scrolling down and slide it back in
   // as soon as the user scrolls up. Keep it visible near the top or while
@@ -2293,10 +2359,6 @@ const filtV=useMemo(()=>{
       return vesselTags.some(t=>selectedTags.has(t));
     });
   }
-  if(coatingFilter.size>0){
-    const selectedCoatings=new Set([...coatingFilter].map(c=>String(c||"").trim().toUpperCase()));
-    list=list.filter(v=>selectedCoatings.has(String(fmtCoating(v.coating)||"").trim().toUpperCase()));
-  }
   // Open-date filter. Uses the same daysBetween parser already used by Positions,
   // so displayed dates such as "10 OCT" and ISO date inputs are compared consistently.
   if(openDateFilter.quick||openDateFilter.from||openDateFilter.to){
@@ -2441,7 +2503,6 @@ const filtV=useMemo(()=>{
   superRegionFilter,
   segmentFilter,
   [...posTagFilter].join(),
-  [...coatingFilter].join(),
   dwtRange.min,dwtRange.max,builtRange.min,builtRange.max,
   [...dwtFilter].join(),
   [...builtFilter].join(),
@@ -2701,7 +2762,7 @@ const filtV=useMemo(()=>{
                       border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.72)":"rgba(88,166,255,.18)"),
                       display:"flex",alignItems:"center",justifyContent:"center",fontSize:mobile?21:24,fontWeight:850,color:pinError?"#ff6b6b":"#79c0ff",
                       boxShadow:pinInput.length>i&&!pinError?"0 0 18px rgba(88,166,255,.12)":"none"
-                    }}><span style={{display:"block",fontSize:mobile?31:36,lineHeight:1,transform:"translateY(-1px)"}}>{pinInput.length>i?"*":""}</span></div>)}
+                    }}> {pinInput.length>i?"*":""}</div>)}
                   </div>
 
                   <style>{`
@@ -2832,7 +2893,7 @@ const filtV=useMemo(()=>{
                 <span style={{fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:4,
                   background:"rgba(250,163,86,0.12)",border:"1px solid rgba(250,163,86,0.3)",
                   color:"rgba(250,163,86,0.8)",letterSpacing:"0.1em",textTransform:"uppercase",marginLeft:4}}>
-                  User
+                  Guest
                 </span>
               )}
             </div>
@@ -2973,7 +3034,7 @@ const filtV=useMemo(()=>{
             }}>{m.label}</span>}
           </button>})}
         </aside>}
-        <div style={{padding:mobile?"8px 8px":"12px 8px",maxWidth:"none",margin:"0 auto",flex:1,minWidth:0,width:"100%",boxSizing:"border-box"}}>
+        <div style={{padding:mobile?"8px 8px":((tab==="cargo"||tab==="cargo2"||tab==="pos")?"12px 8px":"12px 20px"),maxWidth:(tab==="cargo"||tab==="cargo2"||tab==="pos")?"none":1900,margin:"0 auto",flex:1,minWidth:0,width:"100%",boxSizing:"border-box"}}>
       <TabErrorBoundary>
 
         {/* ── POSITIONS ── */}
@@ -3096,7 +3157,7 @@ const filtV=useMemo(()=>{
                       )}
                     </div>
                   )}
-                  <div style={{flex:1,minHeight:0,overflowY:"hidden",padding:"2px 12px",display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+                  <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"4px 12px",display:"flex",flexDirection:"column",justifyContent:"space-evenly"}}>
                     {(()=>{
                       const Chip=({active,onClick,col,children})=>(
                         <button onClick={onClick} style={{...fbBig(active,col),textTransform:"uppercase"}}>{children}</button>
@@ -3115,13 +3176,6 @@ const filtV=useMemo(()=>{
                               </button>
                             )}
                             {outsiderSyncStatus&&<span style={{ fontSize:11, color:C.faint }}>{outsiderSyncStatus}</span>}
-                          </FilterRow>
-                          {/* Coating */}
-                          <FilterRow label="Coating" col="#2dd4bf">
-                            {[...new Set(vessels.map(v=>String(fmtCoating(v.coating)||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(c=>(
-                              <Chip key={c} col="#2dd4bf" active={coatingFilter.has(c)} onClick={()=>{setCoatingFilter(prev=>{const n=new Set(prev);n.has(c)?n.delete(c):n.add(c);return n;});setPosPage(1);}}>{c}</Chip>
-                            ))}
-                            {coatingFilter.size>0&&<Chip col={C.red} active={false} onClick={()=>{setCoatingFilter(new Set());setPosPage(1);}}>✕</Chip>}
                           </FilterRow>
                           {/* Updated */}
                           <FilterRow label="Updated" col={C.blue}>
@@ -3277,12 +3331,6 @@ const filtV=useMemo(()=>{
                           {(()=>{const available=getTagListFor("position");return available.length?available.map(t=>(<B key={t} active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t.toUpperCase()}</B>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>NONE</span>;})()}
                           {posTagFilter.size>0&&<B active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
                         </COL>
-                        <COL label="Coating" col="#2dd4bf">
-                          {[...new Set(vessels.map(v=>String(fmtCoating(v.coating)||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(c=>(
-                            <B key={c} active={coatingFilter.has(c)} onClick={()=>{setCoatingFilter(prev=>{const n=new Set(prev);n.has(c)?n.delete(c):n.add(c);return n;});setPosPage(1);}}>{c}</B>
-                          ))}
-                          {coatingFilter.size>0&&<B active={false} onClick={()=>{setCoatingFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
-                        </COL>
                         <COL label="Open Date" col="#38bdf8">
                           <B active={openDateFilter.quick==="ppt"} onClick={()=>{setOpenDateFilter(r=>({quick:r.quick==="ppt"?"":"ppt",from:"",to:""}));setPosPage(1);}}>Today/Tomorrow</B>
                           <OpenDateRangeSlider/>
@@ -3334,15 +3382,12 @@ const filtV=useMemo(()=>{
                   display:"flex",alignItems:"center",gap:8,padding:"6px 10px",
                   background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,
                   flexWrap:mobile?"wrap":"nowrap",minHeight:38,boxSizing:"border-box",
-                  overflowX:mobile?"visible":"auto",overflowY:mobile?"visible":"hidden",scrollbarWidth:"thin"
+                  overflowX:"visible",overflowY:"visible",scrollbarWidth:"thin"
                 }}>
-                  {mobile&&<div style={{position:"relative",display:"flex",alignItems:"center",width:"100%"}}>
-                    <input value={search} onChange={e=>setSearch(e.target.value)}
-                      placeholder="🔍 Multi-search: e.g. belfast ulsd 1A"
-                      style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"7px 30px 7px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
-                    {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:7,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>}
-                  </div>}
-                  <PositionControlsWrap>
+                  {mobile&&<PositionSearchInput mobile value={search} onSearch={setSearch}/> }
+                  <details open={!mobile} style={{width:mobile?"100%":"auto",border:mobile?"1px solid "+C.bd:"none",borderRadius:mobile?5:0,background:mobile?C.bg2:"transparent",display:mobile?"block":"contents"}}>
+                    <summary style={{display:mobile?"block":"none",padding:"7px 9px",cursor:"pointer",color:C.blue,fontWeight:700,listStyle:"none"}}>Position controls</summary>
+                    <div style={{display:mobile?"flex":"contents",gap:6,alignItems:"center",flexWrap:"wrap",padding:mobile?"0 8px 8px":0}}>
 
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
@@ -3355,7 +3400,7 @@ const filtV=useMemo(()=>{
                       >
                         🗑 Delete ({selVessels.size})
                       </button>
-                      <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setCoatingFilter(new Set());setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());setSelVessels(new Set());setOpFilter(null);}}
+                      <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());setSelVessels(new Set());setOpFilter(null);}}
                         style={{fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",border:"1px solid "+C.bd,background:C.bg2,color:C.tx}}>
                         ✕ Clear all
                       </button>
@@ -3392,20 +3437,8 @@ const filtV=useMemo(()=>{
                   <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{displayPosRows.length}</span></span>
                   <span style={{color:C.faint}}>Selected <span style={{color:"#4fc3f7",fontWeight:700}}>{selVessels.size}</span></span>
                   
-                  {/* MOVED SEARCH FIELD HERE */}
-                  <div style={{position:"relative",marginLeft:"auto",display:mobile?"none":"flex",alignItems:"center",gap:4,width:270,minWidth:270,maxWidth:270,flex:"0 0 270px"}}>
-                    <input
-                      value={search}
-                      onChange={e=>setSearch(e.target.value)}
-                      placeholder="🔍 Multi-search: e.g. belfast ulsd 1A"
-                      style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}
-                    />
-                    {search&&(
-                      <button onClick={()=>setSearch("")} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:1}}>
-                        ✕
-                      </button>
-                    )}
-                  </div>
+                  {/* Stable desktop search field */}
+                  {!mobile&&<PositionSearchInput value={search} onSearch={setSearch}/>}
                   <span style={{fontSize:11,color:C.faint,whiteSpace:"nowrap",flexShrink:0}}>Sort</span>
                   <select value={sortK} onChange={e=>srt(e.target.value)}
                     style={{fontSize:11,background:C.bg2,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",colorScheme:"dark",flexShrink:0}}>
@@ -3422,7 +3455,7 @@ const filtV=useMemo(()=>{
                     style={{fontSize:11,background:C.bg,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,padding:"2px 6px",cursor:"pointer",fontFamily:"inherit",minWidth:28,flexShrink:0}}>
                     {sortD>0?"▲":"▼"}
                   </button>
-                  </PositionControlsWrap>
+                  </div></details>
                 </div>
 
                 {bulkPosTagOpen&&(
@@ -3831,10 +3864,7 @@ const filtV=useMemo(()=>{
 
         {/* ── FIXING ── */}
         {tab==="clients"&&(
-          <div className="clients-full-width" style={{width:"100%",maxWidth:"none",minWidth:0,margin:0,boxSizing:"border-box"}}>
-            <style>{`.clients-full-width > * { width:100% !important; max-width:none !important; margin-left:0 !important; margin-right:0 !important; box-sizing:border-box; }`}</style>
-            <Suspense fallback={<TabFallback/>}><ClientsTab/></Suspense>
-          </div>
+          <Suspense fallback={<TabFallback/>}><ClientsTab/></Suspense>
         )}
         <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",display: tab==="fix" ? "block" : "none"}}>
           <Suspense fallback={<TabFallback/>}><FixingTab vessels={vessels}/></Suspense>
@@ -3856,11 +3886,74 @@ const filtV=useMemo(()=>{
           </div>
         )}
 
-        {/* ── MATRIX — separate, lazy-loaded VoyageMatrix component ── */}
+        {/* ── MATRIX ── */}
         {tab==="matrix"&&(
-          <Suspense fallback={<TabFallback/>}>
-            <VoyageMatrix vessels={vessels} cargoes={cargoes}/>
-          </Suspense>
+          <div style={{border:"1px solid "+C.bd2,borderRadius:7,overflow:"hidden"}}>
+            <div style={{background:C.bg2,padding:"6px 14px",borderBottom:"1px solid "+C.bd2,display:"flex",gap:16,fontSize:13,color:C.dim,alignItems:"center",flexWrap:"wrap"}}>
+              <span style={{fontWeight:700,color:C.tx}}>🔗 Voyage Matrix</span>
+              <span>12.5 kts · 1d load · 18h disch</span>
+              <input value={mxSearch||""} onChange={e=>setMxSearch(e.target.value)} placeholder="🔍 Search vessel…"
+                style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:13,padding:"2px 8px",outline:"none",width:160,marginLeft:"auto"}}/>
+            </div>
+            {vessels.length===0
+              ?<div style={{padding:"40px",textAlign:"center",color:C.faint}}><div style={{fontSize:28,marginBottom:8}}>🔗</div>Add vessels and cargoes</div>
+              :vessels.filter(v=>!mxSearch||v.vessel?.toLowerCase().includes(mxSearch.toLowerCase())||v.operator?.toLowerCase().includes(mxSearch.toLowerCase())).map((v,i)=>{
+                const fixes=cargoes.filter(c=>c.vessel&&c.vessel.toLowerCase()===v.vessel.toLowerCase()).sort((a,b)=>(b.updated||"").localeCompare(a.updated||""));
+                const cargo=fixes[0];const calc=cargo?calcVoyage(v,cargo):null;
+                const bg=i%2===0?C.bg:C.bg2;
+                const sc=cargo?(cargo.status==="FIXED"?C.green:cargo.status==="SUBS"?C.purple:cargo.status==="FAILED"?C.red:C.amber):C.faint;
+                return(
+                  <div key={v.vessel} style={{background:bg,borderBottom:"1px solid "+C.bd2,padding:"9px 14px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                      <div style={{minWidth:150,marginRight:4}}>
+                        <div style={{fontWeight:700,fontSize:13,color:C.blue}}>{toTCase(v.vessel)}</div>
+                        <div style={{fontSize:13,color:C.dim}}>{v.operator||""}</div>
+                      </div>
+                      <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,padding:"3px 9px",textAlign:"center"}}>
+                        <div style={{fontSize:11,color:C.faint,textTransform:"uppercase"}}>Now open</div>
+                        <div style={{fontSize:13,fontWeight:700,color:v.openPort==="EMPLOYED"?C.purple:C.amber}}>{v.openPort||"?"}</div>
+                        {v.date&&<div style={{fontSize:13,color:C.blue}}>{v.date}</div>}
+                      </div>
+                      {cargo&&<>
+                        <div style={{textAlign:"center",padding:"0 3px"}}>
+                          {calc?.ballastNm&&<div style={{fontSize:13,color:C.faint}}>{calc.ballastNm}nm</div>}
+                          <div style={{fontSize:15,color:C.faint}}>──▶</div>
+                          {calc?.ballastDays&&<div style={{fontSize:13,color:C.faint}}>{calc.ballastDays}d</div>}
+                        </div>
+                        <div style={{background:C.bg3,border:"1px solid "+sc+"55",borderRadius:5,padding:"3px 9px",textAlign:"center"}}>
+                          <div style={{fontSize:11,color:C.faint,textTransform:"uppercase"}}>Load</div>
+                          <div style={{fontSize:13,fontWeight:700}}>{cargo.load||"?"}</div>
+                          <div style={{fontSize:13,color:C.blue}}>{calc?.loadDate||cargo.from||"—"}</div>
+                        </div>
+                        <div style={{textAlign:"center",padding:"0 3px"}}>
+                          {calc?.ladenNm&&<div style={{fontSize:13,color:C.faint}}>{calc.ladenNm}nm</div>}
+                          <div style={{fontSize:15,color:sc}}>──▶</div>
+                          {cargo.cargo&&<div style={{fontSize:13,color:C.purple}}>{cargo.cargo}</div>}
+                        </div>
+                        <div style={{background:C.bg3,border:"1px solid "+(calc?.openDate?C.green:C.bd)+"88",borderRadius:5,padding:"3px 9px",textAlign:"center"}}>
+                          <div style={{fontSize:11,color:C.faint,textTransform:"uppercase"}}>Next open</div>
+                          <div style={{fontSize:13,fontWeight:700,color:calc?.openDate?C.green:C.dim}}>{cargo.disch||"?"}</div>
+                          {calc?.openDate?(<div style={{fontSize:13,color:C.green}}>~{calc.openDate}</div>):(<div style={{fontSize:13,color:C.faint}}>—</div>)}
+                        </div>
+                        <div style={{marginLeft:6,display:"flex",flexDirection:"column",gap:2}}>
+                          <span style={{fontSize:13,fontWeight:700,color:sc,background:sc+"18",border:"1px solid "+sc+"44",borderRadius:3,padding:"1px 7px"}}>{cargo.status}</span>
+                          {cargo.freight&&<span style={{fontSize:13,color:C.purple,fontWeight:700}}>{cargo.freight}</span>}
+                          {(()=>{
+                            const b=calc?.ballastNm||0;const l=calc?.ladenNm||0;
+                            if(!l)return null;
+                            const ets=calcEuEts(b,l,13,15,3,8,2,1,0.25,1,0.25,0,12.5,false);
+                            return ets>0?<span style={{fontSize:12,color:"#fd79a8",fontWeight:600,background:"rgba(253,121,168,0.08)",border:"1px solid rgba(253,121,168,0.25)",borderRadius:3,padding:"1px 5px",whiteSpace:"nowrap"}} title="Indicative EU ETS cost (50% scope, deep-sea)">ETS ~${ets.toLocaleString()}</span>:null;
+                          })()}
+                        </div>
+                      </>}
+                      {!cargo&&<div style={{marginLeft:8,fontSize:13,color:C.faint,fontStyle:"italic"}}>No fixture - vessel open</div>}
+                    </div>
+                    {v.spec?.fuel||v.spec?.iceClass?(<div style={{display:"flex",gap:3,marginTop:4}}>{v.spec?.fuel&&<Tag col={v.spec.fuel==="LNG"?C.green:C.purple}>{v.spec.fuel}</Tag>}{v.spec?.iceClass&&<Tag col={C.blue}>{v.spec.iceClass}</Tag>}</div>):null}
+                  </div>
+                );
+              })
+            }
+          </div>
         )}
 
         {/* ── DASHBOARD ── */}
