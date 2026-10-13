@@ -432,7 +432,6 @@ export default function TankPos(){
   // The returned Supabase row is merged back into the canonical cargo array,
   // including Quotes & Fixtures-only columns.
   const updateC=useCallback(async(id,field,value)=>{
-    const editor=localStorage.getItem("signal_user")||"H";
     const nowIso=new Date().toISOString();
     const rawDbValue=(field==="from"||field==="to")?toISODate(value):value;
     const nullableQfFields=new Set(["ex_region","to_region","p_and_c","intelligence","source"]);
@@ -452,12 +451,12 @@ export default function TankPos(){
     setCargoes(prev=>prev.map(c=>{
       if(c.id!==id) return c;
       previousValue=c[field];
-      return {...c,[field]:displayValue,entered_by:editor,changed:nowIso};
+      return {...c,[field]:displayValue,changed:nowIso};
     }));
 
     const {data,error}=await supabase
       .from("cargoes")
-      .update({[field]:dbValue,entered_by:editor,changed:nowIso})
+      .update({[field]:dbValue,changed:nowIso})
       .eq("id",id)
       .select("*")
       .single();
