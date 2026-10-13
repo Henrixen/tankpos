@@ -49,12 +49,12 @@ function CargoMonthChart({ data, total }){
   },[]);
 
   const MONTHS=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-  const counts=data||[];
+  const counts=(data||[]).filter(b=>Number(b.year)>=2018);
   if(!counts.length) return null;
   const W=Math.max(counts.length,2);
   const maxC=Math.max(1,...counts.map(b=>b.count));
   const SVG_W=size.w, SVG_H=size.h;
-  const PAD={t:20,r:12,b:28,l:36};
+  const PAD={t:12,r:12,b:23,l:36};
   const iW=Math.max(1,SVG_W-PAD.l-PAD.r);
   const iH=Math.max(1,SVG_H-PAD.t-PAD.b);
   const pts=counts.map((bkt,i)=>({
@@ -66,7 +66,7 @@ function CargoMonthChart({ data, total }){
   const areaD=pathD+" L"+pts[pts.length-1].x.toFixed(1)+","+(PAD.t+iH)+" L"+pts[0].x.toFixed(1)+","+(PAD.t+iH)+" Z";
   const lineLen=pts.reduce((a,p,i)=>i===0?0:a+Math.hypot(p.x-pts[i-1].x,p.y-pts[i-1].y),0);
   const step=Math.max(1,Math.ceil(W/8));
-  const yearStarts=pts.filter((p,i)=>i>0&&p.year!==pts[i-1].year);
+  const yearStarts=pts.filter((p,i)=>i===0||p.year!==pts[i-1].year);
   const peakIdx=counts.reduce((mx,b,i)=>b.count>counts[mx].count?i:mx,0);
 
   return(
@@ -95,23 +95,17 @@ function CargoMonthChart({ data, total }){
           ))}
           {yearStarts.map(p=>(
             <g key={p.year}>
-              <line x1={p.x} y1={PAD.t-4} x2={p.x} y2={PAD.t+iH+20} stroke="rgba(88,166,255,0.22)" strokeWidth="1.5" strokeDasharray="4,3"/>
-              <text x={p.x+3} y={PAD.t-6} fontSize="10" fill="rgba(88,166,255,0.5)" fontWeight="700">{p.year}</text>
+              <line x1={p.x} y1={PAD.t-4} x2={p.x} y2={PAD.t+iH+4} stroke="rgba(88,166,255,0.22)" strokeWidth="1.5" strokeDasharray="4,3"/>
+              <text x={p.x+3} y={PAD.t+iH+17} fontSize="10" fill="rgba(88,166,255,0.5)" fontWeight="700">{p.year}</text>
             </g>
           ))}
           <path d={areaD} fill="url(#cgGrad)"/>
           <path d={pathD} fill="none" stroke="#58a6ff" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" className="cgLine"/>
           {pts.map((p,i)=>{
-            const showLabel=i===0||i===pts.length-1||i%step===0;
             return(
               <g key={i}>
                 {p.count>0&&<circle cx={p.x} cy={p.y} r={i===peakIdx?4:2.5} fill={i===peakIdx?"#79c0ff":"#58a6ff"} stroke="#0c1729" strokeWidth="1.5"/>}
-                {i===peakIdx&&(
-                  <text x={p.x} y={p.y-9} textAnchor="middle" fontSize="10" fill="#79c0ff" fontWeight="700">{p.count}</text>
-                )}
-                {showLabel&&(
-                  <text x={p.x} y={PAD.t+iH+16} textAnchor="middle" fontSize="10" fill="rgba(120,160,200,0.5)">{MONTHS[p.month]}</text>
-                )}
+                <circle cx={p.x} cy={p.y} r="8" fill="transparent" onMouseEnter={()=>setHovered(p)} onMouseLeave={()=>setHovered(null)}><title>{`${MONTHS[p.month]} ${p.year}: ${p.count.toLocaleString()} cargoes`}</title></circle>
               </g>
             );
           })}
@@ -189,15 +183,29 @@ function editorInitials(v){
 }
 
 
-function gridMove(e,save,row,col,maxCol,down=false){
- if(e.key==="Tab"){e.preventDefault();save?.();const next=e.shiftKey?col-1:col+1;if(next<0)focusGrid(row-1,maxCol);else if(next>maxCol)focusGrid(row+1,0);else focusGrid(row,next)}
- else if(e.key==="Enter"){e.preventDefault();save?.();focusGrid(row+1,col)}
+function gridMove(e,save,row,col,maxCol){
+ const k=e.key;
+ if(!["Tab","Enter","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(k))return;
+ e.preventDefault();e.stopPropagation();
+ save?.();
+ let r=row,c=col;
+ if(k==="Tab"){c+=e.shiftKey?-1:1;if(c<0){r--;c=maxCol}else if(c>maxCol){r++;c=0}}
+ else if(k==="ArrowRight")c=Math.min(maxCol,col+1);
+ else if(k==="ArrowLeft")c=Math.max(0,col-1);
+ else if(k==="ArrowUp")r=Math.max(0,row-1);
+ else r=row+1;
+ focusGrid(r,c);
 }
-function focusGrid(row,col){setTimeout(()=>{const el=document.querySelector(`[data-grid-row="${row}"][data-grid-col="${col}"]`);if(el)el.focus()},0)}
+function focusGrid(row,col){
+ const selector=`[data-grid-row="${row}"][data-grid-col="${col}"]`;
+ const target=document.querySelector(selector);
+ if(target)target.focus({preventScroll:true});
+ else requestAnimationFrame(()=>document.querySelector(selector)?.focus({preventScroll:true}));
+}
 
 function Editable({value,onSave,color,bold,align="left",row,col,maxCol}){
  const[e,setE]=useState(false),[v,setV]=useState(value??"");useEffect(()=>setV(value??""),[value]);
- return <td tabIndex={0} data-grid-row={row} data-grid-col={col} onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} onKeyDown={x=>{if(!e&&(x.key==="Enter"||x.key==="Tab")){x.preventDefault();setE(true)}}} style={{...POS_TD,padding:e?"1px 2px":POS_TD.padding,color:color||C.tx,fontWeight:bold?700:500,textAlign:align}}>
+ return <td tabIndex={0} data-grid-row={row} data-grid-col={col} onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} onKeyDown={x=>{if(!e){if(x.key==="Enter"){x.preventDefault();setE(true)}else if(x.key==="Tab"||x.key.startsWith("Arrow")){gridMove(x,null,row,col,maxCol)}else if(x.key.length===1&&!x.ctrlKey&&!x.metaKey&&!x.altKey){x.preventDefault();setV(x.key);setE(true)}}}} style={{...POS_TD,padding:e?"1px 2px":POS_TD.padding,color:color||C.tx,fontWeight:bold?700:500,textAlign:align}}>
  {e?<input autoFocus value={v} onChange={x=>setV(x.target.value)} onBlur={()=>{setE(false);if(v!==value)onSave(v)}} onKeyDown={x=>{if(x.key==="Enter"||x.key==="Tab"){gridMove(x,()=>{if(v!==value)onSave(v);setE(false)},row,col,maxCol)}else if(x.key==="Escape"){setV(value??"");setE(false)}}} style={{width:"100%",height:27,lineHeight:"25px",padding:"0 5px",margin:0,border:"1px solid rgba(58,130,246,.32)",borderRadius:4,outline:"none",boxShadow:"none",background:"rgba(20,39,66,.78)",color:color||C.tx,fontFamily:"inherit",fontSize:12,fontWeight:bold?700:500,textTransform:"uppercase",boxSizing:"border-box",textAlign:align}}/>:<span title={String(value||"")}>{value||""}</span>}</td>;
 }
 function AddRow({onSave,onClose,quotes=false}){
@@ -212,7 +220,7 @@ function AddRow({onSave,onClose,quotes=false}){
 export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,onAddCargoes,onAddC,onDelC,onAddVessels,onCargoSearch}){
  const [search,setSearch]=useState(""),[status,setStatus]=useState("ALL"),[time,setTime]=useState(""),[grade,setGrade]=useState(""),[tag,setTag]=useState(""),[ex,setEx]=useState(""),[toR,setToR]=useState(""),[parseTag,setParseTag]=useState(""),[showAdd,setShowAdd]=useState(false),[sort,setSort]=useState("updated"),[dir,setDir]=useState(-1);
  const [section,setSection]=useState("all");
-  const [visualTab,setVisualTab]=useState("rates");
+  const [visualTab,setVisualTab]=useState("chart");
  // Intermediate is a segment in the same cargoes master table.
  const addInter=async c=>onAddC({...c,market_segment:"INTERMEDIATE"});
  const parseInter=async rows=>onAddCargoes(rows.map(r=>({...r,market_segment:"INTERMEDIATE"})));
@@ -284,7 +292,7 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
       if(error){console.warn("Monthly counts unavailable",error);return;}
       if(!active)return;
       const m=new Map((data||[]).map(r=>[`${r.year}-${Number(r.month)-1}`,Number(r.count)]));
-      setAllMonthly(monthly.map(b=>({...b,count:m.get(`${b.year}-${b.month}`)||0})));
+      setAllMonthly(Array.from({length:(new Date().getFullYear()-2018+1)*12},(_,i)=>({year:2018+Math.floor(i/12),month:i%12,count:m.get(`${2018+Math.floor(i/12)}-${i%12}`)||0})).filter(b=>b.year<new Date().getFullYear()||b.month<=new Date().getMonth()));
     });
     return ()=>{active=false};
   },[cargoTotal]);
@@ -346,7 +354,7 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,sea
       .qf-actions-main,.qf-actions-search{display:contents!important;}
     }
   `}</style>
-     <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><button onClick={()=>setSection("all")} style={btn(section==="all")}>Cargoes · All</button><button onClick={()=>setSection("inter")} style={btn(section==="inter")}>Intermediate</button>{section==="inter"&&<span style={{fontSize:10,color:C.faint}}>Intermediate records are also visible in Cargoes</span>}</div>
+     <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><button onClick={()=>{setSection("all");setVisualTab("chart")}} style={btn(section==="all")}>Cargoes · All</button><button onClick={()=>{setSection("inter");setVisualTab("rates")}} style={btn(section==="inter")}>Intermediate</button>{section==="inter"&&<span style={{fontSize:10,color:C.faint}}>Intermediate records are also visible in Cargoes</span>}</div>
 <div className="qf-top" style={{display:"flex",gap:10,height:215,minHeight:0,overflow:"hidden"}}>
    <details className="qf-mobile-fold qf-parse-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Paste / Parse</summary><div className="qf-parse" style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}><div className="qf-parse-tags" style={{...card,padding:"6px 8px",display:"flex",gap:4,flexWrap:"wrap",alignContent:"flex-start",flex:"0 0 auto",overflow:"visible"}}><span style={{fontSize:9,color:C.faint,fontWeight:800,width:"100%",marginBottom:1}}>TAG ON PARSE</span>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={{...btn(parseTag===t),color:tc||"#9fc3f5",borderColor:parseTag===t?(tc||C.blue):C.bd,background:parseTag===t?(tc?tc+"22":"rgba(88,166,255,.18)"):C.bg3}}>{t}</button>})}</div><div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await (section==="inter"?parseInter:onAddCargoes)(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div></details>
    <details className="qf-mobile-fold qf-filter-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Filters</summary><div className="qf-filters" style={{flex:"0 0 40%",minWidth:0,...card,padding:8,display:"grid",gridTemplateColumns:"1.15fr .8fr .8fr .8fr 1.4fr 1.4fr",gap:6,overflow:"hidden",position:"relative",zIndex:20,alignContent:"start"}}>
@@ -356,7 +364,7 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,sea
     <div className="qf-tags"><b style={{fontSize:11,color:C.pink}}>TAG</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{tags.slice(0,7).map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={btn(tag===t)}>{t}</button>)}</div></div>
     {[["EX REGION",ex,setEx],["TO REGION",toR,setToR]].map(([lab,val,setter])=><div key={lab} className="qf-region" style={{minWidth:0}}><b style={{fontSize:11,color:C.blue}}>{lab}</b><div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:4}}><button onClick={()=>setter("")} style={btn(!val)}>ALL</button>{REGIONS.map(r=><button key={r} onClick={()=>setter(val===r?"":r)} style={btn(val===r)}>{r}</button>)}</div></div>)}
    </div></details>
-   <details className="qf-mobile-fold qf-chart-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Rates / Cargo Graph</summary><div className="qf-chart" style={{flex:"1 1 35%",minWidth:0,height:"100%",display:"flex"}}><div style={{display:"flex",flexDirection:"column",width:"100%",minHeight:0}}><div style={{display:"flex",gap:5,marginBottom:4}}><button style={btn(visualTab==="rates")} onClick={()=>setVisualTab("rates")}>Rate Matrix</button><button style={btn(visualTab==="chart")} onClick={()=>setVisualTab("chart")}>Cargo Count</button></div><div style={{flex:1,minHeight:0,overflow:"auto"}}>{visualTab==="rates"?<Suspense fallback={null}><RateMatrixCard/></Suspense>:<CargoMonthChart data={allMonthly||monthly} total={allMonthly?cargoTotal||cargoes.length:cargoes.length}/>}</div></div></div></details>
+   <details className="qf-mobile-fold qf-chart-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Rates / Cargo Graph</summary><div className="qf-chart" style={{flex:"1 1 35%",minWidth:0,height:"100%",display:"flex"}}><div style={{display:"flex",flexDirection:"column",width:"100%",minHeight:0}}><div style={{display:"flex",gap:5,marginBottom:4}}>{section==="inter"&&<button style={btn(visualTab==="rates")} onClick={()=>setVisualTab("rates")}>Rate Matrix</button>}<button style={btn(visualTab==="chart")} onClick={()=>setVisualTab("chart")}>Cargo Count</button></div><div style={{flex:1,minHeight:0,overflow:"auto"}}>{section==="inter"&&visualTab==="rates"?<Suspense fallback={null}><RateMatrixCard/></Suspense>:<CargoMonthChart data={allMonthly||monthly} total={allMonthly?cargoTotal||cargoes.length:cargoes.length}/>}</div></div></div></details>
   </div>
   <div className="qf-actions" style={{...card,padding:"5px 8px",display:"flex",gap:6,alignItems:"center",position:"relative",zIndex:100}}>
    <div className="qf-actions-main"><button onClick={()=>setShowAdd(true)} style={{...btn(),color:C.amber}}>+ Add cargo</button><button style={btn()}>Copy all</button><button style={btn()}>Copy CSV</button>{selected.size>0&&<div style={{position:"relative"}}><button onClick={()=>setBulkTagOpen(v=>!v)} style={{...btn(bulkTagOpen),color:C.blue}}>+ Add tag ({selected.size})</button>{bulkTagOpen&&<><div onClick={()=>setBulkTagOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"absolute",left:0,top:"calc(100% + 4px)",zIndex:19999,width:180,maxHeight:300,overflowY:"auto",background:"#071223",border:"1px solid "+C.blue,borderRadius:6,padding:5,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}><button onClick={async()=>{await Promise.all([...selected].map(id=>Promise.resolve(updateWithAudit(id,"tag",""))));setBulkTagOpen(false)}} style={{display:"block",width:"100%",padding:"6px 7px",marginBottom:5,background:"rgba(255,255,255,.025)",border:"1px solid "+C.bd2,borderRadius:3,color:C.faint,fontSize:10,fontWeight:800,cursor:"pointer",textTransform:"uppercase",textAlign:"left"}}>× Clear tag(s)</button>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={async()=>{await Promise.all([...selected].map(id=>Promise.resolve(updateWithAudit(id,"tag",t))));setBulkTagOpen(false)}} style={{display:"flex",alignItems:"center",gap:6,width:"100%",padding:"6px 7px",marginBottom:2,background:"transparent",border:"1px solid "+C.bd2,borderRadius:3,color:tc||"#9fc3f5",fontSize:11,fontWeight:800,cursor:"pointer",textTransform:"uppercase"}}>{tc&&<span style={{width:7,height:7,borderRadius:"50%",background:tc}}/>}{String(t).toUpperCase()}</button>})}</div></>}</div>}<span style={{fontSize:10,color:C.faint}}>This wk <b style={{color:C.blue}}>{week.thisWk}</b>&nbsp; Last wk <b>{week.lastWk}</b>&nbsp;&nbsp; Total <b style={{color:C.tx}}>{cargoTotal||cargoes.length}</b></span>
@@ -387,7 +395,7 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,sea
       if(k==="updated")return <td key={k} style={{...POS_TD,textAlign:"center",color:C.faint}}>{c.updated?new Date(c.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>;
       const val=k==="charterer"?toTCase(c[k]||""):k==="qty"?normaliseQty(c[k]):k==="from"||k==="to"?fmtDateShort(c[k]):k==="freight"?(fmtFreight(c[k])||c[k]||""):c[k]||"";
       return <Editable key={k} row={i} col={navCol(k)} maxCol={navMax} value={val} align={["from","to"].includes(k)?"center":"left"} bold={k==="charterer"} color={k==="vessel"?C.blue:k==="charterer"?"#79c0ff":k==="qty"?C.amber:k==="freight"?"#a8e6a3":C.tx} onSave={v=>updateWithAudit(c.id,k,k==="charterer"||k==="load"||k==="disch"?toTCase(v):k==="qty"?normaliseQty(v):k==="freight"?(fmtFreight(v)||v):v)}/>;
-    })}<td style={{...POS_TD,textAlign:"center",padding:0,verticalAlign:"middle",lineHeight:0,position:"relative",overflow:"visible"}} onMouseLeave={()=>setHoverRowId(null)}>{editorInitials(c.entered_by)&&<span onMouseEnter={()=>showAudit(c.id)} title={`Original: ${c.entered_by||"Unknown"}`} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,padding:0,margin:0,borderRadius:"50%",boxSizing:"border-box",fontSize:10,fontWeight:800,lineHeight:"24px",textAlign:"center",verticalAlign:"middle",color:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?C.blue:C.green,border:"1px solid "+((c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{editorInitials(c.entered_by)}</span>}{hoverRowId===c.id&&<div style={{position:"absolute",right:30,top:"100%",zIndex:30000,width:340,maxHeight:240,overflowY:"auto",padding:10,textAlign:"left",background:"#071223",border:"1px solid #3976b8",borderRadius:6,boxShadow:"0 12px 35px #000a",color:"#d9e8ff",fontSize:11,lineHeight:1.6}}><b>Original contributor: {c.entered_by||"—"}</b><div style={{color:"#79c0ff",marginTop:5}}>Edit history</div>{(auditRows[c.id]||[]).length?(auditRows[c.id]||[]).map((a,j)=><div key={j} style={{borderTop:"1px solid #26374c",padding:"5px 0"}}><b>{a.editor}</b> · {new Date(a.changed_at).toLocaleString("en-GB")}<div>{a.field}: {a.old_value||"—"} → {a.new_value||"—"}</div></div>):<div>{auditError?"Audit table unavailable — run supplied SQL":"No edits recorded yet"}</div>}</div>}</td><td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>setDeleteCargo(c)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td></tr>})}</tbody>
+    })}<td style={{...POS_TD,textAlign:"center",padding:0,verticalAlign:"middle",lineHeight:0,position:"relative",overflow:"visible"}} onMouseLeave={()=>setHoverRowId(null)}>{editorInitials(c.entered_by)&&<span onMouseEnter={()=>showAudit(c.id)} title={`Original: ${c.entered_by||"Unknown"}`} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,padding:0,margin:0,borderRadius:"50%",boxSizing:"border-box",fontSize:10,fontWeight:800,letterSpacing:"0.7px",lineHeight:"1",paddingTop:2,textAlign:"center",verticalAlign:"middle",color:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?C.blue:C.green,border:"1px solid "+((c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{editorInitials(c.entered_by)}</span>}{hoverRowId===c.id&&<div style={{position:"absolute",right:30,top:"100%",zIndex:30000,width:340,maxHeight:240,overflowY:"auto",padding:10,textAlign:"left",background:"#071223",border:"1px solid #3976b8",borderRadius:6,boxShadow:"0 12px 35px #000a",color:"#d9e8ff",fontSize:11,lineHeight:1.6}}><b>Original contributor: {c.entered_by||"—"}</b><div style={{color:"#79c0ff",marginTop:5}}>Edit history</div>{(auditRows[c.id]||[]).length?(auditRows[c.id]||[]).map((a,j)=><div key={j} style={{borderTop:"1px solid #26374c",padding:"5px 0"}}><b>{a.editor}</b> · {new Date(a.changed_at).toLocaleString("en-GB")}<div>{a.field}: {a.old_value||"—"} → {a.new_value||"—"}</div></div>):<div>{auditError?"Audit table unavailable — run supplied SQL":"No edits recorded yet"}</div>}</div>}</td><td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>setDeleteCargo(c)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td></tr>})}</tbody>
    </table>
   </div>
   {filtered.length > pageRows.length && (
