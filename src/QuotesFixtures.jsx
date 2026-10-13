@@ -210,31 +210,9 @@ function AddRow({onSave,onClose,quotes=false}){
 export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,onAddCargoes,onAddC,onDelC,onAddVessels,onCargoSearch}){
  const [search,setSearch]=useState(""),[status,setStatus]=useState("ALL"),[time,setTime]=useState(""),[grade,setGrade]=useState(""),[tag,setTag]=useState(""),[ex,setEx]=useState(""),[toR,setToR]=useState(""),[parseTag,setParseTag]=useState(""),[showAdd,setShowAdd]=useState(false),[sort,setSort]=useState("updated"),[dir,setDir]=useState(-1);
  const [section,setSection]=useState("all");
- const [interIds,setInterIds]=useState(new Set());
- const [interError,setInterError]=useState("");
- const refreshInter=async()=>{
-   const {data,error}=await supabase.from("intermediate_cargoes").select("cargo_id");
-   if(error){setInterError(error.message);return;}
-   setInterError("");setInterIds(new Set((data||[]).map(r=>String(r.cargo_id))));
- };
- useEffect(()=>{
-   refreshInter();
-   const channel=supabase.channel("qf-intermediate-membership").on("postgres_changes",{event:"*",schema:"public",table:"intermediate_cargoes"},refreshInter).subscribe();
-   return ()=>{supabase.removeChannel(channel)};
- },[]);
- const addInter=async c=>{
-   const id=c.id||("c_"+Date.now()+"_"+Math.random().toString(36).slice(2,8));
-   await onAddC({...c,id});
-   const {error}=await supabase.from("intermediate_cargoes").upsert({cargo_id:String(id)},{onConflict:"cargo_id"});
-   if(error)setInterError(error.message);else setInterIds(p=>new Set([...p,String(id)]));
- };
- const parseInter=async rows=>{
-   const stamped=rows.map((r,i)=>({...r,id:r.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,8))}));
-   const result=await onAddCargoes(stamped);
-   const {error}=await supabase.from("intermediate_cargoes").upsert(stamped.map(r=>({cargo_id:String(r.id)})),{onConflict:"cargo_id"});
-   if(error)setInterError(error.message);else setInterIds(p=>new Set([...p,...stamped.map(r=>String(r.id))]));
-   return result;
- };
+ // Intermediate is a segment in the same cargoes master table.
+ const addInter=async c=>onAddC({...c,market_segment:"INTERMEDIATE"});
+ const parseInter=async rows=>onAddCargoes(rows.map(r=>({...r,market_segment:"INTERMEDIATE"})));
  const [page,setPage]=useState(1);
  const PAGE_SIZE=200;
  const qfUser=localStorage.getItem("signal_user")||"H",qfColsKey="signal_qf_visible_columns_"+qfUser;
@@ -308,10 +286,10 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
     return ()=>{active=false};
   },[cargoTotal]);
  const groups=useMemo(()=>{try{return JSON.parse(localStorage.getItem("signal_cargo_filter_groups")||"[]")}catch{return[]}},[cargoes.length]),grades=groups.filter(g=>(g.category||"grade")==="grade"),tags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
- const filtered=useMemo(()=>{let a=cargoes.filter(c=>{if(section==="inter"&&!interIds.has(String(c.id)))return false;if(ex&&c.ex_region!==ex)return false;if(toR&&c.to_region!==toR)return false;if(status!=="ALL"&&c.status!==status)return false;if(tag&&c.tag!==tag)return false;if(time){const d=new Date(c.updated||c.added||0),now=new Date(),[tw0,tw1]=weekBounds(0),[lw0,lw1]=weekBounds(-1);tw1.setHours(23,59,59,999);lw1.setHours(23,59,59,999);if(time==="tw"&&!(d>=tw0&&d<=tw1))return false;if(time==="lw"&&!(d>=lw0&&d<=lw1))return false;if(time==="ytd"&&d<new Date(now.getFullYear(),0,1))return false;}if(grade&&!String(c.cargo||"").toLowerCase().includes(grade.toLowerCase()))return false;if(search&&!JSON.stringify(c).toLowerCase().includes(search.toLowerCase()))return false;return true});const f=sort==="added"?"added":sort;return [...a].sort((x,y)=>{let A=x[f]||x.updated||"",B=y[f]||y.updated||"";if(f==="added"||f==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime()}const primary=(A<B?-1:A>B?1:0)*dir;if(primary)return primary;
+ const filtered=useMemo(()=>{let a=cargoes.filter(c=>{if(section==="inter"&&c.market_segment!=="INTERMEDIATE")return false;if(ex&&c.ex_region!==ex)return false;if(toR&&c.to_region!==toR)return false;if(status!=="ALL"&&c.status!==status)return false;if(tag&&c.tag!==tag)return false;if(time){const d=new Date(c.updated||c.added||0),now=new Date(),[tw0,tw1]=weekBounds(0),[lw0,lw1]=weekBounds(-1);tw1.setHours(23,59,59,999);lw1.setHours(23,59,59,999);if(time==="tw"&&!(d>=tw0&&d<=tw1))return false;if(time==="lw"&&!(d>=lw0&&d<=lw1))return false;if(time==="ytd"&&d<new Date(now.getFullYear(),0,1))return false;}if(grade&&!String(c.cargo||"").toLowerCase().includes(grade.toLowerCase()))return false;if(search&&!JSON.stringify(c).toLowerCase().includes(search.toLowerCase()))return false;return true});const f=sort==="added"?"added":sort;return [...a].sort((x,y)=>{let A=x[f]||x.updated||"",B=y[f]||y.updated||"";if(f==="added"||f==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime()}const primary=(A<B?-1:A>B?1:0)*dir;if(primary)return primary;
 // Stable tie-breakers: editing Intel/regions/etc must never change row position.
 const xa=new Date(x.added||0).getTime()||0,ya=new Date(y.added||0).getTime()||0;if(xa!==ya)return ya-xa;
-return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,interIds,search,status,time,tag,grade,ex,toR,sort,dir]);
+return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,search,status,time,tag,grade,ex,toR,sort,dir]);
  useEffect(()=>{setPage(1);},[search,status,time,tag,grade,ex,toR,sort,dir]);
  const pageRows=useMemo(()=>filtered.slice(0,page*PAGE_SIZE),[filtered,page]);
  const allCols=[["status","Status",3.5],["ex_region","Ex Region",5.5],["to_region","To Region",5.5],["p_and_c","P&C",3],["intelligence","Intel",4],["vessel","Vessel",7],["charterer","Charterer",6.5],["qty","Qty",4],["cargo","Cargo",6],["load","Load",8],["disch","Disch",7.5],["from","From",4.5],["to","To",4.5],["freight","Freight",7],["comment","Comment",9],["tag","Tag",5],["source","Source",5],["updated","Updated",6.5]];
@@ -365,7 +343,7 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,int
       .qf-actions-main,.qf-actions-search{display:contents!important;}
     }
   `}</style>
-     <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><button onClick={()=>setSection("all")} style={btn(section==="all")}>Quotes & Fixtures</button><button onClick={()=>setSection("inter")} style={btn(section==="inter")}>Intermediate</button>{section==="inter"&&<span style={{fontSize:10,color:C.faint}}>Only cargoes added from Intermediate · also saved in Quotes & Fixtures</span>}{interError&&<span style={{fontSize:10,color:C.red}}>Intermediate database: {interError}</span>}</div>
+     <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}><button onClick={()=>setSection("all")} style={btn(section==="all")}>Quotes & Fixtures</button><button onClick={()=>setSection("inter")} style={btn(section==="inter")}>Intermediate</button>{section==="inter"&&<span style={{fontSize:10,color:C.faint}}>Only cargoes added from Intermediate · also saved in Quotes & Fixtures</span>}</div>
 <div className="qf-top" style={{display:"flex",gap:10,height:215,minHeight:0,overflow:"hidden"}}>
    <details className="qf-mobile-fold qf-parse-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Paste / Parse</summary><div className="qf-parse" style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}><div className="qf-parse-tags" style={{...card,padding:"6px 8px",display:"flex",gap:4,flexWrap:"wrap",alignContent:"flex-start",flex:"0 0 auto",overflow:"visible"}}><span style={{fontSize:9,color:C.faint,fontWeight:800,width:"100%",marginBottom:1}}>TAG ON PARSE</span>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={{...btn(parseTag===t),color:tc||"#9fc3f5",borderColor:parseTag===t?(tc||C.blue):C.bd,background:parseTag===t?(tc?tc+"22":"rgba(88,166,255,.18)"):C.bg3}}>{t}</button>})}</div><div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await (section==="inter"?parseInter:onAddCargoes)(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div></details>
    <details className="qf-mobile-fold qf-filter-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Filters</summary><div className="qf-filters" style={{flex:"0 0 40%",minWidth:0,...card,padding:8,display:"grid",gridTemplateColumns:"1.15fr .8fr .8fr .8fr 1.4fr 1.4fr",gap:6,overflow:"hidden",position:"relative",zIndex:20,alignContent:"start"}}>
@@ -386,7 +364,7 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,int
    {colsOpen&&<><div onClick={()=>setColsOpen(false)} style={{position:"fixed",inset:0,zIndex:29990}}/><div style={{position:"fixed",left:colsPos.left,top:colsPos.top,zIndex:29999,width:205,maxHeight:"calc(100vh - 32px)",overflowY:"auto",background:"#071223",border:"1px solid "+C.bd,borderRadius:7,padding:7,boxShadow:"0 12px 34px rgba(0,0,0,.7)"}}>{allCols.map(([k,l])=><label key={k} style={{display:"flex",gap:7,padding:5,fontSize:11,fontWeight:600}}><input type="checkbox" checked={visible.has(k)} onChange={()=>setVisible(p=>{const n=new Set(p);n.has(k)?n.delete(k):n.add(k);return n})}/>{l}</label>)}</div></>}
   </div>
   {showAdd&&<AddRow quotes onSave={section==="inter"?addInter:onAddC} onClose={()=>setShowAdd(false)}/>}
-  {deleteCargo&&<><div onClick={()=>setDeleteCargo(null)} style={{position:"fixed",inset:0,zIndex:64990,background:"rgba(0,0,0,.08)"}}/><div style={{position:"fixed",left:"50%",bottom:28,transform:"translateX(-50%)",zIndex:65000,minWidth:330,background:"#0b1728",border:"1px solid #ff5b5b",borderRadius:8,padding:"12px 14px",boxShadow:"0 14px 40px rgba(0,0,0,.55)",display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:12,fontWeight:700,color:C.tx,marginRight:4}}>{section==="inter"?"Remove from Intermediate:":"Delete"} {(deleteCargo.vessel||deleteCargo.charterer||"cargo").toUpperCase()}?</span><button onClick={async()=>{const id=deleteCargo.id;setDeleteCargo(null);if(section==="inter"){const {error}=await supabase.from("intermediate_cargoes").delete().eq("cargo_id",String(id));if(error)setInterError(error.message);else setInterIds(p=>{const n=new Set(p);n.delete(String(id));return n})}else await onDelC(id)}} style={{...btn(),background:"#ff5b5b",borderColor:"#ff5b5b",color:"#fff",padding:"6px 16px"}}>{section==="inter"?"Remove from Intermediate":"Delete"}</button><button onClick={()=>setDeleteCargo(null)} style={{...btn(),padding:"6px 16px"}}>Cancel</button></div></>}
+  {deleteCargo&&<><div onClick={()=>setDeleteCargo(null)} style={{position:"fixed",inset:0,zIndex:64990,background:"rgba(0,0,0,.08)"}}/><div style={{position:"fixed",left:"50%",bottom:28,transform:"translateX(-50%)",zIndex:65000,minWidth:330,background:"#0b1728",border:"1px solid #ff5b5b",borderRadius:8,padding:"12px 14px",boxShadow:"0 14px 40px rgba(0,0,0,.55)",display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:12,fontWeight:700,color:C.tx,marginRight:4}}>{section==="inter"?"Remove from Intermediate:":"Delete"} {(deleteCargo.vessel||deleteCargo.charterer||"cargo").toUpperCase()}?</span><button onClick={async()=>{const id=deleteCargo.id;setDeleteCargo(null);if(section==="inter"){await onUpdateC(id,"market_segment","OTHER")}else await onDelC(id)}} style={{...btn(),background:"#ff5b5b",borderColor:"#ff5b5b",color:"#fff",padding:"6px 16px"}}>{section==="inter"?"Remove from Intermediate":"Delete"}</button><button onClick={()=>setDeleteCargo(null)} style={{...btn(),padding:"6px 16px"}}>Cancel</button></div></>}
   <div style={POS_WRAP} className="pos-hover-rows qf-table-wrap">
    <style>{`.pos-hover-rows tr:hover{background:rgba(88,166,255,0.07)!important;}`}</style>
    <table className="qf-table" style={POS_TABLE}>
