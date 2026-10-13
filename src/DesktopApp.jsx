@@ -1328,6 +1328,13 @@ class TabErrorBoundary extends React.Component {
   }
 }
 
+function PositionControlsWrap({children,mobile}) { return mobile ? (
+    <details style={{width:"100%",border:"1px solid "+C.bd,borderRadius:5,background:C.bg2,display:"block"}}>
+      <summary style={{display:"block",padding:"7px 9px",cursor:"pointer",color:C.blue,fontWeight:700,listStyle:"none"}}>Position controls</summary>
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",padding:"0 8px 8px"}}>{children}</div>
+    </details>
+  ) : <>{children}</>; }
+
 function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
   // ── PIN config ───────────────────────────────────────────────────────────
   const DEFAULT_USER_TABS = ["pos","cargo","clients"];
@@ -1775,12 +1782,6 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
   // Use mobile state from TankPos (reactive, with manual override) — must be before colWidths
   const mobile = mobileProp !== undefined ? mobileProp : isMobile();
-  const PositionControlsWrap = ({children}) => mobile ? (
-    <details style={{width:"100%",border:"1px solid "+C.bd,borderRadius:5,background:C.bg2,display:"block"}}>
-      <summary style={{display:"block",padding:"7px 9px",cursor:"pointer",color:C.blue,fontWeight:700,listStyle:"none"}}>Position controls</summary>
-      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",padding:"0 8px 8px"}}>{children}</div>
-    </details>
-  ) : <>{children}</>;
 
   // Mobile: hide the top header while scrolling down and slide it back in
   // as soon as the user scrolls up. Keep it visible near the top or while
@@ -3342,7 +3343,7 @@ const filtV=useMemo(()=>{
                       style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"7px 30px 7px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
                     {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:7,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>}
                   </div>}
-                  <PositionControlsWrap>
+                  <PositionControlsWrap mobile={mobile}>
 
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
