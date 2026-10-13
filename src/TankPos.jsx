@@ -95,29 +95,6 @@ export default function TankPos(){
   })();
 },[]);
 
-  // Live cargo sync. Only merge committed remote rows, never remount the active editor.
-  useEffect(()=>{
-    const channel=supabase.channel('steem-cargo-live')
-      .on('postgres_changes',{event:'*',schema:'public',table:'cargoes'},payload=>{
-        if(payload.eventType==='DELETE'){
-          setCargoes(prev=>prev.filter(c=>String(c.id)!==String(payload.old?.id)));
-          return;
-        }
-        const r=payload.new;
-        if(!r?.id)return;
-        const incoming={...normaliseCargo(r),entered_by:r.entered_by,added:r.added,
-          changed:r.changed,ex_region:r.ex_region,to_region:r.to_region,
-          p_and_c:r.p_and_c,intelligence:r.intelligence,source:r.source};
-        setCargoes(prev=>{
-          const idx=prev.findIndex(c=>String(c.id)===String(r.id));
-          if(idx<0)return [incoming,...prev];
-          if(JSON.stringify(prev[idx])===JSON.stringify(incoming))return prev;
-          return prev.map((c,i)=>i===idx?{...c,...incoming}:c);
-        });
-      }).subscribe();
-    return ()=>{supabase.removeChannel(channel);};
-  },[]);
-
   // vesselDB is no longer auto-loaded on startup — it's large (paginated,
   // ~5-6 requests) and only needed for Parse/vessel-detail lookups.
   // loadVesselDB() is still called on-demand via onLoadVesselDB in DesktopApp.
@@ -443,12 +420,12 @@ export default function TankPos(){
     setCargoes(prev=>prev.map(c=>{
       if(c.id!==id) return c;
       previousValue=c[field];
-      return {...c,[field]:displayValue,changed:nowIso};
+      return {...c,[field]:displayValue,entered_by:editor,changed:nowIso};
     }));
 
     const {data,error}=await supabase
       .from("cargoes")
-      .update({[field]:dbValue,changed:nowIso})
+      .update({[field]:dbValue,entered_by:editor,changed:nowIso})
       .eq("id",id)
       .select("*")
       .single();
