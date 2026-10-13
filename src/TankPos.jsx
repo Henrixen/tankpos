@@ -1,666 +1,181 @@
-// CACHE_BUSTER_030
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React,{useEffect,useMemo,useRef,useState,Suspense} from "react";
+import { C } from "./constants";
+import { toTCase,normaliseQty,fmtDateShort,fmtFreight } from "./utils";
 import { supabase } from "./supabaseclient";
-import { isMobile } from "./constants";
-import { enrichV, normaliseCargo, mergeVessels, toISODate } from "./utils";
-import { saveV, saveSnapshot, loadHistory } from "./supabaseHelpers";
-import { v4 as uuidv4 } from 'uuid';
-import DesktopApp from "./DesktopApp";
-import { fetchWithCache } from "./offlineCache";
 
+const EC=React.lazy(()=>import("./EC"));
+const ParsePanel=React.lazy(()=>import("./ParsePanel"));
+const RateMatrixCard=React.lazy(()=>import("./RateMatrix").then(m=>({default:m.RateMatrixCard})));
+const RateMatrixBunkerInput=React.lazy(()=>import("./RateMatrix").then(m=>({default:m.RateMatrixBunkerInput})));
 
-// ─── Root ─────────────────────────────────────────────────────────────────────
-export default function TankPos(){
+const REGIONS=["ECI","ECSAM-NEB","Med","MED-BSEA","NEA","NWE-BALTIC","RSEA","SEA","USAC-GLAKES","USG-CARIBS","WAF-SAF","WC AMERICAS","WCI-AG"];
+const PRESET_TAGS=["AG","BASF","CPP","DPP","EX ASIA","MED","OUTSIDER EUROPE","PARCEL","PNC","SPACE ASIA-EUROPE","SUB 10","TA","TAE","TAW","UKC","WAF"];
+function tagList(){try{const x=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");return[...new Set([...PRESET_TAGS,...x].map(v=>String(v||"").toUpperCase()).filter(Boolean))].sort();}catch{return PRESET_TAGS;}}
+const card={background:C.bg2,border:"1px solid "+C.bd,borderRadius:7};
 
-  const [vesselDB, setVesselDB] = useState({});
-  const [vesselDBLoaded, setVesselDBLoaded] = useState(false);
-  const [vesselDBLoading, setVesselDBLoading] = useState(false);
-  const [vessels,setVessels]=useState([]);
-  const [cargoes,setCargoes]=useState([]);
-  const [cargoTotal,setCargoTotal]=useState(0);
-  const [hasMore,setHasMore]=useState(false);
-  const searchTimer=useRef(null);
-  const [mobile,setMobile]=useState(()=>isMobile());
-  const [fileDate, setFileDate] = useState(() => new Date().toISOString().slice(0,10));
-
-  async function loadVesselDB(){
-    if(vesselDBLoaded||vesselDBLoading) return;
-    setVesselDBLoading(true);
-    let allRows = [];
-    let from = 0;
-    const pageSize = 1000;
-    while(true){
-      const {data, error} = await supabase.from("vessels_db").select("vessel,imo,dwt,built,loa,beam,cbm,coating,ice_class,fuel,operator").range(from, from+pageSize-1);
-      if(error || !data || data.length === 0) break;
-      allRows = [...allRows, ...data];
-      if(data.length < pageSize) break;
-      from += pageSize;
-    }
-    const map = {};
-    const imoMap = {};
-    allRows.forEach(r => {
-      if(r.vessel) map[r.vessel.toLowerCase().trim()] = r;
-      if(r.imo) imoMap[String(r.imo).trim()] = r;
-    });
-    setVesselDB(map);
-    window.vesselDB = map;
-    window.vesselDBByIMO = imoMap;
-    setVesselDBLoaded(true);
-    setVesselDBLoading(false);
-    console.log("vesselDB loaded on demand:", allRows.length);
-  }
-
-  function onCargoSearch(term){
-    clearTimeout(searchTimer.current);
-    // Multi-term search: comma=OR groups, space=AND within each group.
-    // Server query fetches a broad result set for each OR group, then
-    // client-side filter (cTokens in DesktopApp) applies the exact AND logic.
-    // If the full dataset is already loaded we skip the server call entirely.
-    const trimmed = term.trim();
-    if (!trimmed) {
-      // Empty search — reload the default first page
-      searchTimer.current = setTimeout(() => fetchCargoes(""), 300);
-      return;
-    }
-    // Build per OR-group queries: for each comma-separated group take the
-    // first meaningful word and do a broad server-side OR filter.
-    searchTimer.current = setTimeout(async () => {
-      const orGroups = trimmed.toLowerCase()
-        .split(",")
-        .map(g => g.trim().split(/\s+/).filter(Boolean))
-        .filter(g => g.length);
-      // Collect all unique first-words across OR groups for a broad fetch
-      const keywords = [...new Set(orGroups.map(g => g[0]))];
-      try {
-        const orClauses = keywords.flatMap(kw =>
-          ["charterer","vessel","load","disch","cargo","status"].map(col => `${col}.ilike.%${kw}%`)
-        ).join(",");
-        const { data, error } = await supabase.from("cargoes").select("*")
-          .or(orClauses)
-          .range(0, 999)
-          .order("updated", { ascending: false });
-        if (error) { console.error(error); return; }
-        setCargoes(data.map(r => ({ ...normaliseCargo(r), entered_by: r.entered_by, added: r.added, changed: r.changed })));
-      } catch (e) { console.error("cargoSearch:", e); }
-    }, 350);
-  }
-  // Load vessels from local storage, cargoes from Supabase.
-  // Sequenced (not simultaneous) to reduce the initial Supabase connection
-  // burst — positions_latest is the heaviest query, so it goes first while
-  // the pool is least contended.
-  useEffect(()=>{
-  (async () => {
-    await fetchPositions();
-    await fetchCargoes();
-  })();
-},[]);
-
-  // vesselDB is no longer auto-loaded on startup — it's large (paginated,
-  // ~5-6 requests) and only needed for Parse/vessel-detail lookups.
-  // loadVesselDB() is still called on-demand via onLoadVesselDB in DesktopApp.
-
-  useEffect(()=>{const fn=()=>setMobile(isMobile());window.addEventListener("resize",fn);return()=>window.removeEventListener("resize",fn);},[]);
-
-  async function fetchCargoes(searchTerm=""){
-    const t=searchTerm.trim();
-
-    // Load the complete cargo table in pages. Both Cargoes.jsx and
-    // QuotesFixtures.jsx receive this same canonical Supabase-backed array.
-    // Do not use the old 200-row localStorage cache here.
-    const pageSize=1000;
-    let all=[];
-    let from=0;
-
-    while(true){
-      let q=supabase.from("cargoes").select("*");
-      if(t){
-        q=q.or(`charterer.ilike.%${t}%,vessel.ilike.%${t}%,load.ilike.%${t}%,disch.ilike.%${t}%,cargo.ilike.%${t}%,status.ilike.%${t}%,ex_region.ilike.%${t}%,to_region.ilike.%${t}%,source.ilike.%${t}%`);
-      }
-      const {data,error}=await q
-        .order("added",{ascending:false,nullsFirst:false})
-        .order("updated",{ascending:false,nullsFirst:false})
-        .range(from,from+pageSize-1);
-
-      if(error){console.error("fetchCargoes:",error);return;}
-      all.push(...(data||[]));
-      if(!data||data.length<pageSize)break;
-      from+=pageSize;
-    }
-
-    const rows=all.map(r=>({...normaliseCargo(r),
-      entered_by:r.entered_by,added:r.added,changed:r.changed,
-      ex_region:r.ex_region,to_region:r.to_region,p_and_c:r.p_and_c,
-      intelligence:r.intelligence,source:r.source
-    }));
-    console.log(`🚢 Loaded ${rows.length} cargoes from Supabase`);
-    setCargoes(rows);
-    setCargoTotal(rows.length);
-    setHasMore(false);
-  }
-
-  // Shared live cargo changes for Cargoes and Quotes & Fixtures.
-  // Apply row-level changes instead of re-downloading the entire cargo table.
-  useEffect(()=>{
-    const channel=supabase.channel("tankpos-cargoes-live")
-      .on("postgres_changes",{event:"*",schema:"public",table:"cargoes"},payload=>{
-        const row=payload.new;
-        const oldId=payload.old?.id;
-        if(payload.eventType==="DELETE"){
-          if(oldId==null)return;
-          setCargoes(prev=>prev.filter(c=>String(c.id)!==String(oldId)));
-          setCargoTotal(n=>Math.max(0,n-1));
-          return;
-        }
-        if(!row?.id)return;
-        const next={...normaliseCargo(row),entered_by:row.entered_by,
-          added:row.added,changed:row.changed,ex_region:row.ex_region,
-          to_region:row.to_region,p_and_c:row.p_and_c,
-          intelligence:row.intelligence,source:row.source};
-        setCargoes(prev=>{
-          const index=prev.findIndex(c=>String(c.id)===String(row.id));
-          if(index<0){
-            setCargoTotal(n=>n+1);
-            return [next,...prev];
-          }
-          const copy=prev.slice();
-          copy[index]={...copy[index],...next};
-          return copy;
-        });
-      }).subscribe();
-    return ()=>{supabase.removeChannel(channel);};
-  },[]);
-
-  // Retry wrapper for transient Supabase pool-timeout / gateway errors
-  // (PGRST003, connection pool exhaustion, 504s). Retries with backoff;
-  // returns the last result/error if all attempts fail.
-  function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
-
-  async function withSupabaseRetry(requestFn, label, attempts=3){
-    let lastError = null;
-    for (let attempt = 0; attempt < attempts; attempt++){
-      try {
-        const result = await requestFn();
-        if (!result.error) return result;
-        lastError = result.error;
-        const msg = String(result.error.message || "");
-        const retryable = result.error.code === "PGRST003" || msg.includes("connection pool") || msg.includes("timeout") || msg.includes("504");
-        if (!retryable || attempt === attempts - 1) return result;
-      } catch (error) {
-        lastError = error;
-        if (attempt === attempts - 1) throw error;
-      }
-      const delays = [1000, 3000, 7000];
-      console.warn(`${label}: retrying after failure (attempt ${attempt + 1})`);
-      await sleep(delays[attempt] || 7000);
-    }
-    return { data: null, error: lastError };
-  }
-
-  async function fetchPositions(){
-  const REGION_RENAME={
-    "East Coast South America":"EC SAM",
-    "Europe (Mediterranean)":"Med",
-    "South-East-Asia Far-East":"SEA-FEA",
-    "West Africa":"WAF",
-    "West Coast US":"WC US",
-    "West Coast South America":"WC SAM",
-    "North West Europe":"NWE",
-    "Med-Black Sea":"Med",
-    "Arabian Gulf":"Suez-AG-India",
-    "AG":"Suez-AG-India",
-    "AG-India-Red Sea":"Suez-AG-India",
-    "Red Sea":"Suez-India",
-    "India":"Suez-India",
-    "West Pacific":"Pacific",
-    "Southern Ocean":"Pacific",
-  };
-  const SEGMENT_RENAME={
-    "1. Small (<10)":"Sub 10k",
-    "2. Cityclass (10-15)":"City",
-    "3. Intermediate (14-19)":"Inter",
-    "4. J19 (19-22)":"J19",
-    "5. Flexi (22-30)":"Flexi",
-    "6. Handy (30-40)":"Handy",
-    "7. MR (>40)":"MR",
-  };
-  
-  // Only request the columns the dashboard actually maps below — the full
-  // view is wide (40+ cols incl. spec/comment/AIS fields) and returning "*"
-  // adds unnecessary sort/transfer weight on top of the view's own
-  // DISTINCT ON dedup cost, which was contributing to pool-timeout 504s.
-  const POSITION_FIELDS = [
-    "vessel_name","operator","open_date","port_name","dwt","build_year",
-    "overall_length","beam","cbm","details","file_date","imo_no",
-    "dirty_clean","segment","ice_class","last_3_cargoes",
-    "coating_type_2","super_region","updated_at","source"
-  ].join(",");
-
-  // Fetch with offline fallback + retry on transient pool-timeout errors
-  const { data, source } = await fetchWithCache('positions', async () => {
-    const { data, error } = await withSupabaseRetry(
-      () => supabase.from("positions_latest").select(POSITION_FIELDS).limit(5000),
-      "fetchPositions"
-    );
-    if (error) throw error;
-    return data;
-  });
-  
-  if (!data) {
-    console.error('No positions data available (offline + no cache)');
-    return;
-  }
-  
-  console.log(`📍 Loaded ${data.length} positions from ${source}`);
-  
-  const mn=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  setVessels((data||[]).map(r=>{
-    const rawDate=String(r.open_date||"");
-    let fmtDate=rawDate;
-    if(rawDate&&!/^\d{1,2}\s[A-Za-z]/.test(rawDate)){
-      const d=new Date(rawDate);
-      if(!isNaN(d))fmtDate=d.getDate()+" "+mn[d.getMonth()];
-    }
-    const imoKey = String(r.imo_number||r.imo||"").trim();
-    const dbByIMO = window.vesselDBByIMO||{};
-    const imoRec = imoKey ? dbByIMO[imoKey] : null;
-    const nameRec = (window.vesselDB||{})[String(r.vessel_name||"").toLowerCase().trim()];
-    const vrec = imoRec || nameRec || null;
-    return{
-      id:          String(r.id||""),
-      vessel:      String(r.vessel_name||"").toUpperCase(),
-      imoNo:       r.imo_no!=null?String(r.imo_no):null,
-      operator:    r.operator||"",
-      openPort:    r.port_name||"",
-      date:        fmtDate,
-      dwt:         r.dwt||null,
-      built:       r.build_year||null,
-      loa:         r.overall_length!=null?Math.round(Number(r.overall_length))||null:null,
-      beam:        r.beam!=null?Math.round(Number(r.beam))||null:null,
-      cbm:         r.cbm||imoRec?.cbm||null,
-      coating:     r.coating_type_2||r.coating||r.coated||"",
-      comment:     r.details||"",
-      notes:       r.notes||"",
-      last3:       r.last_3_cargoes||"",
-      dirtyClean:  r.dirty_clean||"",
-      iceClass:    r.ice_class||"",
-      segment:     SEGMENT_RENAME[r.segment]||r.segment||"",
-      superRegion: REGION_RENAME[r.super_region]||r.super_region||"",
-      updatedAt:   r.updated_at||"",
-      fileDate:    r.file_date||null,
-      source:      r.source||"external",
-      spec: {
-        fuel: vrec?.fuel||null,
-        iceClass: r.ice_class||vrec?.ice_class||null,
-        lastCargo: r.last_3_cargoes||vrec?.last_cargo||null,
-        segment: r.segment||vrec?.segment||null,
-        coated: r.coating||r.coated||vrec?.coating||null,
-      }
-    };
-  }));
-
-  // Merge in vessel_overrides — manual edits (notes + spec) win over CSV/feed, per field
-  try {
-    const { data: ovRows } = await supabase.from("vessel_overrides")
-      .select("imo_no,vessel_name,operator,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo,tag");
-    if (ovRows && ovRows.length) {
-      const byImo = {}, byName = {};
-      ovRows.forEach(o => {
-        if (o.imo_no) byImo[String(o.imo_no)] = o;
-        if (o.vessel_name) byName[String(o.vessel_name).toUpperCase()] = o;
-      });
-      setVessels(prev => prev.map(v => {
-        const o = (v.imoNo && byImo[v.imoNo]) || byName[v.vessel];
-        if (!o) return v;
-        const merged = { ...v };
-        // top-level fields: only apply override when non-null (manual wins)
-        if (o.operator != null)merged.operator= o.operator;
-        if (o.note != null)    merged.notes   = o.note;
-        if (o.coating != null) merged.coating = o.coating;
-        if (o.loa != null)     merged.loa     = o.loa;
-        if (o.beam != null)    merged.beam    = o.beam;
-        if (o.cbm != null)     merged.cbm     = o.cbm;
-        if (o.dwt != null)     merged.dwt     = o.dwt;
-        if (o.built != null)   merged.built   = o.built;
-        if (o.tag != null)     merged.tag     = o.tag;
-        // spec sub-object
-        merged.spec = { ...(v.spec || {}) };
-        if (o.fuel != null)      merged.spec.fuel      = o.fuel;
-        if (o.ice_class != null) merged.spec.iceClass  = o.ice_class;
-        if (o.last_cargo != null)merged.spec.lastCargo = o.last_cargo;
-        return merged;
-      }));
-    }
-  } catch (e) { console.error("vessel_overrides load:", e); }
-}
-  async function loadMoreCargoes(){ setHasMore(false); }
-
-
-  const renameV=useCallback((oldName,newName)=>{
-    if(!newName||!newName.trim()||newName.trim().toUpperCase()===oldName)return;
-    const n=newName.trim().toUpperCase();
-    setVessels(prev=>{const next=prev.map(v=>v.vessel===oldName?{...v,vessel:n,updatedAt:new Date().toISOString()}:v);saveV(next);return next;});
-    setCargoes(prev=>prev.map(c=>c.vessel===oldName?{...c,vessel:n}:c));
-    setSel(n);
-  },[]);
-
-  const updateV = useCallback(async(name, field, value) => {
-  setVessels(prev => {
-    const now2 = new Date().toISOString();
-
-    const next = prev.map(v => {
-      if (v.vessel !== name) return v;
-
-      if (field.includes(".")) {
-        const [a, b] = field.split(".");
-        return {
-          ...v,
-          updatedAt: now2,
-          [a]: {
-            ...(v[a] || {}),
-            [b]: value || null
-          }
-        };
-      }
-
-      const extra = field === "operator" ? { operatorManual: true } : {};
-
-      return {
-        ...v,
-        updatedAt: now2,
-        [field]: value || null,
-        ...extra
-      };
-    });
-
-    saveV(next);
-    return next;
-  });
-
-  // Manual vessel overrides persist in vessel_overrides and win over CSV/feed updates.
-  // Map popout field -> override column.
-  const OVERRIDE_COLS = {
-    operator: "operator",
-    notes: "note",
-    coating: "coating",
-    loa: "loa",
-    beam: "beam",
-    cbm: "cbm",
-    dwt: "dwt",
-    built: "built",
-    tag: "tag",
-    "spec.fuel": "fuel",
-    "spec.iceClass": "ice_class",
-    "spec.lastCargo": "last_cargo",
-  };
-  if (OVERRIDE_COLS[field]) {
-    const vobj = vessels.find(v => v.vessel === name);
-    const editor = localStorage.getItem("signal_user") || "H";
-    const payload = {
-      vessel_name: name,
-      imo_no: vobj?.imoNo || null,
-      [OVERRIDE_COLS[field]]: value || null,
-      entered_by: editor,
-      updated_at: new Date().toISOString(),
-    };
-    const onConflict = vobj?.imoNo ? "imo_no" : "vessel_name";
-    const { error } = await supabase.from("vessel_overrides").upsert([payload], { onConflict });
-    if (error) console.error("vessel_overrides upsert:", error);
-    return;
-  }
-
-  const fieldMap = {
-    openPort: "port_name",
-    date: "open_date",
-    comment: "details",
-    operator: "operator",
-  };
-
-  const dbField = fieldMap[field] || field;
-
-  const { error } = await supabase
-    .from("positions")
-    .update({
-      [dbField]: value || null,
-      updated_at: new Date().toISOString()
-    })
-    .ilike("vessel_name", name);
-
-  if (error) console.error("updateV error:", error);
-}, [vessels]);
-
-  // Universal cargo updater — optimistic UI + DB-confirmed persistence.
-  // The returned Supabase row is merged back into the canonical cargo array,
-  // including Quotes & Fixtures-only columns.
-  const updateC=useCallback(async(id,field,value)=>{
-    const nowIso=new Date().toISOString();
-    const rawDbValue=(field==="from"||field==="to")?toISODate(value):value;
-    const nullableQfFields=new Set(["ex_region","to_region","p_and_c","intelligence","source"]);
-    let dbValue=nullableQfFields.has(field)&&String(rawDbValue??"").trim()===""?null:rawDbValue;
-    if(field==="intelligence"&&dbValue!=null){
-      const q=String(dbValue).trim().toLowerCase();
-      dbValue=q==="quote"?"Quote":q==="fixture"?"Fixture":dbValue;
-    }
-    const displayValue=(field==="from"||field==="to")?(() => {
-      const iso=toISODate(value);
-      if(!iso) return value;
-      const dt=new Date(iso);
-      return dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
-    })():value;
-
-    let previousValue;
-    setCargoes(prev=>prev.map(c=>{
-      if(c.id!==id) return c;
-      previousValue=c[field];
-      return {...c,[field]:displayValue,changed:nowIso};
-    }));
-
-    const {data,error}=await supabase
-      .from("cargoes")
-      .update({[field]:dbValue,changed:nowIso})
-      .eq("id",id)
-      .select("*")
-      .single();
-
-    if(error){
-      console.error("cargo update failed:",field,id,error);
-      setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:previousValue}:c));
-      if(field!=="intelligence") alert("Cargo update failed: "+error.message);
-      return false;
-    }
-
-    if(!data){
-      setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:previousValue}:c));
-      alert("Cargo update was not confirmed by Supabase.");
-      return false;
-    }
-
-    const saved={
-      ...normaliseCargo(data),
-      entered_by:data.entered_by,
-      added:data.added,
-      changed:data.changed,
-      ex_region:data.ex_region,
-      to_region:data.to_region,
-      p_and_c:data.p_and_c,
-      intelligence:data.intelligence,
-      source:data.source
-    };
-    setCargoes(prev=>prev.map(c=>c.id===id?{...c,...saved}:c));
-    return true;
-  },[]);
-
-  const addVessels = useCallback(async (parsed) => {
-    const vdb = window.vesselDB || vesselDB;
-    const nowIso = new Date().toISOString();
-    let r = { added: 0, updated: 0, total: 0 };
-
-    function extractCoating(text){
-      if(!text) return "";
-      const t=text.toLowerCase();
-      if(t.includes("stainless")||t.includes("stst")||t.includes("ss ")) return "Stainless";
-      if(t.includes("marineline")||t.includes("marine line")) return "Marineline";
-      if(t.includes("interline")) return "Interline";
-      if(t.includes("zinc")) return "Zinc";
-      if(t.includes("epoxy")) return "Epoxy";
-      if(t.includes("phenolic")) return "Epoxy";
-      return "";
-    }
-
-    setVessels(prev => {
-      const before = prev.length;
-      // We pass nowIso into the local state so the UI updates immediately
-      const editorInit = localStorage.getItem("signal_user")||"H";
-      const next = mergeVessels(prev, parsed.map(p => ({ ...p, fileDate: nowIso, entered_by: editorInit })), vdb);
-      r = { 
-        added: next.length - before, 
-        updated: parsed.length - Math.max(0, next.length - before), 
-        total: next.length 
-      };
-      saveV(next);
-      setTimeout(() => saveSnapshot(next), 100);
-      return next;
-    });
-
-    const rows = parsed.map(v => {
-      const ev = enrichV(v, vdb);
-      
-      // Spec data is already in v.spec from ParsePanel OR look it up in vesselDB
-      const vesselKey = ev.vessel?.toUpperCase();
-      const dbVessel = vdb[vesselKey?.toLowerCase()];
-      
-      // Priority: use spec from parsed object first, then fallback to vesselDB
-      const spec = v.spec || (dbVessel ? {
-        iceClass: dbVessel.ice_class,
-        lastCargo: dbVessel.last_cargo,
-        segment: dbVessel.segment,
-      } : {});
-      
-      console.log("Saving to DB - vessel:", ev.vessel, "spec:", spec);
-      
-      return {
-  id: uuidv4(),
-  vessel_name: ev.vessel,
-  operator: ev.operator || null,
-  port_name: ev.openPort || null,
-  open_date: ev.date || null,
-  dwt: ev.dwt || null,
-  build_year: ev.built || null,
-  overall_length: ev.loa || null,
-  beam: ev.beam || null,
-  cbm: ev.cbm || null,
-  coating: ev.coating || dbVessel?.coating || extractCoating(ev.comment||"") || null,
-  details: ev.comment || null,
-  file_date: nowIso,
-  updated_at_manual: nowIso,
-  updated_at: nowIso,
-  entered_by: localStorage.getItem("signal_user")||"H",
-  spec: spec,
+const POS_TH={
+  padding:"7px 10px",
+  color:"rgba(120,160,220,0.55)",
+  fontWeight:700,
+  fontSize:11,
+  textTransform:"uppercase",
+  letterSpacing:"0.08em",
+  textAlign:"left",
+  background:C.bg4,
+  borderBottom:"1px solid rgba(58,130,246,0.14)",
+  whiteSpace:"nowrap",
+  verticalAlign:"middle",
+  fontFamily:"sans-serif"
 };
-    });
+const POS_TD={
+  padding:"6px 10px",
+  color:"#d9e8ff",
+  fontWeight:500,
+  fontSize:12,
+  borderBottom:"1px solid rgba(255,255,255,0.035)",
+  verticalAlign:"middle",
+  whiteSpace:"nowrap",
+  overflow:"hidden",
+  textOverflow:"ellipsis",
+  textTransform:"uppercase",
+  fontFamily:"sans-serif"
+};
+const POS_ROW=i=>i%2?"rgba(255,255,255,0.02)":"transparent";
+const POS_TABLE={width:"100%",borderCollapse:"separate",borderSpacing:0,fontSize:11,tableLayout:"fixed",fontFamily:"sans-serif"};
+const POS_WRAP={border:"1px solid "+C.bd,borderRadius:8,overflow:"auto",minWidth:0,background:C.bg2,boxShadow:"inset 0 1px 0 rgba(88,166,255,0.06)"};
 
-    const { error } = await supabase
-  .from("positions")
-  .upsert(rows, { onConflict: 'vessel_name' });
-    if (error) console.error("positions insert error:", error);
-    else console.log("positions saved ok:", rows.length, "rows");
-    
-    return r;
-  }, [vesselDB, saveV, saveSnapshot]);
-
-  const addCargoes=useCallback(async(parsed)=>{
-    const editorC=localStorage.getItem("signal_user")||"H";
-    const stamped=parsed.map((f,i)=>({...normaliseCargo({
-      ...f,
-      id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
-      updated: new Date().toISOString(),
-    }),entered_by:editorC,added:f.added||new Date().toISOString(),changed:null}));
-    // Dedup by id and by charterer+load+disch+from
-    let added=0;
-    setCargoes(prev=>{
-      const existingIds=new Set(prev.map(c=>c.id));
-      const toAdd=stamped.filter(f=>{
-        if(existingIds.has(f.id))return false;
-        if(f.charterer&&f.load&&f.from){
-  const dupIdx=prev.findIndex(e=>
-    (e.charterer||"").toLowerCase()===(f.charterer||"").toLowerCase()&&
-    (e.load||"").toLowerCase()===(f.load||"").toLowerCase()&&
-    (e.from||"")===(f.from||"")
-  );
-  if(dupIdx>=0){
-    // Update existing record instead of adding new
-    prev[dupIdx]={...prev[dupIdx],...f};
-    return false;
-  }
+const btn=(active=false)=>({fontSize:10,fontWeight:700,padding:"3px 7px",borderRadius:3,border:"1px solid "+(active?C.blue:C.bd),background:active?"rgba(88,166,255,.18)":C.bg3,color:active?"#d9ecff":"#9fc3f5",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
+const input={background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:11,padding:"6px 7px",outline:"none",boxSizing:"border-box"};
+function weekBounds(offset=0){const n=new Date();n.setHours(0,0,0,0);const dow=(n.getDay()+6)%7;const m=new Date(n);m.setDate(n.getDate()-dow+offset*7);const s=new Date(m);s.setDate(m.getDate()+6);return[m,s];}
+function CargoMonthChart({data,total}){
+ const vals=data||[],max=Math.max(1,...vals.map(x=>x.count||0)); const W=520,H=190,L=28,R=10,T=20,B=25,iw=W-L-R,ih=H-T-B;
+ const pts=vals.map((d,i)=>({x:L+(vals.length<2?0:i/(vals.length-1))*iw,y:T+ih-(d.count/max)*ih,...d}));
+ const path=pts.map((p,i)=>(i?"L":"M")+p.x+" "+p.y).join(" ");
+ return <div style={{...card,height:260,padding:"8px 10px",boxSizing:"border-box",minWidth:0,flex:1}}>
+  <div style={{display:"flex",justifyContent:"space-between",fontSize:9,fontWeight:800,color:C.dim,textTransform:"uppercase"}}><span>Cargoes entered by month</span><span style={{color:C.blue}}>{total||0} total</span></div>
+  <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{width:"100%",height:215,display:"block"}}>
+   {[0,.25,.5,.75,1].map(v=><line key={v} x1={L} x2={W-R} y1={T+ih*v} y2={T+ih*v} stroke={C.bd2} strokeDasharray="3 4"/>)}
+   {pts.length>1&&<path d={path} fill="none" stroke={C.blue} strokeWidth="2" vectorEffect="non-scaling-stroke"/>}
+   {pts.map((p,i)=><g key={i}><circle cx={p.x} cy={p.y} r="2.5" fill="#79c0ff"/>{(i===0||i===pts.length-1||i%3===0)&&<text x={p.x} y={H-5} textAnchor="middle" fontSize="9" fill={C.faint}>{new Date(p.year,p.month,1).toLocaleString("en",{month:"short"})}</text>}</g>)}
+  </svg>
+ </div>
 }
-        return true;
-      });
-      added=toAdd.length;
-      return [...prev,...toAdd];
-    });
-    // Write new rows to Supabase
-    if(stamped.length>0){
-      const rows=stamped.map(c=>({...c,from:toISODate(c.from),to:toISODate(c.to)}));
-      console.log("upserting cargo ids:", rows.map(r=>r.id));
-      const{error}=await supabase.from("cargoes").upsert(rows,{onConflict:"id"});
-      if(error)console.error("cargo upsert error:",error);
-    }
-    setVessels(prev=>{const next=prev.map(v=>{const fix=stamped.find(f=>f.vessel&&f.vessel.toLowerCase()===v.vessel.toLowerCase());if(fix&&fix.status==="FIXED"){return{...v,openPort:"EMPLOYED"};}return v;});saveV(next);return next;});
-    return added;
-  },[]);
+function BunkerHeader(){
+ const [b,setB]=useState(null);
+ useEffect(()=>{supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle().then(({data})=>setB(data?.value||null));},[]);
+ return <div style={{display:"flex",alignItems:"center",gap:5,fontSize:9,color:C.faint}}>BUNKER <Suspense fallback={null}><RateMatrixBunkerInput value={b?.ARA_MGO||b?.ara_mgo||null}/></Suspense></div>;
+}
+function useMonthly(){
+ const [week,setWeek]=useState({thisWk:0,lastWk:0}),[monthly,setMonthly]=useState([]);
+ useEffect(()=>{(async()=>{const [tm,ts]=weekBounds(0),[lm,ls]=weekBounds(-1),fmt=d=>d.toISOString().slice(0,10);
+  const [{count:a},{count:b}]=await Promise.all([supabase.from("cargoes").select("*",{count:"exact",head:true}).gte("updated",fmt(tm)).lte("updated",fmt(ts)+"T23:59:59"),supabase.from("cargoes").select("*",{count:"exact",head:true}).gte("updated",fmt(lm)).lte("updated",fmt(ls)+"T23:59:59")]);setWeek({thisWk:a||0,lastWk:b||0});
+  const now=new Date(),arr=[];for(let i=23;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1),n=new Date(d.getFullYear(),d.getMonth()+1,1);const {count}=await supabase.from("cargoes").select("*",{count:"exact",head:true}).gte("updated",d.toISOString().slice(0,10)).lt("updated",n.toISOString().slice(0,10));arr.push({year:d.getFullYear(),month:d.getMonth(),count:count||0});}setMonthly(arr);
+ })();},[]);
+ return {week,monthly};
+}
+function TagCell({id,value,onUpdate}){
+ const [open,setOpen]=useState(false),[pos,setPos]=useState({top:0,left:0}),ref=useRef(null);
+ function show(){if(ref.current){const r=ref.current.getBoundingClientRect(),z=parseFloat(getComputedStyle(document.body).zoom||"1")||1,w=160*z,h=Math.min(360,72+tagList().length*27)*z,m=12;let l=r.left-w-6;if(l<m)l=r.right+6;l=Math.max(m,Math.min(l,innerWidth-w-m));let t=Math.max(m,Math.min(r.top-8,innerHeight-h-m));setPos({left:l/z,top:t/z});}setOpen(true);}
+ return <><td style={{...POS_TD,textAlign:"center",padding:"0 3px"}}><button ref={ref} onClick={show} style={{background:"transparent",border:"1px solid "+C.bd,borderRadius:3,color:value?C.blue:C.faint,fontSize:9,cursor:"pointer",minWidth:20}}>{value||"+"}</button></td>
+ {open&&<><div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"fixed",left:pos.left,top:pos.top,zIndex:19999,width:160,maxHeight:360,overflowY:"auto",background:"#071223",border:"1px solid "+C.bd,borderRadius:7,padding:5,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}>
+ {tagList().map(t=><button key={t} onClick={()=>{onUpdate(id,"tag",value===t?"":t);setOpen(false)}} style={{display:"block",width:"100%",textAlign:"left",padding:"6px 7px",marginBottom:2,background:value===t?"rgba(88,166,255,.16)":"transparent",border:"1px solid "+(value===t?C.blue:C.bd2),borderRadius:3,color:value===t?"#fff":"#9fc3f5",fontSize:9,fontWeight:700,cursor:"pointer"}}>{t}</button>)}</div></>}</>;
+}
+function RegionCell({value,onSave}){
+ const [edit,setEdit]=useState(false),[draft,setDraft]=useState(value||""),ref=useRef(null);
+ const matches=REGIONS.filter(r=>!draft||r.toLowerCase().startsWith(draft.toLowerCase())||r.toLowerCase().includes(draft.toLowerCase()));
+ function commit(){const q=draft.trim(),hit=REGIONS.find(r=>r.toLowerCase()===q.toLowerCase())||REGIONS.find(r=>r.toLowerCase().startsWith(q.toLowerCase()));if(!q)onSave("");else if(hit)onSave(hit);setEdit(false);}
+ return <td style={{...POS_TD,fontWeight:700,color:C.tx,position:"relative"}} onClick={()=>{setDraft(value||"");setEdit(true);setTimeout(()=>ref.current?.focus(),0)}}>
+ {!edit?value||"":<input ref={ref} value={draft} onChange={e=>setDraft(e.target.value)} onBlur={()=>setTimeout(commit,80)} onKeyDown={e=>{if(e.key==="Enter"||e.key==="Tab"){e.preventDefault();commit()}if(e.key==="Escape")setEdit(false)}} style={{...input,width:"100%",height:24,fontWeight:700,textTransform:"uppercase",fontFamily:"inherit",background:"#071223"}}/>}
+ {edit&&matches.length>0&&<div style={{position:"absolute",left:4,top:29,zIndex:15000,minWidth:145,background:"#071223",border:"1px solid "+C.bd,borderRadius:5,padding:3,boxShadow:"0 8px 25px rgba(0,0,0,.65)"}}>{matches.slice(0,8).map(r=><div key={r} onMouseDown={e=>{e.preventDefault();onSave(r);setEdit(false)}} style={{padding:"4px 6px",fontSize:9,fontWeight:700,cursor:"pointer"}}>{r}</div>)}</div>}
+ </td>;
+}
+function Editable({value,onSave,color,bold}){
+ const [e,setE]=useState(false),[v,setV]=useState(value??"");useEffect(()=>setV(value??""),[value]);
+ return <td onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} style={{...POS_TD,color:color||C.tx,fontWeight:bold?700:500}}>
+ {e?<input autoFocus value={v} onChange={x=>setV(x.target.value)} onBlur={()=>{setE(false);if(v!==value)onSave(v)}} onKeyDown={x=>{if(x.key==="Enter"){x.currentTarget.blur()}if(x.key==="Escape"){setV(value??"");setE(false)}}} style={{...input,width:"100%",height:24,background:"#071223"}}/>:<span title={String(value||"")}>{value||""}</span>}</td>;
+}
+function AddRow({onSave,onClose,quotes=false}){
+ const [r,setR]=useState({});const f=(k,p)=><input value={r[k]||""} onChange={e=>setR(x=>({...x,[k]:e.target.value}))} placeholder={p} style={{...input,width:"100%",height:25}}/>;
+ const save=async()=>{if(!r.charterer&&!r.cargo)return onClose();await onSave({...r,updated:new Date().toISOString(),intelligence:quotes?(r.intelligence||""):undefined});onClose();};
+ return <div style={{...card,padding:6,display:"grid",gridTemplateColumns:quotes?"90px 90px 50px 70px 120px 120px 70px 90px 100px 120px 75px 75px 110px 1fr 50px":"100px 120px 70px 90px 100px 120px 75px 75px 110px 1fr 50px",gap:4}}>
+ {quotes&&<>{f("ex_region","Ex region")}{f("to_region","To region")}{f("p_and_c","P&C")}{f("intelligence","Intel")}</>}
+ {f("vessel","Vessel")}{f("charterer","Charterer")}{f("qty","Qty")}{f("cargo","Cargo")}{f("load","Load")}{f("disch","Disch")}{f("from","From")}{f("to","To")}{f("freight","Freight")}{f("comment","Comment")}<button onClick={save} style={btn(true)}>Save</button>
+ </div>;
+}
 
-  const addV=useCallback(async(v)=>{
-  setVessels(prev=>{const idx=prev.findIndex(x=>x.vessel?.toLowerCase()===v.vessel.toLowerCase());const next=idx>=0?prev.map((x,i)=>i===idx?enrichV(v,vesselDB):x):[...prev,enrichV(v,vesselDB)];saveV(next);return next;});
-  const{error}=await supabase.from("positions").upsert([{...v,updated_at:new Date().toISOString()}],{onConflict:"vessel_name"});
-  if(error)console.error(error);
-},[vesselDB]);
-  const addC=useCallback(async(c)=>{
-    const norm={...normaliseCargo({...c,id:c.id||("c_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),updated:c.updated||new Date().toISOString()}),added:c.added||new Date().toISOString(),changed:null};
-    setCargoes(prev=>[...prev,norm]);
-    const row={...norm,from:toISODate(norm.from),to:toISODate(norm.to)};
-    const{error}=await supabase.from("cargoes").upsert([row],{onConflict:"id"});
-    if(error)console.error(error);
-    if(norm.status==="FIXED"&&norm.vessel&&norm.disch){setVessels(prev=>{const next=prev.map(v=>v.vessel?.toLowerCase()!==norm.vessel.toLowerCase()?v:{...v,openPort:norm.disch});saveV(next);return next;});}
-  },[]);
-  const delV = useCallback(async(name)=>{
-  setVessels(prev=>{
-    const next = name==="__ALL__" ? [] : prev.filter(v => v.vessel !== name);
-    saveV(next);
-    return next;
-  });
-
-  if(name==="__ALL__"){
-    const { error } = await supabase
-      .from("positions")
-      .delete()
-      .neq("vessel_name", "__none__");
-    if(error) console.error("delV all error:", error);
-  } else {
-    const { error } = await supabase
-      .from("positions")
-      .delete()
-      .ilike("vessel_name", name);
-    if(error) console.error("delV error:", error, name);
-  }
-},[]);
-  const delC=useCallback(async(id)=>{
-    setCargoes(prev=>id==="__ALLCARGO__"?[]:prev.filter(c=>c.id!==id));
-    setCargoTotal(prev=>id==="__ALLCARGO__"?0:Math.max(0,prev-1));
-    if(id==="__ALLCARGO__"){
-      const{error}=await supabase.from("cargoes").delete().neq("id","__none__");
-      if(error)console.error("delC all error:",error);
-    } else {
-      const{error}=await supabase.from("cargoes").delete().eq("id",id);
-      if(error){
-        console.error("delC error:",error,id);
-        alert("Delete failed: "+error.message+" (id: "+id+")");
-      }
-    }
-  },[]);
-
-  const props={vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
-  return (
-    <>
-      <DesktopApp {...props}/>
-    </>
-  );
+export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,onAddCargoes,onAddC,onDelC,onAddVessels,onCargoSearch}){
+ const [search,setSearch]=useState(""),[status,setStatus]=useState("ALL"),[time,setTime]=useState(""),[grade,setGrade]=useState(""),[tag,setTag]=useState(""),[ex,setEx]=useState(""),[toR,setToR]=useState(""),[parseTag,setParseTag]=useState(""),[showAdd,setShowAdd]=useState(false),[sort,setSort]=useState("added"),[dir,setDir]=useState(-1);
+ const [visible,setVisible]=useState(()=>{try{return new Set(JSON.parse(localStorage.getItem("signal_qf_visible_columns")||"[]"))}catch{return new Set()}});
+ const defaults=["status","ex_region","to_region","p_and_c","intelligence","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment"];
+ useEffect(()=>{if(!visible.size)setVisible(new Set(defaults))},[]);
+ useEffect(()=>{try{localStorage.setItem("signal_qf_visible_columns",JSON.stringify([...visible]))}catch{}},[visible]);
+ // Named views are scoped to the signed-in PIN identity on this browser.
+ const viewOwner=String(localStorage.getItem("signal_user")||"default");
+ const viewKey=`signal_qf_views_${viewOwner}`;
+ const [savedViews,setSavedViews]=useState(()=>{try{return JSON.parse(localStorage.getItem(viewKey)||"[]")}catch{return[]}});
+ const [selectedView,setSelectedView]=useState("");
+ const saveView=()=>{
+   const name=window.prompt("Name this Quotes & Fixtures view:");
+   if(!name?.trim())return;
+   const view={name:name.trim(),search,status,grade,tag,ex,toR,sort,dir,columns:[...visible]};
+   const next=[...savedViews.filter(v=>v.name!==view.name),view];
+   setSavedViews(next);localStorage.setItem(viewKey,JSON.stringify(next));setSelectedView(view.name);
+ };
+ const applyView=name=>{
+   setSelectedView(name);
+   const v=savedViews.find(x=>x.name===name);
+   if(!v)return;
+   setSearch(v.search||"");setStatus(v.status||"ALL");setGrade(v.grade||"");
+   setTag(v.tag||"");setEx(v.ex||"");setToR(v.toR||"");
+   setSort(v.sort||"added");setDir(v.dir||-1);
+   if(Array.isArray(v.columns))setVisible(new Set(v.columns));
+ };
+ const deleteView=()=>{
+   if(!selectedView||!window.confirm(`Delete view "${selectedView}"?`))return;
+   const next=savedViews.filter(v=>v.name!==selectedView);
+   setSavedViews(next);localStorage.setItem(viewKey,JSON.stringify(next));setSelectedView("");
+ };
+ const [colsOpen,setColsOpen]=useState(false),[colsPos,setColsPos]=useState({top:0,left:0});
+ const {week,monthly}=useMonthly();
+ const groups=useMemo(()=>{try{return JSON.parse(localStorage.getItem("signal_cargo_filter_groups")||"[]")}catch{return[]}},[cargoes.length]),grades=groups.filter(g=>(g.category||"grade")==="grade"),tags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
+ const filtered=useMemo(()=>{let a=cargoes.filter(c=>{if(ex&&c.ex_region!==ex)return false;if(toR&&c.to_region!==toR)return false;if(status!=="ALL"&&c.status!==status)return false;if(tag&&c.tag!==tag)return false;if(grade&&!String(c.cargo||"").toLowerCase().includes(grade.toLowerCase()))return false;if(search&&!JSON.stringify(c).toLowerCase().includes(search.toLowerCase()))return false;return true});const f=sort==="added"?"added":sort;return [...a].sort((x,y)=>{let A=x[f]||x.updated||"",B=y[f]||y.updated||"";if(f==="added"||f==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime()}return(A<B?-1:A>B?1:0)*dir})},[cargoes,search,status,tag,grade,ex,toR,sort,dir]);
+ const allCols=[["status","Status",4],["ex_region","Ex Region",6],["to_region","To Region",6],["p_and_c","P&C",3],["intelligence","Intel",4],["vessel","Vessel",9],["charterer","Charterer",10],["qty","Qty",4],["cargo","Cargo",6],["load","Load",9],["disch","Disch",12],["from","From",4],["to","To",4],["freight","Freight",7],["comment","Comment",11],["tag","Tag",4],["source","Source",6],["updated","Updated",6]];
+ const shown=allCols.filter(([k])=>visible.has(k));
+ return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+  <div style={{display:"flex",gap:10,height:260}}>
+   <div style={{flex:"0 0 25%",display:"flex",flexDirection:"column",gap:4}}><div style={{...card,padding:"5px 8px",display:"flex",gap:4,flexWrap:"wrap"}}><span style={{fontSize:9,color:C.faint,fontWeight:800}}>TAG ON PARSE</span>{tagList().map(t=><button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={btn(parseTag===t)}>{t}</button>)}</div><div style={{flex:1}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await onAddCargoes(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div>
+   <div style={{flex:"0 0 40%",...card,padding:8,display:"grid",gridTemplateColumns:".8fr .8fr .8fr 1.6fr 1.6fr",gap:6,overflow:"hidden"}}>
+    <div><b style={{fontSize:9,color:C.blue}}>GRADE</b>{grades.slice(0,6).map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={{...btn(grade===g.id),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{g.label}</button>)}</div>
+    <div><b style={{fontSize:9,color:C.dim}}>PERIOD</b>{[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={{...btn(time===k),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{l}</button>)}</div>
+    <div><b style={{fontSize:9,color:C.pink}}>TAG</b>{tags.slice(0,7).map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={{...btn(tag===t),display:"block",width:"100%",marginTop:3,textAlign:"left"}}>{t}</button>)}</div>
+    {[["EX REGION",ex,setEx],["TO REGION",toR,setToR]].map(([lab,val,setter])=><div key={lab}><b style={{fontSize:9,color:C.blue}}>{lab}</b><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:2,marginTop:3}}><button onClick={()=>setter("")} style={btn(!val)}>All</button>{REGIONS.map(r=><button key={r} onClick={()=>setter(x=>x===r?"":r)} style={btn(val===r)}>{r}</button>)}</div></div>)}
+   </div>
+   <CargoMonthChart data={monthly} total={cargoTotal||cargoes.length}/>
+  </div>
+  <div style={{...card,padding:"5px 8px",display:"flex",gap:6,alignItems:"center",position:"relative",zIndex:100}}>
+   <span style={{fontSize:10,color:C.faint}}>VIEW</span><select aria-label="Saved view" value={selectedView} onChange={e=>applyView(e.target.value)} style={{...input,maxWidth:150}}><option value="">Current filters</option>{savedViews.map(v=><option key={v.name} value={v.name}>{v.name}</option>)}</select><button onClick={saveView} style={btn()}>+ Save view</button>{selectedView&&<button onClick={deleteView} style={btn()}>Delete view</button>}
+   <button onClick={()=>setShowAdd(true)} style={{...btn(),color:C.amber}}>+ Add cargo</button><button style={btn()}>Copy all</button><button style={btn()}>Copy CSV</button><span style={{fontSize:10,color:C.faint}}>This wk <b style={{color:C.blue}}>{week.thisWk}</b>&nbsp; Last wk <b>{week.lastWk}</b></span>
+   <div style={{marginLeft:"auto",display:"flex",gap:5,alignItems:"center"}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search cargoes..." style={{...input,width:210}}/><span style={{fontSize:10,color:C.faint}}>Total <b style={{color:C.tx}}>{cargoTotal||cargoes.length}</b></span><select value={sort} onChange={e=>setSort(e.target.value)} style={input}><option value="added">Added</option><option value="updated">Updated</option><option value="charterer">Charterer</option></select><button onClick={()=>setDir(d=>-d)} style={btn()}>{dir>0?"▲":"▼"}</button>
+   <button onClick={e=>{const r=e.currentTarget.getBoundingClientRect(),z=parseFloat(getComputedStyle(document.body).zoom||"1")||1,w=205*z,h=390*z,m=12;let l=Math.max(m,Math.min(r.right-w,innerWidth-w-m)),t=r.bottom+5;if(t+h>innerHeight-m)t=Math.max(m,r.top-h-5);setColsPos({left:l/z,top:t/z});setColsOpen(v=>!v)}} style={btn()}>Columns⌄</button></div>
+   {colsOpen&&<><div onClick={()=>setColsOpen(false)} style={{position:"fixed",inset:0,zIndex:29990}}/><div style={{position:"fixed",left:colsPos.left,top:colsPos.top,zIndex:29999,width:205,maxHeight:390,overflowY:"auto",background:"#071223",border:"1px solid "+C.bd,borderRadius:7,padding:7,boxShadow:"0 12px 34px rgba(0,0,0,.7)"}}>{allCols.map(([k,l])=><label key={k} style={{display:"flex",gap:7,padding:5,fontSize:10,fontWeight:700}}><input type="checkbox" checked={visible.has(k)} onChange={()=>setVisible(p=>{const n=new Set(p);n.has(k)?n.delete(k):n.add(k);return n})}/>{l}</label>)}</div></>}
+  </div>
+  {showAdd&&<AddRow quotes onSave={onAddC} onClose={()=>setShowAdd(false)}/>}
+  <div style={POS_WRAP}>
+   <style>{`.qf-position-row:hover td{background:rgba(58,130,246,0.06)!important;}`}</style><table style={POS_TABLE}>
+    <colgroup><col style={{width:"1.4%"}}/>{shown.map(([k,l,w])=><col key={k} style={{width:w+"%"}}/>)}<col style={{width:"1.4%"}}/><col style={{width:"1.4%"}}/></colgroup>
+    <thead><tr><th style={{...POS_TH,textAlign:"center"}}></th>{shown.map(([k,l])=><th key={k} style={{...POS_TH,textAlign:["p_and_c","intelligence","from","to","freight"].includes(k)?"center":"left"}}>{l}</th>)}<th style={POS_TH}/><th style={POS_TH}/></tr></thead>
+    <tbody>{filtered.slice(0,200).map((c,i)=><tr key={c.id} className="qf-position-row" style={{background:POS_ROW(i),height:27}}><td style={{...POS_TD,textAlign:"center",color:C.faint,padding:"0 2px"}}>[ ]</td>
+    {shown.map(([k])=>{
+      if(k==="status")return <td key={k} onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:800,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>;
+      if(k==="ex_region"||k==="to_region")return <RegionCell key={k} value={c[k]||""} onSave={v=>onUpdateC(c.id,k,v)}/>;
+      if(k==="p_and_c")return <td key={k} onClick={()=>{const o=[null,1,2,3],x=o.findIndex(v=>String(v??"")===String(c.p_and_c??""));onUpdateC(c.id,"p_and_c",o[(x+1)%o.length])}} style={{...POS_TD,textAlign:"center",fontWeight:900,cursor:"pointer",color:Number(c.p_and_c)===1?"#ff5b5b":Number(c.p_and_c)===2?"#ffad33":Number(c.p_and_c)===3?"#fff":C.faint}}>{c.p_and_c??""}</td>;
+      if(k==="intelligence")return <td key={k} onClick={()=>{const o=["","Quote","Fixture"],x=o.indexOf(c.intelligence||"");onUpdateC(c.id,"intelligence",o[(x+1)%o.length])}} style={{...POS_TD,textAlign:"center",cursor:"pointer"}}>{c.intelligence&&<span style={{display:"inline-block",padding:"2px 5px",borderRadius:3,fontSize:9,fontWeight:800,color:c.intelligence==="Fixture"?C.green:C.blue,border:"1px solid "+(c.intelligence==="Fixture"?C.green+"88":C.blue+"88")}}>{c.intelligence.toUpperCase()}</span>}</td>;
+      if(k==="tag")return <TagCell key={k} id={c.id} value={c.tag} onUpdate={onUpdateC}/>;
+      if(k==="updated")return <td key={k} style={{...POS_TD,textAlign:"center",color:C.faint}}>{c.updated?new Date(c.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>;
+      const val=k==="charterer"?toTCase(c[k]||""):k==="qty"?normaliseQty(c[k]):k==="from"||k==="to"?fmtDateShort(c[k]):k==="freight"?(fmtFreight(c[k])||c[k]||""):c[k]||"";
+      return <Editable key={k} value={val} bold={["vessel","charterer","cargo","load","disch","from","to"].includes(k)} color={k==="vessel"?C.blue:k==="charterer"?"#79c0ff":k==="qty"?C.amber:k==="freight"?"#a8e6a3":C.tx} onSave={v=>onUpdateC(c.id,k,k==="charterer"||k==="load"||k==="disch"?toTCase(v):k==="qty"?normaliseQty(v):k==="freight"?(fmtFreight(v)||v):v)}/>;
+    })}<td style={{...POS_TD,textAlign:"center",padding:"0 2px",fontSize:8,color:c.entered_by==="H"?C.blue:C.green}}>{c.entered_by||""}</td><td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>confirm("Delete cargo?")&&onDelC(c.id)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td></tr>)}</tbody>
+   </table>
+  </div>
+ </div>;
 }
