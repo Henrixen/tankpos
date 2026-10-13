@@ -38,7 +38,7 @@ const NewbuildsTab   = React.lazy(()=>import("./NewbuildsTab"));
 const FleetTab       = React.lazy(()=>import("./FleetTab"));
 const OutsidersTab   = React.lazy(()=>import("./OutsidersTab"));
 const CargoesTab     = React.lazy(()=>import("./Cargoes"));
-const QuotesFixtures = React.lazy(()=>import("./QuotesFixtures"));
+const CargoesMaster = React.lazy(()=>import("./CargoesMaster"));
 
 const TabFallback = ()=>null;
 
@@ -3822,7 +3822,7 @@ const filtV=useMemo(()=>{
         {/* ── QUOTES & FIXTURES — isolated component ── */}
         {tab==="cargo2"&&(
           <Suspense fallback={<TabFallback/>}>
-            <QuotesFixtures
+            <CargoesMaster
               vessels={vessels} cargoes={cargoes} cargoTotal={cargoTotal}
               onUpdateC={onUpdateC} onAddCargoes={onAddCargoes} onAddC={onAddC}
               onDelC={onDelC} onAddVessels={onAddVessels} onCargoSearch={onCargoSearch}
