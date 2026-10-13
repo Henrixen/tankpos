@@ -216,6 +216,31 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
  const defaults=["status","ex_region","to_region","p_and_c","intelligence","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment","tag","updated"];
  useEffect(()=>{setVisible(prev=>{const n=prev.size?new Set(prev):new Set(defaults);n.add("tag");n.add("updated");return n})},[]);
  useEffect(()=>{if(!visible.size)return;const a=[...visible];try{localStorage.setItem(qfColsKey,JSON.stringify(a))}catch{}try{document.cookie="signal_qf_cols="+encodeURIComponent(a.join(","))+"; path=/; max-age=31536000; SameSite=Lax"}catch{}},[qfColsKey,visible]);
+ // Saved views are local to the signed-in PIN on this device.
+ const viewKey="signal_qf_views_"+qfUser;
+ const [savedViews,setSavedViews]=useState(()=>{try{const v=JSON.parse(localStorage.getItem(viewKey)||"[]");return Array.isArray(v)?v:[]}catch{return[]}});
+ const [selectedView,setSelectedView]=useState("");
+ const saveView=()=>{
+   const name=window.prompt("Name this Quotes & Fixtures view:")?.trim();
+   if(!name)return;
+   const view={name,search,status,time,grade,tag,ex,toR,sort,dir,columns:[...visible]};
+   const next=[...savedViews.filter(v=>v.name!==name),view];
+   setSavedViews(next);localStorage.setItem(viewKey,JSON.stringify(next));setSelectedView(name);
+ };
+ const applyView=name=>{
+   setSelectedView(name);
+   const v=savedViews.find(x=>x.name===name);
+   if(!v)return;
+   setSearch(v.search||"");setStatus(v.status||"ALL");setTime(v.time||"");
+   setGrade(v.grade||"");setTag(v.tag||"");setEx(v.ex||"");setToR(v.toR||"");
+   setSort(v.sort||"updated");setDir(v.dir??-1);
+   if(Array.isArray(v.columns))setVisible(new Set(v.columns));
+ };
+ const deleteView=()=>{
+   if(!selectedView||!window.confirm(`Delete view "${selectedView}"?`))return;
+   const next=savedViews.filter(v=>v.name!==selectedView);
+   setSavedViews(next);localStorage.setItem(viewKey,JSON.stringify(next));setSelectedView("");
+ };
  const [colsOpen,setColsOpen]=useState(false),[colsPos,setColsPos]=useState({top:0,left:0});
  const [deleteCargo,setDeleteCargo]=useState(null);
  const [selected,setSelected]=useState(()=>new Set());
@@ -323,7 +348,7 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,stat
   </div>
   <div className="qf-actions" style={{...card,padding:"5px 8px",display:"flex",gap:6,alignItems:"center",position:"relative",zIndex:100}}>
    <div className="qf-actions-main"><button onClick={()=>setShowAdd(true)} style={{...btn(),color:C.amber}}>+ Add cargo</button><button style={btn()}>Copy all</button><button style={btn()}>Copy CSV</button>{selected.size>0&&<div style={{position:"relative"}}><button onClick={()=>setBulkTagOpen(v=>!v)} style={{...btn(bulkTagOpen),color:C.blue}}>+ Add tag ({selected.size})</button>{bulkTagOpen&&<><div onClick={()=>setBulkTagOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"absolute",left:0,top:"calc(100% + 4px)",zIndex:19999,width:180,maxHeight:300,overflowY:"auto",background:"#071223",border:"1px solid "+C.blue,borderRadius:6,padding:5,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}><button onClick={async()=>{await Promise.all([...selected].map(id=>Promise.resolve(updateWithAudit(id,"tag",""))));setBulkTagOpen(false)}} style={{display:"block",width:"100%",padding:"6px 7px",marginBottom:5,background:"rgba(255,255,255,.025)",border:"1px solid "+C.bd2,borderRadius:3,color:C.faint,fontSize:10,fontWeight:800,cursor:"pointer",textTransform:"uppercase",textAlign:"left"}}>× Clear tag(s)</button>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={async()=>{await Promise.all([...selected].map(id=>Promise.resolve(updateWithAudit(id,"tag",t))));setBulkTagOpen(false)}} style={{display:"flex",alignItems:"center",gap:6,width:"100%",padding:"6px 7px",marginBottom:2,background:"transparent",border:"1px solid "+C.bd2,borderRadius:3,color:tc||"#9fc3f5",fontSize:11,fontWeight:800,cursor:"pointer",textTransform:"uppercase"}}>{tc&&<span style={{width:7,height:7,borderRadius:"50%",background:tc}}/>}{String(t).toUpperCase()}</button>})}</div></>}</div>}<span style={{fontSize:10,color:C.faint}}>This wk <b style={{color:C.blue}}>{week.thisWk}</b>&nbsp; Last wk <b>{week.lastWk}</b>&nbsp;&nbsp; Total <b style={{color:C.tx}}>{cargoTotal||cargoes.length}</b></span>
-   </div><div className="qf-actions-search"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search cargoes..." style={{...input,width:210}}/></div><details className="qf-mobile-controls"><summary>Table / Columns</summary><div className="qf-mobile-controls-body"><div style={{position:"relative",width:118,height:27}}><select value={sort} onChange={e=>{setSort(e.target.value);setDir(-1)}} style={{...btn(),appearance:"none",WebkitAppearance:"none",width:"100%",height:27,padding:"3px 26px 3px 9px",background:C.bg3,color:"#9fc3f5",textAlign:"left"}}>
+   </div><div style={{display:"flex",alignItems:"center",gap:4,minWidth:0}}><span style={{fontSize:10,color:C.faint}}>VIEW</span><select aria-label="Saved view" value={selectedView} onChange={e=>applyView(e.target.value)} style={{...input,maxWidth:145}}><option value="">Current filters</option>{savedViews.map(v=><option key={v.name} value={v.name}>{v.name}</option>)}</select><button onClick={saveView} style={btn()}>+ Save view</button>{selectedView&&<button onClick={deleteView} style={btn()}>Delete view</button>}</div><div className="qf-actions-search"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search cargoes..." style={{...input,width:210}}/></div><details className="qf-mobile-controls"><summary>Table / Columns</summary><div className="qf-mobile-controls-body"><div style={{position:"relative",width:118,height:27}}><select value={sort} onChange={e=>{setSort(e.target.value);setDir(-1)}} style={{...btn(),appearance:"none",WebkitAppearance:"none",width:"100%",height:27,padding:"3px 26px 3px 9px",background:C.bg3,color:"#9fc3f5",textAlign:"left"}}>
      <option value="added">Added</option>{allCols.map(([k,l])=><option key={k} value={k}>{l}</option>)}
    </select><span style={{position:"absolute",right:9,top:"50%",transform:"translateY(-52%)",pointerEvents:"none",color:"#9fc3f5",fontSize:11}}>▼</span></div>
    <button onClick={e=>{const r=e.currentTarget.getBoundingClientRect(),z=parseFloat(getComputedStyle(document.body).zoom||"1")||1,w=205*z,h=Math.min(430,innerHeight/z-40)*z,m=12;let l=Math.max(m,Math.min(r.right-w,innerWidth-w-m)),t=r.bottom+5;if(t+h>innerHeight-m)t=Math.max(m,r.top-h-5);setColsPos({left:l/z,top:t/z});setColsOpen(v=>!v)}} style={{...btn(),position:"relative",height:27,width:118,padding:"3px 26px 3px 9px",textAlign:"left"}}>Columns<span style={{position:"absolute",right:9,top:"50%",transform:"translateY(-52%)",fontSize:11}}>▼</span></button></div></details>
