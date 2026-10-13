@@ -66,15 +66,16 @@ function CargoMonthChart({ data, total }){
   const lineLen=pts.reduce((a,p,i)=>i===0?0:a+Math.hypot(p.x-pts[i-1].x,p.y-pts[i-1].y),0);
   const step=Math.max(1,Math.ceil(W/8));
   const yearStarts=pts.filter((p,i)=>i>0&&p.year!==pts[i-1].year);
+  const peakIdx=counts.reduce((mx,b,i)=>b.count>counts[mx].count?i:mx,0);
 
   return(
-    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"8px 10px 6px",display:"flex",flexDirection:"column",gap:4,minWidth:0,boxSizing:"border-box",height:260}}>
+    <div style={{flex:1,background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,padding:"8px 10px 6px",display:"flex",flexDirection:"column",gap:4,minWidth:0,boxSizing:"border-box",height:"100%"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
         <div style={{fontSize:12,fontWeight:700,color:C.dim,textTransform:"uppercase",letterSpacing:"0.07em",fontFamily:"inherit"}}>Cargoes entered by month</div>
         <div style={{fontSize:10,color:"rgba(88,166,255,0.7)",fontWeight:700,fontFamily:"inherit"}}>{total.toLocaleString()} total</div>
       </div>
       <div ref={wrapRef} style={{flex:1,minHeight:0,width:"100%"}}>
-        <svg fontFamily="inherit" width="100%" height="100%" viewBox={"0 0 "+SVG_W+" "+SVG_H} preserveAspectRatio="xMidYMid meet" style={{display:"block",overflow:"visible"}}>
+        <svg fontFamily="inherit" width="100%" height="100%" viewBox={"0 0 "+SVG_W+" "+SVG_H} preserveAspectRatio="xMidYMid meet" style={{display:"block",overflow:"hidden"}}>
           <defs>
             <linearGradient id="cgGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#58a6ff" stopOpacity="0.3"/>
@@ -103,7 +104,10 @@ function CargoMonthChart({ data, total }){
             const showLabel=i===0||i===pts.length-1||i%step===0;
             return(
               <g key={i}>
-                {p.count>0&&<circle cx={p.x} cy={p.y} r={2.5} fill="#58a6ff" stroke="#0c1729" strokeWidth="1.5"><title>{`${p.year} ${MONTHS[p.month]}: ${p.count} cargoes`}</title></circle>}
+                {p.count>0&&<circle cx={p.x} cy={p.y} r={i===peakIdx?4:2.5} fill={i===peakIdx?"#79c0ff":"#58a6ff"} stroke="#0c1729" strokeWidth="1.5"/>}
+                {i===peakIdx&&(
+                  <text x={p.x} y={p.y-9} textAnchor="middle" fontSize="10" fill="#79c0ff" fontWeight="700">{p.count}</text>
+                )}
                 {showLabel&&(
                   <text x={p.x} y={PAD.t+iH+16} textAnchor="middle" fontSize="10" fill="rgba(120,160,200,0.5)">{MONTHS[p.month]}</text>
                 )}
@@ -126,9 +130,9 @@ function useMonthly(cargoes=[]){
   const now=new Date(),[tm,ts]=weekBounds(0),[lm,ls]=weekBounds(-1);
   ts.setHours(23,59,59,999);ls.setHours(23,59,59,999);
   const monthMap=new Map();
-  const dates=cargoes.map(c=>new Date(c.added||c.updated||0)).filter(d=>!Number.isNaN(d.getTime())&&d.getTime()>0);const earliest=dates.length?new Date(Math.min(...dates.map(d=>d.getTime()))):now;const monthCount=Math.max(1,(now.getFullYear()-earliest.getFullYear())*12+now.getMonth()-earliest.getMonth()+1);for(let i=monthCount-1;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);monthMap.set(`${d.getFullYear()}-${d.getMonth()}`,{year:d.getFullYear(),month:d.getMonth(),count:0})}
+  for(let i=23;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);monthMap.set(`${d.getFullYear()}-${d.getMonth()}`,{year:d.getFullYear(),month:d.getMonth(),count:0})}
   let thisWk=0,lastWk=0;
-  for(const c of cargoes){const raw=c.added||c.updated;if(!raw)continue;const d=new Date(raw);if(Number.isNaN(d.getTime()))continue;if(d>=tm&&d<=ts)thisWk++;if(d>=lm&&d<=ls)lastWk++;const k=`${d.getFullYear()}-${d.getMonth()}`;if(monthMap.has(k))monthMap.get(k).count++;}
+  for(const c of cargoes){const raw=c.updated||c.added;if(!raw)continue;const d=new Date(raw);if(Number.isNaN(d.getTime()))continue;if(d>=tm&&d<=ts)thisWk++;if(d>=lm&&d<=ls)lastWk++;const k=`${d.getFullYear()}-${d.getMonth()}`;if(monthMap.has(k))monthMap.get(k).count++;}
   return {week:{thisWk,lastWk},monthly:[...monthMap.values()]};
  },[cargoes]);
 }
@@ -204,21 +208,53 @@ function AddRow({onSave,onClose,quotes=false}){
 }
 
 export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,onAddCargoes,onAddC,onDelC,onAddVessels,onCargoSearch}){
- const [search,setSearch]=useState(""),[status,setStatus]=useState("ALL"),[time,setTime]=useState(""),[grade,setGrade]=useState(""),[tag,setTag]=useState(""),[ex,setEx]=useState(""),[toR,setToR]=useState(""),[parseTag,setParseTag]=useState(""),[showAdd,setShowAdd]=useState(false),[sort,setSort]=useState("added"),[dir,setDir]=useState(-1);
+ const [search,setSearch]=useState(""),[status,setStatus]=useState("ALL"),[time,setTime]=useState(""),[grade,setGrade]=useState(""),[tag,setTag]=useState(""),[ex,setEx]=useState(""),[toR,setToR]=useState(""),[parseTag,setParseTag]=useState(""),[showAdd,setShowAdd]=useState(false),[sort,setSort]=useState("updated"),[dir,setDir]=useState(-1);
  const [page,setPage]=useState(1);
  const PAGE_SIZE=200;
- const [visible,setVisible]=useState(()=>{try{const raw=localStorage.getItem("signal_qf_visible_columns");if(raw){const a=JSON.parse(raw);if(Array.isArray(a)&&a.length)return new Set(a)}}catch{}try{const m=document.cookie.match(/(?:^|; )signal_qf_cols=([^;]*)/);if(m){const a=decodeURIComponent(m[1]).split(",").filter(Boolean);if(a.length)return new Set(a)}}catch{}return new Set()});
+ const qfUser=localStorage.getItem("signal_user")||"H",qfColsKey="signal_qf_visible_columns_"+qfUser;
+ const [visible,setVisible]=useState(()=>{try{const raw=localStorage.getItem(qfColsKey)||localStorage.getItem("signal_qf_visible_columns");if(raw){const a=JSON.parse(raw);if(Array.isArray(a)&&a.length)return new Set(a)}}catch{}try{const m=document.cookie.match(/(?:^|; )signal_qf_cols=([^;]*)/);if(m){const a=decodeURIComponent(m[1]).split(",").filter(Boolean);if(a.length)return new Set(a)}}catch{}return new Set()});
  const defaults=["status","ex_region","to_region","p_and_c","intelligence","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment","tag","updated"];
  useEffect(()=>{setVisible(prev=>{const n=prev.size?new Set(prev):new Set(defaults);n.add("tag");n.add("updated");return n})},[]);
- useEffect(()=>{if(!visible.size)return;const a=[...visible];try{localStorage.setItem("signal_qf_visible_columns",JSON.stringify(a))}catch{}try{document.cookie="signal_qf_cols="+encodeURIComponent(a.join(","))+"; path=/; max-age=31536000; SameSite=Lax"}catch{}},[visible]);
+ useEffect(()=>{if(!visible.size)return;const a=[...visible];try{localStorage.setItem(qfColsKey,JSON.stringify(a))}catch{}try{document.cookie="signal_qf_cols="+encodeURIComponent(a.join(","))+"; path=/; max-age=31536000; SameSite=Lax"}catch{}},[qfColsKey,visible]);
  const [colsOpen,setColsOpen]=useState(false),[colsPos,setColsPos]=useState({top:0,left:0});
  const [deleteCargo,setDeleteCargo]=useState(null);
  const [selected,setSelected]=useState(()=>new Set());
  const [bulkTagOpen,setBulkTagOpen]=useState(false);
  const [hoverRowId,setHoverRowId]=useState(null);
+  const [auditRows,setAuditRows]=useState({});
+  const [auditError,setAuditError]=useState(false);
+  const auditLoaded=useRef(new Set());
+  async function showAudit(id){
+    setHoverRowId(id);
+    if(auditLoaded.current.has(id))return;
+    const {data,error}=await supabase.from("cargoes_audit").select("editor,field,old_value,new_value,changed_at").eq("cargo_id",String(id)).order("changed_at",{ascending:false}).limit(12);
+    if(error){setAuditError(true);return;}
+    auditLoaded.current.add(id);setAuditRows(p=>({...p,[id]:data||[]}));
+  }
+  const updateWithAudit=async(id,field,value)=>{
+    const before=cargoes.find(c=>String(c.id)===String(id));
+    if(!before||String(before[field]??"")===String(value??""))return;
+    const result=await onUpdateC(id,field,value);
+    const editor=String(localStorage.getItem("signal_user")||"H").trim();
+    const {error}=await supabase.from("cargoes_audit").insert({cargo_id:String(id),editor,field,old_value:String(before[field]??""),new_value:String(value??"")});
+    if(error){console.error("Cargo audit save failed",error);setAuditError(true)}
+    else{auditLoaded.current.delete(id);setAuditRows(p=>({...p,[id]:[{editor,field,old_value:String(before[field]??""),new_value:String(value??""),changed_at:new Date().toISOString()},...(p[id]||[])].slice(0,12)}));}
+    return result;
+  };
  const {week,monthly}=useMonthly(cargoes);
+  const [allMonthly,setAllMonthly]=useState(null);
+  useEffect(()=>{
+    let active=true;
+    supabase.rpc("cargoes_monthly_counts").then(({data,error})=>{
+      if(error){console.warn("Monthly counts unavailable",error);return;}
+      if(!active)return;
+      const m=new Map((data||[]).map(r=>[`${r.year}-${Number(r.month)-1}`,Number(r.count)]));
+      setAllMonthly(monthly.map(b=>({...b,count:m.get(`${b.year}-${b.month}`)||0})));
+    });
+    return ()=>{active=false};
+  },[cargoTotal]);
  const groups=useMemo(()=>{try{return JSON.parse(localStorage.getItem("signal_cargo_filter_groups")||"[]")}catch{return[]}},[cargoes.length]),grades=groups.filter(g=>(g.category||"grade")==="grade"),tags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
- const filtered=useMemo(()=>{let a=cargoes.filter(c=>{if(ex&&c.ex_region!==ex)return false;if(toR&&c.to_region!==toR)return false;if(status!=="ALL"&&c.status!==status)return false;if(tag&&c.tag!==tag)return false;if(time){const d=new Date(c.added||c.updated||0),now=new Date(),[tw0,tw1]=weekBounds(0),[lw0,lw1]=weekBounds(-1);tw1.setHours(23,59,59,999);lw1.setHours(23,59,59,999);if(time==="tw"&&!(d>=tw0&&d<=tw1))return false;if(time==="lw"&&!(d>=lw0&&d<=lw1))return false;if(time==="ytd"&&d<new Date(now.getFullYear(),0,1))return false;}if(grade&&!String(c.cargo||"").toLowerCase().includes(grade.toLowerCase()))return false;if(search&&!JSON.stringify(c).toLowerCase().includes(search.toLowerCase()))return false;return true});const f=sort==="added"?"added":sort;return [...a].sort((x,y)=>{let A=x[f]||x.updated||"",B=y[f]||y.updated||"";if(f==="added"||f==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime()}const primary=(A<B?-1:A>B?1:0)*dir;if(primary)return primary;
+ const filtered=useMemo(()=>{let a=cargoes.filter(c=>{if(ex&&c.ex_region!==ex)return false;if(toR&&c.to_region!==toR)return false;if(status!=="ALL"&&c.status!==status)return false;if(tag&&c.tag!==tag)return false;if(time){const d=new Date(c.updated||c.added||0),now=new Date(),[tw0,tw1]=weekBounds(0),[lw0,lw1]=weekBounds(-1);tw1.setHours(23,59,59,999);lw1.setHours(23,59,59,999);if(time==="tw"&&!(d>=tw0&&d<=tw1))return false;if(time==="lw"&&!(d>=lw0&&d<=lw1))return false;if(time==="ytd"&&d<new Date(now.getFullYear(),0,1))return false;}if(grade&&!String(c.cargo||"").toLowerCase().includes(grade.toLowerCase()))return false;if(search&&!JSON.stringify(c).toLowerCase().includes(search.toLowerCase()))return false;return true});const f=sort==="added"?"added":sort;return [...a].sort((x,y)=>{let A=x[f]||x.updated||"",B=y[f]||y.updated||"";if(f==="added"||f==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime()}const primary=(A<B?-1:A>B?1:0)*dir;if(primary)return primary;
 // Stable tie-breakers: editing Intel/regions/etc must never change row position.
 const xa=new Date(x.added||0).getTime()||0,ya=new Date(y.added||0).getTime()||0;if(xa!==ya)return ya-xa;
 return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,status,time,tag,grade,ex,toR,sort,dir]);
@@ -228,64 +264,93 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,search,stat
  const shown=allCols.filter(([k])=>visible.has(k));
  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
   <style>{`
-    @media (max-width: 1800px){
-      .qf-top{gap:6px!important;}
-      .qf-parse{flex-basis:34%!important;}
-      .qf-parse-tags{max-height:96px!important;overflow-y:auto!important;}
-      .qf-filters{flex-basis:52%!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:5px!important;}
-      .qf-grade{grid-column:span 2!important;}
-      .qf-period{grid-column:span 2!important;}
-      .qf-tags{grid-column:span 2!important;}
-      .qf-region{grid-column:span 3!important;}
-      .qf-chart{flex-basis:14%!important;}
+    @media (max-width: 700px){
+      .qf-top{height:auto!important;display:block!important;}
+      .qf-mobile-fold{display:block!important;margin-bottom:6px;background:${C.bg2};border:1px solid ${C.bd};border-radius:7px;overflow:hidden;}
+      .qf-mobile-fold > summary{display:flex!important;align-items:center;justify-content:space-between;list-style:none;padding:10px 12px;color:#79c0ff;font-size:12px;font-weight:800;cursor:pointer;}
+      .qf-mobile-fold > summary::-webkit-details-marker{display:none;}
+      .qf-mobile-fold > summary::after{content:"▸";color:#6f86a8;}
+      .qf-mobile-fold[open] > summary::after{content:"▾";}
+      .qf-mobile-fold > div{width:100%!important;height:auto!important;box-sizing:border-box;}
+      .qf-mobile-fold .qf-parse{height:300px!important;}
+      .qf-mobile-fold .qf-filters{display:grid!important;grid-template-columns:1fr 1fr!important;overflow:visible!important;min-height:0!important;}
+      .qf-mobile-fold .qf-grade,.qf-mobile-fold .qf-period,.qf-mobile-fold .qf-tags,.qf-mobile-fold .qf-region{grid-column:auto!important;}
+      .qf-mobile-fold .qf-chart{height:260px!important;min-height:260px!important;}
+      .qf-actions{display:block!important;padding:7px!important;}
+      .qf-actions-main{display:flex!important;gap:5px!important;align-items:center!important;overflow-x:auto!important;padding-bottom:6px!important;}
+      .qf-actions-search{display:flex!important;width:100%!important;gap:5px!important;align-items:center!important;}
+      .qf-actions-search input{flex:1!important;width:auto!important;min-width:0!important;}
+      .qf-mobile-controls{display:block!important;margin-top:6px!important;background:${C.bg2};border:1px solid ${C.bd};border-radius:7px;overflow:hidden;}
+      .qf-mobile-controls > summary{display:flex!important;align-items:center;justify-content:space-between;list-style:none;padding:9px 11px;color:#79c0ff;font-size:11px;font-weight:800;cursor:pointer;}
+      .qf-mobile-controls > summary::-webkit-details-marker{display:none;}
+      .qf-mobile-controls > summary::after{content:"▸";color:#6f86a8;}
+      .qf-mobile-controls[open] > summary::after{content:"▾";}
+      .qf-mobile-controls-body{display:flex!important;gap:5px!important;flex-wrap:wrap!important;padding:0 8px 8px!important;}
+      .qf-table{min-width:1450px!important;width:1450px!important;table-layout:fixed!important;}
+      .qf-table-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;}
     }
-    @media (max-width: 1450px){
-      .qf-parse{flex-basis:36%!important;}
-      .qf-filters{flex-basis:54%!important;}
-      .qf-chart{flex-basis:10%!important;}
-      .qf-filters button{font-size:9px!important;padding:3px 5px!important;}
+    @media (min-width: 701px){
+      .qf-mobile-fold{display:block!important;position:relative!important;height:100%!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;overflow:hidden!important;}
+      .qf-parse-fold{flex:0 0 25%!important;}
+      .qf-filter-fold{flex:0 0 40%!important;}
+      .qf-chart-fold{flex:1 1 35%!important;}
+      .qf-mobile-fold > summary{display:none!important;}
+      .qf-mobile-fold > div{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important;box-sizing:border-box!important;overflow:hidden!important;}
+      .qf-mobile-fold .qf-parse,.qf-mobile-fold .qf-filters,.qf-mobile-fold .qf-chart{flex:none!important;width:100%!important;height:100%!important;min-height:0!important;overflow:hidden!important;}
+      .qf-mobile-fold .qf-filters{align-items:stretch!important;align-content:stretch!important;grid-auto-rows:auto!important;}
+      .qf-mobile-fold .qf-filters > div{height:100%!important;min-height:0!important;display:flex!important;flex-direction:column!important;}
+      .qf-mobile-fold .qf-filters > div > div{flex:1 1 auto!important;align-content:flex-start!important;}
+      .qf-mobile-fold .qf-parse-tags{padding:5px 8px!important;gap:3px!important;}
+      .qf-mobile-fold .qf-parse textarea{min-height:48px!important;height:48px!important;padding-top:5px!important;padding-bottom:5px!important;}
+      .qf-mobile-fold .qf-parse > div:last-child > div{height:100%!important;display:flex!important;flex-direction:column!important;}
+      .qf-mobile-fold .qf-parse > div:last-child > div > textarea{flex:1 1 auto!important;}
+      .qf-mobile-controls{display:contents!important;}
+      .qf-mobile-controls > summary{display:none!important;}
+      .qf-mobile-controls-body{display:contents!important;}
+      .qf-actions{display:flex!important;}
+      .qf-actions-main,.qf-actions-search{display:contents!important;}
     }
   `}</style>
-  <div className="qf-top" style={{display:"flex",gap:10,height:260}}>
-   <div className="qf-parse" style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}><div className="qf-parse-tags" style={{...card,padding:"6px 8px",display:"flex",gap:4,flexWrap:"wrap",alignContent:"flex-start",flex:"0 0 auto",overflow:"visible"}}><span style={{fontSize:9,color:C.faint,fontWeight:800,width:"100%",marginBottom:1}}>TAG ON PARSE</span>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={{...btn(parseTag===t),color:tc||"#9fc3f5",borderColor:parseTag===t?(tc||C.blue):C.bd,background:parseTag===t?(tc?tc+"22":"rgba(88,166,255,.18)"):C.bg3}}>{t}</button>})}</div><div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await onAddCargoes(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div>
-   <div className="qf-filters" style={{flex:"0 0 40%",minWidth:0,...card,padding:8,display:"grid",gridTemplateColumns:".8fr .8fr .8fr 1.6fr 1.6fr",gap:6,overflow:"hidden",position:"relative",zIndex:20}}>
+  <div className="qf-top" style={{display:"flex",gap:10,height:215,minHeight:0,overflow:"hidden"}}>
+   <details className="qf-mobile-fold qf-parse-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Paste / Parse</summary><div className="qf-parse" style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}><div className="qf-parse-tags" style={{...card,padding:"6px 8px",display:"flex",gap:4,flexWrap:"wrap",alignContent:"flex-start",flex:"0 0 auto",overflow:"visible"}}><span style={{fontSize:9,color:C.faint,fontWeight:800,width:"100%",marginBottom:1}}>TAG ON PARSE</span>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={{...btn(parseTag===t),color:tc||"#9fc3f5",borderColor:parseTag===t?(tc||C.blue):C.bd,background:parseTag===t?(tc?tc+"22":"rgba(88,166,255,.18)"):C.bg3}}>{t}</button>})}</div><div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await onAddCargoes(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div></details>
+   <details className="qf-mobile-fold qf-filter-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Filters</summary><div className="qf-filters" style={{flex:"0 0 40%",minWidth:0,...card,padding:8,display:"grid",gridTemplateColumns:".8fr .8fr .8fr 1.6fr 1.6fr",gap:6,overflow:"hidden",position:"relative",zIndex:20,alignContent:"start"}}>
     <div className="qf-grade"><b style={{fontSize:11,color:C.blue}}>GRADE</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{grades.slice(0,6).map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={btn(grade===g.id)}>{g.label}</button>)}</div></div>
     <div className="qf-period"><b style={{fontSize:11,color:C.dim}}>PERIOD</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={btn(time===k)}>{l}</button>)}</div></div>
     <div className="qf-tags"><b style={{fontSize:11,color:C.pink}}>TAG</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{tags.slice(0,7).map(t=><button key={t} onClick={()=>setTag(x=>x===t?"":t)} style={btn(tag===t)}>{t}</button>)}</div></div>
     {[["EX REGION",ex,setEx],["TO REGION",toR,setToR]].map(([lab,val,setter])=><div key={lab} className="qf-region" style={{minWidth:0}}><b style={{fontSize:9,color:C.blue}}>{lab}</b><div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:4}}><button onClick={()=>setter("")} style={btn(!val)}>ALL</button>{REGIONS.map(r=><button key={r} onClick={()=>setter(val===r?"":r)} style={btn(val===r)}>{r}</button>)}</div></div>)}
-   </div>
-   <div className="qf-chart" style={{flex:"1 1 35%",minWidth:0,height:"100%",display:"flex"}}><CargoMonthChart data={monthly} total={cargoTotal||cargoes.length}/></div>
+   </div></details>
+   <details className="qf-mobile-fold qf-chart-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Cargo Graph / Count</summary><div className="qf-chart" style={{flex:"1 1 35%",minWidth:0,height:"100%",display:"flex"}}><CargoMonthChart data={allMonthly||monthly} total={allMonthly?cargoTotal||cargoes.length:cargoes.length}/></div></details>
   </div>
-  <div style={{...card,padding:"5px 8px",display:"flex",gap:6,alignItems:"center",position:"relative",zIndex:100}}>
-   <button onClick={()=>setShowAdd(true)} style={{...btn(),color:C.amber}}>+ Add cargo</button><button style={btn()}>Copy all</button><button style={btn()}>Copy CSV</button>{selected.size>0&&<div style={{position:"relative"}}><button onClick={()=>setBulkTagOpen(v=>!v)} style={{...btn(bulkTagOpen),color:C.blue}}>+ Add tag ({selected.size})</button>{bulkTagOpen&&<><div onClick={()=>setBulkTagOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"absolute",left:0,top:"calc(100% + 4px)",zIndex:19999,width:180,maxHeight:300,overflowY:"auto",background:"#071223",border:"1px solid "+C.blue,borderRadius:6,padding:5,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}><button onClick={async()=>{await Promise.all([...selected].map(id=>Promise.resolve(onUpdateC(id,"tag",""))));setBulkTagOpen(false)}} style={{display:"block",width:"100%",padding:"6px 7px",marginBottom:5,background:"rgba(255,255,255,.025)",border:"1px solid "+C.bd2,borderRadius:3,color:C.faint,fontSize:10,fontWeight:800,cursor:"pointer",textTransform:"uppercase",textAlign:"left"}}>× Clear tag(s)</button>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={async()=>{await Promise.all([...selected].map(id=>Promise.resolve(onUpdateC(id,"tag",t))));setBulkTagOpen(false)}} style={{display:"flex",alignItems:"center",gap:6,width:"100%",padding:"6px 7px",marginBottom:2,background:"transparent",border:"1px solid "+C.bd2,borderRadius:3,color:tc||"#9fc3f5",fontSize:11,fontWeight:800,cursor:"pointer",textTransform:"uppercase"}}>{tc&&<span style={{width:7,height:7,borderRadius:"50%",background:tc}}/>}{String(t).toUpperCase()}</button>})}</div></>}</div>}<span style={{fontSize:10,color:C.faint}}>This wk <b style={{color:C.blue}}>{week.thisWk}</b>&nbsp; Last wk <b>{week.lastWk}</b>&nbsp;&nbsp; Total <b style={{color:C.tx}}>{cargoTotal||cargoes.length}</b></span>
-   <div style={{marginLeft:"auto",display:"flex",gap:5,alignItems:"center"}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search cargoes..." style={{...input,width:210}}/><div style={{position:"relative",width:118,height:27}}><select value={sort} onChange={e=>setSort(e.target.value)} style={{...btn(),appearance:"none",WebkitAppearance:"none",width:"100%",height:27,padding:"3px 26px 3px 9px",background:C.bg3,color:"#9fc3f5",textAlign:"left"}}>
+  <div className="qf-actions" style={{...card,padding:"5px 8px",display:"flex",gap:6,alignItems:"center",position:"relative",zIndex:100}}>
+   <div className="qf-actions-main"><button onClick={()=>setShowAdd(true)} style={{...btn(),color:C.amber}}>+ Add cargo</button><button style={btn()}>Copy all</button><button style={btn()}>Copy CSV</button>{selected.size>0&&<div style={{position:"relative"}}><button onClick={()=>setBulkTagOpen(v=>!v)} style={{...btn(bulkTagOpen),color:C.blue}}>+ Add tag ({selected.size})</button>{bulkTagOpen&&<><div onClick={()=>setBulkTagOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"absolute",left:0,top:"calc(100% + 4px)",zIndex:19999,width:180,maxHeight:300,overflowY:"auto",background:"#071223",border:"1px solid "+C.blue,borderRadius:6,padding:5,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}><button onClick={async()=>{await Promise.all([...selected].map(id=>Promise.resolve(updateWithAudit(id,"tag",""))));setBulkTagOpen(false)}} style={{display:"block",width:"100%",padding:"6px 7px",marginBottom:5,background:"rgba(255,255,255,.025)",border:"1px solid "+C.bd2,borderRadius:3,color:C.faint,fontSize:10,fontWeight:800,cursor:"pointer",textTransform:"uppercase",textAlign:"left"}}>× Clear tag(s)</button>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={async()=>{await Promise.all([...selected].map(id=>Promise.resolve(updateWithAudit(id,"tag",t))));setBulkTagOpen(false)}} style={{display:"flex",alignItems:"center",gap:6,width:"100%",padding:"6px 7px",marginBottom:2,background:"transparent",border:"1px solid "+C.bd2,borderRadius:3,color:tc||"#9fc3f5",fontSize:11,fontWeight:800,cursor:"pointer",textTransform:"uppercase"}}>{tc&&<span style={{width:7,height:7,borderRadius:"50%",background:tc}}/>}{String(t).toUpperCase()}</button>})}</div></>}</div>}<span style={{fontSize:10,color:C.faint}}>This wk <b style={{color:C.blue}}>{week.thisWk}</b>&nbsp; Last wk <b>{week.lastWk}</b>&nbsp;&nbsp; Total <b style={{color:C.tx}}>{cargoTotal||cargoes.length}</b></span>
+   </div><div className="qf-actions-search"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search cargoes..." style={{...input,width:210}}/></div><details className="qf-mobile-controls"><summary>Table / Columns</summary><div className="qf-mobile-controls-body"><div style={{position:"relative",width:118,height:27}}><select value={sort} onChange={e=>{setSort(e.target.value);setDir(-1)}} style={{...btn(),appearance:"none",WebkitAppearance:"none",width:"100%",height:27,padding:"3px 26px 3px 9px",background:C.bg3,color:"#9fc3f5",textAlign:"left"}}>
      <option value="added">Added</option>{allCols.map(([k,l])=><option key={k} value={k}>{l}</option>)}
    </select><span style={{position:"absolute",right:9,top:"50%",transform:"translateY(-52%)",pointerEvents:"none",color:"#9fc3f5",fontSize:11}}>▼</span></div>
-   <button onClick={e=>{const r=e.currentTarget.getBoundingClientRect(),z=parseFloat(getComputedStyle(document.body).zoom||"1")||1,w=205*z,h=520*z,m=12;let l=Math.max(m,Math.min(r.right-w,innerWidth-w-m)),t=r.bottom+5;if(t+h>innerHeight-m)t=Math.max(m,r.top-h-5);setColsPos({left:l/z,top:t/z});setColsOpen(v=>!v)}} style={{...btn(),position:"relative",height:27,width:118,padding:"3px 26px 3px 9px",textAlign:"left"}}>Columns<span style={{position:"absolute",right:9,top:"50%",transform:"translateY(-52%)",fontSize:11}}>▼</span></button></div>
-   {colsOpen&&<><div onClick={()=>setColsOpen(false)} style={{position:"fixed",inset:0,zIndex:29990}}/><div style={{position:"fixed",left:colsPos.left,top:colsPos.top,zIndex:29999,width:205,overflow:"visible",background:"#071223",border:"1px solid "+C.bd,borderRadius:7,padding:7,boxShadow:"0 12px 34px rgba(0,0,0,.7)"}}>{allCols.map(([k,l])=><label key={k} style={{display:"flex",gap:7,padding:5,fontSize:11,fontWeight:600}}><input type="checkbox" checked={visible.has(k)} onChange={()=>setVisible(p=>{const n=new Set(p);n.has(k)?n.delete(k):n.add(k);return n})}/>{l}</label>)}</div></>}
+   <button onClick={e=>{const r=e.currentTarget.getBoundingClientRect(),z=parseFloat(getComputedStyle(document.body).zoom||"1")||1,w=205*z,h=Math.min(430,innerHeight/z-40)*z,m=12;let l=Math.max(m,Math.min(r.right-w,innerWidth-w-m)),t=r.bottom+5;if(t+h>innerHeight-m)t=Math.max(m,r.top-h-5);setColsPos({left:l/z,top:t/z});setColsOpen(v=>!v)}} style={{...btn(),position:"relative",height:27,width:118,padding:"3px 26px 3px 9px",textAlign:"left"}}>Columns<span style={{position:"absolute",right:9,top:"50%",transform:"translateY(-52%)",fontSize:11}}>▼</span></button></div></details>
+   {colsOpen&&<><div onClick={()=>setColsOpen(false)} style={{position:"fixed",inset:0,zIndex:29990}}/><div style={{position:"fixed",left:colsPos.left,top:colsPos.top,zIndex:29999,width:205,maxHeight:"calc(100vh - 32px)",overflowY:"auto",background:"#071223",border:"1px solid "+C.bd,borderRadius:7,padding:7,boxShadow:"0 12px 34px rgba(0,0,0,.7)"}}>{allCols.map(([k,l])=><label key={k} style={{display:"flex",gap:7,padding:5,fontSize:11,fontWeight:600}}><input type="checkbox" checked={visible.has(k)} onChange={()=>setVisible(p=>{const n=new Set(p);n.has(k)?n.delete(k):n.add(k);return n})}/>{l}</label>)}</div></>}
   </div>
   {showAdd&&<AddRow quotes onSave={onAddC} onClose={()=>setShowAdd(false)}/>}
   {deleteCargo&&<><div onClick={()=>setDeleteCargo(null)} style={{position:"fixed",inset:0,zIndex:64990,background:"rgba(0,0,0,.08)"}}/><div style={{position:"fixed",left:"50%",bottom:28,transform:"translateX(-50%)",zIndex:65000,minWidth:330,background:"#0b1728",border:"1px solid #ff5b5b",borderRadius:8,padding:"12px 14px",boxShadow:"0 14px 40px rgba(0,0,0,.55)",display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:12,fontWeight:700,color:C.tx,marginRight:4}}>Delete {(deleteCargo.vessel||deleteCargo.charterer||"cargo").toUpperCase()}?</span><button onClick={async()=>{const id=deleteCargo.id;setDeleteCargo(null);await onDelC(id)}} style={{...btn(),background:"#ff5b5b",borderColor:"#ff5b5b",color:"#fff",padding:"6px 16px"}}>Delete</button><button onClick={()=>setDeleteCargo(null)} style={{...btn(),padding:"6px 16px"}}>Cancel</button></div></>}
-  <div style={POS_WRAP} className="pos-hover-rows">
+  <div style={POS_WRAP} className="pos-hover-rows qf-table-wrap">
    <style>{`.pos-hover-rows tr:hover{background:rgba(88,166,255,0.07)!important;}`}</style>
-   <table style={POS_TABLE}>
+   <table className="qf-table" style={POS_TABLE}>
     <colgroup><col style={{width:"1.4%"}}/>{shown.map(([k,l,w])=><col key={k} style={{width:w+"%"}}/>)}<col style={{width:"1.4%"}}/><col style={{width:"1.4%"}}/></colgroup>
-    <thead><tr><th onClick={()=>{const ids=pageRows.map(x=>x.id);const all=ids.length>0&&ids.every(id=>selected.has(id));setSelected(p=>{const n=new Set(p);ids.forEach(id=>all?n.delete(id):n.add(id));return n})}} style={{...POS_TH,textAlign:"center",cursor:"pointer",padding:"3px 1px",lineHeight:"11px"}}><div style={{fontSize:11,color:pageRows.length>0&&pageRows.every(x=>selected.has(x.id))?"#4fc3f7":C.faint}}>{pageRows.length>0&&pageRows.every(x=>selected.has(x.id))?"[✓]":"[ ]"}</div><div style={{fontSize:7,color:C.faint}}>ALL</div></th>{shown.map(([k,l])=><th key={k} style={{...POS_TH,textAlign:["status","p_and_c","intelligence","from","to","tag","updated"].includes(k)?"center":"left"}}>{l}</th>)}<th style={POS_TH}/><th style={POS_TH}/></tr></thead>
+    <thead><tr><th onClick={()=>{const ids=pageRows.map(x=>x.id);const all=ids.length>0&&ids.every(id=>selected.has(id));setSelected(p=>{const n=new Set(p);ids.forEach(id=>all?n.delete(id):n.add(id));return n})}} style={{...POS_TH,textAlign:"center",cursor:"pointer",padding:"3px 1px",lineHeight:"11px"}}><div style={{fontSize:11,color:pageRows.length>0&&pageRows.every(x=>selected.has(x.id))?"#4fc3f7":C.faint}}>{pageRows.length>0&&pageRows.every(x=>selected.has(x.id))?"[✓]":"[ ]"}</div><div style={{fontSize:7,color:C.faint}}>ALL</div></th>{shown.map(([k,l])=><th key={k} onClick={()=>{if(sort===k)setDir(d=>-d);else{setSort(k);setDir(-1)}}} title={`Sort by ${l}`} style={{...POS_TH,textAlign:["status","p_and_c","intelligence","from","to","tag","updated"].includes(k)?"center":"left",cursor:"pointer",userSelect:"none"}}>{l}{sort===k?(dir===-1?" ▼":" ▲"):""}</th>)}<th style={POS_TH}/><th style={POS_TH}/></tr></thead>
     <tbody>{pageRows.map((c,i)=>{
       const rowBg=POS_ROW(i);
       const navKeys=shown.map(x=>x[0]).filter(k=>!["tag","updated","source"].includes(k));
       const navCol=k=>navKeys.indexOf(k),navMax=navKeys.length-1;
       return <tr key={c.id} style={{background:rowBg,height:32}}><td onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} style={{...POS_TD,textAlign:"center",padding:"0 2px",overflow:"visible"}}><span role="checkbox" aria-checked={selected.has(c.id)} tabIndex={0} onClick={e=>{e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}} onKeyDown={e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}}} style={{fontSize:12,fontWeight:500,color:selected.has(c.id)?"#4fc3f7":C.faint,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>{selected.has(c.id)?"[✓]":"[ ]"}</span></td>
     {shown.map(([k])=>{
-      if(k==="status")return <td key={k} tabIndex={0} data-grid-row={i} data-grid-col={navCol(k)} onKeyDown={e=>gridMove(e,null,i,navCol(k),navMax)} onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];onUpdateC(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:500,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>;
-      if(k==="ex_region"||k==="to_region")return <RegionCell key={k} row={i} col={navCol(k)} maxCol={navMax} value={c[k]||""} onSave={v=>onUpdateC(c.id,k,v)}/>;
-      if(k==="p_and_c")return <td key={k} tabIndex={0} data-grid-row={i} data-grid-col={navCol(k)} onKeyDown={e=>gridMove(e,null,i,navCol(k),navMax)} onClick={()=>{const o=[null,1,2,3],x=o.findIndex(v=>String(v??"")===String(c.p_and_c??""));onUpdateC(c.id,"p_and_c",o[(x+1)%o.length])}} style={{...POS_TD,textAlign:"center",fontWeight:500,cursor:"pointer",color:Number(c.p_and_c)===1?"#ff5b5b":Number(c.p_and_c)===2?"#ffad33":Number(c.p_and_c)===3?"#fff":C.faint}}>{c.p_and_c??""}</td>;
-      if(k==="intelligence")return <td key={k} tabIndex={0} data-grid-row={i} data-grid-col={navCol(k)} onKeyDown={e=>gridMove(e,null,i,navCol(k),navMax)} onClick={()=>{const cur=String(c.intelligence||"").toUpperCase(),o=[null,"Quote","Fixture"],x=cur==="QUOTE"?1:cur==="FIXTURE"?2:0;onUpdateC(c.id,"intelligence",o[(x+1)%o.length])}} style={{...POS_TD,textAlign:"center",cursor:"pointer",padding:"0 4px",height:32,lineHeight:"32px"}}>{c.intelligence&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",height:18,lineHeight:"16px",boxSizing:"border-box",padding:"0 5px",borderRadius:3,fontSize:9,fontWeight:800,color:String(c.intelligence).toUpperCase()==="FIXTURE"?C.green:C.blue,border:"1px solid "+(String(c.intelligence).toUpperCase()==="FIXTURE"?C.green+"88":C.blue+"88")}}>{c.intelligence.toUpperCase()}</span>}</td>;
-      if(k==="tag")return <TagCell key={k} id={c.id} value={c.tag} onUpdate={onUpdateC}/>;
+      if(k==="status")return <td key={k} tabIndex={0} data-grid-row={i} data-grid-col={navCol(k)} onKeyDown={e=>gridMove(e,null,i,navCol(k),navMax)} onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];updateWithAudit(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:500,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>;
+      if(k==="ex_region"||k==="to_region")return <RegionCell key={k} row={i} col={navCol(k)} maxCol={navMax} value={c[k]||""} onSave={v=>updateWithAudit(c.id,k,v)}/>;
+      if(k==="p_and_c")return <td key={k} tabIndex={0} data-grid-row={i} data-grid-col={navCol(k)} onKeyDown={e=>gridMove(e,null,i,navCol(k),navMax)} onClick={()=>{const o=[null,1,2,3],x=o.findIndex(v=>String(v??"")===String(c.p_and_c??""));updateWithAudit(c.id,"p_and_c",o[(x+1)%o.length])}} style={{...POS_TD,textAlign:"center",fontWeight:500,cursor:"pointer",color:Number(c.p_and_c)===1?"#ff5b5b":Number(c.p_and_c)===2?"#ffad33":Number(c.p_and_c)===3?"#fff":C.faint}}>{c.p_and_c??""}</td>;
+      if(k==="intelligence")return <td key={k} tabIndex={0} data-grid-row={i} data-grid-col={navCol(k)} onKeyDown={e=>gridMove(e,null,i,navCol(k),navMax)} onClick={()=>{const cur=String(c.intelligence||"").toUpperCase(),o=[null,"Quote","Fixture"],x=cur==="QUOTE"?1:cur==="FIXTURE"?2:0;updateWithAudit(c.id,"intelligence",o[(x+1)%o.length])}} style={{...POS_TD,textAlign:"center",cursor:"pointer",padding:"0 4px",height:32,lineHeight:"32px"}}>{c.intelligence&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",height:18,lineHeight:"16px",boxSizing:"border-box",padding:"0 5px",borderRadius:3,fontSize:9,fontWeight:800,color:String(c.intelligence).toUpperCase()==="FIXTURE"?C.green:C.blue,border:"1px solid "+(String(c.intelligence).toUpperCase()==="FIXTURE"?C.green+"88":C.blue+"88")}}>{c.intelligence.toUpperCase()}</span>}</td>;
+      if(k==="tag")return <TagCell key={k} id={c.id} value={c.tag} onUpdate={updateWithAudit}/>;
       if(k==="updated")return <td key={k} style={{...POS_TD,textAlign:"center",color:C.faint}}>{c.updated?new Date(c.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>;
       const val=k==="charterer"?toTCase(c[k]||""):k==="qty"?normaliseQty(c[k]):k==="from"||k==="to"?fmtDateShort(c[k]):k==="freight"?(fmtFreight(c[k])||c[k]||""):c[k]||"";
-      return <Editable key={k} row={i} col={navCol(k)} maxCol={navMax} value={val} align={["from","to"].includes(k)?"center":"left"} bold={k==="charterer"} color={k==="vessel"?C.blue:k==="charterer"?"#79c0ff":k==="qty"?C.amber:k==="freight"?"#a8e6a3":C.tx} onSave={v=>onUpdateC(c.id,k,k==="charterer"||k==="load"||k==="disch"?toTCase(v):k==="qty"?normaliseQty(v):k==="freight"?(fmtFreight(v)||v):v)}/>;
-    })}<td style={{...POS_TD,textAlign:"center",padding:0,verticalAlign:"middle",lineHeight:0}}>{editorInitials(c.entered_by)&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,padding:0,margin:0,borderRadius:"50%",boxSizing:"border-box",fontSize:7,fontWeight:700,lineHeight:"18px",textAlign:"center",verticalAlign:"middle",color:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?C.blue:C.green,border:"1px solid "+((c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{editorInitials(c.entered_by)}</span>}</td><td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>setDeleteCargo(c)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td></tr>})}</tbody>
+      return <Editable key={k} row={i} col={navCol(k)} maxCol={navMax} value={val} align={["from","to"].includes(k)?"center":"left"} bold={k==="charterer"} color={k==="vessel"?C.blue:k==="charterer"?"#79c0ff":k==="qty"?C.amber:k==="freight"?"#a8e6a3":C.tx} onSave={v=>updateWithAudit(c.id,k,k==="charterer"||k==="load"||k==="disch"?toTCase(v):k==="qty"?normaliseQty(v):k==="freight"?(fmtFreight(v)||v):v)}/>;
+    })}<td style={{...POS_TD,textAlign:"center",padding:0,verticalAlign:"middle",lineHeight:0,position:"relative",overflow:"visible"}} onMouseLeave={()=>setHoverRowId(null)}>{editorInitials(c.entered_by)&&<span onMouseEnter={()=>showAudit(c.id)} title={`Original: ${c.entered_by||"Unknown"}`} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,padding:0,margin:0,borderRadius:"50%",boxSizing:"border-box",fontSize:7,fontWeight:700,lineHeight:"18px",textAlign:"center",verticalAlign:"middle",color:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?C.blue:C.green,border:"1px solid "+((c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{editorInitials(c.entered_by)}</span>}{hoverRowId===c.id&&<div style={{position:"absolute",right:30,top:"100%",zIndex:30000,width:340,maxHeight:240,overflowY:"auto",padding:10,textAlign:"left",background:"#071223",border:"1px solid #3976b8",borderRadius:6,boxShadow:"0 12px 35px #000a",color:"#d9e8ff",fontSize:11,lineHeight:1.6}}><b>Original contributor: {c.entered_by||"—"}</b><div style={{color:"#79c0ff",marginTop:5}}>Edit history</div>{(auditRows[c.id]||[]).length?(auditRows[c.id]||[]).map((a,j)=><div key={j} style={{borderTop:"1px solid #26374c",padding:"5px 0"}}><b>{a.editor}</b> · {new Date(a.changed_at).toLocaleString("en-GB")}<div>{a.field}: {a.old_value||"—"} → {a.new_value||"—"}</div></div>):<div>{auditError?"Audit table unavailable — run supplied SQL":"No edits recorded yet"}</div>}</div>}</td><td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>setDeleteCargo(c)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td></tr>})}</tbody>
    </table>
   </div>
   {filtered.length > pageRows.length && (
