@@ -38,7 +38,7 @@ const NewbuildsTab   = React.lazy(()=>import("./NewbuildsTab"));
 const FleetTab       = React.lazy(()=>import("./FleetTab"));
 const OutsidersTab   = React.lazy(()=>import("./OutsidersTab"));
 const CargoesTab     = React.lazy(()=>import("./Cargoes"));
-const CargoesMaster = React.lazy(()=>import("./CargoesMaster"));
+const QuotesFixtures = React.lazy(()=>import("./QuotesFixtures"));
 
 const TabFallback = ()=>null;
 
@@ -148,13 +148,13 @@ function CargoRegionCell({ value, onSave }) {
 const NAV_KEY="signal_navigation_config";
 const NAV_CLOUD_KEY="navigation_config";
 const NAV_ITEMS=[
- ["pos","Positions","#58a6ff","🚢"],["cargo2","Cargoes","#faa356","🛢"],["fix","Fixing","#c792ea","◎"],["tcv","Time Charter","#fb923c","◷"],
+ ["pos","Positions","#58a6ff","🚢"],["cargo","Cargoes","#faa356","🛢"],["cargo2","Quotes&Fixtures","#38bdf8","▤"],["fix","Fixing","#c792ea","◎"],["tcv","Time Charter","#fb923c","◷"],
  ["clients","Clients","#a8e6a3","♟"],["matrix","Matrix","#43e97b","⌗"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","∑"],
  ["dash","Dashboard","#43e97b","▦"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▤"],["map","Freight Map","#10b981","⌁"],
  ["cal","Calendar","#4fc3f7","◫"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","⚓"],["newbuilds","Newbuilds","#fbbf24","△"]
 ];
 function navDefault(){return{mode:"classic",collapsed:false,order:NAV_ITEMS.map(x=>x[0]),hidden:[],groups:[
- {id:"market",label:"Market",tabs:["pos","cargo2","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
+ {id:"market",label:"Market",tabs:["pos","cargo","cargo2","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
  {id:"tools",label:"Tools",tabs:["projects","tce","map"]},{id:"reporting",label:"Reporting",tabs:["dash","reports"]},
  {id:"workspace",label:"Workspace",tabs:["clients","notes","cal","settings"]}]};}
 function navNorm(x){
@@ -993,13 +993,27 @@ function RangeBox({minVal,maxVal,minPh,maxPh,onMin,onMax}){
 function AddVesselInlineRow({onSave,onClose}){
   const now=new Date();
   const today=now.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
-  const [vals,setVals]=useState({vessel:"",openPort:"",date:today,operator:"",dwt:"",coating:"",comment:""});
+  const [vals,setVals]=useState({vessel:"",openPort:"",date:today,operator:"",imoNo:"",dwt:"",coating:"",comment:""});
   const firstRef=useRef(null);
+  const [lookupStatus,setLookupStatus]=useState("");
+  async function lookupIMO(imo){
+    if(!/^\d{7}$/.test(imo)){setLookupStatus(imo?"Enter 7 digits":"");return;}
+    setLookupStatus("Looking up…");
+    const {data,error}=await supabase.from("vessels_db")
+      .select("vessel,imo,dwt,built,loa,beam,cbm,coating,ice_class,fuel,operator")
+      .eq("imo",imo).limit(1).maybeSingle();
+    if(error){setLookupStatus("Lookup unavailable");return;}
+    if(!data){setLookupStatus("IMO not in vessel DB");return;}
+    setVals(prev=>({...prev,vessel:prev.vessel||data.vessel||"",operator:prev.operator||data.operator||"",dwt:prev.dwt||String(data.dwt||""),coating:prev.coating||data.coating||"",built:prev.built||data.built||"",loa:prev.loa||data.loa||"",beam:prev.beam||data.beam||"",cbm:prev.cbm||data.cbm||"",spec:{iceClass:data.ice_class||null,fuel:data.fuel||null}}));
+    setLookupStatus("✓ Vessel specs found");
+  }
+
   useEffect(()=>{firstRef.current?.focus();},[]);
   function upd(k,v){setVals(p=>({...p,[k]:v}));}
   async function save(){
     if(!vals.vessel.trim()||!vals.openPort.trim()) return;
-    await onSave({vessel:vals.vessel.trim().toUpperCase(),openPort:vals.openPort.trim().toUpperCase(),date:vals.date||today,operator:vals.operator||null,dwt:vals.dwt?parseInt(vals.dwt):null,coating:vals.coating||null,comment:vals.comment||null,entered_by:localStorage.getItem("signal_user")||"H"});
+    if(vals.imoNo&&!/^\d{7}$/.test(vals.imoNo)){alert("IMO must contain 7 digits.");return;}
+    await onSave({imoNo:vals.imoNo||null,built:vals.built||null,loa:vals.loa||null,beam:vals.beam||null,cbm:vals.cbm||null,spec:vals.spec||{},vessel:vals.vessel.trim().toUpperCase(),openPort:vals.openPort.trim().toUpperCase(),date:vals.date||today,operator:vals.operator||null,dwt:vals.dwt?parseInt(vals.dwt):null,coating:vals.coating||null,comment:vals.comment||null,entered_by:localStorage.getItem("signal_user")||"H"});
     onClose();
   }
   const TC={borderBottom:"2px solid rgba(67,233,123,0.35)",padding:"2px 3px",background:"rgba(10,24,52,0.9)"};
@@ -1010,6 +1024,7 @@ function AddVesselInlineRow({onSave,onClose}){
           <td style={{...TC,width:32,textAlign:"center"}}><span style={{color:"#43e97b",fontSize:12,fontWeight:700}}>+</span></td>
           <td style={{...TC,width:140}}><input ref={firstRef} value={vals.operator} onChange={e=>upd("operator",e.target.value)} placeholder="Operator" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
           <td style={{...TC,width:140}}><input value={vals.vessel} onChange={e=>upd("vessel",e.target.value)} placeholder="Vessel *" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={{...INP_INLINE,color:"#79c0ff",fontWeight:700}}/></td>
+          <td style={{...TC,width:105}}><input value={vals.imoNo} onChange={e=>{const n=e.target.value.replace(/\D/g,"").slice(0,7);upd("imoNo",n);if(n.length===7)lookupIMO(n);}} placeholder="IMO (7 digits)" title={lookupStatus||"IMO used only when adding a vessel"} style={INP_INLINE}/></td>
           <td style={{...TC,width:55}}><input value={vals.dwt} onChange={e=>upd("dwt",e.target.value)} placeholder="DWT" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
           <td style={{...TC,width:80}}><input value={vals.coating} onChange={e=>upd("coating",e.target.value)} placeholder="Coating" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
           <td style={{...TC,width:96}}><input value={vals.date} onChange={e=>upd("date",e.target.value)} onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={{...INP_INLINE,color:"#a8e6a3"}}/></td>
@@ -3335,7 +3350,8 @@ const filtV=useMemo(()=>{
                   display:"flex",alignItems:"center",gap:8,padding:"6px 10px",
                   background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,
                   flexWrap:mobile?"wrap":"nowrap",minHeight:38,boxSizing:"border-box",
-                  overflowX:mobile?"visible":"auto",overflowY:mobile?"visible":"hidden",scrollbarWidth:"thin"
+                  overflowX:mobile?"visible":"auto",overflowY:mobile?"visible":"hidden",scrollbarWidth:"thin",
+                  position:"sticky",top:0,zIndex:500,boxShadow:"0 3px 12px rgba(0,0,0,.35)"
                 }}>
                   {mobile&&<div style={{position:"relative",display:"flex",alignItems:"center",width:"100%"}}>
                     <input value={search} onChange={e=>setSearch(e.target.value)}
@@ -3809,7 +3825,7 @@ const filtV=useMemo(()=>{
           </div>
         )}
         {/* ── CARGOES — isolated component, restored independently ── */}
-        {false&&tab==="cargo"&&(
+        {tab==="cargo"&&(
           <Suspense fallback={<TabFallback/>}>
             <CargoesTab
               vessels={vessels} cargoes={cargoes} cargoTotal={cargoTotal}
@@ -3822,7 +3838,7 @@ const filtV=useMemo(()=>{
         {/* ── QUOTES & FIXTURES — isolated component ── */}
         {tab==="cargo2"&&(
           <Suspense fallback={<TabFallback/>}>
-            <CargoesMaster
+            <QuotesFixtures
               vessels={vessels} cargoes={cargoes} cargoTotal={cargoTotal}
               onUpdateC={onUpdateC} onAddCargoes={onAddCargoes} onAddC={onAddC}
               onDelC={onDelC} onAddVessels={onAddVessels} onCargoSearch={onCargoSearch}
