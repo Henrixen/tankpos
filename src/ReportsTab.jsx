@@ -524,29 +524,46 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     })();
   }, [reportType]);
 
-  // Seed Recent Fixtures from Cargoes tab selections — one-way import, doesn't
-  // overwrite fields the user has already amended by hand in the report.
+  // Explicit destination selection for cargo imports (never silently change a report).
+  const [cargoImportOpen, setCargoImportOpen] = useState(false);
+  const [cargoImportChoice, setCargoImportChoice] = useState("new");
+  const [cargoImportBusy, setCargoImportBusy] = useState(false);
+  const [cargoImportError, setCargoImportError] = useState("");
   useEffect(() => {
     if (!selectedCargoes?.length) return;
-    const toAdd = selectedCargoes
-      .filter(c => !importedCargoIds.current.has(c.id))
-      .map(c => ({
-        vessel: c.vessel || "",
-        charterer: c.charterer || "",
-        cargo: c.cargo || "",
-        load: c.load || c.loadPort || "",
-        disch: c.disch || c.dischPort || "",
-        laycanFrom: c.from || c.laycanFrom || "",
-        laycanTo: c.to || c.laycanTo || "",
-        freight: c.freight || "",
-      }));
-    if (toAdd.length) {
-      selectedCargoes.forEach(c => importedCargoIds.current.add(c.id));
-      setFixtures(prev => [...prev, ...toAdd]);
-      setSection("market");
-      setReportType(prev => prev || "Intermediate");
-    }
+    setCargoImportChoice("new");
+    setCargoImportError("");
+    setCargoImportOpen(true);
+    loadSavedReports();
   }, [selectedCargoes]);
+  const mapImportedCargo = c => ({
+    vessel:c.vessel||"", charterer:c.charterer||"", cargo:c.cargo||"",
+    load:c.load||c.loadPort||"", disch:c.disch||c.dischPort||"",
+    laycanFrom:c.from||c.laycanFrom||"", laycanTo:c.to||c.laycanTo||"",
+    freight:c.freight||""
+  });
+  async function confirmCargoImport() {
+    if (!selectedCargoes?.length || cargoImportBusy) return;
+    setCargoImportBusy(true); setCargoImportError("");
+    try {
+      const incoming = selectedCargoes.map(mapImportedCargo);
+      if (cargoImportChoice !== "new") {
+        const {data,error} = await supabase.from("reports").select("*").eq("id",cargoImportChoice).single();
+        if (error || !data) throw error || new Error("Saved report not found");
+        await loadReport(cargoImportChoice);
+        setFixtures([...(Array.isArray(data.fixtures)?data.fixtures:[]),...incoming]);
+      } else {
+        setActiveMarketReportId(null);
+        setReportType("Intermediate");
+        setReportDate(new Date().toISOString().split("T")[0]);
+        setCommentary(""); setRateGrid({}); setTceEarnings({}); setQuotes([]);
+        setFixtures(incoming);
+        initRateGrid("Intermediate");
+      }
+      setSection("market"); setCargoImportOpen(false);
+    } catch(e) { setCargoImportError(e?.message || "Import failed"); }
+    finally { setCargoImportBusy(false); }
+  }
 
   // Recalculate a benchmark row's TCE from its freight input, using the
   // shared vessel profile and the route's single-leg laden distance.
@@ -1500,6 +1517,24 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   return (
     <div style={{ display: "flex", width: "100%", height: "100%", background: C.bg, fontFamily: "Inter,system-ui,sans-serif", overflow: "hidden" }}>
       <style>{`@media print{body>*{visibility:hidden;}.pos-print,.pos-print *{visibility:visible;}.pos-print{position:absolute;left:0;top:0;width:100%;}.pos-print-wrap{height:auto!important;overflow:visible!important;}.no-export{display:none!important;}}.pool-row:hover{background:rgba(58,130,246,0.14)!important;}`}</style>
+
+      {cargoImportOpen && <div className="no-export" style={{position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,.72)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div role="dialog" aria-modal="true" aria-label="Choose report for cargo import" style={{width:"min(480px,100%)",maxHeight:"85vh",overflowY:"auto",background:C.bg2,border:"1px solid "+C.bd,borderRadius:9,padding:20,boxShadow:"0 24px 70px rgba(0,0,0,.6)",color:C.tx}}>
+          <div style={{fontSize:17,fontWeight:750,marginBottom:6}}>Import cargoes to report</div>
+          <div style={{fontSize:12,color:C.dim,marginBottom:16}}>{selectedCargoes.length} cargo{selectedCargoes.length===1?"":"es"} selected from Cargoes. Choose a destination before importing.</div>
+          <label style={{display:"block",fontSize:11,color:C.dim,marginBottom:6}}>DESTINATION REPORT</label>
+          <select value={cargoImportChoice} onChange={e=>setCargoImportChoice(e.target.value)} style={{width:"100%",padding:"10px 12px",borderRadius:5,background:C.bg3,color:C.tx,border:"1px solid "+C.bd,fontSize:13}}>
+            <option value="new">+ New Intermediate report</option>
+            {savedReports.filter(r=>MARKET_TYPES.includes(r.report_type)).map(r=><option key={r.id} value={r.id}>{r.report_type} — {r.report_date||"No date"}</option>)}
+          </select>
+          <div style={{fontSize:11,color:C.dim,marginTop:12}}>Imported cargoes will appear under Recent Fixtures. Review and save the report afterwards.</div>
+          {cargoImportError&&<div style={{color:"#ff8585",fontSize:12,marginTop:10}}>{cargoImportError}</div>}
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:20}}>
+            <button disabled={cargoImportBusy} onClick={()=>setCargoImportOpen(false)} style={{padding:"9px 16px",background:"transparent",border:"1px solid "+C.bd,borderRadius:5,color:C.tx,cursor:"pointer"}}>Cancel</button>
+            <button disabled={cargoImportBusy} onClick={confirmCargoImport} style={{padding:"9px 16px",background:"#2563eb",border:"1px solid #3b82f6",borderRadius:5,color:"white",fontWeight:700,cursor:"pointer"}}>{cargoImportBusy?"Importing…":"Import cargoes"}</button>
+          </div>
+        </div>
+      </div>}
 
       {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
       <div style={{ width: 170, minWidth: 170, display: "flex", flexDirection: "column", background: C.bg2, borderRight: "1px solid " + C.bd, overflow: "hidden" }}>
