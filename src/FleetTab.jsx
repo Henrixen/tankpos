@@ -244,6 +244,9 @@ export default function FleetTab() {
   const [selectedKeys, setSelectedKeys] = useState(() => new Set());
   const [includeStatsInCSV, setIncludeStatsInCSV] = useState(true);
   const [outsiderSaveStatus, setOutsiderSaveStatus] = useState(null);
+  const [positionDrafts, setPositionDrafts] = useState(null);
+  const [positionSaving, setPositionSaving] = useState(false);
+  const [positionError, setPositionError] = useState("");
 
   const load = useCallback(async () => {
     if (loaded || loading) return;
@@ -611,6 +614,45 @@ export default function FleetTab() {
     setTimeout(() => setOutsiderSaveStatus(null), 2500);
   }
 
+  function openPositionsImport() {
+    const chosen = filtered.filter(r => selectedKeys.has(vesselKey(r)));
+    if (!chosen.length) return;
+    setPositionDrafts(chosen.map(r => ({
+      key: String(vesselKey(r)), vessel:r.vessel, imo:r.imo,
+      operator:r.operator||"", dwt:r.dwt, built:r.built,
+      coating:r.coating||"", cbm:r.cbm, loa:r.loa, beam:r.beam,
+      openPort:"", date:""
+    })));
+    setPositionError("");
+  }
+
+  function changePositionDraft(key, field, value) {
+    setPositionDrafts(prev => prev.map(r => r.key===key ? {...r,[field]:value} : r));
+  }
+
+  async function savePositionDrafts() {
+    if (!positionDrafts?.length || positionSaving) return;
+    const invalid = positionDrafts.find(r => !r.openPort.trim() || !r.date);
+    if (invalid) { setPositionError(`Enter open port and date for ${invalid.vessel}.`); return; }
+    setPositionSaving(true);
+    setPositionError("");
+    try {
+      const parsed = positionDrafts.map(({vessel,operator,dwt,built,coating,cbm,loa,beam,openPort,date}) =>
+        ({vessel,operator,dwt,built,coating,cbm,loa,beam,openPort:openPort.trim(),date}));
+      // Use the same handler as ParsePanel, which updates both local Positions
+      // state and Supabase. Do not create a competing insert/upsert path.
+      if (typeof window.steemAddFleetPositions !== "function") {
+        throw new Error("Positions import is not connected. Update TankPos.jsx together with FleetTab.jsx.");
+      }
+      await window.steemAddFleetPositions(parsed);
+      setPositionDrafts(null);
+      setSelectedKeys(new Set());
+      setOutsiderSaveStatus(`${parsed.length} vessel${parsed.length===1?"":"s"} sent to Positions`);
+    } catch(e) {
+      setPositionError(e?.message || "Could not save positions.");
+    } finally { setPositionSaving(false); }
+  }
+
   // ── CSV export ───────────────────────────────────────────────────────
   function exportCSV() {
     const cols = [
@@ -678,6 +720,45 @@ export default function FleetTab() {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16, padding:"14px 0 30px" }}>
+
+      {positionDrafts && <div style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}
+        onMouseDown={e=>{if(e.target===e.currentTarget&&!positionSaving)setPositionDrafts(null)}}>
+        <div style={{...CARD,width:"min(1040px,96vw)",maxHeight:"85vh",display:"flex",flexDirection:"column",gap:14,boxShadow:"0 20px 70px #0009"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div><div style={{fontSize:16,fontWeight:700,color:C.tx}}>Add to Positions</div>
+              <div style={{fontSize:11,color:C.faint,marginTop:4}}>{positionDrafts.length} selected vessel{positionDrafts.length===1?"":"s"} · Enter each vessel's open port and date</div></div>
+            <button style={CHIP(false)} disabled={positionSaving} onClick={()=>setPositionDrafts(null)}>✕</button>
+          </div>
+          <div style={{overflow:"auto",flex:1}}>
+            <table style={{borderCollapse:"collapse",width:"100%",minWidth:760}}>
+              <thead><tr>{["Vessel","IMO","DWT","Built","Operator","Open Port / Area","Open Date",""].map(h=><th key={h} style={{...TH_,cursor:"default"}}>{h}</th>)}</tr></thead>
+              <tbody>{positionDrafts.map(r=><tr key={r.key}>
+                <td style={{...TD_,color:C.tx,fontWeight:600}}>{r.vessel}</td>
+                <td style={TD_}>{r.imo||"—"}</td>
+                <td style={TD_}>{fmtFullNumber(r.dwt)}</td>
+                <td style={TD_}>{r.built||"—"}</td>
+                <td style={TD_} title={r.operator}>{r.operator||"—"}</td>
+                <td style={TD_}><input value={r.openPort} placeholder="ARA / Rotterdam" onChange={e=>changePositionDraft(r.key,"openPort",e.target.value)}
+                  style={{...NUM_INPUT,width:"100%",minWidth:150,boxSizing:"border-box"}} /></td>
+                <td style={TD_}><input type="date" value={r.date} onChange={e=>changePositionDraft(r.key,"date",e.target.value)}
+                  style={{...NUM_INPUT,width:145,colorScheme:"dark"}} /></td>
+                <td style={TD_}><button title="Remove from import" style={CHIP(false)} disabled={positionSaving}
+                  onClick={()=>setPositionDrafts(prev=>prev.length===1?null:prev.filter(x=>x.key!==r.key))}>✕</button></td>
+              </tr>)}</tbody>
+            </table>
+          </div>
+          {positionError&&<div style={{color:C.red,fontSize:12}}>{positionError}</div>}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+            <span style={{fontSize:11,color:C.faint}}>Existing vessel positions will be updated by vessel name.</span>
+            <div style={{display:"flex",gap:8}}>
+              <button style={CHIP(false)} disabled={positionSaving} onClick={()=>setPositionDrafts(null)}>Cancel</button>
+              <button style={CHIP(true,"#4ade80")} disabled={positionSaving} onClick={savePositionDrafts}>
+                {positionSaving?"Saving…":`Add ${positionDrafts.length} to Positions`}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>}
 
       {/* ── Fleet / Outsiders toggle ── */}
       <div style={{ display:"flex", gap:8 }}>
@@ -779,7 +860,7 @@ export default function FleetTab() {
           )}
 
           <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
-            <div style={{display:"flex",gap:8,alignItems:"center",minWidth:455,justifyContent:"flex-end"}}>
+            <div style={{display:"flex",gap:8,alignItems:"center",justifyContent:"flex-end",flexWrap:"wrap"}}>
               <span style={{
                 fontSize:11,color:"#58a6ff",fontWeight:700,
                 minWidth:64,textAlign:"right",
@@ -787,6 +868,11 @@ export default function FleetTab() {
               }}>
                 {selectedKeys.size} selected
               </span>
+
+              <button style={{...CHIP(selectedKeys.size>0,"#4ade80"),visibility:selectedKeys.size>0?"visible":"hidden"}}
+                onClick={openPositionsImport} disabled={!selectedKeys.size}>
+                + Add to Positions ({selectedKeys.size})
+              </button>
 
               <button
                 style={{
