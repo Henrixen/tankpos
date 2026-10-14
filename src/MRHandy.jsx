@@ -66,6 +66,24 @@ export default function MRHandy(){
  const available=useMemo(()=>rows.filter(r=>filter==='ALL'||r.route===filter),[rows,filter]);
  const history=useMemo(()=>[...rows].sort((a,b)=>b.as_of_date.localeCompare(a.as_of_date)||a.route.localeCompare(b.route)||periodIndex(a.period)-periodIndex(b.period)),[rows]);
  const addManual=()=>{const n=num(manual.value);if(n===null){setError('Enter a valid numeric rate.');return;}setPreview(p=>[...p,row(manual.date,manual.route,manual.period,manual.metric,n,manual.unit,'manual',manual.eco||null)]);setManual(p=>({...p,value:''}));setError('');};
+ const extractImage=async(file)=>{
+  if(!file)return;
+  if(!file.type?.startsWith('image/')){setError('Please select an image file.');return;}
+  setOcrBusy(true);setOcrStatus('Reading screenshot…');setError('');
+  try{
+   const {recognize}=await import('tesseract.js');
+   const result=await recognize(file,'eng');
+   const extracted=result?.data?.text?.trim()||'';
+   if(!extracted){setError('No text detected in the image.');setOcrStatus('');return;}
+   setRaw(previous=>previous?previous+'\n'+extracted:extracted);
+   setOcrStatus('Image text extracted. Check the values, then click Parse & Review.');
+  }catch(err){setError('Image extraction failed: '+(err?.message||String(err)));setOcrStatus('');}
+  finally{setOcrBusy(false);}
+ };
+ const handleImagePaste=e=>{
+  const file=Array.from(e.clipboardData?.items||[]).find(item=>item.type?.startsWith('image/'))?.getAsFile();
+  if(file){e.preventDefault();void extractImage(file);}
+ };
  const label=(s)=><div style={css.head}>{s}</div>;
  return <div style={{background:'#071325',color:'#d9e8ff',padding:'18px 20px',fontFamily:'Inter,system-ui,sans-serif',minHeight:'100vh',fontSize:12}}>
   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap',marginBottom:18}}><div><div style={{fontSize:21,fontWeight:850,letterSpacing:'.02em'}}>MR <span style={{color:'#58a6ff'}}>–</span> HANDY <span style={{fontWeight:500,color:'#7296bd',fontSize:12,marginLeft:10}}>SPOT · FFA · TCE</span></div><div style={css.muted}>Market intelligence | {rows.length.toLocaleString()} saved observations | Latest {latestDate||'—'}</div></div><div style={{display:'flex',gap:8}}><button style={css.btn} onClick={load}>↻ Refresh</button><button style={{...css.btn,background:'#174776',color:'#eaf4ff'}} onClick={()=>setShowParser(s=>!s)}>{showParser?'Close Import':'＋ Import / Manual Entry'}</button></div></div>
