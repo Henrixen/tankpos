@@ -265,7 +265,7 @@ export default function TankPos(){
 }, []);
 
   // Universal cargo updater — optimistic local update + Supabase write
-  const updateC=useCallback(async(id,field,value)=>{
+  const updateC=useCallback(async(id,field,value,editor)=>{
     const displayValue=(field==="from"||field==="to")?(() => {
       const iso=toISODate(value);
       if(!iso) return value;
@@ -274,7 +274,7 @@ export default function TankPos(){
     })():value;
     setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:displayValue}:c));
     const dbValue=(field==="from"||field==="to")?toISODate(value):value;
-    const{error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id);
+    const{error}=await supabase.from("cargoes").update({[field]:dbValue,updated_by:editor||localStorage.getItem("signal_user")||"UNKNOWN"}).eq("id",id);
     if(error)console.error(error);
   },[]);
 
