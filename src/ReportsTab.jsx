@@ -344,6 +344,13 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [quotes, setQuotes] = useState([]);
   const [reportDate, setReportDate] = useState(new Date().toISOString().split("T")[0]);
   const [savedReports, setSavedReports] = useState([]);
+  const [pendingSavedDelete, setPendingSavedDelete] = useState(null);
+  const [deleteReportError, setDeleteReportError] = useState("");
+  const [marketHeadings, setMarketHeadings] = useState({drivers:"Market drivers / What to watch",benchmark:"Benchmark rates",tce:"TCE earnings",handy:"Handy"});
+  const [activeMarketReportId, setActiveMarketReportId] = useState(null);
+  const editMarketHeading = (key, style) => <input aria-label={"Edit " + key + " heading"} value={marketHeadings[key]}
+    onChange={e => setMarketHeadings(p => ({...p,[key]:e.target.value}))}
+    className="rpt-edit" style={{...style,width:"100%",minWidth:90,background:"transparent",border:"none",padding:0}} />;
 
   // ── Intermediate report rebuild: drivers, benchmark rates, Handy, TCE stats ──
   const [driverBullets, setDriverBullets] = useState([""]);
@@ -569,7 +576,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       if (error) { setBenchmarkRefreshStatus("Refresh failed"); setTimeout(() => setBenchmarkRefreshStatus(null), 2500); return; }
       if (!data || !data.length) { setBenchmarkRefreshStatus("No saved routes found — save some in the TCE tab first"); setTimeout(() => setBenchmarkRefreshStatus(null), 3500); return; }
       setBenchmarkRows(prev => {
-        const updated = prev.map(r => {
+        const updated = BENCHMARK_ROUTES.map(base => {
+          const r = prev.find(x => x.key === base.key) || {...base,freight:"",lastWeek:"",tce:null,tceLastWeek:null};
           const saved = data.find(d => d.route_key === r.key);
           return saved ? { ...r, freight: String(saved.freight ?? ""), tce: saved.tce ?? null, override: false } : r;
         });
@@ -959,6 +967,17 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   async function loadSavedReports() {
     try { const { data } = await supabase.from("reports").select("*").order("created_at", { ascending: false }); if (data) setSavedReports(data); } catch {}
   }
+  async function deleteSavedReport() {
+    if (!pendingSavedDelete) return;
+    setDeleteReportError("");
+    try {
+      const { error } = await supabase.from("reports").delete().eq("id", pendingSavedDelete.id);
+      if (error) throw error;
+      setSavedReports(prev => prev.filter(r => r.id !== pendingSavedDelete.id));
+      if (activeMarketReportId === pendingSavedDelete.id) setActiveMarketReportId(null);
+      setPendingSavedDelete(null);
+    } catch (e) { setDeleteReportError(e.message || "Could not delete report"); }
+  }
   function initRateGrid(type) {
     const G = {
       "Intermediate": { "5kt": { "ARA-Dublin": "", "ARA-Thames": "", "Mongstad-ARA": "" }, "10kt": { "ARA-Dublin": "", "ARA-Thames": "", "Mongstad-ARA": "" }, "18kt": { "ARA-Dublin": "", "ARA-Thames": "", "Mongstad-ARA": "" } },
@@ -1003,16 +1022,35 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   }
 
   async function saveReport() {
-    try { await supabase.from("reports").insert([{ report_type: reportType, report_date: reportDate, commentary, rate_grid: rateGrid, tce_earnings: tceEarnings, fixtures, quotes }]); alert("Saved."); loadSavedReports(); } catch { alert("Save failed."); }
+    try {
+      const payload = { report_type: reportType, report_date: reportDate, commentary,
+        rate_grid: rateGrid, tce_earnings: tceEarnings, fixtures, quotes };
+      // Extra report layout lives inside the existing JSON rate_grid column; no schema migration needed.
+      payload.rate_grid = { ...rateGrid, __marketEditor: { headings: marketHeadings,
+        benchmarks: benchmarkRows, drivers: driverBullets, tceStats, handy } };
+      const { error } = await supabase.from("reports").insert([payload]);
+      if (error) throw error;
+      alert("Saved."); loadSavedReports();
+    } catch (e) { alert("Save failed: " + (e.message || e)); }
   }
   async function loadReport(id) {
     try {
-      const { data } = await supabase.from("reports").select("*").eq("id", id).single(); if (!data) return;
+      const { data, error } = await supabase.from("reports").select("*").eq("id", id).single();
+      if (error || !data) return;
       setReportType(data.report_type); setReportDate(data.report_date || reportDate);
       setCommentary(data.commentary || ""); setRateGrid(data.rate_grid || {});
       setTceEarnings(data.tce_earnings || {}); setFixtures(data.fixtures || []); setQuotes(data.quotes || []);
+      const editor = data.rate_grid?.__marketEditor;
+      if (editor) {
+        if (editor.headings) setMarketHeadings(p => ({...p,...editor.headings}));
+        if (Array.isArray(editor.benchmarks)) setBenchmarkRows(editor.benchmarks);
+        if (Array.isArray(editor.drivers)) setDriverBullets(editor.drivers);
+        if (editor.tceStats) setTceStats(editor.tceStats);
+        if (editor.handy) setHandy(editor.handy);
+      }
+      setActiveMarketReportId(id);
       setSection("market");
-    } catch {}
+    } catch (e) { console.error("loadReport:",e); }
   }
 
   // ── Quick Positions save/load — same "reports" table, so drafts pick up
@@ -1468,16 +1506,16 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         <div style={{ display: "flex", borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
           {[["poslist", "Positions"], ["market", "Market"]].map(([k, l]) => (
             <button key={k} onClick={() => setSection(k === "poslist" && section === "quick" ? "quick" : k)}
-              style={{ flex: 1, padding: "10px 4px", fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none",
-                borderBottom: (section === k || (k === "poslist" && section === "quick")) ? `2px solid ${ACCENT}` : "2px solid transparent",
-                background: "transparent", color: (section === k || (k === "poslist" && section === "quick")) ? ACCENT : C.dim, fontFamily: "inherit" }}>
+              style={{ flex: 1, padding: "12px 5px", fontSize: 13, fontWeight: 800, cursor: "pointer", border: "none",
+                borderBottom: (section === k || (k === "poslist" && section === "quick")) ? `3px solid ${ACCENT}` : "3px solid transparent",
+                background: (section === k || (k === "poslist" && section === "quick")) ? "rgba(58,130,246,.22)" : "rgba(255,255,255,.025)", color: (section === k || (k === "poslist" && section === "quick")) ? "#ffffff" : "#9bb4d3", fontFamily: "inherit" }}>
               {l}
             </button>
           ))}
         </div>
         {(section === "poslist" || section === "quick") && (
           <div style={{ padding: "8px 10px", borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
-            {[["poslist", "Position List"], ["quick", "Quick"]].map(([k, l]) => (
+            {[["poslist", "Position List"], ["quick", "Quick list"]].map(([k, l]) => (
               <button key={k} onClick={() => setSection(k)}
                 style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 10px", marginBottom: 4, borderRadius: 5, cursor: "pointer", fontSize: 12, fontWeight: section === k ? 700 : 400,
                   border: `1px solid ${section === k ? ACCENT : C.bd}`, background: section === k ? "rgba(58,130,246,0.1)" : "transparent", color: section === k ? ACCENT : C.dim, fontFamily: "inherit" }}>
@@ -1516,13 +1554,14 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
             <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Report type</div>
             {MARKET_TYPES.map(t => (
               <button key={t} onClick={() => { setReportType(t); initRateGrid(t); }}
-                style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 10px", marginBottom: 4, borderRadius: 5, cursor: "pointer", fontSize: 12, fontWeight: reportType === t ? 700 : 400, border: `1px solid ${reportType === t ? ACCENT : C.bd}`, background: reportType === t ? "rgba(58,130,246,0.1)" : "transparent", color: reportType === t ? ACCENT : C.dim, fontFamily: "inherit" }}>{t}</button>
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "11px 10px", marginBottom: 5, borderRadius: 5, cursor: "pointer", fontSize: 13, fontWeight: reportType === t ? 700 : 400, border: `1px solid ${reportType === t ? ACCENT : C.bd}`, background: reportType === t ? "rgba(58,130,246,0.1)" : "transparent", color: "#ffffff", fontFamily: "inherit" }}>{t}</button>
             ))}
             {savedReports.filter(r => r.report_type !== "Position List").length > 0 && (
               <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid " + C.bd }}>
                 <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Saved</div>
                 {savedReports.filter(r => r.report_type !== "Position List").map(r => (
-                  <div key={r.id} onClick={() => loadReport(r.id)} style={{ padding: "5px 7px", borderRadius: 4, background: C.bg3, cursor: "pointer", marginBottom: 3 }}>
+                  <div key={r.id} onClick={() => loadReport(r.id)} style={{ padding: "5px 7px", borderRadius: 4, background: C.bg3, cursor: "pointer", marginBottom: 3, position: "relative", paddingRight: 28 }}>
+                    <button title="Delete saved report" onClick={e => {e.stopPropagation();setPendingSavedDelete(r);setDeleteReportError("");}} style={{position:"absolute",right:4,top:5,border:"none",background:"transparent",color:"#fb7185",fontSize:15,cursor:"pointer"}}>×</button>
                     <div style={{ fontSize: 11, fontWeight: 700, color: ACCENT }}>{r.report_type}</div>
                     <div style={{ fontSize: 10, color: C.dim }}>{new Date(r.report_date).toLocaleDateString("en-GB")}</div>
                   </div>
@@ -1534,21 +1573,6 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
         {section === "quick" && (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "8px 10px", gap: 8, overflow: "hidden" }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em" }}>Quick daily positions</div>
-            <div style={{ fontSize: 10, color: C.dim, lineHeight: 1.6 }}>
-              Build a position list before Supabase data arrives. Paste WhatsApp or email positions, edit, then copy.
-            </div>
-            <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginTop: 4 }}>How it works</div>
-            {[["1","Paste raw positions from WhatsApp or email"],
-              ["2","Hit Parse — operators auto-matched from your vessel database"],
-              ["3","Fix any missing fields in the editable table"],
-              ["4","Copy for WhatsApp — paste straight into chat or email"]
-            ].map(([n,t]) => (
-              <div key={n} style={{ display: "flex", gap: 7, alignItems: "flex-start" }}>
-                <div style={{ width: 16, height: 16, minWidth: 16, borderRadius: "50%", background: ACCENT, color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", marginTop: 1 }}>{n}</div>
-                <div style={{ fontSize: 10, color: C.dim, lineHeight: 1.5 }}>{t}</div>
-              </div>
-            ))}
             {savedReports.filter(r => r.report_type === "Quick Positions").length > 0 && (
               <div style={{ borderTop: "1px solid " + C.bd, paddingTop: 8, maxHeight: 160, overflowY: "auto" }}>
                 <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Saved</div>
@@ -1572,6 +1596,18 @@ Any direction`}</pre>
           </div>
         )}
       </div>
+
+      {pendingSavedDelete && <div style={{position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,.72)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{width:360,maxWidth:"90vw",background:C.bg2,border:"1px solid "+C.bd,borderRadius:9,padding:20,boxShadow:"0 15px 50px #0009"}}>
+          <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:9}}>Delete saved report?</div>
+          <div style={{fontSize:12,color:C.dim,marginBottom:18}}>Delete {pendingSavedDelete.report_type} — {pendingSavedDelete.report_date}? This cannot be undone.</div>
+          {deleteReportError && <div style={{color:"#fb7185",fontSize:12,marginBottom:10}}>{deleteReportError}</div>}
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <button onClick={()=>setPendingSavedDelete(null)} style={{...SB,padding:"9px 13px"}}>Cancel</button>
+            <button onClick={deleteSavedReport} style={{...SB,padding:"9px 13px",background:"#b91c1c",border:"1px solid #ef4444",color:"white",fontWeight:800}}>Delete report</button>
+          </div>
+        </div>
+      </div>}
 
       {/* ── Main ────────────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
@@ -1906,7 +1942,7 @@ Any direction`}</pre>
               {/* ── Market drivers / What to watch ── */}
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 13 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, textTransform: "uppercase", letterSpacing: "0.05em" }}>Market drivers / What to watch</div>
+                  {editMarketHeading("drivers",{fontSize:12,fontWeight:700,color:C.tx,textTransform:"uppercase",letterSpacing:"0.05em"})}
                   <span className="no-export" style={{ fontSize: 10, color: C.faint }}>Press Enter to add a line</span>
                 </div>
                 <ul className="driver-list">
@@ -1946,7 +1982,7 @@ Any direction`}</pre>
               {/* ── Benchmark rates ── */}
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden" }}>
                 <div style={{ padding: "8px 13px", background: "rgba(74,144,226,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#79c0ff", textTransform: "uppercase", letterSpacing: "0.05em" }}>Benchmark rates</div>
+                  {editMarketHeading("benchmark",{fontSize:12,fontWeight:700,color:"#79c0ff",textTransform:"uppercase",letterSpacing:"0.05em"})}
                   <div className="no-export" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     {benchmarkRefreshStatus && <span style={{ fontSize: 10, color: C.dim }}>{benchmarkRefreshStatus}</span>}
                     <button onClick={refreshBenchmarkFromSaved} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim, fontSize: 10 }}>↻ Refresh from saved</button>
@@ -1962,10 +1998,12 @@ Any direction`}</pre>
                     <tbody>
                       {benchmarkRows.map((r, i) => (
                         <tr key={r.key} style={{ borderTop: "1px solid " + C.bd, background: i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent" }}>
-                          <td style={{ padding: "6px 10px", fontWeight: 700, color: C.tx }}>{r.label}</td>
+                          <td style={{ padding: "6px 10px", fontWeight: 700, color: C.tx }}><div style={{display:"flex",alignItems:"center",gap:5}}>
+                            <input aria-label="Route name" className="rpt-edit" value={r.label} onChange={e=>setBenchmarkRows(p=>p.map(x=>x.key===r.key?{...x,label:e.target.value}:x))} style={{width:155,fontWeight:700,fontSize:12}} />
+                            <button title="Remove benchmark row" onClick={()=>setBenchmarkRows(p=>p.filter(x=>x.key!==r.key))} style={{border:"none",background:"transparent",color:"#fb7185",cursor:"pointer"}}>×</button>
+                          </div></td>
                           <td style={{ padding: "6px 10px" }}>
-                            {/* Imported from the TCE tab only — not editable here; use "Refresh from saved" to pull the latest value */}
-                            <span style={{ fontSize: 12, fontWeight: 600, color: C.tx }}>{r.freight ? fmtUSD(r.freight) : "—"}</span>
+                            <input aria-label="Spot freight" className="rpt-edit" value={r.freight ?? ""} onChange={e=>updateBenchmarkFreight(r.key,e.target.value)} placeholder="USD" style={{width:110,fontSize:12,fontWeight:600,color:C.tx}} />
                             {r.tce != null && <span style={{ fontSize: 10, color: C.faint, marginLeft: 6 }}>(USD {Math.round(r.tce / 1000)}k pd)</span>}
                           </td>
                           <td style={{ padding: "6px 10px" }}>
@@ -1987,7 +2025,7 @@ Any direction`}</pre>
 
               {/* ── TCE earnings ── */}
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 13 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>TCE earnings</div>
+                {editMarketHeading("tce",{fontSize:12,fontWeight:700,color:C.tx,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:10})}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
                   {[["current", "Current"], ["lastMonth", "Last month avg"], ["ytd", "YTD avg"]].map(([k, label]) => (
                     <div key={k}>
@@ -2127,14 +2165,14 @@ Any direction`}</pre>
 
                 <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
                   <div style={{ background: "#eaf2fc", borderRadius: 8, padding: 12 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Market drivers / What to watch</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{marketHeadings.drivers}</div>
                     <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, lineHeight: 1.6 }}>
                       {driverBullets.filter(b => b.trim()).map((b, i) => <li key={i}>{b}</li>)}
                     </ul>
                   </div>
 
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Benchmark rates</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{marketHeadings.benchmark}</div>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                       <thead><tr style={{ background: "#eaf2fc" }}>
                         <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Intermediate routes</th>
@@ -2199,7 +2237,7 @@ Any direction`}</pre>
                   </div>
 
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>TCE earnings</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{marketHeadings.tce}</div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
                       {[["current", "Current"], ["lastMonth", "Last month avg"], ["ytd", "YTD avg"]].map(([k, label]) => (
                         <div key={k} style={{ background: "#eaf2fc", borderRadius: 6, padding: "6px 9px" }}>
