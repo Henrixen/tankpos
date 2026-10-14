@@ -9,6 +9,8 @@ const PRESET_TAGS = ["AG","BASF","CPP","DPP","EX ASIA","MED","OUTSIDER EUROPE","
 
 const CUSTOM_KEY = "signal_custom_tags";   // array of custom tag names (existing key, unchanged)
 const SCOPE_KEY = "signal_tag_scopes";     // { TAGNAME: "both"|"cargoes"|"positions" }
+const HIDDEN_KEY = "signal_hidden_preset_tags";
+const RENAME_KEY = "signal_renamed_preset_tags";
 const COLOR_KEY = "signal_tag_colors";     // { TAGNAME: "#hex" } — optional, only set ones get a colored dot
 
 function loadJSON(key, fallback) {
@@ -18,7 +20,9 @@ function loadJSON(key, fallback) {
 // Every tag currently in use anywhere (presets + whatever's been added).
 export function allTagNames() {
   const custom = loadJSON(CUSTOM_KEY, []);
-  return [...new Set([...PRESET_TAGS, ...custom].map(t => String(t || "").toUpperCase()).filter(Boolean))].sort();
+  const hidden=loadJSON(HIDDEN_KEY,[]);
+  const renamed=loadJSON(RENAME_KEY,{});
+  return [...new Set([...PRESET_TAGS.filter(t=>!hidden.includes(t)).map(t=>renamed[t]||t), ...custom].map(t => String(t || "").toUpperCase()).filter(Boolean))].sort();
 }
 
 // Scope-aware tag list — this is what Cargoes.jsx / QuotesFixtures.jsx /
@@ -76,8 +80,10 @@ export default function TagManagement() {
     setNewTag("");
   }
   function deleteTag(tag) {
-    if (isPreset(tag)) return; // presets aren't deletable
-    if (!window.confirm(`Delete tag "${tag}"? This won't remove it from cargoes/positions already tagged with it.`)) return;
+    // Presets can be hidden from the available tag list, without erasing historical assignments.
+    if (!window.confirm(`Remove tag "${tag}" from available tags? Existing cargoes/positions retain their historical tag values. Use Sync to cloud to share this change.`)) return;
+    const original=PRESET_TAGS.find(t=>(loadJSON(RENAME_KEY,{})[t]||t)===tag);
+    if(original){const hidden=loadJSON(HIDDEN_KEY,[]);localStorage.setItem(HIDDEN_KEY,JSON.stringify([...new Set([...hidden,original])]));}
     const custom = loadJSON(CUSTOM_KEY, []).filter(t => String(t).toUpperCase() !== tag);
     persistCustom(custom);
     const s = { ...scopes }; delete s[tag]; persistScopes(s);
@@ -87,16 +93,19 @@ export default function TagManagement() {
   function commitRename() {
     const oldName = renaming, newName = renameVal.trim().toUpperCase();
     setRenaming(null);
-    if (!newName || newName === oldName || isPreset(oldName)) return;
+    if (!newName || newName === oldName || allTagNames().includes(newName)) return;
+    const original=PRESET_TAGS.find(t=>(loadJSON(RENAME_KEY,{})[t]||t)===oldName);
+    if(original){const renamed=loadJSON(RENAME_KEY,{});renamed[original]=newName;localStorage.setItem(RENAME_KEY,JSON.stringify(renamed));}
     const custom = loadJSON(CUSTOM_KEY, []).map(t => String(t).toUpperCase() === oldName ? newName : t);
     persistCustom(custom);
+    setNames(allTagNames());
     if (scopes[oldName]) { const s = { ...scopes }; s[newName] = s[oldName]; delete s[oldName]; persistScopes(s); }
     if (colors[oldName]) { const c = { ...colors }; c[newName] = c[oldName]; delete c[oldName]; persistColors(c); }
   }
 
   async function syncToCloud() {
     setSyncStatus("Syncing…");
-    const payload = { scopes, colors, custom: loadJSON(CUSTOM_KEY, []) };
+    const payload = { scopes, colors, custom: loadJSON(CUSTOM_KEY, []), hidden:loadJSON(HIDDEN_KEY,[]), renamed:loadJSON(RENAME_KEY,{}) };
     const { error } = await supabase.from("dashboard").upsert({ key: "tag-management", value: JSON.stringify(payload) }, { onConflict: "key" });
     setSyncStatus(error ? "Sync failed: " + error.message : "✓ Synced");
     setTimeout(() => setSyncStatus(null), 3000);
@@ -111,6 +120,9 @@ export default function TagManagement() {
         if (payload.scopes) persistScopes(payload.scopes);
         if (payload.colors) persistColors(payload.colors);
         if (Array.isArray(payload.custom)) persistCustom(payload.custom);
+        if(Array.isArray(payload.hidden))localStorage.setItem(HIDDEN_KEY,JSON.stringify(payload.hidden));
+        if(payload.renamed)localStorage.setItem(RENAME_KEY,JSON.stringify(payload.renamed));
+        setNames(allTagNames());
       } catch {}
     });
   }, []);
@@ -127,7 +139,7 @@ export default function TagManagement() {
 
       <div style={{ display: "flex", flexDirection: "column" }}>
         {names.map((tag, i) => {
-          const preset = isPreset(tag);
+          const preset = PRESET_TAGS.some(t=>(loadJSON(RENAME_KEY,{})[t]||t)===tag);
           const scope = scopes[tag] || "both";
           const color = colors[tag];
           return (
@@ -161,10 +173,10 @@ export default function TagManagement() {
               </div>
 
               <div style={{ display: "flex", gap: 6, width: 42, flexShrink: 0 }}>
-                {!preset && (
+                {(
                   <>
                     <button onClick={() => startRename(tag)} title="Rename" style={{ background: "none", border: "none", color: "rgba(120,160,220,0.5)", cursor: "pointer", fontSize: 11 }}>✎</button>
-                    <button onClick={() => deleteTag(tag)} title="Delete" style={{ background: "none", border: "none", color: "rgba(255,107,107,0.5)", cursor: "pointer", fontSize: 12 }}>✕</button>
+                    <button onClick={() => deleteTag(tag)} title="Remove from available tags (existing cargo/position assignments remain unchanged)" style={{ background: "none", border: "none", color: "rgba(255,107,107,0.5)", cursor: "pointer", fontSize: 12 }}>✕</button>
                   </>
                 )}
               </div>
