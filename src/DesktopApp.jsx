@@ -1001,7 +1001,7 @@ function AddVesselInlineRow({onSave,onClose}){
   function upd(k,v){setVals(p=>({...p,[k]:v}));}
   async function save(){
     if(!vals.vessel.trim()||!vals.openPort.trim()) return;
-    await onSave({vessel:vals.vessel.trim().toUpperCase(),openPort:vals.openPort.trim().toUpperCase(),date:vals.date||today,operator:vals.operator||null,dwt:vals.dwt?parseInt(vals.dwt):null,coating:vals.coating||null,comment:vals.comment||null,entered_by:localStorage.getItem("signal_user")||"H"});
+    await onSave({vessel:vals.vessel.trim().toUpperCase(),openPort:vals.openPort.trim().toUpperCase(),date:vals.date||today,operator:vals.operator||null,dwt:vals.dwt?parseInt(vals.dwt):null,coating:vals.coating||null,comment:vals.comment||null,entered_by:sessionStorage.getItem("signal_user")||"H"});
     onClose();
   }
   const TC={borderBottom:"2px solid rgba(67,233,123,0.35)",padding:"2px 3px",background:"rgba(10,24,52,0.9)"};
@@ -1038,7 +1038,7 @@ function AddCargoInlineRow({onSave,onClose}){
     const v=valsRef.current;
     if(!v.charterer?.trim()&&!v.cargo?.trim()) return; // empty row — just close
     if(v.charterer?.trim()||v.cargo?.trim()){
-      await onSave({charterer:v.charterer?.trim()||"",cargo:v.cargo?.trim()||"",qty:v.qty||null,load:v.load||null,disch:v.disch||null,from:v.from||null,to:v.to||null,freight:v.freight||null,vessel:v.vessel||null,status:v.status?.toUpperCase()||null,updated:now.toISOString(),entered_by:localStorage.getItem("signal_user")||"H"});
+      await onSave({charterer:v.charterer?.trim()||"",cargo:v.cargo?.trim()||"",qty:v.qty||null,load:v.load||null,disch:v.disch||null,from:v.from||null,to:v.to||null,freight:v.freight||null,vessel:v.vessel||null,status:v.status?.toUpperCase()||null,updated:now.toISOString(),entered_by:sessionStorage.getItem("signal_user")||"H"});
     }
     onClose();
   }
@@ -1443,7 +1443,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         const raw=access?.value, configured=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
         tabs=(configured||DEFAULT_USER_TABS).filter(id=>id!=="settings");
       }
-      localStorage.setItem("signal_user",String(user.initials||"").toUpperCase());
+      sessionStorage.setItem("signal_user",String(user.initials||"").toUpperCase());
       setCurrentAppUser(user); setUserTabs(tabs); setGuestMode(!isAdmin); setUnlocked(true); setPinInput("");
     }catch(_){
       setPinError(true); setPinInput(""); setTimeout(()=>setPinError(false),1200);
@@ -1668,6 +1668,33 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [qfVisibleCols,setQfVisibleCols]=useState(()=>loadVisibleCols("signal_qf_visible_columns",QF_DEFAULT_VISIBLE));
   const [cargoColumnsOpen,setCargoColumnsOpen]=useState(false);
   const [cargoColumnsPos,setCargoColumnsPos]=useState({top:0,left:0});
+  // Preferences are keyed to the authenticated app_users.id, never the PIN itself.
+  // Avoid writing defaults to the cloud before the saved profile has loaded.
+  const [tablePrefsReady,setTablePrefsReady]=useState(false);
+  const tablePrefsLoading=useRef(false);
+  useEffect(()=>{
+    if(!currentAppUser?.id){setTablePrefsReady(false);return;}
+    let cancelled=false;
+    setTablePrefsReady(false);
+    tablePrefsLoading.current=true;
+    const key=`table_preferences_${currentAppUser.id}`;
+    (async()=>{
+      try{
+        const {data,error}=await supabase.from("tag_settings").select("value").eq("key",key).maybeSingle();
+        if(error)throw error;
+        if(cancelled)return;
+        const prefs=data?.value;
+        if(Array.isArray(prefs?.cargoVisibleCols))setCargoVisibleCols(new Set(prefs.cargoVisibleCols.filter(k=>CARGO_COLUMN_KEYS.includes(k))));
+        else setCargoVisibleCols(new Set(CARGO_COLUMN_KEYS));
+        if(Array.isArray(prefs?.qfVisibleCols))setQfVisibleCols(new Set(prefs.qfVisibleCols.filter(k=>QF_COLUMN_KEYS.includes(k))));
+        else setQfVisibleCols(new Set(QF_DEFAULT_VISIBLE));
+        if(prefs?.cargoWidths && typeof prefs.cargoWidths==="object")setColWidthsC(w=>({...w,...prefs.cargoWidths}));
+      }catch(err){console.error("Failed to load user table preferences",err);}
+      finally{if(!cancelled){tablePrefsLoading.current=false;setTablePrefsReady(true);}}
+    })();
+    return()=>{cancelled=true;};
+  },[currentAppUser?.id]);
+  // Save visibility locally as a cache, and persist the full profile to Supabase.
   useEffect(()=>{try{localStorage.setItem("signal_cargo_visible_columns",JSON.stringify([...cargoVisibleCols]));}catch{}},[cargoVisibleCols]);
   useEffect(()=>{try{localStorage.setItem("signal_qf_visible_columns",JSON.stringify([...qfVisibleCols]));}catch{}},[qfVisibleCols]);
   const [cSortK,setCsortK]=useState("updated");
@@ -1833,6 +1860,16 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   }:{
   Status:68,Vessel:165,Charterer:165,Cargo:95,Qty:75,Load:148,Disch:148,LaycanStart:82,LaycanEnd:82,Freight:115,Comment:180,Updated:96
   });
+  useEffect(()=>{
+    if(!currentAppUser?.id||!tablePrefsReady||tablePrefsLoading.current)return;
+    const timer=setTimeout(async()=>{
+      const key=`table_preferences_${currentAppUser.id}`;
+      const value={cargoVisibleCols:[...cargoVisibleCols],qfVisibleCols:[...qfVisibleCols],cargoWidths:colWidthsC};
+      const {error}=await supabase.from("tag_settings").upsert({key,value,updated_at:new Date().toISOString()},{onConflict:"key"});
+      if(error)console.error("Failed to save user table preferences",error);
+    },650);
+    return()=>clearTimeout(timer);
+  },[currentAppUser?.id,tablePrefsReady,cargoVisibleCols,qfVisibleCols,colWidthsC]);
   const [askAiExpanded,setAskAiExpanded]=useState(false);
   const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
   const [selectedAISVessels,setSelectedAISVessels]=useState([]);
