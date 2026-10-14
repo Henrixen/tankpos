@@ -240,6 +240,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
       commission: numD(row.commission),
       speed: numD(row.speed), cons: numD(row.cons), updated_at: new Date().toISOString(),
     }, { onConflict: "route_key" });
+    if (!error) window.dispatchEvent(new Event("tankpos:tce-routes-saved"));
     setStatus(error ? "Save failed" : "Saved ✓");
     setTimeout(() => setStatus(null), 2000);
   }
@@ -256,6 +257,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
       speed: numD(row.speed), cons: numD(row.cons), updated_at: new Date().toISOString(),
     }));
     const { error } = await supabase.from("tce_routes").upsert(payload, { onConflict: "route_key" });
+    if (!error) window.dispatchEvent(new Event("tankpos:tce-routes-saved"));
     setStatus(error ? "Save all failed" : `Saved ${savable.length} ✓`);
     setTimeout(() => setStatus(null), 2000);
   }
