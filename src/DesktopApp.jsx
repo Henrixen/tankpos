@@ -1670,6 +1670,8 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   useEffect(()=>{try{localStorage.setItem("signal_cargo_visible_columns",JSON.stringify([...cargoVisibleCols]));}catch{}},[cargoVisibleCols]);
   useEffect(()=>{try{localStorage.setItem("signal_qf_visible_columns",JSON.stringify([...qfVisibleCols]));}catch{}},[qfVisibleCols]);
   const [cSortK,setCsortK]=useState("updated");
+  const [reportCargoes,setReportCargoes]=useState([]);
+  useEffect(()=>{const handler=e=>{setReportCargoes(e.detail?.cargoes||[]);React.startTransition(()=>setTab("reports"));};window.addEventListener("steem:send-cargoes-to-report",handler);return()=>window.removeEventListener("steem:send-cargoes-to-report",handler);},[]);
   const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
   const [bulkCargoTagOpen,setBulkCargoTagOpen]=useState(false);
   const [bulkCargoTagPos,setBulkCargoTagPos]=useState({top:0,left:0});
@@ -3912,7 +3914,7 @@ const filtV=useMemo(()=>{
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
           </div>
         )}
-        {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={Array.from(selCargoes)}/></Suspense></div>}
+        {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={reportCargoes}/></Suspense></div>}
         {tab==="map"&&<Suspense fallback={<TabFallback/>}><FreightMapTab/></Suspense>}
       </TabErrorBoundary>
       </div>
