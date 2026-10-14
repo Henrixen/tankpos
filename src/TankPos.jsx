@@ -128,6 +128,7 @@ export default function TankPos(){
     return{
       id:          String(r.id||""),
       vessel:      String(r.vessel_name||"").toUpperCase(),
+      imoNo:       r.imo_no!=null?String(r.imo_no):null,
       operator:    r.operator||"",
       openPort:    r.port_name||"",
       date:        fmtDate,
@@ -136,8 +137,10 @@ export default function TankPos(){
       loa:         r.overall_length||null,
       beam:        r.beam||null,
       cbm:         r.cbm||null,
-      coating:     r.coating||r.coated||"",
+      coating:     r.coating_type_2||r.coating||r.coated||"",
+      tag:         r.tag||"",
       comment:     r.details||"",
+      notes:       r.notes||"",
       last3:       r.last_3_cargoes||"",
       dirtyClean:  r.dirty_clean||"",
       iceClass:    r.ice_class||"",
@@ -150,10 +153,44 @@ export default function TankPos(){
         iceClass: r.ice_class||null,
         lastCargo: r.last_3_cargoes||null,
         segment: r.segment||null,
-        coated: r.coating||r.coated||null,
+        coated: r.coating_type_2||r.coating||r.coated||null,
       }
     };
   }));
+
+  // Restore vessel-specific manual overrides, including tags and coating.
+  // The positions_latest feed does not necessarily carry these fields.
+  try {
+    const {data: overrides, error: overrideError} = await supabase
+      .from("vessel_overrides")
+      .select("imo_no,vessel_name,operator,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo,tag");
+    if (overrideError) console.warn("vessel_overrides load:", overrideError);
+    if (overrides?.length) {
+      const byImo = {}, byName = {};
+      overrides.forEach(o => {
+        if (o.imo_no != null) byImo[String(o.imo_no)] = o;
+        if (o.vessel_name) byName[String(o.vessel_name).trim().toUpperCase()] = o;
+      });
+      setVessels(prev => prev.map(v => {
+        const o = (v.imoNo && byImo[v.imoNo]) || byName[v.vessel];
+        if (!o) return v;
+        const merged = {...v, spec:{...(v.spec||{})}};
+        if (o.operator != null) merged.operator = o.operator;
+        if (o.note != null) merged.notes = o.note;
+        if (o.coating != null) merged.coating = o.coating;
+        if (o.loa != null) merged.loa = o.loa;
+        if (o.beam != null) merged.beam = o.beam;
+        if (o.cbm != null) merged.cbm = o.cbm;
+        if (o.dwt != null) merged.dwt = o.dwt;
+        if (o.built != null) merged.built = o.built;
+        if (o.tag != null) merged.tag = o.tag;
+        if (o.fuel != null) merged.spec.fuel = o.fuel;
+        if (o.ice_class != null) merged.spec.iceClass = o.ice_class;
+        if (o.last_cargo != null) merged.spec.lastCargo = o.last_cargo;
+        return merged;
+      }));
+    }
+  } catch(e) { console.error("vessel_overrides load:",e); }
 }
   async function loadMoreCargoes(){
     // All pages are loaded by fetchCargoes; kept for legacy callers.
