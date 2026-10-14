@@ -461,6 +461,7 @@ export function normaliseCargo(c){
     updated:     c.updated     || "",
     entered_by:  c.entered_by  || "",
     record_type: c.record_type || "cargo",
+    market_segment: c.market_segment || "",
   };
 }
 
