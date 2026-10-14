@@ -994,14 +994,13 @@ function RangeBox({minVal,maxVal,minPh,maxPh,onMin,onMax}){
 function AddVesselInlineRow({onSave,onClose}){
   const now=new Date();
   const today=now.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
-  const [vals,setVals]=useState({vessel:"",openPort:"",date:today,operator:"",imoNo:"",dwt:"",coating:"",comment:""});
+  const [vals,setVals]=useState({vessel:"",openPort:"",date:today,operator:"",dwt:"",coating:"",comment:""});
   const firstRef=useRef(null);
   useEffect(()=>{firstRef.current?.focus();},[]);
   function upd(k,v){setVals(p=>({...p,[k]:v}));}
   async function save(){
     if(!vals.vessel.trim()||!vals.openPort.trim()) return;
-    if(vals.imoNo && !/^\d{7}$/.test(vals.imoNo.trim())) { alert("IMO number must contain 7 digits."); return; }
-    await onSave({imoNo:vals.imoNo.trim()||null,vessel:vals.vessel.trim().toUpperCase(),openPort:vals.openPort.trim().toUpperCase(),date:vals.date||today,operator:vals.operator||null,dwt:vals.dwt?parseInt(vals.dwt):null,coating:vals.coating||null,comment:vals.comment||null,entered_by:localStorage.getItem("signal_user")||"H"});
+    await onSave({vessel:vals.vessel.trim().toUpperCase(),openPort:vals.openPort.trim().toUpperCase(),date:vals.date||today,operator:vals.operator||null,dwt:vals.dwt?parseInt(vals.dwt):null,coating:vals.coating||null,comment:vals.comment||null,entered_by:localStorage.getItem("signal_user")||"H"});
     onClose();
   }
   const TC={borderBottom:"2px solid rgba(67,233,123,0.35)",padding:"2px 3px",background:"rgba(10,24,52,0.9)"};
@@ -1012,7 +1011,6 @@ function AddVesselInlineRow({onSave,onClose}){
           <td style={{...TC,width:32,textAlign:"center"}}><span style={{color:"#43e97b",fontSize:12,fontWeight:700}}>+</span></td>
           <td style={{...TC,width:140}}><input ref={firstRef} value={vals.operator} onChange={e=>upd("operator",e.target.value)} placeholder="Operator" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
           <td style={{...TC,width:140}}><input value={vals.vessel} onChange={e=>upd("vessel",e.target.value)} placeholder="Vessel *" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={{...INP_INLINE,color:"#79c0ff",fontWeight:700}}/></td>
-          <td style={{...TC,width:88}}><input value={vals.imoNo} onChange={e=>upd("imoNo",e.target.value.replace(/\D/g,"").slice(0,7))} placeholder="IMO No." inputMode="numeric" maxLength={7} onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
           <td style={{...TC,width:55}}><input value={vals.dwt} onChange={e=>upd("dwt",e.target.value)} placeholder="DWT" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
           <td style={{...TC,width:80}}><input value={vals.coating} onChange={e=>upd("coating",e.target.value)} placeholder="Coating" onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={INP_INLINE}/></td>
           <td style={{...TC,width:96}}><input value={vals.date} onChange={e=>upd("date",e.target.value)} onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape")onClose();}} style={{...INP_INLINE,color:"#a8e6a3"}}/></td>
@@ -3910,8 +3908,6 @@ const filtV=useMemo(()=>{
         )}
         {tab==="settings"&&(
           <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px"}}>
-            <TagManager/>
-            <div style={{height:1,background:C.bd2,margin:"4px 0"}}/>
             {/* Original settings component */}
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
           </div>
