@@ -40,6 +40,9 @@ const BENCHMARK_ROUTES = [
   { key:"lehavre_ara",    label:"Le Havre–ARA",    from:"le havre",   to:"ara" },
   { key:"gothenburg_ara", label:"Gothenburg–ARA",  from:"gothenburg", to:"ara" },
   { key:"tees_ara",       label:"Tees–ARA",        from:"tees",       to:"ara" },
+  { key:"pjg_ara", label:"PJG–ARA", from:"port jerome", to:"ara" },
+  { key:"ara_dublin", label:"ARA–Dublin", from:"ara", to:"dublin" },
+  { key:"gdansk_ara", label:"Gdansk–ARA", from:"gdansk", to:"ara" },
 ];
 
 // EU ETS constants
@@ -152,6 +155,12 @@ function routeDefaults(r, defaults) {
 
 function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   const [rows, setRows] = useState(BENCHMARK_ROUTES.map(r => routeDefaults(r, defaults)));
+  const [routeGroups,setRouteGroups]=useState(()=>{try{return JSON.parse(localStorage.getItem("tankpos_tce_route_groups")||"{}")||{}}catch{return {}}});
+  useEffect(()=>{try{localStorage.setItem("tankpos_tce_route_groups",JSON.stringify(routeGroups))}catch{}},[routeGroups]);
+  const primaryKeys=new Set(["kaarstoe_ara","ara_thames","pjg_ara","ara_dublin","gdansk_ara"]);
+  const deepseaLabel=(label)=>/asia|china|singapore|straits|india|japan|korea|usg|houston|transatlantic|america|brazil|atlantic|far east|gulf/i.test(label||"");
+  const groupFor=(row)=>routeGroups[row.key]||(deepseaLabel(row.label)?"Deepsea":"Europe");
+  const [diffBase,setDiffBase]=useState("kaarstoe_ara");
   const [status, setStatus] = useState(null);
   const [expanded, setExpanded] = useState({});
   const [etsPopout, setEtsPopout] = useState(null); // route key currently showing EU ETS calc
@@ -380,12 +389,16 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
         </div>
       </div>
 
-      <div style={{ display:"flex", flexDirection:"column", maxHeight:560, overflowY:"auto" }}>
-        {rows.map(r=>{
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,padding:8}}>
+      {["Europe","Deepsea"].map(group=><div key={group} style={{minWidth:0,border:"1px solid "+C.bd2,borderRadius:5}}>
+      <div style={{padding:"6px 9px",fontSize:12,color:C.blue,fontWeight:700,background:C.bg3}}>{group} <span style={{color:C.faint,fontWeight:400}}>({rows.filter(r=>groupFor(r)===group).length})</span></div>
+      <div style={{display:"flex",flexDirection:"column",maxHeight:560,overflowY:"auto"}}>
+        {rows.filter(r=>groupFor(r)===group).map(r=>{
           const isOpen = !!expanded[r.key];
           return (
           <div key={r.key} style={{ borderBottom:"1px solid "+C.bd, padding:"7px 12px" }}>
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+              <select aria-label="Voyage group" value={groupFor(r)} onChange={e=>setRouteGroups(p=>({...p,[r.key]:e.target.value}))} style={{background:C.bg3,color:C.dim,border:"1px solid "+C.bd2,borderRadius:3,fontSize:9,width:69}}><option>Europe</option><option>Deepsea</option></select>
               <button onClick={()=>setExpanded(p=>({...p,[r.key]:!p[r.key]}))}
                 style={{background:"none", border:"none", color:C.faint, cursor:"pointer", fontSize:16, padding:0, width:18}}>
                 {isOpen?"▾":"▸"}
@@ -454,6 +467,21 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
             )}
           </div>
         );})}
+      </div></div>)}
+      </div>
+      <div style={{padding:"9px 12px",borderTop:"1px solid "+C.bd2}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.blue,marginBottom:6}}>Benchmark differentials · Europe</div>
+        <div style={{fontSize:10,color:C.faint,marginBottom:7}}>Indicative freight and TCE differences against a selected primary benchmark. Each route uses its own voyage inputs; these differences are not automatically applied as rates.</div>
+        <select value={diffBase} onChange={e=>setDiffBase(e.target.value)} style={{background:C.bg3,color:C.tx,border:"1px solid "+C.bd,padding:4,borderRadius:4,marginBottom:7}}>
+          {rows.filter(r=>primaryKeys.has(r.key)).map(r=><option key={r.key} value={r.key}>{r.label}</option>)}
+        </select>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8}}>
+          <div><div style={{fontWeight:700,color:C.tx,fontSize:11,marginBottom:4}}>Five main benchmarks</div>
+          {rows.filter(r=>primaryKeys.has(r.key)).map(r=><div key={r.key} style={{display:"flex",justifyContent:"space-between",borderBottom:"1px solid "+C.bd2,padding:"5px 2px",fontSize:11}}><span>{r.label}</span><span style={{color:C.green}}>{r.tce==null?"—":"$"+Math.round(r.tce).toLocaleString("nb-NO")+"/d"}</span></div>)}
+          </div><div><div style={{fontWeight:700,color:C.tx,fontSize:11,marginBottom:4}}>Additional legs · vs selected benchmark</div>
+          {rows.filter(r=>!primaryKeys.has(r.key)).map(r=>{const b=rows.find(x=>x.key===diffBase);const df=Number(r.freight)-Number(b?.freight);const dt=Number(r.tce)-Number(b?.tce);return <div key={r.key} style={{display:"flex",justifyContent:"space-between",gap:5,borderBottom:"1px solid "+C.bd2,padding:"5px 2px",fontSize:11}}><span>{r.label}</span><span style={{whiteSpace:"nowrap",color:C.faint}}>{r.freight&&b?.freight?(df>=0?"+":"")+Math.round(df).toLocaleString("nb-NO")+" USD":"—"} / {r.tce!=null&&b?.tce!=null?(dt>=0?"+":"")+Math.round(dt).toLocaleString("nb-NO")+" TCE":"—"}</span></div>})}
+          </div>
+        </div>
       </div>
     </div>
   );
