@@ -509,8 +509,8 @@ export default function SettingsTab() {
         </SectionCard>
 
         <SectionCard title="Cargoes / Copy Format" subtitle="Choose fields, order and separators for copied cargo lines."><CargoExportEditor/></SectionCard>
-        <SectionCard title="Cargoes / WhatsApp Format" subtitle="Used by Copy to WA in Cargoes."><WhatsAppExportEditor/></SectionCard>
-        <SectionCard title="Positions / WhatsApp Format" subtitle="Used by Copy to WA in Positions."><PositionsWhatsAppEditor/></SectionCard>
+        <SectionCard title="Cargoes / WhatsApp Format" subtitle="Copy to WA uses a fixed-width table: Charterer | Qty / Grade | Load / Disch | Laycan | Rate."><div style={{fontSize:12,color:C.tx}}>Fixed-width WhatsApp table with CNR / TBN / TBC / RNR fallbacks. Long values are shortened to fit WhatsApp. Column order is predefined.</div></SectionCard>
+        <SectionCard title="Positions / WhatsApp Format" subtitle="Copy to WA uses a fixed-width table: Vessel | DWT | Port | Date."><div style={{fontSize:12,color:C.tx}}>Fixed-width WhatsApp table. DWT is comma-formatted; missing ports and dates show TBN. Column order is predefined.</div></SectionCard>
 
         <SectionCard title="Fixing">
           <div style={{display:"flex",flexDirection:"column",gap:16}}>
