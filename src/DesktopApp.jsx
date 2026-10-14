@@ -18,6 +18,7 @@ const TimeCharterTab = React.lazy(()=>import("./TimeCharterTab"));
 const ProjectsTab    = React.lazy(()=>import("./ProjectsTab"));
 const TCECalculator  = React.lazy(()=>import("./TCECalculator").then(m=>({default:m.TCECalculator})));
 const Dashboard      = React.lazy(()=>import("./Dashboard"));
+const MRHandy        = React.lazy(()=>import("./MRHandy"));
 const OpeningBreakdown = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.OpeningBreakdown})));
 const FixingWindow   = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.FixingWindow})));
 const FixingWindowChart = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.FixingWindowChart})));
@@ -151,12 +152,12 @@ const NAV_CLOUD_KEY="navigation_config";
 const NAV_ITEMS=[
  ["pos","Positions","#58a6ff","🚢"],["cargo2","Cargoes","#faa356","🛢"],["fix","Fixing","#c792ea","◎"],["tcv","Time Charter","#fb923c","◷"],
  ["clients","Clients","#a8e6a3","♟"],["matrix","Matrix","#43e97b","⌗"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","∑"],
- ["dash","Dashboard","#43e97b","▦"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▤"],["map","Freight Map","#10b981","⌁"],
+ ["dash","Dashboard","#43e97b","▦"],["mrhandy","MR-Handy","#58a6ff","≋"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▤"],["map","Freight Map","#10b981","⌁"],
  ["cal","Calendar","#4fc3f7","◫"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","⚓"],["newbuilds","Newbuilds","#fbbf24","△"]
 ];
 function navDefault(){return{mode:"classic",collapsed:false,order:NAV_ITEMS.map(x=>x[0]),hidden:[],groups:[
  {id:"market",label:"Market",tabs:["pos","cargo2","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
- {id:"tools",label:"Tools",tabs:["projects","tce","map"]},{id:"reporting",label:"Reporting",tabs:["dash","reports"]},
+ {id:"tools",label:"Tools",tabs:["projects","tce","map"]},{id:"reporting",label:"Reporting",tabs:["dash","mrhandy","reports"]},
  {id:"workspace",label:"Workspace",tabs:["clients","notes","cal","settings"]}]};}
 function navNorm(x){
  const d=navDefault(),valid=new Set(NAV_ITEMS.map(x=>x[0]));
@@ -3893,6 +3894,7 @@ const filtV=useMemo(()=>{
         {tab==="dash"&&(
           <Suspense fallback={<TabFallback/>}><Dashboard vessels={vessels} cargoes={cargoes} history={history||[]}/></Suspense>
         )}
+        {tab==="mrhandy"&&(<Suspense fallback={<TabFallback/>}><MRHandy/></Suspense>)}
         {tab==="notes"&&(
           <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
             <Suspense fallback={<TabFallback/>}><NotesTab/></Suspense>
