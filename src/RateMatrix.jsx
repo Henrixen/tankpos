@@ -319,8 +319,8 @@ function RateMatrix({onBunkerChange}){
     if(loadedRef.current){saveRates(matrixRef.current);forceUpdate(n=>n+1);}
   }
 
-  const thS={padding:"4px 5px",fontSize:12,fontWeight:400,color:"rgba(120,160,220,0.45)",background:C.bg,textAlign:"center",whiteSpace:"nowrap",borderBottom:"1px solid "+C.bd2};
-  const tdR={fontSize:12,padding:"1px 2px",borderBottom:"1px solid "+C.bg,verticalAlign:"middle"};
+  const thS={padding:"3px 5px",fontSize:11,fontWeight:400,color:"rgba(120,160,220,0.65)",background:C.bg,textAlign:"center",whiteSpace:"nowrap",border:"1px solid "+C.bd2};
+  const tdR={fontSize:11,padding:"1px 2px",border:"1px solid "+C.bd2,verticalAlign:"middle",height:22};
 
   // RCell is defined outside this component (see above)
 
@@ -337,10 +337,9 @@ function RateMatrix({onBunkerChange}){
         </div>
       )}
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,alignItems:"start"}}>
+      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:0,alignItems:"start",border:"1px solid "+C.bd2}}>
         <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400}}>
-          <thead><tr><th colSpan={3} style={{...thS,textAlign:"left",fontWeight:400,color:C.blue}}>Intra Europe</th></tr>
-            <tr><th style={{...thS,width:"43%",fontWeight:400,textAlign:"left"}}>Route</th><th style={{...thS,width:"28%",fontWeight:400}}>Rate</th><th style={{...thS,width:"29%",fontWeight:400}}>TCE</th></tr></thead>
+          <thead><tr><th style={{...thS,width:"48%",fontWeight:600,textAlign:"left",color:C.blue}}>Intra Europe</th><th style={{...thS,width:"26%",fontWeight:400}}>Rate</th><th style={{...thS,width:"26%",fontWeight:400}}>TCE</th></tr></thead>
           <tbody>{euRoutes.map((rt,i)=><tr key={rt.id} style={{background:i%2?C.bg2:C.bg}}>
             <td style={{...tdR,paddingLeft:3}}><RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-rate"} col={REGION_COLORS.Europe} rev={rev}/></td>
@@ -348,8 +347,7 @@ function RateMatrix({onBunkerChange}){
           </tr>)}</tbody>
         </table>
         <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400}}>
-          <thead><tr><th colSpan={3} style={{...thS,textAlign:"left",fontWeight:400,color:C.blue}}>Deepsea</th></tr>
-            <tr><th style={{...thS,width:"43%",fontWeight:400,textAlign:"left"}}>Route</th><th style={{...thS,width:"28%",fontWeight:400}}>Rate</th><th style={{...thS,width:"29%",fontWeight:400}}>TCE</th></tr></thead>
+          <thead><tr><th style={{...thS,width:"48%",fontWeight:600,textAlign:"left",color:C.blue}}>Deepsea</th><th style={{...thS,width:"26%",fontWeight:400}}>Rate</th><th style={{...thS,width:"26%",fontWeight:400}}>TCE</th></tr></thead>
           <tbody>{rateRoutes.flatMap((rg,rgIdx)=>rg.routes.map((rt,rtIdx)=><tr key={rt.id} style={{background:rtIdx%2?C.bg2:C.bg}}>
             <td style={{...tdR,paddingLeft:3}}><RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-10kt"} col={REGION_COLORS[rg.region]} rev={rev}/></td>
