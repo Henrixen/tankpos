@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { C, TCE_DEFAULTS } from "./constants";
-import { supabase } from "./supabaseclient";
+import { supabase } from "./supabaseclient"; 
 
 // Shared cloud preferences stored in the existing Supabase dashboard key/value table.
 function useCloudJson(key, fallback){
