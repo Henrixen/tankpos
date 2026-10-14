@@ -182,9 +182,12 @@ function editorInitials(v){
  if(!x)return "";
  if(x==="H")return "HH";
  if(x==="L")return "HL";
- // Keep complete contributor codes. Truncating "ADO/HLO" to "AD"
- // made the dropdown ambiguous and broke filtering.
+ // The full contributor code is retained for filters and hover history.
+ // The badge alone is limited to two characters.
  return x;
+}
+function badgeInitials(v){
+ return editorInitials(v).replace(/[^A-Z0-9]/g, "").slice(0,2);
 }
 
 
@@ -307,18 +310,18 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
   async function showAudit(id){
     setHoverRowId(id);
     if(auditLoaded.current.has(id))return;
-    const {data,error}=await supabase.from("cargoes_audit").select("editor,field,old_value,new_value,changed_at").eq("cargo_id",String(id)).order("changed_at",{ascending:false}).limit(12);
+    const {data,error}=await supabase.from("cargoes_audit").select("editor,field,old_value,new_value,changed_at").eq("cargo_id",String(id)).order("changed_at",{ascending:false}).limit(100);
     if(error){setAuditError(true);return;}
-    auditLoaded.current.add(id);setAuditRows(p=>({...p,[id]:data||[]}));
+    auditLoaded.current.add(id);setAuditError(false);setAuditRows(p=>({...p,[id]:data||[]}));
   }
   const updateWithAudit=async(id,field,value)=>{
     const before=cargoes.find(c=>String(c.id)===String(id));
     if(!before||String(before[field]??"")===String(value??""))return;
-    const result=await onUpdateC(id,field,value);
-    const editor=String(localStorage.getItem("signal_user")||"H").trim();
-    const {error}=await supabase.from("cargoes_audit").insert({cargo_id:String(id),editor,field,old_value:String(before[field]??""),new_value:String(value??"")});
-    if(error){console.error("Cargo audit save failed",error);setAuditError(true)}
-    else{auditLoaded.current.delete(id);setAuditRows(p=>({...p,[id]:[{editor,field,old_value:String(before[field]??""),new_value:String(value??""),changed_at:new Date().toISOString()},...(p[id]||[])].slice(0,12)}));}
+    const editor=String(localStorage.getItem("signal_user")||"UNKNOWN").trim();
+    const result=await onUpdateC(id,field,value,editor);
+    // Supabase trigger records the change atomically. Never insert duplicate audit rows here.
+    auditLoaded.current.delete(id);
+    setAuditRows(p=>({...p,[id]:[]}));
     return result;
   };
  const {week,monthly}=useMonthly(cargoes);
@@ -445,7 +448,7 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,sea
       if(k==="updated")return <td key={k} style={{...POS_TD,textAlign:"center",color:C.faint}}>{c.updated?new Date(c.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>;
       const val=k==="charterer"?toTCase(c[k]||""):k==="qty"?normaliseQty(c[k]):k==="from"||k==="to"?fmtDateShort(c[k]):k==="freight"?(fmtFreight(c[k])||c[k]||""):c[k]||"";
       return <Editable key={k} row={i} col={navCol(k)} maxCol={navMax} value={val} align={["from","to"].includes(k)?"center":"left"} bold={k==="charterer"} color={k==="vessel"?C.blue:k==="charterer"?"#79c0ff":k==="qty"?C.amber:k==="freight"?"#a8e6a3":C.tx} onSave={v=>updateWithAudit(c.id,k,k==="charterer"||k==="load"||k==="disch"?toTCase(v):k==="qty"?normaliseQty(v):k==="freight"?(fmtFreight(v)||v):v)}/>;
-    })}<td style={{...POS_TD,textAlign:"center",padding:0,verticalAlign:"middle",lineHeight:0,position:"relative",overflow:"visible"}} onMouseLeave={()=>setHoverRowId(null)}>{editorInitials(c.entered_by)&&<span onMouseEnter={()=>showAudit(c.id)} title={`Original: ${c.entered_by||"Unknown"}`} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,padding:0,margin:0,borderRadius:"50%",boxSizing:"border-box",fontSize:10,fontWeight:800,letterSpacing:"0.7px",lineHeight:"1",paddingTop:2,textAlign:"center",verticalAlign:"middle",color:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?C.blue:C.green,border:"1px solid "+((c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{editorInitials(c.entered_by)}</span>}{hoverRowId===c.id&&<div style={{position:"absolute",right:30,top:"100%",zIndex:30000,width:340,maxHeight:240,overflowY:"auto",padding:10,textAlign:"left",background:"#071223",border:"1px solid #3976b8",borderRadius:6,boxShadow:"0 12px 35px #000a",color:"#d9e8ff",fontSize:11,lineHeight:1.6}}><b>Original contributor: {c.entered_by||"—"}</b><div style={{color:"#79c0ff",marginTop:5}}>Edit history</div>{(auditRows[c.id]||[]).length?(auditRows[c.id]||[]).map((a,j)=><div key={j} style={{borderTop:"1px solid #26374c",padding:"5px 0"}}><b>{a.editor}</b> · {new Date(a.changed_at).toLocaleString("en-GB")}<div>{a.field}: {a.old_value||"—"} → {a.new_value||"—"}</div></div>):<div>{auditError?"Audit table unavailable — run supplied SQL":"No edits recorded yet"}</div>}</div>}</td><td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>setDeleteCargo(c)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td></tr>})}</tbody>
+    })}<td style={{...POS_TD,textAlign:"center",padding:0,verticalAlign:"middle",lineHeight:0,position:"relative",overflow:"visible"}} onMouseLeave={()=>setHoverRowId(null)}>{editorInitials(c.entered_by)&&<span onMouseEnter={()=>showAudit(c.id)} title={`Original contributor: ${c.entered_by||"Unknown"}`} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,padding:0,margin:0,borderRadius:"50%",boxSizing:"border-box",fontSize:10,fontWeight:800,letterSpacing:"0.7px",lineHeight:"1",paddingTop:2,textAlign:"center",verticalAlign:"middle",color:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?C.blue:C.green,border:"1px solid "+((c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{badgeInitials(c.entered_by)}</span>}{hoverRowId===c.id&&<div style={{position:"absolute",right:30,top:"100%",zIndex:30000,width:410,maxHeight:300,overflowY:"auto",padding:10,textAlign:"left",background:"#071223",border:"1px solid #3976b8",borderRadius:6,boxShadow:"0 12px 35px #000a",color:"#d9e8ff",fontSize:11,lineHeight:1.6}}><b>Original contributor: {c.entered_by||"—"}</b><div style={{color:"#79c0ff",marginTop:5}}>Edit history</div>{(auditRows[c.id]||[]).length?(auditRows[c.id]||[]).map((a,j)=><div key={j} style={{borderTop:"1px solid #26374c",padding:"5px 0"}}><b>{a.editor}</b> · {new Date(a.changed_at).toLocaleString("en-GB")}<div>{a.field}: {a.old_value||"—"} → {a.new_value||"—"}</div></div>):<div>{auditError?"Audit table unavailable — run supplied SQL":"No edits recorded yet"}</div>}</div>}</td><td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>setDeleteCargo(c)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td></tr>})}</tbody>
    </table>
   </div>
   {cargoTotal>cargoes.length&&<div style={{padding:"6px 10px",fontSize:11,color:C.faint}}>Loading cargo history: {cargoes.length.toLocaleString("nb-NO")} / {cargoTotal.toLocaleString("nb-NO")}…</div>}
