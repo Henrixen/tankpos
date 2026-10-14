@@ -16,7 +16,7 @@ function RateMatrixBunkerInput(){
     const bs=getBunkerState();const cb=v=>setVal(v);bs.listeners.push(cb);
     supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle().then(({data})=>{
       try{const d=typeof data?.value==="string"?JSON.parse(data.value):data?.value;
-        const price=Number(d?.ARA_VLSFO||d?.ARA_MGO);if(price>0){bs.val=price;bs.listeners.forEach(fn=>fn(price));setStamp(d.date||"");}
+        const price=Number(d?.ARA_MGO);if(price>0){bs.val=price;bs.listeners.forEach(fn=>fn(price));setStamp(d.date||"");}
       }catch(e){console.warn("Bunker price read failed",e)}
     });
     return()=>{bs.listeners=bs.listeners.filter(fn=>fn!==cb)};
@@ -24,7 +24,7 @@ function RateMatrixBunkerInput(){
   async function refresh(){
     setLoading(true);
     try{const res=await fetch("/api/bunkers");if(!res.ok)throw Error("Bunker API unavailable");const d=await res.json();
-      const price=Number(d.ARA_VLSFO||d.ARA_MGO);if(!(price>0))throw Error("No ARA price returned");
+      const price=Number(d.ARA_MGO);if(!(price>0))throw Error("No ARA price returned");
       const bs=getBunkerState();bs.val=price;bs.listeners.forEach(fn=>fn(price));setStamp(d.date||"");
       await supabase.from("dashboard").upsert({key:"last-bunker-prices",value:JSON.stringify(d)},{onConflict:"key"});
     }catch(e){window.alert("PBT bunker refresh failed: "+e.message)}finally{setLoading(false)}
@@ -84,8 +84,8 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
     const raw=matrixRef.current[ck]?.rate||"";
     const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));
     el.value=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;
-    el.style.background=raw?c+"33":"transparent";
-    el.style.color=raw&&matrixRef.current[ck]?.changed_at&&Date.now()-new Date(matrixRef.current[ck].changed_at).getTime()>7*86400000?"#ff6464":raw?"#fff":C.faint;
+    el.style.background="transparent";
+    el.style.color=raw&&matrixRef.current[ck]?.changed_at&&Date.now()-new Date(matrixRef.current[ck].changed_at).getTime()>5*86400000?"#ff6464":raw?"#fff":C.faint;
     el.style.fontWeight="400";
   },[extRev,ck]);
   const vRaw=matrixRef.current[ck]?.rate||"";
@@ -95,7 +95,7 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
     <input ref={inputRef} data-ck={ck}
       defaultValue={v}
       onFocus={e=>{e.target.style.outline="1px solid rgba(88,166,255,.5)";e.target.style.background="rgba(88,166,255,.07)";const raw=matrixRef.current[ck]?.rate||"";e.target.value=raw;e.target.select();}}
-      onBlur={e=>{e.target.style.outline="none";const raw=e.target.value.trim();const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));const display=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;e.target.value=display;e.target.style.background=raw?c+"33":"transparent";e.target.style.color=raw&&matrixRef.current[ck]?.changed_at&&Date.now()-new Date(matrixRef.current[ck].changed_at).getTime()>7*86400000?"#ff6464":raw?"#fff":C.faint;e.target.style.fontWeight="400";onSave(ck,raw);}}
+      onBlur={e=>{e.target.style.outline="none";const raw=e.target.value.trim();const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));const display=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;e.target.value=display;e.target.style.background="transparent";e.target.style.color=raw&&matrixRef.current[ck]?.changed_at&&Date.now()-new Date(matrixRef.current[ck].changed_at).getTime()>5*86400000?"#ff6464":raw?"#fff":C.faint;e.target.style.fontWeight="400";onSave(ck,raw);}}
       onKeyDown={e=>{
         if(e.key==="Tab"||e.key==="Enter"){
           e.preventDefault();
@@ -112,9 +112,9 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
       }}
       onContextMenu={e=>{e.preventDefault();onComment(ck);}}
       title={matrixRef.current[ck]?.comment?"💬 "+matrixRef.current[ck].comment:"Right-click for comment"}
-      style={{width:"100%",background:v?c+"33":"transparent",
+      style={{width:"100%",background:"transparent",
         border:"none",outline:"none",
-        color:vRaw&&matrixRef.current[ck]?.changed_at&&Date.now()-new Date(matrixRef.current[ck].changed_at).getTime()>7*86400000?"#ff6464":v?"#fff":C.faint,fontWeight:400,
+        color:vRaw&&matrixRef.current[ck]?.changed_at&&Date.now()-new Date(matrixRef.current[ck].changed_at).getTime()>5*86400000?"#ff6464":v?"#fff":C.faint,fontWeight:400,
         fontFamily:"inherit",fontSize:12,
         padding:"3px 3px",textAlign:"center",boxSizing:"border-box",minWidth:0}}/>
   );
@@ -235,7 +235,7 @@ function RateMatrix({onBunkerChange}){
         const etsFmt=ets>0?" (incl. ETS $"+ets.toLocaleString("nb-NO")+")":"";
         matrixRef.current={...matrixRef.current,[tceKey]:{...(matrixRef.current[tceKey]||{}),rate:String(r.tce),comment:"Auto-calc: freight $"+freight.toLocaleString()+etsFmt}};
         setTimeout(()=>{
-          document.querySelectorAll("input[data-ck='"+tceKey+"']").forEach(el=>{el.value=r.tce.toLocaleString("nb-NO");el.style.background=REGION_COLORS.Europe+"33";el.style.color="#fff";el.style.fontWeight="400";el.title="Auto-calc TCE"+etsFmt;});
+          document.querySelectorAll("input[data-ck='"+tceKey+"']").forEach(el=>{el.value=r.tce.toLocaleString("nb-NO");el.style.background="transparent";el.style.color="#fff";el.style.fontWeight="400";el.title="Auto-calc TCE"+etsFmt;});
         },30);
       }
     });
@@ -276,9 +276,9 @@ function RateMatrix({onBunkerChange}){
     }
     return(
       <span onClick={()=>setEditingRoute(key)} style={{cursor:"pointer"}} title="Click to edit route">
-        <span style={{fontWeight:400,fontSize:12,color:"rgba(160,200,255,0.6)"}}>{from}</span>
+        <span style={{fontWeight:400,fontSize:12,color:"rgba(230,241,255,0.95)"}}>{from}</span>
         <span style={{color:"rgba(120,160,220,0.45)",fontSize:12}}> → </span>
-        <span style={{fontWeight:400,fontSize:12,color:"rgba(160,200,255,0.6)"}}>{to}</span>
+        <span style={{fontWeight:400,fontSize:12,color:"rgba(230,241,255,0.95)"}}>{to}</span>
         <span style={{color:"rgba(120,160,220,0.45)",fontSize:8,marginLeft:3,opacity:0.5}}>✎</span>
       </span>
     );
@@ -305,7 +305,7 @@ function RateMatrix({onBunkerChange}){
           matrixRef.current={...matrixRef.current,[tceKey]:{...(matrixRef.current[tceKey]||{}),rate:String(r.tce),comment:"Auto-calc: freight $"+freight.toLocaleString()+etsFmt}};
           setTimeout(()=>{
             const inputs=document.querySelectorAll("input[data-ck='"+tceKey+"']");
-            inputs.forEach(el=>{el.value=r.tce.toLocaleString("nb-NO");el.style.background=REGION_COLORS.Europe+"33";el.style.color="#fff";el.style.fontWeight="400";el.title="Auto-calc TCE"+etsFmt;});
+            inputs.forEach(el=>{el.value=r.tce.toLocaleString("nb-NO");el.style.background="transparent";el.style.color="#fff";el.style.fontWeight="400";el.title="Auto-calc TCE"+etsFmt;});
           },30);
         }
       }
@@ -340,7 +340,7 @@ function RateMatrix({onBunkerChange}){
       <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:0,alignItems:"start",border:"1px solid "+C.bd2}}>
         <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400}}>
           <thead><tr><th style={{...thS,width:"48%",fontWeight:600,textAlign:"left",color:C.blue}}>Intra Europe</th><th style={{...thS,width:"26%",fontWeight:400}}>Rate</th><th style={{...thS,width:"26%",fontWeight:400}}>TCE</th></tr></thead>
-          <tbody>{euRoutes.map((rt,i)=><tr key={rt.id} style={{background:i%2?C.bg2:C.bg}}>
+          <tbody>{euRoutes.map((rt,i)=><tr key={rt.id} style={{background:"transparent"}}>
             <td style={{...tdR,paddingLeft:3}}><RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-rate"} col={REGION_COLORS.Europe} rev={rev}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-tce"} col={C.green} rev={rev}/></td>
@@ -348,7 +348,7 @@ function RateMatrix({onBunkerChange}){
         </table>
         <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400}}>
           <thead><tr><th style={{...thS,width:"48%",fontWeight:600,textAlign:"left",color:C.blue}}>Deepsea</th><th style={{...thS,width:"26%",fontWeight:400}}>Rate</th><th style={{...thS,width:"26%",fontWeight:400}}>TCE</th></tr></thead>
-          <tbody>{rateRoutes.flatMap((rg,rgIdx)=>rg.routes.map((rt,rtIdx)=><tr key={rt.id} style={{background:rtIdx%2?C.bg2:C.bg}}>
+          <tbody>{rateRoutes.flatMap((rg,rgIdx)=>rg.routes.map((rt,rtIdx)=><tr key={rt.id} style={{background:"transparent"}}>
             <td style={{...tdR,paddingLeft:3}}><RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-10kt"} col={REGION_COLORS[rg.region]} rev={rev}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-tce"} col={C.green} rev={rev}/></td>
