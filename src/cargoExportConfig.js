@@ -1,4 +1,6 @@
 
+import { normaliseFreight } from "./utils";
+
 export const CARGO_EXPORT_KEY = "cargo_copy_format_v1";
 
 export const CARGO_EXPORT_DEFAULT =
@@ -26,13 +28,20 @@ export function formatCargoExportRow(row, format) {
     /\{([a-z_]+)(?:\|([^}]*))?\}/gi,
     (token, key, fallback) => {
       const field = key.toLowerCase();
+
       if (!CARGO_EXPORT_FIELDS.includes(field)) return token;
 
       const value = row?.[field];
 
-      return value == null || String(value).trim() === ""
-        ? (fallback ?? "")
-        : String(value);
+      if (value == null || String(value).trim() === "") {
+        return fallback ?? "";
+      }
+
+      if (field === "freight") {
+        return normaliseFreight(value);
+      }
+
+      return String(value);
     }
   );
 }
