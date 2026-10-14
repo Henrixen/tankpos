@@ -20,17 +20,24 @@ export function readCargoExportFormat() {
   }
 }
 
+// Supports {field|replacement} for empty values.
 export function formatCargoExportRow(row, format) {
   return String(format).replace(
-    /\{([a-z_]+)\}/gi,
-    (token, key) =>
-      CARGO_EXPORT_FIELDS.includes(key.toLowerCase())
-        ? String(row?.[key.toLowerCase()] ?? "")
-        : token
+    /\{([a-z_]+)(?:\|([^}]*))?\}/gi,
+    (token, key, fallback) => {
+      const field = key.toLowerCase();
+      if (!CARGO_EXPORT_FIELDS.includes(field)) return token;
+
+      const value = row?.[field];
+
+      return value == null || String(value).trim() === ""
+        ? (fallback ?? "")
+        : String(value);
+    }
   );
 }
 
-// WhatsApp individual cargo template
+// Cargoes WhatsApp template
 export const CARGO_WA_KEY = "cargo_whatsapp_format_v1";
 
 export const CARGO_WA_DEFAULT =
@@ -53,7 +60,9 @@ export function formatCargoWhatsAppRow(row) {
     (token, key, fallback) => {
       const field = key.toLowerCase();
       if (!CARGO_EXPORT_FIELDS.includes(field)) return token;
+
       const value = row?.[field];
+
       return value == null || String(value).trim() === ""
         ? (fallback ?? "")
         : String(value);
@@ -94,9 +103,11 @@ export function formatPositionWhatsAppRow(
       const field = POSITION_WA_FIELDS.find(
         x => x.toLowerCase() === key.toLowerCase()
       );
+
       if (!field) return token;
 
       const value = row?.[field];
+
       return value == null || String(value).trim() === ""
         ? (fallback ?? "")
         : String(value);
@@ -104,7 +115,7 @@ export function formatPositionWhatsAppRow(
   );
 }
 
-// Fixed-width WhatsApp tables
+// Fixed-width WhatsApp table formatting
 function waCell(value, width) {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   const chars = Array.from(text);
