@@ -114,9 +114,29 @@ export default function TankPos(){
     "6. Handy (30-40)":"Handy",
     "7. MR (>40)":"MR",
   };
-  const{data,error}=await supabase.from("positions_latest").select("*").limit(10000);
-  if(error){console.error("fetchPositions error:",error);return;}
-  console.log("fetchPositions:",data?.length,"rows");
+  // The positions_latest view can fail transiently during startup (for example
+  // while the database is waking up). Retry here rather than requiring a full
+  // browser refresh and another dashboard login.
+  let data=null, error=null;
+  for(let attempt=1;attempt<=4;attempt++){
+    try {
+      const result=await supabase.from("positions_latest").select("*").limit(10000);
+      data=result.data;
+      error=result.error;
+    } catch(e){error=e;data=null;}
+    if(!error && Array.isArray(data)) break;
+    console.warn("fetchPositions attempt",attempt,"failed:",
+      error?.message||String(error),"code:",error?.code,
+      "details:",error?.details,"hint:",error?.hint);
+    if(attempt<4) await new Promise(resolve=>setTimeout(resolve,750*attempt));
+  }
+  if(error || !Array.isArray(data)){
+    console.error("fetchPositions failed after retries:",{
+      message:error?.message,code:error?.code,details:error?.details,hint:error?.hint
+    });
+    return;
+  }
+  console.log("fetchPositions:",data.length,"rows");
   const mn=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   setVessels((data||[]).map(r=>{
     const rawDate=String(r.open_date||"");
