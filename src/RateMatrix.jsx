@@ -119,6 +119,17 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
         padding:"3px 3px",textAlign:"center",boxSizing:"border-box",minWidth:0}}/>
   );
 }
+// Benchmark Routes are the source of truth only AFTER a successful Save/Save all.
+// Unmatched Rate Matrix routes and manually entered values remain untouched.
+const BENCHMARK_MATRIX_KEYS = {
+  "mongstad_ara":"mng-ara",
+  "ara_thames":"ara-tha",
+  "tees_ara":"tee-ara",
+};
+function normalizeBenchmarkLabel(v){
+  return String(v||"").toLowerCase().replace(/[–—−]/g,"-")
+    .replace(/\\s*[-→]\\s*/g,"-").replace(/\\s+/g,"").trim();
+}
 function RateMatrix({onBunkerChange}){
   const [rev,forceUpdate]=useState(0);
   const matrixRef=useRef(defaultRateMatrix());
@@ -142,6 +153,54 @@ function RateMatrix({onBunkerChange}){
   const [rateRoutes,setRateRoutes]=useState(()=>RATE_ROUTES.map(rg=>({...rg,routes:rg.routes.map(r=>({...r}))})));
   const [editingRoute,setEditingRoute]=useState(null); // {section,rgIdx,rtIdx,field}
   const [matrixBunker,setMatrixBunker]=useState(window._bunkerState?.val||TCE_DEFAULTS.bunker);
+
+  // Pull saved TCE benchmark freight/TCE into the matching Cargoes Rate Matrix
+  // route. Never copy unsaved edits, and do not alter other matrix entries.
+  useEffect(()=>{
+    let active=true;
+    async function syncBenchmarks(){
+      if(!loadedRef.current)return;
+      const {data,error}=await supabase.from("tce_routes")
+        .select("route_key,label,freight,tce,updated_at");
+      if(error||!active||!data)return;
+      const current=matrixRef.current;
+      const next={...current};
+      let changed=false;
+      const targets=[
+        ...euRoutes.map(r=>({id:r.id,rateKey:r.id+"-rate",tceKey:r.id+"-tce",label:r.from+"-"+r.to})),
+        ...rateRoutes.flatMap(g=>g.routes.map(r=>({
+          id:r.id,rateKey:r.id+"-10kt",tceKey:r.id+"-tce",label:r.from+"-"+r.to
+        }))),
+      ];
+      for(const saved of data){
+        const mappedId=BENCHMARK_MATRIX_KEYS[saved.route_key];
+        const target=targets.find(t=>t.id===mappedId)
+          ||targets.find(t=>normalizeBenchmarkLabel(t.label)===normalizeBenchmarkLabel(saved.label));
+        if(!target)continue;
+        for(const [key,value] of [[target.rateKey,saved.freight],[target.tceKey,saved.tce]]){
+          if(value==null||value==="")continue;
+          const existing=next[key]||{};
+          const formatted=String(value);
+          if(existing.rate===formatted&&existing.benchmark_route_key===saved.route_key)continue;
+          next[key]={...existing,rate:formatted,benchmark_route_key:saved.route_key,
+            comment:existing.comment||"Synced from TCE Benchmark Routes",
+            changed_at:saved.updated_at||new Date().toISOString()};
+          changed=true;
+        }
+      }
+      if(changed){
+        matrixRef.current=next;
+        await saveRates(next);
+        if(active)forceUpdate(n=>n+1);
+      }
+    }
+    const handler=()=>{syncBenchmarks();};
+    window.addEventListener("tankpos:tce-routes-saved",handler);
+    // Initial sync after saved matrix loads.
+    const init=setTimeout(syncBenchmarks,500);
+    return()=>{active=false;clearTimeout(init);window.removeEventListener("tankpos:tce-routes-saved",handler);};
+  },[euRoutes,rateRoutes]);
+
 
   // Sync with header bunker input
   useEffect(()=>{
@@ -295,7 +354,7 @@ function RateMatrix({onBunkerChange}){
             <td style={{...tdR,paddingLeft:3}}><RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-10kt"} col={REGION_COLORS[rg.region]} rev={rev}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-tce"} col={C.green} rev={rev}/></td>
-          </tr>)))}</tbody>
+          </tr>))}</tbody>
         </table>
       </div>
     </div>
