@@ -30,11 +30,11 @@ function RateMatrixBunkerInput(){
     }catch(e){window.alert("PBT bunker refresh failed: "+e.message)}finally{setLoading(false)}
   }
   return <span style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11,fontWeight:400}}>
-    <span title={stamp?"PBT quote: "+stamp:"ARA bunker assumption"}>ARA VLSFO</span>
+    <span style={{color:"#b8c4d6"}} title={stamp?"PBT quote: "+stamp:"ARA bunker assumption"}>ARA MGO</span>
     <input aria-label="ARA bunker USD per tonne" value={val} onChange={e=>setVal(e.target.value)}
       onBlur={()=>{const n=Number(val);if(n>0){const bs=getBunkerState();bs.val=n;bs.listeners.forEach(fn=>fn(n));}}}
       style={{width:58,background:"#162540",border:"1px solid "+C.bd2,borderRadius:4,color:C.tx,fontSize:11,fontWeight:400,padding:"3px 5px",textAlign:"right"}}/>
-    <span>USD/mt</span><button type="button" onClick={refresh} disabled={loading} title="Refresh PBT ARA bunker price" style={{background:"transparent",border:"1px solid "+C.bd2,color:C.blue,borderRadius:4,cursor:"pointer"}}>{loading?"…":"↻"}</button>
+    <span style={{color:"#b8c4d6"}}>USD/mt</span><button type="button" onClick={refresh} disabled={loading} title="Refresh PBT ARA bunker price" style={{background:"transparent",border:"1px solid "+C.bd2,color:C.blue,borderRadius:4,cursor:"pointer"}}>{loading?"…":"↻"}</button>
   </span>;
 }
 // Europe routes: single rate + TCE, no qty
@@ -319,7 +319,7 @@ function RateMatrix({onBunkerChange}){
     if(loadedRef.current){saveRates(matrixRef.current);forceUpdate(n=>n+1);}
   }
 
-  const thS={padding:"3px 5px",fontSize:11,fontWeight:400,color:"rgba(120,160,220,0.65)",background:C.bg,textAlign:"center",whiteSpace:"nowrap",border:"1px solid "+C.bd2};
+  const thS={padding:"3px 5px",fontSize:11,fontWeight:400,color:"rgba(120,160,220,0.65)",background:C.bg3,textAlign:"center",whiteSpace:"nowrap",border:"1px solid "+C.bd2};
   const tdR={fontSize:11,padding:"1px 2px",border:"1px solid "+C.bd2,verticalAlign:"middle",height:22};
 
   // RCell is defined outside this component (see above)
@@ -337,17 +337,17 @@ function RateMatrix({onBunkerChange}){
         </div>
       )}
 
-      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:0,alignItems:"start",border:"1px solid "+C.bd2}}>
-        <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400}}>
-          <thead><tr><th style={{...thS,width:"48%",fontWeight:600,textAlign:"left",color:C.blue}}>Intra Europe</th><th style={{...thS,width:"26%",fontWeight:400}}>Rate</th><th style={{...thS,width:"26%",fontWeight:400}}>TCE</th></tr></thead>
+      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:10,alignItems:"start"}}>
+        <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400,background:C.bg2,border:"1px solid "+C.bd,borderRadius:6}}>
+          <thead><tr><th style={{...thS,width:"48%",fontWeight:600,textAlign:"left",color:"#b9d6fa"}}>Intra Europe</th><th style={{...thS,width:"26%",fontWeight:400}}>Rate</th><th style={{...thS,width:"26%",fontWeight:400}}>TCE</th></tr></thead>
           <tbody>{euRoutes.map((rt,i)=><tr key={rt.id} style={{background:"transparent"}}>
             <td style={{...tdR,paddingLeft:3}}><RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-rate"} col={REGION_COLORS.Europe} rev={rev}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-tce"} col={C.green} rev={rev}/></td>
           </tr>)}</tbody>
         </table>
-        <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400}}>
-          <thead><tr><th style={{...thS,width:"48%",fontWeight:600,textAlign:"left",color:C.blue}}>Deepsea</th><th style={{...thS,width:"26%",fontWeight:400}}>Rate</th><th style={{...thS,width:"26%",fontWeight:400}}>TCE</th></tr></thead>
+        <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400,background:C.bg2,border:"1px solid "+C.bd,borderRadius:6}}>
+          <thead><tr><th style={{...thS,width:"48%",fontWeight:600,textAlign:"left",color:"#b9d6fa"}}>Deepsea</th><th style={{...thS,width:"26%",fontWeight:400}}>Rate</th><th style={{...thS,width:"26%",fontWeight:400}}>TCE</th></tr></thead>
           <tbody>{rateRoutes.flatMap((rg,rgIdx)=>rg.routes.map((rt,rtIdx)=><tr key={rt.id} style={{background:"transparent"}}>
             <td style={{...tdR,paddingLeft:3}}><RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-10kt"} col={REGION_COLORS[rg.region]} rev={rev}/></td>
