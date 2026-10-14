@@ -1,4 +1,4 @@
-import { formatPositionWhatsAppRow } from "./cargoExportConfig";
+import { formatPositionWhatsAppRow, formatPositionsWhatsAppTable } from "./cargoExportConfig";
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react";
 import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
@@ -1182,7 +1182,7 @@ function CopyPositionsWAButton({rows,fmtDateShort}){
   const [fallback,setFallback]=React.useState("");
   async function copy(){
     if(!rows.length)return;
-    const txt=rows.map(v=>formatPositionWhatsAppRow({...v,date:fmtDateShort?fmtDateShort(v.date):v.date})).join("\n\n");
+    const txt=formatPositionsWhatsAppTable(rows.map(v=>({...v,date:fmtDateShort?fmtDateShort(v.date):v.date})));
     try{await navigator.clipboard.writeText(txt);setCopied(true);setTimeout(()=>setCopied(false),2300);}
     catch{setFallback(txt);}
   }
