@@ -31,7 +31,7 @@ function RateMatrixBunkerInput(){
   }
   return <span style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11,fontWeight:400}}>
     <span style={{color:"#b8c4d6"}} title={stamp?"PBT quote: "+stamp:"ARA bunker assumption"}>ARA MGO</span>
-    <input aria-label="ARA bunker USD per tonne" value={val} onChange={e=>setVal(e.target.value)}
+    <input aria-label="ARA bunker USD per tonne" value={val===""?"":String(val).replace(/\s/g,"").replace(/\B(?=(\d{3})+(?!\d))/g," ")} onChange={e=>setVal(e.target.value.replace(/\s/g,""))}
       onBlur={()=>{const n=Number(val);if(n>0){const bs=getBunkerState();bs.val=n;bs.listeners.forEach(fn=>fn(n));}}}
       style={{width:58,background:"#162540",border:"1px solid "+C.bd2,borderRadius:4,color:C.tx,fontSize:11,fontWeight:400,padding:"3px 5px",textAlign:"right"}}/>
     <span style={{color:"#b8c4d6"}}>USD/mt</span><button type="button" onClick={refresh} disabled={loading} title="Refresh PBT ARA bunker price" style={{background:"transparent",border:"1px solid "+C.bd2,color:C.blue,borderRadius:4,cursor:"pointer"}}>{loading?"…":"↻"}</button>
@@ -339,7 +339,7 @@ function RateMatrix({onBunkerChange}){
 
       <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:10,alignItems:"start"}}>
         <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400,background:C.bg2,border:"1px solid "+C.bd,borderRadius:6}}>
-          <thead><tr><th style={{...thS,width:"48%",fontWeight:600,textAlign:"left",color:"#b9d6fa"}}>Intra Europe</th><th style={{...thS,width:"26%",fontWeight:400}}>Rate</th><th style={{...thS,width:"26%",fontWeight:400}}>TCE</th></tr></thead>
+          <thead><tr><th style={{...thS,width:"48%",fontWeight:600,textAlign:"left",color:"#b9d6fa"}}>Intra Europe</th><th style={{...thS,width:"26%",fontWeight:400}}>Rate LS</th><th style={{...thS,width:"26%",fontWeight:400}}>TCE</th></tr></thead>
           <tbody>{euRoutes.map((rt,i)=><tr key={rt.id} style={{background:"transparent"}}>
             <td style={{...tdR,paddingLeft:3}}><RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-rate"} col={REGION_COLORS.Europe} rev={rev}/></td>
@@ -347,7 +347,7 @@ function RateMatrix({onBunkerChange}){
           </tr>)}</tbody>
         </table>
         <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400,background:C.bg2,border:"1px solid "+C.bd,borderRadius:6}}>
-          <thead><tr><th style={{...thS,width:"48%",fontWeight:600,textAlign:"left",color:"#b9d6fa"}}>Deepsea</th><th style={{...thS,width:"26%",fontWeight:400}}>Rate</th><th style={{...thS,width:"26%",fontWeight:400}}>TCE</th></tr></thead>
+          <thead><tr><th style={{...thS,width:"48%",fontWeight:600,textAlign:"left",color:"#b9d6fa"}}>Deepsea</th><th style={{...thS,width:"26%",fontWeight:400}}>Rate PMT</th><th style={{...thS,width:"26%",fontWeight:400}}>TCE</th></tr></thead>
           <tbody>{rateRoutes.flatMap((rg,rgIdx)=>rg.routes.map((rt,rtIdx)=><tr key={rt.id} style={{background:"transparent"}}>
             <td style={{...tdR,paddingLeft:3}}><RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-10kt"} col={REGION_COLORS[rg.region]} rev={rev}/></td>
