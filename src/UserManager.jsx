@@ -44,7 +44,16 @@ export default function UserManager(){
  </div>
 }
 function Row({u,patch,changePin,deleteUser}){
- const [oldPin,setOldPin]=useState(""),[newPin,setNewPin]=useState("");const col=u.color||"#58a6ff";
+ const pinKey=`signal_saved_pin_${u.id}`;
+ const [oldPin,setOldPin]=useState(()=>{try{return localStorage.getItem(pinKey)||""}catch{return ""}}),[newPin,setNewPin]=useState("");
+ const [remember,setRemember]=useState(()=>{try{return !!localStorage.getItem(pinKey)}catch{return false}});
+ const [pinNote,setPinNote]=useState("");const col=u.color||"#58a6ff";
+ async function toggleRemember(checked){
+   if(!checked){try{localStorage.removeItem(pinKey)}catch{}setRemember(false);setPinNote("");return}
+   if(oldPin.length!==4 || await sha256(oldPin)!==u.pin_hash){setPinNote("Enter the correct current PIN before saving it.");return}
+   if(!window.confirm("Save this PIN as readable text on this device? Anyone with access to this browser profile may be able to view it."))return;
+   try{localStorage.setItem(pinKey,oldPin);setRemember(true);setPinNote("Saved on this device")}catch{setPinNote("Could not save PIN")}
+ }
  const clean=v=>v.replace(/\D/g,"").slice(0,4);
  return <div style={{display:"grid",gridTemplateColumns:"34px minmax(0,1.35fr) minmax(0,.5fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,1.65fr) 28px",gap:8,alignItems:"center",padding:"6px 8px",background:"rgba(255,255,255,.018)",borderRadius:5,marginTop:4}}>
   <span style={{width:22,height:22,borderRadius:"50%",display:"inline-flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box",padding:0,fontSize:9,fontWeight:800,lineHeight:"1",letterSpacing:0,textAlign:"center",color:col,background:col+"22",border:"1px solid "+col+"88"}}>{u.initials}</span>
@@ -52,10 +61,12 @@ function Row({u,patch,changePin,deleteUser}){
   <input type="color" value={col} onChange={e=>patch(u.id,{color:e.target.value})} style={{width:34,height:24,background:"transparent",border:"none"}}/>
   <label style={{fontSize:10,color:u.active?C.green:C.faint}}><input type="checkbox" checked={!!u.active} onChange={e=>patch(u.id,{active:e.target.checked})}/> Active</label>
   <div style={{display:"flex",gap:4,alignItems:"center"}}>
-   <input value={oldPin} onChange={e=>setOldPin(clean(e.target.value))} inputMode="numeric" type="text" maxLength={4} placeholder="Current PIN" title={u.pin_hash?"PIN configured. Enter the current PIN to change it.":"No PIN configured"} style={{...input,width:66,padding:"4px 6px",textAlign:"center"}}/>
+   <input value={oldPin} onChange={e=>{const v=clean(e.target.value);setOldPin(v);if(remember){try{localStorage.removeItem(pinKey)}catch{}setRemember(false)}}} inputMode="numeric" type="text" maxLength={4} placeholder="Current PIN" title={u.pin_hash?"PIN configured. Enter the current PIN to change it.":"No PIN configured"} style={{...input,width:66,padding:"4px 6px",textAlign:"center"}}/>
    <span style={{fontSize:10,color:C.faint}}>→</span>
-   <input value={newPin} onChange={e=>setNewPin(clean(e.target.value))} inputMode="numeric" type="password" maxLength={4} placeholder="New PIN" style={{...input,width:66,padding:"4px 6px",textAlign:"center"}}/>
-   <button onClick={async()=>{if(await changePin(u.id,oldPin,newPin,u.pin_hash)){setOldPin("");setNewPin("")}}} style={{...input,padding:"4px 7px",cursor:"pointer",whiteSpace:"nowrap"}}>Change</button>
+   <input value={newPin} onChange={e=>setNewPin(clean(e.target.value))} inputMode="numeric" type="text" maxLength={4} placeholder="New PIN" style={{...input,width:66,padding:"4px 6px",textAlign:"center"}}/>
+   <button onClick={async()=>{if(await changePin(u.id,oldPin,newPin,u.pin_hash)){if(remember){try{localStorage.setItem(pinKey,newPin)}catch{}}setOldPin(remember?newPin:"");setNewPin("")}}} style={{...input,padding:"4px 7px",cursor:"pointer",whiteSpace:"nowrap"}}>Change</button>
+   <label title="Optional: saves the PIN in readable form in this browser's local storage" style={{fontSize:9,color:C.faint,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:3}}><input type="checkbox" checked={remember} onChange={e=>toggleRemember(e.target.checked)}/> Remember</label>
+   {pinNote&&<span style={{fontSize:9,color:C.faint}}>{pinNote}</span>}
   </div>
  <button title={`Delete ${u.name}`} aria-label={`Delete ${u.name}`} onClick={()=>deleteUser(u)} style={{background:"rgba(255,75,85,.09)",border:"1px solid rgba(255,75,85,.4)",color:"#ff6677",borderRadius:4,height:25,cursor:"pointer",fontWeight:800}}>×</button>
  </div>
