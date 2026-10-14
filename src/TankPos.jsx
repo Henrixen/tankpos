@@ -265,7 +265,7 @@ export default function TankPos(){
 }, []);
 
   // Universal cargo updater — optimistic local update + Supabase write
-  const updateC=useCallback(async(id,field,value,editor)=>{
+  const updateC=useCallback(async(id,field,value)=>{
     const displayValue=(field==="from"||field==="to")?(() => {
       const iso=toISODate(value);
       if(!iso) return value;
@@ -274,7 +274,7 @@ export default function TankPos(){
     })():value;
     setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:displayValue}:c));
     const dbValue=(field==="from"||field==="to")?toISODate(value):value;
-    const{error}=await supabase.from("cargoes").update({[field]:dbValue,updated_by:editor||localStorage.getItem("signal_user")||"UNKNOWN"}).eq("id",id);
+    const{error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id);
     if(error)console.error(error);
   },[]);
 
@@ -403,10 +403,32 @@ export default function TankPos(){
   },[]);
 
   const addV=useCallback(async(v)=>{
-  setVessels(prev=>{const idx=prev.findIndex(x=>x.vessel?.toLowerCase()===v.vessel.toLowerCase());const next=idx>=0?prev.map((x,i)=>i===idx?enrichV(v,vesselDB):x):[...prev,enrichV(v,vesselDB)];saveV(next);return next;});
-  const{error}=await supabase.from("positions").upsert([{...v,updated_at:new Date().toISOString()}],{onConflict:"vessel_name"});
-  if(error)console.error(error);
-},[vesselDB]);
+    const imo = String(v.imoNo || v.imo_no || "").trim();
+    if(imo && !/^\d{7}$/.test(imo)) { alert("IMO number must contain 7 digits."); return; }
+    const vessel = String(v.vessel || "").trim();
+    if(!vessel) return;
+    const localV = enrichV({...v,imoNo:imo || null},vesselDB);
+    setVessels(prev=>{
+      const idx=prev.findIndex(x=>x.vessel?.toLowerCase()===vessel.toLowerCase());
+      const next=idx>=0?prev.map((x,i)=>i===idx?{...x,...localV}:x):[...prev,localV];
+      saveV(next);return next;
+    });
+    const now = new Date().toISOString();
+    const row = {
+      vessel_name:vessel,
+      imo_no:imo || null,
+      operator:v.operator || null,
+      port_name:v.openPort || null,
+      open_date:v.date || null,
+      dwt:v.dwt || null,
+      coating:v.coating || null,
+      details:v.comment || null,
+      updated_at:now,
+      updated_at_manual:now
+    };
+    const {error}=await supabase.from("positions").upsert([row],{onConflict:"vessel_name"});
+    if(error) console.error("Add vessel error:",error);
+  },[vesselDB]);
   const addC=useCallback(async(c)=>{
     const norm=normaliseCargo({...c,entered_by:c.entered_by||(localStorage.getItem("signal_user")||"H"),id:c.id||("c_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),updated:c.updated||new Date().toISOString()});
     setCargoes(prev=>[...prev,norm]);
