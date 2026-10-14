@@ -2,31 +2,40 @@ import React, { useState, useEffect, useRef } from "react";
 import { C, TCE_DEFAULTS } from "./constants";
 import { loadRates, saveRates } from "./supabaseHelpers";
 import { calcTCE, calcEuEts } from "./TCECalculator";
+import { supabase } from "./supabaseclient";
 
 function getBunkerState(){
   if(!window._bunkerState)window._bunkerState={val:TCE_DEFAULTS.bunker,listeners:[]};
   return window._bunkerState;
 }
 function RateMatrixBunkerInput(){
-  const bs=getBunkerState();
-  const [val,setVal]=useState(bs.val);
+  const [val,setVal]=useState(getBunkerState().val);
+  const [stamp,setStamp]=useState("");
+  const [loading,setLoading]=useState(false);
   useEffect(()=>{
-    const bs=getBunkerState();
-    const cb=v=>{setVal(v);};
-    bs.listeners.push(cb);
-    // Load saved bunker on mount
-    loadRates().then(d=>{if(d?.__matrixBunker){bs.val=d.__matrixBunker;bs.listeners.forEach(c=>c(d.__matrixBunker));}});
-    return()=>{bs.listeners=bs.listeners.filter(x=>x!==cb);};
+    const bs=getBunkerState();const cb=v=>setVal(v);bs.listeners.push(cb);
+    supabase.from("dashboard").select("value").eq("key","last-bunker-prices").maybeSingle().then(({data})=>{
+      try{const d=typeof data?.value==="string"?JSON.parse(data.value):data?.value;
+        const price=Number(d?.ARA_VLSFO||d?.ARA_MGO);if(price>0){bs.val=price;bs.listeners.forEach(fn=>fn(price));setStamp(d.date||"");}
+      }catch(e){console.warn("Bunker price read failed",e)}
+    });
+    return()=>{bs.listeners=bs.listeners.filter(fn=>fn!==cb)};
   },[]);
-  return(
-    <input
-      key={val}
-      defaultValue={val}
-      onBlur={e=>{const n=parseFloat(e.target.value.replace(/[^0-9.]/g,""));if(!isNaN(n)&&n>0){const bs=getBunkerState();bs.val=n;bs.listeners.forEach(cb=>cb(n));}else{e.target.value=val;}}}
-      onKeyDown={e=>{if(e.key==="Enter"){e.target.blur();}if(e.key==="Escape"){e.target.value=val;e.target.blur();}}}
-      style={{width:60,background:"#162540",border:"1px solid "+C.amber,borderRadius:4,color:C.amber,fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"2px 6px",outline:"none",textAlign:"right"}}
-      title="Bunker price used for TCE auto-calculation"/>
-  );
+  async function refresh(){
+    setLoading(true);
+    try{const res=await fetch("/api/bunkers");if(!res.ok)throw Error("Bunker API unavailable");const d=await res.json();
+      const price=Number(d.ARA_VLSFO||d.ARA_MGO);if(!(price>0))throw Error("No ARA price returned");
+      const bs=getBunkerState();bs.val=price;bs.listeners.forEach(fn=>fn(price));setStamp(d.date||"");
+      await supabase.from("dashboard").upsert({key:"last-bunker-prices",value:JSON.stringify(d)},{onConflict:"key"});
+    }catch(e){window.alert("PBT bunker refresh failed: "+e.message)}finally{setLoading(false)}
+  }
+  return <span style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11,fontWeight:400}}>
+    <span title={stamp?"PBT quote: "+stamp:"ARA bunker assumption"}>ARA VLSFO</span>
+    <input aria-label="ARA bunker USD per tonne" value={val} onChange={e=>setVal(e.target.value)}
+      onBlur={()=>{const n=Number(val);if(n>0){const bs=getBunkerState();bs.val=n;bs.listeners.forEach(fn=>fn(n));}}}
+      style={{width:58,background:"#162540",border:"1px solid "+C.bd2,borderRadius:4,color:C.tx,fontSize:11,fontWeight:400,padding:"3px 5px",textAlign:"right"}}/>
+    <span>USD/mt</span><button type="button" onClick={refresh} disabled={loading} title="Refresh PBT ARA bunker price" style={{background:"transparent",border:"1px solid "+C.bd2,color:C.blue,borderRadius:4,cursor:"pointer"}}>{loading?"…":"↻"}</button>
+  </span>;
 }
 // Europe routes: single rate + TCE, no qty
 const EU_ROUTES=[
@@ -76,8 +85,8 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
     const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));
     el.value=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;
     el.style.background=raw?c+"33":"transparent";
-    el.style.color=raw?"#fff":C.faint;
-    el.style.fontWeight=raw?"700":"400";
+    el.style.color=raw&&matrixRef.current[ck]?.changed_at&&Date.now()-new Date(matrixRef.current[ck].changed_at).getTime()>7*86400000?"#ff6464":raw?"#fff":C.faint;
+    el.style.fontWeight="400";
   },[extRev,ck]);
   const vRaw=matrixRef.current[ck]?.rate||"";
   const vNum=parseFloat(vRaw.replace(/[^0-9.\-]/g,""));
@@ -86,7 +95,7 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
     <input ref={inputRef} data-ck={ck}
       defaultValue={v}
       onFocus={e=>{e.target.style.outline="1px solid rgba(88,166,255,.5)";e.target.style.background="rgba(88,166,255,.07)";const raw=matrixRef.current[ck]?.rate||"";e.target.value=raw;e.target.select();}}
-      onBlur={e=>{e.target.style.outline="none";const raw=e.target.value.trim();const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));const display=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;e.target.value=display;e.target.style.background=raw?c+"33":"transparent";e.target.style.color=raw?"#fff":C.faint;e.target.style.fontWeight=raw?"700":"400";onSave(ck,raw);}}
+      onBlur={e=>{e.target.style.outline="none";const raw=e.target.value.trim();const num=parseFloat(raw.replace(/[^0-9.\-]/g,""));const display=raw&&!isNaN(num)?num.toLocaleString("nb-NO"):raw;e.target.value=display;e.target.style.background=raw?c+"33":"transparent";e.target.style.color=raw&&matrixRef.current[ck]?.changed_at&&Date.now()-new Date(matrixRef.current[ck].changed_at).getTime()>7*86400000?"#ff6464":raw?"#fff":C.faint;e.target.style.fontWeight="400";onSave(ck,raw);}}
       onKeyDown={e=>{
         if(e.key==="Tab"||e.key==="Enter"){
           e.preventDefault();
@@ -105,7 +114,7 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
       title={matrixRef.current[ck]?.comment?"💬 "+matrixRef.current[ck].comment:"Right-click for comment"}
       style={{width:"100%",background:v?c+"33":"transparent",
         border:"none",outline:"none",
-        color:v?"#fff":C.faint,fontWeight:v?700:400,
+        color:vRaw&&matrixRef.current[ck]?.changed_at&&Date.now()-new Date(matrixRef.current[ck].changed_at).getTime()>7*86400000?"#ff6464":v?"#fff":C.faint,fontWeight:400,
         fontFamily:"inherit",fontSize:12,
         padding:"3px 3px",textAlign:"center",boxSizing:"border-box",minWidth:0}}/>
   );
@@ -152,6 +161,7 @@ function RateMatrix({onBunkerChange}){
   // Re-calc all EU route TCEs when bunker price changes
   useEffect(()=>{
     if(!loadedRef.current)return;
+    matrixRef.current.__matrixBunker=matrixBunker;
     euRoutes.forEach(rt=>{
       const rateKey=rt.id+"-rate";
       const tceKey=rt.id+"-tce";
@@ -166,7 +176,7 @@ function RateMatrix({onBunkerChange}){
         const etsFmt=ets>0?" (incl. ETS $"+ets.toLocaleString("nb-NO")+")":"";
         matrixRef.current={...matrixRef.current,[tceKey]:{...(matrixRef.current[tceKey]||{}),rate:String(r.tce),comment:"Auto-calc: freight $"+freight.toLocaleString()+etsFmt}};
         setTimeout(()=>{
-          document.querySelectorAll("input[data-ck='"+tceKey+"']").forEach(el=>{el.value=r.tce.toLocaleString("nb-NO");el.style.background=REGION_COLORS.Europe+"33";el.style.color="#fff";el.style.fontWeight="700";el.title="Auto-calc TCE"+etsFmt;});
+          document.querySelectorAll("input[data-ck='"+tceKey+"']").forEach(el=>{el.value=r.tce.toLocaleString("nb-NO");el.style.background=REGION_COLORS.Europe+"33";el.style.color="#fff";el.style.fontWeight="400";el.title="Auto-calc TCE"+etsFmt;});
         },30);
       }
     });
@@ -207,9 +217,9 @@ function RateMatrix({onBunkerChange}){
     }
     return(
       <span onClick={()=>setEditingRoute(key)} style={{cursor:"pointer"}} title="Click to edit route">
-        <span style={{fontWeight:600,fontSize:12,color:"rgba(160,200,255,0.6)"}}>{from}</span>
+        <span style={{fontWeight:400,fontSize:12,color:"rgba(160,200,255,0.6)"}}>{from}</span>
         <span style={{color:"rgba(120,160,220,0.45)",fontSize:12}}> → </span>
-        <span style={{fontWeight:600,fontSize:12,color:"rgba(160,200,255,0.6)"}}>{to}</span>
+        <span style={{fontWeight:400,fontSize:12,color:"rgba(160,200,255,0.6)"}}>{to}</span>
         <span style={{color:"rgba(120,160,220,0.45)",fontSize:8,marginLeft:3,opacity:0.5}}>✎</span>
       </span>
     );
@@ -236,7 +246,7 @@ function RateMatrix({onBunkerChange}){
           matrixRef.current={...matrixRef.current,[tceKey]:{...(matrixRef.current[tceKey]||{}),rate:String(r.tce),comment:"Auto-calc: freight $"+freight.toLocaleString()+etsFmt}};
           setTimeout(()=>{
             const inputs=document.querySelectorAll("input[data-ck='"+tceKey+"']");
-            inputs.forEach(el=>{el.value=r.tce.toLocaleString("nb-NO");el.style.background=REGION_COLORS.Europe+"33";el.style.color="#fff";el.style.fontWeight="700";el.title="Auto-calc TCE"+etsFmt;});
+            inputs.forEach(el=>{el.value=r.tce.toLocaleString("nb-NO");el.style.background=REGION_COLORS.Europe+"33";el.style.color="#fff";el.style.fontWeight="400";el.title="Auto-calc TCE"+etsFmt;});
           },30);
         }
       }
@@ -247,10 +257,10 @@ function RateMatrix({onBunkerChange}){
   function updComment(key,val){
     const prev=matrixRef.current[key]||{};
     matrixRef.current={...matrixRef.current,[key]:{...prev,comment:val,...(String(prev.comment??"")!==String(val??"")?{changed_at:new Date().toISOString()}:{})}};
-    if(loadedRef.current)saveRates(matrixRef.current);
+    if(loadedRef.current){saveRates(matrixRef.current);forceUpdate(n=>n+1);}
   }
 
-  const thS={padding:"4px 5px",fontSize:12,fontWeight:700,color:"rgba(120,160,220,0.45)",background:C.bg,textAlign:"center",whiteSpace:"nowrap",borderBottom:"1px solid "+C.bd2};
+  const thS={padding:"4px 5px",fontSize:12,fontWeight:400,color:"rgba(120,160,220,0.45)",background:C.bg,textAlign:"center",whiteSpace:"nowrap",borderBottom:"1px solid "+C.bd2};
   const tdR={fontSize:12,padding:"1px 2px",borderBottom:"1px solid "+C.bg,verticalAlign:"middle"};
 
   // RCell is defined outside this component (see above)
@@ -268,63 +278,26 @@ function RateMatrix({onBunkerChange}){
         </div>
       )}
 
-      {/* Intra Europe: Rate + TCE columns */}
-      <div>
-        <div style={{fontSize:12,fontWeight:700,color:REGION_COLORS.Europe,textTransform:"uppercase",letterSpacing:"0.07em",padding:"3px 5px",background:REGION_COLORS.Europe+"18",borderLeft:"2px solid "+REGION_COLORS.Europe,marginBottom:2}}>
-          Intra Europe
-        </div>
-        <table style={{borderCollapse:"collapse",width:"100%"}}>
-          <thead><tr>
-            <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
-            <th style={{...thS,width:"15%"}}>Rate ($ lsum)</th>
-            <th style={{...thS,width:"15%",color:C.green}}>TCE $/day</th>
-            <th style={{...thS,width:"40%"}}>Comment</th>
-          </tr></thead>
-          <tbody>
-            {euRoutes.map((rt,i)=>(
-              <tr key={rt.id||i} style={{background:i%2===0?C.bg:C.bg2}}>
-                <td style={{...tdR,color:"rgba(160,200,255,0.6)",paddingLeft:4}}>
-                  <RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/>
-                </td>
-                <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-rate"} col={REGION_COLORS.Europe} rev={rev}/></td>
-                <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-tce"} col={C.green} rev={rev}/></td>
-                <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-comment"} col={C.faint} rev={rev}/></td>
-              </tr>
-            ))}
-          </tbody>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,alignItems:"start"}}>
+        <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400}}>
+          <thead><tr><th colSpan={3} style={{...thS,textAlign:"left",fontWeight:400,color:C.blue}}>Intra Europe</th></tr>
+            <tr><th style={{...thS,width:"43%",fontWeight:400,textAlign:"left"}}>Route</th><th style={{...thS,width:"28%",fontWeight:400}}>Rate</th><th style={{...thS,width:"29%",fontWeight:400}}>TCE</th></tr></thead>
+          <tbody>{euRoutes.map((rt,i)=><tr key={rt.id} style={{background:i%2?C.bg2:C.bg}}>
+            <td style={{...tdR,paddingLeft:3}}><RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/></td>
+            <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-rate"} col={REGION_COLORS.Europe} rev={rev}/></td>
+            <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-tce"} col={C.green} rev={rev}/></td>
+          </tr>)}</tbody>
+        </table>
+        <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400}}>
+          <thead><tr><th colSpan={3} style={{...thS,textAlign:"left",fontWeight:400,color:C.blue}}>Deepsea</th></tr>
+            <tr><th style={{...thS,width:"43%",fontWeight:400,textAlign:"left"}}>Route</th><th style={{...thS,width:"28%",fontWeight:400}}>Rate</th><th style={{...thS,width:"29%",fontWeight:400}}>TCE</th></tr></thead>
+          <tbody>{rateRoutes.flatMap((rg,rgIdx)=>rg.routes.map((rt,rtIdx)=><tr key={rt.id} style={{background:rtIdx%2?C.bg2:C.bg}}>
+            <td style={{...tdR,paddingLeft:3}}><RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/></td>
+            <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-10kt"} col={REGION_COLORS[rg.region]} rev={rev}/></td>
+            <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-tce"} col={C.green} rev={rev}/></td>
+          </tr>)))}</tbody>
         </table>
       </div>
-
-      {/* Asia + TA: by size */}
-      {rateRoutes.map((rg,rgIdx)=>(
-        <div key={rg.region}>
-          <div style={{fontSize:12,fontWeight:700,color:REGION_COLORS[rg.region],textTransform:"uppercase",letterSpacing:"0.07em",padding:"3px 5px",background:REGION_COLORS[rg.region]+"18",borderLeft:"2px solid "+REGION_COLORS[rg.region],marginBottom:2}}>
-            {rg.label}
-          </div>
-          <table style={{borderCollapse:"collapse",width:"100%"}}>
-            <thead><tr>
-              <th style={{...thS,textAlign:"left",width:"25%"}}>Route</th>
-              {RATE_SIZES.map(sz=>(<th key={sz} style={{...thS,width:"11.67%"}}>{sz}</th>))}
-              <th style={{...thS,width:"40%"}}>Comment</th>
-            </tr></thead>
-            <tbody>
-              {rg.routes.map((rt,rtIdx)=>(
-                <tr key={rt.id||rtIdx} style={{background:rtIdx%2===0?C.bg:C.bg2}}>
-                  <td style={{...tdR,color:"rgba(160,200,255,0.6)",paddingLeft:4}}>
-                    <RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/>
-                  </td>
-                  {RATE_SIZES.map(sz=>(
-                    <td key={sz} style={{...tdR,padding:0}}>
-                      <RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-"+sz} col={REGION_COLORS[rg.region]} rev={rev}/>
-                    </td>
-                  ))}
-                  <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-comment"} col={C.faint} rev={rev}/></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
     </div>
   );
 }
