@@ -578,7 +578,7 @@ function DistanceTable(){
             style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"4px 8px",outline:"none",width:160}}/>
         </div>
         <button onClick={search}
-          style={{background:"#1f6feb",border:"none",borderRadius:6,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"6px 16px",cursor:"pointer"}}>
+          style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"6px 16px",cursor:"pointer"}}>
           Search
         </button>
         {searched&&(
@@ -623,7 +623,7 @@ function PortCostRow({label,ports,onChange,col}){
 function TCECalculator(){
   const [defaults,setDefaults]=useState(TCE_DEFAULTS);
   const [loaded,setLoaded]=useState(false);
-  const [mode,setMode]=useState("freight");
+  const [results,setResults]=useState({freight:null,tce:null});
   const [stdVarsOpen,setStdVarsOpen]=useState(false); // collapsed by default — rarely changed
   const [v,setVars]=useState({freight:"",targetTCE:"",ballastNm:"",ladenNm:"",repoNm:"",otherRevenue:"",otherExpenses:""});
   const [loadPorts,setLoadPorts]=useState([{name:"",cost:25000}]);
@@ -631,7 +631,7 @@ function TCECalculator(){
   const [euEts,setEuEts]=useState(0);
   const [autoEts,setAutoEts]=useState(true);
   const [isIntraEU,setIsIntraEU]=useState(true);
-  const [result,setResult]=useState(null);
+  const setResult=()=>setResults({freight:null,tce:null});
   const [showDist,setShowDist]=useState(false);
   const [sharedBunker,setSharedBunker]=useState("");
   const [pbtStatus,setPbtStatus]=useState(null);
@@ -747,7 +747,7 @@ function TCECalculator(){
     if(lp&&dp){const d=lookupDist(lp,dp);if(d)sV("ladenNm",String(d));}
   },[loadPorts[0]?.name,dischPorts[0]?.name]);
 
-  function calculate(){
+  function calculate(mode){
     const p={...defaults,
       ballastNm:v.ballastNm,ladenNm:v.ladenNm,repoNm:v.repoNm||0,
       otherRevenue:v.otherRevenue||0,otherExpenses:v.otherExpenses||0,
@@ -755,10 +755,10 @@ function TCECalculator(){
     };
     if(mode==="freight"){
       const r=calcTCE({freight:v.freight,...p});
-      setResult(r?{...r,freight:numD(v.freight)}:null);
+      setResults(prev=>({...prev,[mode]:r?{...r,freight:numD(v.freight)}:null}));
     } else {
       const freight=calcFreightFromTCE({targetTCE:v.targetTCE,...p});
-      if(freight){const r=calcTCE({freight,...p});setResult(r?{...r,freight}:null);}
+      if(freight){const r=calcTCE({freight,...p});setResults(prev=>({...prev,[mode]:r?{...r,freight}:null}));}
     }
   }
 
@@ -787,73 +787,56 @@ function TCECalculator(){
 
   return(
     <div>
-      {/* Mode tabs + settings gear (moved here so it doesn't throw off column alignment below) */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid "+C.bd2,marginBottom:14}}>
-        <div style={{display:"flex"}}>
-          {[["freight","⚡ TCE Calculator"],["tce","🎯 TCE Target"]].map(([m,l])=>(
-            <button key={m} onClick={()=>{setMode(m);setResult(null);}}
-              style={{padding:"8px 20px",border:"none",background:"transparent",cursor:"pointer",
-                fontFamily:"inherit",fontWeight:700,fontSize:12,
-                color:mode===m?C.blue:C.dim,
-                borderBottom:"2px solid "+(mode===m?C.blue:"transparent")}}>
-              {l}
-            </button>
-          ))}
-        </div>
-        <button onClick={()=>setStdVarsOpen(true)} title="Standard Variables"
-          style={{margin:"0 4px 6px 0",background:"transparent",border:"1px solid "+C.bd,borderRadius:6,color:C.faint,cursor:"pointer",fontSize:14,padding:"5px 10px"}}>
-          ⚙ Standard Variables
-        </button>
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}>
+        <button onClick={()=>setStdVarsOpen(true)} title="Standard Variables" style={{background:"transparent",border:"1px solid "+C.bd,borderRadius:6,color:C.dim,cursor:"pointer",fontSize:12,padding:"5px 10px"}}>⚙ Standard Variables</button>
       </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"stretch",marginBottom:16}}>
-        <div style={CARD}><DistanceTable/></div>
+      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(250px,0.55fr)",gap:14,marginBottom:14}}>
+        <DistanceTable/>
         <div style={{...CARD,padding:"14px 16px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
-          <div style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Bunker (MGO) $/mt</div>
+          <div style={{fontSize:12,fontWeight:700,color:C.tx,textTransform:"uppercase",marginBottom:8}}>Bunker (MGO) $/mt</div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <FmtInput value={sharedBunker} onChange={updateSharedBunker} width={90} fontSize={13} fontWeight={700}/>
-            <button onClick={syncBunkerFromPBT}
-              style={{fontSize:11,fontWeight:700,padding:"6px 12px",borderRadius:5,border:"1px solid rgba(88,166,255,0.4)",background:"rgba(88,166,255,0.12)",color:"#58a6ff",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-              ↻ Refresh PBT
-            </button>
+            <button onClick={syncBunkerFromPBT} style={{fontSize:11,fontWeight:700,padding:"6px 12px",borderRadius:5,border:"1px solid "+C.bd,background:C.bg3,color:C.tx,cursor:"pointer"}}>↻ Refresh PBT</button>
           </div>
           <div style={{fontSize:10,color:C.faint,marginTop:6}}>{pbtStatus || "Fetches live PBT ARA MGO and updates the shared Dashboard price"}</div>
         </div>
       </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"start"}}>
-
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:14,alignItems:"start"}}>
+        {["freight","tce"].map(panelMode=>{
+          const panelResult=results[panelMode];
+          return <React.Fragment key={panelMode}>
         {/* ── LEFT: Voyage Inputs ── */}
-        <div style={CARD}>
+        <div style={{...CARD,minWidth:0}}>
           <div style={{padding:"8px 12px",background:C.bg3,borderBottom:"1px solid "+C.bd2,fontSize:12,fontWeight:700,color:C.tx}}>
-            {mode==="freight"?"Enter freight → get TCE":"Enter target TCE → get required freight"}
+            {panelMode==="freight"?"Enter freight → get TCE":"Enter target TCE → get required freight"}
           </div>
           <div style={{padding:"10px 14px"}}>
-            <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginBottom:6}}>Ports</div>
+            <div style={{fontSize:12,fontWeight:700,color:C.tx,textTransform:"uppercase",letterSpacing:".04em",marginBottom:6}}>Ports</div>
             <PortCostRow label="Load Port(s)" ports={loadPorts} onChange={setLoadPorts} col={C.blue}/>
             <PortCostRow label="Discharge Port(s)" ports={dischPorts} onChange={setDischPorts} col={C.green}/>
 
-            <div style={{display:"flex",gap:8,padding:"4px 0",borderBottom:"1px solid "+C.bg3,marginTop:10}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",marginTop:12,marginBottom:5}}>Distance</div>
+            <div style={{display:"flex",flexDirection:"column",gap:5,borderBottom:"1px solid "+C.bg3,paddingBottom:8}}>
               {[["ballastNm","Ballast NM"],["ladenNm","Laden NM"],["repoNm","Repo NM"]].map(([k,label])=>(
-                <div key={k} style={{display:"flex",flexDirection:"column",gap:1,flex:1}}>
-                  <span style={{fontSize:10,color:C.faint,textTransform:"uppercase"}}>{label}</span>
+                <div key={k} style={{display:"flex",flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:10,flex:1}}>
+                  <span style={{fontSize:11,color:C.dim,textTransform:"uppercase",minWidth:95}}>{label}</span>
                   <input value={v[k]} onChange={e=>{sV(k,e.target.value);setResult(null);}} placeholder={k==="repoNm"?"0":""}
-                    style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 6px",outline:"none",textAlign:"right",boxSizing:"border-box"}}/>
+                    style={{width:130,maxWidth:"60%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 8px",outline:"none",textAlign:"right",boxSizing:"border-box"}}/>
                 </div>
               ))}
             </div>
 
-            <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:1,maxWidth:140}}>
-              <span style={{fontSize:10,color:C.faint,textTransform:"uppercase"}}>{mode==="freight"?"Freight":"Target TCE"}</span>
-              <input value={mode==="freight"&&typeof v.freight==="number"?v.freight.toLocaleString("nb-NO"):(mode==="freight"?v.freight:v.targetTCE)}
-                onChange={e=>{sV(mode==="freight"?"freight":"targetTCE",e.target.value);setResult(null);}}
-                onFocus={e=>{if(mode==="freight")e.target.value=String(v.freight).replace(/\s/g,"");}}
-                onBlur={e=>{if(mode==="freight"){const n=parseFloat(e.target.value.replace(/[^0-9.\-]/g,""));if(!isNaN(n))sV("freight",n);}}}
-                placeholder={mode==="freight"?"USD":"$/day"}
-                style={{width:"100%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"3px 6px",outline:"none",textAlign:"right",boxSizing:"border-box"}}/>
+            <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:1,maxWidth:260}}>
+              <span style={{fontSize:12,fontWeight:700,color:C.tx,textTransform:"uppercase"}}>{panelMode==="freight"?"Freight":"Target TCE"}</span>
+              <input value={panelMode==="freight"&&typeof v.freight==="number"?v.freight.toLocaleString("nb-NO"):(panelMode==="freight"?v.freight:v.targetTCE)}
+                onChange={e=>{sV(panelMode==="freight"?"freight":"targetTCE",e.target.value);setResult(null);}}
+                onFocus={e=>{if(panelMode==="freight")e.target.value=String(v.freight).replace(/\s/g,"");}}
+                onBlur={e=>{if(panelMode==="freight"){const n=parseFloat(e.target.value.replace(/[^0-9.\-]/g,""));if(!isNaN(n))sV("freight",n);}}}
+                placeholder={panelMode==="freight"?"USD":"$/day"}
+                style={{width:"100%",background:C.bg3,border:"1px solid "+C.blue,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:17,fontWeight:700,padding:"9px 10px",outline:"none",textAlign:"right",boxSizing:"border-box"}}/>
             </div>
 
-            <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginTop:10,marginBottom:4}}>Costs</div>
+            <div style={{fontSize:12,fontWeight:700,color:C.tx,textTransform:"uppercase",letterSpacing:".04em",marginTop:10,marginBottom:4}}>Costs</div>
             {numInp("Canal cost","canalCost",defaults.canalCost,sD,"USD","",true)}
 
             {/* EU ETS */}
@@ -878,51 +861,49 @@ function TCECalculator(){
               ))}
             </div>}
 
-            <button onClick={calculate}
-              style={{marginTop:12,background:"#1f6feb",border:"none",borderRadius:6,color:"#fff",
+            <button onClick={()=>calculate(panelMode)}
+              style={{marginTop:12,background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,color:"#fff",
                 fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"9px",cursor:"pointer",width:"100%"}}>
-              {mode==="freight"?"Calculate TCE →":"Calculate Required Freight →"}
+              {panelMode==="freight"?"Calculate TCE →":"Calculate Required Freight →"}
             </button>
 
             {/* ── Result — now inside the same card as the inputs, right below Calculate ── */}
-            <div style={{marginTop:12,background:mode==="freight"?"rgba(79,195,247,.07)":"rgba(67,233,123,.07)",borderRadius:6,padding:"10px 12px"}}>
+            <div style={{marginTop:12,background:panelMode==="freight"?"rgba(79,195,247,.07)":"rgba(67,233,123,.07)",borderRadius:6,padding:"10px 12px"}}>
               <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:".07em"}}>TCE</div>
-              {mode==="freight"
-                ? <div style={{fontSize:24,fontWeight:800,color:result&&result.tce!=null?(result.tce>=0?C.green:C.red):C.faint,lineHeight:1.1}}>
-                    {result&&result.tce!=null?"$"+result.tce.toLocaleString("nb-NO"):"—"}
+              {panelMode==="freight"
+                ? <div style={{fontSize:24,fontWeight:800,color:panelResult&&panelResult.tce!=null?(panelResult.tce>=0?C.green:C.red):C.faint,lineHeight:1.1}}>
+                    {panelResult&&panelResult.tce!=null?"$"+panelResult.tce.toLocaleString("nb-NO"):"—"}
                     <span style={{fontSize:11,color:C.faint,fontWeight:400}}>/day</span>
                   </div>
-                : <div style={{fontSize:20,fontWeight:800,color:result?C.blue:C.faint,lineHeight:1.1}}>
-                    {result?"$"+(result.freight||0).toLocaleString("nb-NO"):"—"}
+                : <div style={{fontSize:20,fontWeight:800,color:panelResult?C.blue:C.faint,lineHeight:1.1}}>
+                    {panelResult?"$"+(panelResult.freight||0).toLocaleString("nb-NO"):"—"}
                     <span style={{fontSize:11,color:C.faint,fontWeight:400}}> lumpsum</span>
                   </div>
               }
-              {mode==="tce"&&result&&result.tce!=null&&<div style={{fontSize:12,color:C.green,marginTop:2}}>✓ TCE check: ${result.tce.toLocaleString("nb-NO")}/day</div>}
-              {result&&(
+              {panelMode==="tce"&&panelResult&&panelResult.tce!=null&&<div style={{fontSize:12,color:C.green,marginTop:2}}>✓ TCE check: ${panelResult.tce.toLocaleString("nb-NO")}/day</div>}
+              {panelResult&&(
                 <div style={{marginTop:8,borderTop:"1px solid "+C.bg3}}>
-                  {resRow("Freight",fmt(result.freight),C.blue)}
-                  {resRow("Days total",fmtN(result.totalDays)+"d")}
-                  {resRow("  Ballast",fmtN(result.daysBallast)+"d",C.faint)}
-                  {resRow("  Laden",fmtN(result.daysLaden)+"d",C.faint)}
-                  {resRow("Net revenue",fmt(result.netRevenue),result.netRevenue>=0?C.green:C.red)}
-                  {resRow("Total bunkers",fmt(result.totalBunkers),C.amber)}
-                  {resRow("Commission",fmt(result.commAmt),C.dim)}
-                  {result.ets>0&&resRow("EU ETS",fmt(result.ets),"#fd79a8")}
-                  {result.lpc>0&&resRow("Load port costs",fmt(result.lpc),C.dim)}
-                  {result.dpc>0&&resRow("Disch port costs",fmt(result.dpc),C.dim)}
-                  {resRow("Total expenses",fmt(result.totalExpenses),C.red)}
+                  {resRow("Freight",fmt(panelResult.freight),C.blue)}
+                  {resRow("Days total",fmtN(panelResult.totalDays)+"d")}
+                  {resRow("  Ballast",fmtN(panelResult.daysBallast)+"d",C.faint)}
+                  {resRow("  Laden",fmtN(panelResult.daysLaden)+"d",C.faint)}
+                  {resRow("Net revenue",fmt(panelResult.netRevenue),panelResult.netRevenue>=0?C.green:C.red)}
+                  {resRow("Total bunkers",fmt(panelResult.totalBunkers),C.amber)}
+                  {resRow("Commission",fmt(panelResult.commAmt),C.dim)}
+                  {panelResult.ets>0&&resRow("EU ETS",fmt(panelResult.ets),"#fd79a8")}
+                  {panelResult.lpc>0&&resRow("Load port costs",fmt(panelResult.lpc),C.dim)}
+                  {panelResult.dpc>0&&resRow("Disch port costs",fmt(panelResult.dpc),C.dim)}
+                  {resRow("Total expenses",fmt(panelResult.totalExpenses),C.red)}
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* ── Benchmark Routes ── */}
-        <div>
-          <BenchmarkRoutes defaults={defaults} sharedBunker={sharedBunker} updateSharedBunker={updateSharedBunker}/>
-        </div>
-
+          </React.Fragment>;
+        })}
       </div>
+      <div style={{marginTop:16}}><BenchmarkRoutes defaults={defaults} sharedBunker={sharedBunker} updateSharedBunker={updateSharedBunker}/></div>
 
       {/* ── Standard Variables popout ── */}
       {stdVarsOpen && (
