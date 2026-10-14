@@ -2,6 +2,29 @@ import React, { useState, useEffect } from "react";
 import { C, TCE_DEFAULTS } from "./constants";
 import { supabase } from "./supabaseclient";
 
+// Shared cloud preferences stored in the existing Supabase dashboard key/value table.
+function useCloudJson(key, fallback){
+  const [value,setValue]=useState(fallback);
+  const [ready,setReady]=useState(false);
+  const [error,setError]=useState("");
+  useEffect(()=>{let live=true;setReady(false);
+    supabase.from("tce_workbench").select("value").eq("key",key).maybeSingle().then(({data,error:e})=>{
+      if(!live)return;
+      if(e){setError(e.message);return;}
+      if(data?.value!=null){try{setValue(JSON.parse(data.value));}catch{setError("Invalid saved data");}}
+      setReady(true);
+    });
+    return()=>{live=false};
+  },[key]);
+  useEffect(()=>{if(!ready)return;
+    const timer=setTimeout(async()=>{
+      const {error:e}=await supabase.from("tce_workbench").upsert({key,value:JSON.stringify(value)},{onConflict:"key"});
+      setError(e?.message||"");
+    },700);
+    return()=>clearTimeout(timer);
+  },[key,value,ready]);
+  return [value,setValue,ready,error];
+}
 const TCE_STORE_KEY = "tankpos-tce-defaults-v1";
 async function loadTCEDefaults(){try{const r=await window.storage.get(TCE_STORE_KEY,true);return r?JSON.parse(r.value):null;}catch(_){return null;}}
 async function saveTCEDefaults(d){try{await window.storage.set(TCE_STORE_KEY,JSON.stringify(d),true);}catch(_){}}
@@ -155,8 +178,7 @@ function routeDefaults(r, defaults) {
 
 function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   const [rows, setRows] = useState(BENCHMARK_ROUTES.map(r => routeDefaults(r, defaults)));
-  const [routeGroups,setRouteGroups]=useState(()=>{try{return JSON.parse(localStorage.getItem("tankpos_tce_route_groups")||"{}")||{}}catch{return {}}});
-  useEffect(()=>{try{localStorage.setItem("tankpos_tce_route_groups",JSON.stringify(routeGroups))}catch{}},[routeGroups]);
+  const [routeGroups,setRouteGroups,groupsReady,groupsError]=useCloudJson("tce-route-groups",{});
   const primaryKeys=new Set(["kaarstoe_ara","ara_thames","pjg_ara","ara_dublin","gdansk_ara"]);
   const deepseaLabel=(label)=>/asia|china|singapore|straits|india|japan|korea|usg|houston|transatlantic|america|brazil|atlantic|far east|gulf/i.test(label||"");
   const groupFor=(row)=>routeGroups[row.key]||(deepseaLabel(row.label)?"Deepsea":"Europe");
@@ -385,8 +407,6 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
           </button>
           <button onClick={saveAll} title="Save all benchmark and custom routes"
             style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:4, border:"1px solid rgba(63,185,80,0.4)", background:"rgba(63,185,80,0.12)", color:C.green, cursor:"pointer", fontFamily:"inherit" }}>💾 Save all</button>
-          <button onClick={()=>addLeg("Europe")} title="Add a custom route"
-            style={{ fontSize:13, fontWeight:700, padding:"1px 8px", borderRadius:4, border:"1px solid "+C.bd, background:"transparent", color:C.blue, cursor:"pointer", fontFamily:"inherit" }}>+ Add Europe leg</button>
         </div>
       </div>
 
@@ -479,34 +499,54 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
 
 function DifferentialWorkbench({rows,primaryKeys}){
   const [tab,setTab]=useState("differentials");
-  const [diffs,setDiffs]=useState(()=>{try{return JSON.parse(localStorage.getItem("tankpos_tce_differentials")||"[]")}catch{return []}});
-  const [notes,setNotes]=useState(()=>{try{return JSON.parse(localStorage.getItem("tankpos_tce_diff_notes")||"[]")}catch{return []}});
-  const [subject,setSubject]=useState("");const [body,setBody]=useState("");
+  const [diffs,setDiffs,diffsReady,diffsError]=useCloudJson("tce-differentials",[]);
+  const [notes,setNotes,notesReady,notesError]=useCloudJson("tce-market-notes",[]);
+  const [subject,setSubject]=useState("");
+  const [body,setBody]=useState("");
   const [expandedNote,setExpandedNote]=useState(null);
-  useEffect(()=>{localStorage.setItem("tankpos_tce_differentials",JSON.stringify(diffs))},[diffs]);
-  useEffect(()=>{localStorage.setItem("tankpos_tce_diff_notes",JSON.stringify(notes))},[notes]);
+  const [pendingDelete,setPendingDelete]=useState(null);
+  const benchmarkOrder=["kaarstoe_ara","ara_thames","pjg_ara","ara_dublin","gdansk_ara"];
+  const refs=benchmarkOrder.map(key=>rows.find(r=>r.key===key)).filter(Boolean);
+  const groups=refs.slice(0,4);
+  const input={background:"#071426",border:"1px solid #284363",color:"#c7dfff",borderRadius:4,padding:"6px 7px",fontSize:11,minWidth:0,width:"100%",boxSizing:"border-box"};
+  const btn=(active=false)=>({border:"1px solid "+(active?"#4489e7":"#284363"),background:active?"#19385e":"#0d2038",color:active?"#fff":"#a5bedc",borderRadius:5,padding:"7px 13px",fontSize:11,fontWeight:700,cursor:"pointer"});
   const update=(id,field,value)=>setDiffs(v=>v.map(x=>x.id===id?{...x,[field]:value}:x));
-  const input={background:"#071426",border:"1px solid #284363",color:"#c7dfff",borderRadius:3,padding:"5px 6px",fontSize:11,minWidth:0,width:"100%",boxSizing:"border-box"};
-  const refs=rows.filter(r=>primaryKeys.has(r.key));
+  const formatRate=v=>{const raw=String(v??"").replace(/[^0-9-]/g,"");if(!raw||raw==="-")return raw;const neg=raw.startsWith("-");const digits=raw.replace(/-/g,"");return (neg?"-":"")+digits.replace(/\B(?=(\d{3})+(?!\d))/g," ");};
+  const add=(base)=>setDiffs(v=>[...v,{id:Date.now()+"-"+Math.random(),leg:"",base,diff:"",comment:""}]);
   return <div style={{padding:12,borderTop:"1px solid #284363"}}>
-    <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:10}}>
-      <button onClick={()=>setTab("differentials")} style={{...input,width:"auto",color:tab==="differentials"?"#fff":"#81a6d4"}}>Route differentials</button>
-      <button onClick={()=>setTab("notes")} style={{...input,width:"auto",color:tab==="notes"?"#fff":"#81a6d4"}}>Market / Contract notes ({notes.length})</button>
-      {tab==="differentials"&&<button onClick={()=>setDiffs(v=>[...v,{id:Date.now()+"-"+Math.random(),leg:"",base:refs[0]?.key||"",diff:"",comment:""}])} style={{...input,width:"auto",marginLeft:"auto"}}>+ Add differential</button>}
+    <div style={{display:"flex",gap:7,alignItems:"center",marginBottom:12}}>
+      <button onClick={()=>setTab("differentials")} style={btn(tab==="differentials")}>Route differentials</button>
+      <button onClick={()=>setTab("notes")} style={btn(tab==="notes")}>Market / Contract notes ({notes.length})</button>
     </div>
-    {tab==="differentials"?<><div style={{fontSize:10,color:"#91a9c9",marginBottom:8}}>Enter negotiated USD lump-sum premiums or discounts relative to a reference leg. Values are manually maintained and do not change automatically with benchmark freight.</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>{[0,1].map(side=><div key={side} style={{display:"flex",flexDirection:"column",gap:5}}>{diffs.filter((_,i)=>i%2===side).map(d=><div key={d.id} style={{display:"grid",gridTemplateColumns:"1.1fr 1fr .6fr 1fr 20px",gap:4,alignItems:"center"}}>
-        <input aria-label="Additional route" placeholder="Additional leg" value={d.leg} onChange={e=>update(d.id,"leg",e.target.value)} style={input}/>
-        <select aria-label="Reference benchmark" value={d.base} onChange={e=>update(d.id,"base",e.target.value)} style={input}>{refs.map(r=><option key={r.key} value={r.key}>{r.label}</option>)}</select>
-        <input aria-label="USD differential" placeholder="+/- USD" value={d.diff} onChange={e=>update(d.id,"diff",e.target.value)} style={input}/>
-        <input aria-label="Comment" placeholder="Comment" value={d.comment} onChange={e=>update(d.id,"comment",e.target.value)} style={input}/>
-        <button title="Remove differential" onClick={()=>setDiffs(v=>v.filter(x=>x.id!==d.id))} style={{background:"none",border:0,color:"#ef7474",cursor:"pointer"}}>×</button>
-      </div>)}</div>)}</div></>:<>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 2fr auto",gap:6,marginBottom:9}}><input placeholder="Trade / subject" value={subject} onChange={e=>setSubject(e.target.value)} style={input}/><textarea placeholder="Paste contract or market differential text..." value={body} onChange={e=>setBody(e.target.value)} style={{...input,minHeight:48}}/><button disabled={!subject.trim()||!body.trim()} onClick={()=>{setNotes(v=>[{id:Date.now(),subject:subject.trim(),body:body.trim()},...v]);setSubject("");setBody("")}} style={{...input,width:"auto"}}>Save note</button></div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:7}}>{notes.map(n=><div key={n.id} style={{border:"1px solid #284363",padding:7,borderRadius:5,maxWidth:300}}><button onClick={()=>setExpandedNote(v=>v===n.id?null:n.id)} title={n.body.slice(0,180)} style={{...input,width:"auto"}}>{n.subject} · {n.body.slice(0,45)}{n.body.length>45?"…":""}</button><button onClick={()=>setNotes(v=>v.filter(x=>x.id!==n.id))} style={{background:"none",border:0,color:"#ef7474"}}>×</button>{expandedNote===n.id&&<div style={{whiteSpace:"pre-wrap",fontSize:11,color:"#b8cee9",paddingTop:8}}>{n.body}</div>}</div>)}</div>
+    {tab==="differentials"?<div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:9,overflowX:"auto"}}>
+      {groups.map(r=><div key={r.key} style={{minWidth:190,border:"1px solid #284363",borderRadius:6,overflow:"hidden"}}>
+        <div style={{padding:"9px 8px",fontSize:12,fontWeight:700,color:"#e4efff",background:"#14253e"}}>{r.label}</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 82px 1fr 20px",gap:4,padding:"7px 5px",color:"#88a9d1",fontSize:10,fontWeight:700}}><span>Additional leg</span><span>Rate</span><span>Comment</span><span/></div>
+        {diffs.filter(d=>d.base===r.key).map(d=><div key={d.id} style={{display:"grid",gridTemplateColumns:"1fr 82px 1fr 20px",gap:4,padding:"3px 5px",alignItems:"center"}}>
+          <input aria-label="Additional leg" value={d.leg} onChange={e=>update(d.id,"leg",e.target.value)} style={input}/>
+          <input aria-label="Rate" inputMode="numeric" value={formatRate(d.diff)} onChange={e=>update(d.id,"diff",e.target.value.replace(/[^0-9-]/g,""))} style={{...input,textAlign:"right"}}/>
+          <input aria-label="Comment" value={d.comment} onChange={e=>update(d.id,"comment",e.target.value)} style={input}/>
+          <button title="Delete leg" onClick={()=>setPendingDelete({type:"diff",id:d.id,label:d.leg||"this leg"})} style={{border:0,background:"transparent",color:"#ef7474",cursor:"pointer",fontSize:16}}>×</button>
+        </div>)}
+        <button disabled={!diffsReady} onClick={()=>add(r.key)} style={{...btn(),margin:"8px 5px",padding:"5px 9px",fontSize:10}}>+ Add leg</button>
+      </div>)}
+    </div>:<>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 2fr auto",gap:6,marginBottom:9}}>
+        <input placeholder="Trade / subject" value={subject} onChange={e=>setSubject(e.target.value)} style={input}/>
+        <textarea placeholder="Paste contract or market differential text..." value={body} onChange={e=>setBody(e.target.value)} style={{...input,minHeight:48}}/>
+        <button disabled={!notesReady||!subject.trim()||!body.trim()} onClick={()=>{setNotes(v=>[{id:Date.now(),subject:subject.trim(),body:body.trim()},...v]);setSubject("");setBody("")}} style={btn()}>Save note</button>
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:7}}>{notes.map(n=><div key={n.id} style={{border:"1px solid #284363",padding:7,borderRadius:5,maxWidth:350}}>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}><button onClick={()=>setExpandedNote(v=>v===n.id?null:n.id)} title={n.body.slice(0,180)} style={{...btn(expandedNote===n.id),textAlign:"left"}}>{n.subject} · {n.body.slice(0,45)}{n.body.length>45?"…":""}</button><button title="Delete note" onClick={()=>setPendingDelete({type:"note",id:n.id,label:n.subject})} style={{background:"none",border:0,color:"#ef7474",cursor:"pointer",fontSize:17}}>×</button></div>
+        {expandedNote===n.id&&<div style={{whiteSpace:"pre-wrap",fontSize:11,color:"#b8cee9",paddingTop:8}}>{n.body}</div>}
+      </div>)}</div>
     </>}
-    <div style={{fontSize:9,color:"#748da9",marginTop:8}}>Differentials and notes are saved in this browser only, not yet shared through Supabase.</div>
-  </div>
+    {pendingDelete&&<div style={{marginTop:12,padding:12,border:"1px solid #a53c46",borderRadius:6,background:"#26151c"}}>
+      <div style={{fontSize:12,color:"#ffd2d2",marginBottom:9}}>Delete <b>{pendingDelete.label}</b>? This cannot be undone.</div>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8}}><button onClick={()=>setPendingDelete(null)} style={btn()}>Cancel</button><button onClick={()=>{if(pendingDelete.type==="note")setNotes(v=>v.filter(x=>x.id!==pendingDelete.id));else setDiffs(v=>v.filter(x=>x.id!==pendingDelete.id));setPendingDelete(null)}} style={{...btn(),background:"#a52231",borderColor:"#db4453",color:"white"}}>Delete</button></div>
+    </div>}
+    {(diffsError||notesError||!diffsReady||!notesReady)&&<div style={{fontSize:10,color:diffsError||notesError?"#ff8585":"#748da9",marginTop:9}}>{diffsError||notesError?"Supabase: "+(diffsError||notesError):"Loading shared data…"}</div>}
+  </div>;
 }
 
 // ─── Distance Table Browser ───────────────────────────────────────────────────
