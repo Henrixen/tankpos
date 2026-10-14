@@ -431,7 +431,12 @@ function CargoExportEditor(){
  const save=()=>{localStorage.setItem(CARGO_EXPORT_KEY,format);setStatus("Saved on this device");};
  return <div style={{display:"flex",flexDirection:"column",gap:9}}>
   <div style={{fontSize:11,color:C.faint}}>Customize the text copied by Copy all and Copy selected. Click a field to insert its placeholder; type any separators, symbols or text between fields.</div>
-  <div style={{padding:10,border:"1px solid rgba(88,166,255,.25)",borderRadius:6,background:"rgba(88,166,255,.05)",fontSize:11,lineHeight:1.7,color:"#b7d0f2"}}><b>How to replace empty fields</b><div>Write <code>{'{field|replacement}'}</code> in your template. The replacement appears only if that field is blank (including spaces). Examples: <code>{'{charterer|CNR}'}</code>, <code>{'{qty|TBN}'}</code>, <code>{'{cargo|TBC}'}</code>, <code>{'{freight|RNR}'}</code>. You can type any replacement, such as XXX.</div><div>Example: <code>{'{charterer|CNR} | {qty|TBN} {cargo|TBC} from {load|TBN} to {disch|TBN} | {from|TBN}-{to|TBN} | {freight|RNR}'}</code></div><div><b>Missing charterer and rate:</b> CNR | 15kt ULSD from Rotterdam to Thames | 15-25 Jun | RNR</div><div>This applies to Copy all and Copy selected; it does not change cargo data in Supabase. Copy CSV remains raw CSV.</div></div>
+  <div style={{padding:"8px 10px",border:"1px solid rgba(88,166,255,.20)",borderRadius:6,background:"rgba(88,166,255,.035)",fontSize:11,color:"#b7d0f2"}}>
+    <b>Empty fields — quick reference</b>
+    <table style={{width:"100%",marginTop:5,borderCollapse:"collapse",textAlign:"left"}}><thead><tr><th style={{padding:"4px 6px"}}>Template</th><th style={{padding:"4px 6px"}}>When empty</th></tr></thead><tbody>
+      {[["{charterer|CNR}","CNR"],["{freight|RNR}","RNR"],["{load|TBN}","TBN"],["{charterer}","Blank"],["{charterer|}","Blank"]].map(([example,result])=><tr key={example}><td style={{padding:"3px 6px",borderTop:"1px solid rgba(88,166,255,.10)"}}><code>{example}</code></td><td style={{padding:"3px 6px",borderTop:"1px solid rgba(88,166,255,.10)"}}>{result}</td></tr>)}
+    </tbody></table>
+  </div>
   <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{CARGO_EXPORT_FIELDS.map(f=><button key={f} onClick={()=>addField(f)} style={{...inp,width:"auto",cursor:"pointer",color:"#9ec5ff",fontSize:10,padding:"4px 7px"}}>+ {f}</button>)}</div>
   <textarea rows={3} value={format} onChange={e=>{setFormat(e.target.value);setStatus("");}} style={{...inp,resize:"vertical",lineHeight:1.6}}/>
   <div style={{fontSize:10,color:C.faint}}>Preview</div>
@@ -510,8 +515,6 @@ export default function SettingsTab() {
         </SectionCard>
 
         <SectionCard title="Cargoes / Copy Format" subtitle="Choose fields, order and separators for copied cargo lines."><CargoExportEditor/></SectionCard>
-        <SectionCard title="Cargoes / WhatsApp Format" subtitle="Copy to WA uses a fixed-width table: Charterer | Qty / Grade | Load / Disch | Laycan | Rate."><div style={{fontSize:12,color:C.tx}}>Fixed-width WhatsApp table with CNR / TBN / TBC / RNR fallbacks. Long values are shortened to fit WhatsApp. Column order is predefined.</div></SectionCard>
-        <SectionCard title="Positions / WhatsApp Format" subtitle="Copy to WA uses a fixed-width table: Vessel | DWT | Port | Date."><div style={{fontSize:12,color:C.tx}}>Fixed-width WhatsApp table. DWT is comma-formatted; missing ports and dates show TBN. Column order is predefined.</div></SectionCard>
 
         <SectionCard title="Fixing">
           <div style={{display:"flex",flexDirection:"column",gap:16}}>
