@@ -324,6 +324,7 @@ export default function TankPos(){
   const addCargoes=useCallback(async(parsed)=>{
     const stamped=parsed.map((f,i)=>normaliseCargo({
       ...f,
+      entered_by: f.entered_by || (localStorage.getItem("signal_user") || "H"),
       id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
       updated: new Date().toISOString(),
     }));
@@ -367,7 +368,7 @@ export default function TankPos(){
   if(error)console.error(error);
 },[vesselDB]);
   const addC=useCallback(async(c)=>{
-    const norm=normaliseCargo({...c,id:c.id||("c_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),updated:c.updated||new Date().toISOString()});
+    const norm=normaliseCargo({...c,entered_by:c.entered_by||(localStorage.getItem("signal_user")||"H"),id:c.id||("c_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),updated:c.updated||new Date().toISOString()});
     setCargoes(prev=>[...prev,norm]);
     const row={...norm,from:toISODate(norm.from),to:toISODate(norm.to)};
     const{error}=await supabase.from("cargoes").upsert([row],{onConflict:"id"});
