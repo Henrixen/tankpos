@@ -219,6 +219,7 @@ function GroupRow({g,editing,onStartEdit,onSaveEdit,onCancelEdit,onDelete,editLa
 const NAV_KEY="signal_navigation_config";
 const NAV_CLOUD_KEY="navigation_config";
 const DEFAULT_USER_TABS=["pos","cargo2","clients"];
+// Cargoes and the former Quotes & Fixtures view share the cargo2 tab ID.
 const UI_ZOOM_KEY="signal_ui_zoom";
 const UI_ZOOM_CLOUD_KEY="ui_zoom";
 const NAV_ITEMS=[
