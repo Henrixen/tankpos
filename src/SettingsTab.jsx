@@ -3,7 +3,7 @@ import { C } from "./constants";
 import { supabase } from "./supabaseclient";
 import UserManager from "./UserManager";
 import TagManagement from "./TagManagement";
-import { CARGO_EXPORT_KEY, CARGO_EXPORT_DEFAULT, CARGO_EXPORT_FIELDS, readCargoExportFormat, formatCargoExportRow } from "./cargoExportConfig";
+import { CARGO_EXPORT_KEY, CARGO_EXPORT_DEFAULT, CARGO_EXPORT_FIELDS, readCargoExportFormat, formatCargoExportRow, CARGO_WA_KEY, CARGO_WA_DEFAULT, readCargoWhatsAppFormat, formatCargoWhatsAppRow, POSITION_WA_KEY, POSITION_WA_DEFAULT, POSITION_WA_FIELDS, readPositionWhatsAppFormat, formatPositionWhatsAppRow } from "./cargoExportConfig";
 
 const INTERUKC_KEY = "signal_interukc_config";
 const DEFAULT_CONFIG = {
@@ -398,6 +398,32 @@ function NavigationEditor(){
  </div>
 }
 
+function WhatsAppExportEditor(){
+  const [format,setFormat]=useState(readCargoWhatsAppFormat);
+  const [saved,setSaved]=useState(false);
+  function save(){localStorage.setItem(CARGO_WA_KEY,format);setSaved(true);setTimeout(()=>setSaved(false),1800);}
+  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+    <div style={{fontSize:11,color:C.faint}}>WhatsApp formatting: *bold* · _italic_ · ~strikethrough~ · `code` · - bullet · 1. numbered · &gt; quote. Use {'{charterer|CNR}'} to replace a missing charterer with CNR; likewise {'{freight|RNR}'}. Blank fields without a fallback are omitted.</div>
+    <textarea value={format} onChange={e=>setFormat(e.target.value)} rows={5} style={{...inp,resize:"vertical",fontFamily:"monospace"}}/>
+    <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{CARGO_EXPORT_FIELDS.map(f=><button key={f} onClick={()=>setFormat(x=>x+"{"+f+"}")} style={{...inp,width:"auto",cursor:"pointer",padding:"3px 6px"}}>{'{'+f+'}'}</button>)}</div>
+    <div style={{display:"flex",gap:8}}><button onClick={save} style={{...inp,width:"auto",cursor:"pointer",color:"#43e97b"}}>Save WhatsApp format</button><button onClick={()=>{setFormat(CARGO_WA_DEFAULT);localStorage.setItem(CARGO_WA_KEY,CARGO_WA_DEFAULT);}} style={{...inp,width:"auto",cursor:"pointer"}}>Reset</button>{saved&&<span style={{color:"#43e97b",fontSize:11}}>Saved</span>}</div>
+    <div style={{fontSize:11,color:C.faint}}>Preview (sample):</div><pre style={{whiteSpace:"pre-wrap",fontSize:11,margin:0,color:C.tx}}>{format.replace(/\{([a-z_]+)(?:\|([^}]*))?\}/gi,(token,key,fallback)=>{const sample={charterer:"",qty:"15kt",cargo:"Gasoil",load:"Antwerp",disch:"Brest",from:"14 Oct",to:"14 Oct",freight:"",comment:""};return sample[key.toLowerCase()]||fallback||"";})}</pre>
+  </div>;
+}
+
+function PositionsWhatsAppEditor(){
+  const [format,setFormat]=useState(readPositionWhatsAppFormat);
+  const [saved,setSaved]=useState(false);
+  const sample={vessel:"STOC BALTIC",operator:"Stoc",openPort:"ARA",date:"17 Oct",dwt:"6800",built:"2009",coating:"Epoxy",comment:"",tag:""};
+  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+    <div style={{fontSize:11,color:C.faint}}>WhatsApp: *bold* · _italic_ · ~strikethrough~ · `code` · - bullet · &gt; quote. Use {'{openPort|TBN}'} for a missing open port. Empty fields without a fallback become blank.</div>
+    <textarea value={format} onChange={e=>setFormat(e.target.value)} rows={5} style={{...inp,resize:"vertical",fontFamily:"monospace"}}/>
+    <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{POSITION_WA_FIELDS.map(f=><button key={f} onClick={()=>setFormat(x=>x+"{"+f+"}")} style={{...inp,width:"auto",cursor:"pointer",padding:"3px 6px"}}>{'{'+f+'}'}</button>)}</div>
+    <div style={{display:"flex",gap:8}}><button onClick={()=>{localStorage.setItem(POSITION_WA_KEY,format);setSaved(true);setTimeout(()=>setSaved(false),1800);}} style={{...inp,width:"auto",cursor:"pointer",color:"#43e97b"}}>Save Positions WA format</button><button onClick={()=>{setFormat(POSITION_WA_DEFAULT);localStorage.setItem(POSITION_WA_KEY,POSITION_WA_DEFAULT);}} style={{...inp,width:"auto",cursor:"pointer"}}>Reset</button>{saved&&<span style={{color:"#43e97b",fontSize:11}}>Saved</span>}</div>
+    <div style={{fontSize:11,color:C.faint}}>Preview (sample):</div><pre style={{whiteSpace:"pre-wrap",fontSize:11,margin:0,color:C.tx}}>{formatPositionWhatsAppRow(sample,format)}</pre>
+  </div>;
+}
+
 function CargoExportEditor(){
  const [format,setFormat]=useState(readCargoExportFormat);
  const [status,setStatus]=useState("");
@@ -483,6 +509,8 @@ export default function SettingsTab() {
         </SectionCard>
 
         <SectionCard title="Cargoes / Copy Format" subtitle="Choose fields, order and separators for copied cargo lines."><CargoExportEditor/></SectionCard>
+        <SectionCard title="Cargoes / WhatsApp Format" subtitle="Used by Copy to WA in Cargoes."><WhatsAppExportEditor/></SectionCard>
+        <SectionCard title="Positions / WhatsApp Format" subtitle="Used by Copy to WA in Positions."><PositionsWhatsAppEditor/></SectionCard>
 
         <SectionCard title="Fixing">
           <div style={{display:"flex",flexDirection:"column",gap:16}}>
