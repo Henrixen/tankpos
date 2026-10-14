@@ -46,7 +46,8 @@ export default function TankPos(){
 
   function onCargoSearch(term){
     clearTimeout(searchTimer.current);
-    searchTimer.current=setTimeout(()=>fetchCargoes(term),300);
+    // CargoesMaster filters the fully loaded dataset locally.
+    // Never replace it with a truncated server search result.
   }
   // Load vessels from local storage, cargoes from Supabase
   useEffect(()=>{
@@ -61,24 +62,29 @@ export default function TankPos(){
 
   useEffect(()=>{const fn=()=>setMobile(isMobile());window.addEventListener("resize",fn);return()=>window.removeEventListener("resize",fn);},[]);
 
+  // Supabase/PostgREST returns at most 1,000 rows per request. Fetch every
+  // batch so searches, initials and other filters operate on the full dataset.
+  const cargoLoadToken=useRef(0);
   async function fetchCargoes(searchTerm=""){
-    if(searchTerm.trim()){
-      const t=searchTerm.trim();
-      const{data,error}=await supabase.from("cargoes").select("*")
-        .or(`charterer.ilike.%${t}%,vessel.ilike.%${t}%,load.ilike.%${t}%,disch.ilike.%${t}%,cargo.ilike.%${t}%,status.ilike.%${t}%`)
-        .range(0,499).order("updated",{ascending:false});
-      if(error){console.error(error);return;}
-      setCargoes(data.map(normaliseCargo));
-    } else {
-      const[{data,error},{count}]=await Promise.all([
-        supabase.from("cargoes").select("*").range(0,199).order("updated",{ascending:false}),
-        supabase.from("cargoes").select("*",{count:"exact",head:true})
-      ]);
-      if(error){console.error(error);return;}
-      setCargoes(data.map(normaliseCargo));
-      setHasMore(data.length===200);
-      if(count!=null)setCargoTotal(count);
+    const token=++cargoLoadToken.current;
+    const batchSize=1000;
+    let offset=0;
+    let all=[];
+    setHasMore(true);
+    while(true){
+      const {data,error}=await supabase.from("cargoes").select("*")
+        .order("updated",{ascending:false})
+        .order("id",{ascending:true})
+        .range(offset,offset+batchSize-1);
+      if(token!==cargoLoadToken.current)return;
+      if(error){console.error("Cargo loading failed",error);setHasMore(false);return;}
+      const rows=data||[];
+      all.push(...rows.map(normaliseCargo));
+      setCargoes([...all]);
+      offset+=rows.length;
+      if(rows.length<batchSize)break;
     }
+    if(token===cargoLoadToken.current){setHasMore(false);setCargoTotal(all.length);}
   }
 
   async function fetchPositions(){
@@ -150,11 +156,8 @@ export default function TankPos(){
   }));
 }
   async function loadMoreCargoes(){
-    const{data,error}=await supabase.from("cargoes").select("*")
-      .range(cargoes.length,cargoes.length+199).order("updated",{ascending:false});
-    if(error){console.error(error);return;}
-    if(data.length<200) setHasMore(false);
-    setCargoes(prev=>[...prev,...data.map(normaliseCargo)]);
+    // All pages are loaded by fetchCargoes; kept for legacy callers.
+    return;
   }
 
   const renameV=useCallback((oldName,newName)=>{
