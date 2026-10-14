@@ -366,10 +366,11 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
     setTimeout(()=>setStatus(null),2200);
   }
 
-  function addLeg(){
+  function addLeg(group="Europe"){
     const key = "custom_" + Date.now();
     setRows(prev => [...prev, { key, label:"New route", freight:"", nmBallast:"0", nmLaden:"", nmRepo:"0", pdaLoad:"0", pdaDisch:"0", euEts:"0", commission:"5", speed:String(defaults.speed??""), cons:String(defaults.consLaden??""), tce:null }]);
     setExpanded(p => ({ ...p, [key]: true }));
+    setRouteGroups(p=>({...p,[key]:group}));
   }
 
   return (
@@ -384,21 +385,21 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
           </button>
           <button onClick={saveAll} title="Save all benchmark and custom routes"
             style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:4, border:"1px solid rgba(63,185,80,0.4)", background:"rgba(63,185,80,0.12)", color:C.green, cursor:"pointer", fontFamily:"inherit" }}>💾 Save all</button>
-          <button onClick={addLeg} title="Add a custom route"
-            style={{ fontSize:13, fontWeight:700, padding:"1px 8px", borderRadius:4, border:"1px solid "+C.bd, background:"transparent", color:C.blue, cursor:"pointer", fontFamily:"inherit" }}>+ Add leg</button>
+          <button onClick={()=>addLeg("Europe")} title="Add a custom route"
+            style={{ fontSize:13, fontWeight:700, padding:"1px 8px", borderRadius:4, border:"1px solid "+C.bd, background:"transparent", color:C.blue, cursor:"pointer", fontFamily:"inherit" }}>+ Add Europe leg</button>
         </div>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,padding:8}}>
       {["Europe","Deepsea"].map(group=><div key={group} style={{minWidth:0,border:"1px solid "+C.bd2,borderRadius:5}}>
-      <div style={{padding:"6px 9px",fontSize:12,color:C.blue,fontWeight:700,background:C.bg3}}>{group} <span style={{color:C.faint,fontWeight:400}}>({rows.filter(r=>groupFor(r)===group).length})</span></div>
-      <div style={{display:"flex",flexDirection:"column",maxHeight:560,overflowY:"auto"}}>
-        {rows.filter(r=>groupFor(r)===group).map(r=>{
+      <div style={{padding:"6px 9px",fontSize:12,color:C.blue,fontWeight:700,background:C.bg3}}>{group} <span style={{color:C.faint,fontWeight:400}}>({rows.filter(r=>groupFor(r)===group).length})</span><button onClick={()=>addLeg(group)} style={{float:"right",background:"transparent",color:C.blue,border:"1px solid "+C.bd,borderRadius:4,cursor:"pointer",fontSize:10}}>+ Add leg</button></div>
+      <div style={{display:"flex",flexDirection:"column",overflow:"visible"}}>
+        {rows.filter(r=>groupFor(r)===group).sort((a,b)=>Number(primaryKeys.has(b.key))-Number(primaryKeys.has(a.key))).map((r,routeIndex)=>{
           const isOpen = !!expanded[r.key];
           return (
-          <div key={r.key} style={{ borderBottom:"1px solid "+C.bd, padding:"7px 12px" }}>
+          <div key={r.key} style={{ borderBottom:primaryKeys.has(r.key)&&!primaryKeys.has(rows.filter(x=>groupFor(x)===group).sort((a,b)=>Number(primaryKeys.has(b.key))-Number(primaryKeys.has(a.key)))[routeIndex+1]?.key)?"2px solid "+C.blue:"1px solid "+C.bd, padding:"7px 12px" }}>
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-              <select aria-label="Voyage group" value={groupFor(r)} onChange={e=>setRouteGroups(p=>({...p,[r.key]:e.target.value}))} style={{background:C.bg3,color:C.dim,border:"1px solid "+C.bd2,borderRadius:3,fontSize:9,width:69}}><option>Europe</option><option>Deepsea</option></select>
+              
               <button onClick={()=>setExpanded(p=>({...p,[r.key]:!p[r.key]}))}
                 style={{background:"none", border:"none", color:C.faint, cursor:"pointer", fontSize:16, padding:0, width:18}}>
                 {isOpen?"▾":"▸"}
@@ -469,24 +470,44 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
         );})}
       </div></div>)}
       </div>
-      <div style={{padding:"9px 12px",borderTop:"1px solid "+C.bd2}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.blue,marginBottom:6}}>Benchmark differentials · Europe</div>
-        <div style={{fontSize:10,color:C.faint,marginBottom:7}}>Indicative freight and TCE differences against a selected primary benchmark. Each route uses its own voyage inputs; these differences are not automatically applied as rates.</div>
-        <select value={diffBase} onChange={e=>setDiffBase(e.target.value)} style={{background:C.bg3,color:C.tx,border:"1px solid "+C.bd,padding:4,borderRadius:4,marginBottom:7}}>
-          {rows.filter(r=>primaryKeys.has(r.key)).map(r=><option key={r.key} value={r.key}>{r.label}</option>)}
-        </select>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:8}}>
-          <div><div style={{fontWeight:700,color:C.tx,fontSize:11,marginBottom:4}}>Five main benchmarks</div>
-          {rows.filter(r=>primaryKeys.has(r.key)).map(r=><div key={r.key} style={{display:"flex",justifyContent:"space-between",borderBottom:"1px solid "+C.bd2,padding:"5px 2px",fontSize:11}}><span>{r.label}</span><span style={{color:C.green}}>{r.tce==null?"—":"$"+Math.round(r.tce).toLocaleString("nb-NO")+"/d"}</span></div>)}
-          </div><div><div style={{fontWeight:700,color:C.tx,fontSize:11,marginBottom:4}}>Additional legs · vs selected benchmark</div>
-          {rows.filter(r=>!primaryKeys.has(r.key)).map(r=>{const b=rows.find(x=>x.key===diffBase);const df=Number(r.freight)-Number(b?.freight);const dt=Number(r.tce)-Number(b?.tce);return <div key={r.key} style={{display:"flex",justifyContent:"space-between",gap:5,borderBottom:"1px solid "+C.bd2,padding:"5px 2px",fontSize:11}}><span>{r.label}</span><span style={{whiteSpace:"nowrap",color:C.faint}}>{r.freight&&b?.freight?(df>=0?"+":"")+Math.round(df).toLocaleString("nb-NO")+" USD":"—"} / {r.tce!=null&&b?.tce!=null?(dt>=0?"+":"")+Math.round(dt).toLocaleString("nb-NO")+" TCE":"—"}</span></div>})}
-          </div>
-        </div>
-      </div>
+      <DifferentialWorkbench rows={rows} primaryKeys={primaryKeys}/>
+
     </div>
   );
 }
 
+
+function DifferentialWorkbench({rows,primaryKeys}){
+  const [tab,setTab]=useState("differentials");
+  const [diffs,setDiffs]=useState(()=>{try{return JSON.parse(localStorage.getItem("tankpos_tce_differentials")||"[]")}catch{return []}});
+  const [notes,setNotes]=useState(()=>{try{return JSON.parse(localStorage.getItem("tankpos_tce_diff_notes")||"[]")}catch{return []}});
+  const [subject,setSubject]=useState("");const [body,setBody]=useState("");
+  const [expandedNote,setExpandedNote]=useState(null);
+  useEffect(()=>{localStorage.setItem("tankpos_tce_differentials",JSON.stringify(diffs))},[diffs]);
+  useEffect(()=>{localStorage.setItem("tankpos_tce_diff_notes",JSON.stringify(notes))},[notes]);
+  const update=(id,field,value)=>setDiffs(v=>v.map(x=>x.id===id?{...x,[field]:value}:x));
+  const input={background:"#071426",border:"1px solid #284363",color:"#c7dfff",borderRadius:3,padding:"5px 6px",fontSize:11,minWidth:0,width:"100%",boxSizing:"border-box"};
+  const refs=rows.filter(r=>primaryKeys.has(r.key));
+  return <div style={{padding:12,borderTop:"1px solid #284363"}}>
+    <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:10}}>
+      <button onClick={()=>setTab("differentials")} style={{...input,width:"auto",color:tab==="differentials"?"#fff":"#81a6d4"}}>Route differentials</button>
+      <button onClick={()=>setTab("notes")} style={{...input,width:"auto",color:tab==="notes"?"#fff":"#81a6d4"}}>Market / Contract notes ({notes.length})</button>
+      {tab==="differentials"&&<button onClick={()=>setDiffs(v=>[...v,{id:Date.now()+"-"+Math.random(),leg:"",base:refs[0]?.key||"",diff:"",comment:""}])} style={{...input,width:"auto",marginLeft:"auto"}}>+ Add differential</button>}
+    </div>
+    {tab==="differentials"?<><div style={{fontSize:10,color:"#91a9c9",marginBottom:8}}>Enter negotiated USD lump-sum premiums or discounts relative to a reference leg. Values are manually maintained and do not change automatically with benchmark freight.</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>{[0,1].map(side=><div key={side} style={{display:"flex",flexDirection:"column",gap:5}}>{diffs.filter((_,i)=>i%2===side).map(d=><div key={d.id} style={{display:"grid",gridTemplateColumns:"1.1fr 1fr .6fr 1fr 20px",gap:4,alignItems:"center"}}>
+        <input aria-label="Additional route" placeholder="Additional leg" value={d.leg} onChange={e=>update(d.id,"leg",e.target.value)} style={input}/>
+        <select aria-label="Reference benchmark" value={d.base} onChange={e=>update(d.id,"base",e.target.value)} style={input}>{refs.map(r=><option key={r.key} value={r.key}>{r.label}</option>)}</select>
+        <input aria-label="USD differential" placeholder="+/- USD" value={d.diff} onChange={e=>update(d.id,"diff",e.target.value)} style={input}/>
+        <input aria-label="Comment" placeholder="Comment" value={d.comment} onChange={e=>update(d.id,"comment",e.target.value)} style={input}/>
+        <button title="Remove differential" onClick={()=>setDiffs(v=>v.filter(x=>x.id!==d.id))} style={{background:"none",border:0,color:"#ef7474",cursor:"pointer"}}>×</button>
+      </div>)}</div>)}</div></>:<>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 2fr auto",gap:6,marginBottom:9}}><input placeholder="Trade / subject" value={subject} onChange={e=>setSubject(e.target.value)} style={input}/><textarea placeholder="Paste contract or market differential text..." value={body} onChange={e=>setBody(e.target.value)} style={{...input,minHeight:48}}/><button disabled={!subject.trim()||!body.trim()} onClick={()=>{setNotes(v=>[{id:Date.now(),subject:subject.trim(),body:body.trim()},...v]);setSubject("");setBody("")}} style={{...input,width:"auto"}}>Save note</button></div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:7}}>{notes.map(n=><div key={n.id} style={{border:"1px solid #284363",padding:7,borderRadius:5,maxWidth:300}}><button onClick={()=>setExpandedNote(v=>v===n.id?null:n.id)} title={n.body.slice(0,180)} style={{...input,width:"auto"}}>{n.subject} · {n.body.slice(0,45)}{n.body.length>45?"…":""}</button><button onClick={()=>setNotes(v=>v.filter(x=>x.id!==n.id))} style={{background:"none",border:0,color:"#ef7474"}}>×</button>{expandedNote===n.id&&<div style={{whiteSpace:"pre-wrap",fontSize:11,color:"#b8cee9",paddingTop:8}}>{n.body}</div>}</div>)}</div>
+    </>}
+    <div style={{fontSize:9,color:"#748da9",marginTop:8}}>Differentials and notes are saved in this browser only, not yet shared through Supabase.</div>
+  </div>
+}
 
 // ─── Distance Table Browser ───────────────────────────────────────────────────
 function DistanceTable(){
