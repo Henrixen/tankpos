@@ -1,4 +1,5 @@
 import React,{useEffect,useMemo,useRef,useState,Suspense} from "react";
+import { createPortal } from "react-dom";
 import { C } from "./constants";
 import { toTCase,normaliseQty,fmtDateShort,fmtFreight } from "./utils";
 import { supabase } from "./supabaseclient";
@@ -142,11 +143,11 @@ function TagCell({id,value,onUpdate}){
  function addAndPick(){const t=newTag.trim().toUpperCase();if(!t)return;try{const custom=JSON.parse(localStorage.getItem("signal_custom_tags")||"[]");if(!custom.includes(t)&&!PRESET_TAGS.includes(t))localStorage.setItem("signal_custom_tags",JSON.stringify([...custom,t]));}catch{}onUpdate(id,"tag",t);setNewTag("");setOpen(false);}
  const activeColor=value?tagColor(value):null;
  return <><td style={{...POS_TD,textAlign:"center",padding:0}}><button ref={ref} onClick={show} style={{width:"100%",height:32,display:"flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box",padding:"0 4px",background:value?(activeColor?activeColor+"2b":"rgba(88,166,255,.14)"):"transparent",border:"none",borderRadius:0,color:value?(activeColor||C.blue):C.faint,fontSize:11,fontWeight:value?800:600,cursor:"pointer",textTransform:"uppercase",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{value?String(value).toUpperCase():<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,border:"1px solid rgba(159,195,245,.45)",borderRadius:3,color:"rgba(159,195,245,.8)",fontSize:15,fontWeight:500,lineHeight:1}}>+</span>}</button></td>
- {open&&<><div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"fixed",left:pos.left,top:pos.top,zIndex:19999,width:170,background:"#071223",border:"1px solid "+C.blue,borderRadius:7,padding:6,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}>
+ {open&&createPortal(<><div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:19990}}/><div style={{position:"fixed",left:pos.left,top:pos.top,zIndex:19999,width:170,background:"#071223",border:"1px solid "+C.blue,borderRadius:7,padding:6,boxShadow:"0 12px 30px rgba(0,0,0,.7)"}}>
  {list.map(t=>{const tc=tagColor(t);return <button key={t} onClick={()=>{onUpdate(id,"tag",value===t?"":t);setOpen(false)}} style={{display:"flex",alignItems:"center",gap:6,width:"100%",textAlign:"left",padding:"6px 7px",marginBottom:2,background:value===t?"rgba(88,166,255,.16)":"transparent",border:"1px solid "+(value===t?C.blue:C.bd2),borderRadius:3,color:tc||(value===t?"#fff":"#9fc3f5"),fontSize:11,fontWeight:700,cursor:"pointer"}}>{tc&&<span style={{width:6,height:6,borderRadius:"50%",background:tc,flexShrink:0}}/>}{t}</button>;})}
  <input value={newTag} onChange={e=>setNewTag(e.target.value)} onClick={e=>e.stopPropagation()} onKeyDown={e=>e.key==="Enter"&&addAndPick()} placeholder="New tag + Enter"
    style={{width:"100%",marginTop:3,background:"#0a1526",border:"1px solid "+C.bd2,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:9,fontWeight:600,padding:"6px 7px",outline:"none",boxSizing:"border-box"}}/>
- </div></>}</>;
+ </div></>,document.body)}</>;
 }
 function RegionFilterInput({label,value,setter}){
  const [open,setOpen]=useState(false),[q,setQ]=useState("");
@@ -316,6 +317,8 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,sea
  const pageRows=useMemo(()=>filtered.slice(0,page*PAGE_SIZE),[filtered,page]);
  const allCols=[["status","Status",3.5],["ex_region","Ex Region",5.5],["to_region","To Region",5.5],["p_and_c","P&C",3],["intelligence","Intel",4],["vessel","Vessel",7],["charterer","Charterer",6.5],["qty","Qty",4],["cargo","Cargo",6],["load","Load",8],["disch","Disch",7.5],["from","From",4.5],["to","To",4.5],["freight","Freight",7],["comment","Comment",9],["tag","Tag",5],["source","Source",5],["updated","Updated",6.5]];
  const shown=allCols.filter(([k])=>visible.has(k));
+ // Normalize visible widths so hiding columns never lets the trailing delete column expand.
+ const shownWidthTotal=shown.reduce((sum,[, ,width])=>sum+width,0)||1;
  const copyFields=["vessel","charterer","qty","cargo","load","disch","from","to","freight","comment"];
  async function copyCargoRows(rows,csv=false){
    const escapeCsv=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
@@ -329,6 +332,8 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,sea
   <style>{`
     @media (max-width: 700px){
       .qf-top{height:auto!important;display:block!important;}
+      .qf-panel-header{display:flex!important;flex-wrap:wrap!important;gap:6px!important;}
+      .qf-panel-header > div{grid-column:auto!important;}
       .qf-header-chart-tabs{width:auto!important;margin-left:0!important;}
       .qf-mobile-fold{display:block!important;margin-bottom:6px;background:${C.bg2};border:1px solid ${C.bd};border-radius:7px;overflow:hidden;}
       .qf-mobile-fold > summary{display:flex!important;align-items:center;justify-content:space-between;list-style:none;padding:10px 12px;color:#79c0ff;font-size:12px;font-weight:800;cursor:pointer;}
@@ -354,10 +359,11 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,sea
       .qf-table-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;}
     }
     @media (min-width: 701px){
+      .qf-top{display:grid!important;grid-template-columns:minmax(0,25fr) minmax(0,40fr) minmax(0,35fr)!important;gap:10px!important;}
       .qf-mobile-fold{display:block!important;position:relative!important;height:100%!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;overflow:hidden!important;}
-      .qf-parse-fold{flex:0 0 25%!important;}
-      .qf-filter-fold{flex:0 0 40%!important;}
-      .qf-chart-fold{flex:1 1 35%!important;}
+      .qf-parse-fold{grid-column:1!important;flex:none!important;}
+      .qf-filter-fold{grid-column:2!important;flex:none!important;}
+      .qf-chart-fold{grid-column:3!important;flex:none!important;}
       .qf-mobile-fold > summary{display:none!important;}
       .qf-mobile-fold > div{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important;box-sizing:border-box!important;overflow:hidden!important;}
       .qf-mobile-fold .qf-parse,.qf-mobile-fold .qf-filters,.qf-mobile-fold .qf-chart{flex:none!important;width:100%!important;height:100%!important;min-height:0!important;overflow:hidden!important;}
@@ -375,7 +381,7 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,sea
       .qf-actions-main,.qf-actions-search{display:contents!important;}
     }
   `}</style>
-     <div style={{display:"grid",gridTemplateColumns:"minmax(0,65fr) minmax(0,35fr)",alignItems:"center",gap:8}}><div style={{display:"flex",gap:6}}><button onClick={()=>{setSection("all");setVisualTab("chart")}} style={btn(section==="all")}>Cargoes · All</button><button onClick={()=>{setSection("inter");setVisualTab("rates")}} style={btn(section==="inter")}>Intermediate</button></div><div className="qf-header-chart-tabs" style={{width:"100%",display:"flex",alignItems:"center",gap:5,boxSizing:"border-box",paddingLeft:0}}><button style={btn(visualTab==="rates")} onClick={()=>setVisualTab("rates")}>Rate Matrix</button><button style={btn(visualTab==="chart")} onClick={()=>setVisualTab("chart")}>Cargo Count</button><span style={{marginLeft:"auto"}}>{visualTab==="rates"&&<BunkerHeader/>}</span></div></div>
+     <div className="qf-panel-header" style={{display:"grid",gridTemplateColumns:"minmax(0,25fr) minmax(0,40fr) minmax(0,35fr)",alignItems:"center",gap:10}}><div style={{gridColumn:"1 / span 2",display:"flex",gap:6}}><button onClick={()=>{setSection("all");setVisualTab("chart")}} style={btn(section==="all")}>Cargoes · All</button><button onClick={()=>{setSection("inter");setVisualTab("rates")}} style={btn(section==="inter")}>Intermediate</button></div><div className="qf-header-chart-tabs" style={{gridColumn:"3",width:"100%",display:"flex",alignItems:"center",gap:5,boxSizing:"border-box",paddingLeft:0}}><button style={btn(visualTab==="rates")} onClick={()=>setVisualTab("rates")}>Rate Matrix</button><button style={btn(visualTab==="chart")} onClick={()=>setVisualTab("chart")}>Cargo Count</button><span style={{marginLeft:"auto"}}>{visualTab==="rates"&&<BunkerHeader/>}</span></div></div>
 <div className="qf-top" style={{display:"flex",gap:10,height:215,minHeight:0,overflow:"hidden"}}>
    <details className="qf-mobile-fold qf-parse-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Paste / Parse</summary><div className="qf-parse" style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}><div className="qf-parse-tags" style={{...card,padding:"6px 8px",display:"flex",gap:4,flexWrap:"wrap",alignContent:"flex-start",flex:"0 0 auto",overflow:"visible"}}>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={{...btn(parseTag===t),color:tc||"#9fc3f5",borderColor:parseTag===t?(tc||C.blue):C.bd,background:parseTag===t?(tc?tc+"22":"rgba(88,166,255,.18)"):C.bg3}}>{t}</button>})}</div><div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await (section==="inter"?parseInter:onAddCargoes)(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div></details>
    <details className="qf-mobile-fold qf-filter-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Filters</summary><div className="qf-filters" style={{flex:"0 0 40%",minWidth:0,...card,padding:8,display:"grid",gridTemplateColumns:".86fr .8fr .8fr .8fr 1.4fr 1.4fr",gap:6,overflow:"hidden",position:"relative",zIndex:20,alignContent:"start"}}>
@@ -398,7 +404,7 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,sea
   <div style={POS_WRAP} className="pos-hover-rows qf-table-wrap">
    <style>{`.pos-hover-rows tr:hover{background:rgba(88,166,255,0.07)!important;}`}</style>
    <table className="qf-table" style={POS_TABLE}>
-    <colgroup><col style={{width:"1.4%"}}/>{shown.map(([k,l,w])=><col key={k} style={{width:w+"%"}}/>)}<col style={{width:"1.4%"}}/><col style={{width:"1.4%"}}/></colgroup>
+    <colgroup><col style={{width:"2%"}}/>{shown.map(([k,l,w])=><col key={k} style={{width:(94*w/shownWidthTotal)+"%"}}/>)}<col style={{width:"2%"}}/><col style={{width:"2%"}}/></colgroup>
     <thead><tr><th onClick={()=>{const ids=pageRows.map(x=>x.id);const all=ids.length>0&&ids.every(id=>selected.has(id));setSelected(p=>{const n=new Set(p);ids.forEach(id=>all?n.delete(id):n.add(id));return n})}} style={{...POS_TH,textAlign:"center",cursor:"pointer",padding:"3px 1px",lineHeight:"11px"}}><div style={{fontSize:11,color:pageRows.length>0&&pageRows.every(x=>selected.has(x.id))?"#4fc3f7":C.faint}}>{pageRows.length>0&&pageRows.every(x=>selected.has(x.id))?"[✓]":"[ ]"}</div><div style={{fontSize:7,color:C.faint}}>ALL</div></th>{shown.map(([k,l])=><th key={k} onClick={()=>{if(sort===k)setDir(d=>-d);else{setSort(k);setDir(-1)}}} title={`Sort by ${l}`} style={{...POS_TH,textAlign:["status","p_and_c","intelligence","from","to","tag","updated"].includes(k)?"center":"left",cursor:"pointer",userSelect:"none"}}>{l}{sort===k?(dir===-1?" ▼":" ▲"):""}</th>)}<th style={POS_TH}/><th style={POS_TH}/></tr></thead>
     <tbody>{pageRows.map((c,i)=>{
       const rowBg=POS_ROW(i);
