@@ -1,3 +1,4 @@
+import { formatPositionWhatsAppRow } from "./cargoExportConfig";
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react";
 import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
@@ -1174,6 +1175,22 @@ function AddCargoModal({onSave,onClose}){
       </div>
     </>
   );
+}
+
+function CopyPositionsWAButton({rows,fmtDateShort}){
+  const [copied,setCopied]=React.useState(false);
+  const [fallback,setFallback]=React.useState("");
+  async function copy(){
+    if(!rows.length)return;
+    const txt=rows.map(v=>formatPositionWhatsAppRow({...v,date:fmtDateShort?fmtDateShort(v.date):v.date})).join("\n\n");
+    try{await navigator.clipboard.writeText(txt);setCopied(true);setTimeout(()=>setCopied(false),2300);}
+    catch{setFallback(txt);}
+  }
+  return <>
+    <button onClick={copy} title="Copy selected positions, or all filtered positions, using the WhatsApp template in Settings" style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(67,233,123,.4)",background:"rgba(67,233,123,.09)",color:"#43e97b",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Copy to WA</button>
+    {copied&&<div role="status" style={{position:"fixed",right:20,bottom:24,zIndex:99999,padding:"8px 13px",border:"1px solid #16a34a",borderRadius:5,background:"#071b16",color:"#34d399",fontSize:12,fontWeight:800,pointerEvents:"none"}}>✓ WhatsApp Copied!</div>}
+    {fallback&&<div style={{position:"fixed",inset:0,zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",background:"#000a"}}><div style={{padding:18,background:"#0a1628",border:"1px solid #58a6ff",borderRadius:8,width:500,maxWidth:"95vw"}}><div style={{fontSize:12,marginBottom:8}}>Select and copy the WhatsApp text:</div><textarea readOnly autoFocus onFocus={e=>e.target.select()} value={fallback} style={{width:"100%",height:240,boxSizing:"border-box"}}/><button onClick={()=>setFallback("")}>Close</button></div></div>}
+  </>;
 }
 
 function CopyPositionsButton({filtV,fmtDateShort}){
@@ -2702,7 +2719,7 @@ const filtV=useMemo(()=>{
                       border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.72)":"rgba(88,166,255,.18)"),
                       display:"flex",alignItems:"center",justifyContent:"center",fontSize:mobile?21:24,fontWeight:850,color:pinError?"#ff6b6b":"#79c0ff",
                       boxShadow:pinInput.length>i&&!pinError?"0 0 18px rgba(88,166,255,.12)":"none"
-                    }}><span style={{display:"block",fontSize:mobile?31:36,lineHeight:1,transform:"translateY(3px)"}}>{pinInput.length>i?"*":""}</span></div>)}
+                    }}><span style={{display:"block",fontSize:mobile?31:36,lineHeight:1,transform:"translateY(-1px)"}}>{pinInput.length>i?"*":""}</span></div>)}
                   </div>
 
                   <style>{`
@@ -3348,6 +3365,7 @@ const filtV=useMemo(()=>{
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
                   <CopyPositionsButton filtV={filtV} fmtDateShort={fmtDateShort}/>
+                  <CopyPositionsWAButton rows={selVessels.size ? filtV.filter(v=>selVessels.has(v.vessel)) : filtV} fmtDateShort={fmtDateShort}/>
                   {selVessels.size>0&&(
                     <>
                       <button
@@ -3890,6 +3908,9 @@ const filtV=useMemo(()=>{
         )}
         {tab==="settings"&&(
           <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px"}}>
+            <TagManager/>
+            <div style={{height:1,background:C.bd2,margin:"4px 0"}}/>
+            {/* Original settings component */}
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
           </div>
         )}
