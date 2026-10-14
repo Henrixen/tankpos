@@ -6,7 +6,6 @@ import { enrichV, normaliseCargo, mergeVessels, toISODate } from "./utils";
 import { saveV, saveSnapshot, loadHistory } from "./supabaseHelpers";
 import { v4 as uuidv4 } from 'uuid';
 import DesktopApp from "./DesktopApp";
-import { fetchWithCache } from "./offlineCache";
 
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
@@ -30,21 +29,16 @@ export default function TankPos(){
     let from = 0;
     const pageSize = 1000;
     while(true){
-      const {data, error} = await supabase.from("vessels_db").select("vessel,imo,dwt,built,loa,beam,cbm,coating,ice_class,fuel,operator").range(from, from+pageSize-1);
+      const {data, error} = await supabase.from("vessels_db").select("vessel,dwt,built,loa,beam,cbm,ice_class,fuel,operator").range(from, from+pageSize-1);
       if(error || !data || data.length === 0) break;
       allRows = [...allRows, ...data];
       if(data.length < pageSize) break;
       from += pageSize;
     }
     const map = {};
-    const imoMap = {};
-    allRows.forEach(r => {
-      if(r.vessel) map[r.vessel.toLowerCase().trim()] = r;
-      if(r.imo) imoMap[String(r.imo).trim()] = r;
-    });
+    allRows.forEach(r => { if(r.vessel) map[r.vessel.toLowerCase().trim()] = r; });
     setVesselDB(map);
     window.vesselDB = map;
-    window.vesselDBByIMO = imoMap;
     setVesselDBLoaded(true);
     setVesselDBLoading(false);
     console.log("vesselDB loaded on demand:", allRows.length);
@@ -52,148 +46,39 @@ export default function TankPos(){
 
   function onCargoSearch(term){
     clearTimeout(searchTimer.current);
-    // Multi-term search: comma=OR groups, space=AND within each group.
-    // Server query fetches a broad result set for each OR group, then
-    // client-side filter (cTokens in DesktopApp) applies the exact AND logic.
-    // If the full dataset is already loaded we skip the server call entirely.
-    const trimmed = term.trim();
-    if (!trimmed) {
-      // Empty search — reload the default first page
-      searchTimer.current = setTimeout(() => fetchCargoes(""), 300);
-      return;
-    }
-    // Build per OR-group queries: for each comma-separated group take the
-    // first meaningful word and do a broad server-side OR filter.
-    searchTimer.current = setTimeout(async () => {
-      const orGroups = trimmed.toLowerCase()
-        .split(",")
-        .map(g => g.trim().split(/\s+/).filter(Boolean))
-        .filter(g => g.length);
-      // Collect all unique first-words across OR groups for a broad fetch
-      const keywords = [...new Set(orGroups.map(g => g[0]))];
-      try {
-        const orClauses = keywords.flatMap(kw =>
-          ["charterer","vessel","load","disch","cargo","status"].map(col => `${col}.ilike.%${kw}%`)
-        ).join(",");
-        const { data, error } = await supabase.from("cargoes").select("*")
-          .or(orClauses)
-          .range(0, 999)
-          .order("updated", { ascending: false });
-        if (error) { console.error(error); return; }
-        setCargoes(data.map(r => ({ ...normaliseCargo(r), entered_by: r.entered_by, added: r.added, changed: r.changed })));
-      } catch (e) { console.error("cargoSearch:", e); }
-    }, 350);
+    searchTimer.current=setTimeout(()=>fetchCargoes(term),300);
   }
-  // Load vessels from local storage, cargoes from Supabase.
-  // Sequenced (not simultaneous) to reduce the initial Supabase connection
-  // burst — positions_latest is the heaviest query, so it goes first while
-  // the pool is least contended.
+  // Load vessels from local storage, cargoes from Supabase
   useEffect(()=>{
-  (async () => {
-    await fetchPositions();
-    await fetchCargoes();
-  })();
+  fetchPositions();
+  fetchCargoes();
 },[]);
 
-  // vesselDB is no longer auto-loaded on startup — it's large (paginated,
-  // ~5-6 requests) and only needed for Parse/vessel-detail lookups.
-  // loadVesselDB() is still called on-demand via onLoadVesselDB in DesktopApp.
+  // Auto-load vesselDB on startup
+  useEffect(() => {
+    loadVesselDB();
+  }, []);
 
   useEffect(()=>{const fn=()=>setMobile(isMobile());window.addEventListener("resize",fn);return()=>window.removeEventListener("resize",fn);},[]);
 
   async function fetchCargoes(searchTerm=""){
-    const t=searchTerm.trim();
-
-    // Load the complete cargo table in pages. Both Cargoes.jsx and
-    // QuotesFixtures.jsx receive this same canonical Supabase-backed array.
-    // Do not use the old 200-row localStorage cache here.
-    const pageSize=1000;
-    let all=[];
-    let from=0;
-
-    while(true){
-      let q=supabase.from("cargoes").select("*");
-      if(t){
-        q=q.or(`charterer.ilike.%${t}%,vessel.ilike.%${t}%,load.ilike.%${t}%,disch.ilike.%${t}%,cargo.ilike.%${t}%,status.ilike.%${t}%,ex_region.ilike.%${t}%,to_region.ilike.%${t}%,source.ilike.%${t}%`);
-      }
-      const {data,error}=await q
-        .order("added",{ascending:false,nullsFirst:false})
-        .order("updated",{ascending:false,nullsFirst:false})
-        .range(from,from+pageSize-1);
-
-      if(error){console.error("fetchCargoes:",error);return;}
-      all.push(...(data||[]));
-      if(!data||data.length<pageSize)break;
-      from+=pageSize;
+    if(searchTerm.trim()){
+      const t=searchTerm.trim();
+      const{data,error}=await supabase.from("cargoes").select("*")
+        .or(`charterer.ilike.%${t}%,vessel.ilike.%${t}%,load.ilike.%${t}%,disch.ilike.%${t}%,cargo.ilike.%${t}%,status.ilike.%${t}%`)
+        .range(0,499).order("updated",{ascending:false});
+      if(error){console.error(error);return;}
+      setCargoes(data.map(normaliseCargo));
+    } else {
+      const[{data,error},{count}]=await Promise.all([
+        supabase.from("cargoes").select("*").range(0,199).order("updated",{ascending:false}),
+        supabase.from("cargoes").select("*",{count:"exact",head:true})
+      ]);
+      if(error){console.error(error);return;}
+      setCargoes(data.map(normaliseCargo));
+      setHasMore(data.length===200);
+      if(count!=null)setCargoTotal(count);
     }
-
-    const rows=all.map(r=>({...normaliseCargo(r),
-      entered_by:r.entered_by,added:r.added,changed:r.changed,
-      ex_region:r.ex_region,to_region:r.to_region,p_and_c:r.p_and_c,
-      intelligence:r.intelligence,source:r.source
-    }));
-    console.log(`🚢 Loaded ${rows.length} cargoes from Supabase`);
-    setCargoes(rows);
-    setCargoTotal(rows.length);
-    setHasMore(false);
-  }
-
-  // Shared live cargo changes for Cargoes and Quotes & Fixtures.
-  // Apply row-level changes instead of re-downloading the entire cargo table.
-  useEffect(()=>{
-    const channel=supabase.channel("tankpos-cargoes-live")
-      .on("postgres_changes",{event:"*",schema:"public",table:"cargoes"},payload=>{
-        const row=payload.new;
-        const oldId=payload.old?.id;
-        if(payload.eventType==="DELETE"){
-          if(oldId==null)return;
-          setCargoes(prev=>prev.filter(c=>String(c.id)!==String(oldId)));
-          setCargoTotal(n=>Math.max(0,n-1));
-          return;
-        }
-        if(!row?.id)return;
-        const next={...normaliseCargo(row),entered_by:row.entered_by,
-          added:row.added,changed:row.changed,ex_region:row.ex_region,
-          to_region:row.to_region,p_and_c:row.p_and_c,
-          intelligence:row.intelligence,source:row.source};
-        setCargoes(prev=>{
-          const index=prev.findIndex(c=>String(c.id)===String(row.id));
-          if(index<0){
-            setCargoTotal(n=>n+1);
-            return [next,...prev];
-          }
-          const copy=prev.slice();
-          copy[index]={...copy[index],...next};
-          return copy;
-        });
-      }).subscribe();
-    return ()=>{supabase.removeChannel(channel);};
-  },[]);
-
-  // Retry wrapper for transient Supabase pool-timeout / gateway errors
-  // (PGRST003, connection pool exhaustion, 504s). Retries with backoff;
-  // returns the last result/error if all attempts fail.
-  function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
-
-  async function withSupabaseRetry(requestFn, label, attempts=3){
-    let lastError = null;
-    for (let attempt = 0; attempt < attempts; attempt++){
-      try {
-        const result = await requestFn();
-        if (!result.error) return result;
-        lastError = result.error;
-        const msg = String(result.error.message || "");
-        const retryable = result.error.code === "PGRST003" || msg.includes("connection pool") || msg.includes("timeout") || msg.includes("504");
-        if (!retryable || attempt === attempts - 1) return result;
-      } catch (error) {
-        lastError = error;
-        if (attempt === attempts - 1) throw error;
-      }
-      const delays = [1000, 3000, 7000];
-      console.warn(`${label}: retrying after failure (attempt ${attempt + 1})`);
-      await sleep(delays[attempt] || 7000);
-    }
-    return { data: null, error: lastError };
   }
 
   async function fetchPositions(){
@@ -223,35 +108,9 @@ export default function TankPos(){
     "6. Handy (30-40)":"Handy",
     "7. MR (>40)":"MR",
   };
-  
-  // Only request the columns the dashboard actually maps below — the full
-  // view is wide (40+ cols incl. spec/comment/AIS fields) and returning "*"
-  // adds unnecessary sort/transfer weight on top of the view's own
-  // DISTINCT ON dedup cost, which was contributing to pool-timeout 504s.
-  const POSITION_FIELDS = [
-    "vessel_name","operator","open_date","port_name","dwt","build_year",
-    "overall_length","beam","cbm","details","file_date","imo_no",
-    "dirty_clean","segment","ice_class","last_3_cargoes",
-    "coating_type_2","super_region","updated_at","source"
-  ].join(",");
-
-  // Fetch with offline fallback + retry on transient pool-timeout errors
-  const { data, source } = await fetchWithCache('positions', async () => {
-    const { data, error } = await withSupabaseRetry(
-      () => supabase.from("positions_latest").select(POSITION_FIELDS).limit(5000),
-      "fetchPositions"
-    );
-    if (error) throw error;
-    return data;
-  });
-  
-  if (!data) {
-    console.error('No positions data available (offline + no cache)');
-    return;
-  }
-  
-  console.log(`📍 Loaded ${data.length} positions from ${source}`);
-  
+  const{data,error}=await supabase.from("positions_latest").select("*").limit(10000);
+  if(error){console.error("fetchPositions error:",error);return;}
+  console.log("fetchPositions:",data?.length,"rows");
   const mn=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   setVessels((data||[]).map(r=>{
     const rawDate=String(r.open_date||"");
@@ -260,26 +119,19 @@ export default function TankPos(){
       const d=new Date(rawDate);
       if(!isNaN(d))fmtDate=d.getDate()+" "+mn[d.getMonth()];
     }
-    const imoKey = String(r.imo_number||r.imo||"").trim();
-    const dbByIMO = window.vesselDBByIMO||{};
-    const imoRec = imoKey ? dbByIMO[imoKey] : null;
-    const nameRec = (window.vesselDB||{})[String(r.vessel_name||"").toLowerCase().trim()];
-    const vrec = imoRec || nameRec || null;
     return{
       id:          String(r.id||""),
       vessel:      String(r.vessel_name||"").toUpperCase(),
-      imoNo:       r.imo_no!=null?String(r.imo_no):null,
       operator:    r.operator||"",
       openPort:    r.port_name||"",
       date:        fmtDate,
       dwt:         r.dwt||null,
       built:       r.build_year||null,
-      loa:         r.overall_length!=null?Math.round(Number(r.overall_length))||null:null,
-      beam:        r.beam!=null?Math.round(Number(r.beam))||null:null,
-      cbm:         r.cbm||imoRec?.cbm||null,
-      coating:     r.coating_type_2||r.coating||r.coated||"",
+      loa:         r.overall_length||null,
+      beam:        r.beam||null,
+      cbm:         r.cbm||null,
+      coating:     r.coating||r.coated||"",
       comment:     r.details||"",
-      notes:       r.notes||"",
       last3:       r.last_3_cargoes||"",
       dirtyClean:  r.dirty_clean||"",
       iceClass:    r.ice_class||"",
@@ -289,51 +141,21 @@ export default function TankPos(){
       fileDate:    r.file_date||null,
       source:      r.source||"external",
       spec: {
-        fuel: vrec?.fuel||null,
-        iceClass: r.ice_class||vrec?.ice_class||null,
-        lastCargo: r.last_3_cargoes||vrec?.last_cargo||null,
-        segment: r.segment||vrec?.segment||null,
-        coated: r.coating||r.coated||vrec?.coating||null,
+        iceClass: r.ice_class||null,
+        lastCargo: r.last_3_cargoes||null,
+        segment: r.segment||null,
+        coated: r.coating||r.coated||null,
       }
     };
   }));
-
-  // Merge in vessel_overrides — manual edits (notes + spec) win over CSV/feed, per field
-  try {
-    const { data: ovRows } = await supabase.from("vessel_overrides")
-      .select("imo_no,vessel_name,operator,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo,tag");
-    if (ovRows && ovRows.length) {
-      const byImo = {}, byName = {};
-      ovRows.forEach(o => {
-        if (o.imo_no) byImo[String(o.imo_no)] = o;
-        if (o.vessel_name) byName[String(o.vessel_name).toUpperCase()] = o;
-      });
-      setVessels(prev => prev.map(v => {
-        const o = (v.imoNo && byImo[v.imoNo]) || byName[v.vessel];
-        if (!o) return v;
-        const merged = { ...v };
-        // top-level fields: only apply override when non-null (manual wins)
-        if (o.operator != null)merged.operator= o.operator;
-        if (o.note != null)    merged.notes   = o.note;
-        if (o.coating != null) merged.coating = o.coating;
-        if (o.loa != null)     merged.loa     = o.loa;
-        if (o.beam != null)    merged.beam    = o.beam;
-        if (o.cbm != null)     merged.cbm     = o.cbm;
-        if (o.dwt != null)     merged.dwt     = o.dwt;
-        if (o.built != null)   merged.built   = o.built;
-        if (o.tag != null)     merged.tag     = o.tag;
-        // spec sub-object
-        merged.spec = { ...(v.spec || {}) };
-        if (o.fuel != null)      merged.spec.fuel      = o.fuel;
-        if (o.ice_class != null) merged.spec.iceClass  = o.ice_class;
-        if (o.last_cargo != null)merged.spec.lastCargo = o.last_cargo;
-        return merged;
-      }));
-    }
-  } catch (e) { console.error("vessel_overrides load:", e); }
 }
-  async function loadMoreCargoes(){ setHasMore(false); }
-
+  async function loadMoreCargoes(){
+    const{data,error}=await supabase.from("cargoes").select("*")
+      .range(cargoes.length,cargoes.length+199).order("updated",{ascending:false});
+    if(error){console.error(error);return;}
+    if(data.length<200) setHasMore(false);
+    setCargoes(prev=>[...prev,...data.map(normaliseCargo)]);
+  }
 
   const renameV=useCallback((oldName,newName)=>{
     if(!newName||!newName.trim()||newName.trim().toUpperCase()===oldName)return;
@@ -376,43 +198,17 @@ export default function TankPos(){
     return next;
   });
 
-  // Manual vessel overrides persist in vessel_overrides and win over CSV/feed updates.
-  // Map popout field -> override column.
-  const OVERRIDE_COLS = {
-    operator: "operator",
-    notes: "note",
-    coating: "coating",
-    loa: "loa",
-    beam: "beam",
-    cbm: "cbm",
-    dwt: "dwt",
-    built: "built",
-    tag: "tag",
-    "spec.fuel": "fuel",
-    "spec.iceClass": "ice_class",
-    "spec.lastCargo": "last_cargo",
-  };
-  if (OVERRIDE_COLS[field]) {
-    const vobj = vessels.find(v => v.vessel === name);
-    const editor = localStorage.getItem("signal_user") || "H";
-    const payload = {
-      vessel_name: name,
-      imo_no: vobj?.imoNo || null,
-      [OVERRIDE_COLS[field]]: value || null,
-      entered_by: editor,
-      updated_at: new Date().toISOString(),
-    };
-    const onConflict = vobj?.imoNo ? "imo_no" : "vessel_name";
-    const { error } = await supabase.from("vessel_overrides").upsert([payload], { onConflict });
-    if (error) console.error("vessel_overrides upsert:", error);
-    return;
-  }
-
   const fieldMap = {
     openPort: "port_name",
     date: "open_date",
+    built: "build_year",
+    loa: "overall_length",
     comment: "details",
     operator: "operator",
+    dwt: "dwt",
+    beam: "beam",
+    cbm: "cbm",
+    coating: "coating",
   };
 
   const dbField = fieldMap[field] || field;
@@ -426,67 +222,20 @@ export default function TankPos(){
     .ilike("vessel_name", name);
 
   if (error) console.error("updateV error:", error);
-}, [vessels]);
+}, []);
 
-  // Universal cargo updater — optimistic UI + DB-confirmed persistence.
-  // The returned Supabase row is merged back into the canonical cargo array,
-  // including Quotes & Fixtures-only columns.
+  // Universal cargo updater — optimistic local update + Supabase write
   const updateC=useCallback(async(id,field,value)=>{
-    const nowIso=new Date().toISOString();
-    const rawDbValue=(field==="from"||field==="to")?toISODate(value):value;
-    const nullableQfFields=new Set(["ex_region","to_region","p_and_c","intelligence","source"]);
-    let dbValue=nullableQfFields.has(field)&&String(rawDbValue??"").trim()===""?null:rawDbValue;
-    if(field==="intelligence"&&dbValue!=null){
-      const q=String(dbValue).trim().toLowerCase();
-      dbValue=q==="quote"?"Quote":q==="fixture"?"Fixture":dbValue;
-    }
     const displayValue=(field==="from"||field==="to")?(() => {
       const iso=toISODate(value);
       if(!iso) return value;
       const dt=new Date(iso);
       return dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
     })():value;
-
-    let previousValue;
-    setCargoes(prev=>prev.map(c=>{
-      if(c.id!==id) return c;
-      previousValue=c[field];
-      return {...c,[field]:displayValue,changed:nowIso};
-    }));
-
-    const {data,error}=await supabase
-      .from("cargoes")
-      .update({[field]:dbValue,changed:nowIso})
-      .eq("id",id)
-      .select("*")
-      .single();
-
-    if(error){
-      console.error("cargo update failed:",field,id,error);
-      setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:previousValue}:c));
-      if(field!=="intelligence") alert("Cargo update failed: "+error.message);
-      return false;
-    }
-
-    if(!data){
-      setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:previousValue}:c));
-      alert("Cargo update was not confirmed by Supabase.");
-      return false;
-    }
-
-    const saved={
-      ...normaliseCargo(data),
-      entered_by:data.entered_by,
-      added:data.added,
-      changed:data.changed,
-      ex_region:data.ex_region,
-      to_region:data.to_region,
-      p_and_c:data.p_and_c,
-      intelligence:data.intelligence,
-      source:data.source
-    };
-    setCargoes(prev=>prev.map(c=>c.id===id?{...c,...saved}:c));
-    return true;
+    setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:displayValue}:c));
+    const dbValue=(field==="from"||field==="to")?toISODate(value):value;
+    const{error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id);
+    if(error)console.error(error);
   },[]);
 
   const addVessels = useCallback(async (parsed) => {
@@ -497,20 +246,20 @@ export default function TankPos(){
     function extractCoating(text){
       if(!text) return "";
       const t=text.toLowerCase();
-      if(t.includes("stainless")||t.includes("stst")||t.includes("ss ")) return "Stainless";
+      if(t.includes("phenolic")) return "Phenolic";
+      if(t.includes("epoxy")) return "Epoxy";
+      if(t.includes("zinc silicate")||t.includes("zinc sil")) return "Zinc Silicate";
       if(t.includes("marineline")||t.includes("marine line")) return "Marineline";
       if(t.includes("interline")) return "Interline";
-      if(t.includes("zinc")) return "Zinc";
-      if(t.includes("epoxy")) return "Epoxy";
-      if(t.includes("phenolic")) return "Epoxy";
+      if(t.includes("coated")) return "Coated";
+      if(t.includes("uncoated")) return "Uncoated";
       return "";
     }
 
     setVessels(prev => {
       const before = prev.length;
       // We pass nowIso into the local state so the UI updates immediately
-      const editorInit = localStorage.getItem("signal_user")||"H";
-      const next = mergeVessels(prev, parsed.map(p => ({ ...p, fileDate: nowIso, entered_by: editorInit })), vdb);
+      const next = mergeVessels(prev, parsed.map(p => ({ ...p, fileDate: nowIso })), vdb);
       r = { 
         added: next.length - before, 
         updated: parsed.length - Math.max(0, next.length - before), 
@@ -548,12 +297,11 @@ export default function TankPos(){
   overall_length: ev.loa || null,
   beam: ev.beam || null,
   cbm: ev.cbm || null,
-  coating: ev.coating || dbVessel?.coating || extractCoating(ev.comment||"") || null,
+  coating: ev.coating || extractCoating(ev.comment||"") || null,
   details: ev.comment || null,
   file_date: nowIso,
   updated_at_manual: nowIso,
   updated_at: nowIso,
-  entered_by: localStorage.getItem("signal_user")||"H",
   spec: spec,
 };
     });
@@ -567,13 +315,18 @@ export default function TankPos(){
     return r;
   }, [vesselDB, saveV, saveSnapshot]);
 
+  // Bridge Fleet's batch import to the existing Positions save handler.
+  useEffect(() => {
+    window.steemAddFleetPositions = addVessels;
+    return () => { if (window.steemAddFleetPositions === addVessels) delete window.steemAddFleetPositions; };
+  }, [addVessels]);
+
   const addCargoes=useCallback(async(parsed)=>{
-    const editorC=localStorage.getItem("signal_user")||"H";
-    const stamped=parsed.map((f,i)=>({...normaliseCargo({
+    const stamped=parsed.map((f,i)=>normaliseCargo({
       ...f,
       id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
       updated: new Date().toISOString(),
-    }),entered_by:editorC,added:f.added||new Date().toISOString(),changed:null}));
+    }));
     // Dedup by id and by charterer+load+disch+from
     let added=0;
     setCargoes(prev=>{
@@ -614,7 +367,7 @@ export default function TankPos(){
   if(error)console.error(error);
 },[vesselDB]);
   const addC=useCallback(async(c)=>{
-    const norm={...normaliseCargo({...c,id:c.id||("c_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),updated:c.updated||new Date().toISOString()}),added:c.added||new Date().toISOString(),changed:null};
+    const norm=normaliseCargo({...c,id:c.id||("c_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),updated:c.updated||new Date().toISOString()});
     setCargoes(prev=>[...prev,norm]);
     const row={...norm,from:toISODate(norm.from),to:toISODate(norm.to)};
     const{error}=await supabase.from("cargoes").upsert([row],{onConflict:"id"});
@@ -658,9 +411,5 @@ export default function TankPos(){
   },[]);
 
   const props={vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
-  return (
-    <>
-      <DesktopApp {...props}/>
-    </>
-  );
+  return <DesktopApp {...props}/>;
 }
