@@ -368,17 +368,27 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
   },[cargoTotal]);
  const groups=useMemo(()=>{try{return JSON.parse(localStorage.getItem("signal_cargo_filter_groups")||"[]")}catch{return[]}},[cargoes.length]),grades=groups.filter(g=>(g.category||"grade")==="grade"),tags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
  const filtered=useMemo(()=>{let a=cargoes.filter(c=>{if(section==="inter"&&c.market_segment!=="INTERMEDIATE")return false;if(section==="all"&&hideIntermediate&&String(c.market_segment||"").trim().toUpperCase()==="INTERMEDIATE")return false;if(contributorFilter&&editorInitials(c.entered_by)!==contributorFilter)return false;if(ex&&c.ex_region!==ex)return false;if(toR&&c.to_region!==toR)return false;if(status!=="ALL"&&c.status!==status)return false;if(activeTags.length&&!activeTags.some(t=>String(c.tag||"").split(/[,;|]/).map(s=>s.trim()).includes(t)))return false;if(laycanStart||laycanEnd){
-  const rangeStart=laycanStart?new Date(laycanStart+"T00:00:00"):null;
-  const rangeEnd=laycanEnd?new Date(laycanEnd+"T00:00:00"):null;
-  const reference=rangeStart||rangeEnd||new Date();
-  const from=cargoLaycanDate(c.from,reference);
-  const to=cargoLaycanDate(c.to,from||reference);
-  // A cargo qualifies when its laycan overlaps the selected period.
-  if(!from&&!to)return false;
-  const first=from||to,last=to||from;
-  const earliest=first<=last?first:last,latest=first<=last?last:first;
-  if(rangeStart&&latest<rangeStart)return false;
-  if(rangeEnd&&earliest>rangeEnd)return false;
+  // Day-of-month filter; matches cargo laycan dates independently of year/month.
+  const fromDay=Number(laycanStart)||null,toDay=Number(laycanEnd)||null;
+  const readDay=v=>{
+    if(!v)return null;
+    const t=String(v).trim();
+    const iso=t.match(/^\\d{4}-\\d{1,2}-(\\d{1,2})/);
+    const day=iso?Number(iso[1]):Number((t.match(/^(\\d{1,2})(?:\\D|$)/)||[])[1]);
+    return day>=1&&day<=31?day:null;
+  };
+  const a=readDay(c.from),b=readDay(c.to);
+  if(a===null&&b===null)return false;
+  // Day range can wrap month end (e.g. 28 to 04).
+  const inRange=d=>{
+    if(d===null)return false;
+    if(fromDay&&toDay)return fromDay<=toDay?d>=fromDay&&d<=toDay:d>=fromDay||d<=toDay;
+    return fromDay?d>=fromDay:d<=toDay;
+  };
+  if(!inRange(a)&&!inRange(b)){
+    // Also include laycans spanning the requested day window.
+    if(a===null||b===null||!fromDay||!toDay||fromDay>toDay||a>b||a>fromDay||b<toDay)return false;
+  }
 }if(time){const d=new Date(c.updated||c.added||0),now=new Date(),[tw0,tw1]=weekBounds(0),[lw0,lw1]=weekBounds(-1);tw1.setHours(23,59,59,999);lw1.setHours(23,59,59,999);if(time==="tw"&&!(d>=tw0&&d<=tw1))return false;if(time==="lw"&&!(d>=lw0&&d<=lw1))return false;if(time==="ytd"&&d<new Date(now.getFullYear(),0,1))return false;}if(grade&&!String(c.cargo||"").toLowerCase().includes(grade.toLowerCase()))return false;if(search&&!JSON.stringify(c).toLowerCase().includes(search.toLowerCase()))return false;return true});const f=sort==="added"?"added":sort;return [...a].sort((x,y)=>{let A=x[f]||x.updated||"",B=y[f]||y.updated||"";if(f==="added"||f==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime()}const primary=(A<B?-1:A>B?1:0)*dir;if(primary)return primary;
 // Stable tie-breakers: editing Intel/regions/etc must never change row position.
 const xa=new Date(x.added||0).getTime()||0,ya=new Date(y.added||0).getTime()||0;if(xa!==ya)return ya-xa;
@@ -415,8 +425,8 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
       .qf-mobile-fold[open] > summary::after{content:"▾";}
       .qf-mobile-fold > div{width:100%!important;height:auto!important;box-sizing:border-box;}
       .qf-mobile-fold .qf-parse{height:300px!important;}
-      .qf-mobile-fold .qf-filters{display:grid!important;grid-template-columns:1fr 1fr!important;overflow:visible!important;min-height:0!important;}
-      .qf-mobile-fold .qf-views,.qf-mobile-fold .qf-grade,.qf-mobile-fold .qf-period,.qf-mobile-fold .qf-tags,.qf-mobile-fold .qf-region{grid-column:auto!important;}
+      .qf-mobile-fold .qf-filters{display:flex!important;flex-wrap:wrap!important;overflow:visible!important;min-height:0!important;}
+      
       .qf-mobile-fold .qf-chart{height:260px!important;min-height:260px!important;}
       .qf-actions{display:block!important;padding:7px!important;}
       .qf-actions-main{display:flex!important;gap:5px!important;align-items:center!important;overflow-x:auto!important;padding-bottom:6px!important;}
@@ -440,10 +450,10 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
       .qf-mobile-fold > summary{display:none!important;}
       .qf-mobile-fold > div{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important;box-sizing:border-box!important;overflow:hidden!important;}
       .qf-mobile-fold .qf-parse,.qf-mobile-fold .qf-filters,.qf-mobile-fold .qf-chart{flex:none!important;width:100%!important;height:100%!important;min-height:0!important;overflow:hidden!important;}
-      .qf-mobile-fold .qf-filters{align-items:start!important;align-content:start!important;grid-auto-rows:auto!important;overflow-y:auto!important;}
+      .qf-mobile-fold .qf-filters{align-items:flex-start!important;align-content:start!important;overflow:auto!important;}
       .cargo-panel-handle{display:block!important;}
-      .qf-mobile-fold .qf-filters > div{height:100%!important;min-height:0!important;display:flex!important;flex-direction:column!important;}
-      .qf-mobile-fold .qf-filters > div > div{flex:1 1 auto!important;align-content:flex-start!important;}
+      .qf-mobile-fold .qf-filters > div{height:auto!important;min-height:0!important;flex:0 0 auto!important;display:flex!important;flex-direction:column!important;}
+      .qf-mobile-fold .qf-filters > div > div{flex:0 0 auto!important;align-content:flex-start!important;}
       .qf-mobile-fold .qf-parse-tags{padding:5px 8px!important;gap:3px!important;}
       .qf-mobile-fold .qf-parse textarea{min-height:48px!important;height:48px!important;padding-top:5px!important;padding-bottom:5px!important;}
       .qf-mobile-fold .qf-parse > div:last-child > div{height:100%!important;display:flex!important;flex-direction:column!important;}
@@ -459,25 +469,24 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
 <div className="qf-top" style={{"--cargo-panel-cols":panelWidths.map(x=>`minmax(0,${x}fr)`).join(" "),display:"flex",gap:10,height:215,minHeight:0,overflow:"hidden",position:"relative"}}>
    <details className="qf-mobile-fold qf-parse-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Paste / Parse</summary><div className="qf-parse" style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}><div className="qf-parse-tags" style={{...card,padding:"6px 8px",display:"flex",gap:4,flexWrap:"wrap",alignContent:"flex-start",flex:"0 0 auto",overflow:"visible"}}>{tagList().map(t=>{const tc=tagColor(t);return <button key={t} onClick={()=>setParseTag(x=>x===t?"":t)} style={{...btn(parseTag===t),color:tc||"#9fc3f5",borderColor:parseTag===t?(tc||C.blue):C.bd,background:parseTag===t?(tc?tc+"22":"rgba(88,166,255,.18)"):C.bg3}}>{t}</button>})}</div><div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await (section==="inter"?parseInter:onAddCargoes)(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div></details>
    <div className="cargo-panel-handle" title="Drag to resize Parse and Filters" onPointerDown={e=>beginPanelResize(0,e)} style={{left:`calc(${panelWidths[0]}% - 5px)`}}/>
-   <details className="qf-mobile-fold qf-filter-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Filters</summary><div className="qf-filters" style={{flex:"0 0 40%",minWidth:0,...card,padding:8,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:6,overflowY:"auto",overflowX:"hidden",position:"relative",zIndex:20,alignContent:"start"}}>
+   <details className="qf-mobile-fold qf-filter-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Filters</summary><div className="qf-filters" style={{flex:"0 0 40%",minWidth:0,...card,padding:8,display:"flex",flexWrap:"nowrap",gap:12,overflowY:"auto",overflowX:"auto",position:"relative",zIndex:20,alignContent:"start"}}>
          <div className="qf-views" style={{minWidth:0,display:"flex",flexDirection:"column",gap:5}}><b style={{fontSize:11,color:C.blue}}>VIEW</b><select aria-label="Saved view" value={selectedView} onChange={e=>applyView(e.target.value)} style={{...input,width:"100%",minWidth:0}}><option value="">Current filters</option>{savedViews.map(v=><option key={v.name} value={v.name}>{v.name}</option>)}</select>{section==="all"&&<button onClick={()=>setHideIntermediate(v=>!v)} style={{...btn(hideIntermediate),textAlign:"left",whiteSpace:"normal",color:hideIntermediate?"#6ee7b7":C.dim}}>{hideIntermediate?"✓ Hide Intermediate":"Hide Intermediate"}</button>}<div style={{display:"flex",flexWrap:"wrap",gap:4}}><button onClick={saveView} style={btn()}>+ Save view</button>{selectedView&&<><button onClick={resetView} style={btn()}>Reset view</button><button onClick={deleteView} style={btn()}>Delete</button></>}</div></div>
-<div className="qf-grade"><b style={{fontSize:11,color:C.blue}}>GRADE</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{grades.slice(0,6).map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={btn(grade===g.id)}>{g.label}</button>)}</div></div>
-    <div className="qf-period"><b style={{fontSize:11,color:C.dim}}>PERIOD</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={btn(time===k)}>{l}</button>)}</div></div>
-    <div className="qf-laycan" style={{minWidth:0,gridColumn:"span 2"}}>
-  <b style={{fontSize:11,color:C.blue}}>LAYCAN PERIOD</b>
-  <div style={{display:"flex",gap:5,marginTop:4,alignItems:"center",flexWrap:"wrap"}}>
-    <label style={{fontSize:10,color:C.dim,display:"flex",alignItems:"center",gap:4}}>From
-      <input aria-label="Laycan period from" type="date" value={laycanStart} max={laycanEnd||undefined} onChange={e=>setLaycanStart(e.target.value)} style={{...input,width:125,minWidth:0,colorScheme:"dark"}}/>
-    </label>
-    <label style={{fontSize:10,color:C.dim,display:"flex",alignItems:"center",gap:4}}>To
-      <input aria-label="Laycan period to" type="date" value={laycanEnd} min={laycanStart||undefined} onChange={e=>setLaycanEnd(e.target.value)} style={{...input,width:125,minWidth:0,colorScheme:"dark"}}/>
-    </label>
-    {(laycanStart||laycanEnd)&&<button onClick={()=>{setLaycanStart("");setLaycanEnd("");}} style={btn()}>×</button>}
+<div className="qf-grade"><b style={{fontSize:11,color:C.blue}}>GRADE</b><div style={{display:"grid",gridAutoFlow:"column",gridTemplateRows:"repeat(7, 20px)",gridAutoColumns:"max-content",gap:3,marginTop:4,justifyContent:"start"}}>{[...grades].sort((a,b)=>String(a.label).localeCompare(String(b.label))).slice(0,6).map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={btn(grade===g.id)}>{g.label}</button>)}</div></div>
+    <div className="qf-period"><b style={{fontSize:11,color:C.dim}}>PERIOD</b>
+  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:4,marginTop:4}}>
+    {[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].sort((a,b)=>a[1].localeCompare(b[1])).map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={btn(time===k)}>{l}</button>)}
+    <b style={{fontSize:10,color:C.blue,marginTop:3}}>LAYCAN DAYS</b>
+    <div style={{display:"flex",alignItems:"center",gap:4}}>
+      <input aria-label="Laycan from day" type="text" inputMode="numeric" maxLength={2} placeholder="From" value={laycanStart} onChange={e=>{const v=e.target.value.replace(/\\D/g,"");if(!v||(+v>=1&&+v<=31))setLaycanStart(v)}} style={{...input,width:43,padding:"5px 4px",textAlign:"center"}}/>
+      <span style={{color:C.faint,fontSize:10}}>–</span>
+      <input aria-label="Laycan to day" type="text" inputMode="numeric" maxLength={2} placeholder="To" value={laycanEnd} onChange={e=>{const v=e.target.value.replace(/\\D/g,"");if(!v||(+v>=1&&+v<=31))setLaycanEnd(v)}} style={{...input,width:43,padding:"5px 4px",textAlign:"center"}}/>
+    </div>
+    {(laycanStart||laycanEnd)&&<button onClick={()=>{setLaycanStart("");setLaycanEnd("")}} style={btn()}>Clear days</button>}
   </div>
 </div>
-     <div className="qf-tags"><b style={{fontSize:11,color:C.pink}}>TAG</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{tags.slice(0,7).map(t=><button key={t} onClick={e=>chooseTag(t,e.ctrlKey||e.metaKey)} title="Ctrl+click to select multiple tags" style={btn(activeTags.includes(t))}>{t}</button>)}</div></div>
-    {[["EX REGION",ex,setEx],["TO REGION",toR,setToR]].map(([lab,val,setter])=><div key={lab} className="qf-region" style={{minWidth:0}}><b style={{fontSize:11,color:C.blue}}>{lab}</b><div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:4}}><button onClick={()=>setter("")} style={btn(!val)}>ALL</button>{REGIONS.map(r=><button key={r} onClick={()=>setter(val===r?"":r)} style={btn(val===r)}>{r}</button>)}</div></div>)}
-    {(search||status!=="ALL"||time||grade||activeTags.length||ex||toR||laycanStart||laycanEnd)&&<button onClick={clearFilters} title="Reset all cargo filters and tags" style={{...btn(),position:"absolute",left:8,bottom:7,color:"#ff7777",borderColor:"rgba(255,90,90,.6)",background:"rgba(110,25,35,.18)",fontWeight:700,zIndex:2}}>× Clear all filters</button>}
+     <div className="qf-tags"><b style={{fontSize:11,color:C.pink}}>TAG</b><div style={{display:"grid",gridAutoFlow:"column",gridTemplateRows:"repeat(7, 20px)",gridAutoColumns:"max-content",gap:3,marginTop:4,justifyContent:"start"}}>{[...tags].sort((a,b)=>a.localeCompare(b)).slice(0,7).map(t=><button key={t} onClick={e=>chooseTag(t,e.ctrlKey||e.metaKey)} title="Ctrl+click to select multiple tags" style={btn(activeTags.includes(t))}>{t}</button>)}</div></div>
+    {[["EX REGION",ex,setEx],["TO REGION",toR,setToR]].map(([lab,val,setter])=><div key={lab} className="qf-region" style={{minWidth:0}}><b style={{fontSize:11,color:C.blue}}>{lab}</b><div style={{display:"grid",gridAutoFlow:"column",gridTemplateRows:"repeat(7, 20px)",gridAutoColumns:"max-content",gap:3,marginTop:4,justifyContent:"start"}}><button onClick={()=>setter("")} style={btn(!val)}>ALL</button>{[...REGIONS].sort((a,b)=>a.localeCompare(b)).map(r=><button key={r} onClick={()=>setter(val===r?"":r)} style={btn(val===r)}>{r}</button>)}</div></div>)}
+    {(search||status!=="ALL"||time||grade||activeTags.length||ex||toR||laycanStart||laycanEnd)&&<button onClick={clearFilters} title="Reset all cargo filters and tags" style={{...btn(),alignSelf:"flex-end",flexShrink:0,color:"#ff7777",borderColor:"rgba(255,90,90,.6)",background:"rgba(110,25,35,.18)",fontWeight:700,zIndex:2}}>× Clear all filters</button>}
    </div></details>
    <div className="cargo-panel-handle" title="Drag to resize Filters and Rate Matrix" onPointerDown={e=>beginPanelResize(1,e)} style={{left:`calc(${panelWidths[0]+panelWidths[1]}% - 1px)`}}/>
    <details className="qf-mobile-fold qf-chart-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Rates / Cargo Graph</summary><div className="qf-chart" style={{flex:"1 1 35%",minWidth:0,height:"100%",display:"flex"}}><div style={{display:"flex",flexDirection:"column",width:"100%",minHeight:0}}><div style={{flex:1,minHeight:0,overflow:"auto"}}>{visualTab==="rates"?<Suspense fallback={null}><RateMatrixCard/></Suspense>:<CargoMonthChart data={allMonthly||monthly} total={allMonthly?cargoTotal||cargoes.length:cargoes.length}/>}</div></div></div></details>
