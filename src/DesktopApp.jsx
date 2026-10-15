@@ -529,49 +529,16 @@ function BunkerHeader(){
   }
 
   async function fetchMGO(){
-    setFetching(true); setFetchErr(null);
-    try{
-      // Fetch via allorigins proxy to avoid CORS
-      const url=encodeURIComponent("https://www.bunkerindex.com/rss/prices.php");
-      const res=await fetch(`https://api.allorigins.win/get?url=${url}`);
-      const data=await res.json();
-      const xml=data.contents||"";
-      // Parse titles from RSS XML
-      const titles=[...xml.matchAll(/<title><!\[CDATA\[([^\]]+)\]\]><\/title>/g)].map(m=>m[1]);
-      const json={items:titles.map(t=>({title:t}))};
-      if(json?.items?.length){
-        // Look for ARA MGO or VLSFO price in title
-        for(const item of json.items){
-          const t=(item.title||"").toLowerCase();
-          if(t.includes("ams")||t.includes("ara")||t.includes("rotterdam")){
-            // Extract number from title like "Rotterdam MGO: 1235"
-            const nums=(item.title||"").match(/\d{3,4}/g);
-            if(nums){
-              const price=parseInt(nums[nums.length-1]);
-              if(price>400&&price<3000){
-                pushPrice(price);
-                setFetching(false);
-                return;
-              }
-            }
-          }
-        }
-        // Try any item with a 4-digit number between 400-3000
-        for(const item of json.items){
-          const nums=(item.title||"").match(/\d{3,4}/g);
-          if(nums){
-            const price=parseInt(nums[0]);
-            if(price>400&&price<3000){
-              pushPrice(price);
-              setFetching(false);
-              return;
-            }
-          }
-        }
-      }
-      setFetchErr("No price found in feed");
-    }catch(e){setFetchErr(e.message?.slice(0,40)||"Error");}
-    setFetching(false);
+    setFetching(true);setFetchErr(null);
+    try {
+      const {data,error}=await supabase.from("bunker_cache")
+        .select("price_usd_mt,source_updated_at")
+        .eq("port","ARA").eq("fuel","MGO").maybeSingle();
+      if(error) throw error;
+      if(!data?.price_usd_mt) throw new Error("No verified ARA MGO price cached yet");
+      pushPrice(Number(data.price_usd_mt));
+    } catch(e) {setFetchErr(e.message||"Bunker cache unavailable");}
+    finally {setFetching(false);}
   }
 
   return(
