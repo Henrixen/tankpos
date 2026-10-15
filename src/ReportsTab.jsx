@@ -214,7 +214,7 @@ function VesselRow({ v, localIdx, globalIdx, editing, onEdit, onSave, onDelete,
   // Alternate: even rows slightly lighter — subtle, not the harsh navy/black split
   const rowBg = isDragOver
     ? "rgba(58,130,246,0.18)"
-    : localIdx % 2 === 0 ? "rgba(255,255,255,0.03)" : "transparent";
+    : localIdx % 2 === 0 ? "#111f35" : "#0c1729";
 
   if (editing) return (
     <div style={{ display: "grid", gridTemplateColumns: GRID, width: "100%", boxSizing: "border-box", background: "rgba(58,130,246,0.1)", color: "#dbe6f5", fontSize: 11, padding: "5px 8px", borderTop: "1px solid rgba(58,130,246,0.16)", alignItems: "center", gap: 2 }}>
@@ -237,7 +237,7 @@ function VesselRow({ v, localIdx, globalIdx, editing, onEdit, onSave, onDelete,
       onDragOver={e => e.preventDefault()} onClick={onEdit} title="Click to edit · drag to reorder"
       style={{ display: "grid", gridTemplateColumns: GRID, width: "100%", boxSizing: "border-box", background: rowBg, color: "#dbe6f5", fontSize: 11, padding: "4px 8px", borderTop: "1px solid rgba(58,130,246,0.1)", cursor: "pointer", alignItems: "center", gap: 2, userSelect: "none" }}
     >
-      <div style={{ ...CELL, fontWeight: 600 }}>{v.vessel}</div>
+      <div style={{ ...CELL, fontWeight: 700, color: "#58a6ff" }}>{v.vessel}</div>
       <div style={CELL}>{fmtDwt(v.dwt)}</div>
       <div style={CELL}>{v.built || ""}</div>
       <div style={CELL}>{fmtCoating(v.coating)}</div>
@@ -346,7 +346,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [savedReports, setSavedReports] = useState([]);
   const [pendingSavedDelete, setPendingSavedDelete] = useState(null);
   const [deleteReportError, setDeleteReportError] = useState("");
-  const [marketHeadings, setMarketHeadings] = useState({drivers:"Market drivers / What to watch",benchmark:"Benchmark rates",tce:"TCE earnings",handy:"Handy"});
+  const [marketHeadings, setMarketHeadings] = useState({drivers:"Market drivers / What to watch",benchmark:"Benchmark rates",tce:"TCE earnings",handy:"Handy",ffa:"FFA trend (BALMO / +1 / +2)"});
   const [activeMarketReportId, setActiveMarketReportId] = useState(null);
   const editMarketHeading = (key, style) => <input aria-label={"Edit " + key + " heading"} value={marketHeadings[key]}
     onChange={e => setMarketHeadings(p => ({...p,[key]:e.target.value}))}
@@ -1097,7 +1097,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     } catch (e) { console.error("loadQuickPositions:", e); }
   }
 
-  const SB = { fontSize: 11, fontWeight: 700, padding: "5px 11px", borderRadius: 5, cursor: "pointer", border: "none", fontFamily: "inherit", whiteSpace: "nowrap" };
+  const SB = { fontSize: 11, fontWeight: 600, padding: "6px 10px", borderRadius: 5, cursor: "pointer", border: "1px solid " + C.bd, fontFamily: "inherit", whiteSpace: "nowrap" };
   const IS = { background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 11, padding: "5px 8px", outline: "none", fontFamily: "inherit" };
   const avgRate = Object.values(rateGrid).flatMap(r => Object.values(r).filter(v => v)).map(v => parseFloat(v) || 0).reduce((a, b) => a + b, 0) / Math.max(1, Object.values(rateGrid).flatMap(r => Object.values(r).filter(v => v)).length) || 0;
   const avgTCE = Object.values(tceEarnings).filter(v => v).map(v => parseFloat(v) || 0).reduce((a, b) => a + b, 0) / Math.max(1, Object.values(tceEarnings).filter(v => v).length) || 0;
@@ -1541,9 +1541,9 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         <div style={{ display: "flex", borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
           {[["poslist", "Positions"], ["market", "Market"]].map(([k, l]) => (
             <button key={k} onClick={() => setSection(k === "poslist" && section === "quick" ? "quick" : k)}
-              style={{ flex: 1, padding: "12px 5px", fontSize: 13, fontWeight: 800, cursor: "pointer", border: "none",
-                borderBottom: (section === k || (k === "poslist" && section === "quick")) ? `3px solid ${ACCENT}` : "3px solid transparent",
-                background: (section === k || (k === "poslist" && section === "quick")) ? "rgba(58,130,246,.22)" : "rgba(255,255,255,.025)", color: (section === k || (k === "poslist" && section === "quick")) ? "#ffffff" : "#9bb4d3", fontFamily: "inherit" }}>
+              style={{ flex: 1, padding: "13px 5px", fontSize: 12, fontWeight: 800, cursor: "pointer", border: "none",
+                borderBottom: (section === k || (k === "poslist" && section === "quick")) ? `2px solid ${ACCENT}` : "2px solid transparent",
+                background: (section === k || (k === "poslist" && section === "quick")) ? C.bg3 : C.bg2, color: (section === k || (k === "poslist" && section === "quick")) ? "#ffffff" : "#9bb4d3", fontFamily: "inherit" }}>
               {l}
             </button>
           ))}
@@ -1552,8 +1552,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
           <div style={{ padding: "8px 10px", borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
             {[["poslist", "Position List"], ["quick", "Quick list"]].map(([k, l]) => (
               <button key={k} onClick={() => setSection(k)}
-                style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 10px", marginBottom: 4, borderRadius: 5, cursor: "pointer", fontSize: 12, fontWeight: section === k ? 700 : 400,
-                  border: `1px solid ${section === k ? ACCENT : C.bd}`, background: section === k ? "rgba(58,130,246,0.1)" : "transparent", color: section === k ? ACCENT : C.dim, fontFamily: "inherit" }}>
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 11px", marginBottom: 6, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: section === k ? 700 : 400,
+                  border: `1px solid ${section === k ? ACCENT : C.bd}`, background: section === k ? C.bg4 : C.bg2, color: section === k ? ACCENT : C.dim, fontFamily: "inherit" }}>
                 {l}
               </button>
             ))}
@@ -1652,10 +1652,11 @@ Any direction`}</pre>
           <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 12px", background: C.bg2, borderBottom: "1px solid " + C.bd, flexWrap: "wrap", flexShrink: 0 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>Position List</span>
             <input type="date" value={posDate} onChange={e => setPosDate(e.target.value)} style={{ ...IS }} />
-            <div style={{ display: "flex", gap: 3 }}>
+            <div style={{ display: "flex", gap: 5, alignItems: "center", padding: "4px 8px", background: C.bg3, border: "1px solid " + C.bd2, borderRadius: 6 }}>
+              <span style={{fontSize:9,color:C.faint,fontWeight:700,marginRight:4}}>LAYOUT</span>
               {[["segment", "By Segment"], ["region", "By Region"]].map(([k, l]) => (
                 <button key={k} onClick={() => setPosGroupBy(k)}
-                  style={{ ...SB, border: `1px solid ${posGroupBy === k ? ACCENT : C.bd}`, background: posGroupBy === k ? ACCENT : "transparent", color: posGroupBy === k ? "#fff" : C.dim }}>{l}</button>
+                  style={{ ...SB, border: `1px solid ${posGroupBy === k ? ACCENT : C.bd}`, background: posGroupBy === k ? C.bg4 : "transparent", color: posGroupBy === k ? C.tx : C.dim }}>{l}</button>
               ))}
               {posGroupBy === "region" && (
                 <>
@@ -1667,7 +1668,7 @@ Any direction`}</pre>
                 </>
               )}
               <button onClick={() => setSortByDate(s => !s)}
-                style={{ ...SB, border: `1px solid ${sortByDate ? ACCENT : C.bd}`, background: sortByDate ? ACCENT : "transparent", color: sortByDate ? "#fff" : C.dim }}>
+                style={{ ...SB, border: `1px solid ${sortByDate ? ACCENT : C.bd}`, background: sortByDate ? C.bg4 : "transparent", color: sortByDate ? C.tx : C.dim }}>
                 {sortByDate ? "✓ " : ""}Sort by date ↑
               </button>
               <button onClick={addManualVessel} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: ACCENT }}>+ Add manual row</button>
@@ -1679,8 +1680,8 @@ Any direction`}</pre>
               <button onClick={() => { if (window.confirm(`Remove all ${reportVessels.length} vessels from this position list?`)) clearAll(); }}
                 style={{ ...SB, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.45)", color: "#ef4444" }}>Clear all</button>
             )}
-            <button onClick={savePositionList} style={{ ...SB, background: "rgba(63,185,80,0.1)", border: "1px solid rgba(63,185,80,0.45)", color: "#3fb950" }}>Save</button>
-            <button onClick={handleCopyEmail} style={{ ...SB, background: "rgba(245,166,35,0.12)", border: "1px solid rgba(245,166,35,0.45)", color: "#f5a623" }}>Copy for Email</button>
+            <button onClick={savePositionList} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Save</button>
+            <button onClick={handleCopyEmail} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Copy for Email</button>
             <button onClick={handleDownloadPng} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Download PNG</button>
             <button onClick={() => window.print()} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Print / PDF</button>
           </div>
@@ -2032,7 +2033,7 @@ Any direction`}</pre>
                     </tr></thead>
                     <tbody>
                       {benchmarkRows.map((r, i) => (
-                        <tr key={r.key} style={{ borderTop: "1px solid " + C.bd, background: i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent" }}>
+                        <tr key={r.key} style={{ borderTop: "1px solid " + C.bd, background: i % 2 === 0 ? C.bg3 : C.bg2 }}>
                           <td style={{ padding: "6px 10px", fontWeight: 700, color: C.tx }}><div style={{display:"flex",alignItems:"center",gap:5}}>
                             <input aria-label="Route name" className="rpt-edit" value={r.label} onChange={e=>setBenchmarkRows(p=>p.map(x=>x.key===r.key?{...x,label:e.target.value}:x))} style={{width:155,fontWeight:700,fontSize:12}} />
                             <button title="Remove benchmark row" onClick={()=>setBenchmarkRows(p=>p.filter(x=>x.key!==r.key))} style={{border:"none",background:"transparent",color:"#fb7185",cursor:"pointer"}}>×</button>
@@ -2067,7 +2068,7 @@ Any direction`}</pre>
                       <label style={{ display: "block", fontSize: 10, color: C.dim, marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>{label}</label>
                       <input value={tceStats[k]} onChange={e => setTceStats(p => ({ ...p, [k]: e.target.value }))} placeholder="e.g. 31000" className="rpt-edit"
                         style={{ width: "100%", fontSize: 18, fontWeight: 700 }} />
-                      <div style={{ fontSize: 10, color: C.faint, marginTop: 3 }}>{tceStats[k] ? `USD ${Math.round(parseFloat(tceStats[k]) / 1000)}k pd` : ""}</div>
+                      <div style={{ fontSize: 10, color: C.faint, marginTop: 3, textAlign: "center" }}>{tceStats[k] ? `USD ${Math.round(parseFloat(tceStats[k]) / 1000)}k pd` : ""}</div>
                     </div>
                   ))}
                 </div>
@@ -2092,11 +2093,11 @@ Any direction`}</pre>
                     <thead><tr>
                       <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>Segment</th>
                       <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>Spot WS</th>
-                      <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>FFA trend (Aug–Oct)</th>
+                      <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>{marketHeadings.ffa || "FFA trend (BALMO / +1 / +2)"}</th>
                     </tr></thead>
                     <tbody>
                       {["tc23", "tc6"].map((seg, i) => (
-                        <tr key={seg} style={{ borderTop: "1px solid " + C.bd, background: i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent" }}>
+                        <tr key={seg} style={{ borderTop: "1px solid " + C.bd, background: i % 2 === 0 ? C.bg3 : C.bg2 }}>
                           <td style={{ padding: "6px 10px", fontWeight: 700, color: C.tx }}>{seg === "tc23" ? "TC23" : "TC6"}</td>
                           <td style={{ padding: "6px 10px" }}>
                             <input value={handy[seg].spotWS} onChange={e => setHandy(p => ({ ...p, [seg]: { ...p[seg], spotWS: e.target.value } }))} placeholder="WS" className="rpt-edit"
@@ -2108,8 +2109,8 @@ Any direction`}</pre>
                               <div style={{ display: "flex", gap: 4 }}>
                                 {["ffaAug", "ffaSep", "ffaOct"].map(f => (
                                   <input key={f} value={handy[seg][f]} onChange={e => setHandy(p => ({ ...p, [seg]: { ...p[seg], [f]: e.target.value } }))}
-                                    placeholder={f.slice(3)} className="rpt-edit"
-                                    style={{ width: 40, fontSize: 10, color: C.faint }} />
+                                    placeholder={({ffaAug:"BALMO",ffaSep:"+1",ffaOct:"+2"})[f]} className="rpt-edit"
+                                    style={{ width: 55, fontSize: 10, color: C.dim }} />
                                 ))}
                               </div>
                             </div>
@@ -2232,7 +2233,7 @@ Any direction`}</pre>
                       <thead><tr style={{ background: "#eaf2fc" }}>
                         <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Segment</th>
                         <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Spot WS</th>
-                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>FFA Aug / Sep / Oct</th>
+                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>BALMO / +1 / +2</th>
                       </tr></thead>
                       <tbody>
                         {["tc23", "tc6"].map((seg, i) => (
@@ -2294,7 +2295,7 @@ Any direction`}</pre>
                 <div style={{ display: "flex", gap: 6 }}>
                   <button onClick={saveReport} style={{ ...SB, background: "rgba(63,185,80,0.12)", border: "1px solid rgba(63,185,80,0.45)", color: "#3fb950" }}>Save</button>
                   <button onClick={() => window.print()} style={{ ...SB, background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.45)", color: "#6366f1" }}>Print</button>
-                  <button onClick={async () => { try { await navigator.clipboard.writeText(`${reportType} · ${reportDate}\n\n${commentary}`); } catch {} }} style={{ ...SB, background: "rgba(245,166,35,0.12)", border: "1px solid rgba(245,166,35,0.45)", color: "#f5a623" }}>Copy</button>
+                  <button onClick={async () => { try { await navigator.clipboard.writeText(`${reportType} · ${reportDate}\n\n${commentary}`); } catch {} }} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Copy</button>
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 11 }}>
