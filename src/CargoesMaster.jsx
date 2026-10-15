@@ -34,6 +34,27 @@ const POS_WRAP={border:"1px solid "+C.bd,borderRadius:8,overflow:"auto",minWidth
 
 const btn=(active=false)=>({fontSize:11,fontWeight:700,padding:"3px 7px",borderRadius:3,border:"1px solid "+(active?C.blue:C.bd),background:active?"rgba(88,166,255,.18)":C.bg3,color:active?"#d9ecff":"#9fc3f5",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"});
 const input={background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:11,padding:"6px 7px",outline:"none",boxSizing:"border-box"};
+// Laycan range filter: supports ISO dates and short broker dates (e.g. "08 Oct").
+function cargoLaycanDate(value, referenceDate = new Date()) {
+  if (!value) return null;
+  const text = String(value).trim();
+  const iso = text.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/);
+  if (iso) {
+    const d = new Date(+iso[1], +iso[2] - 1, +iso[3]);
+    return d.getFullYear() === +iso[1] && d.getMonth() === +iso[2] - 1 && d.getDate() === +iso[3] ? d : null;
+  }
+  const short = text.match(/^(\\d{1,2})[\\s/.-]+([a-z]{3,9})(?:[\\s/.-]+(\\d{2,4}))?$/i);
+  if (!short) return null;
+  const months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+  const month = months.indexOf(short[2].slice(0, 3).toLowerCase());
+  if (month < 0) return null;
+  const day = +short[1];
+  const ref = referenceDate instanceof Date && !isNaN(referenceDate) ? referenceDate : new Date();
+  const year = short[3] ? (+short[3] < 100 ? 2000 + +short[3] : +short[3]) : ref.getFullYear();
+  const years = short[3] ? [year] : [year - 1, year, year + 1];
+  const dates = years.map(y => new Date(y, month, day)).filter(d => d.getMonth() === month && d.getDate() === day);
+  return dates.sort((a, b) => Math.abs(a - ref) - Math.abs(b - ref))[0] || null;
+}
 function weekBounds(offset=0){const n=new Date();n.setHours(0,0,0,0);const dow=(n.getDay()+6)%7;const m=new Date(n);m.setDate(n.getDate()-dow+offset*7);const s=new Date(m);s.setDate(m.getDate()+6);return[m,s];}
 function CargoMonthChart({ data, total }){
   const wrapRef = React.useRef(null);
@@ -240,12 +261,14 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
  useEffect(()=>()=>clearTimeout(toastTimer.current),[]);
  const pressAction=(name)=>{setPressedAction(name);setTimeout(()=>setPressedAction(v=>v===name?"":v),450);};
  const [search,setSearch]=useState(""),[status,setStatus]=useState("ALL"),[time,setTime]=useState(""),[grade,setGrade]=useState(""),[tag,setTag]=useState(""),[ex,setEx]=useState(""),[toR,setToR]=useState(""),[parseTag,setParseTag]=useState(""),[showAdd,setShowAdd]=useState(false),[sort,setSort]=useState("updated"),[dir,setDir]=useState(-1);
- const [section,setSection]=useState("all");
+ const [laycanStart,setLaycanStart]=useState("");
+  const [laycanEnd,setLaycanEnd]=useState("");
+  const [section,setSection]=useState("all");
  const [contributorFilter,setContributorFilter]=useState("");
  const [extraTags,setExtraTags]=useState([]);
  const activeTags=tag?[tag,...extraTags]:extraTags;
  const chooseTag=(value,ctrl)=>{if(ctrl){const next=new Set(activeTags);next.has(value)?next.delete(value):next.add(value);const a=[...next];setTag(a[0]||"");setExtraTags(a.slice(1));}else{setTag(tag===value&&extraTags.length===0?"":value);setExtraTags([]);}};
- const clearFilters=()=>{setSearch("");setStatus("ALL");setTime("");setGrade("");setTag("");setExtraTags([]);setEx("");setToR("");setContributorFilter("");};
+ const clearFilters=()=>{setSearch("");setStatus("ALL");setTime("");setGrade("");setTag("");setExtraTags([]);setEx("");setToR("");setContributorFilter("");setLaycanStart("");setLaycanEnd("");};
   const [visualTab,setVisualTab]=useState("chart");
  // Intermediate is a segment in the same cargoes master table.
  const addInter=async c=>onAddC({...c,market_segment:"INTERMEDIATE"});
@@ -284,7 +307,7 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
  const saveView=()=>{
    const name=window.prompt("Name this Cargoes view:")?.trim();
    if(!name)return;
-   const view={name,search,status,time,grade,tag,ex,toR,contributorFilter,sort,dir,columns:[...visible]};
+   const view={name,search,status,time,grade,tag,ex,toR,contributorFilter,laycanStart,laycanEnd,sort,dir,columns:[...visible]};
    const next=[...savedViews.filter(v=>v.name!==name),view];
    setSavedViews(next);localStorage.setItem(viewKey,JSON.stringify(next));setSelectedView(name);
  };
@@ -293,12 +316,13 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
    const v=savedViews.find(x=>x.name===name);
    if(!v)return;
    setSearch(v.search||"");setStatus(v.status||"ALL");setTime(v.time||"");
-   setGrade(v.grade||"");setTag(v.tag||"");setEx(v.ex||"");setToR(v.toR||"");setContributorFilter(v.contributorFilter||"");
+   setLaycanStart(v.laycanStart||"");setLaycanEnd(v.laycanEnd||"");
+    setGrade(v.grade||"");setTag(v.tag||"");setEx(v.ex||"");setToR(v.toR||"");setContributorFilter(v.contributorFilter||"");
    setSort(v.sort||"updated");setDir(v.dir??-1);
    if(Array.isArray(v.columns))setVisible(new Set(v.columns));
  };
  const resetView=()=>{
-   setSelectedView("");setSearch("");setStatus("ALL");setTime("");setGrade("");setTag("");setEx("");setToR("");setSort("updated");setDir(-1);
+   setSelectedView("");setSearch("");setStatus("ALL");setTime("");setLaycanStart("");setLaycanEnd("");setGrade("");setTag("");setEx("");setToR("");setSort("updated");setDir(-1);
  };
  const deleteView=()=>{
    if(!selectedView||!window.confirm(`Delete view "${selectedView}"?`))return;
@@ -343,11 +367,23 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
     return ()=>{active=false};
   },[cargoTotal]);
  const groups=useMemo(()=>{try{return JSON.parse(localStorage.getItem("signal_cargo_filter_groups")||"[]")}catch{return[]}},[cargoes.length]),grades=groups.filter(g=>(g.category||"grade")==="grade"),tags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
- const filtered=useMemo(()=>{let a=cargoes.filter(c=>{if(section==="inter"&&c.market_segment!=="INTERMEDIATE")return false;if(section==="all"&&hideIntermediate&&String(c.market_segment||"").trim().toUpperCase()==="INTERMEDIATE")return false;if(contributorFilter&&editorInitials(c.entered_by)!==contributorFilter)return false;if(ex&&c.ex_region!==ex)return false;if(toR&&c.to_region!==toR)return false;if(status!=="ALL"&&c.status!==status)return false;if(activeTags.length&&!activeTags.some(t=>String(c.tag||"").split(/[,;|]/).map(s=>s.trim()).includes(t)))return false;if(time){const d=new Date(c.updated||c.added||0),now=new Date(),[tw0,tw1]=weekBounds(0),[lw0,lw1]=weekBounds(-1);tw1.setHours(23,59,59,999);lw1.setHours(23,59,59,999);if(time==="tw"&&!(d>=tw0&&d<=tw1))return false;if(time==="lw"&&!(d>=lw0&&d<=lw1))return false;if(time==="ytd"&&d<new Date(now.getFullYear(),0,1))return false;}if(grade&&!String(c.cargo||"").toLowerCase().includes(grade.toLowerCase()))return false;if(search&&!JSON.stringify(c).toLowerCase().includes(search.toLowerCase()))return false;return true});const f=sort==="added"?"added":sort;return [...a].sort((x,y)=>{let A=x[f]||x.updated||"",B=y[f]||y.updated||"";if(f==="added"||f==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime()}const primary=(A<B?-1:A>B?1:0)*dir;if(primary)return primary;
+ const filtered=useMemo(()=>{let a=cargoes.filter(c=>{if(section==="inter"&&c.market_segment!=="INTERMEDIATE")return false;if(section==="all"&&hideIntermediate&&String(c.market_segment||"").trim().toUpperCase()==="INTERMEDIATE")return false;if(contributorFilter&&editorInitials(c.entered_by)!==contributorFilter)return false;if(ex&&c.ex_region!==ex)return false;if(toR&&c.to_region!==toR)return false;if(status!=="ALL"&&c.status!==status)return false;if(activeTags.length&&!activeTags.some(t=>String(c.tag||"").split(/[,;|]/).map(s=>s.trim()).includes(t)))return false;if(laycanStart||laycanEnd){
+  const rangeStart=laycanStart?new Date(laycanStart+"T00:00:00"):null;
+  const rangeEnd=laycanEnd?new Date(laycanEnd+"T00:00:00"):null;
+  const reference=rangeStart||rangeEnd||new Date();
+  const from=cargoLaycanDate(c.from,reference);
+  const to=cargoLaycanDate(c.to,from||reference);
+  // A cargo qualifies when its laycan overlaps the selected period.
+  if(!from&&!to)return false;
+  const first=from||to,last=to||from;
+  const earliest=first<=last?first:last,latest=first<=last?last:first;
+  if(rangeStart&&latest<rangeStart)return false;
+  if(rangeEnd&&earliest>rangeEnd)return false;
+}if(time){const d=new Date(c.updated||c.added||0),now=new Date(),[tw0,tw1]=weekBounds(0),[lw0,lw1]=weekBounds(-1);tw1.setHours(23,59,59,999);lw1.setHours(23,59,59,999);if(time==="tw"&&!(d>=tw0&&d<=tw1))return false;if(time==="lw"&&!(d>=lw0&&d<=lw1))return false;if(time==="ytd"&&d<new Date(now.getFullYear(),0,1))return false;}if(grade&&!String(c.cargo||"").toLowerCase().includes(grade.toLowerCase()))return false;if(search&&!JSON.stringify(c).toLowerCase().includes(search.toLowerCase()))return false;return true});const f=sort==="added"?"added":sort;return [...a].sort((x,y)=>{let A=x[f]||x.updated||"",B=y[f]||y.updated||"";if(f==="added"||f==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime()}const primary=(A<B?-1:A>B?1:0)*dir;if(primary)return primary;
 // Stable tie-breakers: editing Intel/regions/etc must never change row position.
 const xa=new Date(x.added||0).getTime()||0,ya=new Date(y.added||0).getTime()||0;if(xa!==ya)return ya-xa;
-return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hideIntermediate,search,status,time,tag,extraTags,grade,ex,toR,contributorFilter,sort,dir]);
- useEffect(()=>{setPage(1);},[section,hideIntermediate,search,status,time,tag,extraTags,grade,ex,toR,contributorFilter,sort,dir]);
+return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hideIntermediate,search,status,time,tag,extraTags,grade,ex,toR,contributorFilter,laycanStart,laycanEnd,sort,dir]);
+ useEffect(()=>{setPage(1);},[section,hideIntermediate,search,status,time,tag,extraTags,grade,ex,toR,contributorFilter,laycanStart,laycanEnd,sort,dir]);
  const pageRows=useMemo(()=>filtered.slice(0,page*PAGE_SIZE),[filtered,page]);
  const allCols=[["status","Status",3.5],["ex_region","Ex Region",5.5],["to_region","To Region",5.5],["p_and_c","P&C",3],["intelligence","Intel",4],["vessel","Vessel",7],["charterer","Charterer",6.5],["qty","Qty",4],["cargo","Cargo",6],["load","Load",8],["disch","Disch",7.5],["from","From",4.5],["to","To",4.5],["freight","Freight",7],["comment","Comment",9],["tag","Tag",5],["source","Source",5],["updated","Updated",6.5]];
  const shown=allCols.filter(([k])=>visible.has(k));
@@ -427,9 +463,21 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
          <div className="qf-views" style={{minWidth:0,display:"flex",flexDirection:"column",gap:5}}><b style={{fontSize:11,color:C.blue}}>VIEW</b><select aria-label="Saved view" value={selectedView} onChange={e=>applyView(e.target.value)} style={{...input,width:"100%",minWidth:0}}><option value="">Current filters</option>{savedViews.map(v=><option key={v.name} value={v.name}>{v.name}</option>)}</select>{section==="all"&&<button onClick={()=>setHideIntermediate(v=>!v)} style={{...btn(hideIntermediate),textAlign:"left",whiteSpace:"normal",color:hideIntermediate?"#6ee7b7":C.dim}}>{hideIntermediate?"✓ Hide Intermediate":"Hide Intermediate"}</button>}<div style={{display:"flex",flexWrap:"wrap",gap:4}}><button onClick={saveView} style={btn()}>+ Save view</button>{selectedView&&<><button onClick={resetView} style={btn()}>Reset view</button><button onClick={deleteView} style={btn()}>Delete</button></>}</div></div>
 <div className="qf-grade"><b style={{fontSize:11,color:C.blue}}>GRADE</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{grades.slice(0,6).map(g=><button key={g.id} onClick={()=>setGrade(x=>x===g.id?"":g.id)} style={btn(grade===g.id)}>{g.label}</button>)}</div></div>
     <div className="qf-period"><b style={{fontSize:11,color:C.dim}}>PERIOD</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={btn(time===k)}>{l}</button>)}</div></div>
-    <div className="qf-tags"><b style={{fontSize:11,color:C.pink}}>TAG</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{tags.slice(0,7).map(t=><button key={t} onClick={e=>chooseTag(t,e.ctrlKey||e.metaKey)} title="Ctrl+click to select multiple tags" style={btn(activeTags.includes(t))}>{t}</button>)}</div></div>
+    <div className="qf-laycan" style={{minWidth:0,gridColumn:"span 2"}}>
+  <b style={{fontSize:11,color:C.blue}}>LAYCAN PERIOD</b>
+  <div style={{display:"flex",gap:5,marginTop:4,alignItems:"center",flexWrap:"wrap"}}>
+    <label style={{fontSize:10,color:C.dim,display:"flex",alignItems:"center",gap:4}}>From
+      <input aria-label="Laycan period from" type="date" value={laycanStart} max={laycanEnd||undefined} onChange={e=>setLaycanStart(e.target.value)} style={{...input,width:125,minWidth:0,colorScheme:"dark"}}/>
+    </label>
+    <label style={{fontSize:10,color:C.dim,display:"flex",alignItems:"center",gap:4}}>To
+      <input aria-label="Laycan period to" type="date" value={laycanEnd} min={laycanStart||undefined} onChange={e=>setLaycanEnd(e.target.value)} style={{...input,width:125,minWidth:0,colorScheme:"dark"}}/>
+    </label>
+    {(laycanStart||laycanEnd)&&<button onClick={()=>{setLaycanStart("");setLaycanEnd("");}} style={btn()}>×</button>}
+  </div>
+</div>
+     <div className="qf-tags"><b style={{fontSize:11,color:C.pink}}>TAG</b><div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>{tags.slice(0,7).map(t=><button key={t} onClick={e=>chooseTag(t,e.ctrlKey||e.metaKey)} title="Ctrl+click to select multiple tags" style={btn(activeTags.includes(t))}>{t}</button>)}</div></div>
     {[["EX REGION",ex,setEx],["TO REGION",toR,setToR]].map(([lab,val,setter])=><div key={lab} className="qf-region" style={{minWidth:0}}><b style={{fontSize:11,color:C.blue}}>{lab}</b><div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:4}}><button onClick={()=>setter("")} style={btn(!val)}>ALL</button>{REGIONS.map(r=><button key={r} onClick={()=>setter(val===r?"":r)} style={btn(val===r)}>{r}</button>)}</div></div>)}
-    {(search||status!=="ALL"||time||grade||activeTags.length||ex||toR)&&<button onClick={clearFilters} title="Reset all cargo filters and tags" style={{...btn(),position:"absolute",left:8,bottom:7,color:"#ff7777",borderColor:"rgba(255,90,90,.6)",background:"rgba(110,25,35,.18)",fontWeight:700,zIndex:2}}>× Clear all filters</button>}
+    {(search||status!=="ALL"||time||grade||activeTags.length||ex||toR||laycanStart||laycanEnd)&&<button onClick={clearFilters} title="Reset all cargo filters and tags" style={{...btn(),position:"absolute",left:8,bottom:7,color:"#ff7777",borderColor:"rgba(255,90,90,.6)",background:"rgba(110,25,35,.18)",fontWeight:700,zIndex:2}}>× Clear all filters</button>}
    </div></details>
    <div className="cargo-panel-handle" title="Drag to resize Filters and Rate Matrix" onPointerDown={e=>beginPanelResize(1,e)} style={{left:`calc(${panelWidths[0]+panelWidths[1]}% - 1px)`}}/>
    <details className="qf-mobile-fold qf-chart-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Rates / Cargo Graph</summary><div className="qf-chart" style={{flex:"1 1 35%",minWidth:0,height:"100%",display:"flex"}}><div style={{display:"flex",flexDirection:"column",width:"100%",minHeight:0}}><div style={{flex:1,minHeight:0,overflow:"auto"}}>{visualTab==="rates"?<Suspense fallback={null}><RateMatrixCard/></Suspense>:<CargoMonthChart data={allMonthly||monthly} total={allMonthly?cargoTotal||cargoes.length:cargoes.length}/>}</div></div></div></details>
