@@ -373,8 +373,8 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
   const readDay=v=>{
     if(!v)return null;
     const t=String(v).trim();
-    const iso=t.match(/^\\d{4}-\\d{1,2}-(\\d{1,2})/);
-    const day=iso?Number(iso[1]):Number((t.match(/^(\\d{1,2})(?:\\D|$)/)||[])[1]);
+    const iso=t.match(/^\d{4}-\d{1,2}-(\d{1,2})/);
+    const day=iso?Number(iso[1]):Number((t.match(/^(\d{1,2})(?:\D|$)/)||[])[1]);
     return day>=1&&day<=31?day:null;
   };
   const a=readDay(c.from),b=readDay(c.to);
@@ -530,3 +530,4 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
   )}
  </div>;
 }
++
