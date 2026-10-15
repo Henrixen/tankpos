@@ -1,13 +1,8 @@
 
 export const CARGO_EXPORT_KEY = "cargo_copy_format_v1";
-
-export const CARGO_EXPORT_DEFAULT =
-  " | {charterer} | {qty} | {cargo} | {load} | {disch} | {from} | {to} | {freight} | {comment} |";
-
+export const CARGO_EXPORT_DEFAULT = "{charterer|CNR} | {vessel|TBN} | {qty} {cargo} | {load} to {disch} | {from} - {to} | {freight|RNR}";
 export const CARGO_EXPORT_SECOND_KEY = "cargo_copy_format_second_v1";
-
-export const CARGO_EXPORT_SECOND_DEFAULT =
-  "{charterer} | {vessel} | {qty} {cargo} | {load} to {disch} | {from} - {to} | {freight}";
+export const CARGO_EXPORT_SECOND_DEFAULT = "{charterer|CNR} | {vessel|TBN} | {qty} {cargo} | {load} to {disch} | {from} - {to} | {freight|RNR}";
 
 export function readCargoExportSecondFormat() {
   try {
@@ -33,21 +28,51 @@ export function readCargoExportFormat() {
   }
 }
 
-export function formatCargoExportRow(row, format) {
-  return String(format).replace(
-    /\{([a-z_]+)\}/gi,
-    (token, key) =>
-      CARGO_EXPORT_FIELDS.includes(key.toLowerCase())
-        ? String(row?.[key.toLowerCase()] ?? "")
-        : token
-  );
+function cargoExportNameCase(value) {
+  const abbreviations = new Set([
+    "CSS", "SA", "BASF", "BP", "AG",
+    "ARA", "NWE", "UKC", "USG", "WAF", "SAF"
+  ]);
+
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/\b[a-z]/g, c => c.toUpperCase())
+    .replace(/\b[A-Za-z]+\b/g, word =>
+      abbreviations.has(word.toUpperCase())
+        ? word.toUpperCase()
+        : word
+    );
 }
 
-// WhatsApp uses *bold*, _italic_, ~strike~,
-// and `inline code` markers.
+export function formatCargoExportRow(row, format) {
+  return String(format ?? "")
+    .replace(/\\n/g, "\n")
+    .replace(
+      /\{([a-z_][a-z_0-9]*)(?:\|([^}]*))?\}/gi,
+      (token, key, fallback) => {
+        const field = CARGO_EXPORT_FIELDS.find(
+          f => f.toLowerCase() === key.toLowerCase()
+        );
 
+        if (!field) return token;
+
+        const raw = field === "vessel"
+          ? (row?.vessel ?? row?.vessel_name)
+          : row?.[field];
+
+        const value = String(raw ?? "").trim();
+
+        if (!value) return fallback ?? "";
+
+        return ["charterer", "vessel", "load", "disch"].includes(field)
+          ? cargoExportNameCase(value)
+          : value;
+      }
+    );
+}
+
+// WhatsApp uses *bold*, _italic_, ~strike~, and `inline code` markers.
 export const CARGO_WA_KEY = "cargo_whatsapp_format_v1";
-
 export const CARGO_WA_DEFAULT =
   "*{charterer|CNR}* | {qty|TBN} {cargo|TBC}\n" +
   "{load|TBN} → {disch|TBN}\n" +
@@ -67,11 +92,8 @@ export function formatCargoWhatsAppRow(row) {
     /\{([a-z_]+)(?:\|([^}]*))?\}/gi,
     (token, key, fallback) => {
       const field = key.toLowerCase();
-
       if (!CARGO_EXPORT_FIELDS.includes(field)) return token;
-
       const value = row?.[field];
-
       return value == null || String(value).trim() === ""
         ? (fallback ?? "")
         : String(value);
@@ -80,9 +102,7 @@ export function formatCargoWhatsAppRow(row) {
 }
 
 // Positions WhatsApp template, independent of Cargoes.
-
 export const POSITION_WA_KEY = "positions_whatsapp_format_v1";
-
 export const POSITION_WA_DEFAULT =
   "*{vessel|TBN}* — {operator|TBN}\n" +
   "{openPort|TBN} | {date|TBN}\n" +
@@ -113,11 +133,8 @@ export function formatPositionWhatsAppRow(
       const field = POSITION_WA_FIELDS.find(
         x => x.toLowerCase() === key.toLowerCase()
       );
-
       if (!field) return token;
-
       const value = row?.[field];
-
       return value == null || String(value).trim() === ""
         ? (fallback ?? "")
         : String(value);
@@ -125,9 +142,7 @@ export function formatPositionWhatsAppRow(
   );
 }
 
-// Compact WhatsApp tables:
-// fixed-width cells inside a monospace code block.
-
+// Compact WhatsApp tables.
 function waTitleCase(value) {
   return String(value ?? "")
     .toLowerCase()
@@ -135,12 +150,8 @@ function waTitleCase(value) {
 }
 
 function waCell(value, width) {
-  const text = String(value ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
-
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
   const chars = Array.from(text);
-
   return (
     chars.length > width
       ? chars.slice(0, width - 1).join("") + "…"
@@ -149,24 +160,16 @@ function waCell(value, width) {
 }
 
 function waTable(columns, rows) {
-  const line = columns
-    .map(c => "-".repeat(c.width))
-    .join(" ");
-
-  const header = columns
-    .map(c => waCell(c.title, c.width))
-    .join(" ");
-
+  const line = columns.map(c => "-".repeat(c.width)).join(" ");
+  const header = columns.map(c => waCell(c.title, c.width)).join(" ");
   const body = rows.map(row =>
     columns.map(c => waCell(c.value(row), c.width)).join(" ")
   );
-
   return "```\n" + [header, line, ...body].join("\n") + "\n```";
 }
 
 function waDate(v) {
   if (!v) return "TBN";
-
   const text = String(v).trim();
   const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
 
@@ -176,7 +179,6 @@ function waDate(v) {
       Number(iso[2]) - 1,
       Number(iso[3])
     );
-
     return d.toLocaleDateString("en-GB", {
       day: "2-digit",
       month: "short"
@@ -188,9 +190,7 @@ function waDate(v) {
 
 function waQty(row) {
   const v = row?.qty ?? row?.quantity ?? row?.volume;
-
   if (v == null || String(v).trim() === "") return "TBN";
-
   return String(v);
 }
 
@@ -243,7 +243,6 @@ export function formatPositionsWhatsAppTable(rows) {
         const n = Number(
           String(r.dwt ?? "").replace(/[^0-9.]/g, "")
         );
-
         return Number.isFinite(n) && n > 0
           ? n.toLocaleString("en-US")
           : "TBN";
@@ -252,14 +251,12 @@ export function formatPositionsWhatsAppTable(rows) {
     {
       title: "Port",
       width: 18,
-      value: r =>
-        r.openPort || r.open_port || r.port || "TBN"
+      value: r => r.openPort || r.open_port || r.port || "TBN"
     },
     {
       title: "Date",
       width: 9,
-      value: r =>
-        waDate(r.date || r.openDate || r.open_date)
+      value: r => waDate(r.date || r.openDate || r.open_date)
     }
   ], rows);
 }
