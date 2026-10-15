@@ -432,19 +432,20 @@ function CargoExportEditor(){
  const addField=(field)=>setFormat(v=>v+"{"+field+"}");
  const save=()=>{localStorage.setItem(CARGO_EXPORT_KEY,format);setStatus("Saved on this device");};
  return <div style={{display:"flex",flexDirection:"column",gap:9}}>
-  <div style={{fontSize:11,color:C.faint}}>Customize the text copied by Copy all and Copy selected. Click a field to insert its placeholder; type any separators, symbols or text between fields.</div>
+  <div style={{fontSize:11,color:C.faint}}>Configure Copy List and Copy Text independently. Use {field|fallback} (e.g. {charterer|CNR}, {vessel|TBN}, {freight|RNR}) to show fallback text when a cell is empty. Click a field to insert its placeholder.</div>
+  <div style={{fontSize:11,fontWeight:700,color:C.blue}}>Copy List</div>
   <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{CARGO_EXPORT_FIELDS.map(f=><button key={f} onClick={()=>addField(f)} style={{...inp,width:"auto",cursor:"pointer",color:"#9ec5ff",fontSize:10,padding:"4px 7px"}}>+ {f}</button>)}</div>
   <textarea rows={3} value={format} onChange={e=>{setFormat(e.target.value);setStatus("");}} style={{...inp,resize:"vertical",lineHeight:1.6}}/>
   <div style={{fontSize:10,color:C.faint}}>Preview</div>
   <div style={{...inp,whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{formatCargoExportRow({charterer:"Seariver",vessel:"Golden Olive",qty:"15kt",cargo:"Gasoil",load:"Antwerp",disch:"Brest",from:"14 Oct",to:"14 Oct",freight:"USD 337,5K LS",comment:""},format)}</div>
   <div style={{display:"flex",alignItems:"center",gap:8}}><button onClick={save} style={{...inp,width:"auto",cursor:"pointer",color:"#6ee7b7"}}>Save format</button><button onClick={()=>{setFormat(CARGO_EXPORT_DEFAULT);setStatus("Click Save format to apply default");}} style={{...inp,width:"auto",cursor:"pointer"}}>Reset default</button><span style={{fontSize:10,color:C.faint}}>{status}</span></div>
-  <div style={{fontSize:11,color:C.blue,fontWeight:700,marginTop:8}}>Copy selected 2 — alternate format</div>
-  <div style={{fontSize:10,color:C.faint}}>A second independent template for the Copy selected 2 button in Cargoes.</div>
+  <div style={{fontSize:11,color:C.blue,fontWeight:700,marginTop:8}}>Copy Text — independent format</div>
+  <div style={{fontSize:10,color:C.faint}}>Customize the Copy Text button separately; actual newlines in the template are preserved.</div>
   <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{CARGO_EXPORT_FIELDS.map(f=><button key={f} onClick={()=>setSecondFormat(v=>v+"{"+f+"}")} style={{...inp,width:"auto",cursor:"pointer",color:"#9ec5ff",fontSize:10,padding:"4px 7px"}}>+ {f}</button>)}</div>
   <textarea rows={3} value={secondFormat} onChange={e=>{setSecondFormat(e.target.value);setSecondStatus("");}} style={{...inp,resize:"vertical",lineHeight:1.6}}/>
   <div style={{fontSize:10,color:C.faint}}>Preview — format 2</div>
   <div style={{...inp,whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{formatCargoExportRow({charterer:"Seariver",vessel:"Golden Olive",qty:"15kt",cargo:"ULSD",load:"Port Jerome",disch:"ARA",from:"08 Oct",to:"09 Oct",freight:"USD 337,5K LS"},secondFormat)}</div>
-  <div style={{display:"flex",alignItems:"center",gap:8}}><button onClick={()=>{localStorage.setItem(CARGO_EXPORT_SECOND_KEY,secondFormat);setSecondStatus("Saved on this device");}} style={{...inp,width:"auto",cursor:"pointer",color:"#6ee7b7"}}>Save format 2</button><button onClick={()=>{setSecondFormat(CARGO_EXPORT_SECOND_DEFAULT);setSecondStatus("Click Save format 2 to apply default");}} style={{...inp,width:"auto",cursor:"pointer"}}>Reset format 2</button><span style={{fontSize:10,color:C.faint}}>{secondStatus}</span></div>
+  <div style={{display:"flex",alignItems:"center",gap:8}}><button onClick={()=>{localStorage.setItem(CARGO_EXPORT_SECOND_KEY,secondFormat);setSecondStatus("Saved on this device");}} style={{...inp,width:"auto",cursor:"pointer",color:"#6ee7b7"}}>Save Copy Text</button><button onClick={()=>{setSecondFormat(CARGO_EXPORT_SECOND_DEFAULT);setSecondStatus("Click Save Copy Text to apply default");}} style={{...inp,width:"auto",cursor:"pointer"}}>Reset format 2</button><span style={{fontSize:10,color:C.faint}}>{secondStatus}</span></div>
   <div style={{fontSize:10,color:C.faint}}>Copy CSV retains its standard comma-separated format.</div>
  </div>;
 }
