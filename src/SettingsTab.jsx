@@ -432,7 +432,7 @@ function CargoExportEditor(){
  const addField=(field)=>setFormat(v=>v+"{"+field+"}");
  const save=()=>{localStorage.setItem(CARGO_EXPORT_KEY,format);setStatus("Saved on this device");};
  return <div style={{display:"flex",flexDirection:"column",gap:9}}>
-  <div style={{fontSize:11,color:C.faint}}>Configure Copy List and Copy Text independently. Use {field|fallback} (e.g. {charterer|CNR}, {vessel|TBN}, {freight|RNR}) to show fallback text when a cell is empty. Click a field to insert its placeholder.</div>
+  <div style={{fontSize:11,color:C.faint}}>Configure Copy List and Copy Text independently. Use {"{field|fallback}"} (e.g. {"{charterer|CNR}"}, {"{vessel|TBN}"}, {"{freight|RNR}"}) to show fallback text when a cell is empty. Click a field to insert its placeholder.</div>
   <div style={{fontSize:11,fontWeight:700,color:C.blue}}>Copy List</div>
   <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{CARGO_EXPORT_FIELDS.map(f=><button key={f} onClick={()=>addField(f)} style={{...inp,width:"auto",cursor:"pointer",color:"#9ec5ff",fontSize:10,padding:"4px 7px"}}>+ {f}</button>)}</div>
   <textarea rows={3} value={format} onChange={e=>{setFormat(e.target.value);setStatus("");}} style={{...inp,resize:"vertical",lineHeight:1.6}}/>
