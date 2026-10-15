@@ -151,27 +151,27 @@ function TCETrendMini({ lastMonth, current, ytd }) {
   if (lm == null && cur == null) return (
     <div style={{ padding: 20, textAlign: "center", color: "rgba(219,230,245,0.3)", fontSize: 11 }}>Enter TCE figures below to see the trend</div>
   );
-  const W = 300, H = 150, P = { t: 20, r: 20, b: 26, l: 34 };
+  const W = 340, H = 180, P = { t: 34, r: 22, b: 28, l: 28 };
   const w = W - P.l - P.r, h = H - P.t - P.b;
   const vals = [lm, cur, y].filter(v => v != null);
   const maxV = Math.max(...vals, 1) * 1.15, minV = Math.min(...vals, 0) * 0.9;
   const yFor = v => P.t + h - ((v - minV) / (maxV - minV || 1)) * h;
-  const bw = w * 0.18;
+  const bw = w * 0.29;
   const x1 = P.l + w * 0.28, x2 = P.l + w * 0.72;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H}>
       {y != null && <>
         <line x1={P.l} y1={yFor(y)} x2={W - P.r} y2={yFor(y)} stroke="#a3a3a3" strokeWidth="1.3" strokeDasharray="5,4" />
-        <text x={W - P.r} y={yFor(y) - 5} fill="rgba(219,230,245,0.5)" fontSize="9" textAnchor="end">YTD avg ${y.toLocaleString("nb-NO")}/d</text>
+        <text x={W - P.r} y={13} fill="rgba(219,230,245,0.5)" fontSize="9" textAnchor="end">YTD AVG ${y.toLocaleString("nb-NO")}/d</text>
       </>}
       {lm != null && <>
         <rect x={x1 - bw / 2} y={yFor(lm)} width={bw} height={h - (yFor(lm) - P.t)} fill="rgba(219,230,245,0.35)" rx="2" />
-        <text x={x1} y={yFor(lm) - 6} fill="#dbe6f5" fontSize="10" textAnchor="middle">${lm.toLocaleString("nb-NO")}/d</text>
+        <text x={x1} y={Math.max(28,yFor(lm) - 7)} fill="#dbe6f5" fontSize="10" textAnchor="middle">${lm.toLocaleString("nb-NO")}/d</text>
         <text x={x1} y={H - 8} fill="rgba(219,230,245,0.5)" fontSize="9" textAnchor="middle">Last month</text>
       </>}
       {cur != null && <>
         <rect x={x2 - bw / 2} y={yFor(cur)} width={bw} height={h - (yFor(cur) - P.t)} fill="#3a82f6" rx="2" />
-        <text x={x2} y={yFor(cur) - 6} fill="#dbe6f5" fontSize="10" textAnchor="middle">${cur.toLocaleString("nb-NO")}/d</text>
+        <text x={x2} y={Math.max(28,yFor(cur) - 7)} fill="#dbe6f5" fontSize="10" textAnchor="middle">${cur.toLocaleString("nb-NO")}/d</text>
         <text x={x2} y={H - 8} fill="rgba(219,230,245,0.5)" fontSize="9" textAnchor="middle">Spot</text>
       </>}
     </svg>
@@ -359,10 +359,12 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   );
   const [tceDefaults, setTceDefaults] = useState(null); // vessel profile shared with TCECalculator
   const [tceStats, setTceStats] = useState({ current: "", lastMonth: "", ytd: "" });
+  const [handyCommentary, setHandyCommentary] = useState("");
   const [handy, setHandy] = useState({
     tc23: { spotWS: "", ffaAug: "", ffaSep: "", ffaOct: "" },
     tc6:  { spotWS: "", ffaAug: "", ffaSep: "", ffaOct: "" },
   });
+  const [handySegments, setHandySegments] = useState(["tc23","tc6"]);
   const [benchmarkRefreshStatus, setBenchmarkRefreshStatus] = useState(null);
   const [pendingDriverDelete, setPendingDriverDelete] = useState(null);
   const [pendingFixtureDelete, setPendingFixtureDelete] = useState(null);
@@ -1044,7 +1046,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         rate_grid: rateGrid, tce_earnings: tceEarnings, fixtures, quotes };
       // Extra report layout lives inside the existing JSON rate_grid column; no schema migration needed.
       payload.rate_grid = { ...rateGrid, __marketEditor: { headings: marketHeadings,
-        benchmarks: benchmarkRows, drivers: driverBullets, tceStats, handy } };
+        benchmarks: benchmarkRows, drivers: driverBullets, tceStats, handy, handyCommentary, handySegments } };
       const { error } = await supabase.from("reports").insert([payload]);
       if (error) throw error;
       alert("Saved."); loadSavedReports();
@@ -1064,6 +1066,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         if (Array.isArray(editor.drivers)) setDriverBullets(editor.drivers);
         if (editor.tceStats) setTceStats(editor.tceStats);
         if (editor.handy) setHandy(editor.handy);
+        setHandyCommentary(editor.handyCommentary || "");
+        if (editor.handySegments) setHandySegments(editor.handySegments);
       }
       setActiveMarketReportId(id);
       setSection("market");
@@ -1537,11 +1541,11 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       </div>}
 
       {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
-      <div style={{ width: 170, minWidth: 170, display: "flex", flexDirection: "column", background: C.bg2, borderRight: "1px solid " + C.bd, overflow: "hidden" }}>
+      <div style={{ width: 210, minWidth: 210, display: "flex", flexDirection: "column", background: C.bg2, borderRight: "1px solid " + C.bd, overflow: "hidden" }}>
         <div style={{ display: "flex", borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
           {[["poslist", "Positions"], ["market", "Market"]].map(([k, l]) => (
             <button key={k} onClick={() => setSection(k === "poslist" && section === "quick" ? "quick" : k)}
-              style={{ flex: 1, padding: "13px 5px", fontSize: 12, fontWeight: 800, cursor: "pointer", border: "none",
+              style={{ flex: 1, padding: "16px 8px", fontSize: 12, fontWeight: 800, cursor: "pointer", border: "none",
                 borderBottom: (section === k || (k === "poslist" && section === "quick")) ? `2px solid ${ACCENT}` : "2px solid transparent",
                 background: (section === k || (k === "poslist" && section === "quick")) ? C.bg3 : C.bg2, color: (section === k || (k === "poslist" && section === "quick")) ? "#ffffff" : "#9bb4d3", fontFamily: "inherit" }}>
               {l}
@@ -1552,8 +1556,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
           <div style={{ padding: "8px 10px", borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
             {[["poslist", "Position List"], ["quick", "Quick list"]].map(([k, l]) => (
               <button key={k} onClick={() => setSection(k)}
-                style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 11px", marginBottom: 6, borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: section === k ? 700 : 400,
-                  border: `1px solid ${section === k ? ACCENT : C.bd}`, background: section === k ? C.bg4 : C.bg2, color: section === k ? ACCENT : C.dim, fontFamily: "inherit" }}>
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "13px 14px", marginBottom: 9, borderRadius: 7, cursor: "pointer", fontSize: 12, fontWeight: section === k ? 700 : 400,
+                  border: `1px solid ${section === k ? ACCENT : C.bd}`, background: section === k ? "rgba(88,166,255,0.13)" : "transparent", color: section === k ? "#e8f2ff" : C.dim, fontFamily: "inherit" }}>
                 {l}
               </button>
             ))}
@@ -1589,7 +1593,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
             <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Report type</div>
             {MARKET_TYPES.map(t => (
               <button key={t} onClick={() => { setReportType(t); initRateGrid(t); }}
-                style={{ display: "block", width: "100%", textAlign: "left", padding: "11px 10px", marginBottom: 5, borderRadius: 5, cursor: "pointer", fontSize: 13, fontWeight: reportType === t ? 700 : 400, border: `1px solid ${reportType === t ? ACCENT : C.bd}`, background: reportType === t ? "rgba(58,130,246,0.1)" : "transparent", color: "#ffffff", fontFamily: "inherit" }}>{t}</button>
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "13px 14px", marginBottom: 9, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: reportType === t ? 700 : 400, border: `1px solid ${reportType === t ? ACCENT : C.bd}`, background: reportType === t ? "rgba(58,130,246,0.1)" : "transparent", color: "#ffffff", fontFamily: "inherit" }}>{t}</button>
             ))}
             {savedReports.filter(r => r.report_type !== "Position List").length > 0 && (
               <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid " + C.bd }}>
@@ -1648,12 +1652,26 @@ Any direction`}</pre>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
 
         {section === "poslist" && <>
-          {/* Toolbar */}
+          {/* Primary actions — separate from report layout settings */}
           <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 12px", background: C.bg2, borderBottom: "1px solid " + C.bd, flexWrap: "wrap", flexShrink: 0 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>Position List</span>
+            <span style={{ fontSize: 13, fontWeight: 750, color: C.tx, marginRight: 8 }}>POSITION LIST</span>
             <input type="date" value={posDate} onChange={e => setPosDate(e.target.value)} style={{ ...IS }} />
-            <div style={{ display: "flex", gap: 5, alignItems: "center", padding: "4px 8px", background: C.bg3, border: "1px solid " + C.bd2, borderRadius: 6 }}>
-              <span style={{fontSize:9,color:C.faint,fontWeight:700,marginRight:4}}>LAYOUT</span>
+            <div style={{ flex: 1 }} />
+            {posSaveStatus && <span style={{ fontSize: 10, color: posSaveStatus === "Saved ✓" ? "#43e97b" : C.dim }}>{posSaveStatus}</span>}
+            {exportStatus && <span style={{ fontSize: 10, color: C.dim, maxWidth: 220 }}>{exportStatus}</span>}
+            {reportVessels.length > 0 && (
+              <button onClick={() => { if (window.confirm(`Remove all ${reportVessels.length} vessels from this position list?`)) clearAll(); }}
+                style={{ ...SB, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.45)", color: "#ef4444" }}>Clear all</button>
+            )}
+            <button onClick={savePositionList} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Save</button>
+            <button onClick={handleCopyEmail} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Copy for Email</button>
+            <button onClick={handleDownloadPng} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Download PNG</button>
+            <button onClick={() => window.print()} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Print / PDF</button>
+          </div>
+          {/* Secondary layout toolbar */}
+          <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,flexShrink:0,flexWrap:"wrap"}}>
+            <div style={{ display: "flex", gap: 5, alignItems: "center", padding: "5px 8px", background: "transparent", border: "1px solid " + C.bd2, borderRadius: 6 }}>
+              <span style={{fontSize:10,color:C.dim,fontWeight:700,marginRight:9,letterSpacing:"0.07em"}}>GROUP & SORT</span>
               {[["segment", "By Segment"], ["region", "By Region"]].map(([k, l]) => (
                 <button key={k} onClick={() => setPosGroupBy(k)}
                   style={{ ...SB, border: `1px solid ${posGroupBy === k ? ACCENT : C.bd}`, background: posGroupBy === k ? C.bg4 : "transparent", color: posGroupBy === k ? C.tx : C.dim }}>{l}</button>
@@ -1673,17 +1691,6 @@ Any direction`}</pre>
               </button>
               <button onClick={addManualVessel} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: ACCENT }}>+ Add manual row</button>
             </div>
-            <div style={{ flex: 1 }} />
-            {posSaveStatus && <span style={{ fontSize: 10, color: posSaveStatus === "Saved ✓" ? "#43e97b" : C.dim }}>{posSaveStatus}</span>}
-            {exportStatus && <span style={{ fontSize: 10, color: C.dim, maxWidth: 220 }}>{exportStatus}</span>}
-            {reportVessels.length > 0 && (
-              <button onClick={() => { if (window.confirm(`Remove all ${reportVessels.length} vessels from this position list?`)) clearAll(); }}
-                style={{ ...SB, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.45)", color: "#ef4444" }}>Clear all</button>
-            )}
-            <button onClick={savePositionList} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Save</button>
-            <button onClick={handleCopyEmail} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Copy for Email</button>
-            <button onClick={handleDownloadPng} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Download PNG</button>
-            <button onClick={() => window.print()} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Print / PDF</button>
           </div>
           {/* Editable title strip */}
           <div style={{ display: "flex", gap: 8, padding: "5px 12px", background: C.bg3, borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
@@ -1797,7 +1804,7 @@ Any direction`}</pre>
                     <col style={{ width: "32%" }} /><col style={{ width: "14%" }} /><col style={{ width: "16%" }} /><col style={{ width: "20%" }} /><col style={{ width: "14%" }} /><col style={{ width: "4%" }} />
                   </colgroup>
                   <thead>
-                    <tr style={{ position: "sticky", top: 0, background: C.bg2 }}>
+                    <tr style={{ position: "sticky", top: 0, background: "#101d30" }}>
                       {["Vessel", "DWT", "Open date", "Open port", "Updated", ""].map(h => (
                         <th key={h} style={{ padding: "5px 6px", textAlign: "left", fontSize: 9, fontWeight: 700, color: C.dim, textTransform: "uppercase", borderBottom: "1px solid " + C.bd, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h}</th>
                       ))}
@@ -1806,8 +1813,8 @@ Any direction`}</pre>
                   <tbody>
                     {vesselPool.map((v, i) => (
                       <tr key={(v.imoNo || v.vessel) + "_" + i} onClick={() => addFromPool(v)} className="pool-row"
-                        style={{ cursor: "pointer", background: i % 2 === 0 ? "rgba(255,255,255,0.03)" : "transparent" }}>
-                        <td style={{ padding: "5px 6px", fontWeight: 600, color: C.tx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel}</td>
+                        style={{ cursor: "pointer", background: i % 2 === 0 ? "#101d30" : "#0b1626", borderBottom:"1px solid rgba(58,130,246,0.055)" }}>
+                        <td style={{ padding: "6px 6px", fontWeight: 700, color: "#58b6ff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel}</td>
                         <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.dwt ? fmtDwt(v.dwt) : ""}</td>
                         <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.date || ""}</td>
                         <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.openPort || ""}</td>
@@ -1954,9 +1961,9 @@ Any direction`}</pre>
               <div className="no-export" style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
                 {marketExportStatus && <span style={{ fontSize: 11, color: C.dim }}>{marketExportStatus}</span>}
                 <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} style={IS} />
-                <button onClick={saveReport} style={{ ...SB, background: "rgba(63,185,80,0.15)", border: "1px solid rgba(63,185,80,0.45)", color: "#3fb950" }}>Save</button>
-                <button onClick={() => window.print()} style={{ ...SB, background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.45)", color: "#a5b4fc" }}>Print</button>
-                <button onClick={handleMarketCopyEmail} style={{ ...SB, background: "rgba(245,166,35,0.15)", border: "1px solid rgba(245,166,35,0.45)", color: "#f5a623" }}>Copy for email</button>
+                <button onClick={saveReport} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Save</button>
+                <button onClick={() => window.print()} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Print</button>
+                <button onClick={handleMarketCopyEmail} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Copy for email</button>
                 <button onClick={handleMarketDownloadPng} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Download PNG</button>
               </div>
 
@@ -2021,6 +2028,7 @@ Any direction`}</pre>
                   {editMarketHeading("benchmark",{fontSize:12,fontWeight:700,color:"#79c0ff",textTransform:"uppercase",letterSpacing:"0.05em"})}
                   <div className="no-export" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     {benchmarkRefreshStatus && <span style={{ fontSize: 10, color: C.dim }}>{benchmarkRefreshStatus}</span>}
+                    <button className="no-export" onClick={()=>setBenchmarkRows(p=>[...p,{key:"custom-"+Date.now(),label:"New route",from:"",to:"",freight:"",lastWeek:"",tce:null,tceLastWeek:null,override:true}])} style={{...SB,background:C.bg3,color:C.blue,border:"1px solid "+C.bd}}>+ Add route</button>
                     <button onClick={refreshBenchmarkFromSaved} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim, fontSize: 10 }}>↻ Refresh from saved</button>
                   </div>
                 </div>
@@ -2062,12 +2070,12 @@ Any direction`}</pre>
               {/* ── TCE earnings ── */}
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 13 }}>
                 {editMarketHeading("tce",{fontSize:12,fontWeight:700,color:C.tx,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:10})}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,180px))", gap: 16, justifyContent: "center", textAlign: "center" }}>
                   {[["current", "Current"], ["lastMonth", "Last month avg"], ["ytd", "YTD avg"]].map(([k, label]) => (
                     <div key={k}>
                       <label style={{ display: "block", fontSize: 10, color: C.dim, marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>{label}</label>
                       <input value={tceStats[k]} onChange={e => setTceStats(p => ({ ...p, [k]: e.target.value }))} placeholder="e.g. 31000" className="rpt-edit"
-                        style={{ width: "100%", fontSize: 18, fontWeight: 700 }} />
+                        style={{ width: "100%", fontSize: 18, fontWeight: 700, textAlign: "center" }} />
                       <div style={{ fontSize: 10, color: C.faint, marginTop: 3, textAlign: "center" }}>{tceStats[k] ? `USD ${Math.round(parseFloat(tceStats[k]) / 1000)}k pd` : ""}</div>
                     </div>
                   ))}
@@ -2078,15 +2086,12 @@ Any direction`}</pre>
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden" }}>
                 <div style={{ padding: "8px 13px", background: "rgba(74,144,226,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#79c0ff", textTransform: "uppercase", letterSpacing: "0.05em" }}>Handy</div>
-                  <div className="no-export" style={{ fontSize: 10, color: C.faint }}>Paste a screenshot or text with WS/FFA levels below</div>
+                  <button className="no-export" onClick={()=>{const k="seg"+Date.now();setHandySegments(p=>[...p,k]);setHandy(p=>({...p,[k]:{name:"New segment",spotWS:"",ffaAug:"",ffaSep:"",ffaOct:""}}));}} style={{...SB,background:C.bg3,color:C.blue,border:"1px solid "+C.bd}}>+ Add segment</button>
                 </div>
-                <div className="no-export" style={{ padding: "8px 13px" }}>
-                  <textarea
-                    onPaste={handleHandyImagePaste}
-                    onChange={e => { if (e.target.value.trim()) { parseHandyText(e.target.value); e.target.value = ""; } }}
-                    placeholder="Paste screenshot (Ctrl+V) or type e.g. 'TC23 spot WS 160, FFA Aug WS 163' then click away…"
-                    style={{ width: "100%", minHeight: 44, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontSize: 11, padding: 7, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
-                  {handyParseMsg && <div style={{ fontSize: 10, color: handyParsing ? C.dim : "#3fb950", marginTop: 4 }}>{handyParseMsg}</div>}
+                <div style={{ padding: "9px 13px" }}>
+                  <textarea value={handyCommentary} onChange={e=>setHandyCommentary(e.target.value)}
+                    placeholder="Handy market commentary / what to watch…"
+                    style={{ width: "100%", minHeight: 75, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 12, padding: 9, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }} />
                 </div>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
@@ -2096,9 +2101,10 @@ Any direction`}</pre>
                       <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>{marketHeadings.ffa || "FFA trend (BALMO / +1 / +2)"}</th>
                     </tr></thead>
                     <tbody>
-                      {["tc23", "tc6"].map((seg, i) => (
+                      {handySegments.map((seg, i) => (
                         <tr key={seg} style={{ borderTop: "1px solid " + C.bd, background: i % 2 === 0 ? C.bg3 : C.bg2 }}>
-                          <td style={{ padding: "6px 10px", fontWeight: 700, color: C.tx }}>{seg === "tc23" ? "TC23" : "TC6"}</td>
+                          <td style={{ padding: "6px 10px", fontWeight: 700, color: C.tx }}><input className="rpt-edit" value={handy[seg]?.name || (seg === "tc23" ? "TC23" : seg === "tc6" ? "TC6" : seg)} onChange={e=>setHandy(p=>({...p,[seg]:{...p[seg],name:e.target.value}}))} style={{width:100,color:C.blue,fontWeight:700}} />
+                            <button className="no-export" title="Remove segment" onClick={()=>setHandySegments(p=>p.filter(k=>k!==seg))} style={{border:0,background:"transparent",color:C.faint,cursor:"pointer"}}>×</button></td>
                           <td style={{ padding: "6px 10px" }}>
                             <input value={handy[seg].spotWS} onChange={e => setHandy(p => ({ ...p, [seg]: { ...p[seg], spotWS: e.target.value } }))} placeholder="WS" className="rpt-edit"
                               style={{ width: 55, fontSize: 12, fontWeight: 600 }} />
@@ -2229,6 +2235,7 @@ Any direction`}</pre>
 
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Handy</div>
+                    {handyCommentary && <div style={{fontSize:11,color:"#334155",whiteSpace:"pre-wrap",lineHeight:1.6,marginBottom:8}}>{handyCommentary}</div>}
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                       <thead><tr style={{ background: "#eaf2fc" }}>
                         <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Segment</th>
@@ -2236,11 +2243,11 @@ Any direction`}</pre>
                         <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>BALMO / +1 / +2</th>
                       </tr></thead>
                       <tbody>
-                        {["tc23", "tc6"].map((seg, i) => (
+                        {handySegments.map((seg, i) => (
                           <tr key={seg} style={{ borderTop: "1px solid #d9e2ef" }}>
-                            <td style={{ padding: "5px 8px", fontWeight: 700 }}>{seg === "tc23" ? "TC23" : "TC6"}</td>
+                            <td style={{ padding: "5px 8px", fontWeight: 700 }}>{handy[seg]?.name || (seg === "tc23" ? "TC23" : seg === "tc6" ? "TC6" : seg)}</td>
                             <td style={{ padding: "5px 8px" }}>{handy[seg].spotWS ? "WS " + handy[seg].spotWS : "—"}</td>
-                            <td style={{ padding: "5px 8px", color: "#6b7280" }}>{[handy[seg].ffaAug, handy[seg].ffaSep, handy[seg].ffaOct].filter(Boolean).map(v => "WS " + v).join(" / ") || "—"}</td>
+                            <td style={{ padding: "5px 8px", color: "#6b7280" }}><div style={{display:"flex",alignItems:"center",gap:10}}><FfaSparkline aug={handy[seg].ffaAug} sep={handy[seg].ffaSep} oct={handy[seg].ffaOct}/><span>{[handy[seg].ffaAug, handy[seg].ffaSep, handy[seg].ffaOct].filter(Boolean).map(v => "WS " + v).join(" / ") || "—"}</span></div></td>
                           </tr>
                         ))}
                       </tbody>
@@ -2274,7 +2281,7 @@ Any direction`}</pre>
 
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{marketHeadings.tce}</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,180px))", gap: 16, justifyContent: "center", textAlign: "center" }}>
                       {[["current", "Current"], ["lastMonth", "Last month avg"], ["ytd", "YTD avg"]].map(([k, label]) => (
                         <div key={k} style={{ background: "#eaf2fc", borderRadius: 6, padding: "6px 9px" }}>
                           <div style={{ fontSize: 9, color: "#6b7280", textTransform: "uppercase" }}>{label}</div>
@@ -2293,7 +2300,7 @@ Any direction`}</pre>
                   <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} style={IS} />
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={saveReport} style={{ ...SB, background: "rgba(63,185,80,0.12)", border: "1px solid rgba(63,185,80,0.45)", color: "#3fb950" }}>Save</button>
+                  <button onClick={saveReport} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Save</button>
                   <button onClick={() => window.print()} style={{ ...SB, background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.45)", color: "#6366f1" }}>Print</button>
                   <button onClick={async () => { try { await navigator.clipboard.writeText(`${reportType} · ${reportDate}\n\n${commentary}`); } catch {} }} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Copy</button>
                 </div>
@@ -2335,7 +2342,7 @@ Any direction`}</pre>
               {reportType !== "TimeCharter" && (
                 <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 13 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, marginBottom: 10 }}>Indicative TCE ($/day)</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,180px))", gap: 16, justifyContent: "center", textAlign: "center" }}>
                     {["10k", "15k", "20k"].map(seg => (
                       <div key={seg}>
                         <label style={{ display: "block", fontSize: 10, color: C.dim, marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>{seg}</label>
@@ -2395,7 +2402,7 @@ Any direction`}</pre>
               <div style={{ flex: 1 }} />
               {quickSaveStatus && <span style={{ fontSize: 11, color: quickSaveStatus === "Saved ✓" ? "#43e97b" : C.dim }}>{quickSaveStatus}</span>}
               <button onClick={saveQuickPositions} disabled={!quickRows.length}
-                style={{ ...SB, opacity: quickRows.length ? 1 : 0.4, background: "rgba(63,185,80,0.15)", border: "1px solid rgba(63,185,80,0.45)", color: "#3fb950" }}>
+                style={{ ...SB, opacity: quickRows.length ? 1 : 0.4, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>
                 Save
               </button>
               {quickRows.length > 0 && (
