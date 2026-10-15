@@ -38,12 +38,12 @@ const input={background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx
 function cargoLaycanDate(value, referenceDate = new Date()) {
   if (!value) return null;
   const text = String(value).trim();
-  const iso = text.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})/);
+  const iso = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (iso) {
     const d = new Date(+iso[1], +iso[2] - 1, +iso[3]);
     return d.getFullYear() === +iso[1] && d.getMonth() === +iso[2] - 1 && d.getDate() === +iso[3] ? d : null;
   }
-  const short = text.match(/^(\\d{1,2})[\\s/.-]+([a-z]{3,9})(?:[\\s/.-]+(\\d{2,4}))?$/i);
+  const short = text.match(/^(\d{1,2})[\s/.-]+([a-z]{3,9})(?:[\s/.-]+(\d{2,4}))?$/i);
   if (!short) return null;
   const months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
   const month = months.indexOf(short[2].slice(0, 3).toLowerCase());
@@ -477,9 +477,9 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
     {[["","All"],["tw","This week"],["lw","Last week"],["ytd","YTD"]].sort((a,b)=>a[1].localeCompare(b[1])).map(([k,l])=><button key={l} onClick={()=>setTime(k)} style={btn(time===k)}>{l}</button>)}
     <b style={{fontSize:10,color:C.blue,marginTop:3}}>LAYCAN DAYS</b>
     <div style={{display:"flex",alignItems:"center",gap:4}}>
-      <input aria-label="Laycan from day" type="text" inputMode="numeric" maxLength={2} placeholder="From" value={laycanStart} onChange={e=>{const v=e.target.value.replace(/\\D/g,"");if(!v||(+v>=1&&+v<=31))setLaycanStart(v)}} style={{...input,width:43,padding:"5px 4px",textAlign:"center"}}/>
+      <input aria-label="Laycan from day" type="text" inputMode="numeric" maxLength={2} placeholder="From" value={laycanStart} onChange={e=>{const v=e.target.value.replace(/\D/g,"");if(!v||(+v>=1&&+v<=31))setLaycanStart(v)}} style={{...input,width:43,padding:"5px 4px",textAlign:"center"}}/>
       <span style={{color:C.faint,fontSize:10}}>–</span>
-      <input aria-label="Laycan to day" type="text" inputMode="numeric" maxLength={2} placeholder="To" value={laycanEnd} onChange={e=>{const v=e.target.value.replace(/\\D/g,"");if(!v||(+v>=1&&+v<=31))setLaycanEnd(v)}} style={{...input,width:43,padding:"5px 4px",textAlign:"center"}}/>
+      <input aria-label="Laycan to day" type="text" inputMode="numeric" maxLength={2} placeholder="To" value={laycanEnd} onChange={e=>{const v=e.target.value.replace(/\D/g,"");if(!v||(+v>=1&&+v<=31))setLaycanEnd(v)}} style={{...input,width:43,padding:"5px 4px",textAlign:"center"}}/>
     </div>
     {(laycanStart||laycanEnd)&&<button onClick={()=>{setLaycanStart("");setLaycanEnd("")}} style={btn()}>Clear days</button>}
   </div>
@@ -530,4 +530,3 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
   )}
  </div>;
 }
-+
