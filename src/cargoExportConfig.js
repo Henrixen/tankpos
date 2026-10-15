@@ -1,10 +1,21 @@
 
-import { normaliseFreight } from "./utils";
-
 export const CARGO_EXPORT_KEY = "cargo_copy_format_v1";
 
 export const CARGO_EXPORT_DEFAULT =
   " | {charterer} | {qty} | {cargo} | {load} | {disch} | {from} | {to} | {freight} | {comment} |";
+
+export const CARGO_EXPORT_SECOND_KEY = "cargo_copy_format_second_v1";
+
+export const CARGO_EXPORT_SECOND_DEFAULT =
+  "{charterer} | {vessel} | {qty} {cargo} | {load} to {disch} | {from} - {to} | {freight}";
+
+export function readCargoExportSecondFormat() {
+  try {
+    return localStorage.getItem(CARGO_EXPORT_SECOND_KEY) ?? CARGO_EXPORT_SECOND_DEFAULT;
+  } catch {
+    return CARGO_EXPORT_SECOND_DEFAULT;
+  }
+}
 
 export const CARGO_EXPORT_FIELDS = [
   "status", "ex_region", "to_region", "p_and_c",
@@ -22,31 +33,19 @@ export function readCargoExportFormat() {
   }
 }
 
-// Supports {field|replacement} for empty values.
 export function formatCargoExportRow(row, format) {
   return String(format).replace(
-    /\{([a-z_]+)(?:\|([^}]*))?\}/gi,
-    (token, key, fallback) => {
-      const field = key.toLowerCase();
-
-      if (!CARGO_EXPORT_FIELDS.includes(field)) return token;
-
-      const value = row?.[field];
-
-      if (value == null || String(value).trim() === "") {
-        return fallback ?? "";
-      }
-
-      if (field === "freight") {
-        return normaliseFreight(value);
-      }
-
-      return String(value);
-    }
+    /\{([a-z_]+)\}/gi,
+    (token, key) =>
+      CARGO_EXPORT_FIELDS.includes(key.toLowerCase())
+        ? String(row?.[key.toLowerCase()] ?? "")
+        : token
   );
 }
 
-// Cargoes WhatsApp template
+// WhatsApp uses *bold*, _italic_, ~strike~,
+// and `inline code` markers.
+
 export const CARGO_WA_KEY = "cargo_whatsapp_format_v1";
 
 export const CARGO_WA_DEFAULT =
@@ -68,6 +67,7 @@ export function formatCargoWhatsAppRow(row) {
     /\{([a-z_]+)(?:\|([^}]*))?\}/gi,
     (token, key, fallback) => {
       const field = key.toLowerCase();
+
       if (!CARGO_EXPORT_FIELDS.includes(field)) return token;
 
       const value = row?.[field];
@@ -79,7 +79,8 @@ export function formatCargoWhatsAppRow(row) {
   );
 }
 
-// Positions WhatsApp template
+// Positions WhatsApp template, independent of Cargoes.
+
 export const POSITION_WA_KEY = "positions_whatsapp_format_v1";
 
 export const POSITION_WA_DEFAULT =
@@ -124,9 +125,20 @@ export function formatPositionWhatsAppRow(
   );
 }
 
-// Fixed-width WhatsApp table formatting
+// Compact WhatsApp tables:
+// fixed-width cells inside a monospace code block.
+
+function waTitleCase(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/\b[a-z]/g, letter => letter.toUpperCase());
+}
+
 function waCell(value, width) {
-  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  const text = String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+
   const chars = Array.from(text);
 
   return (
@@ -137,8 +149,13 @@ function waCell(value, width) {
 }
 
 function waTable(columns, rows) {
-  const line = columns.map(c => "-".repeat(c.width)).join(" ");
-  const header = columns.map(c => waCell(c.title, c.width)).join(" ");
+  const line = columns
+    .map(c => "-".repeat(c.width))
+    .join(" ");
+
+  const header = columns
+    .map(c => waCell(c.title, c.width))
+    .join(" ");
 
   const body = rows.map(row =>
     columns.map(c => waCell(c.value(row), c.width)).join(" ")
@@ -173,16 +190,21 @@ function waQty(row) {
   const v = row?.qty ?? row?.quantity ?? row?.volume;
 
   if (v == null || String(v).trim() === "") return "TBN";
+
   return String(v);
 }
 
-// Cargoes: Charterer | Qty / Grade | Load / Disch | Laycan | Rate
 export function formatCargoWhatsAppTable(rows) {
   return waTable([
     {
       title: "Charterer",
       width: 14,
-      value: r => r.charterer || "CNR"
+      value: r => waTitleCase(r.charterer || "CNR")
+    },
+    {
+      title: "Vessel",
+      width: 18,
+      value: r => waTitleCase(r.vessel || r.vessel_name || "TBN")
     },
     {
       title: "Qty / Grade",
@@ -207,7 +229,6 @@ export function formatCargoWhatsAppTable(rows) {
   ], rows);
 }
 
-// Positions: Vessel | DWT | Port | Date
 export function formatPositionsWhatsAppTable(rows) {
   return waTable([
     {
@@ -231,12 +252,14 @@ export function formatPositionsWhatsAppTable(rows) {
     {
       title: "Port",
       width: 18,
-      value: r => r.openPort || r.open_port || r.port || "TBN"
+      value: r =>
+        r.openPort || r.open_port || r.port || "TBN"
     },
     {
       title: "Date",
       width: 9,
-      value: r => waDate(r.date || r.openDate || r.open_date)
+      value: r =>
+        waDate(r.date || r.openDate || r.open_date)
     }
   ], rows);
 }
