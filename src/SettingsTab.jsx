@@ -1,10 +1,9 @@
-import { NAV_KEY, NAV_CLOUD_KEY, NAV_ITEMS, navDefault, navNorm, navLoad } from "./NavigationRegistry";
 import React, { useState, useEffect } from "react";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
 import UserManager from "./UserManager";
 import TagManagement from "./TagManagement";
-import { CARGO_EXPORT_KEY, CARGO_EXPORT_DEFAULT, CARGO_EXPORT_FIELDS, readCargoExportFormat, formatCargoExportRow, CARGO_WA_KEY, CARGO_WA_DEFAULT, readCargoWhatsAppFormat, formatCargoWhatsAppRow, POSITION_WA_KEY, POSITION_WA_DEFAULT, POSITION_WA_FIELDS, readPositionWhatsAppFormat, formatPositionWhatsAppRow } from "./cargoExportConfig";
+import { CARGO_EXPORT_KEY, CARGO_EXPORT_DEFAULT, CARGO_EXPORT_SECOND_KEY, CARGO_EXPORT_SECOND_DEFAULT, CARGO_EXPORT_FIELDS, readCargoExportFormat, readCargoExportSecondFormat, formatCargoExportRow, CARGO_WA_KEY, CARGO_WA_DEFAULT, readCargoWhatsAppFormat, formatCargoWhatsAppRow, POSITION_WA_KEY, POSITION_WA_DEFAULT, POSITION_WA_FIELDS, readPositionWhatsAppFormat, formatPositionWhatsAppRow } from "./cargoExportConfig";
 
 const INTERUKC_KEY = "signal_interukc_config";
 const DEFAULT_CONFIG = {
@@ -218,7 +217,30 @@ function GroupRow({g,editing,onStartEdit,onSaveEdit,onCancelEdit,onDelete,editLa
 }
 
 
-
+const NAV_KEY="signal_navigation_config";
+const NAV_CLOUD_KEY="navigation_config";
+const DEFAULT_USER_TABS=["pos","cargo2","clients"];
+// Cargoes and the former Quotes & Fixtures view share the cargo2 tab ID.
+const UI_ZOOM_KEY="signal_ui_zoom";
+const UI_ZOOM_CLOUD_KEY="ui_zoom";
+const NAV_ITEMS=[
+ ["pos","Positions","#58a6ff","⌖"],["cargo2","Cargoes","#faa356","▤"],["fix","Fixing","#c792ea","✓"],["tcv","Time Charter","#fb923c","◷"],
+ ["clients","Clients","#a8e6a3","♙"],["matrix","Matrix","#43e97b","▦"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","⚡"],
+ ["dash","Dashboard","#43e97b","▥"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▧"],["map","Freight Map","#10b981","⌁"],
+ ["cal","Calendar","#4fc3f7","□"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","◈"],["newbuilds","Newbuilds","#fbbf24","△"]
+];
+function navDefault(){return{mode:"classic",collapsed:false,order:NAV_ITEMS.map(x=>x[0]),hidden:[],groups:[
+ {id:"market",label:"Market",tabs:["pos","cargo2","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
+ {id:"tools",label:"Tools",tabs:["projects","tce","map"]},{id:"reporting",label:"Reporting",tabs:["dash","reports"]},
+ {id:"workspace",label:"Workspace",tabs:["clients","notes","cal","settings"]}]};}
+function navNorm(x){
+ const d=navDefault(),valid=new Set(NAV_ITEMS.map(x=>x[0]));
+ const order=(Array.isArray(x?.order)?x.order:[]).filter(id=>valid.has(id));d.order.forEach(id=>{if(!order.includes(id))order.push(id)});
+ const groups=(Array.isArray(x?.groups)?x.groups:d.groups).map((g,i)=>({id:String(g.id||"g"+i),label:String(g.label||"Menu"),tabs:(g.tabs||[]).filter(id=>valid.has(id))}));
+ const used=new Set(groups.flatMap(g=>g.tabs));const missing=order.filter(id=>!used.has(id));if(missing.length){if(!groups.length)groups.push({id:"other",label:"Other",tabs:[]});groups.at(-1).tabs.push(...missing);}
+ return{mode:["classic","grouped","sidebar"].includes(x?.mode)?x.mode:"classic",collapsed:!!x?.collapsed,order,hidden:(x?.hidden||[]).filter(id=>valid.has(id)),groups};
+}
+function navLoad(){try{return navNorm(JSON.parse(localStorage.getItem(NAV_KEY)||"null"));}catch{return navDefault();}}
 
 
 
@@ -316,7 +338,7 @@ function AppScaleControl(){
 
 function NavigationEditor(){
  const [cfg,setCfg]=useState(navLoad),[status,setStatus]=useState("");
- const meta=Object.fromEntries([...NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,icon}]),...cfg.order.filter(id=>!NAV_ITEMS.some(x=>x[0]===id)).map(id=>[id,{label:id.replace(/[-_]/g," ").replace(/\b\w/g,c=>c.toUpperCase()),icon:"◈"}])]);
+ const meta=Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,icon}]));
  const [drag,setDrag]=useState(null);
  function dropTab(targetId,targetGroupId=null){
    if(!drag||drag.type!=="tab"||drag.id===targetId){setDrag(null);return;}
@@ -385,7 +407,7 @@ function WhatsAppExportEditor(){
     <textarea value={format} onChange={e=>setFormat(e.target.value)} rows={5} style={{...inp,resize:"vertical",fontFamily:"monospace"}}/>
     <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{CARGO_EXPORT_FIELDS.map(f=><button key={f} onClick={()=>setFormat(x=>x+"{"+f+"}")} style={{...inp,width:"auto",cursor:"pointer",padding:"3px 6px"}}>{'{'+f+'}'}</button>)}</div>
     <div style={{display:"flex",gap:8}}><button onClick={save} style={{...inp,width:"auto",cursor:"pointer",color:"#43e97b"}}>Save WhatsApp format</button><button onClick={()=>{setFormat(CARGO_WA_DEFAULT);localStorage.setItem(CARGO_WA_KEY,CARGO_WA_DEFAULT);}} style={{...inp,width:"auto",cursor:"pointer"}}>Reset</button>{saved&&<span style={{color:"#43e97b",fontSize:11}}>Saved</span>}</div>
-    <div style={{fontSize:11,color:C.faint}}>Preview (sample):</div><pre style={{whiteSpace:"pre-wrap",fontSize:11,margin:0,color:C.tx}}>{format.replace(/\{([a-z_]+)(?:\|([^}]*))?\}/gi,(token,key,fallback)=>{const sample={charterer:"",qty:"15kt",cargo:"Gasoil",load:"Antwerp",disch:"Brest",from:"14 Oct",to:"14 Oct",freight:"",comment:""};return sample[key.toLowerCase()]||fallback||"";})}</pre>
+    <div style={{fontSize:11,color:C.faint}}>Preview (sample):</div><pre style={{whiteSpace:"pre-wrap",fontSize:11,margin:0,color:C.tx}}>{format.replace(/\{([a-z_]+)(?:\|([^}]*))?\}/gi,(token,key,fallback)=>{const sample={charterer:"Seariver",vessel:"Golden Olive",qty:"15kt",cargo:"Gasoil",load:"Antwerp",disch:"Brest",from:"14 Oct",to:"14 Oct",freight:"USD 337,5K LS",comment:""};return sample[key.toLowerCase()]||fallback||"";})}</pre>
   </div>;
 }
 
@@ -403,23 +425,26 @@ function PositionsWhatsAppEditor(){
 }
 
 function CargoExportEditor(){
+ const [secondFormat,setSecondFormat]=useState(readCargoExportSecondFormat);
+ const [secondStatus,setSecondStatus]=useState("");
  const [format,setFormat]=useState(readCargoExportFormat);
  const [status,setStatus]=useState("");
  const addField=(field)=>setFormat(v=>v+"{"+field+"}");
  const save=()=>{localStorage.setItem(CARGO_EXPORT_KEY,format);setStatus("Saved on this device");};
  return <div style={{display:"flex",flexDirection:"column",gap:9}}>
   <div style={{fontSize:11,color:C.faint}}>Customize the text copied by Copy all and Copy selected. Click a field to insert its placeholder; type any separators, symbols or text between fields.</div>
-  <div style={{padding:"8px 10px",border:"1px solid rgba(88,166,255,.20)",borderRadius:6,background:"rgba(88,166,255,.035)",fontSize:11,color:"#b7d0f2"}}>
-    <b>Empty fields — quick reference</b>
-    <table style={{width:"100%",marginTop:5,borderCollapse:"collapse",textAlign:"left"}}><thead><tr><th style={{padding:"4px 6px"}}>Template</th><th style={{padding:"4px 6px"}}>When empty</th></tr></thead><tbody>
-      {[["{charterer|CNR}","CNR"],["{freight|RNR}","RNR"],["{load|TBN}","TBN"],["{charterer}","Blank"],["{charterer|}","Blank"]].map(([example,result])=><tr key={example}><td style={{padding:"3px 6px",borderTop:"1px solid rgba(88,166,255,.10)"}}><code>{example}</code></td><td style={{padding:"3px 6px",borderTop:"1px solid rgba(88,166,255,.10)"}}>{result}</td></tr>)}
-    </tbody></table>
-  </div>
   <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{CARGO_EXPORT_FIELDS.map(f=><button key={f} onClick={()=>addField(f)} style={{...inp,width:"auto",cursor:"pointer",color:"#9ec5ff",fontSize:10,padding:"4px 7px"}}>+ {f}</button>)}</div>
   <textarea rows={3} value={format} onChange={e=>{setFormat(e.target.value);setStatus("");}} style={{...inp,resize:"vertical",lineHeight:1.6}}/>
   <div style={{fontSize:10,color:C.faint}}>Preview</div>
-  <div style={{...inp,whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{formatCargoExportRow({charterer:"CSS SA",qty:"15kt",cargo:"Gasoil",load:"Antwerp",disch:"Brest",from:"14 Oct",to:"14 Oct",freight:"",comment:""},format)}</div>
+  <div style={{...inp,whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{formatCargoExportRow({charterer:"Seariver",vessel:"Golden Olive",qty:"15kt",cargo:"Gasoil",load:"Antwerp",disch:"Brest",from:"14 Oct",to:"14 Oct",freight:"USD 337,5K LS",comment:""},format)}</div>
   <div style={{display:"flex",alignItems:"center",gap:8}}><button onClick={save} style={{...inp,width:"auto",cursor:"pointer",color:"#6ee7b7"}}>Save format</button><button onClick={()=>{setFormat(CARGO_EXPORT_DEFAULT);setStatus("Click Save format to apply default");}} style={{...inp,width:"auto",cursor:"pointer"}}>Reset default</button><span style={{fontSize:10,color:C.faint}}>{status}</span></div>
+  <div style={{fontSize:11,color:C.blue,fontWeight:700,marginTop:8}}>Copy selected 2 — alternate format</div>
+  <div style={{fontSize:10,color:C.faint}}>A second independent template for the Copy selected 2 button in Cargoes.</div>
+  <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{CARGO_EXPORT_FIELDS.map(f=><button key={f} onClick={()=>setSecondFormat(v=>v+"{"+f+"}")} style={{...inp,width:"auto",cursor:"pointer",color:"#9ec5ff",fontSize:10,padding:"4px 7px"}}>+ {f}</button>)}</div>
+  <textarea rows={3} value={secondFormat} onChange={e=>{setSecondFormat(e.target.value);setSecondStatus("");}} style={{...inp,resize:"vertical",lineHeight:1.6}}/>
+  <div style={{fontSize:10,color:C.faint}}>Preview — format 2</div>
+  <div style={{...inp,whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{formatCargoExportRow({charterer:"Seariver",vessel:"Golden Olive",qty:"15kt",cargo:"ULSD",load:"Port Jerome",disch:"ARA",from:"08 Oct",to:"09 Oct",freight:"USD 337,5K LS"},secondFormat)}</div>
+  <div style={{display:"flex",alignItems:"center",gap:8}}><button onClick={()=>{localStorage.setItem(CARGO_EXPORT_SECOND_KEY,secondFormat);setSecondStatus("Saved on this device");}} style={{...inp,width:"auto",cursor:"pointer",color:"#6ee7b7"}}>Save format 2</button><button onClick={()=>{setSecondFormat(CARGO_EXPORT_SECOND_DEFAULT);setSecondStatus("Click Save format 2 to apply default");}} style={{...inp,width:"auto",cursor:"pointer"}}>Reset format 2</button><span style={{fontSize:10,color:C.faint}}>{secondStatus}</span></div>
   <div style={{fontSize:10,color:C.faint}}>Copy CSV retains its standard comma-separated format.</div>
  </div>;
 }
@@ -493,6 +518,8 @@ export default function SettingsTab() {
         </SectionCard>
 
         <SectionCard title="Cargoes / Copy Format" subtitle="Choose fields, order and separators for copied cargo lines."><CargoExportEditor/></SectionCard>
+        <SectionCard title="Cargoes / WhatsApp Format" subtitle="Used by Copy to WA in Cargoes."><WhatsAppExportEditor/></SectionCard>
+        <SectionCard title="Positions / WhatsApp Format" subtitle="Used by Copy to WA in Positions."><PositionsWhatsAppEditor/></SectionCard>
 
         <SectionCard title="Fixing">
           <div style={{display:"flex",flexDirection:"column",gap:16}}>
