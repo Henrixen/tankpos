@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {supabase} from './supabaseclient';
 
-const ROUTES=['TC2','TC14','TC17','TC6','TC23','TC7'];
+const ROUTES=['TC2','TC14','TC6','TC23','TC7'];
 const COLORS={TC2:'#58a6ff',TC14:'#f59e0b',TC17:'#c084fc',TC6:'#34d399',TC23:'#fb7185',TC7:'#22d3ee'};
 const PERIODS=['SPOT','Oct 26','Nov 26','Dec 26','Jan 27','Feb 27','Mar 27','Apr 27','May 27','Jun 27','Jul 27','Aug 27','Sep 27'];
 const css={panel:{background:'#0b1a30',border:'1px solid #213b5d',borderRadius:8,padding:15,minWidth:0},muted:{fontSize:11,color:'#7897bb'},input:{background:'#081528',border:'1px solid #315174',borderRadius:5,color:'#e4efff',padding:'7px 9px',fontSize:12},btn:{background:'#112d4c',border:'1px solid #35659a',borderRadius:5,color:'#a9d5ff',padding:'7px 12px',cursor:'pointer',fontSize:12},head:{color:'#76b7ff',fontSize:11,fontWeight:800,letterSpacing:'.09em',textTransform:'uppercase',marginBottom:12}};
@@ -64,31 +64,39 @@ function SparkChart({items,route,metric,unit,forward=true,height=260}){
   {points.map((p,i)=><g key={i}><circle cx={xx(p.x)} cy={yy(p.y)} r="4" fill={p.label==='BALMO'?'#f5b86a':color}><title>{`${p.label}: ${format(p.y,unit)} ${unit}`}</title></circle>{(points.length<=8||i%Math.ceil(points.length/8)===0||i===points.length-1)&&<text x={xx(p.x)} y={H-18} textAnchor="middle" fill="#a6bed8" fontSize="12">{p.label}</text>}</g>)}
  </svg>;
 }
-function MonthBalanceComparison({items,route,unit}){
- const dates=[...new Set(items.filter(r=>r.route===route&&r.metric==='FFA'&&r.unit===unit&&['Current Month','Oct 26','Nov 26','Dec 26','Jan 27','Feb 27','Mar 27','Apr 27','May 27','Jun 27','Jul 27','Aug 27','Sep 27'].includes(r.period)).map(r=>r.as_of_date))].sort();
- const latest=dates.at(-1);
- const entries=items.filter(r=>r.route===route&&r.metric==='FFA'&&r.unit===unit&&r.as_of_date===latest);
- const current=entries.find(r=>canonicalPeriod(r.period,latest)===monthLabel(latest));
- // BALMO is currently stored as its delivery month (e.g. Oct 26), not a separate period.
- // Do not infer a BALMO quote from an ordinary monthly quote: the parser must retain the contract code first.
- const balmo=entries.find(r=>r.period==='BALMO');
- if(!current&&!balmo)return null;
- const difference=current&&balmo?balmo.value-current.value:null;
- return <div style={{marginTop:12,padding:'11px 12px',background:'#08182d',border:'1px solid #294463',borderRadius:6}}>
-  <div style={{display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap',marginBottom:9}}><b style={{color:'#9bc7f6',fontSize:11}}>MONTHLY ASSESSMENT VS BALANCE OF MONTH</b><span style={css.muted}>{latest} · {route} · {unit}</span></div>
-  <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',alignItems:'center',gap:10}}>
-   <div><div style={{color:'#8ebaff',fontWeight:750}}>← CURRENT MONTH</div><div style={{fontSize:21,fontWeight:800}}>{current?format(current.value,unit):'—'}</div></div>
-   <div style={{color:'#8ba8c9',textAlign:'center',fontSize:11}}>{difference==null?'vs':`${difference>=0?'+':''}${difference.toFixed(3)} ${unit}`}<div style={{fontSize:10}}>BALMO − CURMON</div></div>
-   <div style={{textAlign:'right'}}><div style={{color:'#f8ba73',fontWeight:750}}>BALMO →</div><div style={{fontSize:21,fontWeight:800}}>{balmo?format(balmo.value,unit):'—'}</div></div>
-  </div>
-  <div style={{...css.muted,marginTop:7}}>Comparisons use matching route, quote date and unit. Historical quotes remain available in saved observations.</div>
- </div>;
+function CompareChart({items,routes,metric,unit,height=370}){
+ const valid=routes.map(route=>{
+  const all=items.filter(r=>r.route===route&&r.metric===metric&&r.unit===unit&&Number.isFinite(Number(r.value)));
+  const latest=all.map(r=>r.as_of_date).sort().at(-1);
+  const same=all.filter(r=>r.as_of_date===latest);
+  const lookup=p=>same.find(r=>canonicalPeriod(r.period,latest)===p);
+  const periods=latest?[monthLabel(latest),'BALMO',...Array.from({length:2},(_,i)=>monthLabel(latest,i+1))]:[];
+  const points=periods.map((p,i)=>({i,p,value:lookup(p)?.value})).filter(p=>p.value!=null);
+  const quarter=lookup('Current Quarter')||same.find(r=>/^Q[1-4]\s*\d{2}$/i.test(r.period));
+  return {route,latest,points,quarter:quarter?.value,periods};
+ });
+ const active=valid.filter(s=>s.points.length);
+ if(!active.length)return <div style={{height,display:'grid',placeItems:'center',color:'#7897bb'}}>No matching forward assessments saved for selected routes and unit.</div>;
+ const values=active.flatMap(s=>[...s.points.map(p=>p.value),...(s.quarter!=null?[s.quarter]:[])]);
+ const min=Math.min(...values),max=Math.max(...values),padding=(max-min||Math.abs(max)*.1||1)*.15;
+ const low=min-padding,high=max+padding,W=1000,H=height,L=75,R=28,T=25,B=48;
+ const x=i=>L+i*(W-L-R)/3,y=v=>T+(high-v)/(high-low)*(H-T-B);
+ const labels=active[0].periods;
+ return <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{width:'100%',height,display:'block'}} role="img" aria-label="Forward curve comparison">
+  {[0,1,2,3,4].map(i=>{const yy=T+i*(H-T-B)/4;return <g key={i}><line x1={L} x2={W-R} y1={yy} y2={yy} stroke="#29415c" strokeDasharray="3 6"/><text x={L-12} y={yy+4} fill="#91a9c5" fontSize="12" textAnchor="end">{format(high-(high-low)*i/4,unit)}</text></g>})}
+  {labels.map((p,i)=><text key={p} x={x(i)} y={H-14} textAnchor="middle" fill="#a6bed8" fontSize="13">{p}</text>)}
+  {active.map(s=><g key={s.route}>
+   {s.points.length>1&&<path d={s.points.map((p,i)=>`${i?'L':'M'}${x(p.i)},${y(p.value)}`).join(' ')} stroke={COLORS[s.route]} strokeWidth="2.6" fill="none" vectorEffect="non-scaling-stroke"/>}
+   {s.points.map(p=><circle key={p.p} cx={x(p.i)} cy={y(p.value)} r="4.5" fill={COLORS[s.route]}><title>{`${s.route} ${p.p}: ${format(p.value,unit)} ${unit}`}</title></circle>)}
+   {s.quarter!=null&&<line x1={L} x2={W-R} y1={y(s.quarter)} y2={y(s.quarter)} stroke={COLORS[s.route]} strokeDasharray="6 6" opacity=".6" strokeWidth="1.5"/>}
+  </g>)}
+ </svg>;
 }
 function periodIndex(p){const m=String(p).match(/^(\w{3})\s*(\d{2})$/);if(m){const month=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(m[1]);return (+m[2])*12+month;}return {'SPOT':0,'Current Month':1,'Month +1':2,'Month +2':3,'Current Quarter':4}[p]??999;}
 const format=(n,u)=>n==null?'—':u==='USD/DAY'?'$'+Math.round(n).toLocaleString('en-US'):Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
 export default function MRHandy(){
  const [rows,setRows]=useState([]),[preview,setPreview]=useState([]),[raw,setRaw]=useState(''),[date,setDate]=useState(new Date().toISOString().slice(0,10));
- const [route,setRoute]=useState('TC2'),[metric,setMetric]=useState('FFA'),[unit,setUnit]=useState('WS'),[showParser,setShowParser]=useState(false),[saving,setSaving]=useState(false),[error,setError]=useState(''),[filter,setFilter]=useState('ALL'),[ocrBusy,setOcrBusy]=useState(false),[ocrStatus,setOcrStatus]=useState('');
+ const [route,setRoute]=useState('TC2'),[compareRoutes,setCompareRoutes]=useState(['TC2']),[metric,setMetric]=useState('FFA'),[unit,setUnit]=useState('WS'),[showParser,setShowParser]=useState(false),[saving,setSaving]=useState(false),[error,setError]=useState(''),[filter,setFilter]=useState('ALL'),[ocrBusy,setOcrBusy]=useState(false),[ocrStatus,setOcrStatus]=useState('');
  const [accessKey,setAccessKey]=useState('');
  const [connected,setConnected]=useState(false);
  const [manual,setManual]=useState({route:'TC2',period:'SPOT',metric:'FFA',unit:'WS',value:'',eco:'',date:new Date().toISOString().slice(0,10)});
@@ -134,10 +142,22 @@ export default function MRHandy(){
   <div style={{borderTop:'1px solid #263f5d',margin:'16px 0 12px'}}/>{label('MANUAL RATE ENTRY')}<div style={{display:'flex',flexWrap:'wrap',gap:8,alignItems:'center'}}>{[['route',ROUTES],['period',PERIODS],['metric',['FFA','TCE']],['unit',['WS','USD/MT','USD/DAY']],['eco',['','ECO','NON-ECO']]].map(([k,options])=><select key={k} title={k} style={css.input} value={manual[k]} onChange={e=>setManual(p=>({...p,[k]:e.target.value}))}>{options.map(o=><option key={o} value={o}>{o||'Eco status —'}</option>)}</select>)}<input style={{...css.input,width:115}} type="number" step="any" placeholder="Rate" value={manual.value} onChange={e=>setManual(p=>({...p,value:e.target.value}))}/><input style={css.input} type="date" value={manual.date} onChange={e=>setManual(p=>({...p,date:e.target.value}))}/><button style={css.btn} onClick={addManual}>Add to review</button></div>
   {preview.length>0&&<div style={{marginTop:16}}>{label(`REVIEW IMPORT · ${preview.length} OBSERVATIONS`)}<div style={{maxHeight:220,overflow:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}><thead><tr>{['Date','Route','Period','Type','Unit','Value','Source',''].map(x=><th key={x} style={{textAlign:'left',padding:7,borderBottom:'1px solid #395473'}}>{x}</th>)}</tr></thead><tbody>{preview.map((r,i)=><tr key={i}>{[r.as_of_date,r.route,r.period,r.metric,r.unit,r.value,r.source].map((v,j)=><td key={j} style={{padding:6,borderBottom:'1px solid #1c3048'}}>{v}</td>)}<td><button style={css.btn} onClick={()=>setPreview(p=>p.filter((_,j)=>j!==i))}>×</button></td></tr>)}</tbody></table></div><button disabled={saving} style={{...css.btn,background:'#14654e',borderColor:'#28977a',color:'white',marginTop:10}} onClick={()=>save(preview)}>{saving?'Saving…':`Save ${preview.length} rates to Supabase`}</button></div>}</div>}
   <div style={{display:'grid',gridTemplateColumns:'minmax(0,1.6fr) minmax(290px,1fr)',gap:12,marginBottom:12}}>
-   <div style={css.panel}>{label('SPOT HISTORY + FORWARD CURVE')}<div style={{display:'flex',gap:7,flexWrap:'wrap',marginBottom:8}}>{ROUTES.map(r=><button key={r} onClick={()=>setRoute(r)} style={{...css.btn,background:route===r?'#214b7b':'#0c2039',borderColor:route===r?COLORS[r]:'#274364',color:route===r?'white':'#91aac7'}}>{r}</button>)}<select style={css.input} value={metric} onChange={e=>{setMetric(e.target.value);setUnit(e.target.value==='TCE'?'USD/DAY':'WS')}}><option value="FFA">Spot / FFA</option><option value="TCE">TCE</option></select><select style={css.input} value={unit} onChange={e=>setUnit(e.target.value)}>{(metric==='TCE'?['USD/DAY']:['WS','USD/MT']).map(x=><option key={x}>{x}</option>)}</select></div><SparkChart items={rows} route={route} metric={metric} unit={unit}/>{metric==='FFA'&&<MonthBalanceComparison items={rows} route={route} unit={unit}/>}<div style={{display:'flex',gap:18,marginTop:5,...css.muted}}><span>━ Historical spot</span><span>━ Monthly forward curve</span><span style={{color:'#f5b86a'}}>┄ Quarter assessment</span><span>Forward rates plotted only when units match</span></div></div>
+   <div style={css.panel}>
+    <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,flexWrap:'wrap',marginBottom:12}}>
+     {label('SPOT HISTORY + FORWARD CURVE')}
+     <div style={{display:'flex',gap:6,alignItems:'center',justifyContent:'flex-end',flexWrap:'wrap'}}>
+      <span style={css.muted}>COMPARE ROUTES</span>
+      {ROUTES.map(r=><button key={r} onClick={()=>setCompareRoutes(prev=>prev.includes(r)?(prev.length>1?prev.filter(x=>x!==r):prev):[...prev,r])} style={{...css.btn,padding:'6px 9px',borderColor:compareRoutes.includes(r)?COLORS[r]:'#274364',background:compareRoutes.includes(r)?'#17344e':'#0c2039',color:compareRoutes.includes(r)?COLORS[r]:'#91aac7'}}>{compareRoutes.includes(r)?'✓ ':''}{r}</button>)}
+      <select style={css.input} value={metric} onChange={e=>{setMetric(e.target.value);setUnit(e.target.value==='TCE'?'USD/DAY':'WS')}}><option value="FFA">Spot / FFA</option><option value="TCE">TCE</option></select>
+      <select style={css.input} value={unit} onChange={e=>setUnit(e.target.value)}>{(metric==='TCE'?['USD/DAY']:['WS','USD/MT']).map(x=><option key={x}>{x}</option>)}</select>
+     </div>
+    </div>
+    <CompareChart items={rows} routes={compareRoutes} metric={metric} unit={unit} height={370}/>
+    <div style={{display:'flex',gap:16,flexWrap:'wrap',marginTop:8,...css.muted}}>{compareRoutes.map(r=><span key={r} style={{color:COLORS[r]}}>━ {r}</span>)}<span style={{color:'#f5b86a'}}>┄ Current-quarter assessment</span></div>
+   </div>
    <div style={css.panel}>{label('LATEST FORWARD ASSESSMENTS')}<div style={{display:'grid',gap:9}}>{ROUTES.map(r=>{const latest=rows.filter(x=>x.route===r).map(x=>x.as_of_date).sort().at(-1);if(!latest)return null;const set=rows.filter(x=>x.route===r&&x.as_of_date===latest);const get=(p,u='WS')=>set.find(x=>canonicalPeriod(x.period,latest)===p&&x.unit===u);const current=monthLabel(latest),next=monthLabel(latest,1),after=monthLabel(latest,2);const labels=[current,'BALMO',next,after];return <div key={r} style={{background:'#08182d',border:'1px solid #294463',borderRadius:7,padding:'10px 12px'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:9}}><b style={{color:COLORS[r],fontSize:13}}>{r}</b><span style={css.muted}>{latest}</span></div><div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:5}}>{labels.map(p=>{const q=get(p);return <div key={p} style={{minWidth:0}}><div style={{...css.muted,whiteSpace:'nowrap',fontSize:10}}>{p}</div><div style={{fontWeight:800,fontSize:14,color:p==='BALMO'?'#f5b86a':'#e3efff'}}>{q?format(q.value,'WS'):'—'}</div></div>})}</div>{get('Current Quarter')&&<div style={{...css.muted,marginTop:8,borderTop:'1px solid #1e3857',paddingTop:6}}>Quarter assessment: <b style={{color:'#f5b86a'}}>{format(get('Current Quarter').value,'WS')} WS</b></div>}</div>})}</div></div>
   </div>
-  <div style={{...css.panel,marginBottom:12}}>{label('FORWARD TERM STRUCTURE · LATEST DATE')}<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(250px,1fr))',gap:10}}>{['TC2','TC14','TC17','TC6'].map(r=><div key={r} style={{background:'#09182c',border:'1px solid #203a5a',borderRadius:6,padding:9}}><div style={{color:COLORS[r],fontWeight:800,marginBottom:3}}>{r} · WS</div><SparkChart items={rows.filter(x=>x.as_of_date===rows.filter(z=>z.route===r).map(z=>z.as_of_date).sort().at(-1))} route={r} metric="FFA" unit="WS" height={150}/></div>)}</div><div style={{...css.muted,marginTop:10}}>2027 USD/MT flat-rate contracts are shown separately in the forward table; they are never combined with WS on a single scale.</div></div>
+  <div style={{...css.panel,marginBottom:12}}>{label('FORWARD TERM STRUCTURE · LATEST DATE')}<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(310px,1fr))',gap:10}}>{['TC2','TC14','TC6','TC7','TC23'].map(r=><div key={r} style={{background:'#09182c',border:'1px solid #203a5a',borderRadius:6,padding:9}}><div style={{color:COLORS[r],fontWeight:800,marginBottom:3}}>{r} · WS</div><SparkChart items={rows.filter(x=>x.as_of_date===rows.filter(z=>z.route===r).map(z=>z.as_of_date).sort().at(-1))} route={r} metric="FFA" unit="WS" height={240}/></div>)}</div><div style={{...css.muted,marginTop:10}}>2027 USD/MT flat-rate contracts are shown separately in the forward table; they are never combined with WS on a single scale.</div></div>
   <div style={css.panel}>{label('MARKET DATA · SAVED OBSERVATIONS')}<div style={{display:'flex',gap:7,marginBottom:10}}><select style={css.input} value={filter} onChange={e=>setFilter(e.target.value)}>{['ALL',...ROUTES].map(x=><option key={x}>{x}</option>)}</select><span style={{...css.muted,alignSelf:'center'}}>{available.length} records · showing latest 150</span></div><div style={{overflowX:'auto',maxHeight:420,overflowY:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',whiteSpace:'nowrap',fontSize:11}}><thead style={{position:'sticky',top:0,background:'#11243e'}}><tr>{['Date','Route','Period','Metric','Unit','Rate','Eco','Source'].map(x=><th key={x} style={{padding:'9px 11px',textAlign:'left',color:'#8ab3df',borderBottom:'1px solid #36587b'}}>{x}</th>)}</tr></thead><tbody>{history.filter(x=>filter==='ALL'||x.route===filter).slice(0,150).map((x,i)=><tr key={x.id||i}>{[x.as_of_date,x.route,x.period,x.metric,x.unit,format(x.value,x.unit),x.eco||'—',x.source].map((v,j)=><td key={j} style={{padding:'8px 11px',borderBottom:'1px solid #192c43',color:j===1?COLORS[x.route]:'#c5d7ed'}}>{v}</td>)}</tr>)}</tbody></table></div></div>
  </div>;
 }
