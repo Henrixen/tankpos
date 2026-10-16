@@ -430,9 +430,39 @@ function CargoExportEditor(){
  const [format,setFormat]=useState(readCargoExportFormat);
  const [status,setStatus]=useState("");
  const addField=(field)=>setFormat(v=>v+"{"+field+"}");
- const save=()=>{localStorage.setItem(CARGO_EXPORT_KEY,format);setStatus("Saved on this device");};
+ const [loadingTemplates,setLoadingTemplates]=useState(true);
+ useEffect(()=>{
+   let active=true;
+   (async()=>{
+     try {
+       const {data,error}=await supabase.from("dashboard").select("key,value").in("key",["cargo-copy-list-template","cargo-copy-text-template"]);
+       if(error)throw error;
+       if(!active)return;
+       const templates=Object.fromEntries((data||[]).map(x=>[x.key,x.value]));
+       const list=templates["cargo-copy-list-template"];
+       const text=templates["cargo-copy-text-template"];
+       if(typeof list==="string") {setFormat(list);localStorage.setItem(CARGO_EXPORT_KEY,list);}
+       if(typeof text==="string") {setSecondFormat(text);localStorage.setItem(CARGO_EXPORT_SECOND_KEY,text);}
+       window.dispatchEvent(new Event("steem:cargo-export-templates-updated"));
+     }catch(e){if(active)setStatus("Could not load Supabase formats; local copies shown");console.error("Cargo export format load failed",e);}
+     finally{if(active)setLoadingTemplates(false);}
+   })();
+   return()=>{active=false};
+ },[]);
+ const saveTemplate=async(key,storageKey,value,setMessage)=>{
+   setMessage("Saving to Supabase…");
+   try{
+     const {error}=await supabase.from("dashboard").upsert({key,value},{onConflict:"key"});
+     if(error)throw error;
+     localStorage.setItem(storageKey,value);
+     window.dispatchEvent(new Event("steem:cargo-export-templates-updated"));
+     setMessage("Saved to Supabase ✓");
+   }catch(e){setMessage("Supabase save failed — not saved");console.error("Cargo export format save failed",e);}
+ };
+ const save=()=>saveTemplate("cargo-copy-list-template",CARGO_EXPORT_KEY,format,setStatus);
  return <div style={{display:"flex",flexDirection:"column",gap:9}}>
-  <div style={{fontSize:11,color:C.faint}}>Configure Copy List and Copy Text independently. Use {"{field|fallback}"} (e.g. {"{charterer|CNR}"}, {"{vessel|TBN}"}, {"{freight|RNR}"}) to show fallback text when a cell is empty. Click a field to insert its placeholder.</div>
+  <div style={{fontSize:11,color:C.faint}}>Copy List and Copy Text are stored separately in Supabase. Use {"{field|fallback}"} (e.g. {"{charterer|CNR}"}, {"{vessel|TBN}"}, {"{freight|RNR}"}) to show fallback text when a cell is empty. Click a field to insert its placeholder.</div>
+  {loadingTemplates&&<div style={{fontSize:10,color:C.faint}}>Loading saved templates from Supabase…</div>}
   <div style={{fontSize:11,fontWeight:700,color:C.blue}}>Copy List</div>
   <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{CARGO_EXPORT_FIELDS.map(f=><button key={f} onClick={()=>addField(f)} style={{...inp,width:"auto",cursor:"pointer",color:"#9ec5ff",fontSize:10,padding:"4px 7px"}}>+ {f}</button>)}</div>
   <textarea rows={3} value={format} onChange={e=>{setFormat(e.target.value);setStatus("");}} style={{...inp,resize:"vertical",lineHeight:1.6}}/>
@@ -445,7 +475,7 @@ function CargoExportEditor(){
   <textarea rows={3} value={secondFormat} onChange={e=>{setSecondFormat(e.target.value);setSecondStatus("");}} style={{...inp,resize:"vertical",lineHeight:1.6}}/>
   <div style={{fontSize:10,color:C.faint}}>Preview — format 2</div>
   <div style={{...inp,whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{formatCargoExportRow({charterer:"Seariver",vessel:"Golden Olive",qty:"15kt",cargo:"ULSD",load:"Port Jerome",disch:"ARA",from:"08 Oct",to:"09 Oct",freight:"USD 337,5K LS"},secondFormat)}</div>
-  <div style={{display:"flex",alignItems:"center",gap:8}}><button onClick={()=>{localStorage.setItem(CARGO_EXPORT_SECOND_KEY,secondFormat);setSecondStatus("Saved on this device");}} style={{...inp,width:"auto",cursor:"pointer",color:"#6ee7b7"}}>Save Copy Text</button><button onClick={()=>{setSecondFormat(CARGO_EXPORT_SECOND_DEFAULT);setSecondStatus("Click Save Copy Text to apply default");}} style={{...inp,width:"auto",cursor:"pointer"}}>Reset format 2</button><span style={{fontSize:10,color:C.faint}}>{secondStatus}</span></div>
+  <div style={{display:"flex",alignItems:"center",gap:8}}><button onClick={()=>saveTemplate("cargo-copy-text-template",CARGO_EXPORT_SECOND_KEY,secondFormat,setSecondStatus)} style={{...inp,width:"auto",cursor:"pointer",color:"#6ee7b7"}}>Save Copy Text</button><button onClick={()=>{setSecondFormat(CARGO_EXPORT_SECOND_DEFAULT);setSecondStatus("Click Save Copy Text to apply default");}} style={{...inp,width:"auto",cursor:"pointer"}}>Reset format 2</button><span style={{fontSize:10,color:C.faint}}>{secondStatus}</span></div>
   <div style={{fontSize:10,color:C.faint}}>Copy CSV retains its standard comma-separated format.</div>
  </div>;
 }
