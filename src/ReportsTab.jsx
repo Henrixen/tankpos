@@ -251,6 +251,16 @@ function VesselRow({ v, localIdx, globalIdx, editing, onEdit, onSave, onDelete,
   );
 }
 
+function fixingWindowReportTitle(snapshot){
+  const segments=Array.isArray(snapshot?.segments)?snapshot.segments:[];
+  const names={"Inter":"Intermediate","Sub 10":"Sub 10","City":"City","J19":"J19","Flexi":"Flexi","Handy":"Handy","MR":"MR"};
+  const segmentLabel=segments.length?segments.map(s=>names[s]||s).join(" / "):"All Segments";
+  const periods={"7D":"7 Day","14D":"14 Day","1M":"1 Month","3M":"3 Month","6M":"6 Month","1Y":"1 Year","ALL":"All-Time"};
+  const periodLabel=periods[snapshot?.period]||snapshot?.period||"All-Time";
+  const region=snapshot?.region;
+  return `Fixing Window ${segmentLabel}${region&&region!=="All"&&region!=="ALL"&&region!=="All Regions"?` · ${region}`:""} ${periodLabel} Average`;
+}
+
 function ImportedFixingWindowChart({snapshot}){
   const rows=snapshot?.rows||[], segments=snapshot?.segments?.length?snapshot.segments:["Inter"];
   const colors={"Sub 10":"#8b949e",City:"#58a6ff",Inter:"#22d3ee",J19:"#a78bfa",Flexi:"#fd79a8",Handy:"#3fb950",MR:"#f5a623"};
@@ -260,13 +270,13 @@ function ImportedFixingWindowChart({snapshot}){
   const max=Math.max(7,Math.ceil(Math.max(...valid)+2));
   const x=i=>L+i*iw/Math.max(1,rows.length-1), y=v=>T+ih-(v/max)*ih;
   return <div style={{width:"100%"}}>
-    <div style={{fontSize:10,color:"#b8d5f7",marginBottom:5}}>Dashboard fixing window · {snapshot.region||"All"} · {snapshot.period||"ALL"}</div>
+    <div style={{fontSize:9,color:"#b8d5f7",marginBottom:4,fontWeight:650}}>{fixingWindowReportTitle(snapshot)}</div>
     <svg viewBox={`0 0 ${W} ${H}`} style={{display:"block",width:"100%",height:"auto"}}>
-      {[0,.5,1].map(t=><g key={t}><line x1={L} y1={T+t*ih} x2={W-R} y2={T+t*ih} stroke="rgba(130,160,200,.22)"/><text x={L-5} y={T+t*ih+3} textAnchor="end" fontSize="9" fill="#9fb4cd">{Math.round(max*(1-t))}</text></g>)}
-      {segments.map(seg=>{const points=rows.map((r,i)=>{const v=r[seg];return v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v))&&Number(v)>=0?[x(i),y(Number(v))]:null}).filter(Boolean);return points.length>1?<polyline key={seg} points={points.map(p=>p.join(",")).join(" ")} fill="none" stroke={colors[seg]||"#58a6ff"} strokeWidth="2" strokeLinejoin="round"/>:null;})}
-      {[0,Math.floor((rows.length-1)/2),rows.length-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=><text key={i} x={x(i)} y={H-7} textAnchor={i===0?"start":i===rows.length-1?"end":"middle"} fontSize="9" fill="#9fb4cd">{String(rows[i]?.date||rows[i]?.label||"").slice(0,11)}</text>)}
+      {[0,.5,1].map(t=><g key={t}><line x1={L} y1={T+t*ih} x2={W-R} y2={T+t*ih} stroke="rgba(130,160,200,.22)"/><text x={L-5} y={T+t*ih+3} textAnchor="end" fontSize="7.5" fill="#9fb4cd">{Math.round(max*(1-t))}</text></g>)}
+      {segments.map(seg=>{const points=rows.map((r,i)=>{const v=r[seg];return v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v))&&Number(v)>=0?[x(i),y(Number(v))]:null}).filter(Boolean);return points.length>1?<polyline key={seg} points={points.map(p=>p.join(",")).join(" ")} fill="none" stroke={colors[seg]||"#58a6ff"} strokeWidth="1.35" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>:null;})}
+      {[0,Math.floor((rows.length-1)/2),rows.length-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=><text key={i} x={x(i)} y={H-7} textAnchor={i===0?"start":i===rows.length-1?"end":"middle"} fontSize="7.5" fill="#9fb4cd">{String(rows[i]?.date||rows[i]?.label||"").slice(0,11)}</text>)}
     </svg>
-    <div style={{display:"flex",flexWrap:"wrap",gap:10,justifyContent:"center"}}>{segments.map(seg=><span key={seg} style={{fontSize:10,color:colors[seg]||"#58a6ff",fontWeight:700}}>● {seg}</span>)}</div>
+    <div style={{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center"}}>{segments.map(seg=><span key={seg} style={{fontSize:8.5,color:colors[seg]||"#58a6ff",fontWeight:650}}>● {seg}</span>)}</div>
   </div>;
 }
 
