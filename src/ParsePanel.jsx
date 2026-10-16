@@ -4,6 +4,26 @@ import { C } from "./constants";
 import { loadImg, normaliseQty, rollOpenDateForward, dbLookup, resolveVesselName } from "./utils";
 import { apiCall, ocrImage, parsePos, parseCargo } from "./api";
 
+// Explicit cargo-batch metadata. Only a standalone final non-empty line is a directive.
+// Fail closed on malformed/duplicate directives so no source is silently misassigned.
+function extractCargoBatchSource(rawText) {
+  const lines = String(rawText || "").split(/\r?\n/);
+  let end = lines.length - 1;
+  while (end >= 0 && !lines[end].trim()) end--;
+  const directive = /^\s*source\s+all\s*:\s*(.*?)\s*$/i;
+  const candidate = end >= 0 ? lines[end].trim() : "";
+  const match = candidate.match(directive);
+  const earlier = lines.slice(0, match ? end : end + 1).filter(line => /^\s*source\s+all\s*:/i.test(line));
+  if (earlier.length) throw new Error("SOURCE ALL must appear once, on the final line of the cargo list.");
+  if (!match) {
+    if (/^\s*source\s+all\b/i.test(candidate)) throw new Error("Use SOURCE ALL: Stenersen (with a colon and a source name).");
+    return { text: rawText, source: null };
+  }
+  const source = match[1].trim();
+  if (!source || source.length > 100 || /[\t\r\n]/.test(source)) throw new Error("SOURCE ALL needs a source name of 1–100 characters.");
+  return { text: lines.slice(0, end).join("\n"), source };
+}
+
 function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vesselDB = {}}) {
   const [posDate, setPosDate] = useState(() => {const d=new Date();return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();});
   const [mode,setMode]=useState(lockedMode||"pos");
@@ -135,11 +155,13 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
     m:"✓ "+(r.added?r.added+" added":"")+(r.updated?", "+r.updated+" updated":"")+" - "+r.total+" total"
   });
       }else{
-        const p=await parseCargo(text||"(img)",img,known);if(!p?.length){setStatus({t:"error",m:"No fixture data found."});return;}
+        const batch=extractCargoBatchSource(text);
+        if (!batch.text.trim() && !img) throw new Error("No cargo rows before SOURCE ALL instruction.");
+        const p=await parseCargo(batch.text||(img?"(img)":""),img,known);if(!p?.length){setStatus({t:"error",m:"No fixture data found."});return;}
         const [dd,mm,yyyy]=posDate.split("/");const ts=(dd&&mm&&yyyy)?new Date(`${yyyy}-${mm}-${dd}`).toISOString():new Date().toISOString();
-        const stamped=p.map(v=>({...v,updated:ts}));
-        const lk=onAddCargoes(stamped);setText("");setImg(null);
-        setStatus({t:"success",m:"✓ "+p.length+" fixture(s)"+(lk?", "+lk+" pos updated":"")});
+        const stamped=p.map(v=>({...v,updated:ts,...(batch.source!==null?{source:batch.source}:{})}));
+        await onAddCargoes(stamped);setText("");setImg(null);
+        setStatus({t:"success",m:"✓ "+p.length+" fixture(s) submitted"+(batch.source?" · Source: "+batch.source:"")});
       }
     }catch(e){setStatus({t:"error",m:e.message});}finally{setBusy(false);}
   }
@@ -154,7 +176,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
       {img?.dataUrl&&<div style={{position:"relative"}}><img src={img.dataUrl} alt="" style={{width:"100%",maxHeight:80,objectFit:"cover",display:"block"}}/><button onClick={()=>setImg(null)} style={{position:"absolute",top:3,right:3,background:"rgba(0,0,0,.7)",border:"none",color:"#fff",borderRadius:"50%",width:20,height:20,fontSize:12,cursor:"pointer"}}>✕</button></div>}
       {img&&!img.dataUrl&&<div style={{padding:"3px 10px",background:"rgba(188,140,255,.07)",fontSize:12,color:C.purple,display:"flex",justifyContent:"space-between"}}><span>📷 attached</span><button onClick={()=>setImg(null)} style={{background:"none",border:"none",color:C.purple,cursor:"pointer",fontSize:12}}>✕</button></div>}
       <textarea value={text} onChange={e=>setText(e.target.value)} onPaste={onPaste}
-        placeholder={mode==="pos"?"Paste positions or Ctrl+V screenshot…":"Paste cargo fixtures or Ctrl+V screenshot…"}
+        placeholder={mode==="pos"?"Paste positions or Ctrl+V screenshot…":"Paste cargo fixtures… Add SOURCE ALL: Stenersen on the last line to assign source to every cargo."}
         style={{width:"100%",minHeight:130,background:C.bg2,border:"none",color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 10px",resize:"none",outline:"none",boxSizing:"border-box"}}/>
         <div style={{padding:"5px 8px",borderTop:"1px solid "+C.bd2,display:"flex",gap:5,alignItems:"center"}}>
         <button onClick={go} disabled={busy} style={{flex:1,background:busy?"rgba(31,111,235,.10)":"rgba(10,25,45,.72)",border:"1px solid "+(busy?"rgba(88,166,255,.30)":"#2f6fae"),borderRadius:4,color:busy?C.dim:"#79c0ff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"5px 0",cursor:busy?"default":"pointer"}}>
