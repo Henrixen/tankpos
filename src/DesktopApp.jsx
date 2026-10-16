@@ -1536,6 +1536,12 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
   const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||userTabs.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode,userTabs]);
   const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
+  // Dashboard fixing-window snapshot → Reports (preserves v68 state and navigation).
+  const [dashboardReportImport,setDashboardReportImport]=React.useState(null);
+  const importDashboardFixingWindow=React.useCallback(snapshot=>{
+    setDashboardReportImport({...snapshot,requestId:Date.now()});
+    React.startTransition(()=>setTab("reports"));
+  },[]);
   const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set());setMobileNavOpen(false)});
  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
 const [posPage,setPosPage]=useState(1);
@@ -3878,7 +3884,7 @@ const filtV=useMemo(()=>{
           </div>
         )}
         {tab==="dash"&&(
-          <Suspense fallback={<TabFallback/>}><Dashboard vessels={vessels} cargoes={cargoes} history={history||[]}/></Suspense>
+          <Suspense fallback={<TabFallback/>}><Dashboard vessels={vessels} cargoes={cargoes} history={history||[]} onImportFixingWindow={importDashboardFixingWindow}/></Suspense>
         )}
         {tab==="mrhandy"&&(<Suspense fallback={<TabFallback/>}><MRHandy/></Suspense>)}
         {tab==="notes"&&(
@@ -3902,7 +3908,7 @@ const filtV=useMemo(()=>{
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
           </div>
         )}
-        {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={reportCargoes}/></Suspense></div>}
+        {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={reportCargoes} dashboardFixingImport={dashboardReportImport} onDashboardFixingImportHandled={()=>setDashboardReportImport(null)}/></Suspense></div>}
         {tab==="map"&&<Suspense fallback={<TabFallback/>}><FreightMapTab/></Suspense>}
       </TabErrorBoundary>
       </div>
