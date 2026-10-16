@@ -348,6 +348,9 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [deleteReportError, setDeleteReportError] = useState("");
   const [marketHeadings, setMarketHeadings] = useState({drivers:"Market drivers / What to watch",benchmark:"Benchmark rates",tce:"TCE earnings",handy:"Handy",ffa:"FFA trend (BALMO / +1 / +2)"});
   const [activeMarketReportId, setActiveMarketReportId] = useState(null);
+  const [marketSaveStatus,setMarketSaveStatus] = useState("");
+  const [marketSaveBusy,setMarketSaveBusy] = useState(false);
+  const [deleteReportBusy,setDeleteReportBusy] = useState(false);
   const editMarketHeading = (key, style) => <input aria-label={"Edit " + key + " heading"} value={marketHeadings[key]}
     onChange={e => setMarketHeadings(p => ({...p,[key]:e.target.value}))}
     className="rpt-edit" style={{...style,width:"100%",minWidth:90,background:"transparent",border:"none",padding:0}} />;
@@ -531,8 +534,12 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [cargoImportChoice, setCargoImportChoice] = useState("new");
   const [cargoImportBusy, setCargoImportBusy] = useState(false);
   const [cargoImportError, setCargoImportError] = useState("");
+  const lastCargoImportSignature = useRef("");
   useEffect(() => {
-    if (!selectedCargoes?.length) return;
+    if (!selectedCargoes?.length) { lastCargoImportSignature.current = ""; return; }
+    const signature = selectedCargoes.map(c => String(c.id ?? [c.vessel,c.cargo,c.from,c.to].join("|"))).join(";");
+    if (signature === lastCargoImportSignature.current) return;
+    lastCargoImportSignature.current = signature;
     setCargoImportChoice("new");
     setCargoImportError("");
     setCargoImportOpen(true);
@@ -949,12 +956,12 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       const lib = await loadHTI();
       const blob = await lib.toBlob(previewRef.current, { backgroundColor: "#070f1c", pixelRatio: 2, filter: exportFilter });
       await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      setExportStatus("Copied — paste into your email body.");
+      setExportStatus("Copied — paste into your email body."); setTimeout(() => setExportStatus(""), 2800);
     } catch (e) { setExportStatus("Copy failed: " + e.message); }
   }
   async function handleDownloadPng() {
     setExportStatus("Rendering...");
-    try { const url = await capturePng(); const a = document.createElement("a"); a.download = `positions-${posDate}.png`; a.href = url; a.click(); setExportStatus("Downloaded."); }
+    try { const url = await capturePng(); const a = document.createElement("a"); a.download = `positions-${posDate}.png`; a.href = url; a.click(); setExportStatus("Downloaded."); setTimeout(() => setExportStatus(""), 2800); }
     catch (e) { setExportStatus("Failed: " + e.message); }
   }
 
@@ -989,6 +996,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   async function deleteSavedReport() {
     if (!pendingSavedDelete) return;
     setDeleteReportError("");
+    setDeleteReportBusy(true);
     try {
       const { error } = await supabase.from("reports").delete().eq("id", pendingSavedDelete.id);
       if (error) throw error;
@@ -996,6 +1004,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       if (activeMarketReportId === pendingSavedDelete.id) setActiveMarketReportId(null);
       setPendingSavedDelete(null);
     } catch (e) { setDeleteReportError(e.message || "Could not delete report"); }
+    finally { setDeleteReportBusy(false); }
   }
   function initRateGrid(type) {
     const G = {
@@ -1041,16 +1050,24 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   }
 
   async function saveReport() {
+    if (marketSaveBusy) return;
+    setMarketSaveBusy(true); setMarketSaveStatus("Saving...");
     try {
       const payload = { report_type: reportType, report_date: reportDate, commentary,
-        rate_grid: rateGrid, tce_earnings: tceEarnings, fixtures, quotes };
-      // Extra report layout lives inside the existing JSON rate_grid column; no schema migration needed.
-      payload.rate_grid = { ...rateGrid, __marketEditor: { headings: marketHeadings,
-        benchmarks: benchmarkRows, drivers: driverBullets, tceStats, handy, handyCommentary, handySegments } };
-      const { error } = await supabase.from("reports").insert([payload]);
+        rate_grid: { ...rateGrid, __marketEditor: { headings: marketHeadings,
+          benchmarks: benchmarkRows, drivers: driverBullets, tceStats, handy, handyCommentary, handySegments } },
+        tce_earnings: tceEarnings, fixtures, quotes };
+      // Editing an existing saved report updates that exact row. New reports insert once.
+      const query = activeMarketReportId
+        ? supabase.from("reports").update(payload).eq("id", activeMarketReportId).select("id").single()
+        : supabase.from("reports").insert([payload]).select("id").single();
+      const { data, error } = await query;
       if (error) throw error;
-      alert("Saved."); loadSavedReports();
-    } catch (e) { alert("Save failed: " + (e.message || e)); }
+      if (data?.id) setActiveMarketReportId(data.id);
+      setMarketSaveStatus("Saved!");
+      await loadSavedReports();
+    } catch (e) { setMarketSaveStatus("Save failed: " + (e.message || e)); }
+    finally { setMarketSaveBusy(false); setTimeout(() => setMarketSaveStatus(""), 2800); }
   }
   async function loadReport(id) {
     try {
@@ -1592,7 +1609,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px" }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Report type</div>
             {MARKET_TYPES.map(t => (
-              <button key={t} onClick={() => { setReportType(t); initRateGrid(t); }}
+              <button key={t} onClick={() => { setReportType(t); setActiveMarketReportId(null); setMarketSaveStatus(""); initRateGrid(t); }}
                 style={{ display: "block", width: "100%", textAlign: "left", padding: "13px 14px", marginBottom: 9, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: reportType === t ? 700 : 400, border: `1px solid ${reportType === t ? ACCENT : C.bd}`, background: reportType === t ? "rgba(58,130,246,0.1)" : "transparent", color: "#ffffff", fontFamily: "inherit" }}>{t}</button>
             ))}
             {savedReports.filter(r => r.report_type !== "Position List").length > 0 && (
@@ -1636,14 +1653,14 @@ Any direction`}</pre>
         )}
       </div>
 
-      {pendingSavedDelete && <div style={{position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,.72)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{width:360,maxWidth:"90vw",background:C.bg2,border:"1px solid "+C.bd,borderRadius:9,padding:20,boxShadow:"0 15px 50px #0009"}}>
-          <div style={{fontSize:16,fontWeight:800,color:"#fff",marginBottom:9}}>Delete saved report?</div>
+      {pendingSavedDelete && <div className="no-export" style={{position:"fixed",left:20,bottom:20,zIndex:99999,maxWidth:"calc(100vw - 40px)"}}>
+        <div style={{width:340,maxWidth:"100%",background:C.bg2,border:"1px solid rgba(248,113,113,.5)",borderRadius:8,padding:14,boxShadow:"0 8px 28px #0009"}}>
+          <div style={{fontSize:13,fontWeight:700,color:C.tx,marginBottom:6}}>Delete saved report?</div>
           <div style={{fontSize:12,color:C.dim,marginBottom:18}}>Delete {pendingSavedDelete.report_type} — {pendingSavedDelete.report_date}? This cannot be undone.</div>
           {deleteReportError && <div style={{color:"#fb7185",fontSize:12,marginBottom:10}}>{deleteReportError}</div>}
           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
             <button onClick={()=>setPendingSavedDelete(null)} style={{...SB,padding:"9px 13px"}}>Cancel</button>
-            <button onClick={deleteSavedReport} style={{...SB,padding:"9px 13px",background:"#b91c1c",border:"1px solid #ef4444",color:"white",fontWeight:800}}>Delete report</button>
+            <button onClick={deleteSavedReport} style={{...SB,padding:"9px 13px",background:"rgba(248,113,113,.12)",border:"1px solid rgba(248,113,113,.45)",color:"#fda4af",fontWeight:700}} disabled={deleteReportBusy}>{deleteReportBusy?"Deleting...":"Delete"}</button>
           </div>
         </div>
       </div>}
@@ -1664,8 +1681,8 @@ Any direction`}</pre>
                 style={{ ...SB, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.45)", color: "#ef4444" }}>Clear all</button>
             )}
             <button onClick={savePositionList} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Save</button>
-            <button onClick={handleCopyEmail} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Copy for Email</button>
-            <button onClick={handleDownloadPng} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Download PNG</button>
+            <button onClick={handleCopyEmail} style={{ ...SB, background: exportStatus.startsWith("Copied") ? "rgba(63,185,80,.16)" : C.bg3, border: "1px solid " + (exportStatus.startsWith("Copied") ? "#3fb950" : C.bd), color: exportStatus.startsWith("Copied") ? "#65d68b" : C.tx }}>{exportStatus.startsWith("Copied") ? "✓ Copied!" : "Copy for Email"}</button>
+            <button onClick={handleDownloadPng} style={{ ...SB, background: exportStatus === "Downloaded." ? "rgba(63,185,80,.16)" : "transparent", border: "1px solid " + (exportStatus === "Downloaded." ? "#3fb950" : C.bd), color: exportStatus === "Downloaded." ? "#65d68b" : C.dim }}>{exportStatus === "Downloaded." ? "✓ Saved!" : "Download PNG"}</button>
             <button onClick={() => window.print()} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Print / PDF</button>
           </div>
           {/* Secondary layout toolbar */}
@@ -1959,12 +1976,13 @@ Any direction`}</pre>
 
               {/* ── Toolbar (not captured in export/print) ── */}
               <div className="no-export" style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
-                {marketExportStatus && <span style={{ fontSize: 11, color: C.dim }}>{marketExportStatus}</span>}
+                {marketSaveStatus.startsWith("Save failed") && <span style={{ fontSize: 11, color: "#fb7185" }}>{marketSaveStatus}</span>}
+                {marketExportStatus && !marketExportStatus.startsWith("Copied") && marketExportStatus !== "Downloaded." && <span style={{ fontSize: 11, color: C.dim }}>{marketExportStatus}</span>}
                 <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} style={IS} />
-                <button onClick={saveReport} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Save</button>
+                <button disabled={marketSaveBusy} onClick={saveReport} style={{ ...SB, background: marketSaveStatus === "Saved!" ? "rgba(63,185,80,.16)" : C.bg3, border: "1px solid " + (marketSaveStatus === "Saved!" ? "#3fb950" : C.bd), color: marketSaveStatus === "Saved!" ? "#65d68b" : C.tx }}>{marketSaveStatus === "Saved!" ? "✓ Saved!" : marketSaveBusy ? "Saving..." : "Save"}</button>
                 <button onClick={() => window.print()} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Print</button>
-                <button onClick={handleMarketCopyEmail} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Copy for email</button>
-                <button onClick={handleMarketDownloadPng} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Download PNG</button>
+                <button onClick={handleMarketCopyEmail} style={{ ...SB, background: marketExportStatus.startsWith("Copied") ? "rgba(63,185,80,.16)" : C.bg3, border: "1px solid " + (marketExportStatus.startsWith("Copied") ? "#3fb950" : C.bd), color: marketExportStatus.startsWith("Copied") ? "#65d68b" : C.tx }}>{marketExportStatus.startsWith("Copied") ? "✓ Copied!" : "Copy for email"}</button>
+                <button onClick={handleMarketDownloadPng} style={{ ...SB, background: marketExportStatus === "Downloaded." ? "rgba(63,185,80,.16)" : "transparent", border: "1px solid " + (marketExportStatus === "Downloaded." ? "#3fb950" : C.bd), color: marketExportStatus === "Downloaded." ? "#65d68b" : C.dim }}>{marketExportStatus === "Downloaded." ? "✓ Saved!" : "Download PNG"}</button>
               </div>
 
               {/* ── Printable/exportable report content ── */}
@@ -2300,7 +2318,7 @@ Any direction`}</pre>
                   <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} style={IS} />
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={saveReport} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Save</button>
+                  <button disabled={marketSaveBusy} onClick={saveReport} style={{ ...SB, background: marketSaveStatus === "Saved!" ? "rgba(63,185,80,.16)" : C.bg3, border: "1px solid " + (marketSaveStatus === "Saved!" ? "#3fb950" : C.bd), color: marketSaveStatus === "Saved!" ? "#65d68b" : C.tx }}>{marketSaveStatus === "Saved!" ? "✓ Saved!" : marketSaveBusy ? "Saving..." : "Save"}</button>
                   <button onClick={() => window.print()} style={{ ...SB, background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.45)", color: "#6366f1" }}>Print</button>
                   <button onClick={async () => { try { await navigator.clipboard.writeText(`${reportType} · ${reportDate}\n\n${commentary}`); } catch {} }} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Copy</button>
                 </div>
