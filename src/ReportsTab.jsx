@@ -1086,8 +1086,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   // ── Market report export — same html-to-image pattern as Position List ──
   const [marketExportStatus, setMarketExportStatus] = useState("");
-  const [emailIncludeTceTrend,setEmailIncludeTceTrend] = useState(false);
-  const [emailIncludeFixingWindow,setEmailIncludeFixingWindow] = useState(false);
+  const [emailSections,setEmailSections] = useState({drivers:true,rates:true,tce:true,handy:true,fixtures:true,tceChart:false,fixingChart:false});
+  const emailSectionTick = (key) => <label className="no-export" title="Include this section in Copy for email" style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,color:C.dim,cursor:"pointer",whiteSpace:"nowrap",marginLeft:"auto",fontWeight:500,textTransform:"none",letterSpacing:0}}><input type="checkbox" checked={!!emailSections[key]} onChange={e=>setEmailSections(prev=>({...prev,[key]:e.target.checked}))} style={{accentColor:"#4a90e2",width:13,height:13,cursor:"pointer"}}/> Email</label>;
   const lightExportRef = useRef(null);
   async function captureMarketPng() {
     const lib = await loadHTI();
@@ -2122,8 +2122,6 @@ Any direction`}</pre>
                 <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} style={IS} />
                 <button disabled={marketSaveBusy} onClick={saveReport} style={{ ...SB, background: marketSaveStatus === "Saved!" ? "rgba(63,185,80,.16)" : C.bg3, border: "1px solid " + (marketSaveStatus === "Saved!" ? "#3fb950" : C.bd), color: marketSaveStatus === "Saved!" ? "#65d68b" : C.tx }}>{marketSaveStatus === "Saved!" ? "✓ Saved!" : marketSaveBusy ? "Saving..." : "Save"}</button>
                 <button onClick={() => window.print()} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Print</button>
-                <label style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11,color:C.tx,cursor:"pointer",whiteSpace:"nowrap"}} title="Include the TCE trend chart in the copied email"><input type="checkbox" checked={emailIncludeTceTrend} onChange={e=>setEmailIncludeTceTrend(e.target.checked)} /> TCE chart</label>
-                <label style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11,color:C.tx,cursor:"pointer",whiteSpace:"nowrap"}} title="Include the fixing-window chart in the copied email"><input type="checkbox" checked={emailIncludeFixingWindow} onChange={e=>setEmailIncludeFixingWindow(e.target.checked)} /> Fixing window</label>
                 <button onClick={handleMarketCopyEmail} style={{ ...SB, background: marketExportStatus.startsWith("Copied") ? "rgba(63,185,80,.16)" : C.bg3, border: "1px solid " + (marketExportStatus.startsWith("Copied") ? "#3fb950" : C.bd), color: marketExportStatus.startsWith("Copied") ? "#65d68b" : C.tx }}>{marketExportStatus.startsWith("Copied") ? "✓ Copied!" : "Copy for email"}</button>
                 <button onClick={handleMarketDownloadPng} style={{ ...SB, background: marketExportStatus === "Downloaded." ? "rgba(63,185,80,.16)" : "transparent", border: "1px solid " + (marketExportStatus === "Downloaded." ? "#3fb950" : C.bd), color: marketExportStatus === "Downloaded." ? "#65d68b" : C.dim }}>{marketExportStatus === "Downloaded." ? "✓ Saved!" : "Download PNG"}</button>
               </div>
@@ -2148,6 +2146,7 @@ Any direction`}</pre>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                   {editMarketHeading("drivers",{fontSize:12,fontWeight:700,color:C.tx,textTransform:"uppercase",letterSpacing:"0.05em"})}
                   <span className="no-export" style={{ fontSize: 10, color: C.faint }}>Press Enter to add a line</span>
+                  {emailSectionTick("drivers")}
                 </div>
                 <ul className="driver-list">
                   {driverBullets.map((b, i) => (
@@ -2189,6 +2188,7 @@ Any direction`}</pre>
                   {editMarketHeading("benchmark",{fontSize:12,fontWeight:700,color:"#79c0ff",textTransform:"uppercase",letterSpacing:"0.05em"})}
                   <div className="no-export" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     {benchmarkRefreshStatus && <span style={{ fontSize: 10, color: C.dim }}>{benchmarkRefreshStatus}</span>}
+                    {emailSectionTick("rates")}
                     <button className="no-export" onClick={()=>setBenchmarkRows(p=>[...p,{key:"custom-"+Date.now(),label:"New route",from:"",to:"",freight:"",lastWeek:"",tce:null,tceLastWeek:null,override:true}])} style={{...SB,background:C.bg3,color:C.blue,border:"1px solid "+C.bd}}>+ Add route</button>
                     <button onClick={refreshBenchmarkFromSaved} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim, fontSize: 10 }}>↻ Refresh from saved</button>
                   </div>
@@ -2230,7 +2230,7 @@ Any direction`}</pre>
 
               {/* ── TCE earnings ── */}
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 13 }}>
-                {editMarketHeading("tce",{fontSize:12,fontWeight:700,color:C.tx,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:10})}
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>{editMarketHeading("tce",{fontSize:12,fontWeight:700,color:C.tx,textTransform:"uppercase",letterSpacing:"0.05em"})}{emailSectionTick("tce")}</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,180px))", gap: 16, justifyContent: "center", textAlign: "center" }}>
                   {[["current", "Current"], ["lastMonth", "Last month avg"], ["ytd", "YTD avg"]].map(([k, label]) => (
                     <div key={k}>
@@ -2247,7 +2247,7 @@ Any direction`}</pre>
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden" }}>
                 <div style={{ padding: "8px 13px", background: "rgba(74,144,226,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#79c0ff", textTransform: "uppercase", letterSpacing: "0.05em" }}>Handy</div>
-                  <button className="no-export" onClick={()=>{const k="seg"+Date.now();setHandySegments(p=>[...p,k]);setHandy(p=>({...p,[k]:{name:"New segment",spotWS:"",ffaAug:"",ffaSep:"",ffaOct:""}}));}} style={{...SB,background:C.bg3,color:C.blue,border:"1px solid "+C.bd}}>+ Add segment</button>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>{emailSectionTick("handy")}<button className="no-export" onClick={()=>{const k="seg"+Date.now();setHandySegments(p=>[...p,k]);setHandy(p=>({...p,[k]:{name:"New segment",spotWS:"",ffaAug:"",ffaSep:"",ffaOct:""}}));}} style={{...SB,background:C.bg3,color:C.blue,border:"1px solid "+C.bd}}>+ Add segment</button></div>
                 </div>
                 <div style={{ padding: "9px 13px" }}>
                   <textarea value={handyCommentary} onChange={e=>setHandyCommentary(e.target.value)}
@@ -2293,8 +2293,8 @@ Any direction`}</pre>
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, textTransform: "uppercase", letterSpacing: "0.05em" }}>Recent fixtures</div>
-                  <button onClick={() => setFixtures(p => [...p, { vessel: "", charterer: "", cargo: "", load: "", disch: "", laycanFrom: "", laycanTo: "", freight: "" }])} className="no-export"
-                    style={{ background: ACCENT, border: "none", borderRadius: 3, color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", cursor: "pointer" }}>+ Add</button>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>{emailSectionTick("fixtures")}<button onClick={() => setFixtures(p => [...p, { vessel: "", charterer: "", cargo: "", load: "", disch: "", laycanFrom: "", laycanTo: "", freight: "" }])} className="no-export"
+                    style={{ background: ACCENT, border: "none", borderRadius: 3, color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", cursor: "pointer" }}>+ Add</button></div>
                 </div>
                 {fixtures.length === 0 ? <div style={{ padding: 10, textAlign: "center", color: C.faint, fontSize: 10 }}>None yet — select cargoes in the Cargoes tab to import, or add manually</div> : (
                   <div style={{ overflowX: "auto" }}>
@@ -2342,10 +2342,11 @@ Any direction`}</pre>
               {/* ── TCE trend (50%) + Fixing window (50%) ── */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11 }}>
                 <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.tx, marginBottom: 6 }}>TCE trend</div>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}><div style={{fontSize:11,fontWeight:700,color:C.tx}}>TCE trend</div>{emailSectionTick("tceChart")}</div>
                   <TCETrendMini lastMonth={tceStats.lastMonth} current={tceStats.current} ytd={tceStats.ytd} />
                 </div>
                 <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10 }}>
+                  <div style={{display:"flex",justifyContent:"flex-end",marginBottom:2}}>{emailSectionTick("fixingChart")}</div>
                   {importedFixingChart?.rows?.length
                     ? <ImportedFixingWindowChart snapshot={importedFixingChart}/>
                     : <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" barLabel="No. of ships" lineLabel="Avg. fix window" title="Fixing window (days)" accent="#4a90e2" loading={fixHistoryLoading} />}
@@ -2369,13 +2370,16 @@ Any direction`}</pre>
                 </div>
 
                 <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+                  {emailSections.drivers && (
                   <div style={{ background: "#eaf2fc", borderRadius: 8, padding: 12 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{marketHeadings.drivers}</div>
                     <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, lineHeight: 1.6 }}>
                       {driverBullets.filter(b => b.trim()).map((b, i) => <li key={i}>{b}</li>)}
                     </ul>
                   </div>
+                  )}
 
+                  {emailSections.rates && (
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{marketHeadings.benchmark}</div>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
@@ -2395,7 +2399,9 @@ Any direction`}</pre>
                       </tbody>
                     </table>
                   </div>
+                  )}
 
+                  {emailSections.handy && (
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Handy</div>
                     {handyCommentary && <div style={{fontSize:11,color:"#334155",whiteSpace:"pre-wrap",lineHeight:1.6,marginBottom:8}}>{handyCommentary}</div>}
@@ -2416,7 +2422,9 @@ Any direction`}</pre>
                       </tbody>
                     </table>
                   </div>
+                  )}
 
+                  {emailSections.fixtures && (
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Recent fixtures</div>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
@@ -2441,7 +2449,9 @@ Any direction`}</pre>
                       </tbody>
                     </table>
                   </div>
+                  )}
 
+                  {emailSections.tce && (
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{marketHeadings.tce}</div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,180px))", gap: 16, justifyContent: "center", textAlign: "center" }}>
@@ -2453,14 +2463,15 @@ Any direction`}</pre>
                       ))}
                     </div>
                   </div>
+                  )}
 
-                  {(emailIncludeTceTrend || emailIncludeFixingWindow) && (
-                    <div style={{display:"grid",gridTemplateColumns:emailIncludeTceTrend&&emailIncludeFixingWindow?"1fr 1fr":"1fr",gap:12,padding:"12px 18px 18px",alignItems:"start"}}>
-                      {emailIncludeTceTrend && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0}}>
+                  {(emailSections.tceChart || emailSections.fixingChart) && (
+                    <div style={{display:"grid",gridTemplateColumns:emailSections.tceChart&&emailSections.fixingChart?"1fr 1fr":"1fr",gap:12,padding:"12px 18px 18px",alignItems:"start"}}>
+                      {emailSections.tceChart && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0}}>
                         <div style={{fontSize:11,fontWeight:700,marginBottom:6}}>TCE trend</div>
                         <TCETrendMini lastMonth={tceStats.lastMonth} current={tceStats.current} ytd={tceStats.ytd}/>
                       </div>}
-                      {emailIncludeFixingWindow && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0}}>
+                      {emailSections.fixingChart && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0}}>
                         {importedFixingChart?.rows?.length
                           ? <ImportedFixingWindowChart snapshot={importedFixingChart}/>
                           : <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" barLabel="No. of ships" lineLabel="Avg. fix window" title="Fixing window (days)" accent="#4a90e2" loading={fixHistoryLoading}/>}
