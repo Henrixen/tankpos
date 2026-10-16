@@ -178,6 +178,16 @@ function TCETrendMini({ lastMonth, current, ytd }) {
   );
 }
 
+// Calendar month labels for the three forward FFA periods (BALMO, +1, +2).
+function reportFfaMonths(dateValue){
+  const parsed = dateValue ? new Date(`${dateValue}T12:00:00`) : new Date();
+  const base = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  return [0,1,2].map(offset=>{
+    const d = new Date(base.getFullYear(),base.getMonth()+offset,1);
+    return d.toLocaleDateString("en-GB",{month:"short"});
+  });
+}
+
 // ─── Tiny inline sparkline for Handy FFA Aug/Sep/Oct trend ──
 function FfaSparkline({ aug, sep, oct }) {
   const vals = [aug, sep, oct].map(v => parseFloat(v)).filter(v => !isNaN(v));
@@ -1076,6 +1086,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   // ── Market report export — same html-to-image pattern as Position List ──
   const [marketExportStatus, setMarketExportStatus] = useState("");
+  const [emailIncludeTceTrend,setEmailIncludeTceTrend] = useState(false);
+  const [emailIncludeFixingWindow,setEmailIncludeFixingWindow] = useState(false);
   const lightExportRef = useRef(null);
   async function captureMarketPng() {
     const lib = await loadHTI();
@@ -2110,6 +2122,8 @@ Any direction`}</pre>
                 <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} style={IS} />
                 <button disabled={marketSaveBusy} onClick={saveReport} style={{ ...SB, background: marketSaveStatus === "Saved!" ? "rgba(63,185,80,.16)" : C.bg3, border: "1px solid " + (marketSaveStatus === "Saved!" ? "#3fb950" : C.bd), color: marketSaveStatus === "Saved!" ? "#65d68b" : C.tx }}>{marketSaveStatus === "Saved!" ? "✓ Saved!" : marketSaveBusy ? "Saving..." : "Save"}</button>
                 <button onClick={() => window.print()} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Print</button>
+                <label style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11,color:C.tx,cursor:"pointer",whiteSpace:"nowrap"}} title="Include the TCE trend chart in the copied email"><input type="checkbox" checked={emailIncludeTceTrend} onChange={e=>setEmailIncludeTceTrend(e.target.checked)} /> TCE chart</label>
+                <label style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:11,color:C.tx,cursor:"pointer",whiteSpace:"nowrap"}} title="Include the fixing-window chart in the copied email"><input type="checkbox" checked={emailIncludeFixingWindow} onChange={e=>setEmailIncludeFixingWindow(e.target.checked)} /> Fixing window</label>
                 <button onClick={handleMarketCopyEmail} style={{ ...SB, background: marketExportStatus.startsWith("Copied") ? "rgba(63,185,80,.16)" : C.bg3, border: "1px solid " + (marketExportStatus.startsWith("Copied") ? "#3fb950" : C.bd), color: marketExportStatus.startsWith("Copied") ? "#65d68b" : C.tx }}>{marketExportStatus.startsWith("Copied") ? "✓ Copied!" : "Copy for email"}</button>
                 <button onClick={handleMarketDownloadPng} style={{ ...SB, background: marketExportStatus === "Downloaded." ? "rgba(63,185,80,.16)" : "transparent", border: "1px solid " + (marketExportStatus === "Downloaded." ? "#3fb950" : C.bd), color: marketExportStatus === "Downloaded." ? "#65d68b" : C.dim }}>{marketExportStatus === "Downloaded." ? "✓ Saved!" : "Download PNG"}</button>
               </div>
@@ -2245,7 +2259,7 @@ Any direction`}</pre>
                     <thead><tr>
                       <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>Segment</th>
                       <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>Spot WS</th>
-                      <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>{marketHeadings.ffa || "FFA trend (BALMO / +1 / +2)"}</th>
+                      <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>{reportFfaMonths(reportDate).join(" | ")}</th>
                     </tr></thead>
                     <tbody>
                       {handySegments.map((seg, i) => (
@@ -2389,7 +2403,7 @@ Any direction`}</pre>
                       <thead><tr style={{ background: "#eaf2fc" }}>
                         <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Segment</th>
                         <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Spot WS</th>
-                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>BALMO / +1 / +2</th>
+                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>{reportFfaMonths(reportDate).join(" | ")}</th>
                       </tr></thead>
                       <tbody>
                         {handySegments.map((seg, i) => (
@@ -2439,6 +2453,20 @@ Any direction`}</pre>
                       ))}
                     </div>
                   </div>
+
+                  {(emailIncludeTceTrend || emailIncludeFixingWindow) && (
+                    <div style={{display:"grid",gridTemplateColumns:emailIncludeTceTrend&&emailIncludeFixingWindow?"1fr 1fr":"1fr",gap:12,padding:"12px 18px 18px",alignItems:"start"}}>
+                      {emailIncludeTceTrend && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0}}>
+                        <div style={{fontSize:11,fontWeight:700,marginBottom:6}}>TCE trend</div>
+                        <TCETrendMini lastMonth={tceStats.lastMonth} current={tceStats.current} ytd={tceStats.ytd}/>
+                      </div>}
+                      {emailIncludeFixingWindow && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0}}>
+                        {importedFixingChart?.rows?.length
+                          ? <ImportedFixingWindowChart snapshot={importedFixingChart}/>
+                          : <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" barLabel="No. of ships" lineLabel="Avg. fix window" title="Fixing window (days)" accent="#4a90e2" loading={fixHistoryLoading}/>}
+                      </div>}
+                    </div>
+                  )}
                 </div>
               </div>
               </div>
