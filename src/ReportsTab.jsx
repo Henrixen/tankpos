@@ -251,8 +251,27 @@ function VesselRow({ v, localIdx, globalIdx, editing, onEdit, onSave, onDelete,
   );
 }
 
+function ImportedFixingWindowChart({snapshot}){
+  const rows=snapshot?.rows||[], segments=snapshot?.segments?.length?snapshot.segments:["Inter"];
+  const colors={"Sub 10":"#8b949e",City:"#58a6ff",Inter:"#22d3ee",J19:"#a78bfa",Flexi:"#fd79a8",Handy:"#3fb950",MR:"#f5a623"};
+  const W=460,H=180,L=32,R=12,T=16,B=30, iw=W-L-R,ih=H-T-B;
+  const valid=segments.flatMap(seg=>rows.map(r=>Number(r[seg]))).filter(v=>Number.isFinite(v)&&v>=0);
+  if(!valid.length)return <div style={{fontSize:11,color:"#9fb4cd",padding:20}}>Imported fixing-window data has no values.</div>;
+  const max=Math.max(7,Math.ceil(Math.max(...valid)+2));
+  const x=i=>L+i*iw/Math.max(1,rows.length-1), y=v=>T+ih-(v/max)*ih;
+  return <div style={{width:"100%"}}>
+    <div style={{fontSize:10,color:"#b8d5f7",marginBottom:5}}>Dashboard fixing window · {snapshot.region||"All"} · {snapshot.period||"ALL"}</div>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{display:"block",width:"100%",height:"auto"}}>
+      {[0,.5,1].map(t=><g key={t}><line x1={L} y1={T+t*ih} x2={W-R} y2={T+t*ih} stroke="rgba(130,160,200,.22)"/><text x={L-5} y={T+t*ih+3} textAnchor="end" fontSize="9" fill="#9fb4cd">{Math.round(max*(1-t))}</text></g>)}
+      {segments.map(seg=>{const points=rows.map((r,i)=>{const v=r[seg];return v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v))&&Number(v)>=0?[x(i),y(Number(v))]:null}).filter(Boolean);return points.length>1?<polyline key={seg} points={points.map(p=>p.join(",")).join(" ")} fill="none" stroke={colors[seg]||"#58a6ff"} strokeWidth="2" strokeLinejoin="round"/>:null;})}
+      {[0,Math.floor((rows.length-1)/2),rows.length-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=><text key={i} x={x(i)} y={H-7} textAnchor={i===0?"start":i===rows.length-1?"end":"middle"} fontSize="9" fill="#9fb4cd">{String(rows[i]?.date||rows[i]?.label||"").slice(0,11)}</text>)}
+    </svg>
+    <div style={{display:"flex",flexWrap:"wrap",gap:10,justifyContent:"center"}}>{segments.map(seg=><span key={seg} style={{fontSize:10,color:colors[seg]||"#58a6ff",fontWeight:700}}>● {seg}</span>)}</div>
+  </div>;
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
-function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [] }) {
+function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [], dashboardFixingImport = null, onDashboardFixingImportHandled }) {
   const [section, setSection] = useState("poslist");
 
   // Position list
@@ -528,6 +547,42 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       }));
     })();
   }, [reportType]);
+
+  // Dashboard fixing-window import: explicit destination and persisted chart snapshot.
+  const [fixingImportOpen,setFixingImportOpen]=useState(false);
+  const [fixingImportChoice,setFixingImportChoice]=useState("new");
+  const [fixingImportBusy,setFixingImportBusy]=useState(false);
+  const [fixingImportError,setFixingImportError]=useState("");
+  const [importedFixingChart,setImportedFixingChart]=useState(null);
+  const fixingImportSeen=useRef(null);
+  useEffect(()=>{
+    if(!dashboardFixingImport || dashboardFixingImport.kind!=="dashboard-fixing-window")return;
+    if(fixingImportSeen.current===dashboardFixingImport.requestId)return;
+    fixingImportSeen.current=dashboardFixingImport.requestId;
+    setFixingImportChoice("new");setFixingImportError("");setFixingImportOpen(true);
+    loadSavedReports();
+  },[dashboardFixingImport]);
+  async function confirmFixingImport(){
+    if(fixingImportBusy||!dashboardFixingImport)return;
+    setFixingImportBusy(true);setFixingImportError("");
+    try{
+      const snap={kind:"dashboard-fixing-window",region:dashboardFixingImport.region||"All",period:dashboardFixingImport.period||"ALL",segments:Array.isArray(dashboardFixingImport.segments)?dashboardFixingImport.segments:[],rows:Array.isArray(dashboardFixingImport.rows)?dashboardFixingImport.rows:[],importedAt:dashboardFixingImport.importedAt||new Date().toISOString()};
+      if(!snap.rows.length)throw new Error("No fixing-window observations to import");
+      if(fixingImportChoice!=="new"){
+        const {data,error}=await supabase.from("reports").select("*").eq("id",fixingImportChoice).single();
+        if(error||!data)throw error||new Error("Report not found");
+        if(data.report_type!=="Intermediate")throw new Error("Choose an Intermediate report");
+        await loadReport(fixingImportChoice);
+      }else{
+        setActiveMarketReportId(null);setReportType("Intermediate");setReportDate(new Date().toISOString().slice(0,10));
+        setCommentary("");setRateGrid({});setTceEarnings({});setQuotes([]);setFixtures([]);
+        initRateGrid("Intermediate");
+      }
+      setImportedFixingChart(snap);setSection("market");setFixingImportOpen(false);
+      onDashboardFixingImportHandled?.();
+    }catch(e){setFixingImportError(e?.message||"Import failed");}
+    finally{setFixingImportBusy(false);}
+  }
 
   // Explicit destination selection for cargo imports (never silently change a report).
   const [cargoImportOpen, setCargoImportOpen] = useState(false);
@@ -1055,7 +1110,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     try {
       const payload = { report_type: reportType, report_date: reportDate, commentary,
         rate_grid: { ...rateGrid, __marketEditor: { headings: marketHeadings,
-          benchmarks: benchmarkRows, drivers: driverBullets, tceStats, handy, handyCommentary, handySegments } },
+          benchmarks: benchmarkRows, drivers: driverBullets, tceStats, handy, handyCommentary, handySegments, importedFixingChart } },
         tce_earnings: tceEarnings, fixtures, quotes };
       // Editing an existing saved report updates that exact row. New reports insert once.
       const query = activeMarketReportId
@@ -1075,6 +1130,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       if (error || !data) return;
       setReportType(data.report_type); setReportDate(data.report_date || reportDate);
       setCommentary(data.commentary || ""); setRateGrid(data.rate_grid || {});
+      setImportedFixingChart(data.rate_grid?.__marketEditor?.importedFixingChart||null);
       setTceEarnings(data.tce_earnings || {}); setFixtures(data.fixtures || []); setQuotes(data.quotes || []);
       const editor = data.rate_grid?.__marketEditor;
       if (editor) {
@@ -1538,6 +1594,24 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   return (
     <div style={{ display: "flex", width: "100%", height: "100%", background: C.bg, fontFamily: "Inter,system-ui,sans-serif", overflow: "hidden" }}>
       <style>{`@media print{body>*{visibility:hidden;}.pos-print,.pos-print *{visibility:visible;}.pos-print{position:absolute;left:0;top:0;width:100%;}.pos-print-wrap{height:auto!important;overflow:visible!important;}.no-export{display:none!important;}}.pool-row:hover{background:rgba(58,130,246,0.14)!important;}`}</style>
+
+      {fixingImportOpen && <div className="no-export" style={{position:"fixed",inset:0,zIndex:100001,background:"rgba(0,0,0,.76)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div role="dialog" aria-modal="true" aria-label="Choose report for fixing-window import" style={{width:"min(480px,100%)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:9,padding:20,color:C.tx,boxShadow:"0 24px 70px rgba(0,0,0,.6)"}}>
+          <div style={{fontSize:17,fontWeight:750,marginBottom:8}}>Import fixing-window graph</div>
+          <div style={{fontSize:12,color:C.dim,marginBottom:16}}>Import the selected Dashboard graph ({dashboardFixingImport?.period||"ALL"} · {dashboardFixingImport?.region||"All"}) into an Intermediate report.</div>
+          <label style={{display:"block",fontSize:11,color:C.dim,marginBottom:6}}>DESTINATION REPORT</label>
+          <select value={fixingImportChoice} onChange={e=>setFixingImportChoice(e.target.value)} style={{width:"100%",padding:"10px 12px",borderRadius:5,background:C.bg3,color:C.tx,border:"1px solid "+C.bd,fontSize:13}}>
+            <option value="new">+ New Intermediate report</option>
+            {savedReports.filter(r=>r.report_type==="Intermediate").map(r=><option key={r.id} value={r.id}>Intermediate — {r.report_date||"No date"}</option>)}
+          </select>
+          <div style={{fontSize:11,color:C.dim,marginTop:12}}>The imported graph will replace the fixing-window graph in this report. Click Save afterwards to store it in Supabase.</div>
+          {fixingImportError&&<div style={{color:"#ff8585",fontSize:12,marginTop:10}}>{fixingImportError}</div>}
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:20}}>
+            <button disabled={fixingImportBusy} onClick={()=>{setFixingImportOpen(false);onDashboardFixingImportHandled?.();}} style={{padding:"9px 16px",background:"transparent",border:"1px solid "+C.bd,borderRadius:5,color:C.tx,cursor:"pointer"}}>Cancel</button>
+            <button disabled={fixingImportBusy} onClick={confirmFixingImport} style={{padding:"9px 16px",background:"#2563eb",border:"1px solid #3b82f6",borderRadius:5,color:"white",fontWeight:700,cursor:"pointer"}}>{fixingImportBusy?"Importing…":"Import graph"}</button>
+          </div>
+        </div>
+      </div>}
 
       {cargoImportOpen && <div className="no-export" style={{position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,.72)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
         <div role="dialog" aria-modal="true" aria-label="Choose report for cargo import" style={{width:"min(480px,100%)",maxHeight:"85vh",overflowY:"auto",background:C.bg2,border:"1px solid "+C.bd,borderRadius:9,padding:20,boxShadow:"0 24px 70px rgba(0,0,0,.6)",color:C.tx}}>
@@ -2203,7 +2277,9 @@ Any direction`}</pre>
                   <TCETrendMini lastMonth={tceStats.lastMonth} current={tceStats.current} ytd={tceStats.ytd} />
                 </div>
                 <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10 }}>
-                  <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" barLabel="No. of ships" lineLabel="Avg. fix window" title="Fixing window (days)" accent="#4a90e2" loading={fixHistoryLoading} />
+                  {importedFixingChart?.rows?.length
+                    ? <ImportedFixingWindowChart snapshot={importedFixingChart}/>
+                    : <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" barLabel="No. of ships" lineLabel="Avg. fix window" title="Fixing window (days)" accent="#4a90e2" loading={fixHistoryLoading} />}
                 </div>
               </div>
 
