@@ -319,6 +319,18 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
  const parseInter=async rows=>onAddCargoes(rows.map(r=>({...r,market_segment:"INTERMEDIATE"})));
  const [page,setPage]=useState(1);
  const PAGE_SIZE=200;
+ useEffect(()=>{
+   let active=true;
+   supabase.from("dashboard").select("key,value").in("key",["cargo-copy-list-template","cargo-copy-text-template"]).then(({data,error})=>{
+     if(error){console.warn("Cargo export templates unavailable",error);return;}
+     if(!active)return;
+     for(const item of data||[]){
+       const key=item.key==="cargo-copy-list-template"?"cargo_copy_format_v1":item.key==="cargo-copy-text-template"?"cargo_copy_format_second_v1":null;
+       if(key&&typeof item.value==="string")localStorage.setItem(key,item.value);
+     }
+   });
+   return()=>{active=false};
+ },[]);
  const qfUser=localStorage.getItem("signal_user")||"H";
  const defaults=["status","ex_region","to_region","p_and_c","intelligence","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment","tag","updated"];
  const colsKeyFor=part=>"signal_qf_visible_columns_"+qfUser+"_"+part;
