@@ -457,7 +457,7 @@ function ExportPanel({vessels, cargoes, mode, selCargoes, selVessels, allFiltere
 const FW_SEGMENTS = [
   { key:"sub10",  label:"Sub 10k",  color:"#58a6ff", dwt:[0,       10000] },
   { key:"city",   label:"City",     color:"#4ade80", dwt:[10001,   14500] },
-  { key:"inter",  label:"Inter",    color:"#f778ba", dwt:[14501,   22000] },
+  { key:"inter",  label:"Inter",    color:"#f778ba", dwt:[16000,   21000] },
   { key:"flexi",  label:"Flexi",    color:"#ea9a00", dwt:[22001,   28000] },
   { key:"handy",  label:"Handy",    color:"#a78bfa", dwt:[28001,   39000] },
   { key:"mr",     label:"MR",       color:"#22d3ee", dwt:[39001,   60000] },
@@ -637,7 +637,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false, fill
   }));
 
   // vessel count + avg behind the current view
-  const inView = enriched.filter(e => !excluded.has(e.vessel.toUpperCase()) && (!range || (e.week >= range.from && e.week <= range.to)));
+  const inView = enriched.filter(e => activeSeg.has(e.seg) && !excluded.has(e.vessel.toUpperCase()) && (!range || (e.week >= range.from && e.week <= range.to)));
   const vesselCount = new Set(inView.map(e => e.vessel.toUpperCase())).size;
   const avgFW = inView.length ? Math.round(inView.reduce((a, b) => a + b.fw, 0) / inView.length) : null;
 
@@ -702,7 +702,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false, fill
       {/* Keep the top row exclusively for segment controls so they never get pushed out. */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:4, marginBottom:1, minHeight:22, whiteSpace:"nowrap", overflow:"hidden" }}>
         <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"nowrap"}}>
-          {FW_SEGMENTS.map(s=>{const on=activeSeg.has(s.key);return <button key={s.key} onClick={()=>setActiveSeg(prev=>{const n=new Set(prev);n.has(s.key)?n.delete(s.key):n.add(s.key);return n;})} style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(on?s.color:"rgba(88,166,255,0.15)"),background:on?s.color+"22":"transparent",color:on?s.color:"rgba(140,170,210,0.35)",flex:"0 0 auto"}}>{s.label}</button>})}
+          {FW_SEGMENTS.map(s=>{const on=activeSeg.has(s.key);return <button key={s.key} onClick={(e)=>setActiveSeg(prev=>{if(e.shiftKey){const n=new Set(prev);n.has(s.key)?n.delete(s.key):n.add(s.key);return n.size?n:new Set([s.key]);}return prev.size===1&&prev.has(s.key)?new Set(FW_SEGMENTS.map(x=>x.key)):new Set([s.key]);})} style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(on?s.color:"rgba(88,166,255,0.15)"),background:on?s.color+"22":"transparent",color:on?s.color:"rgba(140,170,210,0.35)",flex:"0 0 auto"}}>{s.label}</button>})}
           <button onClick={()=>setShowList(v=>!v)} style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",border:"1px solid rgba(88,166,255,0.25)",background:showList?"rgba(88,166,255,0.12)":"transparent",color:"#79c0ff",flex:"0 0 auto"}}>{showList?"Hide vessels":`Vessels (${vesselCount})`}</button>
         </div>
       </div>
@@ -807,7 +807,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false, fill
               </thead>
               <tbody>
                 {Array.from(new Map(enriched
-                  .filter(e => !range || (e.week >= range.from && e.week <= range.to))
+                  .filter(e => activeSeg.has(e.seg) && (!range || (e.week >= range.from && e.week <= range.to)))
                   .map(e => [e.vessel.toUpperCase(), e])).values())
                   .sort((a, b) => {
                     const k = listSort.key;
@@ -825,7 +825,7 @@ function FixingWindowChart({ vessels = [], tagFilter, filterActive = false, fill
                         </td>
                         <td style={{ padding: "4px 8px", color: "rgba(160,190,230,0.7)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 120 }}>{e.operator}</td>
                         <td style={{ padding: "4px 8px", color: C.tx, fontWeight: 600 }}>{e.vessel}</td>
-                        <td style={{ padding: "4px 8px", textAlign: "right", color: "rgba(160,190,230,0.7)" }}>{Math.round(e.dwt / 1000)}K</td>
+                        <td style={{ padding: "4px 8px", textAlign: "right", color: "rgba(160,190,230,0.7)" }}>{Math.round(e.dwt).toLocaleString("en-US")}</td>
                         <td style={{ padding: "4px 8px", textAlign: "right", color: "rgba(160,190,230,0.7)" }}>{fmtWeek(e.openDate)}</td>
                         <td style={{ padding: "4px 8px", textAlign: "right", color: "rgba(160,190,230,0.7)" }}>{fmtWeek(e.updated)}</td>
                       </tr>
