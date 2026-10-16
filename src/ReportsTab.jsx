@@ -262,22 +262,66 @@ function fixingWindowReportTitle(snapshot){
 }
 
 function ImportedFixingWindowChart({snapshot}){
-  const rows=Array.isArray(snapshot?.rows)?snapshot.rows:[], segments=Array.isArray(snapshot?.segments)&&snapshot.segments.length?snapshot.segments:["Inter"];
+  const rows=Array.isArray(snapshot?.rows)?snapshot.rows:[];
+  const segments=Array.isArray(snapshot?.segments)&&snapshot.segments.length?snapshot.segments:["Inter"];
   const colors={"Sub 10":"#8b949e",City:"#58a6ff",Inter:"#22d3ee",J19:"#a78bfa",Flexi:"#fd79a8",Handy:"#3fb950",MR:"#f5a623"};
-  const W=460,H=180,L=32,R=12,T=16,B=30, iw=W-L-R,ih=H-T-B;
-  const valid=segments.flatMap(seg=>rows.map(r=>Number(r?.[seg]))).filter(v=>Number.isFinite(v)&&v>=0);
+  const W=640,H=228,L=39,R=44,T=19,B=32,iw=W-L-R,ih=H-T-B;
+  const valueAt=(row,seg)=>{const raw=row?.[seg];if(raw==null||raw==="")return null;const n=Number(raw);return Number.isFinite(n)&&n>=0?n:null;};
+  const valid=segments.flatMap(seg=>rows.map(r=>valueAt(r,seg))).filter(v=>v!==null);
   if(!valid.length)return <div style={{fontSize:11,color:"#9fb4cd",padding:20}}>Imported fixing-window data has no values.</div>;
-  const max=Math.max(7,Math.ceil(Math.max(...valid)+2));
-  const x=i=>L+i*iw/Math.max(1,rows.length-1), y=v=>T+ih-(v/max)*ih;
-  return <div style={{width:"100%"}}>
-    <div style={{fontSize:9,color:"#b8d5f7",marginBottom:4,fontWeight:650}}>{fixingWindowReportTitle(snapshot)}</div>
-    <svg viewBox={`0 0 ${W} ${H}`} style={{display:"block",width:"100%",height:"auto"}}>
-      {[0,.5,1].map(t=><g key={t}><line x1={L} y1={T+t*ih} x2={W-R} y2={T+t*ih} stroke="rgba(130,160,200,.22)"/><text x={L-5} y={T+t*ih+3} textAnchor="end" fontSize="7.5" fill="#9fb4cd">{Math.round(max*(1-t))}</text></g>)}
-      {segments.map(seg=>{const points=rows.map((r,i)=>{const v=r?.[seg];return v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v))&&Number(v)>=0?[x(i),y(Number(v))]:null}).filter(Boolean);return points.length>1?<polyline key={seg} points={points.map(p=>p.join(",")).join(" ")} fill="none" stroke={colors[seg]||"#58a6ff"} strokeWidth="1.35" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>:null;})}
-      {[0,Math.floor((rows.length-1)/2),rows.length-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=><text key={i} x={x(i)} y={H-7} textAnchor={i===0?"start":i===rows.length-1?"end":"middle"} fontSize="7.5" fill="#9fb4cd">{String(rows[i]?.date||rows[i]?.label||"").slice(0,11)}</text>)}
+  const maximum=Math.max(...valid),max=Math.max(4,Math.ceil((maximum+1)/2)*2);
+  const x=i=>L+i*iw/Math.max(1,rows.length-1),y=v=>T+ih-v/max*ih;
+  const smooth=(pts)=>{
+    if(!pts.length)return "";
+    let d=`M ${pts[0][0]} ${pts[0][1]}`;
+    for(let i=0;i<pts.length-1;i++){
+      const p0=pts[i-1]||pts[i],p1=pts[i],p2=pts[i+1],p3=pts[i+2]||p2;
+      const dx=(p2[0]-p1[0]);
+      const c1x=p1[0]+dx/3,c2x=p2[0]-dx/3;
+      const c1y=p1[1]+(p2[1]-p0[1])/6,c2y=p2[1]-(p3[1]-p1[1])/6;
+      d+=` C ${c1x} ${c1y} ${c2x} ${c2y} ${p2[0]} ${p2[1]}`;
+    }
+    return d;
+  };
+  const fmtDate=v=>{const str=String(v||"");const dt=new Date(str);return !Number.isNaN(dt.getTime())?dt.toLocaleDateString("en-GB",{day:"numeric",month:"short"}):str.slice(0,11);};
+  const tickIndices=[0,Math.floor((rows.length-1)/4),Math.floor((rows.length-1)/2),Math.floor((rows.length-1)*3/4),rows.length-1].filter((v,i,a)=>a.indexOf(v)===i);
+  return <div style={{width:"100%",minWidth:0}}>
+    <div style={{fontSize:11,color:"#dbe6f5",marginBottom:5,fontWeight:700}}>{fixingWindowReportTitle(snapshot)}</div>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{display:"block",width:"100%",height:"auto",overflow:"visible"}} role="img" aria-label="Imported fixing window historical average">
+      {Array.from({length:6},(_,i)=>i/5).map(t=><g key={t}><line x1={L} y1={T+t*ih} x2={W-R} y2={T+t*ih} stroke="rgba(130,160,200,.18)"/><text x={L-9} y={T+t*ih+3.5} textAnchor="end" fontSize="10" fontWeight="600" fill="#a7bdd9">{Number((max*(1-t)).toFixed(1)).toLocaleString("en-GB")}</text></g>)}
+      {segments.map(seg=>{
+        const groups=[];let current=[];
+        rows.forEach((r,i)=>{const v=valueAt(r,seg);if(v===null){if(current.length)groups.push(current);current=[];}else current.push([x(i),y(v)]);});
+        if(current.length)groups.push(current);
+        const lastIndex=rows.findLastIndex(r=>valueAt(r,seg)!==null);
+        const last=lastIndex>=0?valueAt(rows[lastIndex],seg):null;
+        return <g key={seg}>
+          {groups.map((pts,i)=>pts.length>1?<path key={i} d={smooth(pts)} fill="none" stroke={colors[seg]||"#58a6ff"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>:null)}
+          {last!==null&&<g><circle cx={x(lastIndex)} cy={y(last)} r="2.7" fill={colors[seg]||"#58a6ff"}/><text x={Math.min(W-6,x(lastIndex)+7)} y={Math.max(12,y(last)-7)} textAnchor={lastIndex===rows.length-1?"end":"start"} fontSize="10" fontWeight="750" fill={colors[seg]||"#58a6ff"}>{Number(last.toFixed(1))}d</text></g>}
+        </g>;
+      })}
+      {tickIndices.map(i=><text key={i} x={x(i)} y={H-9} textAnchor={i===0?"start":i===rows.length-1?"end":"middle"} fontSize="10" fontWeight="600" fill="#a7bdd9">{fmtDate(rows[i]?.date||rows[i]?.label)}</text>)}
     </svg>
-    <div style={{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center"}}>{segments.map(seg=><span key={seg} style={{fontSize:8.5,color:colors[seg]||"#58a6ff",fontWeight:650}}>● {seg}</span>)}</div>
+    <div style={{display:"flex",flexWrap:"wrap",gap:12,justifyContent:"center",marginTop:0}}>{segments.map(seg=><span key={seg} style={{fontSize:10,color:colors[seg]||"#58a6ff",fontWeight:700}}>● {seg==="Inter"?"Intermediate":seg}</span>)}</div>
   </div>;
+}
+
+function reportNaturalCase(value){
+  const s=String(value??"").trim();if(!s)return "";
+  if(s!==s.toUpperCase())return s;
+  const acronyms=new Set(["ARA","ULSD","UMS","CPP","HVO","FAME","UCO","MR","NWE","UKC","USG","BP","CSS","SA","ST"]);
+  return s.toLowerCase().replace(/\b[a-z][a-z'-]*\b/g,w=>acronyms.has(w.toUpperCase())?w.toUpperCase():w[0].toUpperCase()+w.slice(1));
+}
+function reportFixtureFreight(value){
+  const raw=String(value??"").trim();if(!raw)return "";
+  const compact=raw.replace(/\s/g,"").replace(/^(?:USD|US\$|\$)/i,"").replace(/(?:LS|L\/S|LUMPSUM)$/i,"");
+  const suffix=compact.match(/^([\d.,]+)([kKmM])$/);
+  let amount;
+  if(suffix){const n=Number(suffix[1].replace(",","."));amount=n*(suffix[2].toLowerCase()==="m"?1000000:1000);}
+  else {const digits=compact.replace(/[^\d.,]/g,"");const cleaned=digits.includes(",")&&!digits.includes(".")&&/[,][0-9]{1,2}$/.test(digits)?digits.replace(",","."):digits.replace(/[\s,]/g,"");amount=Number(cleaned);}
+  if(!Number.isFinite(amount)||amount<=0)return raw;
+  const k=amount/1000;
+  return `USD ${Number(k.toFixed(2)).toLocaleString("en-GB",{maximumFractionDigits:2})}K LS`;
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -2253,12 +2297,12 @@ Any direction`}</pre>
                               <td key={field} style={{ padding: "3px 5px" }}>
                                 {field === "freight" ? (
                                   <input value={f.freight || ""} onChange={e => setFixtures(p => { const n = [...p]; n[i] = { ...n[i], freight: e.target.value }; return n; })}
-                                    onFocus={e => { e.target.value = String(f.freight || "").replace(/[^0-9.\-]/g, ""); }}
-                                    onBlur={e => { const num = parseFloat(e.target.value.replace(/[^0-9.\-]/g, "")); if (!isNaN(num)) e.target.value = num.toLocaleString("nb-NO"); }}
-                                    className="rpt-edit" style={{ width: 90, fontSize: 11 }} placeholder="USD" />
+                                    
+                                    onBlur={() => setFixtures(p => p.map((row,j) => j===i ? {...row,freight:reportFixtureFreight(row.freight)} : row))}
+                                    className="rpt-edit" style={{ width: 135, fontSize: 11 }} placeholder="USD 250K LS" />
                                 ) : (
-                                  <input value={f[field] || ""} onChange={e => setFixtures(p => { const n = [...p]; n[i] = { ...n[i], [field]: e.target.value }; return n; })}
-                                    className="rpt-edit" style={{ width: field === "vessel" ? 100 : 68, fontSize: 11 }} />
+                                  <input value={reportNaturalCase(f[field])} onChange={e => setFixtures(p => { const n = [...p]; n[i] = { ...n[i], [field]: e.target.value }; return n; })}
+                                    className="rpt-edit" style={{ width: field === "vessel" ? 155 : field === "load" || field === "disch" ? 145 : field === "charterer" ? 120 : 100, fontSize: 11 }} />
                                 )}
                               </td>
                             ))}
@@ -2370,14 +2414,14 @@ Any direction`}</pre>
                       <tbody>
                         {fixtures.map((f, i) => (
                           <tr key={i} style={{ borderTop: "1px solid #d9e2ef" }}>
-                            <td style={{ padding: "4px 6px" }}>{f.vessel}</td>
-                            <td style={{ padding: "4px 6px" }}>{f.charterer}</td>
-                            <td style={{ padding: "4px 6px" }}>{f.cargo}</td>
-                            <td style={{ padding: "4px 6px" }}>{f.load}</td>
-                            <td style={{ padding: "4px 6px" }}>{f.disch}</td>
+                            <td style={{ padding: "4px 6px" }}>{reportNaturalCase(f.vessel)}</td>
+                            <td style={{ padding: "4px 6px" }}>{reportNaturalCase(f.charterer)}</td>
+                            <td style={{ padding: "4px 6px" }}>{reportNaturalCase(f.cargo)}</td>
+                            <td style={{ padding: "4px 6px" }}>{reportNaturalCase(f.load)}</td>
+                            <td style={{ padding: "4px 6px" }}>{reportNaturalCase(f.disch)}</td>
                             <td style={{ padding: "4px 6px" }}>{f.laycanFrom}</td>
                             <td style={{ padding: "4px 6px" }}>{f.laycanTo}</td>
-                            <td style={{ padding: "4px 6px" }}>{f.freight ? fmtUSD(f.freight) : ""}</td>
+                            <td style={{ padding: "4px 6px" }}>{reportFixtureFreight(f.freight)}</td>
                           </tr>
                         ))}
                       </tbody>
