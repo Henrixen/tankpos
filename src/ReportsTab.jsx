@@ -1094,7 +1094,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const moveBenchmarkRow=(from,to)=>setBenchmarkRows(prev=>{if(to<0||to>=prev.length)return prev;const next=[...prev];next.splice(to,0,next.splice(from,1)[0]);return next;});
   const reportHeadingStyle={background:"#d8e7f8",color:"#0b2850",padding:"7px 10px",borderLeft:"4px solid #377dc8",fontWeight:800,fontSize:12,letterSpacing:"0.055em",textTransform:"uppercase"};
   const [emailSections,setEmailSections] = useState({drivers:true,rates:true,tce:true,handy:true,fixtures:true,tceChart:false,fixingChart:false});
-  const emailSectionTick = (key) => <label className="no-export" title="Include this section in Copy for email" style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,color:C.tx,cursor:"pointer",whiteSpace:"nowrap",marginLeft:"auto",fontWeight:500,textTransform:"none",letterSpacing:0}}><span style={{width:14,height:14,display:"inline-flex",alignItems:"center",justifyContent:"center",background:emailSections[key]?"#225c9d":"#10213b",border:"1px solid #5d789d",borderRadius:3,color:"#fff",fontSize:11,fontWeight:800}}>{emailSections[key]?"✓":""}</span> Include</label>;
+  const emailSectionTick = (key) => <label className="no-export" title="Toggle inclusion in exported report" style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,color:C.tx,cursor:"pointer",whiteSpace:"nowrap",marginLeft:"auto",fontWeight:500,textTransform:"none",letterSpacing:0}} onClick={()=>setEmailSections(p=>({...p,[key]:!p[key]}))}><span style={{width:14,height:14,display:"inline-flex",alignItems:"center",justifyContent:"center",background:emailSections[key]?"#225c9d":"#10213b",border:"1px solid #5d789d",borderRadius:3,color:"#fff",fontSize:11,fontWeight:800}}>{emailSections[key]?"✓":""}</span> Include</label>;
   const lightExportRef = useRef(null);
   async function captureMarketPng() {
     const lib = await loadHTI();
@@ -2140,12 +2140,12 @@ Any direction`}</pre>
               <div ref={marketPreviewRef} style={{ display: "flex", flexDirection: "column", gap: 12, background: "#0b1f3f", padding: 10, borderRadius: 8 }}>
 
               {/* ── Header ── */}
-              <div style={{ background: "#0b1f3f", borderRadius: 8, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <img src={INTERMEDIATE_HEADER_LOGO} alt="Steem1960 Shipbrokers" style={{width:180,height:48,objectFit:"contain",background:"#fff",borderRadius:4,padding:"3px 6px",boxSizing:"border-box"}} />
-                  <input className="rpt-edit" aria-label="Intermediate report title" value={intermediateTitle} onChange={e=>setIntermediateTitle(e.target.value)} style={{fontSize:15,fontWeight:700,color:"#fff",background:"transparent",border:"none",borderBottom:"1px solid transparent",outline:"none",minWidth:210,width:Math.max(210,intermediateTitle.length*9)+"px"}} />
+              <div style={{background:"#0b1f3f",borderRadius:8,padding:"12px 16px",position:"relative",minHeight:94,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                <img src={INTERMEDIATE_HEADER_LOGO} alt="Steem1960 Shipbrokers" style={{width:210,height:56,objectFit:"contain",background:"#fff",borderRadius:4,padding:"3px 6px",boxSizing:"border-box"}} />
+                <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",width:"100%",gap:12}}>
+                  <input className="rpt-edit" aria-label="Intermediate report title" value={intermediateTitle} onChange={e=>setIntermediateTitle(e.target.value)} style={{fontSize:15,fontWeight:700,color:"#fff",background:"transparent",border:"none",borderBottom:"1px solid transparent",outline:"none",flex:1,minWidth:0}} />
+                  <div style={{fontSize:11,color:"#9fc4f0",whiteSpace:"nowrap"}}>{new Date(reportDate).toLocaleDateString("en-GB")}</div>
                 </div>
-                <div style={{ fontSize: 11, color: "#9fc4f0" }}>{new Date(reportDate).toLocaleDateString("en-GB")}</div>
               </div>
 
               {/* ── Market drivers / What to watch ── */}
@@ -2191,12 +2191,12 @@ Any direction`}</pre>
 
               {/* ── Benchmark rates ── */}
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden" }}>
-                <div style={{ padding: "8px 13px", background: "rgba(74,144,226,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ padding: "10px 13px", background: "rgba(74,144,226,0.17)", borderLeft:"4px solid #377dc8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   {editMarketHeading("benchmark",{fontSize:12,fontWeight:700,color:"#79c0ff",textTransform:"uppercase",letterSpacing:"0.05em"})}
-                  <div className="no-export" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div className="no-export" style={{ display: "flex", alignItems: "center", gap: 15,flexWrap:"wrap" }}>
                     {benchmarkRefreshStatus && <span style={{ fontSize: 10, color: C.dim }}>{benchmarkRefreshStatus}</span>}
-                    {emailSectionTick("rates")}<label style={{fontSize:10,color:C.dim}}><input type="checkbox" checked={routeColumns.lastWeek} onChange={e=>setRouteColumns(p=>({...p,lastWeek:e.target.checked}))}/> Last week</label><label style={{fontSize:10,color:C.dim}}><input type="checkbox" checked={routeColumns.comment} onChange={e=>setRouteColumns(p=>({...p,comment:e.target.checked}))}/> Comment</label>
-                    <button className="no-export" onClick={()=>setBenchmarkRows(p=>[...p,{key:"custom-"+Date.now(),label:"New route",from:"",to:"",freight:"",lastWeek:"",tce:null,tceLastWeek:null,override:true}])} style={{...SB,background:C.bg3,color:C.blue,border:"1px solid "+C.bd}}>+ Add route</button>
+                    {emailSectionTick("rates")}<label style={{fontSize:10,color:C.dim,display:"inline-flex",alignItems:"center",gap:6,marginLeft:12}}><input type="checkbox" checked={routeColumns.lastWeek} onChange={e=>setRouteColumns(p=>({...p,lastWeek:e.target.checked}))}/> Last week</label><label style={{fontSize:10,color:C.dim,display:"inline-flex",alignItems:"center",gap:6,marginLeft:8}}><input type="checkbox" checked={routeColumns.comment} onChange={e=>setRouteColumns(p=>({...p,comment:e.target.checked}))}/> Comment</label>
+                    <button className="no-export" onClick={()=>setBenchmarkRows(p=>[...p,{key:"custom-"+Date.now(),label:"New route",from:"",to:"",freight:"",lastWeek:"",tce:null,tceLastWeek:null,manualTce:"",override:true}])} style={{...SB,background:C.bg3,color:C.blue,border:"1px solid "+C.bd}}>+ Add route</button>
                     <button onClick={refreshBenchmarkFromSaved} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim, fontSize: 10 }}>↻ Refresh from saved</button>
                   </div>
                 </div>
@@ -2217,7 +2217,7 @@ Any direction`}</pre>
                           </div></td>
                           <td style={{ padding: "6px 10px" }}>
                             <input aria-label="Spot freight" className="rpt-edit" value={r.freight ?? ""} onChange={e=>updateBenchmarkFreight(r.key,e.target.value)} placeholder="USD" style={{width:110,fontSize:12,fontWeight:600,color:C.tx}} />
-                            {r.tce != null && <span style={{ fontSize: 10, color: C.faint, marginLeft: 6 }}>(USD {Math.round(r.tce / 1000)}k pd)</span>}
+                            {(r.key?.startsWith("custom-") || r.override && !r.from && !r.to) ? <input aria-label="Manual TCE in USD thousands per day" className="rpt-edit" value={r.manualTce||""} onChange={e=>setBenchmarkRows(p=>p.map(x=>x.key===r.key?{...x,manualTce:e.target.value}:x))} placeholder="USD XXk pd" title="Enter TCE manually, e.g. 25 or USD 25k pd" style={{width:108,fontSize:10,color:C.faint,marginLeft:6}}/> : r.tce != null && <span style={{ fontSize: 10, color: C.faint, marginLeft: 6 }}>(USD {Math.round(r.tce / 1000)}k pd)</span>}
                           </td>
                           {routeColumns.lastWeek&&<td style={{ padding: "6px 10px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -2237,8 +2237,8 @@ Any direction`}</pre>
               </div>
 
               {/* ── TCE earnings ── */}
-              <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 13 }}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>{editMarketHeading("tce",{fontSize:12,fontWeight:700,color:C.tx,textTransform:"uppercase",letterSpacing:"0.05em"})}{emailSectionTick("tce")}</div>
+              <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow:"hidden" }}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 13px",background:"rgba(74,144,226,0.17)",borderLeft:"4px solid #377dc8"}}>{editMarketHeading("tce",{fontSize:12,fontWeight:700,color:"#79c0ff",textTransform:"uppercase",letterSpacing:"0.05em"})}{emailSectionTick("tce")}</div><div style={{padding:13}}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,180px))", gap: 16, justifyContent: "center", textAlign: "center" }}>
                   {[["current", "Current"], ["lastMonth", "Last month avg"], ["ytd", "YTD avg"]].map(([k, label]) => (
                     <div key={k}>
@@ -2248,7 +2248,7 @@ Any direction`}</pre>
                       <div style={{ fontSize: 10, color: C.faint, marginTop: 3, textAlign: "center" }}>{tceStats[k] ? `USD ${Math.round(parseFloat(tceStats[k]) / 1000)}k pd` : ""}</div>
                     </div>
                   ))}
-                </div>
+                </div></div>
               </div>
 
               {/* ── Handy ── */}
@@ -2368,12 +2368,12 @@ Any direction`}</pre>
               {/* ── Hidden light-themed export node — captured for PNG/print instead of the dark editor above ── */}
               <div className="pos-print-wrap" style={{ height: 0, overflow: "hidden" }}>
               <div ref={lightExportRef} className="pos-print" style={{ width: 700, background: "#ffffff", color: "#16233f", fontFamily: "-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" }}>
-                <div style={{ background: "#0b1f3f", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <img src={INTERMEDIATE_HEADER_LOGO} alt="Steem1960 Shipbrokers" style={{width:180,height:48,objectFit:"contain",background:"#fff",borderRadius:4,padding:"3px 6px",boxSizing:"border-box"}} />
+                <div style={{background:"#0b1f3f",padding:"14px 18px",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
+                  <img src={INTERMEDIATE_HEADER_LOGO} alt="Steem1960 Shipbrokers" style={{width:210,height:56,objectFit:"contain",background:"#fff",borderRadius:4,padding:"3px 6px",boxSizing:"border-box"}} />
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%"}}>
                     <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>{intermediateTitle}</div>
+                    <div style={{fontSize:11,color:"#c9d8ee"}}>{new Date(reportDate).toLocaleDateString("en-GB")}</div>
                   </div>
-                  <div style={{ fontSize: 11, color: "#c9d8ee" }}>{new Date(reportDate).toLocaleDateString("en-GB")}</div>
                 </div>
 
                 <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -2388,7 +2388,7 @@ Any direction`}</pre>
 
                   {emailSections.rates && (
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{marketHeadings.benchmark}</div>
+                    <div style={{...reportHeadingStyle,marginBottom:8}}>{marketHeadings.benchmark}</div>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                       <thead><tr style={{ background: "#eaf2fc" }}>
                         <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Intermediate routes</th>
@@ -2400,7 +2400,7 @@ Any direction`}</pre>
                         {benchmarkRows.map((r, i) => (
                           <tr key={r.key} style={{ borderTop: "1px solid #d9e2ef" }}>
                             <td style={{ padding: "5px 8px", fontWeight: 700 }}>{r.label}</td>
-                            <td style={{ padding: "5px 8px" }}>{r.freight ? fmtUSD(r.freight) : "—"} {r.tce != null && <span style={{ color: "#6b7280" }}>(USD {Math.round(r.tce / 1000)}k pd)</span>}</td>
+                            <td style={{ padding: "5px 8px" }}>{r.freight ? fmtUSD(r.freight) : "—"} {r.manualTce?.trim() ? <span style={{color:"#6b7280"}}>({/^usd/i.test(r.manualTce.trim())?r.manualTce.trim():`USD ${r.manualTce.trim().replace(/\s*k\s*(pd)?$/i,"")}k pd`})</span> : r.tce != null && <span style={{ color: "#6b7280" }}>(USD {Math.round(r.tce / 1000)}k pd)</span>}</td>
                             {routeColumns.lastWeek&&<td style={{padding:"5px 8px",color:"#6b7280"}}>{r.lastWeek ? fmtUSD(r.lastWeek) : "—"} {r.tceLastWeek != null && `(USD ${Math.round(r.tceLastWeek / 1000)}k pd)`}</td>}
                             {routeColumns.comment&&<td style={{padding:"5px 8px",color:"#6b7280"}}>{r.comment||""}</td>}
                           </tr>
@@ -2464,7 +2464,7 @@ Any direction`}</pre>
 
                   {emailSections.tce && (
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0b1f3f", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{marketHeadings.tce}</div>
+                    <div style={{...reportHeadingStyle,marginBottom:8}}>{marketHeadings.tce}</div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,180px))", gap: 16, justifyContent: "center", textAlign: "center" }}>
                       {[["current", "Current"], ["lastMonth", "Last month avg"], ["ytd", "YTD avg"]].map(([k, label]) => (
                         <div key={k} style={{ background: "#eaf2fc", borderRadius: 6, padding: "6px 9px" }}>
