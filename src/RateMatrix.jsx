@@ -348,7 +348,7 @@ function RateMatrix({onBunkerChange}){
     if(loadedRef.current){saveRates(matrixRef.current);forceUpdate(n=>n+1);}
   }
 
-  const thS={padding:"3px 5px",fontSize:11,fontWeight:400,color:"rgba(120,160,220,0.65)",background:C.bg3,textAlign:"center",whiteSpace:"nowrap",border:"1px solid "+C.bd2};
+  const thS={padding:"3px 2px",fontSize:10,fontWeight:400,color:"rgba(120,160,220,0.65)",background:C.bg3,textAlign:"center",whiteSpace:"nowrap",border:"1px solid "+C.bd2};
   const tdR={fontSize:11,padding:"1px 2px",border:"1px solid "+C.bd2,verticalAlign:"middle",height:22};
 
   // RCell is defined outside this component (see above)
@@ -367,8 +367,8 @@ function RateMatrix({onBunkerChange}){
         </div>
       )}
 
-      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:10,alignItems:"start"}}>
-        <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400,background:C.bg2,border:"1px solid "+C.bd,borderRadius:6}}>
+      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:6,alignItems:"start",minWidth:0,width:"100%"}}>
+        <table style={{minWidth:0,borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400,background:C.bg2,border:"1px solid "+C.bd,borderRadius:6}}>
           <thead><tr><th style={{...thS,width:"48%",fontWeight:600,textAlign:"left",color:"#b9d6fa"}}>Intra Europe</th><th style={{...thS,width:"26%",fontWeight:400}}>Rate LS</th><th style={{...thS,width:"26%",fontWeight:400}}>TCE</th></tr></thead>
           <tbody>{euRoutes.map((rt,i)=><tr key={rt.id} style={{background:i%2?"#111f34":"#0a172a"}}>
             <td style={{...tdR,paddingLeft:3}}><RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/></td>
@@ -376,8 +376,8 @@ function RateMatrix({onBunkerChange}){
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-tce"} col={C.green} rev={rev}/></td>
           </tr>)}</tbody>
         </table>
-        <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400,background:C.bg2,border:"1px solid "+C.bd,borderRadius:6}}>
-          <thead><tr><th style={{...thS,width:"67%",fontWeight:600,textAlign:"left",color:C.blue}}>Deepsea</th><th style={{...thS,width:"11%",fontWeight:400}}>5k pmt</th><th style={{...thS,width:"11%",fontWeight:400}}>10k pmt</th><th style={{...thS,width:"11%",fontWeight:400}}>15–20k pmt</th></tr></thead>
+        <table style={{minWidth:0,borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400,background:C.bg2,border:"1px solid "+C.bd,borderRadius:6}}>
+          <thead><tr><th style={{...thS,width:"40%",fontWeight:600,textAlign:"left",color:C.blue}}>Deepsea</th><th style={{...thS,width:"20%",fontWeight:400}}>5k pmt</th><th style={{...thS,width:"20%",fontWeight:400}}>10k pmt</th><th style={{...thS,width:"20%",fontWeight:400}}>15–20k pmt</th></tr></thead>
           <tbody>{rateRoutes.flatMap((rg,rgIdx)=>rg.routes.map((rt,rtIdx)=><tr key={rt.id} style={{background:(rateRoutes.slice(0,rgIdx).reduce((n,g)=>n+g.routes.length,0)+rtIdx)%2?"#111f34":"#0a172a"}}>
             <td style={{...tdR,paddingLeft:3}}><div style={{display:"flex",alignItems:"center",gap:2,minWidth:0}}><span style={{flex:1,minWidth:0}}><RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/></span><button type="button" title="Delete this route" aria-label={`Delete ${rt.from} to ${rt.to}`} onClick={()=>deleteDeepseaRoute(rgIdx,rtIdx)} style={{border:"none",background:"transparent",color:"#d87979",fontSize:11,cursor:"pointer",padding:"0 2px",flexShrink:0}}>×</button></div></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-5kt"} col={REGION_COLORS[rg.region]} rev={rev}/></td>
