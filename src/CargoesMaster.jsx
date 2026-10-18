@@ -519,7 +519,8 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
       .qf-mobile-controls > summary{display:none!important;}
       .qf-mobile-controls-body{display:contents!important;}
       .qf-actions{display:flex!important;}
-      .qf-actions-main,.qf-actions-search{display:contents!important;}
+      .qf-actions-main{display:contents!important;}
+      .qf-actions-search{display:flex!important;position:relative!important;width:210px!important;flex:0 0 210px!important;align-items:center!important;}
     }
   `}</style>
      <div className="qf-panel-header" style={{display:"grid",gridTemplateColumns:panelWidths.map(x=>`minmax(0,${x}fr)`).join(" "),alignItems:"center",gap:10}}><div style={{gridColumn:"1 / span 2",display:"flex",gap:6}}><button onClick={()=>{setSection("all");setVisualTab("chart")}} style={btn(section==="all")}>Cargoes · All</button><button onClick={()=>{setSection("inter");setVisualTab("rates")}} style={btn(section==="inter")}>Intermediate</button></div><div className="qf-header-chart-tabs" style={{gridColumn:"3",width:"100%",display:"flex",alignItems:"center",gap:5,boxSizing:"border-box",paddingLeft:0}}><button style={btn(visualTab==="rates")} onClick={()=>setVisualTab("rates")}>Rate Matrix</button><button style={btn(visualTab==="chart")} onClick={()=>setVisualTab("chart")}>Cargo Count</button><span style={{marginLeft:"auto"}}>{visualTab==="rates"&&<BunkerHeader/>}</span></div></div>
