@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useRef,useState,Suspense} from "react";
+import React,{useEffect,useMemo,useRef,useState,useDeferredValue,Suspense} from "react";
 import { createPortal } from "react-dom";
 import { C } from "./constants";
 import { toTCase,normaliseQty,fmtDateShort,fmtFreight } from "./utils";
@@ -313,6 +313,7 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
  const [extraTags,setExtraTags]=useState([]);
  const activeTags=tag?[tag,...extraTags]:extraTags;
  const chooseTag=(value,ctrl)=>{if(ctrl){const next=new Set(activeTags);next.has(value)?next.delete(value):next.add(value);const a=[...next];setTag(a[0]||"");setExtraTags(a.slice(1));}else{setTag(tag===value&&extraTags.length===0?"":value);setExtraTags([]);}};
+ const deferredSearch=useDeferredValue(search);
  const clearFilters=()=>{setSearch("");setStatus("ALL");setTime("");setGrade("");setTag("");setExtraTags([]);setEx("");setToR("");setContributorFilter("");setLaycanStart("");setLaycanEnd("");setDuplicateOnly(false);};
   const [visualTab,setVisualTab]=useState("chart");
  // Intermediate is a segment in the same cargoes master table.
@@ -443,10 +444,10 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
   const laycanTo=cargoLaycanDate(c.to,laycanFrom||periodEnd);
   if(!laycanFrom||!laycanTo)return false;
   if(laycanFrom<periodStart||laycanTo>periodEnd||laycanTo<laycanFrom)return false;
-}if(time){const d=new Date(c.updated||c.added||0),now=new Date(),[tw0,tw1]=weekBounds(0),[lw0,lw1]=weekBounds(-1);tw1.setHours(23,59,59,999);lw1.setHours(23,59,59,999);if(time==="tw"&&!(d>=tw0&&d<=tw1))return false;if(time==="lw"&&!(d>=lw0&&d<=lw1))return false;if(time==="ytd"&&d<new Date(now.getFullYear(),0,1))return false;}if(grade&&!String(c.cargo||"").toLowerCase().includes(grade.toLowerCase()))return false;if(search&&!JSON.stringify(c).toLowerCase().includes(search.toLowerCase()))return false;return true});const f=sort==="added"?"added":sort;return [...a].sort((x,y)=>{let A=x[f]||x.updated||"",B=y[f]||y.updated||"";if(f==="added"||f==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime()}const primary=(A<B?-1:A>B?1:0)*dir;if(primary)return primary;
+}if(time){const d=new Date(c.updated||c.added||0),now=new Date(),[tw0,tw1]=weekBounds(0),[lw0,lw1]=weekBounds(-1);tw1.setHours(23,59,59,999);lw1.setHours(23,59,59,999);if(time==="tw"&&!(d>=tw0&&d<=tw1))return false;if(time==="lw"&&!(d>=lw0&&d<=lw1))return false;if(time==="ytd"&&d<new Date(now.getFullYear(),0,1))return false;}if(grade&&!String(c.cargo||"").toLowerCase().includes(grade.toLowerCase()))return false;if(deferredSearch&&!JSON.stringify(c).toLowerCase().includes(deferredSearch.toLowerCase()))return false;return true});const f=sort==="added"?"added":sort;return [...a].sort((x,y)=>{let A=x[f]||x.updated||"",B=y[f]||y.updated||"";if(f==="added"||f==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime()}const primary=(A<B?-1:A>B?1:0)*dir;if(primary)return primary;
 // Stable tie-breakers: editing Intel/regions/etc must never change row position.
 const xa=new Date(x.added||0).getTime()||0,ya=new Date(y.added||0).getTime()||0;if(xa!==ya)return ya-xa;
-return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hideIntermediate,duplicateOnly,duplicateIds,search,status,time,tag,extraTags,grade,ex,toR,contributorFilter,laycanStart,laycanEnd,sort,dir]);
+return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hideIntermediate,duplicateOnly,duplicateIds,deferredSearch,status,time,tag,extraTags,grade,ex,toR,contributorFilter,laycanStart,laycanEnd,sort,dir]);
  useEffect(()=>{setPage(1);},[section,hideIntermediate,duplicateOnly,duplicateMode,search,status,time,tag,extraTags,grade,ex,toR,contributorFilter,laycanStart,laycanEnd,sort,dir]);
  const pageRows=useMemo(()=>filtered.slice(0,page*PAGE_SIZE),[filtered,page]);
  const allCols=[["status","Status",3.5],["ex_region","Ex Region",5.5],["to_region","To Region",5.5],["p_and_c","P&C",3],["intelligence","Intel",4],["vessel","Vessel",7],["charterer","Charterer",6.5],["qty","Qty",4],["cargo","Cargo",6],["load","Load",8],["disch","Disch",7.5],["from","From",4.5],["to","To",4.5],["freight","Freight",7],["comment","Comment",9],["tag","Tag",5],["source","Source",5],["updated","Updated",6.5]];
@@ -511,9 +512,9 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
       .qf-mobile-fold .qf-filters > div{height:auto!important;min-height:0!important;flex:0 0 auto!important;display:flex!important;flex-direction:column!important;}
       .qf-mobile-fold .qf-filters > div > div{flex:0 0 auto!important;align-content:flex-start!important;}
       .qf-mobile-fold .qf-parse-tags{padding:0!important;gap:3px!important;top:5px!important;right:7px!important;}
-      .qf-mobile-fold .qf-parse textarea{min-height:95px!important;height:auto!important;flex:1 1 auto!important;padding-top:8px!important;padding-bottom:5px!important;}
+      .qf-mobile-fold .qf-parse textarea{min-height:95px!important;height:auto!important;flex:1 1 auto!important;padding-top:32px!important;padding-bottom:5px!important;}
       .qf-mobile-fold .qf-parse > div:last-child > div{height:100%!important;display:flex!important;flex-direction:column!important;}
-      .qf-mobile-fold .qf-parse > div:last-child > div > textarea{flex:1 1 auto!important;}
+      .qf-mobile-fold .qf-parse > div:last-child > div > textarea{flex:1 1 auto!important;padding-top:32px!important;}
       .qf-mobile-controls{display:contents!important;}
       .qf-mobile-controls > summary{display:none!important;}
       .qf-mobile-controls-body{display:contents!important;}
