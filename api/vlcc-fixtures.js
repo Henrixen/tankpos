@@ -25,7 +25,7 @@ function extract(text,now){
       out.push({date:day.toISOString().slice(0,10),vessel:m[2].trim(),built:+m[3],operator:m[4].trim()||null,charterer:m[5].trim(),status:m[6],tce:earnings?Math.round(Number(earnings[1].replace(/,/g,''))*1000):null,route:null,rate:null,duration:null});
     }
   }
-  return [...new Map(out.map(x=>[`${x.date}|${x.vessel.toLowerCase()}|${x.charterer.toLowerCase()}|${x.status}`,x])).values()].sort((a,b)=>b.date.localeCompare(a.date));
+  return [...new Map(out.filter(x=>Number.isFinite(x.tce)&&x.tce>0).map(x=>[`${x.date}|${x.vessel.toLowerCase()}|${x.charterer.toLowerCase()}|${x.status}`,x])).values()].sort((a,b)=>b.date.localeCompare(a.date));
 }
 export default async function handler(req,res){
   res.setHeader('Cache-Control','s-maxage=900, stale-while-revalidate=1800');
