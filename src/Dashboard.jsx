@@ -886,6 +886,9 @@ function Dashboard({vessels, cargoes, history, onImportFixingWindow}) {
   const [shippingPriceTab,setShippingPriceTab]=useState("vlcc");
   const [vlccPeriod,setVlccPeriod]=useState("1Y");
   const [vlccError,setVlccError]=useState(null);
+  const [vlccFixtures,setVlccFixtures]=useState(null);
+  const [vlccFixturesError,setVlccFixturesError]=useState(null);
+  const [vlccFixturesOpen,setVlccFixturesOpen]=useState(false);
   const [wsSummaryData,setWsSummaryData]=useState(null);
 
   useEffect(()=>{
@@ -931,6 +934,10 @@ function Dashboard({vessels, cargoes, history, onImportFixingWindow}) {
           await supabase.from("dashboard").upsert({key:"commodity-hist-"+day,value:JSON.stringify(snap)},{onConflict:"key"});
         }catch(e){console.warn("commodity snapshot save:",e);}
       }).catch(()=>{});
+    fetch("/api/vlcc-fixtures",{cache:"no-store"})
+      .then(async r=>{const j=await r.json();if(!r.ok)throw new Error(j.error||"Fixture feed unavailable");return j;})
+      .then(j=>{if(alive){setVlccFixtures(j);setVlccFixturesError(null);}})
+      .catch(e=>{if(alive)setVlccFixturesError(e.message||"Fixture feed unavailable");});
     fetch("/api/vlcc-earnings",{cache:"no-store"})
       .then(r=>r.ok?r.json():Promise.reject(new Error("HTTP "+r.status)))
       .then(j=>{if(alive){setVlcc(j);setVlccError(j?.latest?null:"No VLCC data returned");}})
@@ -1607,7 +1614,7 @@ function Dashboard({vessels, cargoes, history, onImportFixingWindow}) {
               </div>
             </div>
             {shippingPriceTab==="vlcc" ? (
-              vlcc?.latest ? <div className="dash-vlcc-block" style={{display:"flex",flexDirection:"column",height:346,minHeight:314}}>
+              <>{vlcc?.latest ? <div className="dash-vlcc-block" style={{display:"flex",flexDirection:"column",height:346,minHeight:314}}>
                 <div className="dash-vlcc-head" style={{position:"relative",minHeight:46,margin:"-14px 0 0"}}>
                   <div style={{position:"absolute",left:0,top:4,fontSize:9.5,fontWeight:850,color:"rgba(185,215,245,.72)",textTransform:"uppercase",letterSpacing:".06em"}}>TD3C MEG → China</div>
                   <div className="dash-vlcc-earnings" style={{textAlign:"center",paddingTop:0,transform:"translateY(-3px)"}}>
@@ -1619,7 +1626,20 @@ function Dashboard({vessels, cargoes, history, onImportFixingWindow}) {
                 <div style={{flex:1,minHeight:0}}><VlccSparkline history={vlcc.history||[]} period={vlccPeriod}/></div>
               </div> : <div style={{fontSize:11,color:vlccError?D.red:D.faint,padding:"10px 0"}}>
                 {vlccError?"VLCC unavailable · "+vlccError:"Loading VLCC earnings…"}
+              </div>}
+              <div style={{marginTop:9,borderTop:"1px solid "+D.border,paddingTop:8}}>
+                <button type="button" onClick={()=>setVlccFixturesOpen(v=>!v)} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",background:"transparent",border:0,color:D.tx,fontSize:10,fontWeight:800,cursor:"pointer",padding:"5px 0"}}>
+                  <span>VLCC FIXTURES · LAST 14 DAYS {vlccFixtures?.fixtures?.length!=null?`(${vlccFixtures.fixtures.length})`:""}</span><span>{vlccFixturesOpen?"▴":"▾"}</span>
+                </button>
+                {vlccFixturesOpen&&<div style={{maxHeight:300,overflow:"auto"}}>
+                  <div style={{fontSize:9,color:D.faint,marginBottom:5}}>Tankers International · public reported fixtures · TCE and duration only when available</div>
+                  {vlccFixturesError&&<div style={{color:D.red,fontSize:10}}>Feed unavailable: {vlccFixturesError}</div>}
+                  {!vlccFixtures&&!vlccFixturesError&&<div style={{color:D.faint,fontSize:10}}>Loading fixtures…</div>}
+                  {vlccFixtures&&<table style={{width:"100%",borderCollapse:"collapse",fontSize:9.5}}><thead><tr>{["DATE","VESSEL","CHARTERER","STATUS","TCE/DAY","DAYS"].map(h=><th key={h} style={{textAlign:h==="TCE/DAY"||h==="DAYS"?"right":"left",padding:"5px 4px",color:D.faint,borderBottom:"1px solid "+D.border}}>{h}</th>)}</tr></thead><tbody>{(vlccFixtures.fixtures||[]).map((f,i)=><tr key={f.date+f.vessel+i} style={{borderBottom:"1px solid "+D.border}}><td style={{padding:"5px 4px",whiteSpace:"nowrap"}}>{f.date.slice(5)}</td><td style={{padding:"5px 4px",fontWeight:700}}>{f.vessel}</td><td style={{padding:"5px 4px"}}>{f.charterer||"—"}</td><td style={{padding:"5px 4px",color:f.status==="Failed"?D.red:D.dim}}>{f.status||"—"}</td><td style={{padding:"5px 4px",textAlign:"right",whiteSpace:"nowrap"}}>{f.tce!=null?"$"+Math.round(f.tce/1000)+"k":"—"}</td><td style={{padding:"5px 4px",textAlign:"right"}}>{f.duration??"—"}</td></tr>)}</tbody></table>}
+                  {vlccFixtures&&!vlccFixtures.fixtures?.length&&<div style={{color:D.faint,fontSize:10}}>No fixtures reported within 14 days.</div>}
+                </div>}
               </div>
+</>
             ) : (
               <>
                 {!bFetched&&!bLoading&&<div style={{textAlign:"center",padding:"8px 0"}}><button onClick={fetchBunkersPBT} style={{background:"rgba(88,166,255,.12)",border:"1px solid rgba(88,166,255,.32)",borderRadius:5,color:D.blue,fontWeight:700,fontSize:10,padding:"5px 10px",cursor:"pointer"}}>Fetch bunker prices</button></div>}
