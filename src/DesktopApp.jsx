@@ -2697,7 +2697,7 @@ const filtV=useMemo(()=>{
 
                   <div aria-label={`${pinInput.length} of 4 PIN digits entered`} style={{display:"flex",gap:mobile?15:19,justifyContent:"center",alignItems:"center",marginBottom:mobile?18:23,minHeight:mobile?24:28}}>
                     {[0,1,2,3].map(i=><span key={i} style={{
-                      width:mobile?13:15,height:mobile?13:15,borderRadius:"50%",boxSizing:"border-box",
+                      width:mobile?16:18,height:mobile?16:18,borderRadius:"50%",boxSizing:"border-box",
                       background:pinError?"#ff6b6b":pinInput.length>i?"#79c0ff":"transparent",
                       border:"2px solid "+(pinError?"#ff6b6b":pinInput.length>i?"#79c0ff":"rgba(139,169,205,.65)"),
                       boxShadow:pinInput.length>i&&!pinError?"0 0 9px rgba(88,166,255,.25)":"none",
