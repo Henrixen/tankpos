@@ -91,6 +91,9 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
   const vRaw=matrixRef.current[ck]?.rate||"";
   const vNum=parseFloat(vRaw.replace(/[^0-9.\-]/g,""));
   const v=vRaw&&!isNaN(vNum)?vNum.toLocaleString("nb-NO"):vRaw;
+  const timestamp=matrixRef.current[ck]?.changed_at||matrixRef.current[ck]?.updated_at;
+  const dateLabel=timestamp&&!Number.isNaN(new Date(timestamp).getTime())?new Date(timestamp).toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}):"No saved amendment timestamp";
+  const hoverTitle=`Last added/amended: ${dateLabel}${matrixRef.current[ck]?.comment?"\nComment: "+matrixRef.current[ck].comment:""}`;
   return(
     <input ref={inputRef} data-ck={ck}
       defaultValue={v}
@@ -111,7 +114,7 @@ function RCell({ck,col,matrixRef,onSave,onComment,rev:extRev=0}){
         if(e.key==="Escape"){e.target.blur();}
       }}
       onContextMenu={e=>{e.preventDefault();onComment(ck);}}
-      title={matrixRef.current[ck]?.comment?"💬 "+matrixRef.current[ck].comment:"Right-click for comment"}
+      title={hoverTitle}
       style={{width:"100%",background:"transparent",
         border:"none",outline:"none",
         color:vRaw&&matrixRef.current[ck]?.changed_at&&Date.now()-new Date(matrixRef.current[ck].changed_at).getTime()>5*86400000?"#ff6464":v?"#fff":C.faint,fontWeight:400,
@@ -312,6 +315,14 @@ function RateMatrix({onBunkerChange}){
     }
     if(loadedRef.current){saveRates(matrixRef.current);forceUpdate(n=>n+1);}
   }
+  function addDeepseaRoute(){
+    const next=rateRoutes.map(rg=>({...rg,routes:[...rg.routes]}));
+    const id="deepsea-"+Date.now().toString(36);
+    const target=next.find(rg=>rg.region==="Asia")||next[0];
+    if(!target)return;
+    target.routes.push({id,from:"New load",to:"New disch"});
+    setRateRoutes(next);saveRoutes(euRoutes,next);
+  }
   function onComment(key){setEditComment(key);}
   function updComment(key,val){
     const prev=matrixRef.current[key]||{};
@@ -347,12 +358,14 @@ function RateMatrix({onBunkerChange}){
           </tr>)}</tbody>
         </table>
         <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400,background:C.bg2,border:"1px solid "+C.bd,borderRadius:6}}>
-          <thead><tr><th style={{...thS,width:"48%",fontWeight:600,textAlign:"left",color:"#b9d6fa"}}>Deepsea</th><th style={{...thS,width:"26%",fontWeight:400}}>Rate PMT</th><th style={{...thS,width:"26%",fontWeight:400}}>TCE</th></tr></thead>
-          <tbody>{rateRoutes.flatMap((rg,rgIdx)=>rg.routes.map((rt,rtIdx)=><tr key={rt.id} style={{background:"transparent"}}>
+          <thead><tr><th colSpan={4} style={{...thS,textAlign:"left",fontWeight:400,color:C.blue}}>Deepsea</th></tr>
+            <tr><th style={{...thS,width:"34%",fontWeight:400,textAlign:"left"}}>Deepsea</th><th style={{...thS,width:"22%",fontWeight:400}}>5kt pmt</th><th style={{...thS,width:"22%",fontWeight:400}}>10kt pmt</th><th style={{...thS,width:"22%",fontWeight:400}}>15-20kt pmt</th></tr></thead>
+          <tbody>{rateRoutes.flatMap((rg,rgIdx)=>rg.routes.map((rt,rtIdx)=><tr key={rt.id} style={{background:rtIdx%2?C.bg2:C.bg}}>
             <td style={{...tdR,paddingLeft:3}}><RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/></td>
+            <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-5kt"} col={REGION_COLORS[rg.region]} rev={rev}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-10kt"} col={REGION_COLORS[rg.region]} rev={rev}/></td>
-            <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-tce"} col={C.green} rev={rev}/></td>
-          </tr>))}</tbody>
+            <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-18kt"} col={REGION_COLORS[rg.region]} rev={rev}/></td>
+          </tr>))}<tr><td colSpan={4} style={{...tdR,padding:"5px 3px"}}><button type="button" onClick={addDeepseaRoute} style={{background:C.bg3,border:"1px solid "+C.bd2,color:C.blue,borderRadius:3,fontSize:11,cursor:"pointer",padding:"3px 8px"}}>+ Add row</button></td></tr></tbody>
         </table>
       </div>
     </div>
