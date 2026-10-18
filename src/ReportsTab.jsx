@@ -152,7 +152,7 @@ function TCETrendMini({ lastMonth, current, ytd }) {
   if (lm == null && cur == null) return (
     <div style={{ padding: 20, textAlign: "center", color: "rgba(219,230,245,0.3)", fontSize: 11 }}>Enter TCE figures below to see the trend</div>
   );
-  const W = 340, H = 180, P = { t: 34, r: 22, b: 28, l: 28 };
+  const W = 340, H = 215, P = { t: 34, r: 22, b: 28, l: 28 };
   const w = W - P.l - P.r, h = H - P.t - P.b;
   const vals = [lm, cur, y].filter(v => v != null);
   const maxV = Math.max(...vals, 1) * 1.15, minV = Math.min(...vals, 0) * 0.9;
@@ -160,7 +160,7 @@ function TCETrendMini({ lastMonth, current, ytd }) {
   const bw = w * 0.29;
   const x1 = P.l + w * 0.28, x2 = P.l + w * 0.72;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H}>
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="215">
       {y != null && <>
         <line x1={P.l} y1={yFor(y)} x2={W - P.r} y2={yFor(y)} stroke="#f0f6ff" strokeWidth="1.8" strokeDasharray="5,4" />
         <text x={W - P.r} y={13} fill="rgba(219,230,245,0.5)" fontSize="9" textAnchor="end">YTD AVG ${y.toLocaleString("nb-NO")}/d</text>
@@ -276,7 +276,7 @@ function ImportedFixingWindowChart({snapshot}){
   const rows=Array.isArray(snapshot?.rows)?snapshot.rows:[];
   const segments=Array.isArray(snapshot?.segments)&&snapshot.segments.length?snapshot.segments:["Inter"];
   const colors={"Sub 10":"#8b949e",City:"#58a6ff",Inter:"#22d3ee",J19:"#a78bfa",Flexi:"#fd79a8",Handy:"#3fb950",MR:"#f5a623"};
-  const W=640,H=228,L=39,R=44,T=19,B=32,iw=W-L-R,ih=H-T-B;
+  const W=640,H=254,L=39,R=44,T=19,B=32,iw=W-L-R,ih=H-T-B;
   const valueAt=(row,seg)=>{const raw=row?.[seg];if(raw==null||raw==="")return null;const n=Number(raw);return Number.isFinite(n)&&n>=0?n:null;};
   const valid=segments.flatMap(seg=>rows.map(r=>valueAt(r,seg))).filter(v=>v!==null);
   if(!valid.length)return <div style={{fontSize:11,color:"#9fb4cd",padding:20}}>Imported fixing-window data has no values.</div>;
@@ -315,6 +315,7 @@ function ImportedFixingWindowChart({snapshot}){
   </div>;
 }
 
+function reportHeaderDate(value){const d=new Date(`${value}T12:00:00`);return Number.isNaN(d.getTime())?String(value||""):d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});}
 function reportNaturalCase(value){
   const s=String(value??"").trim();if(!s)return "";
   if(s!==s.toUpperCase())return s;
@@ -2139,13 +2140,11 @@ Any direction`}</pre>
               {/* ── Printable/exportable report content ── */}
               <div ref={marketPreviewRef} style={{ display: "flex", flexDirection: "column", gap: 12, background: "#0b1f3f", padding: 10, borderRadius: 8 }}>
 
-              {/* ── Header ── */}
-              <div style={{background:"#0b1f3f",borderRadius:8,padding:"12px 16px",position:"relative",minHeight:94,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"space-between",gap:12}}>
-                <img src={INTERMEDIATE_HEADER_LOGO} alt="Steem1960 Shipbrokers" style={{width:210,height:56,objectFit:"contain",background:"#fff",borderRadius:4,padding:"3px 6px",boxSizing:"border-box"}} />
-                <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",width:"100%",gap:12}}>
-                  <input className="rpt-edit" aria-label="Intermediate report title" value={intermediateTitle} onChange={e=>setIntermediateTitle(e.target.value)} style={{fontSize:15,fontWeight:700,color:"#fff",background:"transparent",border:"none",borderBottom:"1px solid transparent",outline:"none",flex:1,minWidth:0}} />
-                  <div style={{fontSize:11,color:"#9fc4f0",whiteSpace:"nowrap"}}>{new Date(reportDate).toLocaleDateString("en-GB")}</div>
-                </div>
+              {/* ── Compact, single-row report header ── */}
+              <div style={{background:"#0b1f3f",borderRadius:8,padding:"12px 16px",display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",gap:14,minHeight:66}}>
+                <input className="rpt-edit" aria-label="Intermediate report title" value={intermediateTitle} onChange={e=>setIntermediateTitle(e.target.value)} style={{fontSize:12,fontWeight:600,color:"#c9d8ee",background:"transparent",border:"none",outline:"none",width:"100%",minWidth:0}} />
+                <img src={INTERMEDIATE_HEADER_LOGO} alt="Steem1960 Shipbrokers" style={{width:190,height:50,objectFit:"contain",background:"#fff",borderRadius:4,padding:"3px 6px",boxSizing:"border-box"}} />
+                <div style={{fontSize:12,color:"#c9d8ee",whiteSpace:"nowrap",textAlign:"right"}}>{reportHeaderDate(reportDate)}</div>
               </div>
 
               {/* ── Market drivers / What to watch ── */}
@@ -2195,7 +2194,7 @@ Any direction`}</pre>
                   {editMarketHeading("benchmark",{fontSize:12,fontWeight:700,color:"#79c0ff",textTransform:"uppercase",letterSpacing:"0.05em"})}
                   <div className="no-export" style={{ display: "flex", alignItems: "center", gap: 15,flexWrap:"wrap" }}>
                     {benchmarkRefreshStatus && <span style={{ fontSize: 10, color: C.dim }}>{benchmarkRefreshStatus}</span>}
-                    {emailSectionTick("rates")}<label style={{fontSize:10,color:C.dim,display:"inline-flex",alignItems:"center",gap:6,marginLeft:12}}><input type="checkbox" checked={routeColumns.lastWeek} onChange={e=>setRouteColumns(p=>({...p,lastWeek:e.target.checked}))}/> Last week</label><label style={{fontSize:10,color:C.dim,display:"inline-flex",alignItems:"center",gap:6,marginLeft:8}}><input type="checkbox" checked={routeColumns.comment} onChange={e=>setRouteColumns(p=>({...p,comment:e.target.checked}))}/> Comment</label>
+                    {emailSectionTick("rates")}<label style={{fontSize:10,color:C.dim,display:"inline-flex",alignItems:"center",gap:6,marginLeft:20,cursor:"pointer"}}><span role="checkbox" tabIndex={0} aria-checked={routeColumns.lastWeek} onKeyDown={e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();setRouteColumns(p=>({...p,lastWeek:!p.lastWeek}));}}} style={{width:14,height:14,display:"inline-flex",alignItems:"center",justifyContent:"center",background:routeColumns.lastWeek?"#225c9d":"#10213b",border:"1px solid #5d789d",borderRadius:3,color:"#fff",fontSize:11,fontWeight:800}}>{routeColumns.lastWeek?"✓":""}</span> Last week</label><label style={{fontSize:10,color:C.dim,display:"inline-flex",alignItems:"center",gap:6,marginLeft:16,cursor:"pointer"}}><span role="checkbox" tabIndex={0} aria-checked={routeColumns.comment} onKeyDown={e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();setRouteColumns(p=>({...p,comment:!p.comment}));}}} style={{width:14,height:14,display:"inline-flex",alignItems:"center",justifyContent:"center",background:routeColumns.comment?"#225c9d":"#10213b",border:"1px solid #5d789d",borderRadius:3,color:"#fff",fontSize:11,fontWeight:800}}>{routeColumns.comment?"✓":""}</span> Comment</label>
                     <button className="no-export" onClick={()=>setBenchmarkRows(p=>[...p,{key:"custom-"+Date.now(),label:"New route",from:"",to:"",freight:"",lastWeek:"",tce:null,tceLastWeek:null,manualTce:"",override:true}])} style={{...SB,background:C.bg3,color:C.blue,border:"1px solid "+C.bd}}>+ Add route</button>
                     <button onClick={refreshBenchmarkFromSaved} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim, fontSize: 10 }}>↻ Refresh from saved</button>
                   </div>
@@ -2351,11 +2350,11 @@ Any direction`}</pre>
 
               {/* ── TCE trend (50%) + Fixing window (50%) ── */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11, alignItems:"stretch" }}>
-                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10, minHeight:250,boxSizing:"border-box" }}>
+                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10, minHeight:250,height:270,boxSizing:"border-box" }}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}><div style={{fontSize:11,fontWeight:700,color:C.tx}}>TCE trend</div>{emailSectionTick("tceChart")}</div>
                   <TCETrendMini lastMonth={tceStats.lastMonth} current={tceStats.current} ytd={tceStats.ytd} />
                 </div>
-                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10,minHeight:250,boxSizing:"border-box" }}>
+                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10,minHeight:250,height:270,boxSizing:"border-box" }}>
                   <div style={{display:"flex",justifyContent:"flex-end",marginBottom:2}}>{emailSectionTick("fixingChart")}</div>
                   {importedFixingChart?.rows?.length
                     ? <ImportedFixingWindowChart snapshot={importedFixingChart}/>
@@ -2368,14 +2367,11 @@ Any direction`}</pre>
               {/* ── Hidden light-themed export node — captured for PNG/print instead of the dark editor above ── */}
               <div className="pos-print-wrap" style={{ height: 0, overflow: "hidden" }}>
               <div ref={lightExportRef} className="pos-print" style={{ width: 700, background: "#ffffff", color: "#16233f", fontFamily: "-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" }}>
-                <div style={{background:"#0b1f3f",padding:"14px 18px",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
-                  <img src={INTERMEDIATE_HEADER_LOGO} alt="Steem1960 Shipbrokers" style={{width:210,height:56,objectFit:"contain",background:"#fff",borderRadius:4,padding:"3px 6px",boxSizing:"border-box"}} />
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%"}}>
-                    <div style={{fontSize:15,fontWeight:700,color:"#fff"}}>{intermediateTitle}</div>
-                    <div style={{fontSize:11,color:"#c9d8ee"}}>{new Date(reportDate).toLocaleDateString("en-GB")}</div>
-                  </div>
+                <div style={{background:"#0b1f3f",padding:"14px 18px",display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",gap:14}}>
+                  <div style={{fontSize:12,fontWeight:600,color:"#c9d8ee"}}>{intermediateTitle}</div>
+                  <img src={INTERMEDIATE_HEADER_LOGO} alt="Steem1960 Shipbrokers" style={{width:190,height:50,objectFit:"contain",background:"#fff",borderRadius:4,padding:"3px 6px",boxSizing:"border-box"}} />
+                  <div style={{fontSize:12,color:"#c9d8ee",textAlign:"right",whiteSpace:"nowrap"}}>{reportHeaderDate(reportDate)}</div>
                 </div>
-
                 <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
                   {emailSections.drivers && (
                   <div style={{ background: "#eaf2fc", borderRadius: 8, padding: 12 }}>
@@ -2477,12 +2473,12 @@ Any direction`}</pre>
                   )}
 
                   {(emailSections.tceChart || emailSections.fixingChart) && (
-                    <div style={{display:"grid",gridTemplateColumns:emailSections.tceChart&&emailSections.fixingChart?"1fr 1fr":"1fr",gap:12,padding:"12px 18px 18px",alignItems:"start"}}>
-                      {emailSections.tceChart && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0}}>
+                    <div style={{display:"grid",gridTemplateColumns:emailSections.tceChart&&emailSections.fixingChart?"1fr 1fr":"1fr",gap:12,padding:"12px 18px 18px",alignItems:"stretch"}}>
+                      {emailSections.tceChart && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0,minHeight:255,boxSizing:"border-box"}}>
                         <div style={{fontSize:11,fontWeight:700,marginBottom:6}}>TCE trend</div>
                         <TCETrendMini lastMonth={tceStats.lastMonth} current={tceStats.current} ytd={tceStats.ytd}/>
                       </div>}
-                      {emailSections.fixingChart && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0}}>
+                      {emailSections.fixingChart && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0,minHeight:255,boxSizing:"border-box"}}>
                         {importedFixingChart?.rows?.length
                           ? <ImportedFixingWindowChart snapshot={importedFixingChart}/>
                           : <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" barLabel="No. of ships" lineLabel="Avg. fix window" title="Fixing window (days)" accent="#4a90e2" loading={fixHistoryLoading}/>}
