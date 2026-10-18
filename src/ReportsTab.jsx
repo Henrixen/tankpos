@@ -72,7 +72,7 @@ function dateSortKey(str) {
   return mon === -1 ? 9999 : mon * 31 + day;
 }
 
-function groupVessels(list, by, sortByDate, regionMode, matchCustomRegion) {
+function groupVessels(list, by, sortByDate, regionMode, matchCustomRegion, outputSort) {
   const fn = by === "region"
     ? (regionMode === "region"
         ? v => (matchCustomRegion && matchCustomRegion(v.openPort)) || classifyRegion(v.openPort) || "Other"
@@ -80,7 +80,15 @@ function groupVessels(list, by, sortByDate, regionMode, matchCustomRegion) {
     : v => v.segment || "Other";
   const out = {};
   list.forEach(v => { const k = fn(v); if (!out[k]) out[k] = []; out[k].push(v); });
-  if (sortByDate) {
+  if (outputSort?.key) {
+    const fields = {VESSEL:"vessel",DWT:"dwt",BUILT:"built",COATING:"coating",OPEN:"date",PORT:"openPort",COMMENT:"comment",OPERATOR:"operator"};
+    const field = fields[outputSort.key];
+    Object.keys(out).forEach(k => out[k].sort((a,b) => {
+      const av = field === "date" ? dateSortKey(a.date) : (field === "dwt" || field === "built") ? Number(a[field]) || 0 : String(a[field] || "").toLowerCase();
+      const bv = field === "date" ? dateSortKey(b.date) : (field === "dwt" || field === "built") ? Number(b[field]) || 0 : String(b[field] || "").toLowerCase();
+      return (typeof av === "number" ? av - bv : av.localeCompare(bv)) * (outputSort.desc ? -1 : 1);
+    }));
+  } else if (sortByDate) {
     Object.keys(out).forEach(k => out[k].sort((a, b) => dateSortKey(a.date) - dateSortKey(b.date)));
   }
   if (by === "segment") {
@@ -126,9 +134,9 @@ function BarLineChart({ data, barKey, lineKey, barLabel, lineLabel, title, accen
           {data.length <= 10 && d[barKey] > 0 && (
             <text x={xc(i)} y={yB(d[barKey] || 0) - 4} fill="#dbe6f5" fontSize="10" textAnchor="middle">{d[barKey]}</text>
           )}
-          <text x={xc(i)} y={H - 7} fill="rgba(219,230,245,0.5)" fontSize="9" textAnchor="middle">
+          {(i % Math.max(1,Math.ceil(data.length / 7)) === 0 || i === data.length - 1) && <text x={xc(i)} y={H - 7} fill="rgba(219,230,245,0.5)" fontSize="9" textAnchor="middle">
             {String(d.label || "").slice(0, 7)}
-          </text>
+          </text>}
         </g>
       ))}
       {hasLine && <>
@@ -349,6 +357,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     try { return JSON.parse(localStorage.getItem(DRAFT_META_KEY))?.subtitle || "10-22,000 DWT · COATED AND STST"; } catch { return "10-22,000 DWT · COATED AND STST"; }
   });
   const [posGroupBy, setPosGroupBy] = useState("segment");
+  const [outputSort, setOutputSort] = useState({key:null,desc:false});
+  const [positionCharts, setPositionCharts] = useState({open:true,fixing:true});
   const [regionMode, setRegionMode] = useState("superRegion"); // "superRegion" | "region"
 
   // Custom Region Filter Groups from Settings (localStorage — same key,
@@ -404,6 +414,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [dwtRange, setDwtRange] = useState({ min: "", max: "" });
   const [builtFilter, setBuiltFilter] = useState(new Set());
   const [coatingFilter, setCoatingFilter] = useState(new Set());
+  const [poolSort, setPoolSort] = useState({ key: "Updated", desc: true });
   const [builtRange, setBuiltRange] = useState({ min: "", max: "" });
   const [dateFilter, setDateFilter] = useState("all");
   const [poolSearch, setPoolSearch] = useState("");
@@ -807,7 +818,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   }
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const posGrouped = useMemo(() => groupVessels(reportVessels, posGroupBy, sortByDate, regionMode, matchCustomRegion), [reportVessels, posGroupBy, sortByDate, regionMode, customRegionGroups]);
+  const posGrouped = useMemo(() => groupVessels(reportVessels, posGroupBy, sortByDate, regionMode, matchCustomRegion, outputSort), [reportVessels, posGroupBy, sortByDate, regionMode, customRegionGroups, outputSort]);
   const reportedNames = useMemo(() => new Set(reportVessels.map(v => v.vessel)), [reportVessels]);
 
   const openTimingData = useMemo(() => {
@@ -916,7 +927,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       }
       if (coatingFilter.size > 0) {
         const coating = String(v.coating || "").trim().toUpperCase();
-        if (![...coatingFilter].some(c => coating === String(c).toUpperCase())) return false;
+        const normalized = coating.includes("MARINELINE") || coating === "ML" ? "ML" : coating.includes("INTERLINE") ? "INTERLINE" : coating.includes("STAINLESS") || coating === "STST" || coating === "SS" ? "STST" : coating.includes("EPOXY") ? "EPOXY" : coating;
+        if (!coatingFilter.has(normalized)) return false;
       }
       if (dateFilter !== "all" && v.updatedAt) {
         const diff = (now - new Date(v.updatedAt)) / 86400000;
@@ -927,6 +939,12 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       return true;
     });
   }, [allVessels, reportedNames, tagFilter, segmentFilter, superRegionFilter, regionFilter, dwtFilter, dwtRange, builtFilter, builtRange, coatingFilter, poolSearch, dateFilter]);
+
+  const sortedVesselPool = useMemo(() => [...vesselPool].sort((a,b) => {
+    const field = {Vessel:"vessel",DWT:"dwt","Open date":"date","Open port":"openPort",Updated:"updatedAt"}[poolSort.key] || "updatedAt";
+    const val = v => { const raw = v[field] ?? ""; if (field === "updatedAt") return new Date(raw || 0).getTime() || 0; if (field === "dwt") return Number(String(raw).replace(/[^0-9.]/g,"")) || 0; if (field === "date") { const t = Date.parse(raw); return Number.isFinite(t) ? t : String(raw).toLowerCase(); } return String(raw).toLowerCase(); };
+    const av=val(a),bv=val(b); const cmp=typeof av === "number" && typeof bv === "number" ? av-bv : String(av).localeCompare(String(bv)); return (poolSort.desc ? -1 : 1)*cmp;
+  }), [vesselPool,poolSort]);
 
   function renameRegionBucket(bucket, rows) {
     if (posGroupBy !== "region" || !rows?.length) return;
@@ -1870,6 +1888,11 @@ Any direction`}</pre>
             <input value={posSubtitle} onChange={e => setPosSubtitle(e.target.value)} style={{ ...IS, flex: 3 }} placeholder="Subtitle" />
           </div>
 
+          <div className="no-export" style={{display:"flex",alignItems:"center",gap:18,padding:"7px 13px",borderBottom:"1px solid " + C.bd,fontSize:11,color:C.dim}}>
+            <span style={{fontWeight:700}}>Include in Position List export:</span>
+            <label style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}><input type="checkbox" checked={positionCharts.open} onChange={e=>setPositionCharts(p=>({...p,open:e.target.checked}))}/> Open timing</label>
+            <label style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}><input type="checkbox" checked={positionCharts.fixing} onChange={e=>setPositionCharts(p=>({...p,fixing:e.target.checked}))}/> Fixing window history</label>
+          </div>
           {/* Report preview (left) + Add Vessels panel (right) */}
           <div style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
 
@@ -1902,7 +1925,7 @@ Any direction`}</pre>
                 ) : <>
                   {/* Column headers */}
                   <div style={{ display: "grid", gridTemplateColumns: GRID, width: "100%", boxSizing: "border-box", background: ACCENT, color: "#fff", fontSize: 10, fontWeight: 700, padding: "5px 8px", gap: 2 }}>
-                    {HEADS.map((h, i) => <div key={i} style={{ overflow: "hidden", whiteSpace: "nowrap" }}>{h}</div>)}
+                    {HEADS.map((h, i) => <div key={i} className="no-export-click" onClick={() => h && setOutputSort(p => ({key:h,desc:p.key === h ? !p.desc : false}))} title={h ? `Sort ${h.toLowerCase()} within each ${posGroupBy}` : undefined} style={{ overflow: "hidden", whiteSpace: "nowrap", cursor:h ? "pointer":"default", userSelect:"none" }}>{h}{outputSort.key === h ? (outputSort.desc ? " ▼" : " ▲") : ""}</div>)}
                   </div>
                   {/* Rows grouped */}
                   {Object.entries(posGrouped).map(([bucket, rows]) => (
@@ -1940,13 +1963,13 @@ Any direction`}</pre>
 
               {/* Charts */}
               {reportVessels.length > 0 && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, padding: "6px 6px 12px" }}>
-                  <div style={{ background: "#0c1729", border: "1px solid rgba(58,130,246,0.12)", padding: "8px 10px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: positionCharts.open && positionCharts.fixing ? "1fr 1fr" : "1fr", gap: 8, padding: "6px 6px 12px" }}>
+                  {positionCharts.open && <div style={{ background: "#0c1729", border: "1px solid rgba(58,130,246,0.12)", padding: "8px 10px" }}>
                     <BarLineChart data={openTimingData} barKey="count" title="Open timing" barLabel="Ships" accent={ACCENT} />
-                  </div>
-                  <div style={{ background: "#0c1729", border: "1px solid rgba(58,130,246,0.12)", padding: "8px 10px" }}>
+                  </div>}
+                  {positionCharts.fixing && <div style={{ background: "#0c1729", border: "1px solid rgba(58,130,246,0.12)", padding: "8px 10px" }}>
                     <BarLineChart data={posFixHistory} barKey="ships" lineKey="avgWindow" title="Fixing window history (segments in this list)" barLabel="Ships" lineLabel="Avg days" accent={ACCENT} loading={posFixHistoryLoading} />
-                  </div>
+                  </div>}
                 </div>
               )}
             </div>
@@ -1971,19 +1994,19 @@ Any direction`}</pre>
                   {allVessels.length === 0 ? "Select vessels on Positions tab" : "No vessels match your search/tags"}
                 </div>
               ) : (
-                <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", fontSize: 10 }}>
+                <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", fontSize: 11 }}>
                   <colgroup>
                     <col style={{ width: "32%" }} /><col style={{ width: "14%" }} /><col style={{ width: "16%" }} /><col style={{ width: "20%" }} /><col style={{ width: "14%" }} /><col style={{ width: "4%" }} />
                   </colgroup>
                   <thead>
                     <tr style={{ position: "sticky", top: 0, background: "#101d30" }}>
                       {["Vessel", "DWT", "Open date", "Open port", "Updated", ""].map(h => (
-                        <th key={h} style={{ padding: "5px 6px", textAlign: "left", fontSize: 9, fontWeight: 700, color: C.dim, textTransform: "uppercase", borderBottom: "1px solid " + C.bd, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h}</th>
+                        <th key={h} onClick={() => h && setPoolSort(p => ({key:h,desc:p.key === h ? !p.desc : h === "Updated"}))} style={{ cursor:h ? "pointer" : "default", userSelect:"none", padding: "6px 6px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase", borderBottom: "1px solid " + C.bd, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h}{h && poolSort.key === h ? (poolSort.desc ? " ▼" : " ▲") : ""}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {vesselPool.map((v, i) => (
+                    {sortedVesselPool.map((v, i) => (
                       <tr key={(v.imoNo || v.vessel) + "_" + i} onClick={() => addFromPool(v)} className="pool-row"
                         style={{ cursor: "pointer", background: i % 2 === 0 ? "#101d30" : "#0b1626", borderBottom:"1px solid rgba(58,130,246,0.055)" }}>
                         <td style={{ padding: "6px 6px", fontWeight: 700, color: "#58b6ff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel}</td>
@@ -2035,7 +2058,7 @@ Any direction`}</pre>
                 </div>
               );
               const RB = ({ active, onClick, children }) => (
-                <button onClick={onClick} style={{ fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 3, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                <button onClick={onClick} style={{ fontSize: 10, fontWeight: 600, padding: "3px 7px", borderRadius: 3, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
                   border: "1px solid " + (active ? C.blue : "rgba(120,160,220,0.35)"), background: active ? "rgba(88,166,255,.22)" : C.bg3, color: active ? "#d9ecff" : "#9fc3f5" }}>
                   {children}
                 </button>
@@ -2046,7 +2069,7 @@ Any direction`}</pre>
               const usedSegments = [...new Set(allVessels.map(v => v.segment).filter(Boolean))]
                 .sort((a, b) => ["Sub 10k","City","Inter","J19","Flexi","Handy","MR"].indexOf(a) - ["Sub 10k","City","Inter","J19","Flexi","Handy","MR"].indexOf(b));
               const usedSuperRegions = [...new Set(allVessels.map(v => v.superRegion).filter(Boolean))].sort();
-              const usedCoatings = [...new Set(allVessels.map(v => String(v.coating || "").trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+              const usedCoatings = ["EPOXY", "STST", "ML", "INTERLINE"];
 
               return (
                 <>
@@ -2073,16 +2096,16 @@ Any direction`}</pre>
                       {superRegionFilter.size > 0 && <RB active={false} onClick={() => setSuperRegionFilter(new Set())}><span style={{ color: C.red }}>✕</span></RB>}
                     </RCOL>
                   )}
-                  {usedSegments.length > 0 && (
-                    <RCOL label="Segment" col={C.green}>
-                      {usedSegments.map(s => (<RB key={s} active={segmentFilter.has(s)} onClick={() => toggleIn(setSegmentFilter)(s)}>{s}</RB>))}
-                      {segmentFilter.size > 0 && <RB active={false} onClick={() => setSegmentFilter(new Set())}><span style={{ color: C.red }}>✕</span></RB>}
-                    </RCOL>
-                  )}
                   {usedCoatings.length > 0 && (
                     <RCOL label="Coating" col="#f5a623">
                       {usedCoatings.map(c => (<RB key={c} active={coatingFilter.has(c)} onClick={() => toggleIn(setCoatingFilter)(c)}>{c.toUpperCase()}</RB>))}
                       {coatingFilter.size > 0 && <RB active={false} onClick={() => setCoatingFilter(new Set())}><span style={{ color: C.red }}>✕</span></RB>}
+                    </RCOL>
+                  )}
+                  {usedSegments.length > 0 && (
+                    <RCOL label="Segment" col={C.green}>
+                      {usedSegments.map(s => (<RB key={s} active={segmentFilter.has(s)} onClick={() => toggleIn(setSegmentFilter)(s)}>{s}</RB>))}
+                      {segmentFilter.size > 0 && <RB active={false} onClick={() => setSegmentFilter(new Set())}><span style={{ color: C.red }}>✕</span></RB>}
                     </RCOL>
                   )}
                   <RCOL label="DWT" col="#f59e0b">
