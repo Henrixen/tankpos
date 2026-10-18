@@ -1644,12 +1644,12 @@ function Dashboard({vessels, cargoes, history, onImportFixingWindow}) {
       <div className="dash-fixing-grid" style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:12,alignItems:"stretch",height:520}}>
 {panel(
           <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:9}}>
               <span className="dash-fixing-title-desktop">{secHead(`Fixing window by vessel size · days until open${fixingRegionFilter!=="All"?" · "+fixingRegionFilter:""}`)}</span>
               <span className="dash-fixing-title-mobile">{secHead("Fixing window")}</span>
-              <div style={{display:"flex",alignItems:"center",gap:7}}><span className="dash-fixing-note" style={{fontSize:9,color:D.faint}}>past positions · negative values excluded</span><button type="button" disabled={fixingSegmentDisplayData.length<2} onClick={()=>onImportFixingWindow?.({kind:"dashboard-fixing-window",region:fixingRegionFilter,period:fixingPeriod,segments:[...activeFixingSegments],rows:fixingSegmentDisplayData.map(r=>({...r})),importedAt:new Date().toISOString()})} style={{background:"rgba(88,166,255,.13)",border:"1px solid rgba(88,166,255,.45)",color:"#9fc4f0",borderRadius:5,padding:"5px 9px",fontSize:10,fontWeight:750,cursor:"pointer",whiteSpace:"nowrap"}}>↗ Import to Report</button></div>
+              <div style={{display:"flex",alignItems:"center",gap:7}}><button type="button" disabled={fixingSegmentDisplayData.length<2} onClick={()=>onImportFixingWindow?.({kind:"dashboard-fixing-window",region:fixingRegionFilter,period:fixingPeriod,segments:[...activeFixingSegments],rows:fixingSegmentDisplayData.map(r=>({...r})),importedAt:new Date().toISOString()})} style={{background:"rgba(88,166,255,.13)",border:"1px solid rgba(88,166,255,.45)",color:"#9fc4f0",borderRadius:5,padding:"5px 9px",fontSize:10,fontWeight:750,cursor:"pointer",whiteSpace:"nowrap"}}>↗ Import to Report</button></div>
             </div>
-            <div className="dash-fixing-desktop-controls" style={{display:"flex",gap:5,flexWrap:"wrap",margin:"-2px 0 8px"}}>
+            <div className="dash-fixing-desktop-controls" style={{display:"flex",gap:5,flexWrap:"wrap",margin:"0 0 8px"}}>
               <div style={{display:"flex",gap:5,flexWrap:"wrap",flex:1}}>{SEGMENT_ORDER.map(seg=>{const active=seg==="All"?!fixingSegments.length:fixingSegments.includes(seg);return <button key={seg} onClick={()=>toggleFixingSegment(seg)} style={{background:active?"rgba(88,166,255,.18)":D.bg3,border:"1px solid "+(active?D.blue:D.border2),borderRadius:5,color:active?D.tx:D.dim,fontFamily:"inherit",fontSize:10,fontWeight:active?800:600,padding:"4px 8px",cursor:"pointer"}}>{seg}</button>})}</div><HorizonButtons value={fixingPeriod} onChange={setFixingPeriod}/>
             </div>
             <div className="dash-fixing-mobile-controls">
