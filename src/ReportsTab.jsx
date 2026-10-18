@@ -134,7 +134,7 @@ function BarLineChart({ data, barKey, lineKey, barLabel, lineLabel, title, accen
           {data.length <= 10 && d[barKey] > 0 && (
             <text x={xc(i)} y={yB(d[barKey] || 0) - 4} fill="#dbe6f5" fontSize="10" textAnchor="middle">{d[barKey]}</text>
           )}
-          {(i % Math.max(1,Math.ceil(data.length / 7)) === 0 || i === data.length - 1) && <text x={xc(i)} y={H - 7} fill="rgba(219,230,245,0.5)" fontSize="9" textAnchor="middle">
+          {(i % Math.max(1,Math.ceil(data.length / 5)) === 0 || i === data.length - 1) && <text x={xc(i)} y={H - 7} fill="rgba(219,230,245,0.5)" fontSize="9" textAnchor="middle">
             {String(d.label || "").slice(0, 7)}
           </text>}
         </g>
@@ -359,6 +359,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [posGroupBy, setPosGroupBy] = useState("segment");
   const [outputSort, setOutputSort] = useState({key:null,desc:false});
   const [positionCharts, setPositionCharts] = useState({open:true,fixing:true});
+  const [positionPreviewWidth, setPositionPreviewWidth] = useState(820);
+  const [segmentNames, setSegmentNames] = useState({});
   const [regionMode, setRegionMode] = useState("superRegion"); // "superRegion" | "region"
 
   // Custom Region Filter Groups from Settings (localStorage — same key,
@@ -941,33 +943,51 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   }, [allVessels, reportedNames, tagFilter, segmentFilter, superRegionFilter, regionFilter, dwtFilter, dwtRange, builtFilter, builtRange, coatingFilter, poolSearch, dateFilter]);
 
   const sortedVesselPool = useMemo(() => [...vesselPool].sort((a,b) => {
-    const field = {Vessel:"vessel",DWT:"dwt","Open date":"date","Open port":"openPort",Updated:"updatedAt"}[poolSort.key] || "updatedAt";
-    const val = v => { const raw = v[field] ?? ""; if (field === "updatedAt") return new Date(raw || 0).getTime() || 0; if (field === "dwt") return Number(String(raw).replace(/[^0-9.]/g,"")) || 0; if (field === "date") { const t = Date.parse(raw); return Number.isFinite(t) ? t : String(raw).toLowerCase(); } return String(raw).toLowerCase(); };
+    const field = {Vessel:"vessel",DWT:"dwt",Built:"built",Coating:"coating","Open date":"date","Open port":"openPort",Operator:"operator",Updated:"updatedAt"}[poolSort.key] || "updatedAt";
+    const val = v => { const raw = v[field] ?? ""; if (field === "updatedAt") return new Date(raw || 0).getTime() || 0; if (field === "dwt" || field === "built") return Number(String(raw).replace(/[^0-9.]/g,"")) || 0; if (field === "date") { const t = Date.parse(raw); return Number.isFinite(t) ? t : String(raw).toLowerCase(); } return String(raw).toLowerCase(); };
     const av=val(a),bv=val(b); const cmp=typeof av === "number" && typeof bv === "number" ? av-bv : String(av).localeCompare(String(bv)); return (poolSort.desc ? -1 : 1)*cmp;
   }), [vesselPool,poolSort]);
 
-  function renameRegionBucket(bucket, rows) {
-    if (posGroupBy !== "region" || !rows?.length) return;
+  function renameBucketInline(bucket, rows, text) {
+    const clean = String(text || "").trim();
+    if (!clean || !rows?.length) return;
+    if (posGroupBy === "segment") {
+      setSegmentNames(prev => ({...prev, [bucket]:clean}));
+      return;
+    }
     const modeKey = regionMode === "region" ? "region" : "superRegion";
-    const existing = rows[0]?._reportRegionNames?.[modeKey]?.[bucket] || bucket;
-    const next = window.prompt(`Rename ${regionMode === "region" ? "region" : "super region"}`, existing);
-    if (next === null) return;
-    const clean = next.trim();
-    if (!clean) return;
     const ids = new Set(rows.map(r => r._rid || r.vessel));
     setReportVessels(prev => prev.map(v => ids.has(v._rid || v.vessel) ? {
       ...v,
       _reportRegionNames: {
         ...(v._reportRegionNames || {}),
-        [modeKey]: { ...((v._reportRegionNames || {})[modeKey] || {}), [bucket]: clean }
+        [modeKey]: {...((v._reportRegionNames || {})[modeKey] || {}), [bucket]:clean}
       }
     } : v));
   }
 
   function displayRegionBucket(bucket, rows) {
-    if (posGroupBy !== "region" || !rows?.length) return bucket;
+    if (posGroupBy === "segment") return segmentNames[bucket] || bucket;
+    if (!rows?.length) return bucket;
     const modeKey = regionMode === "region" ? "region" : "superRegion";
     return rows[0]?._reportRegionNames?.[modeKey]?.[bucket] || bucket;
+  }
+
+  function startPositionResize(e) {
+    e.preventDefault();
+    const startX = e.clientX, startWidth = positionPreviewWidth;
+    const move = ev => setPositionPreviewWidth(Math.max(480, Math.min(1250, startWidth + ev.clientX - startX)));
+    const stop = () => {window.removeEventListener("mousemove",move);window.removeEventListener("mouseup",stop);document.body.style.cursor="";document.body.style.userSelect="";};
+    document.body.style.cursor="col-resize";document.body.style.userSelect="none";
+    window.addEventListener("mousemove",move);window.addEventListener("mouseup",stop);
+  }
+
+  function positionChartTick(key, label) {
+    return <label className="no-export" title="Include this graph in copy, PNG and PDF export" style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10,color:"#dbe6f5",cursor:"pointer",fontWeight:650,whiteSpace:"nowrap"}}>
+      <input type="checkbox" checked={positionCharts[key]} onChange={e=>setPositionCharts(p=>({...p,[key]:e.target.checked}))} style={{appearance:"none",width:15,height:15,margin:0,border:"1px solid #6081ad",borderRadius:3,background:positionCharts[key]?"#225c9d":"#10213b",cursor:"pointer"}} />
+      <span style={{marginLeft:-19,width:15,textAlign:"center",color:"white",fontSize:12,pointerEvents:"none"}}>{positionCharts[key]?"✓":""}</span>
+      {label}
+    </label>;
   }
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -1081,7 +1101,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   }
 
   // ── Export ────────────────────────────────────────────────────────────────
-  const exportFilter = node => !node.classList?.contains("no-export");
+  const exportFilter = node => !node.classList?.contains("no-export") && !node.classList?.contains("exclude-position-chart");
   async function capturePng() {
     setEditingRid(null);
     await new Promise(r => setTimeout(r, 70));
@@ -1692,7 +1712,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   return (
     <div style={{ display: "flex", width: "100%", height: "100%", background: C.bg, fontFamily: "Inter,system-ui,sans-serif", overflow: "hidden" }}>
-      <style>{`@media print{body>*{visibility:hidden;}.pos-print,.pos-print *{visibility:visible;}.pos-print{position:absolute;left:0;top:0;width:100%;}.pos-print-wrap{height:auto!important;overflow:visible!important;}.no-export{display:none!important;}}.pool-row:hover{background:rgba(58,130,246,0.14)!important;}`}</style>
+      <style>{`@media print{body>*{visibility:hidden;}.pos-print,.pos-print *{visibility:visible;}.pos-print{position:absolute;left:0;top:0;width:100%;}.pos-print-wrap{height:auto!important;overflow:visible!important;}.no-export,.exclude-position-chart{display:none!important;}}.pool-row:hover{background:rgba(58,130,246,0.14)!important;}`}</style>
 
       {fixingImportOpen && <div className="no-export" style={{position:"fixed",inset:0,zIndex:100001,background:"rgba(0,0,0,.76)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
         <div role="dialog" aria-modal="true" aria-label="Choose report for fixing-window import" style={{width:"min(480px,100%)",background:C.bg2,border:"1px solid "+C.bd,borderRadius:9,padding:20,color:C.tx,boxShadow:"0 24px 70px rgba(0,0,0,.6)"}}>
@@ -1888,21 +1908,17 @@ Any direction`}</pre>
             <input value={posSubtitle} onChange={e => setPosSubtitle(e.target.value)} style={{ ...IS, flex: 3 }} placeholder="Subtitle" />
           </div>
 
-          <div className="no-export" style={{display:"flex",alignItems:"center",gap:18,padding:"7px 13px",borderBottom:"1px solid " + C.bd,fontSize:11,color:C.dim}}>
-            <span style={{fontWeight:700}}>Include in Position List export:</span>
-            <label style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}><input type="checkbox" checked={positionCharts.open} onChange={e=>setPositionCharts(p=>({...p,open:e.target.checked}))}/> Open timing</label>
-            <label style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}><input type="checkbox" checked={positionCharts.fixing} onChange={e=>setPositionCharts(p=>({...p,fixing:e.target.checked}))}/> Fixing window history</label>
-          </div>
+
           {/* Report preview (left) + Add Vessels panel (right) */}
           <div style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
 
           {/* Scrollable report area — sized to its content, not stretched, so the vessel table sits right next to it with no gap */}
-          <div style={{ flex: "0 0 auto", minHeight: 0, overflowY: "auto", overflowX: "auto", padding: 12 }}>
+          <div style={{ flex: `0 0 ${positionPreviewWidth + 24}px`, minWidth: 0, minHeight: 0, overflowY: "auto", overflowX: "auto", padding: 12 }}>
             {/* Captured node — entire report */}
-            <div ref={previewRef} className="pos-print" style={{ background: "#070f1c", fontFamily: "Inter,system-ui,sans-serif", width: 820, border: "1px solid rgba(88,166,255,0.2)", borderRadius: 8, overflow: "hidden" }}>
+            <div ref={previewRef} className="pos-print" style={{ background: "#070f1c", fontFamily: "Inter,system-ui,sans-serif", width: positionPreviewWidth, border: "1px solid rgba(88,166,255,0.2)", borderRadius: 8, overflow: "hidden" }}>
               {/* Date bar */}
               <div style={{ background: "#0c1e3d", padding: "7px 14px", textAlign: "right" }}>
-                <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>{new Date(posDate).toLocaleDateString("en-GB")}</span>
+                <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>{posDate ? new Date(posDate + "T12:00:00").toLocaleDateString("en-GB", {day:"numeric",month:"short",year:"numeric"}) : ""}</span>
               </div>
               {/* Logo */}
               <div style={{ background: "#fff", padding: "11px 0", textAlign: "center" }}>
@@ -1931,11 +1947,12 @@ Any direction`}</pre>
                   {Object.entries(posGrouped).map(([bucket, rows]) => (
                     <div key={bucket}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(88,166,255,0.14)", borderTop: "1px solid rgba(88,166,255,0.25)", borderBottom: "1px solid rgba(88,166,255,0.25)" }}>
-                        <span
-                          onClick={() => posGroupBy === "region" && renameRegionBucket(bucket, rows)}
-                          title={posGroupBy === "region" ? `Click to rename this ${regionMode === "region" ? "region" : "super region"} in the report` : undefined}
-                          className={posGroupBy === "region" ? "no-export-click" : undefined}
-                          style={{ color: "#9fc4f0", fontSize: 11, fontWeight: 700, padding: "5px 8px", letterSpacing: 0.5, textTransform: "uppercase", cursor: posGroupBy === "region" ? "text" : "default" }}
+                        <span key={`${posGroupBy}-${regionMode}-${bucket}`} contentEditable suppressContentEditableWarning
+                          onBlur={e => renameBucketInline(bucket, rows, e.currentTarget.textContent)}
+                          onKeyDown={e => {if(e.key === "Enter"){e.preventDefault();e.currentTarget.blur();} if(e.key === "Escape"){e.currentTarget.textContent=displayRegionBucket(bucket,rows);e.currentTarget.blur();}}}
+                          title="Click and type to rename this group in the report"
+                          className="no-export-click"
+                          style={{ color: "#9fc4f0", fontSize: 11, fontWeight: 700, padding: "5px 8px", letterSpacing: 0.5, textTransform: "uppercase", cursor: "text", outlineOffset: -2, minWidth: 70 }}
                         >{displayRegionBucket(bucket, rows)}</span>
                         <button onClick={() => addManualVessel(bucket)} className="no-export" title={`Add a vessel to ${bucket}`}
                           style={{ background: "none", border: "none", color: "#9fc4f0", cursor: "pointer", fontSize: 14, fontWeight: 700, padding: "0 8px", lineHeight: 1 }}>+</button>
@@ -1961,20 +1978,23 @@ Any direction`}</pre>
                 </>}
               </div>
 
-              {/* Charts */}
+              {/* Charts — each has an independent export toggle, without hiding the preview. */}
               {reportVessels.length > 0 && (
-                <div style={{ display: "grid", gridTemplateColumns: positionCharts.open && positionCharts.fixing ? "1fr 1fr" : "1fr", gap: 8, padding: "6px 6px 12px" }}>
-                  {positionCharts.open && <div style={{ background: "#0c1729", border: "1px solid rgba(58,130,246,0.12)", padding: "8px 10px" }}>
-                    <BarLineChart data={openTimingData} barKey="count" title="Open timing" barLabel="Ships" accent={ACCENT} />
-                  </div>}
-                  {positionCharts.fixing && <div style={{ background: "#0c1729", border: "1px solid rgba(58,130,246,0.12)", padding: "8px 10px" }}>
-                    <BarLineChart data={posFixHistory} barKey="ships" lineKey="avgWindow" title="Fixing window history (segments in this list)" barLabel="Ships" lineLabel="Avg days" accent={ACCENT} loading={posFixHistoryLoading} />
-                  </div>}
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8, padding: "6px 6px 12px" }}>
+                  <div className={positionCharts.open ? "" : "exclude-position-chart"} style={{ background: "#0c1729", border: "1px solid rgba(58,130,246,0.12)", padding: "8px 10px",minWidth:0 }}>
+                    <div className="no-export" style={{display:"flex",justifyContent:"flex-end",paddingBottom:3}}>{positionChartTick("open","Include in export")}</div>
+                    <div className={positionCharts.open ? "" : "exclude-position-chart"}><BarLineChart data={openTimingData} barKey="count" title="Open timing" barLabel="Ships" accent={ACCENT} /></div>
+                  </div>
+                  <div className={positionCharts.fixing ? "" : "exclude-position-chart"} style={{ background: "#0c1729", border: "1px solid rgba(58,130,246,0.12)", padding: "8px 10px",minWidth:0 }}>
+                    <div className="no-export" style={{display:"flex",justifyContent:"flex-end",paddingBottom:3}}>{positionChartTick("fixing","Include in export")}</div>
+                    <div className={positionCharts.fixing ? "" : "exclude-position-chart"}><BarLineChart data={posFixHistory} barKey="ships" lineKey="avgWindow" title="Fixing window history (segments in this list)" barLabel="Ships" lineLabel="Avg days" accent={ACCENT} loading={posFixHistoryLoading} /></div>
+                  </div>
                 </div>
               )}
             </div>
           </div>
 
+          <div className="no-export" onMouseDown={startPositionResize} title="Drag to resize output / vessel selection panels" style={{width:7,flex:"0 0 7px",cursor:"col-resize",background:"#183456",borderLeft:"1px solid #31547d",borderRight:"1px solid #31547d",alignSelf:"stretch",zIndex:2}} />
           {/* ── Vessel pool table — fills the space between the report preview and the controls sidebar ── */}
           <div style={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", borderLeft: "1px solid " + C.bd, overflow: "hidden" }}>
             <div style={{ padding: "8px 12px", borderBottom: "1px solid " + C.bd, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
@@ -1988,19 +2008,19 @@ Any direction`}</pre>
                 </button>
               )}
             </div>
-            <div key={poolSearch + "|" + [...tagFilter].sort().join(",") + "|" + dateFilter} style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+            <div key={poolSearch + "|" + [...tagFilter].sort().join(",") + "|" + dateFilter} style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
               {vesselPool.length === 0 ? (
                 <div style={{ padding: "24px 0", textAlign: "center", color: C.faint, fontSize: 11 }}>
                   {allVessels.length === 0 ? "Select vessels on Positions tab" : "No vessels match your search/tags"}
                 </div>
               ) : (
-                <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", fontSize: 11 }}>
+                <table style={{ width: "100%", minWidth: 940, tableLayout: "fixed", borderCollapse: "collapse", fontSize: 12 }}>
                   <colgroup>
-                    <col style={{ width: "32%" }} /><col style={{ width: "14%" }} /><col style={{ width: "16%" }} /><col style={{ width: "20%" }} /><col style={{ width: "14%" }} /><col style={{ width: "4%" }} />
+                    {[175,78,72,110,105,125,160,105,28].map((w,i)=><col key={i} style={{width:w}} />)}
                   </colgroup>
                   <thead>
                     <tr style={{ position: "sticky", top: 0, background: "#101d30" }}>
-                      {["Vessel", "DWT", "Open date", "Open port", "Updated", ""].map(h => (
+                      {["Vessel", "DWT", "Built", "Coating", "Open date", "Open port", "Operator", "Updated", ""].map(h => (
                         <th key={h} onClick={() => h && setPoolSort(p => ({key:h,desc:p.key === h ? !p.desc : h === "Updated"}))} style={{ cursor:h ? "pointer" : "default", userSelect:"none", padding: "6px 6px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase", borderBottom: "1px solid " + C.bd, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h}{h && poolSort.key === h ? (poolSort.desc ? " ▼" : " ▲") : ""}</th>
                       ))}
                     </tr>
@@ -2011,8 +2031,11 @@ Any direction`}</pre>
                         style={{ cursor: "pointer", background: i % 2 === 0 ? "#101d30" : "#0b1626", borderBottom:"1px solid rgba(58,130,246,0.055)" }}>
                         <td style={{ padding: "6px 6px", fontWeight: 700, color: "#58b6ff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel}</td>
                         <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.dwt ? fmtDwt(v.dwt) : ""}</td>
+                        <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.built || ""}</td>
+                        <td title={v.coating || ""} style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fmtCoating(v.coating)}</td>
                         <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.date || ""}</td>
                         <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.openPort || ""}</td>
+                        <td title={v.operator || ""} style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.operator || ""}</td>
                         <td style={{ padding: "5px 6px", color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.updatedAt ? new Date(v.updatedAt).toLocaleDateString("en-GB") : ""}</td>
                         <td style={{ padding: "5px 6px" }}><span style={{ fontSize: 14, color: ACCENT, fontWeight: 700 }}>+</span></td>
                       </tr>
@@ -2024,7 +2047,7 @@ Any direction`}</pre>
           </div>
 
           {/* ── Controls — paste, then the same category structure as the Positions tab filter panel ── */}
-          <div style={{ width: 280, flexShrink: 0, borderLeft: "1px solid " + C.bd, display: "flex", flexDirection: "column", overflowY: "auto", padding: "7px 10px", gap: 5 }}>
+          <div style={{ width: 298, flexShrink: 0, borderLeft: "1px solid " + C.bd, display: "flex", flexDirection: "column", overflowY: "auto", padding: "7px 18px 7px 10px", gap: 5 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em" }}>Add vessels</div>
 
             <button onClick={() => setPosPasteOpen(o => !o)}
@@ -2058,7 +2081,7 @@ Any direction`}</pre>
                 </div>
               );
               const RB = ({ active, onClick, children }) => (
-                <button onClick={onClick} style={{ fontSize: 10, fontWeight: 600, padding: "3px 7px", borderRadius: 3, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+                <button onClick={onClick} style={{ fontSize: 11, fontWeight: 650, padding: "5px 9px", borderRadius: 4, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
                   border: "1px solid " + (active ? C.blue : "rgba(120,160,220,0.35)"), background: active ? "rgba(88,166,255,.22)" : C.bg3, color: active ? "#d9ecff" : "#9fc3f5" }}>
                   {children}
                 </button>
