@@ -855,18 +855,18 @@ function CommodityTape({data,history,period,selectedId,onSelect}){
 }
 function VlccSparkline({history,period="1Y"}) {
   const [hover,setHover]=useState(null);
-  let rows=(Array.isArray(history)?history:[]).map(x=>({...x,tce:Number(x.tce)})).filter(x=>Number.isFinite(x.tce)).sort((a,b)=>(a.year||0)-(b.year||0)||(a.week||0)-(b.week||0));
-  const n=period==="3M"?13:period==="6M"?26:period==="1Y"?52:rows.length; rows=rows.slice(-n);
+  let rows=(Array.isArray(history)?history:[]).map(x=>({...x,tce:Number(x.tce)})).filter(x=>Number.isFinite(x.tce)).sort((a,b)=>a.isoDate&&b.isoDate?a.isoDate.localeCompare(b.isoDate):(a.year||0)-(b.year||0)||(a.week||0)-(b.week||0));
+  const n=period==="14D"?rows.length:period==="3M"?13:period==="6M"?26:period==="1Y"?52:rows.length; rows=rows.slice(-n);
   if(!rows.length)return null; const clean=cleanIsolatedValues(rows.map(x=>x.tce));rows=rows.map((x,i)=>({...x,tce:clean[i]}));
   const W=900,H=350,PL=58,PR=12,PT=2,PB=28,vals=rows.map(x=>x.tce/1000),mn=Math.min(...vals),mx=Math.max(...vals),pad=Math.max(25,(mx-mn)*.14),lo=Math.max(0,mn-pad),hi=mx+pad,range=hi-lo||1;
   const pts=rows.map((x,i)=>[PL+i/(rows.length-1||1)*(W-PL-PR),PT+(hi-x.tce/1000)/range*(H-PT-PB)]),ticks=[hi,(hi+lo)/2,lo],labels=[0,Math.floor((rows.length-1)/2),rows.length-1].filter((v,i,a)=>a.indexOf(v)===i);
   const move=e=>{const b=e.currentTarget.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*W;let idx=0,best=1e9;pts.forEach((p,i)=>{const d=Math.abs(p[0]-x);if(d<best){best=d;idx=i}});setHover(idx)};
   return <div style={{height:"100%",position:"relative",display:"flex",flexDirection:"column"}}><svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" onMouseMove={move} onMouseLeave={()=>setHover(null)} style={{width:"100%",height:"100%",minHeight:125,display:"block",cursor:"crosshair"}}>
     {ticks.map((v,i)=>{const y=PT+i/2*(H-PT-PB);return <g key={i}><line x1={PL} y1={y} x2={W-PR} y2={y} stroke="rgba(88,130,200,.14)"/><text x={PL-8} y={y+4} fill="#e8f2ff" fontSize="14" fontWeight="850" textAnchor="end">${Math.round(v)}k</text></g>})}
-    {pts.length>1&&<path d={smoothPath(pts)} fill="none" stroke="#58a6ff" strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>}
+    {pts.length>1&&<path d={period==="14D"?"M"+pts.map(p=>p.join(",")).join(" L"):smoothPath(pts)} fill="none" stroke="#58a6ff" strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>}
     {hover!=null&&<><line x1={pts[hover][0]} x2={pts[hover][0]} y1={PT} y2={H-PB} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4"/><circle cx={pts[hover][0]} cy={pts[hover][1]} r="5" fill="#58a6ff" stroke="none"/></>}
     {labels.map(i=><text key={i} x={i===0?pts[i][0]+5:i===rows.length-1?pts[i][0]-5:pts[i][0]} y={H-8} fill="#e8f2ff" fontSize="12.5" fontWeight="850" textAnchor={i===0?"start":i===rows.length-1?"end":"middle"}>{rows[i].date||(`W${rows[i].week||""}`)}</text>)}
-  </svg>{hover!=null&&<div style={{position:"absolute",top:26,left:`${Math.min(82,Math.max(12,pts[hover][0]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.95)",border:"1px solid rgba(88,166,255,.45)",borderRadius:6,padding:"6px 8px",pointerEvents:"none"}}><div style={{fontSize:9,color:"rgba(205,225,250,.82)"}}>{rows[hover].date||`Week ${rows[hover].week||""}`}</div><div style={{fontSize:11,fontWeight:900,color:C.blue}}>${Math.round(rows[hover].tce/1000)}k/day</div>{rows[hover].ws!=null&&<div style={{fontSize:9.5,color:C.tx}}>WS {rows[hover].ws}</div>}</div>}</div>;
+  </svg>{hover!=null&&<div style={{position:"absolute",top:26,left:`${Math.min(82,Math.max(12,pts[hover][0]/W*100))}%`,transform:"translateX(-50%)",background:"rgba(5,14,30,.95)",border:"1px solid rgba(88,166,255,.45)",borderRadius:6,padding:"6px 8px",pointerEvents:"none"}}><div style={{fontSize:9,color:"rgba(205,225,250,.82)"}}>{rows[hover].date||`Week ${rows[hover].week||""}`}</div><div style={{fontSize:11,fontWeight:900,color:C.blue}}>${Math.round(rows[hover].tce/1000)}k/day</div>{rows[hover].vessel&&<div style={{fontSize:9.5,color:C.tx}}>{rows[hover].vessel} · {rows[hover].charterer||""}</div>}{rows[hover].ws!=null&&<div style={{fontSize:9.5,color:C.tx}}>WS {rows[hover].ws}</div>}</div>}</div>;
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -884,9 +884,14 @@ function Dashboard({vessels, cargoes, history, onImportFixingWindow}) {
   const [selectedCommodity,setSelectedCommodity]=useState("brent");
   const [vlcc,setVlcc]=useState(null);
   const [shippingPriceTab,setShippingPriceTab]=useState("vlcc");
-  const [vlccPeriod,setVlccPeriod]=useState("1Y");
+  const [vlccPeriod,setVlccPeriod]=useState("14D");
   const [vlccError,setVlccError]=useState(null);
   const [vlccFixtures,setVlccFixtures]=useState(null);
+  const fixtureRows=(vlccFixtures?.fixtures||[]).filter(f=>Number.isFinite(Number(f.tce))&&Number(f.tce)>0);
+  const fixtureChart=fixtureRows.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(f=>({isoDate:f.date,date:f.date.slice(5),tce:Number(f.tce),vessel:f.vessel,charterer:f.charterer}));
+  const showingFixtureChart=vlccPeriod==="14D";
+  const activeVlccHistory=showingFixtureChart?fixtureChart:(vlcc?.history||[]);
+  const activeVlccLatest=showingFixtureChart?fixtureChart.at(-1):vlcc?.latest;
   const [vlccFixturesError,setVlccFixturesError]=useState(null);
   const [vlccFixturesOpen,setVlccFixturesOpen]=useState(false);
   const [wsSummaryData,setWsSummaryData]=useState(null);
@@ -1614,29 +1619,29 @@ function Dashboard({vessels, cargoes, history, onImportFixingWindow}) {
               </div>
             </div>
             {shippingPriceTab==="vlcc" ? (
-              <>{vlcc?.latest ? <div className="dash-vlcc-block" style={{display:"flex",flexDirection:"column",height:346,minHeight:314}}>
+              <>{activeVlccLatest ? <div className="dash-vlcc-block" style={{display:"flex",flexDirection:"column",height:346,minHeight:314}}>
                 <div className="dash-vlcc-head" style={{position:"relative",minHeight:46,margin:"-14px 0 0"}}>
-                  <div style={{position:"absolute",left:0,top:4,fontSize:9.5,fontWeight:850,color:"rgba(185,215,245,.72)",textTransform:"uppercase",letterSpacing:".06em"}}>TD3C MEG → China</div>
+                  <div style={{position:"absolute",left:0,top:4,fontSize:9.5,fontWeight:850,color:"rgba(185,215,245,.72)",textTransform:"uppercase",letterSpacing:".06em"}}>{showingFixtureChart?"VLCC FIXTURE EARNINGS · TANKERS INTERNATIONAL":"TD3C MEG → China · Baltic"}</div>
                   <div className="dash-vlcc-earnings" style={{textAlign:"center",paddingTop:0,transform:"translateY(-3px)"}}>
-                    <div style={{fontSize:34,fontWeight:900,color:D.tx,lineHeight:1}}>${Math.round(Number(vlcc.latest.tce)/1000)}k<span style={{fontSize:10.5,color:"rgba(190,215,245,.72)",fontWeight:650}}>/day</span></div>
-                    <div style={{fontSize:9.5,color:"rgba(190,215,245,.66)",marginTop:3}}>{vlcc.latest.date||""} · {vlcc.latest.ws!=null?"WS "+vlcc.latest.ws:"Baltic weekly"} · {(vlcc.history||[]).length} obs</div>
+                    <div style={{fontSize:34,fontWeight:900,color:D.tx,lineHeight:1}}>${Math.round(Number(activeVlccLatest.tce)/1000)}k<span style={{fontSize:10.5,color:"rgba(190,215,245,.72)",fontWeight:650}}>/day</span></div>
+                    <div style={{fontSize:9.5,color:"rgba(190,215,245,.66)",marginTop:3}}>{showingFixtureChart?`${activeVlccLatest.isoDate||activeVlccLatest.date} · ${fixtureChart.length} fixtures · reported earnings`:`${vlcc.latest.date||""} · ${vlcc.latest.ws!=null?"WS "+vlcc.latest.ws:"Baltic weekly"} · ${(vlcc.history||[]).length} obs`}</div>
                   </div>
-                  <div style={{position:"absolute",right:0,top:29}}><HorizonButtons value={vlccPeriod} onChange={setVlccPeriod} options={["3M","6M","1Y","ALL"]}/></div>
+                  <div style={{position:"absolute",right:0,top:29}}><HorizonButtons value={vlccPeriod} onChange={setVlccPeriod} options={["14D","3M","6M","1Y","ALL"]}/></div>
                 </div>
-                <div style={{flex:1,minHeight:0}}><VlccSparkline history={vlcc.history||[]} period={vlccPeriod}/></div>
+                <div style={{flex:1,minHeight:0}}><VlccSparkline history={activeVlccHistory} period={vlccPeriod}/></div>
               </div> : <div style={{fontSize:11,color:vlccError?D.red:D.faint,padding:"10px 0"}}>
-                {vlccError?"VLCC unavailable · "+vlccError:"Loading VLCC earnings…"}
+                {showingFixtureChart?(vlccFixturesError?"Fixtures unavailable · "+vlccFixturesError:"No reported fixture earnings in the last 14 days"):(vlccError?"VLCC unavailable · "+vlccError:"Loading Baltic earnings…")}
               </div>}
               <div style={{marginTop:9,borderTop:"1px solid "+D.border,paddingTop:8}}>
                 <button type="button" onClick={()=>setVlccFixturesOpen(v=>!v)} style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",background:"transparent",border:0,color:D.tx,fontSize:10,fontWeight:800,cursor:"pointer",padding:"5px 0"}}>
-                  <span>VLCC FIXTURES · LAST 14 DAYS {vlccFixtures?.fixtures?.length!=null?`(${vlccFixtures.fixtures.length})`:""}</span><span>{vlccFixturesOpen?"▴":"▾"}</span>
+                  <span>VLCC FIXTURES · LAST 14 DAYS {vlccFixtures?.fixtures?.length!=null?`(${fixtureRows.length})`:""}</span><span>{vlccFixturesOpen?"▴":"▾"}</span>
                 </button>
                 {vlccFixturesOpen&&<div style={{maxHeight:300,overflow:"auto"}}>
-                  <div style={{fontSize:9,color:D.faint,marginBottom:5}}>Tankers International · public reported fixtures · TCE and duration only when available</div>
+                  <div style={{fontSize:9,color:D.faint,marginBottom:5}}>Tankers International · public reported fixture earnings (not Baltic TD3C benchmark)</div>
                   {vlccFixturesError&&<div style={{color:D.red,fontSize:10}}>Feed unavailable: {vlccFixturesError}</div>}
                   {!vlccFixtures&&!vlccFixturesError&&<div style={{color:D.faint,fontSize:10}}>Loading fixtures…</div>}
-                  {vlccFixtures&&<table style={{width:"100%",borderCollapse:"collapse",fontSize:9.5}}><thead><tr>{["DATE","VESSEL","CHARTERER","STATUS","TCE/DAY","DAYS"].map(h=><th key={h} style={{textAlign:h==="TCE/DAY"||h==="DAYS"?"right":"left",padding:"5px 4px",color:D.faint,borderBottom:"1px solid "+D.border}}>{h}</th>)}</tr></thead><tbody>{(vlccFixtures.fixtures||[]).map((f,i)=><tr key={f.date+f.vessel+i} style={{borderBottom:"1px solid "+D.border}}><td style={{padding:"5px 4px",whiteSpace:"nowrap"}}>{f.date.slice(5)}</td><td style={{padding:"5px 4px",fontWeight:700}}>{f.vessel}</td><td style={{padding:"5px 4px"}}>{f.charterer||"—"}</td><td style={{padding:"5px 4px",color:f.status==="Failed"?D.red:D.dim}}>{f.status||"—"}</td><td style={{padding:"5px 4px",textAlign:"right",whiteSpace:"nowrap"}}>{f.tce!=null?"$"+Math.round(f.tce/1000)+"k":"—"}</td><td style={{padding:"5px 4px",textAlign:"right"}}>{f.duration??"—"}</td></tr>)}</tbody></table>}
-                  {vlccFixtures&&!vlccFixtures.fixtures?.length&&<div style={{color:D.faint,fontSize:10}}>No fixtures reported within 14 days.</div>}
+                  {vlccFixtures&&<table style={{width:"100%",borderCollapse:"collapse",fontSize:9.5}}><thead><tr>{["DATE","VESSEL","CHARTERER","STATUS","TCE/DAY"].map(h=><th key={h} style={{textAlign:h==="TCE/DAY"?"right":"left",padding:"5px 4px",color:D.faint,borderBottom:"1px solid "+D.border}}>{h}</th>)}</tr></thead><tbody>{fixtureRows.map((f,i)=><tr key={f.date+f.vessel+i} style={{borderBottom:"1px solid "+D.border}}><td style={{padding:"5px 4px",whiteSpace:"nowrap"}}>{f.date.slice(5)}</td><td style={{padding:"5px 4px",fontWeight:700}}>{f.vessel}</td><td style={{padding:"5px 4px"}}>{f.charterer||"—"}</td><td style={{padding:"5px 4px",color:f.status==="Failed"?D.red:D.dim}}>{f.status||"—"}</td><td style={{padding:"5px 4px",textAlign:"right",whiteSpace:"nowrap"}}>{f.tce!=null?"$"+Math.round(f.tce/1000)+"k":"—"}</td></tr>)}</tbody></table>}
+                  {vlccFixtures&&!fixtureRows.length&&<div style={{color:D.faint,fontSize:10}}>No fixtures with published daily earnings in the last 14 days.</div>}
                 </div>}
               </div>
 </>
