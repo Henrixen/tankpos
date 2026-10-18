@@ -152,7 +152,7 @@ function TCETrendMini({ lastMonth, current, ytd }) {
   if (lm == null && cur == null) return (
     <div style={{ padding: 20, textAlign: "center", color: "rgba(219,230,245,0.3)", fontSize: 11 }}>Enter TCE figures below to see the trend</div>
   );
-  const W = 340, H = 215, P = { t: 34, r: 22, b: 28, l: 28 };
+  const W = 340, H = 178, P = { t: 28, r: 22, b: 25, l: 28 };
   const w = W - P.l - P.r, h = H - P.t - P.b;
   const vals = [lm, cur, y].filter(v => v != null);
   const maxV = Math.max(...vals, 1) * 1.15, minV = Math.min(...vals, 0) * 0.9;
@@ -160,7 +160,7 @@ function TCETrendMini({ lastMonth, current, ytd }) {
   const bw = w * 0.29;
   const x1 = P.l + w * 0.28, x2 = P.l + w * 0.72;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="215">
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="178">
       {y != null && <>
         <line x1={P.l} y1={yFor(y)} x2={W - P.r} y2={yFor(y)} stroke="#f0f6ff" strokeWidth="1.8" strokeDasharray="5,4" />
         <text x={W - P.r} y={13} fill="rgba(219,230,245,0.5)" fontSize="9" textAnchor="end">YTD AVG ${y.toLocaleString("nb-NO")}/d</text>
@@ -276,7 +276,7 @@ function ImportedFixingWindowChart({snapshot}){
   const rows=Array.isArray(snapshot?.rows)?snapshot.rows:[];
   const segments=Array.isArray(snapshot?.segments)&&snapshot.segments.length?snapshot.segments:["Inter"];
   const colors={"Sub 10":"#8b949e",City:"#58a6ff",Inter:"#22d3ee",J19:"#a78bfa",Flexi:"#fd79a8",Handy:"#3fb950",MR:"#f5a623"};
-  const W=640,H=254,L=39,R=44,T=19,B=32,iw=W-L-R,ih=H-T-B;
+  const W=640,H=198,L=39,R=44,T=14,B=26,iw=W-L-R,ih=H-T-B;
   const valueAt=(row,seg)=>{const raw=row?.[seg];if(raw==null||raw==="")return null;const n=Number(raw);return Number.isFinite(n)&&n>=0?n:null;};
   const valid=segments.flatMap(seg=>rows.map(r=>valueAt(r,seg))).filter(v=>v!==null);
   if(!valid.length)return <div style={{fontSize:11,color:"#9fb4cd",padding:20}}>Imported fixing-window data has no values.</div>;
@@ -447,6 +447,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [tceDefaults, setTceDefaults] = useState(null); // vessel profile shared with TCECalculator
   const [tceStats, setTceStats] = useState({ current: "", lastMonth: "", ytd: "" });
   const [handyCommentary, setHandyCommentary] = useState("");
+  const [intermediateRoutesLabel,setIntermediateRoutesLabel] = useState("Intermediate routes");
   const [handy, setHandy] = useState({
     tc23: { spotWS: "", ffaAug: "", ffaSep: "", ffaOct: "" },
     tc6:  { spotWS: "", ffaAug: "", ffaSep: "", ffaOct: "" },
@@ -1184,7 +1185,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     try {
       const payload = { report_type: reportType, report_date: reportDate, commentary,
         rate_grid: { ...rateGrid, __marketEditor: { headings: marketHeadings, intermediateTitle,
-          benchmarks: benchmarkRows, drivers: driverBullets, tceStats, handy, handyCommentary, handySegments, importedFixingChart,routeColumns,routeTitles } },
+          benchmarks: benchmarkRows, drivers: driverBullets, tceStats, handy, handyCommentary, handySegments, importedFixingChart,routeColumns,routeTitles,intermediateRoutesLabel,marketHeadings } },
         tce_earnings: tceEarnings, fixtures, quotes };
       // Editing an existing saved report updates that exact row. New reports insert once.
       const query = activeMarketReportId
@@ -1216,6 +1217,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         if (editor.handy) setHandy(editor.handy);
         setHandyCommentary(editor.handyCommentary || "");
         if (Array.isArray(editor.handySegments)) setHandySegments(editor.handySegments);
+        if (typeof editor.intermediateRoutesLabel === "string") setIntermediateRoutesLabel(editor.intermediateRoutesLabel);
+        if (editor.marketHeadings) setMarketHeadings(p=>({...p,...editor.marketHeadings}));
         if(editor.routeColumns)setRouteColumns(editor.routeColumns);
         if(editor.routeTitles)setRouteTitles(editor.routeTitles);
       }
@@ -2202,7 +2205,7 @@ Any direction`}</pre>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead><tr>
-                      <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>Intermediate routes</th>
+                      <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}><input aria-label="Intermediate routes column title" className="rpt-edit" value={intermediateRoutesLabel} onChange={e=>setIntermediateRoutesLabel(e.target.value)} style={{width:150,fontSize:10,fontWeight:700}}/></th>
                       <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}><input className="rpt-edit" aria-label="Spot column title" value={routeTitles.spot} onChange={e=>setRouteTitles(p=>({...p,spot:e.target.value}))} style={{width:85}}/></th>
                       {routeColumns.lastWeek&&<th style={{padding:"6px 10px",textAlign:"left"}}><input className="rpt-edit" aria-label="Last week column title" value={routeTitles.lastWeek} onChange={e=>setRouteTitles(p=>({...p,lastWeek:e.target.value}))} style={{width:90}}/></th>}
                       {routeColumns.comment&&<th style={{padding:"6px 10px",textAlign:"left"}}><input className="rpt-edit" aria-label="Comment column title" value={routeTitles.comment} onChange={e=>setRouteTitles(p=>({...p,comment:e.target.value}))} style={{width:130}}/></th>}
@@ -2253,7 +2256,7 @@ Any direction`}</pre>
               {/* ── Handy ── */}
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow: "hidden" }}>
                 <div style={{ padding: "8px 13px", background: "rgba(74,144,226,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#79c0ff", textTransform: "uppercase", letterSpacing: "0.05em" }}>Handy</div>
+                  {editMarketHeading("handy",{fontSize:12,fontWeight:700,color:"#79c0ff",textTransform:"uppercase",letterSpacing:"0.05em"})}
                   <div style={{display:"flex",alignItems:"center",gap:10}}>{emailSectionTick("handy")}<button className="no-export" onClick={()=>{const k="seg"+Date.now();setHandySegments(p=>[...p,k]);setHandy(p=>({...p,[k]:{name:"New segment",spotWS:"",ffaAug:"",ffaSep:"",ffaOct:""}}));}} style={{...SB,background:C.bg3,color:C.blue,border:"1px solid "+C.bd}}>+ Add segment</button></div>
                 </div>
                 <div style={{ padding: "9px 13px" }}>
@@ -2350,11 +2353,11 @@ Any direction`}</pre>
 
               {/* ── TCE trend (50%) + Fixing window (50%) ── */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11, alignItems:"stretch" }}>
-                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10, minHeight:250,height:270,boxSizing:"border-box" }}>
+                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10, minHeight:240,height:240,overflow:"hidden",boxSizing:"border-box" }}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}><div style={{fontSize:11,fontWeight:700,color:C.tx}}>TCE trend</div>{emailSectionTick("tceChart")}</div>
                   <TCETrendMini lastMonth={tceStats.lastMonth} current={tceStats.current} ytd={tceStats.ytd} />
                 </div>
-                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10,minHeight:250,height:270,boxSizing:"border-box" }}>
+                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10,minHeight:240,height:240,overflow:"hidden",boxSizing:"border-box" }}>
                   <div style={{display:"flex",justifyContent:"flex-end",marginBottom:2}}>{emailSectionTick("fixingChart")}</div>
                   {importedFixingChart?.rows?.length
                     ? <ImportedFixingWindowChart snapshot={importedFixingChart}/>
@@ -2387,7 +2390,7 @@ Any direction`}</pre>
                     <div style={{...reportHeadingStyle,marginBottom:8}}>{marketHeadings.benchmark}</div>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                       <thead><tr style={{ background: "#eaf2fc" }}>
-                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Intermediate routes</th>
+                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>{intermediateRoutesLabel}</th>
                         <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>{routeTitles.spot}</th>
                         {routeColumns.lastWeek&&<th style={{padding:"5px 8px",textAlign:"left",color:"#6b7280"}}>{routeTitles.lastWeek}</th>}
                         {routeColumns.comment&&<th style={{padding:"5px 8px",textAlign:"left",color:"#6b7280"}}>{routeTitles.comment}</th>}
@@ -2408,7 +2411,7 @@ Any direction`}</pre>
 
                   {emailSections.handy && (
                   <div>
-                    <div style={{...reportHeadingStyle,marginBottom:8}}>Handy</div>
+                    <div style={{...reportHeadingStyle,marginBottom:8}}>{marketHeadings.handy}</div>
                     {handyCommentary && <div style={{fontSize:11,color:"#334155",whiteSpace:"pre-wrap",lineHeight:1.6,marginBottom:8}}>{handyCommentary}</div>}
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                       <thead><tr style={{ background: "#eaf2fc" }}>
@@ -2473,12 +2476,12 @@ Any direction`}</pre>
                   )}
 
                   {(emailSections.tceChart || emailSections.fixingChart) && (
-                    <div style={{display:"grid",gridTemplateColumns:emailSections.tceChart&&emailSections.fixingChart?"1fr 1fr":"1fr",gap:12,padding:"12px 18px 18px",alignItems:"stretch"}}>
-                      {emailSections.tceChart && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0,minHeight:255,boxSizing:"border-box"}}>
+                    <div style={{display:"grid",gridTemplateColumns:emailSections.tceChart&&emailSections.fixingChart?"1fr 1fr":"1fr",gap:12,padding:"12px 18px 12px",alignItems:"stretch"}}>
+                      {emailSections.tceChart && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0,height:245,overflow:"hidden",boxSizing:"border-box"}}>
                         <div style={{fontSize:11,fontWeight:700,marginBottom:6}}>TCE trend</div>
                         <TCETrendMini lastMonth={tceStats.lastMonth} current={tceStats.current} ytd={tceStats.ytd}/>
                       </div>}
-                      {emailSections.fixingChart && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0,minHeight:255,boxSizing:"border-box"}}>
+                      {emailSections.fixingChart && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0,height:245,overflow:"hidden",boxSizing:"border-box"}}>
                         {importedFixingChart?.rows?.length
                           ? <ImportedFixingWindowChart snapshot={importedFixingChart}/>
                           : <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" barLabel="No. of ships" lineLabel="Avg. fix window" title="Fixing window (days)" accent="#4a90e2" loading={fixHistoryLoading}/>}
