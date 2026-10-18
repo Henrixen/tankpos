@@ -1,5 +1,3 @@
-import { NAV_KEY, NAV_CLOUD_KEY, NAV_ITEMS, navDefault, navNorm, navLoad } from "./NavigationRegistry";
-import { formatPositionWhatsAppRow, formatPositionsWhatsAppTable } from "./cargoExportConfig";
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react";
 import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
@@ -19,7 +17,6 @@ const TimeCharterTab = React.lazy(()=>import("./TimeCharterTab"));
 const ProjectsTab    = React.lazy(()=>import("./ProjectsTab"));
 const TCECalculator  = React.lazy(()=>import("./TCECalculator").then(m=>({default:m.TCECalculator})));
 const Dashboard      = React.lazy(()=>import("./Dashboard"));
-const MRHandy        = React.lazy(()=>import("./MRHandy"));
 const OpeningBreakdown = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.OpeningBreakdown})));
 const FixingWindow   = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.FixingWindow})));
 const FixingWindowChart = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.FixingWindowChart})));
@@ -148,7 +145,26 @@ function CargoRegionCell({ value, onSave }) {
   );
 }
 
-
+const NAV_KEY="signal_navigation_config";
+const NAV_CLOUD_KEY="navigation_config";
+const NAV_ITEMS=[
+ ["pos","Positions","#58a6ff","🚢"],["cargo2","Cargoes","#faa356","🛢"],["fix","Fixing","#c792ea","◎"],["tcv","Time Charter","#fb923c","◷"],
+ ["clients","Clients","#a8e6a3","♟"],["matrix","Matrix","#43e97b","⌗"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","∑"],
+ ["dash","Dashboard","#43e97b","▦"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▤"],["map","Freight Map","#10b981","⌁"],
+ ["cal","Calendar","#4fc3f7","◫"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","⚓"],["newbuilds","Newbuilds","#fbbf24","△"]
+];
+function navDefault(){return{mode:"classic",collapsed:false,order:NAV_ITEMS.map(x=>x[0]),hidden:[],groups:[
+ {id:"market",label:"Market",tabs:["pos","cargo2","fix","tcv","matrix"]},{id:"fleetg",label:"Fleet",tabs:["fleet","newbuilds","vessels"]},
+ {id:"tools",label:"Tools",tabs:["projects","tce","map"]},{id:"reporting",label:"Reporting",tabs:["dash","reports"]},
+ {id:"workspace",label:"Workspace",tabs:["clients","notes","cal","settings"]}]};}
+function navNorm(x){
+ const d=navDefault(),valid=new Set(NAV_ITEMS.map(x=>x[0]));
+ const order=(Array.isArray(x?.order)?x.order:[]).filter(id=>valid.has(id));d.order.forEach(id=>{if(!order.includes(id))order.push(id)});
+ const groups=(Array.isArray(x?.groups)?x.groups:d.groups).map((g,i)=>({id:String(g.id||"g"+i),label:String(g.label||"Menu"),tabs:(g.tabs||[]).filter(id=>valid.has(id))}));
+ const used=new Set(groups.flatMap(g=>g.tabs));const missing=order.filter(id=>!used.has(id));if(missing.length){if(!groups.length)groups.push({id:"other",label:"Other",tabs:[]});groups.at(-1).tabs.push(...missing);}
+ return{mode:["classic","grouped","sidebar"].includes(x?.mode)?x.mode:"classic",collapsed:!!x?.collapsed,order,hidden:(x?.hidden||[]).filter(id=>valid.has(id)),groups};
+}
+function navLoad(){try{return navNorm(JSON.parse(localStorage.getItem(NAV_KEY)||"null"));}catch{return navDefault();}}
 
 
 
@@ -511,16 +527,49 @@ function BunkerHeader(){
   }
 
   async function fetchMGO(){
-    setFetching(true);setFetchErr(null);
-    try {
-      const {data,error}=await supabase.from("bunker_cache")
-        .select("price_usd_mt,source_updated_at")
-        .eq("port","ARA").eq("fuel","MGO").maybeSingle();
-      if(error) throw error;
-      if(!data?.price_usd_mt) throw new Error("No verified ARA MGO price cached yet");
-      pushPrice(Number(data.price_usd_mt));
-    } catch(e) {setFetchErr(e.message||"Bunker cache unavailable");}
-    finally {setFetching(false);}
+    setFetching(true); setFetchErr(null);
+    try{
+      // Fetch via allorigins proxy to avoid CORS
+      const url=encodeURIComponent("https://www.bunkerindex.com/rss/prices.php");
+      const res=await fetch(`https://api.allorigins.win/get?url=${url}`);
+      const data=await res.json();
+      const xml=data.contents||"";
+      // Parse titles from RSS XML
+      const titles=[...xml.matchAll(/<title><!\[CDATA\[([^\]]+)\]\]><\/title>/g)].map(m=>m[1]);
+      const json={items:titles.map(t=>({title:t}))};
+      if(json?.items?.length){
+        // Look for ARA MGO or VLSFO price in title
+        for(const item of json.items){
+          const t=(item.title||"").toLowerCase();
+          if(t.includes("ams")||t.includes("ara")||t.includes("rotterdam")){
+            // Extract number from title like "Rotterdam MGO: 1235"
+            const nums=(item.title||"").match(/\d{3,4}/g);
+            if(nums){
+              const price=parseInt(nums[nums.length-1]);
+              if(price>400&&price<3000){
+                pushPrice(price);
+                setFetching(false);
+                return;
+              }
+            }
+          }
+        }
+        // Try any item with a 4-digit number between 400-3000
+        for(const item of json.items){
+          const nums=(item.title||"").match(/\d{3,4}/g);
+          if(nums){
+            const price=parseInt(nums[0]);
+            if(price>400&&price<3000){
+              pushPrice(price);
+              setFetching(false);
+              return;
+            }
+          }
+        }
+      }
+      setFetchErr("No price found in feed");
+    }catch(e){setFetchErr(e.message?.slice(0,40)||"Error");}
+    setFetching(false);
   }
 
   return(
@@ -950,7 +999,7 @@ function AddVesselInlineRow({onSave,onClose}){
   function upd(k,v){setVals(p=>({...p,[k]:v}));}
   async function save(){
     if(!vals.vessel.trim()||!vals.openPort.trim()) return;
-    await onSave({vessel:vals.vessel.trim().toUpperCase(),openPort:vals.openPort.trim().toUpperCase(),date:vals.date||today,operator:vals.operator||null,dwt:vals.dwt?parseInt(vals.dwt):null,coating:vals.coating||null,comment:vals.comment||null,entered_by:sessionStorage.getItem("signal_user")||"H"});
+    await onSave({vessel:vals.vessel.trim().toUpperCase(),openPort:vals.openPort.trim().toUpperCase(),date:vals.date||today,operator:vals.operator||null,dwt:vals.dwt?parseInt(vals.dwt):null,coating:vals.coating||null,comment:vals.comment||null,entered_by:localStorage.getItem("signal_user")||"H"});
     onClose();
   }
   const TC={borderBottom:"2px solid rgba(67,233,123,0.35)",padding:"2px 3px",background:"rgba(10,24,52,0.9)"};
@@ -987,7 +1036,7 @@ function AddCargoInlineRow({onSave,onClose}){
     const v=valsRef.current;
     if(!v.charterer?.trim()&&!v.cargo?.trim()) return; // empty row — just close
     if(v.charterer?.trim()||v.cargo?.trim()){
-      await onSave({charterer:v.charterer?.trim()||"",cargo:v.cargo?.trim()||"",qty:v.qty||null,load:v.load||null,disch:v.disch||null,from:v.from||null,to:v.to||null,freight:v.freight||null,vessel:v.vessel||null,status:v.status?.toUpperCase()||null,updated:now.toISOString(),entered_by:sessionStorage.getItem("signal_user")||"H"});
+      await onSave({charterer:v.charterer?.trim()||"",cargo:v.cargo?.trim()||"",qty:v.qty||null,load:v.load||null,disch:v.disch||null,from:v.from||null,to:v.to||null,freight:v.freight||null,vessel:v.vessel||null,status:v.status?.toUpperCase()||null,updated:now.toISOString(),entered_by:localStorage.getItem("signal_user")||"H"});
     }
     onClose();
   }
@@ -1125,22 +1174,6 @@ function AddCargoModal({onSave,onClose}){
       </div>
     </>
   );
-}
-
-function CopyPositionsWAButton({rows,fmtDateShort}){
-  const [copied,setCopied]=React.useState(false);
-  const [fallback,setFallback]=React.useState("");
-  async function copy(){
-    if(!rows.length)return;
-    const txt=formatPositionsWhatsAppTable(rows.map(v=>({...v,date:fmtDateShort?fmtDateShort(v.date):v.date})));
-    try{await navigator.clipboard.writeText(txt);setCopied(true);setTimeout(()=>setCopied(false),2300);}
-    catch{setFallback(txt);}
-  }
-  return <>
-    <button onClick={copy} title="Copy selected positions, or all filtered positions, using the WhatsApp template in Settings" style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(67,233,123,.4)",background:"rgba(67,233,123,.09)",color:"#43e97b",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Copy to WA</button>
-    {copied&&<div role="status" style={{position:"fixed",right:20,bottom:24,zIndex:99999,padding:"8px 13px",border:"1px solid #16a34a",borderRadius:5,background:"#071b16",color:"#34d399",fontSize:12,fontWeight:800,pointerEvents:"none"}}>✓ WhatsApp Copied!</div>}
-    {fallback&&<div style={{position:"fixed",inset:0,zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",background:"#000a"}}><div style={{padding:18,background:"#0a1628",border:"1px solid #58a6ff",borderRadius:8,width:500,maxWidth:"95vw"}}><div style={{fontSize:12,marginBottom:8}}>Select and copy the WhatsApp text:</div><textarea readOnly autoFocus onFocus={e=>e.target.select()} value={fallback} style={{width:"100%",height:240,boxSizing:"border-box"}}/><button onClick={()=>setFallback("")}>Close</button></div></div>}
-  </>;
 }
 
 function CopyPositionsButton({filtV,fmtDateShort}){
@@ -1392,7 +1425,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
         const raw=access?.value, configured=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
         tabs=(configured||DEFAULT_USER_TABS).filter(id=>id!=="settings");
       }
-      sessionStorage.setItem("signal_user",String(user.initials||"").toUpperCase());
+      localStorage.setItem("signal_user",String(user.initials||"").toUpperCase());
       setCurrentAppUser(user); setUserTabs(tabs); setGuestMode(!isAdmin); setUnlocked(true); setPinInput("");
     }catch(_){
       setPinError(true); setPinInput(""); setTimeout(()=>setPinError(false),1200);
@@ -1536,12 +1569,6 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
   const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||userTabs.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode,userTabs]);
   const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
-  // Dashboard fixing-window snapshot → Reports (preserves v68 state and navigation).
-  const [dashboardReportImport,setDashboardReportImport]=React.useState(null);
-  const importDashboardFixingWindow=React.useCallback(snapshot=>{
-    setDashboardReportImport({...snapshot,requestId:Date.now()});
-    React.startTransition(()=>setTab("reports"));
-  },[]);
   const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set());setMobileNavOpen(false)});
  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
 const [posPage,setPosPage]=useState(1);
@@ -1623,38 +1650,9 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [qfVisibleCols,setQfVisibleCols]=useState(()=>loadVisibleCols("signal_qf_visible_columns",QF_DEFAULT_VISIBLE));
   const [cargoColumnsOpen,setCargoColumnsOpen]=useState(false);
   const [cargoColumnsPos,setCargoColumnsPos]=useState({top:0,left:0});
-  // Preferences are keyed to the authenticated app_users.id, never the PIN itself.
-  // Avoid writing defaults to the cloud before the saved profile has loaded.
-  const [tablePrefsReady,setTablePrefsReady]=useState(false);
-  const tablePrefsLoading=useRef(false);
-  useEffect(()=>{
-    if(!currentAppUser?.id){setTablePrefsReady(false);return;}
-    let cancelled=false;
-    setTablePrefsReady(false);
-    tablePrefsLoading.current=true;
-    const key=`table_preferences_${currentAppUser.id}`;
-    (async()=>{
-      try{
-        const {data,error}=await supabase.from("tag_settings").select("value").eq("key",key).maybeSingle();
-        if(error)throw error;
-        if(cancelled)return;
-        const prefs=data?.value;
-        if(Array.isArray(prefs?.cargoVisibleCols))setCargoVisibleCols(new Set(prefs.cargoVisibleCols.filter(k=>CARGO_COLUMN_KEYS.includes(k))));
-        else setCargoVisibleCols(new Set(CARGO_COLUMN_KEYS));
-        if(Array.isArray(prefs?.qfVisibleCols))setQfVisibleCols(new Set(prefs.qfVisibleCols.filter(k=>QF_COLUMN_KEYS.includes(k))));
-        else setQfVisibleCols(new Set(QF_DEFAULT_VISIBLE));
-        if(prefs?.cargoWidths && typeof prefs.cargoWidths==="object")setColWidthsC(w=>({...w,...prefs.cargoWidths}));
-      }catch(err){console.error("Failed to load user table preferences",err);}
-      finally{if(!cancelled){tablePrefsLoading.current=false;setTablePrefsReady(true);}}
-    })();
-    return()=>{cancelled=true;};
-  },[currentAppUser?.id]);
-  // Save visibility locally as a cache, and persist the full profile to Supabase.
   useEffect(()=>{try{localStorage.setItem("signal_cargo_visible_columns",JSON.stringify([...cargoVisibleCols]));}catch{}},[cargoVisibleCols]);
   useEffect(()=>{try{localStorage.setItem("signal_qf_visible_columns",JSON.stringify([...qfVisibleCols]));}catch{}},[qfVisibleCols]);
   const [cSortK,setCsortK]=useState("updated");
-  const [reportCargoes,setReportCargoes]=useState([]);
-  useEffect(()=>{const handler=e=>{setReportCargoes(e.detail?.cargoes||[]);React.startTransition(()=>setTab("reports"));};window.addEventListener("steem:send-cargoes-to-report",handler);return()=>window.removeEventListener("steem:send-cargoes-to-report",handler);},[]);
   const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
   const [bulkCargoTagOpen,setBulkCargoTagOpen]=useState(false);
   const [bulkCargoTagPos,setBulkCargoTagPos]=useState({top:0,left:0});
@@ -1815,16 +1813,6 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   }:{
   Status:68,Vessel:165,Charterer:165,Cargo:95,Qty:75,Load:148,Disch:148,LaycanStart:82,LaycanEnd:82,Freight:115,Comment:180,Updated:96
   });
-  useEffect(()=>{
-    if(!currentAppUser?.id||!tablePrefsReady||tablePrefsLoading.current)return;
-    const timer=setTimeout(async()=>{
-      const key=`table_preferences_${currentAppUser.id}`;
-      const value={cargoVisibleCols:[...cargoVisibleCols],qfVisibleCols:[...qfVisibleCols],cargoWidths:colWidthsC};
-      const {error}=await supabase.from("tag_settings").upsert({key,value,updated_at:new Date().toISOString()},{onConflict:"key"});
-      if(error)console.error("Failed to save user table preferences",error);
-    },650);
-    return()=>clearTimeout(timer);
-  },[currentAppUser?.id,tablePrefsReady,cargoVisibleCols,qfVisibleCols,colWidthsC]);
   const [askAiExpanded,setAskAiExpanded]=useState(false);
   const [intelVaultExpanded,setIntelVaultExpanded]=useState(false);
   const [selectedAISVessels,setSelectedAISVessels]=useState([]);
@@ -2707,14 +2695,14 @@ const filtV=useMemo(()=>{
                     <div style={{fontSize:mobile?14:22,fontWeight:800,color:"#eef6ff",marginTop:5}}>Enter your 4-digit access code</div>
                   </div>
 
-                  <div style={{display:"flex",gap:mobile?9:11,justifyContent:"center",marginBottom:mobile?12:17}}>
-                    {[0,1,2,3].map(i=><div key={i} style={{
-                      width:mobile?50:62,height:mobile?46:54,borderRadius:9,
-                      background:pinError?"rgba(255,107,107,.12)":pinInput.length>i?"rgba(88,166,255,.18)":"rgba(5,14,30,.72)",
-                      border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.72)":"rgba(88,166,255,.18)"),
-                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:mobile?21:24,fontWeight:850,color:pinError?"#ff6b6b":"#79c0ff",
-                      boxShadow:pinInput.length>i&&!pinError?"0 0 18px rgba(88,166,255,.12)":"none"
-                    }}><span style={{display:"block",fontSize:mobile?31:36,lineHeight:1,transform:"translateY(-1px)"}}>{pinInput.length>i?"*":""}</span></div>)}
+                  <div aria-label={`${pinInput.length} of 4 PIN digits entered`} style={{display:"flex",gap:mobile?15:19,justifyContent:"center",alignItems:"center",marginBottom:mobile?18:23,minHeight:mobile?24:28}}>
+                    {[0,1,2,3].map(i=><span key={i} style={{
+                      width:mobile?13:15,height:mobile?13:15,borderRadius:"50%",boxSizing:"border-box",
+                      background:pinError?"#ff6b6b":pinInput.length>i?"#79c0ff":"transparent",
+                      border:"2px solid "+(pinError?"#ff6b6b":pinInput.length>i?"#79c0ff":"rgba(139,169,205,.65)"),
+                      boxShadow:pinInput.length>i&&!pinError?"0 0 9px rgba(88,166,255,.25)":"none",
+                      transition:"background .12s ease,border-color .12s ease,box-shadow .12s ease"
+                    }}/>) }
                   </div>
 
                   <style>{`
@@ -3360,7 +3348,6 @@ const filtV=useMemo(()=>{
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
                   <CopyPositionsButton filtV={filtV} fmtDateShort={fmtDateShort}/>
-                  <CopyPositionsWAButton rows={selVessels.size ? filtV.filter(v=>selVessels.has(v.vessel)) : filtV} fmtDateShort={fmtDateShort}/>
                   {selVessels.size>0&&(
                     <>
                       <button
@@ -3884,9 +3871,8 @@ const filtV=useMemo(()=>{
           </div>
         )}
         {tab==="dash"&&(
-          <Suspense fallback={<TabFallback/>}><Dashboard vessels={vessels} cargoes={cargoes} history={history||[]} onImportFixingWindow={importDashboardFixingWindow}/></Suspense>
+          <Suspense fallback={<TabFallback/>}><Dashboard vessels={vessels} cargoes={cargoes} history={history||[]}/></Suspense>
         )}
-        {tab==="mrhandy"&&(<Suspense fallback={<TabFallback/>}><MRHandy/></Suspense>)}
         {tab==="notes"&&(
           <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
             <Suspense fallback={<TabFallback/>}><NotesTab/></Suspense>
@@ -3904,11 +3890,13 @@ const filtV=useMemo(()=>{
         )}
         {tab==="settings"&&(
           <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px"}}>
+            <TagManager/>
+            <div style={{height:1,background:C.bd2,margin:"4px 0"}}/>
             {/* Original settings component */}
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
           </div>
         )}
-        {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={reportCargoes} dashboardFixingImport={dashboardReportImport} onDashboardFixingImportHandled={()=>setDashboardReportImport(null)}/></Suspense></div>}
+        {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={Array.from(selCargoes)}/></Suspense></div>}
         {tab==="map"&&<Suspense fallback={<TabFallback/>}><FreightMapTab/></Suspense>}
       </TabErrorBoundary>
       </div>
