@@ -19,6 +19,9 @@ export default function TankPos(){
   const [cargoTotal,setCargoTotal]=useState(0);
   const [hasMore,setHasMore]=useState(false);
   const searchTimer=useRef(null);
+  const vesselsRef=useRef([]);
+  const saveQueueRef=useRef(new Map());
+  useEffect(()=>{vesselsRef.current=vessels;},[vessels]);
   const [mobile,setMobile]=useState(()=>isMobile());
   const [fileDate, setFileDate] = useState(() => new Date().toISOString().slice(0,10));
 
@@ -203,7 +206,13 @@ export default function TankPos(){
         if (o.cbm != null) merged.cbm = o.cbm;
         if (o.dwt != null) merged.dwt = o.dwt;
         if (o.built != null) merged.built = o.built;
-        if (o.tag != null) merged.tag = o.tag;
+        if (o.tag != null || o.tags != null) merged.tag = o.tag ?? o.tags;
+        if (o.open_date != null) {
+          const dt = new Date(o.open_date + "T12:00:00");
+          merged.date = Number.isNaN(dt.getTime()) ? o.open_date : `${dt.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][dt.getMonth()]}`;
+        }
+        if (o.open_port != null) merged.openPort = o.open_port;
+        if (o.comment != null) merged.comment = o.comment;
         if (o.fuel != null) merged.spec.fuel = o.fuel;
         if (o.ice_class != null) merged.spec.iceClass = o.ice_class;
         if (o.last_cargo != null) merged.spec.lastCargo = o.last_cargo;
@@ -225,64 +234,74 @@ export default function TankPos(){
     setSel(n);
   },[]);
 
-  const updateV = useCallback(async(name, field, value) => {
-  setVessels(prev => {
-    const now2 = new Date().toISOString();
-
-    const next = prev.map(v => {
-      if (v.vessel !== name) return v;
-
-      if (field.includes(".")) {
-        const [a, b] = field.split(".");
-        return {
-          ...v,
-          updatedAt: now2,
-          [a]: {
-            ...(v[a] || {}),
-            [b]: value || null
-          }
-        };
-      }
-
-      const extra = field === "operator" ? { operatorManual: true } : {};
-
-      return {
-        ...v,
-        updatedAt: now2,
-        [field]: value || null,
-        ...extra
-      };
+  // Persist ALL manual vessel edits independently of the external positions feed.
+  // Serialize edits per vessel so rapid field changes cannot create duplicate rows.
+  const updateV = useCallback(async (name, field, value) => {
+    const vessel = vesselsRef.current.find(v => v.vessel === name);
+    if (!vessel) { alert(`Cannot save ${name}: vessel not found`); return; }
+    const now = new Date().toISOString();
+    const cleanValue = value === "" || value === undefined ? null : value;
+    setVessels(prev => {
+      const next = prev.map(v => v.vessel !== name ? v : field.includes(".")
+        ? {...v, updatedAt:now, [field.split(".")[0]]:{...(v[field.split(".")[0]]||{}),[field.split(".")[1]]:cleanValue}}
+        : {...v, updatedAt:now, [field]:cleanValue, ...(field === "operator" ? {operatorManual:true} : {})});
+      saveV(next);
+      return next;
     });
 
-    saveV(next);
-    return next;
-  });
-
-  const fieldMap = {
-    openPort: "port_name",
-    date: "open_date",
-    built: "build_year",
-    loa: "overall_length",
-    comment: "details",
-    operator: "operator",
-    dwt: "dwt",
-    beam: "beam",
-    cbm: "cbm",
-    coating: "coating",
-  };
-
-  const dbField = fieldMap[field] || field;
-
-  const { error } = await supabase
-    .from("positions")
-    .update({
-      [dbField]: value || null,
-      updated_at: new Date().toISOString()
-    })
-    .ilike("vessel_name", name);
-
-  if (error) console.error("updateV error:", error);
-}, []);
+    const fields = {
+      operator:"operator", tag:"tag", tags:"tags", notes:"note",
+      coating:"coating", loa:"loa", beam:"beam", cbm:"cbm",
+      dwt:"dwt", built:"built", comment:"comment", openPort:"open_port",
+      date:"open_date", "spec.iceClass":"ice_class", "spec.fuel":"fuel",
+      "spec.lastCargo":"last_cargo"
+    };
+    const dbField = fields[field];
+    if (!dbField) {
+      console.error("No persistent override mapping for",field);
+      alert(`The ${field} field cannot be saved yet. Please report this.`);
+      return;
+    }
+    let dbValue = cleanValue;
+    if (field === "date" && cleanValue != null) {
+      const raw = String(cleanValue).trim();
+      const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+      if (iso) dbValue = iso;
+      else {
+        const m = raw.match(/^(\d{1,2})\s+([a-z]{3})(?:\s+(\d{4}))?$/i);
+        const months = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+        const month = m ? months.indexOf(m[2].toLowerCase()) : -1;
+        if (month < 0) { alert(`Invalid date: ${raw}. Change not saved.`); return; }
+        const year = m[3] ? Number(m[3]) : Number(String(vessel.fileDate || now).slice(0,4));
+        const d = new Date(Date.UTC(year,month,Number(m[1])));
+        dbValue = d.toISOString().slice(0,10);
+      }
+    }
+    const key = vessel.imoNo ? `imo:${vessel.imoNo}` : `name:${name}`;
+    const prior = saveQueueRef.current.get(key) || Promise.resolve();
+    const task = prior.catch(()=>{}).then(async () => {
+      const table = supabase.from("vessel_overrides");
+      const query = vessel.imoNo ? table.select("id").eq("imo_no",String(vessel.imoNo)) : table.select("id").ilike("vessel_name",name);
+      const {data:existing,error:readError} = await query.limit(1);
+      if (readError) throw readError;
+      const patch = {[dbField]:dbValue,updated_at:new Date().toISOString()};
+      let result;
+      if (existing?.length) {
+        result = await supabase.from("vessel_overrides").update(patch).eq("id",existing[0].id).select("id");
+      } else {
+        result = await supabase.from("vessel_overrides").insert({vessel_name:name,imo_no:vessel.imoNo||null,...patch}).select("id");
+      }
+      if (result.error) throw result.error;
+      if (!result.data?.length) throw new Error("Supabase returned zero saved rows (check RLS permissions)");
+      console.info("Vessel amendment saved",name,field,dbValue);
+    });
+    saveQueueRef.current.set(key,task);
+    try { await task; }
+    catch (e) {
+      console.error("CRITICAL: vessel amendment NOT saved",name,field,e);
+      alert(`SAVE FAILED for ${name} / ${field}: ${e.message || e}. Do not refresh; copy your changes before leaving.`);
+    } finally { if (saveQueueRef.current.get(key) === task) saveQueueRef.current.delete(key); }
+  }, []);
 
   // Universal cargo updater — optimistic local update + Supabase write
   const updateC=useCallback(async(id,field,value)=>{
