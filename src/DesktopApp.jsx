@@ -170,7 +170,7 @@ function navLoad(){try{return navNorm(JSON.parse(localStorage.getItem(NAV_KEY)||
 
 
 // PanelEC — div-based click-to-edit cell for the vessel popout (EC is <td>-only, breaks in flex)
-function PanelEC({value,color,placeholder,onSave}){
+function PanelEC({value,color,placeholder,onSave,displayValue}){
   const [editing,setEditing]=React.useState(false);
   const [draft,setDraft]=React.useState("");
   const ref=React.useRef(null);
@@ -185,7 +185,7 @@ function PanelEC({value,color,placeholder,onSave}){
   return(
     <span onClick={start} title="Click to edit"
       style={{fontSize:12,color:value?(color||"#e6edf7"):"#4a5a78",cursor:"text",textAlign:"right",maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-      {value||placeholder||"—"}
+      {displayValue ?? (value||placeholder||"—")}
     </span>
   );
 }
@@ -1510,6 +1510,11 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   },[unlocked]);
   // ────────────────────────────────────────────────────────────────────────
   const [tab,setTab]=useState(()=>guestMode?"pos":"pos");
+  const [dashboardFixingImport,setDashboardFixingImport]=useState(null);
+  const handleImportFixingWindow=useCallback(payload=>{
+    setDashboardFixingImport({...payload,requestId:`${Date.now()}-${Math.random().toString(36).slice(2)}`});
+    React.startTransition(()=>setTab("reports"));
+  },[]);
   // CargoesMaster dispatches this event from the “To Report” action.
   // Keep the actual cargo records (not only their IDs) for ReportsTab import.
   const [reportCargoes,setReportCargoes]=useState([]);
@@ -2571,7 +2576,7 @@ const filtV=useMemo(()=>{
   { key: "loa",       sortKey:"loa",       label: "LOA",           align:"left", width: colWidthsV.LOA },
   { key: "beam",      sortKey:"beam",      label: "Beam",        align:"right", width: colWidthsV.Beam },
   { key: "cbm",       sortKey:"cbm",       label: "CBM",           align:"left", width: colWidthsV.CBM },
-  { key: "date",      sortKey:"date",      label: "Date",        align:"center", width: colWidthsV.Date },
+  { key: "date",      sortKey:"date",      label: "Date",        align:"left", width: colWidthsV.Date },
   { key: "openPort",  sortKey:"openPort",  label: "Open Port", width: colWidthsV.OpenPort },
   { key: "comment",   sortKey:"comment",   label: "Comment",  width: colWidthsV.Comment },
   { key: "updatedAt", sortKey:"fileDate",  label: "Updated", align:"center", width: colWidthsV.FileDate },
@@ -2592,7 +2597,7 @@ const filtV=useMemo(()=>{
     { key:"built",    sortKey:"built",    label:"Blt",     align:"left", width:36 },
     { key:"dwt",      sortKey:"dwt",      label:"DWT",     align:"left", width:48 },
     { key:"coating",  sortKey:"coating",  label:"Coat",    width:44 },
-    { key:"date",     sortKey:"date",     label:"Date",    align:"center", width:44 },
+    { key:"date",     sortKey:"date",     label:"Date",    align:"left", width:44 },
     { key:"openPort", sortKey:"openPort", label:"Port",    width:80 },
     { key:"comment",  sortKey:"comment",  label:"Comment", width:90 },
     { key:"tag",      label:"Tag",        align:"center",  width:50 },
@@ -3639,10 +3644,10 @@ const filtV=useMemo(()=>{
 
       <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.built || ""}</td>
       <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtDwtFull(v.dwt)}</td>
-      <td style={{ ...tdTxt, color: C.dim }} title={v.coating||""}>{fmtCoating(v.coating)}</td>
+      <td style={{ ...tdTxt, color: C.dim }} title={v.coating||v.spec?.coated||""}>{fmtCoating(v.coating||v.spec?.coated)}</td>
       {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.loa || ""}</td>}
       {!mobile && <td style={{ ...tdNum, color: C.dim }}>{v.beam || ""}</td>}
-      {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtN(v.cbm)}</td>}
+      {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtDwtFull(v.cbm)}</td>}
 
       {/* DATE */}
       <EC
@@ -3765,7 +3770,7 @@ const filtV=useMemo(()=>{
                       `}</style>
                       <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
                         <div>
-                          <div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:12}}><div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>{selV.imoNo&&<span style={{fontSize:12,color:C.amber}}>IMO {selV.imoNo}</span>}</div>
                           <div style={{fontSize:12,color:C.purple}}>{selV.operator||""}</div>
                         </div>
                         <button onClick={()=>{setSel(null);setSelectedAISVessels([]);}} style={{background:"none",border:"none",color:C.dim,fontSize:14,cursor:"pointer"}}>✕</button>
@@ -3775,11 +3780,10 @@ const filtV=useMemo(()=>{
                         {[["Open Port","openPort",C.amber],["Date","date",C.blue],["Comment","comment",C.dim],["Operator","operator",C.purple],["Built","built",C.dim],["DWT","dwt",C.amber],["Coating","coating",C.green],["LOA","loa",C.dim],["Beam","beam",C.dim],["CBM","cbm",C.dim]].map(([l,f,col])=>(
                           <div key={f} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderBottom:"1px solid "+C.bg,gap:4}}>
                             <span style={{fontSize:12,color:C.faint,minWidth:55,flexShrink:0}}>{l}</span>
-                            <PanelEC value={selV[f]} color={col} placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
+                            <PanelEC value={selV[f]} displayValue={(f==="dwt"||f==="cbm")&&selV[f]!=null&&selV[f]!==""?fmtDwtFull(selV[f]):undefined} color={col} placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
                           </div>
                         ))}
 
-                        <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em",padding:"6px 0 3px",borderBottom:"1px solid "+C.bd2}}>Spec</div>
                         {[["Fuel","spec.fuel",C.purple],["Ice Class","spec.iceClass",C.blue],["Last Cargo","spec.lastCargo",C.dim]].map(([l,f,col])=>{
                           const val=f.startsWith("spec.")?(selV.spec||{})[f.split(".")[1]]:selV[f];
                           return(
@@ -3945,7 +3949,7 @@ const filtV=useMemo(()=>{
           </div>
         )}
         {tab==="dash"&&(
-          <Suspense fallback={<TabFallback/>}><Dashboard vessels={vessels} cargoes={cargoes} history={history||[]}/></Suspense>
+          <Suspense fallback={<TabFallback/>}><Dashboard vessels={vessels} cargoes={cargoes} history={history||[]} onImportFixingWindow={handleImportFixingWindow}/></Suspense>
         )}
         {tab==="notes"&&(
           <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
@@ -3970,7 +3974,7 @@ const filtV=useMemo(()=>{
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
           </div>
         )}
-        {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={reportCargoes}/></Suspense></div>}
+        {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={reportCargoes} dashboardFixingImport={dashboardFixingImport} onDashboardFixingImportHandled={()=>setDashboardFixingImport(null)}/></Suspense></div>}
         {tab==="map"&&<Suspense fallback={<TabFallback/>}><FreightMapTab/></Suspense>}
       </TabErrorBoundary>
       </div>
