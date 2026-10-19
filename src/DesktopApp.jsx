@@ -1176,57 +1176,6 @@ function AddCargoModal({onSave,onClose}){
   );
 }
 
-const CLIENT_POSITION_COLUMNS = [
-  {key:"vessel",label:"Vessel",get:v=>v.vessel},
-  {key:"dwt",label:"DWT",get:v=>v.dwt},
-  {key:"cbm",label:"CBM",get:v=>v.cbm},
-  {key:"openPort",label:"Port",get:v=>v.openPort},
-  {key:"date",label:"Date",get:v=>v.date},
-  {key:"comment",label:"Comment",get:v=>v.comment},
-  {key:"operator",label:"Operator",get:v=>v.operator},
-  {key:"built",label:"Built",get:v=>v.built},
-  {key:"coating",label:"Coating",get:v=>v.coating},
-  {key:"loa",label:"LOA",get:v=>v.loa},
-  {key:"beam",label:"Beam",get:v=>v.beam},
-  {key:"tag",label:"Tag",get:v=>v.tag},
-];
-function ClientPositionCopy({vessels}){
-  const [open,setOpen]=React.useState(false);
-  const [keys,setKeys]=React.useState(["vessel","dwt","cbm","openPort","date","comment"]);
-  const [done,setDone]=React.useState(false);
-  const [fallback,setFallback]=React.useState("");
-  const chosen=keys.map(k=>CLIENT_POSITION_COLUMNS.find(c=>c.key===k)).filter(Boolean);
-  const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-  const value=(v,c)=>String(c.get(v)??"").trim();
-  function toggle(k){setKeys(old=>old.includes(k)?old.filter(x=>x!==k):CLIENT_POSITION_COLUMNS.filter(c=>old.includes(c.key)||c.key===k).map(c=>c.key));}
-  async function copy(){
-    if(!chosen.length||!vessels.length)return;
-    const text=[chosen.map(c=>c.label).join("\t"),...vessels.map(v=>chosen.map(c=>value(v,c).replace(/\s+/g," ")).join("\t"))].join("\n");
-    const html='<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;color:#1b2b3b"><thead><tr>'+chosen.map(c=>'<th style="background:#173454;color:#fff;border:1px solid #b8c8d8;padding:7px 10px;text-align:left">'+esc(c.label)+'</th>').join('')+'</tr></thead><tbody>'+vessels.map((v,i)=>'<tr>'+chosen.map(c=>'<td style="border:1px solid #cbd5e1;padding:6px 10px;background:'+(i%2?'#f0f5fa':'#fff')+'">'+esc(value(v,c))+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
-    try{
-      if(navigator.clipboard?.write&&window.ClipboardItem){await navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([html],{type:'text/html'}),'text/plain':new Blob([text],{type:'text/plain'})})]);}
-      else if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(text);}
-      else throw new Error('Clipboard unavailable');
-      setDone(true);setTimeout(()=>setDone(false),2200);setOpen(false);
-    }catch(e){setFallback(text);}
-  }
-  const buttonStyle={background:"rgba(58,130,246,.1)",border:"1px solid rgba(88,166,255,.3)",borderRadius:4,color:"#8cc8ff",fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer",fontFamily:"inherit"};
-  return <>
-    <button onClick={()=>setOpen(true)} style={{...buttonStyle,whiteSpace:"nowrap"}}>Copy for Email</button>
-    {open&&<div onMouseDown={e=>{if(e.target===e.currentTarget)setOpen(false)}} style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center",padding:14}}>
-      <div style={{width:500,maxWidth:"95vw",background:"#0c1729",border:"1px solid rgba(88,166,255,.35)",borderRadius:9,padding:18,boxShadow:"0 15px 50px #0009",color:"#d9e9ff"}}>
-        <div style={{fontSize:15,fontWeight:700,marginBottom:5}}>Copy Positions for Email</div>
-        <div style={{fontSize:11,color:"#8aa5c9",marginBottom:14}}>{vessels.length} filtered vessel{vessels.length===1?"":"s"} · Select columns to include (in displayed order)</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:7}}>{CLIENT_POSITION_COLUMNS.map(c=><label key={c.key} style={{display:"flex",gap:7,alignItems:"center",fontSize:12,cursor:"pointer",background:keys.includes(c.key)?"#172b47":"#101d30",padding:"7px 9px",borderRadius:4,border:"1px solid rgba(88,166,255,.18)"}}><input type="checkbox" checked={keys.includes(c.key)} onChange={()=>toggle(c.key)}/>{c.label}</label>)}</div>
-        <div style={{fontSize:11,color:"#8aa5c9",marginTop:12}}>Columns: {chosen.map(c=>c.label).join(" | ")||"None selected"}</div>
-        <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:17}}><button onClick={()=>setOpen(false)} style={buttonStyle}>Cancel</button><button disabled={!keys.length||!vessels.length} onClick={copy} style={{...buttonStyle,background:"#194c83",color:"white",opacity:keys.length&&vessels.length?1:.4}}>Copy table</button></div>
-      </div>
-    </div>}
-    {fallback&&<div style={{position:"fixed",inset:0,zIndex:9999,background:"#000b",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"#0c1729",padding:18,border:"1px solid #396ba0",borderRadius:8,width:550,maxWidth:"94vw"}}><div style={{fontSize:12,color:"#8cc8ff",marginBottom:8}}>Select all and copy (Ctrl+A, Ctrl+C)</div><textarea autoFocus readOnly onFocus={e=>e.target.select()} value={fallback} style={{width:"100%",height:240,boxSizing:"border-box",background:"#081222",color:"white"}}/><button onClick={()=>{setFallback("");setOpen(false)}} style={{...buttonStyle,marginTop:10}}>Close</button></div></div>}
-    {done&&<span style={{fontSize:11,color:"#43e97b"}}>Copied!</span>}
-  </>;
-}
-
 function CopyPositionsButton({filtV,fmtDateShort}){
   const [copied,setCopied]=React.useState(false);
   const [fallbackText,setFallbackText]=React.useState(null);
@@ -3399,7 +3348,6 @@ const filtV=useMemo(()=>{
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
                   <CopyPositionsButton filtV={filtV} fmtDateShort={fmtDateShort}/>
-                  <ClientPositionCopy vessels={filtV}/>
                   {selVessels.size>0&&(
                     <>
                       <button
