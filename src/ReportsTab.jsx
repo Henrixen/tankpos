@@ -1921,7 +1921,7 @@ Any direction`}</pre>
           <div style={{ flex: 1, minHeight: 0, display: "flex", overflow: "hidden" }}>
 
           {/* Scrollable report area — sized to its content, not stretched, so the vessel table sits right next to it with no gap */}
-          <div style={{ flex: `0 0 ${positionPreviewWidth + 24}px`, minWidth: 0, minHeight: 0, overflowY: "auto", overflowX: "auto", padding: 12 }}>
+          <div style={{ flex: `0 0 ${positionPreviewWidth + 24}px`, minWidth: 0, minHeight: 0, overflowY: reportVessels.length ? "auto" : "hidden", overflowX: "auto", padding: 12 }}>
             {/* Captured node — entire report */}
             <div ref={previewRef} className="pos-print" style={{ background: "#070f1c", fontFamily: "Inter,system-ui,sans-serif", width: positionPreviewWidth, border: "1px solid rgba(88,166,255,0.2)", borderRadius: 8, overflow: "hidden" }}>
               {/* Date bar */}
@@ -2176,7 +2176,7 @@ Any direction`}</pre>
         </>}
 
         {section === "market" && (
-          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: reportType ? "auto" : "hidden", scrollbarWidth: reportType === "Intermediate" && !fixtures.length && !quotes.length && !commentary.trim() ? "none" : "auto", padding: 12, display: "flex", flexDirection: "column", gap: 12 }}>
             {!reportType ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1 }}>
                 <div style={{ textAlign: "center", color: C.dim }}>
