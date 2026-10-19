@@ -32,7 +32,7 @@ export default function TankPos(){
     let from = 0;
     const pageSize = 1000;
     while(true){
-      const {data, error} = await supabase.from("vessels_db").select("vessel,dwt,built,loa,beam,cbm,ice_class,fuel,operator").range(from, from+pageSize-1);
+      const {data, error} = await supabase.from("vessels_db").select("*").range(from, from+pageSize-1);
       if(error || !data || data.length === 0) break;
       allRows = [...allRows, ...data];
       if(data.length < pageSize) break;
@@ -40,6 +40,14 @@ export default function TankPos(){
     }
     const map = {};
     allRows.forEach(r => { if(r.vessel) map[r.vessel.toLowerCase().trim()] = r; });
+    // Fill missing coating from vessel master without replacing manual values.
+    // The vessel master can expose coating under several column names.
+    setVessels(prev => prev.map(v => {
+      if (String(v.coating || "").trim()) return v;
+      const master = map[String(v.vessel || "").toLowerCase().trim()];
+      const coating = master?.coating_type_2 || master?.coating || master?.coated || master?.coating_type || "";
+      return coating ? {...v, coating} : v;
+    }));
     setVesselDB(map);
     window.vesselDB = map;
     setVesselDBLoaded(true);
@@ -338,7 +346,10 @@ export default function TankPos(){
     setVessels(prev => {
       const before = prev.length;
       // We pass nowIso into the local state so the UI updates immediately
-      const next = mergeVessels(prev, parsed.map(p => ({ ...p, fileDate: nowIso })), vdb);
+      const next = mergeVessels(prev, parsed.map(p => {
+        const master = vdb[String(p.vessel || "").toLowerCase().trim()];
+        return {...p, coating: p.coating || master?.coating_type_2 || master?.coating || master?.coated || master?.coating_type || "", fileDate: nowIso};
+      }), vdb);
       r = { 
         added: next.length - before, 
         updated: parsed.length - Math.max(0, next.length - before), 
@@ -350,7 +361,9 @@ export default function TankPos(){
     });
 
     const rows = parsed.map(v => {
-      const ev = enrichV(v, vdb);
+      const base = enrichV(v, vdb);
+      const master = vdb[String(v.vessel || "").toLowerCase().trim()];
+      const ev = {...base, coating: base.coating || master?.coating_type_2 || master?.coating || master?.coated || master?.coating_type || ""};
       
       // Spec data is already in v.spec from ParsePanel OR look it up in vesselDB
       const vesselKey = ev.vessel?.toUpperCase();
