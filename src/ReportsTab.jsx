@@ -1159,10 +1159,10 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const fixtureId = (f, i) => String(f._reportExportId || `legacy-${i}`);
   const chartererKey = v => String(v || "").trim().toUpperCase().replace(/\s+/g, " ");
   const reportCharterers = [...new Set(fixtures.map(f => chartererKey(f.charterer)).filter(Boolean))].sort();
+  const chartererIsExcluded = f => excludedCharterers.includes(chartererKey(f.charterer)) || (!!recipientCharterer && chartererKey(f.charterer) === recipientCharterer);
+  const fixtureIsIncluded = (f, i) => !excludedFixtureIds.includes(fixtureId(f, i)) && !chartererIsExcluded(f);
   const visibleExportFixtures = fixtures.filter((f, i) =>
-    !excludedFixtureIds.includes(fixtureId(f, i)) &&
-    !excludedCharterers.includes(chartererKey(f.charterer)) &&
-    (!recipientCharterer || chartererKey(f.charterer) !== recipientCharterer)
+    fixtureIsIncluded(f, i)
   );
   const toggleExcluded = (setter, value) => setter(p => p.includes(value) ? p.filter(x => x !== value) : [...p, value]);
   const exportCheckboxStyle = {width:14,height:14,accentColor:"#377dc8",cursor:"pointer"};
@@ -2304,7 +2304,7 @@ Any direction`}</pre>
                   {editMarketHeading("benchmark",{fontSize:12,fontWeight:700,color:"#79c0ff",textTransform:"uppercase",letterSpacing:"0.05em"})}
                   <div className="no-export" style={{ display: "flex", alignItems: "center", gap: 15,flexWrap:"wrap" }}>
                     {benchmarkRefreshStatus && <span style={{ fontSize: 10, color: C.dim }}>{benchmarkRefreshStatus}</span>}
-                    {emailSectionTick("rates")}<label style={{fontSize:10,color:C.dim,display:"inline-flex",alignItems:"center",gap:6,marginLeft:20,cursor:"pointer"}}><span role="checkbox" tabIndex={0} aria-checked={routeColumns.lastWeek} onKeyDown={e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();setRouteColumns(p=>({...p,lastWeek:!p.lastWeek}));}}} style={{width:14,height:14,display:"inline-flex",alignItems:"center",justifyContent:"center",background:routeColumns.lastWeek?"#225c9d":"#10213b",border:"1px solid #5d789d",borderRadius:3,color:"#fff",fontSize:11,fontWeight:800}}>{routeColumns.lastWeek?"✓":""}</span> Last week</label><label style={{fontSize:10,color:C.dim,display:"inline-flex",alignItems:"center",gap:6,marginLeft:16,cursor:"pointer"}}><span role="checkbox" tabIndex={0} aria-checked={routeColumns.comment} onKeyDown={e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();setRouteColumns(p=>({...p,comment:!p.comment}));}}} style={{width:14,height:14,display:"inline-flex",alignItems:"center",justifyContent:"center",background:routeColumns.comment?"#225c9d":"#10213b",border:"1px solid #5d789d",borderRadius:3,color:"#fff",fontSize:11,fontWeight:800}}>{routeColumns.comment?"✓":""}</span> Comment</label>
+                    {emailSectionTick("rates")}{[ ["lastWeek", "Last week"], ["comment", "Comment"] ].map(([key, caption]) => <label key={key} style={{fontSize:10,color:C.dim,display:"inline-flex",alignItems:"center",gap:6,marginLeft:key==="lastWeek"?20:16,cursor:"pointer"}}><input type="checkbox" checked={!!routeColumns[key]} onChange={e=>setRouteColumns(p=>({...p,[key]:e.target.checked}))} style={exportCheckboxStyle}/>{caption}</label>)}
                     <button className="no-export" onClick={()=>setBenchmarkRows(p=>[...p,{key:"custom-"+Date.now(),label:"New route",from:"",to:"",freight:"",lastWeek:"",tce:null,tceLastWeek:null,manualTce:"",override:true}])} style={{...SB,background:C.bg3,color:C.blue,border:"1px solid "+C.bd}}>+ Add route</button>
                     <button onClick={refreshBenchmarkFromSaved} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim, fontSize: 10 }}>↻ Refresh from saved</button>
                   </div>
@@ -2420,15 +2420,15 @@ Any direction`}</pre>
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 640 }}>
                       <thead><tr>
-                        <th className="no-export" style={{padding:"5px 6px",width:24}} title="Include all fixtures"><input type="checkbox" aria-label="Include all fixtures in email" style={exportCheckboxStyle} checked={fixtures.length>0 && fixtures.every((f,i)=>!excludedFixtureIds.includes(fixtureId(f,i)))} onChange={e=>setExcludedFixtureIds(e.target.checked?[]:fixtures.map(fixtureId))}/></th>
+                        <th className="no-export" style={{padding:"5px 6px",width:24}} title="Include all fixtures"><input type="checkbox" aria-label="Include all fixtures in email" style={exportCheckboxStyle} checked={fixtures.length>0 && fixtures.every((f,i)=>fixtureIsIncluded(f,i))} onChange={e=>setExcludedFixtureIds(e.target.checked?[]:fixtures.map((f,i)=>fixtureId(f,i)))}/></th>
                         {["Vessel", "Charterer", "Cargo", "Load", "Disch", "From", "To", "Freight", ""].map((h,hi) => (
                           <th key={h} onClick={()=>h&&toggleFixtureSort(["vessel","charterer","cargo","load","disch","laycanFrom","laycanTo","freight"][hi])} style={{ padding: "5px 8px", textAlign: "left", fontSize: 9, fontWeight: 700, color: C.dim, textTransform: "uppercase",cursor:h?"pointer":"default" }}>{h}{fixtureSort.key===["vessel","charterer","cargo","load","disch","laycanFrom","laycanTo","freight"][hi]?(fixtureSort.dir===1?" ▲":" ▼"):""}</th>
                         ))}
                       </tr></thead>
                       <tbody>
                         {sortedFixtures.map((f, displayIndex) => {const i=fixtures.indexOf(f);return (
-                          <tr key={i} style={{ borderTop: "1px solid " + C.bd }}>
-                            <td className="no-export" style={{padding:"3px 6px"}}><input type="checkbox" aria-label={`Include ${f.vessel || f.charterer || "fixture"} in email`} style={exportCheckboxStyle} checked={!excludedFixtureIds.includes(fixtureId(f,i))} onChange={()=>toggleExcluded(setExcludedFixtureIds,fixtureId(f,i))}/></td>
+                          <tr key={i} style={{ borderTop: "1px solid " + C.bd, opacity: fixtureIsIncluded(f,i)?1:0.42 }}>
+                            <td className="no-export" style={{padding:"3px 6px"}}><input type="checkbox" aria-label={`Include ${f.vessel || f.charterer || "fixture"} in email`} style={exportCheckboxStyle} checked={fixtureIsIncluded(f,i)} disabled={chartererIsExcluded(f)} title={chartererIsExcluded(f)?"Excluded by charterer filter / recipient selection":"Include in email"} onChange={()=>toggleExcluded(setExcludedFixtureIds,fixtureId(f,i))}/></td>
                             {["vessel", "charterer", "cargo", "load", "disch", "laycanFrom", "laycanTo", "freight"].map(field => (
                               <td key={field} style={{ padding: "3px 5px" }}>
                                 {field === "freight" ? (
