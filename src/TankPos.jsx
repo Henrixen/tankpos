@@ -311,18 +311,23 @@ export default function TankPos(){
     } finally { if (saveQueueRef.current.get(key) === task) saveQueueRef.current.delete(key); }
   }, []);
 
-  // Universal cargo updater — optimistic local update + Supabase write
+  // Cargo edits: confirm the database write before showing the new value.
   const updateC=useCallback(async(id,field,value)=>{
+    const dbValue=(field==="from"||field==="to")?toISODate(value):value;
+    const {data,error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id).select("id");
+    if(error||!data?.length){
+      const message=error?.message||"No row was updated (check Supabase RLS permissions).";
+      console.error("Cargo save FAILED",{id,field,value,error});
+      alert(`Cargo NOT saved (${field}): ${message}`);
+      throw error||new Error(message);
+    }
     const displayValue=(field==="from"||field==="to")?(() => {
-      const iso=toISODate(value);
-      if(!iso) return value;
-      const dt=new Date(iso);
+      if(!dbValue)return "";
+      const dt=new Date(dbValue+"T12:00:00");
       return dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
     })():value;
-    setCargoes(prev=>prev.map(c=>c.id===id?{...c,[field]:displayValue}:c));
-    const dbValue=(field==="from"||field==="to")?toISODate(value):value;
-    const{error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id);
-    if(error)console.error(error);
+    setCargoes(prev=>prev.map(c=>String(c.id)===String(id)?{...c,[field]:displayValue}:c));
+    return true;
   },[]);
 
   const addVessels = useCallback(async (parsed) => {
@@ -414,45 +419,30 @@ export default function TankPos(){
   }, [addVessels]);
 
   const addCargoes=useCallback(async(parsed)=>{
-    const stamped=parsed.map((f,i)=>normaliseCargo({
+    const stamped=parsed.map((f,i)=>({
       ...f,
-      entered_by: f.entered_by || (localStorage.getItem("signal_user") || "H"),
-      id: f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
-      updated: new Date().toISOString(),
+      entered_by:f.entered_by||(localStorage.getItem("signal_user")||"H"),
+      id:f.id||("c_"+Date.now()+"_"+i+"_"+Math.random().toString(36).slice(2,6)),
+      updated:new Date().toISOString(),
     }));
-    // Dedup by id and by charterer+load+disch+from
-    let added=0;
-    setCargoes(prev=>{
-      const existingIds=new Set(prev.map(c=>c.id));
-      const toAdd=stamped.filter(f=>{
-        if(existingIds.has(f.id))return false;
-        if(f.charterer&&f.load&&f.from){
-  const dupIdx=prev.findIndex(e=>
-    (e.charterer||"").toLowerCase()===(f.charterer||"").toLowerCase()&&
-    (e.load||"").toLowerCase()===(f.load||"").toLowerCase()&&
-    (e.from||"")===(f.from||"")
-  );
-  if(dupIdx>=0){
-    // Update existing record instead of adding new
-    prev[dupIdx]={...prev[dupIdx],...f};
-    return false;
-  }
-}
-        return true;
-      });
-      added=toAdd.length;
-      return [...prev,...toAdd];
-    });
-    // Write new rows to Supabase
-    if(stamped.length>0){
-      const rows=stamped.map(c=>({...c,from:toISODate(c.from),to:toISODate(c.to)}));
-      console.log("upserting cargo ids:", rows.map(r=>r.id));
-      const{error}=await supabase.from("cargoes").upsert(rows,{onConflict:"id"});
-      if(error)console.error("cargo upsert error:",error);
+    if(!stamped.length)return 0;
+    const rows=stamped.map(c=>({...c,intelligence:c.intelligence||null,from:toISODate(c.from),to:toISODate(c.to)}));
+    const {data,error}=await supabase.from("cargoes").upsert(rows,{onConflict:"id"}).select("*");
+    if(error||!data?.length){
+      const message=error?.message||"Supabase did not confirm any saved cargo rows.";
+      console.error("Cargo import NOT saved",error,rows);
+      alert("Cargo import NOT saved: "+message);
+      throw error||new Error(message);
     }
-    setVessels(prev=>{const next=prev.map(v=>{const fix=stamped.find(f=>f.vessel&&f.vessel.toLowerCase()===v.vessel.toLowerCase());if(fix&&fix.status==="FIXED"){return{...v,openPort:"EMPLOYED"};}return v;});saveV(next);return next;});
-    return added;
-  },[]);
+    const saved=data.map(normaliseCargo);
+    setCargoes(prev=>{
+      const byId=new Map(prev.map(c=>[String(c.id),c]));
+      for(const c of saved)byId.set(String(c.id),c);
+      return [...byId.values()];
+    });
+    setCargoTotal(prev=>prev+saved.filter(c=>!cargoes.some(old=>String(old.id)===String(c.id))).length);
+    return saved.length;
+  },[cargoes]);
 
   const addV=useCallback(async(v)=>{
     const imo = String(v.imoNo || v.imo_no || "").trim();
@@ -482,12 +472,25 @@ export default function TankPos(){
     if(error) console.error("Add vessel error:",error);
   },[vesselDB]);
   const addC=useCallback(async(c)=>{
-    const norm=normaliseCargo({...c,entered_by:c.entered_by||(localStorage.getItem("signal_user")||"H"),id:c.id||("c_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),updated:c.updated||new Date().toISOString()});
-    setCargoes(prev=>[...prev,norm]);
-    const row={...norm,from:toISODate(norm.from),to:toISODate(norm.to)};
-    const{error}=await supabase.from("cargoes").upsert([row],{onConflict:"id"});
-    if(error)console.error(error);
-    if(norm.status==="FIXED"&&norm.vessel&&norm.disch){setVessels(prev=>{const next=prev.map(v=>v.vessel?.toLowerCase()!==norm.vessel.toLowerCase()?v:{...v,openPort:norm.disch});saveV(next);return next;});}
+    const row={...c,
+      entered_by:c.entered_by||(localStorage.getItem("signal_user")||"H"),
+      id:c.id||("c_"+Date.now()+"_"+Math.random().toString(36).slice(2,6)),
+      updated:c.updated||new Date().toISOString(),
+      intelligence:c.intelligence||null,
+      from:toISODate(c.from),to:toISODate(c.to)
+    };
+    const {data,error}=await supabase.from("cargoes").upsert([row],{onConflict:"id"}).select("*");
+    if(error||!data?.length){
+      const message=error?.message||"Supabase did not confirm the new cargo.";
+      console.error("New cargo NOT saved",error,row);
+      alert("Cargo NOT saved: "+message);
+      throw error||new Error(message);
+    }
+    const saved=normaliseCargo(data[0]);
+    setCargoes(prev=>[saved,...prev.filter(x=>String(x.id)!==String(saved.id))]);
+    setCargoTotal(prev=>prev+1);
+    if(saved.status==="FIXED"&&saved.vessel&&saved.disch){setVessels(prev=>{const next=prev.map(v=>v.vessel?.toLowerCase()!==saved.vessel.toLowerCase()?v:{...v,openPort:saved.disch});saveV(next);return next;});}
+    return saved;
   },[]);
   const delV = useCallback(async(name)=>{
   setVessels(prev=>{
