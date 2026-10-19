@@ -186,7 +186,7 @@ export default function TankPos(){
   try {
     const {data: overrides, error: overrideError} = await supabase
       .from("vessel_overrides")
-      .select("imo_no,vessel_name,operator,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo,tag");
+      .select("imo_no,vessel_name,operator,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo,tag,tags,open_date,open_port,comment");
     if (overrideError) console.warn("vessel_overrides load:", overrideError);
     if (overrides?.length) {
       const byImo = {}, byName = {};
