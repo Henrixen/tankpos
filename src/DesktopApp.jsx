@@ -2571,7 +2571,7 @@ const filtV=useMemo(()=>{
   { key: "loa",       sortKey:"loa",       label: "LOA",           align:"left", width: colWidthsV.LOA },
   { key: "beam",      sortKey:"beam",      label: "Beam",        align:"right", width: colWidthsV.Beam },
   { key: "cbm",       sortKey:"cbm",       label: "CBM",           align:"left", width: colWidthsV.CBM },
-  { key: "date",      sortKey:"date",      label: "Date",        align:"center", width: colWidthsV.Date },
+  { key: "date",      sortKey:"date",      label: "Date",        align:"left", width: colWidthsV.Date },
   { key: "openPort",  sortKey:"openPort",  label: "Open Port", width: colWidthsV.OpenPort },
   { key: "comment",   sortKey:"comment",   label: "Comment",  width: colWidthsV.Comment },
   { key: "updatedAt", sortKey:"fileDate",  label: "Updated", align:"center", width: colWidthsV.FileDate },
@@ -2592,7 +2592,7 @@ const filtV=useMemo(()=>{
     { key:"built",    sortKey:"built",    label:"Blt",     align:"left", width:36 },
     { key:"dwt",      sortKey:"dwt",      label:"DWT",     align:"left", width:48 },
     { key:"coating",  sortKey:"coating",  label:"Coat",    width:44 },
-    { key:"date",     sortKey:"date",     label:"Date",    align:"center", width:44 },
+    { key:"date",     sortKey:"date",     label:"Date",    align:"left", width:44 },
     { key:"openPort", sortKey:"openPort", label:"Port",    width:80 },
     { key:"comment",  sortKey:"comment",  label:"Comment", width:90 },
     { key:"tag",      label:"Tag",        align:"center",  width:50 },
@@ -3639,7 +3639,7 @@ const filtV=useMemo(()=>{
 
       <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.built || ""}</td>
       <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtDwtFull(v.dwt)}</td>
-      <td style={{ ...tdTxt, color: C.dim }} title={v.coating||""}>{fmtCoating(v.coating)}</td>
+      <td style={{ ...tdTxt, color: C.dim }} title={v.coating||v.spec?.coated||""}>{fmtCoating(v.coating||v.spec?.coated)}</td>
       {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.loa || ""}</td>}
       {!mobile && <td style={{ ...tdNum, color: C.dim }}>{v.beam || ""}</td>}
       {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtDwtFull(v.cbm)}</td>}
