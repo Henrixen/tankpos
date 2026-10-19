@@ -311,24 +311,38 @@ export default function TankPos(){
     } finally { if (saveQueueRef.current.get(key) === task) saveQueueRef.current.delete(key); }
   }, []);
 
-  // Cargo edits: confirm the database write before showing the new value.
-  const updateC=useCallback(async(id,field,value)=>{
+  // Cargo edits: optimistic rendering, serialized writes per cell, and safe rollback.
+  // Supabase remains authoritative, but the editor never waits for the network to paint.
+  const cargoCellQueueRef=useRef(new Map());
+  const updateC=useCallback((id,field,value)=>{
+    const key=String(id)+":"+field;
     const dbValue=(field==="from"||field==="to")?toISODate(value):value;
-    const {data,error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id).select("id");
-    if(error||!data?.length){
-      const message=error?.message||"No row was updated (check Supabase RLS permissions).";
-      console.error("Cargo save FAILED",{id,field,value,error});
-      alert(`Cargo NOT saved (${field}): ${message}`);
-      throw error||new Error(message);
-    }
     const displayValue=(field==="from"||field==="to")?(() => {
       if(!dbValue)return "";
       const dt=new Date(dbValue+"T12:00:00");
       return dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
     })():value;
-    setCargoes(prev=>prev.map(c=>String(c.id)===String(id)?{...c,[field]:displayValue}:c));
-    return true;
-  },[]);
+    const previous=cargoes.find(c=>String(c.id)===String(id))?.[field];
+    setCargoes(prev=>prev.map(c=>{
+      if(String(c.id)!==String(id))return c;
+      return {...c,[field]:displayValue};
+    }));
+    const preceding=cargoCellQueueRef.current.get(key)||Promise.resolve();
+    const task=preceding.catch(()=>{}).then(async()=>{
+      const {data,error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id).select("id");
+      if(error||!data?.length){
+        const message=error?.message||"No row was updated (check Supabase RLS permissions).";
+        console.error("Cargo save FAILED",{id,field,value,error});
+        setCargoes(prev=>prev.map(c=>String(c.id)===String(id)&&c[field]===displayValue?{...c,[field]:previous}:c));
+        alert(`Cargo NOT saved (${field}): ${message}`);
+        throw error||new Error(message);
+      }
+      return true;
+    });
+    cargoCellQueueRef.current.set(key,task);
+    task.finally(()=>{if(cargoCellQueueRef.current.get(key)===task)cargoCellQueueRef.current.delete(key);}).catch(()=>{});
+    return task;
+  },[cargoes]);
 
   const addVessels = useCallback(async (parsed) => {
     const vdb = window.vesselDB || vesselDB;
