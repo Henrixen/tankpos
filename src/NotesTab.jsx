@@ -54,8 +54,22 @@ function pasteNoteContent(e,onImage){
   if(text)document.execCommand("insertText",false,text.replace(/\r\n?/g,"\n"));
 }
 
+// Highlight only the selected text in an editable note; stored as HTML with the note.
+const HIGHLIGHT_COLORS=[{label:"Yellow",value:"#ffe066"},{label:"Green",value:"#98f5a0"},{label:"Orange",value:"#ffbd69"},{label:"Pink",value:"#ff9bc2"},{label:"Blue",value:"#8bd5ff"}];
+function highlightSelection(color){
+  const selection=window.getSelection();
+  if(!selection||selection.isCollapsed||!selection.rangeCount)return false;
+  const range=selection.getRangeAt(0);
+  const editable=range.commonAncestorContainer.nodeType===1?range.commonAncestorContainer:range.commonAncestorContainer.parentElement;
+  if(!editable?.closest?.('[contenteditable="true"]'))return false;
+  document.execCommand("styleWithCSS",false,true);
+  document.execCommand("hiliteColor",false,color);
+  document.execCommand("styleWithCSS",false,false);
+  return true;
+}
+
 // ── Toolbar ──────────────────────────────────────────────────────────────────
-function Toolbar({onInsertTable}){
+function Toolbar({onInsertTable,onHighlight}){
   const btn=(label,action)=>(
     <button key={action+label} onMouseDown={e=>{e.preventDefault();applyFmt(action);}} style={{
       background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
@@ -67,6 +81,11 @@ function Toolbar({onInsertTable}){
   return(
     <div style={{display:"flex",gap:4,padding:0,borderBottom:"none",background:"transparent",flexWrap:"nowrap",alignItems:"center"}}>
       {btn("\u2022 List","insertUnorderedList")}{btn("1. List","insertOrderedList")}
+      <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px",height:14}}/>
+      <span style={{fontSize:10,color:"rgba(160,200,255,.65)",whiteSpace:"nowrap"}}>Mark</span>
+      {HIGHLIGHT_COLORS.map(c=><button key={c.label} title={"Highlight selected text: "+c.label}
+        onMouseDown={e=>{e.preventDefault();if(highlightSelection(c.value))onHighlight?.();}}
+        style={{width:15,height:15,flexShrink:0,borderRadius:"50%",background:c.value,border:"1px solid rgba(255,255,255,.35)",cursor:"pointer",padding:0}}/>)}
       <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px",height:14}}/>
       <button onMouseDown={e=>{e.preventDefault();onInsertTable&&onInsertTable();}} style={{
         background:"transparent",border:"1px solid rgba(58,130,246,0.12)",borderRadius:3,
@@ -929,7 +948,7 @@ export default function NotesTab(){
           </div>
 
           {/* Toolbar */}
-          <Toolbar onInsertTable={()=>setShowTblPicker(true)}/>
+          <Toolbar onInsertTable={()=>setShowTblPicker(true)} onHighlight={scheduleSave}/>
 
           {/* Body */}
           <div ref={bodyRef} className="notes-plain-content" contentEditable suppressContentEditableWarning
