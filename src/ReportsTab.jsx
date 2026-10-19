@@ -420,6 +420,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [builtRange, setBuiltRange] = useState({ min: "", max: "" });
   const [dateFilter, setDateFilter] = useState("all");
   const [poolSearch, setPoolSearch] = useState("");
+  const [vesselPoolPage, setVesselPoolPage] = useState(1);
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const [posPasteText, setPosPasteText] = useState("");
   const [posPasteOpen, setPosPasteOpen] = useState(false);
@@ -947,6 +948,13 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     const val = v => { const raw = v[field] ?? ""; if (field === "updatedAt") return new Date(raw || 0).getTime() || 0; if (field === "dwt" || field === "built") return Number(String(raw).replace(/[^0-9.]/g,"")) || 0; if (field === "date") { const t = Date.parse(raw); return Number.isFinite(t) ? t : String(raw).toLowerCase(); } return String(raw).toLowerCase(); };
     const av=val(a),bv=val(b); const cmp=typeof av === "number" && typeof bv === "number" ? av-bv : String(av).localeCompare(String(bv)); return (poolSort.desc ? -1 : 1)*cmp;
   }), [vesselPool,poolSort]);
+
+  // Pagination only affects the Add Vessels pool; filtering, sorting and Import all use the full result set.
+  const VESSEL_POOL_PAGE_SIZE = 200;
+  const vesselPoolPageCount = Math.max(1, Math.ceil(sortedVesselPool.length / VESSEL_POOL_PAGE_SIZE));
+  const currentVesselPoolPage = Math.min(vesselPoolPage, vesselPoolPageCount);
+  const pagedVesselPool = sortedVesselPool.slice((currentVesselPoolPage - 1) * VESSEL_POOL_PAGE_SIZE, currentVesselPoolPage * VESSEL_POOL_PAGE_SIZE);
+  useEffect(() => { setVesselPoolPage(1); }, [poolSearch, tagFilter, dateFilter, regionFilter, superRegionFilter, coatingFilter, segmentFilter, dwtFilter, dwtRange, builtFilter, builtRange, poolSort]);
 
   function renameBucketInline(bucket, rows, text) {
     const clean = String(text || "").trim();
@@ -2008,7 +2016,15 @@ Any direction`}</pre>
                 </button>
               )}
             </div>
-            <div key={poolSearch + "|" + [...tagFilter].sort().join(",") + "|" + dateFilter} style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 12px",borderBottom:"1px solid " + C.bd,flexShrink:0,fontSize:10,color:C.faint}}>
+              <span>{vesselPool.length ? `${(currentVesselPoolPage - 1) * VESSEL_POOL_PAGE_SIZE + 1}–${Math.min(currentVesselPoolPage * VESSEL_POOL_PAGE_SIZE, vesselPool.length)} of ${vesselPool.length}` : "0 vessels"} · 200 per page</span>
+              <div style={{display:"flex",alignItems:"center",gap:7}}>
+                <button disabled={currentVesselPoolPage <= 1} onClick={() => setVesselPoolPage(p => Math.max(1,p-1))} style={{...IS,padding:"3px 8px",cursor:currentVesselPoolPage<=1?"default":"pointer",opacity:currentVesselPoolPage<=1?.4:1}}>‹ Prev</button>
+                <span style={{whiteSpace:"nowrap"}}>{currentVesselPoolPage} / {vesselPoolPageCount}</span>
+                <button disabled={currentVesselPoolPage >= vesselPoolPageCount} onClick={() => setVesselPoolPage(p => Math.min(vesselPoolPageCount,p+1))} style={{...IS,padding:"3px 8px",cursor:currentVesselPoolPage>=vesselPoolPageCount?"default":"pointer",opacity:currentVesselPoolPage>=vesselPoolPageCount?.4:1}}>Next ›</button>
+              </div>
+            </div>
+            <div key={poolSearch + "|" + [...tagFilter].sort().join(",") + "|" + dateFilter + "|" + currentVesselPoolPage} style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
               {vesselPool.length === 0 ? (
                 <div style={{ padding: "24px 0", textAlign: "center", color: C.faint, fontSize: 11 }}>
                   {allVessels.length === 0 ? "Select vessels on Positions tab" : "No vessels match your search/tags"}
@@ -2026,7 +2042,7 @@ Any direction`}</pre>
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedVesselPool.map((v, i) => (
+                    {pagedVesselPool.map((v, i) => (
                       <tr key={(v.imoNo || v.vessel) + "_" + i} onClick={() => addFromPool(v)} className="pool-row"
                         style={{ cursor: "pointer", background: i % 2 === 0 ? "#101d30" : "#0b1626", borderBottom:"1px solid rgba(58,130,246,0.055)" }}>
                         <td style={{ padding: "6px 6px", fontWeight: 700, color: "#58b6ff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vessel}</td>
