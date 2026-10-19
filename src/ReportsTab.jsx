@@ -331,15 +331,25 @@ function reportNaturalCase(value){
   return s.toLowerCase().replace(/\b[a-z][a-z'-]*\b/g,w=>acronyms.has(w.toUpperCase())?w.toUpperCase():w[0].toUpperCase()+w.slice(1));
 }
 function reportFixtureFreight(value){
-  const raw=String(value??"").trim();if(!raw)return "";
-  const compact=raw.replace(/\s/g,"").replace(/^(?:USD|US\$|\$)/i,"").replace(/(?:LS|L\/S|LUMPSUM)$/i,"");
-  const suffix=compact.match(/^([\d.,]+)([kKmM])$/);
-  let amount;
-  if(suffix){const n=Number(suffix[1].replace(",","."));amount=n*(suffix[2].toLowerCase()==="m"?1000000:1000);}
-  else {const digits=compact.replace(/[^\d.,]/g,"");const cleaned=digits.includes(",")&&!digits.includes(".")&&/[,][0-9]{1,2}$/.test(digits)?digits.replace(",","."):digits.replace(/[\s,]/g,"");amount=Number(cleaned);}
-  if(!Number.isFinite(amount)||amount<=0)return raw;
-  const k=amount/1000;
-  return `USD ${Number(k.toFixed(2)).toLocaleString("en-GB",{maximumFractionDigits:2})}K LS`;
+  const raw=String(value??"").trim();
+  if(!raw)return "";
+  const stripped=raw.replace(/^(?:USD|US\$|\$)\s*/i,"").trim();
+  const perTon=/\b(?:PMT|P\/?MT|PER\s*(?:METRIC\s*)?TON(?:NE)?)\b/i.test(stripped);
+  const lumpSum=/\b(?:LS|L\/?S|LUMP\s*SUM)\b/i.test(stripped);
+  const compact=stripped.replace(/\b(?:PMT|P\/?MT|PER\s*(?:METRIC\s*)?TON(?:NE)?|LS|L\/?S|LUMP\s*SUM)\b/gi,"").replace(/\s/g,"").trim();
+  const match=compact.match(/^([\d.,]+)([kKmM]?)$/);
+  if(!match)return raw;
+  const [,digits,suffix]=match;
+  // Commas are decimal separators when followed by 1–2 digits; otherwise grouping.
+  const decimalComma=/,\d{1,2}$/.test(digits)&&!digits.includes(".");
+  const numeric=decimalComma?digits.replace(",","."):digits.replace(/,/g,"");
+  const n=Number(numeric);
+  if(!Number.isFinite(n)||n<=0)return raw;
+  const multiplier=suffix.toLowerCase()==="m"?1000000:suffix.toLowerCase()==="k"?1000:1;
+  const amount=n*multiplier;
+  const format=x=>Number(x.toFixed(2)).toLocaleString("de-DE",{maximumFractionDigits:2,useGrouping:false});
+  if(perTon || (!suffix&&!lumpSum&&amount<1000))return `USD ${format(amount)} PMT`;
+  return `USD ${format(amount/1000)}K LS`;
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -684,7 +694,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     vessel:c.vessel||"", charterer:c.charterer||"", cargo:c.cargo||"",
     load:c.load||c.loadPort||"", disch:c.disch||c.dischPort||"",
     laycanFrom:c.from||c.laycanFrom||"", laycanTo:c.to||c.laycanTo||"",
-    freight:c.freight||""
+    freight:reportFixtureFreight(c.freight)
   });
   async function confirmCargoImport() {
     if (!selectedCargoes?.length || cargoImportBusy) return;
@@ -695,7 +705,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         const {data,error} = await supabase.from("reports").select("*").eq("id",cargoImportChoice).single();
         if (error || !data) throw error || new Error("Saved report not found");
         await loadReport(cargoImportChoice);
-        setFixtures([...(Array.isArray(data.fixtures)?data.fixtures:[]),...incoming]);
+        setFixtures([...(Array.isArray(data.fixtures)?data.fixtures:[]).map(f=>({...f,freight:reportFixtureFreight(f.freight)})),...incoming]);
       } else {
         setActiveMarketReportId(null);
         setReportType("Intermediate");
@@ -1141,6 +1151,21 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const toggleFixtureSort = key=>setFixtureSort(p=>({key,dir:p.key===key?-p.dir:1}));
   const moveBenchmarkRow=(from,to)=>setBenchmarkRows(prev=>{if(to<0||to>=prev.length)return prev;const next=[...prev];next.splice(to,0,next.splice(from,1)[0]);return next;});
   const reportHeadingStyle={background:"#d8e7f8",color:"#0b2850",padding:"7px 10px",borderLeft:"4px solid #377dc8",fontWeight:800,fontSize:12,letterSpacing:"0.055em",textTransform:"uppercase"};
+  // Export-only visibility: keep the underlying fixtures and benchmark rows intact.
+  const [excludedFixtureIds, setExcludedFixtureIds] = useState([]);
+  const [excludedBenchmarkKeys, setExcludedBenchmarkKeys] = useState([]);
+  const [excludedCharterers, setExcludedCharterers] = useState([]);
+  const [recipientCharterer, setRecipientCharterer] = useState("");
+  const fixtureId = (f, i) => String(f._reportExportId || `legacy-${i}`);
+  const chartererKey = v => String(v || "").trim().toUpperCase().replace(/\s+/g, " ");
+  const reportCharterers = [...new Set(fixtures.map(f => chartererKey(f.charterer)).filter(Boolean))].sort();
+  const visibleExportFixtures = fixtures.filter((f, i) =>
+    !excludedFixtureIds.includes(fixtureId(f, i)) &&
+    !excludedCharterers.includes(chartererKey(f.charterer)) &&
+    (!recipientCharterer || chartererKey(f.charterer) !== recipientCharterer)
+  );
+  const toggleExcluded = (setter, value) => setter(p => p.includes(value) ? p.filter(x => x !== value) : [...p, value]);
+  const exportCheckboxStyle = {width:14,height:14,accentColor:"#377dc8",cursor:"pointer"};
   const [emailSections,setEmailSections] = useState({drivers:true,rates:true,tce:true,handy:true,fixtures:true,tceChart:false,fixingChart:false});
   const emailSectionTick = (key) => <label className="no-export" title="Toggle inclusion in exported report" style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,color:C.tx,cursor:"pointer",whiteSpace:"nowrap",marginLeft:"auto",fontWeight:500,textTransform:"none",letterSpacing:0}} onClick={()=>setEmailSections(p=>({...p,[key]:!p[key]}))}><span style={{width:14,height:14,display:"inline-flex",alignItems:"center",justifyContent:"center",background:emailSections[key]?"#225c9d":"#10213b",border:"1px solid #5d789d",borderRadius:3,color:"#fff",fontSize:11,fontWeight:800}}>{emailSections[key]?"✓":""}</span> Include</label>;
   const lightExportRef = useRef(null);
@@ -1231,7 +1256,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     try {
       const payload = { report_type: reportType, report_date: reportDate, commentary,
         rate_grid: { ...rateGrid, __marketEditor: { headings: marketHeadings, intermediateTitle,
-          benchmarks: benchmarkRows, drivers: driverBullets, tceStats, handy, handyCommentary, handySegments, importedFixingChart,routeColumns,routeTitles,intermediateRoutesLabel,marketHeadings } },
+          benchmarks: benchmarkRows, drivers: driverBullets, tceStats, handy, handyCommentary, handySegments, importedFixingChart,routeColumns,routeTitles,intermediateRoutesLabel,marketHeadings, excludedFixtureIds, excludedBenchmarkKeys, excludedCharterers, recipientCharterer } },
         tce_earnings: tceEarnings, fixtures, quotes };
       // Editing an existing saved report updates that exact row. New reports insert once.
       const query = activeMarketReportId
@@ -1255,6 +1280,10 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       setTceEarnings(data.tce_earnings && typeof data.tce_earnings==="object" ? data.tce_earnings : {}); setFixtures(Array.isArray(data.fixtures)?data.fixtures:[]); setQuotes(Array.isArray(data.quotes)?data.quotes:[]);
       const editor = data.rate_grid?.__marketEditor;
       setIntermediateTitle(editor?.intermediateTitle || "Intermediate Summary");
+      setExcludedFixtureIds(Array.isArray(editor?.excludedFixtureIds)?editor.excludedFixtureIds:[]);
+      setExcludedBenchmarkKeys(Array.isArray(editor?.excludedBenchmarkKeys)?editor.excludedBenchmarkKeys:[]);
+      setExcludedCharterers(Array.isArray(editor?.excludedCharterers)?editor.excludedCharterers:[]);
+      setRecipientCharterer(editor?.recipientCharterer || "");
       if (editor) {
         if (editor.headings) setMarketHeadings(p => ({...p,...editor.headings}));
         if (Array.isArray(editor.benchmarks)) setBenchmarkRows(editor.benchmarks);
@@ -1825,6 +1854,22 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                 ))}
               </div>
             )}
+            {reportType === "Intermediate" && <div style={{marginTop:16,paddingTop:12,borderTop:"1px solid "+C.bd}}>
+              <div style={{fontSize:10,fontWeight:800,color:C.tx,letterSpacing:"0.06em",marginBottom:6}}>CHARTERER TAG FILTER</div>
+              <div style={{fontSize:10,color:C.dim,marginBottom:8}}>Uncheck charterers to exclude their fixtures from the email report. The report data remains unchanged.</div>
+              <label style={{display:"block",fontSize:10,color:C.dim,marginBottom:4}}>Sending report to</label>
+              <select value={recipientCharterer} onChange={e=>setRecipientCharterer(e.target.value)} style={{width:"100%",padding:"7px 6px",marginBottom:8,background:C.bg3,color:C.tx,border:"1px solid "+C.bd,borderRadius:4}}>
+                <option value="">All clients / no automatic exclusion</option>
+                {reportCharterers.map(c=><option key={c} value={c}>{c}</option>)}
+              </select>
+              {recipientCharterer && <div style={{fontSize:10,color:C.blue,marginBottom:8}}>Automatically excluding {recipientCharterer}'s own fixtures.</div>}
+              <div style={{display:"flex",gap:8,marginBottom:7}}><button onClick={()=>setExcludedCharterers([])} style={{...SB,fontSize:10}}>All</button><button onClick={()=>setExcludedCharterers([...reportCharterers])} style={{...SB,fontSize:10}}>None</button></div>
+              {reportCharterers.map(c=><label key={c} style={{display:"flex",gap:7,alignItems:"center",padding:"4px 2px",fontSize:10,color:C.tx,cursor:"pointer"}}>
+                <input type="checkbox" style={exportCheckboxStyle} checked={!excludedCharterers.includes(c)} onChange={()=>toggleExcluded(setExcludedCharterers,c)}/><span>{c}</span>
+              </label>)}
+              {!reportCharterers.length && <div style={{fontSize:10,color:C.faint}}>Import fixtures to show charterers.</div>}
+              <div style={{fontSize:10,color:C.dim,marginTop:9}}>{visibleExportFixtures.length} of {fixtures.length} fixtures included</div>
+            </div>}
           </div>
         )}
 
@@ -2276,6 +2321,7 @@ Any direction`}</pre>
                       {benchmarkRows.map((r, i) => (
                         <tr key={r.key} style={{ borderTop: "1px solid " + C.bd, background: i % 2 === 0 ? C.bg3 : C.bg2 }}>
                           <td style={{ padding: "6px 10px", fontWeight: 700, color: C.tx }}><div style={{display:"flex",alignItems:"center",gap:5}}>
+                            <input className="no-export" type="checkbox" style={exportCheckboxStyle} aria-label={`Include ${r.label} benchmark in email`} checked={!excludedBenchmarkKeys.includes(String(r.key))} onChange={()=>toggleExcluded(setExcludedBenchmarkKeys,String(r.key))}/>
                             <input aria-label="Route name" className="rpt-edit" value={r.label} onChange={e=>setBenchmarkRows(p=>p.map(x=>x.key===r.key?{...x,label:e.target.value}:x))} style={{width:155,fontWeight:700,fontSize:12}} />
                             <span className="no-export" style={{display:"inline-flex",gap:2}}><button title="Move route up" onClick={()=>moveBenchmarkRow(i,i-1)} style={{border:0,background:"transparent",color:C.blue,cursor:"pointer"}}>↑</button><button title="Move route down" onClick={()=>moveBenchmarkRow(i,i+1)} style={{border:0,background:"transparent",color:C.blue,cursor:"pointer"}}>↓</button></span><button title="Remove benchmark row" onClick={()=>setBenchmarkRows(p=>p.filter(x=>x.key!==r.key))} style={{border:"none",background:"transparent",color:"#fb7185",cursor:"pointer"}}>×</button>
                           </div></td>
@@ -2374,6 +2420,7 @@ Any direction`}</pre>
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 640 }}>
                       <thead><tr>
+                        <th className="no-export" style={{padding:"5px 6px",width:24}} title="Include all fixtures"><input type="checkbox" aria-label="Include all fixtures in email" style={exportCheckboxStyle} checked={fixtures.length>0 && fixtures.every((f,i)=>!excludedFixtureIds.includes(fixtureId(f,i)))} onChange={e=>setExcludedFixtureIds(e.target.checked?[]:fixtures.map(fixtureId))}/></th>
                         {["Vessel", "Charterer", "Cargo", "Load", "Disch", "From", "To", "Freight", ""].map((h,hi) => (
                           <th key={h} onClick={()=>h&&toggleFixtureSort(["vessel","charterer","cargo","load","disch","laycanFrom","laycanTo","freight"][hi])} style={{ padding: "5px 8px", textAlign: "left", fontSize: 9, fontWeight: 700, color: C.dim, textTransform: "uppercase",cursor:h?"pointer":"default" }}>{h}{fixtureSort.key===["vessel","charterer","cargo","load","disch","laycanFrom","laycanTo","freight"][hi]?(fixtureSort.dir===1?" ▲":" ▼"):""}</th>
                         ))}
@@ -2381,6 +2428,7 @@ Any direction`}</pre>
                       <tbody>
                         {sortedFixtures.map((f, displayIndex) => {const i=fixtures.indexOf(f);return (
                           <tr key={i} style={{ borderTop: "1px solid " + C.bd }}>
+                            <td className="no-export" style={{padding:"3px 6px"}}><input type="checkbox" aria-label={`Include ${f.vessel || f.charterer || "fixture"} in email`} style={exportCheckboxStyle} checked={!excludedFixtureIds.includes(fixtureId(f,i))} onChange={()=>toggleExcluded(setExcludedFixtureIds,fixtureId(f,i))}/></td>
                             {["vessel", "charterer", "cargo", "load", "disch", "laycanFrom", "laycanTo", "freight"].map(field => (
                               <td key={field} style={{ padding: "3px 5px" }}>
                                 {field === "freight" ? (
@@ -2458,7 +2506,7 @@ Any direction`}</pre>
                         {routeColumns.comment&&<th style={{padding:"5px 8px",textAlign:"left",color:"#6b7280"}}>{routeTitles.comment}</th>}
                       </tr></thead>
                       <tbody>
-                        {benchmarkRows.map((r, i) => (
+                        {benchmarkRows.filter(r=>!excludedBenchmarkKeys.includes(String(r.key))).map((r, i) => (
                           <tr key={r.key} style={{ borderTop: "1px solid #d9e2ef" }}>
                             <td style={{ padding: "5px 8px", fontWeight: 700 }}>{r.label}</td>
                             <td style={{ padding: "5px 8px" }}>{r.freight ? fmtUSD(r.freight) : "—"} {r.manualTce?.trim() ? <span style={{color:"#6b7280"}}>({/^usd/i.test(r.manualTce.trim())?r.manualTce.trim():`USD ${r.manualTce.trim().replace(/\s*k\s*(pd)?$/i,"")}k pd`})</span> : r.tce != null && <span style={{ color: "#6b7280" }}>(USD {Math.round(r.tce / 1000)}k pd)</span>}</td>
@@ -2499,23 +2547,27 @@ Any direction`}</pre>
                   {emailSections.fixtures && (
                   <div>
                     <div style={{...reportHeadingStyle,marginBottom:8}}>Recent fixtures</div>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 10 }}>
+                      <colgroup>
+                        <col style={{width:"17%"}}/><col style={{width:"12%"}}/><col style={{width:"10%"}}/>
+                        <col style={{width:"15%"}}/><col style={{width:"15%"}}/><col style={{width:"18%"}}/>
+                        <col style={{width:"13%"}}/>
+                      </colgroup>
                       <thead><tr style={{ background: "#eaf2fc" }}>
-                        {["Vessel", "Charterer", "Cargo", "Load", "Disch", "From", "To", "Freight"].map(h => (
-                          <th key={h} style={{ padding: "4px 6px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>{h}</th>
+                        {["Vessel", "Charterer", "Cargo", "Load", "Disch", "Laycan", "Freight"].map(h => (
+                          <th key={h} style={{ padding: "4px 6px", textAlign: "left", fontWeight: 600, color: "#6b7280", whiteSpace:"nowrap" }}>{h}</th>
                         ))}
                       </tr></thead>
                       <tbody>
-                        {fixtures.map((f, i) => (
+                        {visibleExportFixtures.map((f, i) => (
                           <tr key={i} style={{ borderTop: "1px solid #d9e2ef" }}>
                             <td style={{ padding: "4px 6px" }}>{reportNaturalCase(f.vessel)}</td>
                             <td style={{ padding: "4px 6px" }}>{reportNaturalCase(f.charterer)}</td>
                             <td style={{ padding: "4px 6px" }}>{reportNaturalCase(f.cargo)}</td>
                             <td style={{ padding: "4px 6px" }}>{reportNaturalCase(f.load)}</td>
                             <td style={{ padding: "4px 6px" }}>{reportNaturalCase(f.disch)}</td>
-                            <td style={{ padding: "4px 6px" }}>{f.laycanFrom}</td>
-                            <td style={{ padding: "4px 6px" }}>{f.laycanTo}</td>
-                            <td style={{ padding: "4px 6px" }}>{reportFixtureFreight(f.freight)}</td>
+                            <td style={{ padding: "4px 6px", whiteSpace:"nowrap" }}>{[f.laycanFrom, f.laycanTo].filter(Boolean).join(" - ")}</td>
+                            <td style={{ padding: "4px 6px", whiteSpace:"nowrap", paddingLeft:14 }}>{reportFixtureFreight(f.freight)}</td>
                           </tr>
                         ))}
                       </tbody>
