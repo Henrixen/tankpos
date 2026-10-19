@@ -170,7 +170,7 @@ function navLoad(){try{return navNorm(JSON.parse(localStorage.getItem(NAV_KEY)||
 
 
 // PanelEC — div-based click-to-edit cell for the vessel popout (EC is <td>-only, breaks in flex)
-function PanelEC({value,color,placeholder,onSave}){
+function PanelEC({value,color,placeholder,onSave,displayValue}){
   const [editing,setEditing]=React.useState(false);
   const [draft,setDraft]=React.useState("");
   const ref=React.useRef(null);
@@ -185,7 +185,7 @@ function PanelEC({value,color,placeholder,onSave}){
   return(
     <span onClick={start} title="Click to edit"
       style={{fontSize:12,color:value?(color||"#e6edf7"):"#4a5a78",cursor:"text",textAlign:"right",maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-      {value||placeholder||"—"}
+      {displayValue ?? (value||placeholder||"—")}
     </span>
   );
 }
@@ -3642,7 +3642,7 @@ const filtV=useMemo(()=>{
       <td style={{ ...tdTxt, color: C.dim }} title={v.coating||""}>{fmtCoating(v.coating)}</td>
       {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.loa || ""}</td>}
       {!mobile && <td style={{ ...tdNum, color: C.dim }}>{v.beam || ""}</td>}
-      {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtN(v.cbm)}</td>}
+      {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtDwtFull(v.cbm)}</td>}
 
       {/* DATE */}
       <EC
@@ -3765,7 +3765,7 @@ const filtV=useMemo(()=>{
                       `}</style>
                       <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
                         <div>
-                          <div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:12}}><div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>{selV.imoNo&&<span style={{fontSize:12,color:C.amber}}>IMO {selV.imoNo}</span>}</div>
                           <div style={{fontSize:12,color:C.purple}}>{selV.operator||""}</div>
                         </div>
                         <button onClick={()=>{setSel(null);setSelectedAISVessels([]);}} style={{background:"none",border:"none",color:C.dim,fontSize:14,cursor:"pointer"}}>✕</button>
@@ -3775,11 +3775,10 @@ const filtV=useMemo(()=>{
                         {[["Open Port","openPort",C.amber],["Date","date",C.blue],["Comment","comment",C.dim],["Operator","operator",C.purple],["Built","built",C.dim],["DWT","dwt",C.amber],["Coating","coating",C.green],["LOA","loa",C.dim],["Beam","beam",C.dim],["CBM","cbm",C.dim]].map(([l,f,col])=>(
                           <div key={f} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderBottom:"1px solid "+C.bg,gap:4}}>
                             <span style={{fontSize:12,color:C.faint,minWidth:55,flexShrink:0}}>{l}</span>
-                            <PanelEC value={selV[f]} color={col} placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
+                            <PanelEC value={selV[f]} displayValue={(f==="dwt"||f==="cbm")&&selV[f]!=null&&selV[f]!==""?fmtDwtFull(selV[f]):undefined} color={col} placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
                           </div>
                         ))}
 
-                        <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em",padding:"6px 0 3px",borderBottom:"1px solid "+C.bd2}}>Spec</div>
                         {[["Fuel","spec.fuel",C.purple],["Ice Class","spec.iceClass",C.blue],["Last Cargo","spec.lastCargo",C.dim]].map(([l,f,col])=>{
                           const val=f.startsWith("spec.")?(selV.spec||{})[f.split(".")[1]]:selV[f];
                           return(
