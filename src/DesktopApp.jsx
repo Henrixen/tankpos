@@ -1510,6 +1510,20 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   },[unlocked]);
   // ────────────────────────────────────────────────────────────────────────
   const [tab,setTab]=useState(()=>guestMode?"pos":"pos");
+  // CargoesMaster dispatches this event from the “To Report” action.
+  // Keep the actual cargo records (not only their IDs) for ReportsTab import.
+  const [reportCargoes,setReportCargoes]=useState([]);
+  useEffect(()=>{
+    const receiveCargoes=e=>{
+      const rows=Array.isArray(e.detail?.cargoes)?e.detail.cargoes:[];
+      if(!rows.length)return;
+      setReportCargoes(rows);
+      React.startTransition(()=>setTab("reports"));
+    };
+    window.addEventListener("steem:send-cargoes-to-report",receiveCargoes);
+    return()=>window.removeEventListener("steem:send-cargoes-to-report",receiveCargoes);
+  },[]);
+
   const [search,setSearch]=useState("");
   const [filters,setFilters]=useState(new Set());
   const [posTagFilter,setPosTagFilter]=useState(new Set());
@@ -3956,7 +3970,7 @@ const filtV=useMemo(()=>{
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
           </div>
         )}
-        {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={Array.from(selCargoes)}/></Suspense></div>}
+        {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={reportCargoes}/></Suspense></div>}
         {tab==="map"&&<Suspense fallback={<TabFallback/>}><FreightMapTab/></Suspense>}
       </TabErrorBoundary>
       </div>
