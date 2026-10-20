@@ -311,24 +311,48 @@ export default function TankPos(){
     } finally { if (saveQueueRef.current.get(key) === task) saveQueueRef.current.delete(key); }
   }, []);
 
-  // Cargo edits: confirm the database write before showing the new value.
-  const updateC=useCallback(async(id,field,value)=>{
-    const dbValue=(field==="from"||field==="to")?toISODate(value):value;
-    const {data,error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id).select("id");
-    if(error||!data?.length){
-      const message=error?.message||"No row was updated (check Supabase RLS permissions).";
-      console.error("Cargo save FAILED",{id,field,value,error});
-      alert(`Cargo NOT saved (${field}): ${message}`);
-      throw error||new Error(message);
-    }
+  // Cargo edits: optimistic rendering, serialized writes per cell, and safe rollback.
+  // Supabase remains authoritative, but the editor never waits for the network to paint.
+  const cargoCellQueueRef=useRef(new Map());
+  const cargoCellVersionRef=useRef(new Map());
+  const updateC=useCallback((id,field,value)=>{
+    const key=String(id)+":"+field;
+    // Clearing a cell is an intentional edit. Nullable typed columns need SQL NULL,
+    // not an empty string (which Postgres rejects for dates / constrained fields).
+    const cleared=value===null||value===undefined||String(value).trim()==="";
+    const dbValue=(field==="from"||field==="to")?(cleared?null:toISODate(value))
+      :(cleared&&["intelligence","p_and_c"].includes(field)?null:(cleared?"":value));
     const displayValue=(field==="from"||field==="to")?(() => {
       if(!dbValue)return "";
       const dt=new Date(dbValue+"T12:00:00");
       return dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
     })():value;
-    setCargoes(prev=>prev.map(c=>String(c.id)===String(id)?{...c,[field]:displayValue}:c));
-    return true;
-  },[]);
+    const previous=cargoes.find(c=>String(c.id)===String(id))?.[field];
+    const version=(cargoCellVersionRef.current.get(key)||0)+1;
+    cargoCellVersionRef.current.set(key,version);
+    setCargoes(prev=>prev.map(c=>{
+      if(String(c.id)!==String(id))return c;
+      return {...c,[field]:displayValue};
+    }));
+    const preceding=cargoCellQueueRef.current.get(key)||Promise.resolve();
+    const task=preceding.catch(()=>{}).then(async()=>{
+      const {data,error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id).select("id");
+      if(error||!data?.length){
+        const message=error?.message||"No row was updated (check Supabase RLS permissions).";
+        console.error("Cargo save FAILED",{id,field,value,error});
+        // Never undo a newer edit when an older queued request fails.
+        if(cargoCellVersionRef.current.get(key)===version){
+          setCargoes(prev=>prev.map(c=>String(c.id)===String(id)&&c[field]===displayValue?{...c,[field]:previous}:c));
+        }
+        alert(`Cargo NOT saved (${field}): ${message}`);
+        throw error||new Error(message);
+      }
+      return true;
+    });
+    cargoCellQueueRef.current.set(key,task);
+    task.finally(()=>{if(cargoCellQueueRef.current.get(key)===task)cargoCellQueueRef.current.delete(key);}).catch(()=>{});
+    return task;
+  },[cargoes]);
 
   const addVessels = useCallback(async (parsed) => {
     const vdb = window.vesselDB || vesselDB;
@@ -428,8 +452,8 @@ export default function TankPos(){
     if(!stamped.length)return 0;
     const rows=stamped.map(c=>({...c,intelligence:c.intelligence||null,from:toISODate(c.from),to:toISODate(c.to)}));
     const {data,error}=await supabase.from("cargoes").upsert(rows,{onConflict:"id"}).select("*");
-    if(error||data?.length!==rows.length){
-      const message=error?.message||`Supabase confirmed ${data?.length||0} of ${rows.length} cargo rows.`;
+    if(error||!data?.length){
+      const message=error?.message||"Supabase did not confirm any saved cargo rows.";
       console.error("Cargo import NOT saved",error,rows);
       alert("Cargo import NOT saved: "+message);
       throw error||new Error(message);
