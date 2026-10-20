@@ -1838,6 +1838,42 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
     return()=>cancelAnimationFrame(id);
   },[fixingExpanded,fixingPanelTab]);
   const [aisPanelTab,setAisPanelTab]=useState("Map");
+  // Positions top-row widths (percent). Drag either divider to resize adjacent panels.
+  const [positionsWidths,setPositionsWidths]=useState([32,34,34]);
+  const positionsTopRef=useRef(null);
+  const positionsDragRef=useRef(null);
+  useEffect(()=>{
+    const move=e=>{
+      const drag=positionsDragRef.current;
+      if(!drag||!positionsTopRef.current)return;
+      const rect=positionsTopRef.current.getBoundingClientRect();
+      const delta=(e.clientX-drag.startX)/rect.width*100;
+      const widths=[...drag.widths];
+      const i=drag.index;
+      const change=Math.max(16-widths[i],Math.min(delta,widths[i+1]-16));
+      widths[i]+=change;
+      widths[i+1]-=change;
+      setPositionsWidths(widths);
+    };
+    const up=()=>{positionsDragRef.current=null;document.body.style.cursor="";document.body.style.userSelect="";};
+    window.addEventListener("pointermove",move);
+    window.addEventListener("pointerup",up);
+    return()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);};
+  },[]);
+  const startPositionsResize=(index,e)=>{
+    e.preventDefault();
+    positionsDragRef.current={index,startX:e.clientX,widths:[...positionsWidths]};
+    document.body.style.cursor="col-resize";
+    document.body.style.userSelect="none";
+  };
+  const positionsDivider=index=>(
+    <div onPointerDown={e=>startPositionsResize(index,e)}
+      title="Drag to resize panels"
+      style={{width:8,flex:"0 0 8px",cursor:"col-resize",alignSelf:"stretch",display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none"}}>
+      <div style={{height:52,width:2,borderRadius:2,background:"#365476"}}/>
+    </div>
+  );
+
   const [posOutsiderView,setPosOutsiderView]=useState(false);
   const [outsiderSyncStatus,setOutsiderSyncStatus]=useState(null);
   function getInterUKCConfig(){
@@ -3081,12 +3117,12 @@ const filtV=useMemo(()=>{
 
             {/* ── Top row: Perfect grid (desktop) ── */}
             {!mobile && (
-            <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
+            <div ref={positionsTopRef} style={{display:"flex",gap:0,flexDirection:mobile?"column":"row",width:"100%"}}>
               
               {/* LEFT: Parse + Fixing (32%) */}
               <div
   style={{
-    width: mobile ? "100%" : "32%",
+    width: mobile ? "100%" : `calc(${positionsWidths[0]}% - 6px)`,
     minWidth: 0,
     height: mobile ? "auto" : 460,
     display: "flex",
@@ -3157,8 +3193,9 @@ const filtV=useMemo(()=>{
               {/* CENTER: Filters — redesigned as horizontal scrolling rows (frees up the box
                   that used to be split between this and the Regional Snapshot placeholder,
                   since Regional Snapshot is now a tab inside the AIS Map panel on the right) */}
+              {positionsDivider(0)}
               {!mobile&&(
-                <div style={{width:"34%",minWidth:0,height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                <div style={{width:`calc(${positionsWidths[1]}% - 6px)`,minWidth:0,height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
                   <HScrollStyle/>
                   {(opFilter||bucketFilters.size>0)&&(
                     <div style={{flexShrink:0,padding:"8px 12px 0 12px",display:"flex",flexDirection:"column",gap:4}}>
@@ -3266,12 +3303,32 @@ const filtV=useMemo(()=>{
                 </div>
               )}
 
-              {/* RIGHT: AIS Map / Regional Position Snapshot (34%) */}
+              {/* RIGHT: AIS Map / Regional Snapshot / Positions Preview */}
+              {positionsDivider(1)}
 {!mobile&&(
-  <div style={{width:"34%",minWidth:0}}>
-    <TabbedPanel tabs={["Map","Regional Snapshot"]} active={aisPanelTab} onChange={setAisPanelTab} height={460}>
+  <div style={{width:`calc(${positionsWidths[2]}% - 6px)`,minWidth:0}}>
+    <TabbedPanel tabs={["Map","Regional Snapshot","Positions Preview"]} active={aisPanelTab} onChange={setAisPanelTab} height={460}>
       {aisPanelTab==="Map" ? (
         <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels} onAisVesselsChange={setAisVesselSet}/></Suspense>
+      ) : aisPanelTab==="Positions Preview" ? (
+        <div style={{height:"100%",overflow:"auto",background:C.bg2}}>
+          <div style={{padding:"8px 10px",fontSize:11,color:C.faint,borderBottom:"1px solid "+C.bd}}>
+            Filtered positions · {filtV.length} vessel{filtV.length===1?"":"s"}
+          </div>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:10,textAlign:"left",whiteSpace:"nowrap"}}>
+            <thead style={{position:"sticky",top:0,background:C.bg2,zIndex:1}}>
+              <tr>{["VESSEL","DWT","BLT","DATE","OPEN PORT"].map(h=><th key={h} style={{padding:"8px 7px",color:C.blue,borderBottom:"1px solid "+C.bd}}>{h}</th>)}</tr>
+            </thead>
+            <tbody>{filtV.map((v,i)=><tr key={v.id||i} style={{borderBottom:"1px solid "+C.bd}}>
+              <td style={{padding:"7px",color:C.blue,fontWeight:600}}>{v.vessel||"—"}</td>
+              <td style={{padding:"7px",color:C.tx}}>{fmtN(v.dwt)||"—"}</td>
+              <td style={{padding:"7px",color:C.tx}}>{v.built||"—"}</td>
+              <td style={{padding:"7px",color:C.tx}}>{fmtDateShort(v.date)||v.date||"—"}</td>
+              <td style={{padding:"7px",color:C.tx}}>{v.openPort||"—"}</td>
+            </tr>)}</tbody>
+          </table>
+          {filtV.length===0&&<div style={{padding:20,textAlign:"center",fontSize:11,color:C.faint}}>No vessels match the current filters</div>}
+        </div>
       ) : (
         <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
           <span style={{fontSize:11,color:C.faint,textAlign:"center",padding:"0 16px"}}>Regional Position Snapshot — coming here next</span>
