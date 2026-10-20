@@ -24,9 +24,9 @@ function IntelVault({onVaultUpdate}){
     try{
       const imgBlock=img?[{type:"image",source:{type:"base64",media_type:img.mime,data:img.base64}}]:[];
       const today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
-      const res=await fetch("https://api.anthropic.com/v1/messages",{
+      const res=await fetch("/api/claude",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
           model:"claude-sonnet-4-6",
           max_tokens:2000,
@@ -195,9 +195,9 @@ export function IntelVaultStrip({onVaultUpdate}){
     setBusy(true);setStatus({t:"info",m:"Extracting…"});
     try{
       const today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
-      const res=await fetch("https://api.anthropic.com/v1/messages",{
+      const res=await fetch("/api/claude",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
           model:"claude-sonnet-4-6",max_tokens:2000,
           system:`You are a maritime market intelligence extractor. Today is ${today}. Split the input into logical items. Output as JSON array only, no markdown. Each item: {"tag":"TAG","title":"short title max 6 words","content":"full intel text"}. Tags: RATES,FIXTURE,QUOTE,MARKET,FM,RUMOUR,COUNTERPARTY,EVENT,TC,SALE`,
