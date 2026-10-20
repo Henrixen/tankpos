@@ -1532,16 +1532,6 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [search,setSearch]=useState("");
   const [filters,setFilters]=useState(new Set());
   const [posTagFilter,setPosTagFilter]=useState(new Set());
-  // Independent, refresh-persistent preview shortlist: tag choices and starred vessels.
-  const [previewTags,setPreviewTags]=useState(()=>{
-    try{return new Set(JSON.parse(localStorage.getItem("steem_positions_preview_tags")||"[]"));}catch{return new Set();}
-  });
-  const [previewSaved,setPreviewSaved]=useState(()=>{
-    try{return JSON.parse(localStorage.getItem("steem_positions_preview_saved")||"false");}catch{return false;}
-  });
-  useEffect(()=>{try{localStorage.setItem("steem_positions_preview_tags",JSON.stringify([...previewTags]));}catch{}},[previewTags]);
-  useEffect(()=>{try{localStorage.setItem("steem_positions_preview_saved",JSON.stringify(previewSaved));}catch{}},[previewSaved]);
-
   const [coatingFilter,setCoatingFilter]=useState(new Set());
   const [dwtRange,setDwtRange]=useState({min:"",max:""});
   const [builtRange,setBuiltRange]=useState({min:"",max:""});
@@ -1848,42 +1838,6 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
     return()=>cancelAnimationFrame(id);
   },[fixingExpanded,fixingPanelTab]);
   const [aisPanelTab,setAisPanelTab]=useState("Map");
-  // Positions top-row widths (percent). Drag either divider to resize adjacent panels.
-  const [positionsWidths,setPositionsWidths]=useState([32,34,34]);
-  const positionsTopRef=useRef(null);
-  const positionsDragRef=useRef(null);
-  useEffect(()=>{
-    const move=e=>{
-      const drag=positionsDragRef.current;
-      if(!drag||!positionsTopRef.current)return;
-      const rect=positionsTopRef.current.getBoundingClientRect();
-      const delta=(e.clientX-drag.startX)/rect.width*100;
-      const widths=[...drag.widths];
-      const i=drag.index;
-      const change=Math.max(16-widths[i],Math.min(delta,widths[i+1]-16));
-      widths[i]+=change;
-      widths[i+1]-=change;
-      setPositionsWidths(widths);
-    };
-    const up=()=>{positionsDragRef.current=null;document.body.style.cursor="";document.body.style.userSelect="";};
-    window.addEventListener("pointermove",move);
-    window.addEventListener("pointerup",up);
-    return()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);};
-  },[]);
-  const startPositionsResize=(index,e)=>{
-    e.preventDefault();
-    positionsDragRef.current={index,startX:e.clientX,widths:[...positionsWidths]};
-    document.body.style.cursor="col-resize";
-    document.body.style.userSelect="none";
-  };
-  const positionsDivider=index=>(
-    <div onPointerDown={e=>startPositionsResize(index,e)}
-      title="Drag to resize panels"
-      style={{width:8,flex:"0 0 8px",cursor:"col-resize",alignSelf:"stretch",display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none"}}>
-      <div style={{height:52,width:2,borderRadius:2,background:"#365476"}}/>
-    </div>
-  );
-
   const [posOutsiderView,setPosOutsiderView]=useState(false);
   const [outsiderSyncStatus,setOutsiderSyncStatus]=useState(null);
   function getInterUKCConfig(){
@@ -2587,31 +2541,6 @@ const filtV=useMemo(()=>{
     });
   },[filtV]);
 
-  // The preview uses the underlying unique vessels, not the current table search,
-  // DWT/date/segment filters or pagination. Tags and starred positions alone define it.
-  const previewVessels=useMemo(()=>{
-    const tags=new Set([...previewTags].map(t=>String(t).trim().toUpperCase()));
-    const seen=new Set();
-    return vessels.filter(v=>{
-      const key=String(v.vessel||"").trim().toUpperCase();
-      if(!key||seen.has(key))return false;
-      const vesselTags=(Array.isArray(v.tag)?v.tag.join("|"):String(v.tag||""))
-        .split(/[|,;]+/).map(t=>t.trim().toUpperCase());
-      const matched=vesselTags.some(t=>tags.has(t))||(previewSaved&&savedVessels.has(v.vessel));
-      if(matched)seen.add(key);
-      return matched;
-    });
-  },[vessels,previewTags,previewSaved,savedVessels]);
-  const copyPreview=(email=false)=>{
-    const cols=["VESSEL","DWT","BLT","DATE","OPEN PORT"];
-    const rows=previewVessels.map(v=>[v.vessel||"",v.dwt||"",v.built||"",fmtDateShort(v.date)||v.date||"",v.openPort||""]);
-    const value=email
-      ? rows.map(r=>r.join(" | ")).join("\n")
-      : [cols,...rows].map(r=>r.join("\t")).join("\n");
-    if(navigator.clipboard?.writeText)navigator.clipboard.writeText(value).catch(()=>{});
-    else{const ta=document.createElement("textarea");ta.value=value;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();}
-  };
-
   const posColumns = [
   { 
     key: "select", 
@@ -3152,12 +3081,12 @@ const filtV=useMemo(()=>{
 
             {/* ── Top row: Perfect grid (desktop) ── */}
             {!mobile && (
-            <div ref={positionsTopRef} style={{display:"flex",gap:0,flexDirection:mobile?"column":"row",width:"100%"}}>
+            <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
               
               {/* LEFT: Parse + Fixing (32%) */}
               <div
   style={{
-    width: mobile ? "100%" : `calc(${positionsWidths[0]}% - 6px)`,
+    width: mobile ? "100%" : "32%",
     minWidth: 0,
     height: mobile ? "auto" : 460,
     display: "flex",
@@ -3228,9 +3157,8 @@ const filtV=useMemo(()=>{
               {/* CENTER: Filters — redesigned as horizontal scrolling rows (frees up the box
                   that used to be split between this and the Regional Snapshot placeholder,
                   since Regional Snapshot is now a tab inside the AIS Map panel on the right) */}
-              {positionsDivider(0)}
               {!mobile&&(
-                <div style={{width:`calc(${positionsWidths[1]}% - 6px)`,minWidth:0,height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                <div style={{width:"34%",minWidth:0,height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
                   <HScrollStyle/>
                   {(opFilter||bucketFilters.size>0)&&(
                     <div style={{flexShrink:0,padding:"8px 12px 0 12px",display:"flex",flexDirection:"column",gap:4}}>
@@ -3256,7 +3184,7 @@ const filtV=useMemo(()=>{
                         <>
                           {/* Tags */}
                           <FilterRow label="Tags" col="#79c0ff">
-                            {(()=>{const available=getTagListFor("position");return available.length?available.map(t=>(<Chip key={t} col="#79c0ff" active={posTagFilter.has(t)} onClick={()=>{if(aisPanelTab==="Positions Preview"){setPreviewTags(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});}else{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPreviewTags(prev=>new Set([...prev,t]));setPosPage(1);}}}>{t.toUpperCase()}</Chip>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>NONE</span>;})()}
+                            {(()=>{const available=getTagListFor("position");return available.length?available.map(t=>(<Chip key={t} col="#79c0ff" active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t.toUpperCase()}</Chip>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>NONE</span>;})()}
                             {posTagFilter.size>0&&<Chip col={C.red} active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}>✕</Chip>}
                             {vessels.some(v=>(v.tag||"").trim().toUpperCase()==="OUTSIDER")&&(
                               <button onClick={syncOutsiderTaggedVessels} title="Adds/updates OUTSIDER-tagged vessels with a known date+port into the static Outsider list"
@@ -3306,7 +3234,7 @@ const filtV=useMemo(()=>{
                           {/* Inter UKC */}
                           <FilterRow label="Inter UKC" col="#4fc3f7">
                             <Chip col="#4fc3f7" active={interUKCActive} onClick={()=>{setInterUKCActive(v=>!v);setPosPage(1);}}>Inter UKC</Chip>
-                            <Chip col="#fbbf24" active={showSavedOnly} onClick={()=>{if(aisPanelTab==="Positions Preview")setPreviewSaved(v=>!v);else{setShowSavedOnly(v=>!v);setPreviewSaved(true);}}}>
+                            <Chip col="#fbbf24" active={showSavedOnly} onClick={()=>setShowSavedOnly(v=>!v)}>
                               <span style={{display:"flex",alignItems:"center",gap:6}}>
                                 Saved ({savedVessels.size}) ★
                                 {savedVessels.size>0&&<span onClick={e=>{e.stopPropagation();setPendingDel({type:"clearsaved",label:`all ${savedVessels.size} saved vessels`});}} style={{color:C.red,cursor:"pointer"}}>✕</span>}
@@ -3338,40 +3266,12 @@ const filtV=useMemo(()=>{
                 </div>
               )}
 
-              {/* RIGHT: AIS Map / Regional Snapshot / Positions Preview */}
-              {positionsDivider(1)}
+              {/* RIGHT: AIS Map / Regional Position Snapshot (34%) */}
 {!mobile&&(
-  <div style={{width:`calc(${positionsWidths[2]}% - 6px)`,minWidth:0}}>
-    <TabbedPanel tabs={["Map","Regional Snapshot","Positions Preview"]} active={aisPanelTab} onChange={setAisPanelTab} height={460}>
+  <div style={{width:"34%",minWidth:0}}>
+    <TabbedPanel tabs={["Map","Regional Snapshot"]} active={aisPanelTab} onChange={setAisPanelTab} height={460}>
       {aisPanelTab==="Map" ? (
         <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels} onAisVesselsChange={setAisVesselSet}/></Suspense>
-      ) : aisPanelTab==="Positions Preview" ? (
-        <div style={{height:"100%",overflow:"auto",background:C.bg2}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,padding:"8px 9px",borderBottom:"1px solid "+C.bd,background:C.bg3}}>
-            <div style={{minWidth:0}}>
-              <div style={{fontSize:11,fontWeight:800,color:C.blue,letterSpacing:"0.04em"}}>POSITIONS PREVIEW <span style={{color:C.tx}}>({previewVessels.length})</span></div>
-              <div style={{fontSize:9,color:C.faint,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{[...previewTags,...(previewSaved?["SAVED ★"]:[])].join(" · ")||"Click a tag or Saved ★ to build the shortlist"}</div>
-            </div>
-            <div style={{display:"flex",gap:4,flexShrink:0}}>
-              <button style={fb(false)} onClick={()=>copyPreview(false)}>Copy ({previewVessels.length})</button>
-              <button style={fb(false)} onClick={()=>copyPreview(true)}>Copy for email ({previewVessels.length})</button>
-              <button style={{...fb(false),color:C.red}} onClick={()=>{setPreviewTags(new Set());setPreviewSaved(false);}}>Clear</button>
-            </div>
-          </div>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,textAlign:"left",whiteSpace:"nowrap"}}>
-            <thead style={{position:"sticky",top:0,background:"#142034",zIndex:1}}>
-              <tr>{["VESSEL","DWT","BLT","DATE","OPEN PORT"].map(h=><th key={h} style={{padding:"9px 7px",fontSize:10,fontWeight:700,color:"#4977b4",letterSpacing:"0.06em",borderBottom:"1px solid "+C.bd}}>{h}</th>)}</tr>
-            </thead>
-            <tbody>{previewVessels.map((v,i)=><tr key={String(v.vessel).toUpperCase()} style={{background:i%2===0?"#0e192b":"#111e31",borderBottom:"1px solid rgba(58,100,180,0.08)",height:29}}>
-              <td style={{padding:"6px 7px",color:C.blue,fontWeight:700}}>{String(v.vessel||"—").toUpperCase()}</td>
-              <td style={{padding:"6px 7px",color:C.blue,fontWeight:600}}>{fmtN(v.dwt)||"—"}</td>
-              <td style={{padding:"6px 7px",color:C.blue}}>{v.built||"—"}</td>
-              <td style={{padding:"6px 7px",color:C.blue,fontWeight:600}}>{fmtDateShort(v.date)||v.date||"—"}</td>
-              <td style={{padding:"6px 7px",color:C.blue}}>{String(v.openPort||"—").toUpperCase()}</td>
-            </tr>)}</tbody>
-          </table>
-          {previewVessels.length===0&&<div style={{padding:20,textAlign:"center",fontSize:11,color:C.faint}}>No positions in preview. Click a tag or Saved ★ to add vessels.</div>}
-        </div>
       ) : (
         <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
           <span style={{fontSize:11,color:C.faint,textAlign:"center",padding:"0 16px"}}>Regional Position Snapshot — coming here next</span>
