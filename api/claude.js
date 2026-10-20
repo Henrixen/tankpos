@@ -1,3 +1,4 @@
+// /api/claude.js
 // Server-side middleman: the browser talks to this, this talks to Claude.
 // The key lives only in Vercel (ANTHROPIC_API_KEY) and never reaches the browser.
 
@@ -5,15 +6,15 @@ const ALLOWED_ORIGINS = ['https://tankpos.vercel.app']; // add your custom domai
 const SAFE_MODEL = 'claude-sonnet-4-6';
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST') return res.status(405).json({ error: { message: 'Method not allowed' } });
 
   // Only accept requests coming from your own website
   if (!ALLOWED_ORIGINS.includes(req.headers.origin)) {
-    return res.status(403).json({ error: 'Forbidden' });
+    return res.status(403).json({ error: { message: 'Forbidden' } });
   }
 
   const body = req.body || {};
-  if (!body.messages) return res.status(400).json({ error: 'Missing messages' });
+  if (!body.messages) return res.status(400).json({ error: { message: 'Missing messages' } });
 
   // Block expensive models: swap them for Sonnet
   const model = String(body.model || '');
