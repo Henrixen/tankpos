@@ -1929,9 +1929,9 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   },[mobile,mobileNavOpen]);
 
   const [colWidthsV,setColWidthsV]=useState(()=>mobile?{
-  Operator:null,Vessel:null,Built:null,DWT:null,Coating:null,LOA:null,Beam:null,CBM:null,Date:null,OpenPort:null,Comment:null,FileDate:null,Spec:null
+  Operator:null,Vessel:null,Built:null,DWT:null,Coating:null,LOA:null,Beam:null,Flag:null,CBM:null,Date:null,OpenPort:null,Comment:null,FileDate:null,Spec:null
   }:{
-  Operator:150,Vessel:145,Built:60,DWT:72,Coating:78,LOA:62,Beam:56,CBM:78,Date:88,OpenPort:155,Comment:140,FileDate:88,Spec:72
+  Operator:150,Vessel:145,Built:60,DWT:72,Coating:78,LOA:62,Beam:56,Flag:100,CBM:78,Date:88,OpenPort:155,Comment:140,FileDate:88,Spec:72
   });
   const [colWidthsC,setColWidthsC]=useState(()=>mobile?{
   Status:55,Vessel:null,Charterer:null,Cargo:null,Qty:null,Load:null,Disch:null,LaycanStart:null,LaycanEnd:null,Freight:null,Comment:null,Updated:null
@@ -2312,6 +2312,32 @@ const quoteFixtureColumns = [
     }
   }
 
+  // Read flags directly because the parent vessel DB loader may omit this column.
+  const [vesselFlags,setVesselFlags]=useState({});
+  useEffect(()=>{
+    let cancelled=false;
+    (async()=>{
+      const flags={};
+      const pageSize=1000;
+      for(let from=0;;from+=pageSize){
+        const {data,error}=await supabase.from("vessels_db").select("vessel,flag").order("vessel").range(from,from+pageSize-1);
+        if(error){console.error("Could not load vessel flags",error);return;}
+        for(const row of data||[]){
+          if(row.vessel) flags[String(row.vessel).trim().toLowerCase()]=String(row.flag||"").trim();
+        }
+        if(cancelled)return;
+        if(!data||data.length<pageSize)break;
+      }
+      if(!cancelled)setVesselFlags(flags);
+    })();
+    return()=>{cancelled=true;};
+  },[]);
+  function vesselFlag(v){
+    const key=String(v.vessel||"").trim().toLowerCase();
+    return String(vesselFlags[key]??window.vesselDB?.[key]?.flag??v.flag??"").trim();
+  }
+  const flagOptions=Array.from(new Set(vessels.map(v=>vesselFlag(v).toUpperCase()).filter(Boolean))).sort();
+
   // Multi-token search across all text fields
   const tokens=search.trim().toLowerCase().split(/\s+/).filter(Boolean);
   function matchesSearch(v){
@@ -2351,19 +2377,9 @@ const filtV=useMemo(()=>{
 
   if(filters.size>0){
     list=list.filter(v=>{
-      // OR within one filter group, AND between different groups.
-      // Example: (WCUK OR ECUK) AND (PPT OR SUBS) AND selected DWT/tag/etc.
-      const statusKeys=["PPT","SUBS","HIDE_EMP"];
-      const selectedStatus=statusKeys.filter(k=>filters.has(k));
-      if(selectedStatus.length){
-        const statusMatch=selectedStatus.some(k=>{
-          if(k==="PPT") return isOpenPPT(v.date);
-          if(k==="SUBS") return v.openPort==="EMPLOYED";
-          if(k==="HIDE_EMP") return v.openPort!=="EMPLOYED";
-          return false;
-        });
-        if(!statusMatch) return false;
-      }
+      // OR between selected flags; AND with the other filter groups.
+      const selectedFlags=[...filters].filter(k=>k.startsWith("FLAG:"));
+      if(selectedFlags.length&&!selectedFlags.includes("FLAG:"+vesselFlag(v).toUpperCase())) return false;
 
       if(filters.has("NAP") && !(v.comment?.toLowerCase().includes("naph") || v.spec?.lastCargo?.toLowerCase().includes("naph"))) return false;
 
@@ -2546,8 +2562,8 @@ const filtV=useMemo(()=>{
         return (toNum(a.date)-toNum(b.date))*sortD;
       }
 
-      const av=String(a[sortK]||"").toLowerCase();
-      const bv=String(b[sortK]||"").toLowerCase();
+      const av=String((sortK==="flag"?vesselFlag(a):a[sortK])||"").toLowerCase();
+      const bv=String((sortK==="flag"?vesselFlag(b):b[sortK])||"").toLowerCase();
       return av<bv ? -sortD : av>bv ? sortD : 0;
     });
   }
@@ -2555,6 +2571,8 @@ const filtV=useMemo(()=>{
   return list;
 },[
   vessels,
+  vesselFlags,
+  vesselDBLoaded,
   filters,
   search,
   sortK,
@@ -2644,10 +2662,11 @@ const filtV=useMemo(()=>{
   { key: "ais",       label: "",           align:"center",     width: 18 },
   { key: "built",     sortKey:"built",     label: "Built",     align:"left", width: colWidthsV.Built },
   { key: "dwt",       sortKey:"dwt",       label: "DWT",           align:"left", width: colWidthsV.DWT },
+  { key: "cbm",       sortKey:"cbm",       label: "CBM",           align:"left", width: colWidthsV.CBM },
   { key: "coating",   sortKey:"coating",   label: "Coating", width: colWidthsV.Coating },
   { key: "loa",       sortKey:"loa",       label: "LOA",           align:"left", width: colWidthsV.LOA },
-  { key: "beam",      sortKey:"beam",      label: "Beam",        align:"right", width: colWidthsV.Beam },
-  { key: "cbm",       sortKey:"cbm",       label: "CBM",           align:"left", width: colWidthsV.CBM },
+  { key: "beam",      sortKey:"beam",      label: "Beam",        align:"left", width: colWidthsV.Beam },
+  { key: "flag",      sortKey:"flag",      label: "Flag",        align:"left", width: colWidthsV.Flag },
   { key: "date",      sortKey:"date",      label: "Date",        align:"left", width: colWidthsV.Date },
   { key: "openPort",  sortKey:"openPort",  label: "Open Port", width: colWidthsV.OpenPort },
   { key: "comment",   sortKey:"comment",   label: "Comment",  width: colWidthsV.Comment },
@@ -2763,7 +2782,7 @@ const filtV=useMemo(()=>{
   },[cargoes,cFilter,cSearch,cDateFilter,cSortK,cSortD,cTimeFilter,cTagFilter,cGradeFilter,tab,cExRegionFilter,cToRegionFilter]);
 
   const FILTER_GROUPS=[
-    {label:"Status",items:[["PPT","Open PPT"],["SUBS","On Subs"],["HIDE_EMP","Hide Employed"]]},
+    {label:"Flag",items:flagOptions.map(flag=>["FLAG:"+flag,flag])},
     {label:"Region",items:[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]]},
   ];
 
@@ -3300,8 +3319,8 @@ const filtV=useMemo(()=>{
                             {superRegionFilter.size>0&&<Chip col={C.red} active={false} onClick={()=>setSuperRegionFilter(new Set())}>✕</Chip>}
                           </FilterRow>
                           {/* Status */}
-                          <FilterRow label="Status" col={C.amber}>
-                            {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<Chip key={f} col={C.amber} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</Chip>))}
+                          <FilterRow label="Flag" col={C.amber}>
+                            {flagOptions.map(flag=>["FLAG:"+flag,flag]).map(([f,l])=>(<Chip key={f} col={C.amber} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</Chip>))}
                             {filters.size>0&&<Chip col={C.red} active={false} onClick={()=>setFilters(new Set())}>✕ Clear</Chip>}
                           </FilterRow>
                           {/* Inter UKC */}
@@ -3479,8 +3498,8 @@ const filtV=useMemo(()=>{
                           <B active={openDateFilter.quick==="ppt"} onClick={()=>{setOpenDateFilter(r=>({quick:r.quick==="ppt"?"":"ppt",from:"",to:""}));setPosPage(1);}}>Today/Tomorrow</B>
                           <OpenDateRangeSlider/>
                         </COL>
-                        <COL label="Status" col={C.amber}>
-                          {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
+                        <COL label="Flag" col={C.amber}>
+                          {flagOptions.map(flag=>["FLAG:"+flag,flag]).map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
                           {filters.size>0&&<B active={false} onClick={()=>setFilters(new Set())}><span style={{color:C.red}}>✕ Clear</span></B>}
                         </COL>
                         <COL label="Region" col="#7dd3fc">
@@ -3757,10 +3776,11 @@ const filtV=useMemo(()=>{
 
       <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.built || ""}</td>
       <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtDwtFull(v.dwt)}</td>
+      {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtDwtFull(v.cbm)}</td>}
       <td style={{ ...tdTxt, color: C.dim }} title={v.coating||v.spec?.coated||""}>{fmtCoating(v.coating||v.spec?.coated)}</td>
       {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.loa || ""}</td>}
-      {!mobile && <td style={{ ...tdNum, color: C.dim }}>{v.beam || ""}</td>}
-      {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtDwtFull(v.cbm)}</td>}
+      {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.beam || ""}</td>}
+      {!mobile && <td style={{ ...tdTxt, textAlign:"left", color:C.dim }}>{vesselFlag(v)}</td>}
 
       {/* DATE */}
       <EC
