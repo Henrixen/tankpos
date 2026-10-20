@@ -170,7 +170,7 @@ function navLoad(){try{return navNorm(JSON.parse(localStorage.getItem(NAV_KEY)||
 
 
 // PanelEC — div-based click-to-edit cell for the vessel popout (EC is <td>-only, breaks in flex)
-function PanelEC({value,color,placeholder,onSave}){
+function PanelEC({value,color,placeholder,onSave,displayValue}){
   const [editing,setEditing]=React.useState(false);
   const [draft,setDraft]=React.useState("");
   const ref=React.useRef(null);
@@ -185,7 +185,7 @@ function PanelEC({value,color,placeholder,onSave}){
   return(
     <span onClick={start} title="Click to edit"
       style={{fontSize:12,color:value?(color||"#e6edf7"):"#4a5a78",cursor:"text",textAlign:"right",maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-      {value||placeholder||"—"}
+      {displayValue ?? (value||placeholder||"—")}
     </span>
   );
 }
@@ -1176,6 +1176,65 @@ function AddCargoModal({onSave,onClose}){
   );
 }
 
+const CLIENT_POSITION_COLUMNS = [
+  {key:"vessel",label:"Vessel",get:v=>v.vessel},
+  {key:"dwt",label:"DWT",get:v=>v.dwt},
+  {key:"cbm",label:"CBM",get:v=>v.cbm},
+  {key:"openPort",label:"Port",get:v=>v.openPort},
+  {key:"date",label:"Date",get:v=>v.date},
+  {key:"comment",label:"Comment",get:v=>v.comment},
+  {key:"operator",label:"Operator",get:v=>v.operator},
+  {key:"built",label:"Built",get:v=>v.built},
+  {key:"coating",label:"Coating",get:v=>v.coating},
+  {key:"loa",label:"LOA",get:v=>v.loa},
+  {key:"beam",label:"Beam",get:v=>v.beam},
+  {key:"tag",label:"Tag",get:v=>v.tag},
+];
+function ClientPositionCopy({vessels,selVessels}){
+  const selectedVessels = vessels.filter(v => selVessels.has(v.vessel));
+  const [open,setOpen]=React.useState(false);
+  const [keys,setKeys]=React.useState(["vessel","dwt","cbm","openPort","date","comment"]);
+  const [done,setDone]=React.useState(false);
+  const [fallback,setFallback]=React.useState("");
+  const chosen=keys.map(k=>CLIENT_POSITION_COLUMNS.find(c=>c.key===k)).filter(Boolean);
+  const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  const value=(v,c)=>{
+    const raw=String(c.get(v)??"").trim();
+    if((c.key==="dwt"||c.key==="cbm") && raw){
+      const compact=raw.replace(/[\s,]/g,"");
+      if(/^\d+(?:\.0+)?$/.test(compact)) return Math.round(Number(compact)).toLocaleString("fr-FR").replace(/\u202f|\u00a0/g," ");
+    }
+    return raw.replace(/\s+/g," ");
+  };
+  function toggle(k){setKeys(old=>old.includes(k)?old.filter(x=>x!==k):CLIENT_POSITION_COLUMNS.filter(c=>old.includes(c.key)||c.key===k).map(c=>c.key));}
+  async function copy(){
+    if(!chosen.length||!selectedVessels.length)return;
+    const text=[chosen.map(c=>c.label).join("\t"),...selectedVessels.map(v=>chosen.map(c=>value(v,c).replace(/\s+/g," ")).join("\t"))].join("\n");
+    const html='<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;color:#1b2b3b"><thead><tr>'+chosen.map(c=>'<th style="background:#173454;color:#fff;border:1px solid #b8c8d8;padding:7px 10px;text-align:left">'+esc(c.label)+'</th>').join('')+'</tr></thead><tbody>'+selectedVessels.map((v,i)=>'<tr>'+chosen.map(c=>'<td style="border:1px solid #cbd5e1;padding:6px 10px;background:'+(i%2?'#f0f5fa':'#fff')+';white-space:nowrap;min-width:'+(c.key==='date'?'65px':'auto')+'">'+esc(value(v,c))+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
+    try{
+      if(navigator.clipboard?.write&&window.ClipboardItem){await navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([html],{type:'text/html'}),'text/plain':new Blob([text],{type:'text/plain'})})]);}
+      else if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(text);}
+      else throw new Error('Clipboard unavailable');
+      setDone(true);setTimeout(()=>setDone(false),2200);setOpen(false);
+    }catch(e){setFallback(text);}
+  }
+  const buttonStyle={background:"rgba(58,130,246,.1)",border:"1px solid rgba(88,166,255,.3)",borderRadius:4,color:"#8cc8ff",fontSize:11,fontWeight:600,padding:"4px 10px",cursor:"pointer",fontFamily:"inherit"};
+  return <>
+    <button disabled={!selectedVessels.length} title={selectedVessels.length?`Copy ${selectedVessels.length} checked vessels`:"Tick vessels to enable email export"} onClick={()=>setOpen(true)} style={{...buttonStyle,whiteSpace:"nowrap",opacity:selectedVessels.length?1:.5}}>Copy for Email ({selectedVessels.length})</button>
+    {open&&<div onMouseDown={e=>{if(e.target===e.currentTarget)setOpen(false)}} style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center",padding:14}}>
+      <div style={{width:500,maxWidth:"95vw",background:"#0c1729",border:"1px solid rgba(88,166,255,.35)",borderRadius:9,padding:18,boxShadow:"0 15px 50px #0009",color:"#d9e9ff"}}>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:5}}>Copy Positions for Email</div>
+        <div style={{fontSize:11,color:"#8aa5c9",marginBottom:14}}>{selectedVessels.length} checked vessel{selectedVessels.length===1?"":"s"} only · Select columns to include (in displayed order)</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:7}}>{CLIENT_POSITION_COLUMNS.map(c=><label key={c.key} style={{display:"flex",gap:7,alignItems:"center",fontSize:12,cursor:"pointer",background:keys.includes(c.key)?"#172b47":"#101d30",padding:"7px 9px",borderRadius:4,border:"1px solid rgba(88,166,255,.18)"}}><input type="checkbox" checked={keys.includes(c.key)} onChange={()=>toggle(c.key)}/>{c.label}</label>)}</div>
+        <div style={{fontSize:11,color:"#8aa5c9",marginTop:12}}>Columns: {chosen.map(c=>c.label).join(" | ")||"None selected"}</div>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:17}}><button onClick={()=>setOpen(false)} style={buttonStyle}>Cancel</button><button disabled={!keys.length||!selectedVessels.length} onClick={copy} style={{...buttonStyle,background:"#194c83",color:"white",opacity:keys.length&&selectedVessels.length?1:.4}}>Copy table</button></div>
+      </div>
+    </div>}
+    {fallback&&<div style={{position:"fixed",inset:0,zIndex:9999,background:"#000b",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"#0c1729",padding:18,border:"1px solid #396ba0",borderRadius:8,width:550,maxWidth:"94vw"}}><div style={{fontSize:12,color:"#8cc8ff",marginBottom:8}}>Select all and copy (Ctrl+A, Ctrl+C)</div><textarea autoFocus readOnly onFocus={e=>e.target.select()} value={fallback} style={{width:"100%",height:240,boxSizing:"border-box",background:"#081222",color:"white"}}/><button onClick={()=>{setFallback("");setOpen(false)}} style={{...buttonStyle,marginTop:10}}>Close</button></div></div>}
+    {done&&<span style={{fontSize:11,color:"#43e97b"}}>Copied!</span>}
+  </>;
+}
+
 function CopyPositionsButton({filtV,fmtDateShort}){
   const [copied,setCopied]=React.useState(false);
   const [fallbackText,setFallbackText]=React.useState(null);
@@ -1451,6 +1510,25 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   },[unlocked]);
   // ────────────────────────────────────────────────────────────────────────
   const [tab,setTab]=useState(()=>guestMode?"pos":"pos");
+  const [dashboardFixingImport,setDashboardFixingImport]=useState(null);
+  const handleImportFixingWindow=useCallback(payload=>{
+    setDashboardFixingImport({...payload,requestId:`${Date.now()}-${Math.random().toString(36).slice(2)}`});
+    React.startTransition(()=>setTab("reports"));
+  },[]);
+  // CargoesMaster dispatches this event from the “To Report” action.
+  // Keep the actual cargo records (not only their IDs) for ReportsTab import.
+  const [reportCargoes,setReportCargoes]=useState([]);
+  useEffect(()=>{
+    const receiveCargoes=e=>{
+      const rows=Array.isArray(e.detail?.cargoes)?e.detail.cargoes:[];
+      if(!rows.length)return;
+      setReportCargoes(rows);
+      React.startTransition(()=>setTab("reports"));
+    };
+    window.addEventListener("steem:send-cargoes-to-report",receiveCargoes);
+    return()=>window.removeEventListener("steem:send-cargoes-to-report",receiveCargoes);
+  },[]);
+
   const [search,setSearch]=useState("");
   const [filters,setFilters]=useState(new Set());
   const [posTagFilter,setPosTagFilter]=useState(new Set());
@@ -1761,6 +1839,42 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
     return()=>cancelAnimationFrame(id);
   },[fixingExpanded,fixingPanelTab]);
   const [aisPanelTab,setAisPanelTab]=useState("Map");
+  // Positions top-row widths (percent). Drag either divider to resize adjacent panels.
+  const [positionsWidths,setPositionsWidths]=useState([32,34,34]);
+  const positionsTopRef=useRef(null);
+  const positionsDragRef=useRef(null);
+  useEffect(()=>{
+    const move=e=>{
+      const drag=positionsDragRef.current;
+      if(!drag||!positionsTopRef.current)return;
+      const rect=positionsTopRef.current.getBoundingClientRect();
+      const delta=(e.clientX-drag.startX)/rect.width*100;
+      const widths=[...drag.widths];
+      const i=drag.index;
+      const change=Math.max(16-widths[i],Math.min(delta,widths[i+1]-16));
+      widths[i]+=change;
+      widths[i+1]-=change;
+      setPositionsWidths(widths);
+    };
+    const up=()=>{positionsDragRef.current=null;document.body.style.cursor="";document.body.style.userSelect="";};
+    window.addEventListener("pointermove",move);
+    window.addEventListener("pointerup",up);
+    return()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);};
+  },[]);
+  const startPositionsResize=(index,e)=>{
+    e.preventDefault();
+    positionsDragRef.current={index,startX:e.clientX,widths:[...positionsWidths]};
+    document.body.style.cursor="col-resize";
+    document.body.style.userSelect="none";
+  };
+  const positionsDivider=index=>(
+    <div onPointerDown={e=>startPositionsResize(index,e)}
+      title="Drag to resize panels"
+      style={{width:8,flex:"0 0 8px",cursor:"col-resize",alignSelf:"stretch",display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none"}}>
+      <div style={{height:52,width:2,borderRadius:2,background:"#365476"}}/>
+    </div>
+  );
+
   const [posOutsiderView,setPosOutsiderView]=useState(false);
   const [outsiderSyncStatus,setOutsiderSyncStatus]=useState(null);
   function getInterUKCConfig(){
@@ -2222,7 +2336,7 @@ const vesselsTodayUpdated=useMemo(()=>{
     }).map(v=>v.vessel));
   },[vessels]);
 
-// FLAG comes exclusively from the already-loaded vessels_db, never from positions.
+// FLAG is read only from the existing vessels_db lookup.
 const vesselFlag = name => String((window.vesselDB || {})[String(name||"").toLowerCase().trim()]?.flag || "").trim().toUpperCase();
 const flagOptions = vesselDBLoaded ? [...new Set(vessels.map(v=>vesselFlag(v.vessel)).filter(Boolean))].sort() : [];
 
@@ -2508,7 +2622,7 @@ const filtV=useMemo(()=>{
   { key: "loa",       sortKey:"loa",       label: "LOA",           align:"left", width: colWidthsV.LOA },
   { key: "beam",      sortKey:"beam",      label: "Beam",        align:"right", width: colWidthsV.Beam },
   { key: "cbm",       sortKey:"cbm",       label: "CBM",           align:"left", width: colWidthsV.CBM },
-  { key: "date",      sortKey:"date",      label: "Date",        align:"center", width: colWidthsV.Date },
+  { key: "date",      sortKey:"date",      label: "Date",        align:"left", width: colWidthsV.Date },
   { key: "openPort",  sortKey:"openPort",  label: "Open Port", width: colWidthsV.OpenPort },
   { key: "comment",   sortKey:"comment",   label: "Comment",  width: colWidthsV.Comment },
   { key: "updatedAt", sortKey:"fileDate",  label: "Updated", align:"center", width: colWidthsV.FileDate },
@@ -2529,7 +2643,7 @@ const filtV=useMemo(()=>{
     { key:"built",    sortKey:"built",    label:"Blt",     align:"left", width:36 },
     { key:"dwt",      sortKey:"dwt",      label:"DWT",     align:"left", width:48 },
     { key:"coating",  sortKey:"coating",  label:"Coat",    width:44 },
-    { key:"date",     sortKey:"date",     label:"Date",    align:"center", width:44 },
+    { key:"date",     sortKey:"date",     label:"Date",    align:"left", width:44 },
     { key:"openPort", sortKey:"openPort", label:"Port",    width:80 },
     { key:"comment",  sortKey:"comment",  label:"Comment", width:90 },
     { key:"tag",      label:"Tag",        align:"center",  width:50 },
@@ -2705,14 +2819,14 @@ const filtV=useMemo(()=>{
                     <div style={{fontSize:mobile?14:22,fontWeight:800,color:"#eef6ff",marginTop:5}}>Enter your 4-digit access code</div>
                   </div>
 
-                  <div style={{display:"flex",gap:mobile?9:11,justifyContent:"center",marginBottom:mobile?12:17}}>
-                    {[0,1,2,3].map(i=><div key={i} style={{
-                      width:mobile?50:62,height:mobile?46:54,borderRadius:9,
-                      background:pinError?"rgba(255,107,107,.12)":pinInput.length>i?"rgba(88,166,255,.18)":"rgba(5,14,30,.72)",
-                      border:"1px solid "+(pinError?"rgba(255,107,107,.72)":pinInput.length>i?"rgba(88,166,255,.72)":"rgba(88,166,255,.18)"),
-                      display:"flex",alignItems:"center",justifyContent:"center",fontSize:mobile?21:24,fontWeight:850,color:pinError?"#ff6b6b":"#79c0ff",
-                      boxShadow:pinInput.length>i&&!pinError?"0 0 18px rgba(88,166,255,.12)":"none"
-                    }}><span style={{display:"block",fontSize:mobile?31:36,lineHeight:1,transform:"translateY(-1px)"}}>{pinInput.length>i?"*":""}</span></div>)}
+                  <div aria-label={`${pinInput.length} of 4 PIN digits entered`} style={{display:"flex",gap:mobile?15:19,justifyContent:"center",alignItems:"center",marginBottom:mobile?18:23,minHeight:mobile?24:28}}>
+                    {[0,1,2,3].map(i=><span key={i} style={{
+                      width:mobile?16:18,height:mobile?16:18,borderRadius:"50%",boxSizing:"border-box",
+                      background:pinError?"#ff6b6b":pinInput.length>i?"#79c0ff":"transparent",
+                      border:"2px solid "+(pinError?"#ff6b6b":pinInput.length>i?"#79c0ff":"rgba(139,169,205,.65)"),
+                      boxShadow:pinInput.length>i&&!pinError?"0 0 9px rgba(88,166,255,.25)":"none",
+                      transition:"background .12s ease,border-color .12s ease,box-shadow .12s ease"
+                    }}/>) }
                   </div>
 
                   <style>{`
@@ -3013,12 +3127,12 @@ const filtV=useMemo(()=>{
 
             {/* ── Top row: Perfect grid (desktop) ── */}
             {!mobile && (
-            <div style={{display:"flex",gap:10,flexDirection:mobile?"column":"row"}}>
+            <div ref={positionsTopRef} style={{display:"flex",gap:0,flexDirection:mobile?"column":"row",width:"100%"}}>
               
               {/* LEFT: Parse + Fixing (32%) */}
               <div
   style={{
-    width: mobile ? "100%" : "32%",
+    width: mobile ? "100%" : `calc(${positionsWidths[0]}% - 6px)`,
     minWidth: 0,
     height: mobile ? "auto" : 460,
     display: "flex",
@@ -3089,8 +3203,9 @@ const filtV=useMemo(()=>{
               {/* CENTER: Filters — redesigned as horizontal scrolling rows (frees up the box
                   that used to be split between this and the Regional Snapshot placeholder,
                   since Regional Snapshot is now a tab inside the AIS Map panel on the right) */}
+              {positionsDivider(0)}
               {!mobile&&(
-                <div style={{width:"34%",minWidth:0,height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                <div style={{width:`calc(${positionsWidths[1]}% - 6px)`,minWidth:0,height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
                   <HScrollStyle/>
                   {(opFilter||bucketFilters.size>0)&&(
                     <div style={{flexShrink:0,padding:"8px 12px 0 12px",display:"flex",flexDirection:"column",gap:4}}>
@@ -3163,7 +3278,7 @@ const filtV=useMemo(()=>{
                             {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<Chip key={f} col={C.amber} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</Chip>))}
                             {filters.size>0&&<Chip col={C.red} active={false} onClick={()=>setFilters(new Set())}>✕ Clear</Chip>}
                           </FilterRow>
-                          {/* Flag — sourced from vessels_db */}
+                          {/* Flag — vessels_db only */}
                           <FilterRow label="Flag" col="#a5b4fc">
                             {flagOptions.map(f=><Chip key={f} col="#a5b4fc" active={flagFilter.has(f)} onClick={()=>{setFlagFilter(prev=>{const n=new Set(prev);n.has(f)?n.delete(f):n.add(f);return n;});setPosPage(1);}}>{f}</Chip>)}
                             {flagFilter.size>0&&<Chip col={C.red} active={false} onClick={()=>{setFlagFilter(new Set());setPosPage(1);}}>✕</Chip>}
@@ -3203,12 +3318,32 @@ const filtV=useMemo(()=>{
                 </div>
               )}
 
-              {/* RIGHT: AIS Map / Regional Position Snapshot (34%) */}
+              {/* RIGHT: AIS Map / Regional Snapshot / Positions Preview */}
+              {positionsDivider(1)}
 {!mobile&&(
-  <div style={{width:"34%",minWidth:0}}>
-    <TabbedPanel tabs={["Map","Regional Snapshot"]} active={aisPanelTab} onChange={setAisPanelTab} height={460}>
+  <div style={{width:`calc(${positionsWidths[2]}% - 6px)`,minWidth:0}}>
+    <TabbedPanel tabs={["Map","Regional Snapshot","Positions Preview"]} active={aisPanelTab} onChange={setAisPanelTab} height={460}>
       {aisPanelTab==="Map" ? (
         <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels} onAisVesselsChange={setAisVesselSet}/></Suspense>
+      ) : aisPanelTab==="Positions Preview" ? (
+        <div style={{height:"100%",overflow:"auto",background:C.bg2}}>
+          <div style={{padding:"8px 10px",fontSize:11,color:C.faint,borderBottom:"1px solid "+C.bd}}>
+            Filtered positions · {filtV.length} vessel{filtV.length===1?"":"s"}
+          </div>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:10,textAlign:"left",whiteSpace:"nowrap"}}>
+            <thead style={{position:"sticky",top:0,background:C.bg2,zIndex:1}}>
+              <tr>{["VESSEL","DWT","BLT","DATE","OPEN PORT"].map(h=><th key={h} style={{padding:"8px 7px",color:C.blue,borderBottom:"1px solid "+C.bd}}>{h}</th>)}</tr>
+            </thead>
+            <tbody>{filtV.map((v,i)=><tr key={v.id||i} style={{borderBottom:"1px solid "+C.bd}}>
+              <td style={{padding:"7px",color:C.blue,fontWeight:600}}>{v.vessel||"—"}</td>
+              <td style={{padding:"7px",color:C.tx}}>{fmtN(v.dwt)||"—"}</td>
+              <td style={{padding:"7px",color:C.tx}}>{v.built||"—"}</td>
+              <td style={{padding:"7px",color:C.tx}}>{fmtDateShort(v.date)||v.date||"—"}</td>
+              <td style={{padding:"7px",color:C.tx}}>{v.openPort||"—"}</td>
+            </tr>)}</tbody>
+          </table>
+          {filtV.length===0&&<div style={{padding:20,textAlign:"center",fontSize:11,color:C.faint}}>No vessels match the current filters</div>}
+        </div>
       ) : (
         <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
           <span style={{fontSize:11,color:C.faint,textAlign:"center",padding:"0 16px"}}>Regional Position Snapshot — coming here next</span>
@@ -3307,6 +3442,10 @@ const filtV=useMemo(()=>{
                           {[["PPT","PPT"],["SUBS","Subs"],["HIDE_EMP","Employed"]].map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
                           {filters.size>0&&<B active={false} onClick={()=>setFilters(new Set())}><span style={{color:C.red}}>✕ Clear</span></B>}
                         </COL>
+                        <COL label="Flag" col="#a5b4fc">
+                          {flagOptions.map(f=><B key={f} active={flagFilter.has(f)} onClick={()=>{setFlagFilter(prev=>{const n=new Set(prev);n.has(f)?n.delete(f):n.add(f);return n;});setPosPage(1);}}>{f}</B>)}
+                          {flagFilter.size>0&&<B active={false} onClick={()=>{setFlagFilter(new Set());setPosPage(1);}}>✕</B>}
+                        </COL>
                         <COL label="Region" col="#7dd3fc">
                           {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
                         </COL>
@@ -3363,6 +3502,7 @@ const filtV=useMemo(()=>{
                   <Suspense fallback={null}><ExportPanel vessels={filtV} cargoes={cargoes} mode="pos" selVessels={selVessels}/></Suspense>
                   {/* Copy positions in formatted style */}
                   <CopyPositionsButton filtV={filtV} fmtDateShort={fmtDateShort}/>
+                  <ClientPositionCopy vessels={filtV} selVessels={selVessels}/>
                   {selVessels.size>0&&(
                     <>
                       <button
@@ -3580,10 +3720,10 @@ const filtV=useMemo(()=>{
 
       <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.built || ""}</td>
       <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtDwtFull(v.dwt)}</td>
-      <td style={{ ...tdTxt, color: C.dim }} title={v.coating||""}>{fmtCoating(v.coating)}</td>
+      <td style={{ ...tdTxt, color: C.dim }} title={v.coating||v.spec?.coated||""}>{fmtCoating(v.coating||v.spec?.coated)}</td>
       {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{v.loa || ""}</td>}
       {!mobile && <td style={{ ...tdNum, color: C.dim }}>{v.beam || ""}</td>}
-      {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtN(v.cbm)}</td>}
+      {!mobile && <td style={{ ...tdNum, textAlign:"left", color: C.dim }}>{fmtDwtFull(v.cbm)}</td>}
 
       {/* DATE */}
       <EC
@@ -3706,7 +3846,7 @@ const filtV=useMemo(()=>{
                       `}</style>
                       <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
                         <div>
-                          <div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:12}}><div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>{selV.imoNo&&<span style={{fontSize:12,color:C.amber}}>IMO {selV.imoNo}</span>}</div>
                           <div style={{fontSize:12,color:C.purple}}>{selV.operator||""}</div>
                         </div>
                         <button onClick={()=>{setSel(null);setSelectedAISVessels([]);}} style={{background:"none",border:"none",color:C.dim,fontSize:14,cursor:"pointer"}}>✕</button>
@@ -3716,11 +3856,10 @@ const filtV=useMemo(()=>{
                         {[["Open Port","openPort",C.amber],["Date","date",C.blue],["Comment","comment",C.dim],["Operator","operator",C.purple],["Built","built",C.dim],["DWT","dwt",C.amber],["Coating","coating",C.green],["LOA","loa",C.dim],["Beam","beam",C.dim],["CBM","cbm",C.dim]].map(([l,f,col])=>(
                           <div key={f} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderBottom:"1px solid "+C.bg,gap:4}}>
                             <span style={{fontSize:12,color:C.faint,minWidth:55,flexShrink:0}}>{l}</span>
-                            <PanelEC value={selV[f]} color={col} placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
+                            <PanelEC value={selV[f]} displayValue={(f==="dwt"||f==="cbm")&&selV[f]!=null&&selV[f]!==""?fmtDwtFull(selV[f]):undefined} color={col} placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
                           </div>
                         ))}
 
-                        <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em",padding:"6px 0 3px",borderBottom:"1px solid "+C.bd2}}>Spec</div>
                         {[["Fuel","spec.fuel",C.purple],["Ice Class","spec.iceClass",C.blue],["Last Cargo","spec.lastCargo",C.dim]].map(([l,f,col])=>{
                           const val=f.startsWith("spec.")?(selV.spec||{})[f.split(".")[1]]:selV[f];
                           return(
@@ -3886,7 +4025,7 @@ const filtV=useMemo(()=>{
           </div>
         )}
         {tab==="dash"&&(
-          <Suspense fallback={<TabFallback/>}><Dashboard vessels={vessels} cargoes={cargoes} history={history||[]}/></Suspense>
+          <Suspense fallback={<TabFallback/>}><Dashboard vessels={vessels} cargoes={cargoes} history={history||[]} onImportFixingWindow={handleImportFixingWindow}/></Suspense>
         )}
         {tab==="notes"&&(
           <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
@@ -3911,7 +4050,7 @@ const filtV=useMemo(()=>{
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
           </div>
         )}
-        {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={Array.from(selCargoes)}/></Suspense></div>}
+        {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={reportCargoes} dashboardFixingImport={dashboardFixingImport} onDashboardFixingImportHandled={()=>setDashboardFixingImport(null)}/></Suspense></div>}
         {tab==="map"&&<Suspense fallback={<TabFallback/>}><FreightMapTab/></Suspense>}
       </TabErrorBoundary>
       </div>
