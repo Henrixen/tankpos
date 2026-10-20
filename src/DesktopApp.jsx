@@ -3225,8 +3225,8 @@ const filtV=useMemo(()=>{
               .fixing-history-fill > div > svg { flex:1 1 auto !important; height:auto !important; min-height:0 !important; width:100% !important; }
             `}</style>}
             <Suspense fallback={null}><FixingWindowChart
-              vessels={filtV}
-              filterActive={filtV.length !== vessels.length}
+              vessels={displayPosRows}
+              filterActive={displayPosRows.length !== vessels.length}
               tagFilter={cTagFilter||null}
               fillHeight={fixingExpanded}
             /></Suspense>
@@ -3235,7 +3235,7 @@ const filtV=useMemo(()=>{
       ) : (
         <Suspense fallback={null}><OpeningBreakdown
           vessels={vessels14d}
-          filteredVessels={filtV}
+          filteredVessels={displayPosRows}
           bucketFilters={bucketFilters}
           onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
           fillHeight={true}
@@ -3443,15 +3443,15 @@ const filtV=useMemo(()=>{
                             }
                           `}</style>
                           <Suspense fallback={null}><FixingWindowChart
-                            vessels={filtV}
-                            filterActive={filtV.length !== vessels.length}
+                            vessels={displayPosRows}
+                            filterActive={displayPosRows.length !== vessels.length}
                             tagFilter={cTagFilter||null}
                           /></Suspense>
                         </>
                       ) : (
                         <Suspense fallback={null}><OpeningBreakdown
-                          vessels={vessels14d.filter(v=>vesselsTodayUpdated.has(v.vessel))}
-                          filteredVessels={filtV.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+                          vessels={vessels14d}
+                          filteredVessels={displayPosRows}
                           bucketFilters={bucketFilters}
                           onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
                           fillHeight={true}
