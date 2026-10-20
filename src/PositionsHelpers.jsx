@@ -46,15 +46,28 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
   ];
 
   const comparison=React.useMemo(()=>{
+    // Current bars count today's filtered vessels directly; historical arrows
+    // retain their existing seven-report comparison logic.
+    const current=[0,0,0,0];
+    const unique=new Set();
+    for(const v of filteredVessels||vessels||[]){
+      const name=String(v.vessel||"").trim().toUpperCase();
+      if(!name||unique.has(name))continue;
+      unique.add(name);
+      if(String(v.openPort||"").toUpperCase()==="EMPLOYED")continue;
+      const dwt=Number(String(v.dwt||"").replace(/\s/g,""))||0;
+      const seg=FW_SEGMENTS.find(s=>dwt>=s.dwt[0]&&dwt<=s.dwt[1]);
+      if(!seg||!activeSeg.has(seg.key))continue;
+      const days=daysBetween(v.date);
+      if(days===null||!Number.isFinite(days)||days<0)continue;
+      const idx=bucketDefs.findIndex(b=>b.test(days));
+      if(idx>=0)current[idx]++;
+    }
     const byDay={};
-    // Use the same currently filtered vessel universe as the Positions table.
-    // This makes Tags / Updated / Region / Status / Segment / DWT / Built filters
-    // flow through to both the current and 30-day comparison bars.
-    const filteredNames = Array.isArray(filteredVessels)
-      ? new Set(filteredVessels.map(v=>String(v.vessel||"").toUpperCase()).filter(Boolean))
-      : null;
+    const filteredNames=Array.isArray(filteredVessels)
+      ?new Set(filteredVessels.map(v=>String(v.vessel||"").toUpperCase())):null;
     for(const r of historyRows){
-      if(filteredNames && !filteredNames.has(String(r.vessel_name||"").toUpperCase())) continue;
+      if(filteredNames&&!filteredNames.has(String(r.vessel_name||"").toUpperCase()))continue;
       const report=new Date(r.last_update_spotship),open=new Date(r.open_date);
       if(isNaN(report)||isNaN(open)||!r.vessel_name)continue;
       const dwt=Number(r.dwt)||0;
@@ -67,9 +80,7 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
       if(!prev||new Date(prev.last_update_spotship)<report)byDay[day][key]=r;
     }
     const dates=Object.keys(byDay).sort();
-    if(!dates.length)return null;
-    const latest7=dates.slice(-7);
-    const latestDate=new Date(dates[dates.length-1]+"T12:00:00");
+    const latestDate=dates.length?new Date(dates[dates.length-1]+"T12:00:00"):new Date();
     const target=new Date(latestDate);target.setDate(target.getDate()-30);
     const old7=dates.filter(d=>new Date(d+"T12:00:00")<=target).slice(-7);
     const countsFor=day=>{
@@ -83,19 +94,10 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
       }
       return counts;
     };
-    const avg=ds=>{
-      if(!ds.length)return [0,0,0,0];
-      const sums=[0,0,0,0];
-      ds.forEach(d=>countsFor(d).forEach((v,i)=>sums[i]+=v));
-      return sums.map(v=>Math.round(v/ds.length));
-    };
-    const shortDate=d=>{const x=new Date(d+"T12:00:00");return x.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});};
-    return{
-      current:avg(latest7),old:avg(old7),
-      currentLabel:latest7.length?shortDate(latest7[0])+"–"+shortDate(latest7[latest7.length-1]):"—",
-      oldLabel:old7.length?shortDate(old7[0])+"–"+shortDate(old7[old7.length-1]):"—"
-    };
-  },[historyRows,activeSeg,filteredVessels]);
+    const old=old7.length?old7.reduce((s,d)=>{countsFor(d).forEach((n,i)=>s[i]+=n);return s;},[0,0,0,0]).map(n=>Math.round(n/old7.length)):[0,0,0,0];
+    const shortDate=d=>new Date(d+"T12:00:00").toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
+    return {current,old,currentLabel:"Live filtered positions",oldLabel:old7.length?shortDate(old7[0])+"–"+shortDate(old7[old7.length-1]):"—"};
+  },[historyRows,activeSeg,filteredVessels,vessels]);
 
   const maxCount=Math.max(1,...(comparison?[...comparison.current,...comparison.old]:[1]));
 
@@ -108,7 +110,7 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
             style={{fontSize:10,fontWeight:700,padding:"2px 7px",flex:"0 0 auto",borderRadius:4,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(on?s.color:"rgba(88,166,255,0.15)"),background:on?s.color+"22":"transparent",color:on?s.color:"rgba(140,170,210,0.35)"}}>{s.label}</button>;
         })}
       </div>
-      {loadingHistory?(
+      {false&&loadingHistory?(
         <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:C.faint}}>Loading…</div>
       ):!comparison?(
         <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:C.faint}}>No historical positions available</div>
@@ -137,7 +139,7 @@ function OpeningBreakdown({vessels, filteredVessels, bucketFilters=new Set(), on
         </div>
       )}
       {!loadingHistory&&comparison&&<div style={{fontSize:8.5,color:"rgba(150,180,220,0.62)",whiteSpace:"nowrap",marginTop:2,lineHeight:"11px",minHeight:11,textAlign:"center",width:"100%"}}>
-        <span style={{color:"#58a6ff",fontWeight:700}}>■</span> Current 7 reports {comparison.currentLabel}
+        <span style={{color:"#58a6ff",fontWeight:700}}>■</span> Current {comparison.currentLabel}
         <span style={{marginLeft:9,color:"rgba(190,205,225,0.78)",fontWeight:700}}>◀</span> 30d ago {comparison.oldLabel}
       </div>}
     </div>
