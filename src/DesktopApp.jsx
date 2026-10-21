@@ -2606,29 +2606,77 @@ const filtV=useMemo(()=>{
     });
   },[filtV]);
 
-  // The preview uses the underlying unique vessels, not the current table search,
-  // DWT/date/segment filters or pagination. Tags and starred positions alone define it.
+  // Resolve duplicate positions by freshness before applying independent preview tags.
+  const [previewSort,setPreviewSort]=useState({key:"operator",dir:1});
+  const [previewFormat,setPreviewFormat]=useState("table");
+  const [previewCopied,setPreviewCopied]=useState("");
+  const previewCopyTimer=useRef(null);
+  useEffect(()=>()=>clearTimeout(previewCopyTimer.current),[]);
+  const previewColumns=[["operator","Operator"],["vessel","Vessel"],["dwt","DWT"],["built","Blt"],["date","Date"],["openPort","Port"],["comment","Comment"],["updatedAt","Updated date"]];
   const previewVessels=useMemo(()=>{
     const tags=new Set([...previewTags].map(t=>String(t).trim().toUpperCase()));
-    const seen=new Set();
-    return vessels.filter(v=>{
+    const latest=new Map();
+    const timestamp=value=>{const n=Date.parse(value||"");return Number.isFinite(n)?n:0;};
+    const freshness=v=>timestamp(v.fileDate)||timestamp(v.updatedAt)||timestamp(v.addedAt);
+    for(const v of vessels){
       const key=String(v.vessel||"").trim().toUpperCase();
-      if(!key||seen.has(key))return false;
+      if(!key)continue;
+      const previous=latest.get(key);
+      if(!previous||freshness(v)>freshness(previous)||(freshness(v)===freshness(previous)&&timestamp(v.updatedAt)>timestamp(previous.updatedAt)))latest.set(key,v);
+    }
+    const rows=[...latest.values()].filter(v=>{
       const vesselTags=(Array.isArray(v.tag)?v.tag.join("|"):String(v.tag||""))
         .split(/[|,;]+/).map(t=>t.trim().toUpperCase());
-      const matched=vesselTags.some(t=>tags.has(t))||(previewSaved&&savedVessels.has(v.vessel));
-      if(matched)seen.add(key);
-      return matched;
+      return vesselTags.some(t=>tags.has(t))||(previewSaved&&savedVessels.has(v.vessel));
     });
-  },[vessels,previewTags,previewSaved,savedVessels]);
-  const copyPreview=(email=false)=>{
-    const cols=["VESSEL","DWT","BLT","DATE","OPEN PORT"];
-    const rows=previewVessels.map(v=>[v.vessel||"",v.dwt||"",v.built||"",fmtDateShort(v.date)||v.date||"",v.openPort||""]);
-    const value=email
-      ? rows.map(r=>r.join(" | ")).join("\n")
-      : [cols,...rows].map(r=>r.join("\t")).join("\n");
-    if(navigator.clipboard?.writeText)navigator.clipboard.writeText(value).catch(()=>{});
-    else{const ta=document.createElement("textarea");ta.value=value;document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove();}
+    const sortValue=v=>{
+      const value=v[previewSort.key];
+      if(previewSort.key==="dwt"||previewSort.key==="built")return Number(String(value||"").replace(/[^0-9.]/g,""))||0;
+      if(previewSort.key==="date")return daysBetween(value)??Infinity;
+      if(previewSort.key==="updatedAt")return timestamp(value);
+      return String(value||"");
+    };
+    return rows.sort((a,b)=>{
+      const av=sortValue(a),bv=sortValue(b);
+      const result=typeof av==="number"?(av===bv?0:av<bv?-1:1):av.localeCompare(bv,undefined,{numeric:true,sensitivity:"base"});
+      return result*previewSort.dir||String(a.vessel).localeCompare(String(b.vessel));
+    });
+  },[vessels,previewTags,previewSaved,savedVessels,previewSort]);
+  const copyPreview=async(email=false)=>{
+    const escapeHTML=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    const cols=previewColumns.map(([,label])=>label.toUpperCase());
+    const rows=previewVessels.map(v=>[v.operator||"",v.vessel||"",fmtDwtFull(v.dwt),v.built||"",fmtDateShort(v.date)||v.date||"",v.openPort||"",v.comment||"",fmtDateShort(v.updatedAt)||""]);
+    let value,html;
+    if(previewFormat==="short"){
+      const groups=new Map();
+      for(const v of previewVessels){
+        const operator=String(v.operator||"Unknown").trim();
+        if(!groups.has(operator))groups.set(operator,[]);
+        groups.get(operator).push([v.vessel||"",v.cbm?fmtDwtFull(v.cbm)+" CBM":"", "open",fmtDateShort(v.date)||v.date||"TBA",v.openPort||"TBA"].filter(Boolean).join(" "));
+      }
+      value=[...groups].map(([op,lines])=>[op,...lines].join("\n")).join("\n\n");
+      html=[...groups].map(([op,lines])=>"<div style='margin-bottom:14px'><strong>"+escapeHTML(op)+"</strong><br>"+lines.map(escapeHTML).join("<br>")+"</div>").join("");
+    }else{
+      value=email?rows.map(r=>r.join(" | ")).join("\n"):[cols,...rows].map(r=>r.join("\t")).join("\n");
+      html="<table style='border-collapse:collapse;font-family:Arial;font-size:12px'><thead><tr>"+cols.map(c=>"<th style='text-align:left;padding:5px 8px'>"+escapeHTML(c)+"</th>").join("")+"</tr></thead><tbody>"+rows.map(r=>"<tr>"+r.map(c=>"<td style='padding:5px 8px'>"+escapeHTML(c)+"</td>").join("")+"</tr>").join("")+"</tbody></table>";
+    }
+    const fallback=()=>{
+      const handler=e=>{e.preventDefault();e.clipboardData.setData("text/plain",value);e.clipboardData.setData("text/html",html);};
+      const ta=document.createElement("textarea");ta.value=value;ta.style.cssText="position:fixed;opacity:0";document.body.appendChild(ta);ta.select();
+      document.addEventListener("copy",handler);
+      let ok=false;
+      try{ok=document.execCommand("copy");}finally{document.removeEventListener("copy",handler);ta.remove();}
+      if(!ok)throw new Error("Copy failed");
+    };
+    try{
+      if((email||previewFormat==="short")&&navigator.clipboard?.write&&typeof ClipboardItem!=="undefined"){
+        try{await navigator.clipboard.write([new ClipboardItem({"text/plain":new Blob([value],{type:"text/plain"}),"text/html":new Blob([html],{type:"text/html"})})]);}catch{fallback();}
+      }else if(navigator.clipboard?.writeText){try{await navigator.clipboard.writeText(value);}catch{fallback();}}
+      else fallback();
+      setPreviewCopied(email?"email":"copy");
+      clearTimeout(previewCopyTimer.current);
+      previewCopyTimer.current=setTimeout(()=>setPreviewCopied(""),2500);
+    }catch(error){console.error("Could not copy positions preview",error);}
   };
 
   const posColumns = [
@@ -3225,8 +3273,8 @@ const filtV=useMemo(()=>{
               .fixing-history-fill > div > svg { flex:1 1 auto !important; height:auto !important; min-height:0 !important; width:100% !important; }
             `}</style>}
             <Suspense fallback={null}><FixingWindowChart
-              vessels={displayPosRows}
-              filterActive={displayPosRows.length !== vessels.length}
+              vessels={filtV}
+              filterActive={filtV.length !== vessels.length}
               tagFilter={cTagFilter||null}
               fillHeight={fixingExpanded}
             /></Suspense>
@@ -3235,7 +3283,7 @@ const filtV=useMemo(()=>{
       ) : (
         <Suspense fallback={null}><OpeningBreakdown
           vessels={vessels14d}
-          filteredVessels={displayPosRows}
+          filteredVessels={filtV}
           bucketFilters={bucketFilters}
           onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
           fillHeight={true}
@@ -3377,21 +3425,25 @@ const filtV=useMemo(()=>{
               </div>
             </div>
             <div style={{display:"flex",gap:4,flexShrink:0}}>
-              <button style={fb(false)} onClick={()=>copyPreview(false)}>Copy ({previewVessels.length})</button>
-              <button style={fb(false)} onClick={()=>copyPreview(true)}>Copy for email ({previewVessels.length})</button>
+              <select aria-label="Preview export format" value={previewFormat} onChange={e=>setPreviewFormat(e.target.value)} style={{...fb(false),background:C.bg2}}><option value="table">Table</option><option value="short">Short list</option></select>
+              <button disabled={!previewVessels.length} style={{...fb(false),...(previewCopied==="copy"?{color:C.green,borderColor:C.green}:{} )}} onClick={()=>copyPreview(false)}>{previewCopied==="copy"?"✓ Copied!":`Copy (${previewVessels.length})`}</button>
+              <button disabled={!previewVessels.length} style={{...fb(false),...(previewCopied==="email"?{color:C.green,borderColor:C.green}:{} )}} onClick={()=>copyPreview(true)}>{previewCopied==="email"?"✓ Copied!":`Copy for email (${previewVessels.length})`}</button>
               
             </div>
           </div>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,textAlign:"left",whiteSpace:"nowrap"}}>
             <thead style={{position:"sticky",top:0,background:"#142034",zIndex:1}}>
-              <tr>{["VESSEL","DWT","BLT","DATE","OPEN PORT"].map(h=><th key={h} style={{padding:"9px 7px",fontSize:10,fontWeight:700,color:"#4977b4",letterSpacing:"0.06em",borderBottom:"1px solid "+C.bd}}>{h}</th>)}</tr>
+              <tr>{previewColumns.map(([key,label])=><th key={key} onClick={()=>setPreviewSort(prev=>({key,dir:prev.key===key?-prev.dir:1}))} aria-sort={previewSort.key===key?(previewSort.dir===1?"ascending":"descending"):"none"} style={{padding:"9px 7px",fontSize:10,fontWeight:700,color:previewSort.key===key?C.blue:"#4977b4",letterSpacing:"0.06em",borderBottom:"1px solid "+C.bd,cursor:"pointer",userSelect:"none"}}>{label.toUpperCase()}{previewSort.key===key?(previewSort.dir===1?" ▲":" ▼"):""}</th>)}</tr>
             </thead>
             <tbody>{previewVessels.map((v,i)=><tr key={String(v.vessel).toUpperCase()} style={{background:i%2===0?"#0e192b":"#111e31",borderBottom:"1px solid rgba(58,100,180,0.08)",height:29}}>
+              <td style={{padding:"6px 7px",color:C.blue}}>{String(v.operator||"—").toUpperCase()}</td>
               <td style={{padding:"6px 7px",color:C.blue,fontWeight:700}}>{String(v.vessel||"—").toUpperCase()}</td>
               <td style={{padding:"6px 7px",color:C.blue,fontWeight:600}}>{fmtN(v.dwt)||"—"}</td>
               <td style={{padding:"6px 7px",color:C.blue}}>{v.built||"—"}</td>
               <td style={{padding:"6px 7px",color:C.blue,fontWeight:600}}>{fmtDateShort(v.date)||v.date||"—"}</td>
               <td style={{padding:"6px 7px",color:C.blue}}>{String(v.openPort||"—").toUpperCase()}</td>
+              <td style={{padding:"6px 7px",color:C.dim}}>{v.comment||"—"}</td>
+              <td style={{padding:"6px 7px",color:C.dim}}>{fmtDateShort(v.updatedAt)||"—"}</td>
             </tr>)}</tbody>
           </table>
           {previewVessels.length===0&&<div style={{padding:20,textAlign:"center",fontSize:11,color:C.faint}}>No positions in preview. Click a tag or Saved ★ to add vessels.</div>}
@@ -3443,15 +3495,15 @@ const filtV=useMemo(()=>{
                             }
                           `}</style>
                           <Suspense fallback={null}><FixingWindowChart
-                            vessels={displayPosRows}
-                            filterActive={displayPosRows.length !== vessels.length}
+                            vessels={filtV}
+                            filterActive={filtV.length !== vessels.length}
                             tagFilter={cTagFilter||null}
                           /></Suspense>
                         </>
                       ) : (
                         <Suspense fallback={null}><OpeningBreakdown
-                          vessels={vessels14d}
-                          filteredVessels={displayPosRows}
+                          vessels={vessels14d.filter(v=>vesselsTodayUpdated.has(v.vessel))}
+                          filteredVessels={filtV.filter(v=>vesselsTodayUpdated.has(v.vessel))}
                           bucketFilters={bucketFilters}
                           onBucketFilter={k=>setBucketFilters(s=>{const n=new Set(s);n.has(k)?n.delete(k):n.add(k);return n;})}
                           fillHeight={true}
