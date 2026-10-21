@@ -2642,6 +2642,32 @@ const filtV=useMemo(()=>{
       return result*previewSort.dir||String(a.vessel).localeCompare(String(b.vessel));
     });
   },[vessels,previewTags,previewSaved,savedVessels,previewSort]);
+  async function removePreviewVessel(v){
+    const activeTags=new Set([...previewTags].map(t=>String(t).trim().toUpperCase()));
+    const tags=(Array.isArray(v.tag)?v.tag:String(v.tag||"").split(/[|,;]+/))
+      .map(t=>String(t).trim()).filter(Boolean);
+    const remaining=tags.filter(t=>!activeTags.has(t.toUpperCase()));
+    if(remaining.length!==tags.length)await Promise.resolve(onUpdateV(v.vessel,"tag",remaining.join("|")));
+    if(savedVessels.has(v.vessel))toggleSavedVessel(v.vessel);
+  }
+  function savePreviewCell(v,key,value){
+    if(key==="vessel")return renameVesselAndRefreshSpecs(v.vessel,value);
+    let next=String(value??"").trim();
+    if(key==="date"){
+      const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const numeric=next.match(/^(\d{1,2})[/-](\d{1,2})$/);
+      const named=next.match(/^(\d{1,2})\s+([a-z]{3})/i);
+      if(numeric&&+numeric[2]>=1&&+numeric[2]<=12)next=+numeric[1]+" "+months[+numeric[2]-1];
+      else if(named){const month=months.find(m=>m.toLowerCase()===named[2].toLowerCase());if(month)next=+named[1]+" "+month;}
+    }
+    if(key==="updatedAt"&&next){
+      const parsed=new Date(next);
+      if(isNaN(parsed.getTime()))return;
+      next=parsed.toISOString();
+    }
+    return onUpdateV(v.vessel,key,next);
+  }
+
   const copyPreview=async(email=false)=>{
     const escapeHTML=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
     const cols=previewColumns.map(([,label])=>label.toUpperCase());
@@ -3433,17 +3459,19 @@ const filtV=useMemo(()=>{
           </div>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,textAlign:"left",whiteSpace:"nowrap"}}>
             <thead style={{position:"sticky",top:0,background:"#142034",zIndex:1}}>
-              <tr>{previewColumns.map(([key,label])=><th key={key} onClick={()=>setPreviewSort(prev=>({key,dir:prev.key===key?-prev.dir:1}))} aria-sort={previewSort.key===key?(previewSort.dir===1?"ascending":"descending"):"none"} style={{padding:"9px 7px",fontSize:10,fontWeight:700,color:previewSort.key===key?C.blue:"#4977b4",letterSpacing:"0.06em",borderBottom:"1px solid "+C.bd,cursor:"pointer",userSelect:"none"}}>{label.toUpperCase()}{previewSort.key===key?(previewSort.dir===1?" ▲":" ▼"):""}</th>)}</tr>
+              <tr>{previewColumns.map(([key,label])=><th key={key} onClick={()=>setPreviewSort(prev=>({key,dir:prev.key===key?-prev.dir:1}))} aria-sort={previewSort.key===key?(previewSort.dir===1?"ascending":"descending"):"none"} style={{padding:"9px 7px",fontSize:10,fontWeight:700,color:previewSort.key===key?C.blue:"#4977b4",letterSpacing:"0.06em",borderBottom:"1px solid "+C.bd,cursor:"pointer",userSelect:"none"}}>{label.toUpperCase()}{previewSort.key===key?(previewSort.dir===1?" ▲":" ▼"):""}</th>)}<th style={{width:22}} aria-label="Remove from shortlist"/></tr>
             </thead>
             <tbody>{previewVessels.map((v,i)=><tr key={String(v.vessel).toUpperCase()} style={{background:i%2===0?"#0e192b":"#111e31",borderBottom:"1px solid rgba(58,100,180,0.08)",height:29}}>
-              <td style={{padding:"6px 7px",color:C.blue}}>{String(v.operator||"—").toUpperCase()}</td>
-              <td style={{padding:"6px 7px",color:C.blue,fontWeight:700}}>{String(v.vessel||"—").toUpperCase()}</td>
-              <td style={{padding:"6px 7px",color:C.blue,fontWeight:600}}>{fmtN(v.dwt)||"—"}</td>
-              <td style={{padding:"6px 7px",color:C.blue}}>{v.built||"—"}</td>
-              <td style={{padding:"6px 7px",color:C.blue,fontWeight:600}}>{fmtDateShort(v.date)||v.date||"—"}</td>
-              <td style={{padding:"6px 7px",color:C.blue}}>{String(v.openPort||"—").toUpperCase()}</td>
-              <td style={{padding:"6px 7px",color:C.dim}}>{v.comment||"—"}</td>
-              <td style={{padding:"6px 7px",color:C.dim}}>{fmtDateShort(v.updatedAt)||"—"}</td>
+              {previewColumns.map(([key,label])=><EC
+                key={key}
+                value={key==="updatedAt"?String(v.updatedAt||"").slice(0,10):String(v[key]??"")}
+                color={["vessel","date","openPort"].includes(key)?"#79c0ff":C.dim}
+                bold={false}
+                placeholder={label}
+                onSave={value=>savePreviewCell(v,key,value)}
+                style={{padding:"0 1px",fontFamily:"inherit",fontSize:12,fontWeight:400,color:C.dim,minWidth:key==="comment"?120:key==="updatedAt"?150:60}}
+              />)}
+              <td style={{padding:"0 4px",textAlign:"center"}}><button title="Remove active shortlist tags and saved star" aria-label={`Remove ${v.vessel} from shortlist`} onClick={()=>removePreviewVessel(v)} style={{border:"none",background:"transparent",color:C.faint,fontSize:14,padding:"2px",cursor:"pointer"}}>×</button></td>
             </tr>)}</tbody>
           </table>
           {previewVessels.length===0&&<div style={{padding:20,textAlign:"center",fontSize:11,color:C.faint}}>No positions in preview. Click a tag or Saved ★ to add vessels.</div>}
