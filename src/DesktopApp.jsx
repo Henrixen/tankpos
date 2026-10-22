@@ -3,7 +3,6 @@ import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
 import { loadHistory } from "./supabaseHelpers";
 import { supabase } from "./supabaseclient";
-import { getUsageCache, fetchUsageTotals } from "./aiUsage";
 
 // Every component lazy-loaded to fully break circular dependency chains
 const EC             = React.lazy(()=>import("./EC"));
@@ -23,7 +22,13 @@ const FixingWindowChart = React.lazy(()=>import("./PositionsHelpers").then(m=>({
 const ExportPanel    = React.lazy(()=>import("./PositionsHelpers").then(m=>({default:m.ExportPanel})));
 const IntelVault     = React.lazy(()=>import("./IntelVault"));
 const IntelVaultStrip = React.lazy(()=>import("./IntelVault").then(m=>({default:m.IntelVaultStrip})));
-const AISMap         = React.lazy(()=>import("./AISMap"));
+// AIS downloads are paused: do not mount/import the live map or its polling effects.
+function AISMap(){
+  return <div style={{height:"100%",minHeight:180,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,background:C.bg2,color:C.dim}}>
+    <span style={{fontSize:13,fontWeight:600}}>AIS paused</span>
+    <span style={{fontSize:11}}>AIS downloads are disabled.</span>
+  </div>;
+}
 const MatrixTable    = React.lazy(()=>import("./components/ui/MatrixTable"));
 const VoyageMatrix   = React.lazy(()=>import("./VoyageMatrix"));
 const NotesTab       = React.lazy(()=>import("./NotesTab"));
@@ -692,69 +697,6 @@ function TagManager(){
           <button onClick={()=>{const i=document.getElementById("newTagInput");if(i&&i.value.trim()){addCustomTag(i.value.trim());i.value="";refresh();}}}
             style={{fontSize:12,padding:"5px 12px",borderRadius:5,border:"1px solid rgba(88,166,255,0.3)",background:"rgba(88,166,255,0.1)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"}}>+ Add</button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// AI Credit tracker — shows estimated remaining balance
-const STARTING_BALANCE_KEY = "signal_ai_starting_balance";
-function AICreditWidget(){
-  const [usage,setUsage]=React.useState(getUsageCache);
-  const [starting,setStarting]=React.useState(()=>{
-    const s=localStorage.getItem(STARTING_BALANCE_KEY);
-    return s?parseFloat(s):9.38; // default to current known balance
-  });
-  const [editing,setEditing]=React.useState(false);
-  const [editVal,setEditVal]=React.useState("");
-
-  // Refresh from Supabase every 60s
-  React.useEffect(()=>{
-    fetchUsageTotals().then(t=>setUsage(t));
-    const interval=setInterval(()=>fetchUsageTotals().then(t=>setUsage(t)),60000);
-    return()=>clearInterval(interval);
-  },[]);
-
-  const remaining=Math.max(0,starting-usage.total);
-  const pct=starting>0?Math.min(100,remaining/starting*100):100;
-  const barCol=pct>50?"#43e97b":pct>20?"#faa356":"#ef4444";
-
-  function saveBalance(v){
-    const n=parseFloat(v);
-    if(!isNaN(n)&&n>=0){
-      setStarting(n);
-      localStorage.setItem(STARTING_BALANCE_KEY,String(n));
-    }
-    setEditing(false);
-  }
-
-  return(
-    <div style={{display:"flex",flexDirection:"column",gap:2,padding:"4px 10px",
-      background:"rgba(8,16,32,0.6)",border:"1px solid rgba(58,130,246,0.15)",
-      borderRadius:7,minWidth:150,cursor:"pointer"}}
-      title="Click balance to update starting amount">
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-        <span style={{fontSize:9,fontWeight:700,color:"rgba(120,160,220,0.45)",textTransform:"uppercase",letterSpacing:"0.08em"}}>API Credits</span>
-        {editing?(
-          <input autoFocus defaultValue={starting.toFixed(2)}
-            onBlur={e=>saveBalance(e.target.value)}
-            onKeyDown={e=>{if(e.key==="Enter")saveBalance(e.target.value);if(e.key==="Escape")setEditing(false);}}
-            style={{width:60,fontSize:11,background:"rgba(8,16,32,0.9)",border:"1px solid rgba(88,166,255,0.4)",
-              borderRadius:3,color:"#cde",padding:"1px 5px",fontFamily:"inherit",outline:"none",textAlign:"right"}}/>
-        ):(
-          <span style={{fontSize:11,fontWeight:700,color:barCol,cursor:"pointer"}}
-            onClick={()=>{setEditVal(starting.toFixed(2));setEditing(true);}}>
-            ${remaining.toFixed(2)} left
-          </span>
-        )}
-      </div>
-      {/* Progress bar */}
-      <div style={{height:3,background:"rgba(255,255,255,0.08)",borderRadius:2}}>
-        <div style={{height:"100%",borderRadius:2,background:barCol,width:pct+"%",transition:"width 0.5s"}}/>
-      </div>
-      <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"rgba(100,140,180,0.4)"}}>
-        <span>Today ${usage.today.toFixed(3)}</span>
-        <span>Month ${usage.month.toFixed(3)}</span>
       </div>
     </div>
   );
@@ -2336,7 +2278,22 @@ const quoteFixtureColumns = [
     const key=String(v.vessel||"").trim().toLowerCase();
     return String(vesselFlags[key]??window.vesselDB?.[key]?.flag??v.flag??"").trim();
   }
-  const flagOptions=Array.from(new Set(vessels.map(v=>vesselFlag(v).toUpperCase()).filter(Boolean))).sort();
+  const euFlagAliases=new Set([
+    "AT","AUT","AUSTRIA","BE","BEL","BELGIUM","BG","BGR","BULGARIA",
+    "HR","HRV","CROATIA","CY","CYP","CYPRUS","CZ","CZE","CZECHIA","CZECH REPUBLIC",
+    "DK","DNK","DENMARK","DANISH","DIS","DAS","DANISH INTERNATIONAL REGISTER",
+    "EE","EST","ESTONIA","FI","FIN","FINLAND","FR","FRA","FRANCE","FRENCH","RIF","FIS","FRENCH INTERNATIONAL REGISTER",
+    "DE","DEU","GER","GERMANY","GR","GRC","GRE","GREECE","HU","HUN","HUNGARY",
+    "IE","IRL","IRELAND","IT","ITA","ITALY","LV","LVA","LATVIA","LT","LTU","LITHUANIA",
+    "LU","LUX","LUXEMBOURG","MT","MLT","MALTA","MALTESE","NL","NLD","NED","NETHERLANDS","THE NETHERLANDS","DUTCH",
+    "PL","POL","POLAND","PT","PRT","POR","PORTUGAL","MADEIRA","PORTUGAL (MADEIRA)",
+    "RO","ROU","ROMANIA","SK","SVK","SLOVAKIA","SI","SVN","SLOVENIA",
+    "ES","ESP","SPAIN","SE","SWE","SWEDEN","SWEDISH"
+  ]);
+  function isEUFlag(v){return euFlagAliases.has(vesselFlag(v).toUpperCase().replace(/\s+/g," ").trim());}
+  const flagOptions=["EU Flag",...Array.from(new Set(
+    vessels.filter(v=>!isEUFlag(v)).map(v=>vesselFlag(v).toUpperCase()).filter(Boolean)
+  )).sort((a,b)=>a.localeCompare(b))];
 
   // Multi-token search across all text fields
   const tokens=search.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -2379,7 +2336,7 @@ const filtV=useMemo(()=>{
     list=list.filter(v=>{
       // OR between selected flags; AND with the other filter groups.
       const selectedFlags=[...filters].filter(k=>k.startsWith("FLAG:"));
-      if(selectedFlags.length&&!selectedFlags.includes("FLAG:"+vesselFlag(v).toUpperCase())) return false;
+      if(selectedFlags.length&&!selectedFlags.some(flag=>flag==="FLAG:EU Flag"?isEUFlag(v):flag==="FLAG:"+vesselFlag(v).toUpperCase())) return false;
 
       if(filters.has("NAP") && !(v.comment?.toLowerCase().includes("naph") || v.spec?.lastCargo?.toLowerCase().includes("naph"))) return false;
 
@@ -2612,7 +2569,7 @@ const filtV=useMemo(()=>{
   const [previewCopied,setPreviewCopied]=useState("");
   const previewCopyTimer=useRef(null);
   useEffect(()=>()=>clearTimeout(previewCopyTimer.current),[]);
-  const previewColumns=[["operator","Operator"],["vessel","Vessel"],["dwt","DWT"],["built","Blt"],["date","Date"],["openPort","Port"],["comment","Comment"],["updatedAt","Updated date"]];
+  const previewColumns=[["operator","Operator"],["vessel","Vessel"],["dwt","DWT"],["built","Blt"],["date","Date"],["openPort","Port"],["comment","Comment"],["updatedAt","Updated"]];
   const previewVessels=useMemo(()=>{
     const tags=new Set([...previewTags].map(t=>String(t).trim().toUpperCase()));
     const latest=new Map();
@@ -2660,9 +2617,12 @@ const filtV=useMemo(()=>{
       if(numeric&&+numeric[2]>=1&&+numeric[2]<=12)next=+numeric[1]+" "+months[+numeric[2]-1];
       else if(named){const month=months.find(m=>m.toLowerCase()===named[2].toLowerCase());if(month)next=+named[1]+" "+month;}
     }
+    if(key==="dwt")next=next.replace(/\s+/g,"");
     if(key==="updatedAt"&&next){
-      const parsed=new Date(next);
+      const year=(String(v.updatedAt||"").match(/^\d{4}/)||[String(new Date().getFullYear())])[0];
+      const parsed=new Date(/^\d{1,2}\s+[a-z]{3}$/i.test(next)?next+" "+year:next);
       if(isNaN(parsed.getTime()))return;
+      if(/^\d{1,2}\s+[a-z]{3}$/i.test(next))parsed.setHours(12,0,0,0);
       next=parsed.toISOString();
     }
     return onUpdateV(v.vessel,key,next);
@@ -3105,7 +3065,6 @@ const filtV=useMemo(()=>{
             </div>
           )}
           {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}          <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0,paddingBottom:10}}>
-            {!mobile&&<AICreditWidget/>}
             {/* ⚙ Settings dropdown */}
             <SettingsMenu mobile={mobile} onToggleLayout={onToggleLayout} layoutOverride={layoutOverride}/>
           </div>
@@ -3457,19 +3416,21 @@ const filtV=useMemo(()=>{
               
             </div>
           </div>
+          <style>{`.preview-updated-cell span, .preview-updated-cell input { text-transform:none !important; }`}</style>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,textAlign:"left",whiteSpace:"nowrap"}}>
             <thead style={{position:"sticky",top:0,background:"#142034",zIndex:1}}>
-              <tr>{previewColumns.map(([key,label])=><th key={key} onClick={()=>setPreviewSort(prev=>({key,dir:prev.key===key?-prev.dir:1}))} aria-sort={previewSort.key===key?(previewSort.dir===1?"ascending":"descending"):"none"} style={{padding:"9px 7px",fontSize:10,fontWeight:700,color:previewSort.key===key?C.blue:"#4977b4",letterSpacing:"0.06em",borderBottom:"1px solid "+C.bd,cursor:"pointer",userSelect:"none"}}>{label.toUpperCase()}{previewSort.key===key?(previewSort.dir===1?" ▲":" ▼"):""}</th>)}<th style={{width:22}} aria-label="Remove from shortlist"/></tr>
+              <tr>{previewColumns.map(([key,label])=><th key={key} onClick={()=>setPreviewSort(prev=>({key,dir:prev.key===key?-prev.dir:1}))} aria-sort={previewSort.key===key?(previewSort.dir===1?"ascending":"descending"):"none"} style={{padding:key==="operator"?"9px 7px 9px 15px":"9px 7px",width:key==="updatedAt"?72:undefined,fontSize:10,fontWeight:700,color:previewSort.key===key?C.blue:"#4977b4",letterSpacing:"0.06em",borderBottom:"1px solid "+C.bd,cursor:"pointer",userSelect:"none"}}>{label.toUpperCase()}{previewSort.key===key?(previewSort.dir===1?" ▲":" ▼"):""}</th>)}<th style={{width:22}} aria-label="Remove from shortlist"/></tr>
             </thead>
             <tbody>{previewVessels.map((v,i)=><tr key={String(v.vessel).toUpperCase()} style={{background:i%2===0?"#0e192b":"#111e31",borderBottom:"1px solid rgba(58,100,180,0.08)",height:29}}>
               {previewColumns.map(([key,label])=><EC
                 key={key}
-                value={key==="updatedAt"?String(v.updatedAt||"").slice(0,10):String(v[key]??"")}
+                value={key==="updatedAt"?fmtDateShort(v.updatedAt):key==="dwt"?fmtDwtFull(v.dwt):String(v[key]??"")}
+                className={key==="updatedAt"?"preview-updated-cell":undefined}
                 color={["vessel","date","openPort"].includes(key)?"#79c0ff":C.dim}
                 bold={false}
                 placeholder={label}
                 onSave={value=>savePreviewCell(v,key,value)}
-                style={{padding:"0 1px",fontFamily:"inherit",fontSize:12,fontWeight:400,color:C.dim,minWidth:key==="comment"?120:key==="updatedAt"?150:60}}
+                style={{padding:key==="operator"?"0 1px 0 9px":"0 1px",fontFamily:"inherit",fontSize:12,fontWeight:400,color:C.dim,width:key==="updatedAt"?72:key==="comment"?"100%":undefined,minWidth:key==="comment"?120:key==="updatedAt"?72:60,maxWidth:key==="updatedAt"?72:undefined}}
               />)}
               <td style={{padding:"0 4px",textAlign:"center"}}><button title="Remove active shortlist tags and saved star" aria-label={`Remove ${v.vessel} from shortlist`} onClick={()=>removePreviewVessel(v)} style={{border:"none",background:"transparent",color:C.faint,fontSize:14,padding:"2px",cursor:"pointer"}}>×</button></td>
             </tr>)}</tbody>
