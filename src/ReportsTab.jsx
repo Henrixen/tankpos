@@ -756,7 +756,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     loadSavedReports();
   }, [selectedCargoes]);
   const mapImportedCargo = c => normalizeReportFixture({
-    vessel:c.vessel||"", charterer:c.charterer||"", cargo:c.cargo||"",
+    vessel:c.vessel||"", charterer:c.charterer||"", qty:c.qty??"", cargo:c.cargo||"",
     load:c.load||c.loadPort||"", disch:c.disch||c.dischPort||"",
     laycanFrom:c.from||c.laycanFrom||"", laycanTo:c.to||c.laycanTo||"",
     freight:reportFixtureFreight(c.freight)
@@ -2470,7 +2470,7 @@ Any direction`}</pre>
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, textTransform: "uppercase", letterSpacing: "0.05em" }}>Recent fixtures</div>
-                  <div style={{display:"flex",alignItems:"center",gap:10}}>{emailSectionTick("fixtures")}<button type="button" className="no-export" disabled={!fixtures.length} title="Remove all cargoes from this report only" onClick={()=>{setFixtures([]);setExcludedFixtureIds([]);setPendingFixtureDelete(null);}} style={{background:"transparent",border:"1px solid rgba(251,113,133,.4)",borderRadius:3,color:"#fb7185",fontSize:10,fontWeight:700,padding:"3px 8px",cursor:fixtures.length?"pointer":"default",opacity:fixtures.length?1:0.4}}>Remove all cargoes</button><button onClick={() => setFixtures(p => [...p, { vessel: "", charterer: "", cargo: "", load: "", disch: "", laycanFrom: "", laycanTo: "", freight: "" }])} className="no-export"
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>{emailSectionTick("fixtures")}<button type="button" className="no-export" disabled={!fixtures.length} title="Remove all cargoes from this report only" onClick={()=>{setFixtures([]);setExcludedFixtureIds([]);setPendingFixtureDelete(null);}} style={{background:"transparent",border:"1px solid rgba(251,113,133,.4)",borderRadius:3,color:"#fb7185",fontSize:10,fontWeight:700,padding:"3px 8px",cursor:fixtures.length?"pointer":"default",opacity:fixtures.length?1:0.4}}>Remove all cargoes</button><button onClick={() => setFixtures(p => [...p, { vessel: "", charterer: "", qty: "", cargo: "", load: "", disch: "", laycanFrom: "", laycanTo: "", freight: "" }])} className="no-export"
                     style={{ background: ACCENT, border: "none", borderRadius: 3, color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", cursor: "pointer" }}>+ Add</button></div>
                 </div>
                 {fixtures.length === 0 ? <div style={{ padding: 10, textAlign: "center", color: C.faint, fontSize: 10 }}>None yet — select cargoes in the Cargoes tab to import, or add manually</div> : (
@@ -2478,15 +2478,15 @@ Any direction`}</pre>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 640 }}>
                       <thead><tr>
                         <th className="no-export" style={{padding:"5px 6px",width:24}} title="Include all fixtures"><input type="checkbox" aria-label="Include all fixtures in email" style={exportCheckboxStyle} checked={fixtures.length>0 && fixtures.every((f,i)=>fixtureIsIncluded(f,i))} onChange={e=>setExcludedFixtureIds(e.target.checked?[]:fixtures.map((f,i)=>fixtureId(f,i)))}/></th>
-                        {["Vessel", "Charterer", "Cargo", "Load", "Disch", "From", "To", "Freight", ""].map((h,hi) => (
-                          <th key={h} onClick={()=>h&&toggleFixtureSort(["vessel","charterer","cargo","load","disch","laycanFrom","laycanTo","freight"][hi])} style={{ padding: "5px 8px", textAlign: "left", fontSize: 9, fontWeight: 700, color: C.dim, textTransform: "uppercase",cursor:h?"pointer":"default" }}>{h}{fixtureSort.key===["vessel","charterer","cargo","load","disch","laycanFrom","laycanTo","freight"][hi]?(fixtureSort.dir===1?" ▲":" ▼"):""}</th>
+                        {["Vessel", "Charterer", "Qty", "Cargo", "Load", "Disch", "From", "To", "Freight", ""].map((h,hi) => (
+                          <th key={h} onClick={()=>h&&toggleFixtureSort(["vessel","charterer","qty","cargo","load","disch","laycanFrom","laycanTo","freight"][hi])} style={{ padding: "5px 8px", textAlign: "left", fontSize: 9, fontWeight: 700, color: C.dim, textTransform: "uppercase",cursor:h?"pointer":"default" }}>{h}{fixtureSort.key===["vessel","charterer","qty","cargo","load","disch","laycanFrom","laycanTo","freight"][hi]?(fixtureSort.dir===1?" ▲":" ▼"):""}</th>
                         ))}
                       </tr></thead>
                       <tbody>
                         {sortedFixtures.map((f, displayIndex) => {const i=fixtures.indexOf(f);return (
                           <tr key={i} style={{ borderTop: "1px solid " + C.bd, opacity: fixtureIsIncluded(f,i)?1:0.42 }}>
                             <td className="no-export" style={{padding:"3px 6px"}}><input type="checkbox" aria-label={`Include ${f.vessel || f.charterer || "fixture"} in email`} style={exportCheckboxStyle} checked={fixtureIsIncluded(f,i)} disabled={chartererIsExcluded(f)} title={chartererIsExcluded(f)?"Excluded by charterer filter / recipient selection":"Include in email"} onChange={()=>toggleExcluded(setExcludedFixtureIds,fixtureId(f,i))}/></td>
-                            {["vessel", "charterer", "cargo", "load", "disch", "laycanFrom", "laycanTo", "freight"].map(field => (
+                            {["vessel", "charterer", "qty", "cargo", "load", "disch", "laycanFrom", "laycanTo", "freight"].map(field => (
                               <td key={field} style={{ padding: "3px 5px" }}>
                                 {field === "freight" ? (
                                   <input value={f.freight || ""} onChange={e => setFixtures(p => { const n = [...p]; n[i] = { ...n[i], freight: e.target.value }; return n; })}
@@ -2495,7 +2495,7 @@ Any direction`}</pre>
                                     className="rpt-edit" style={{ width: 135, fontSize: 11 }} placeholder="USD 250K LS" />
                                 ) : (
                                   <input value={f[field] || ""} onChange={e => setFixtures(p => { const n = [...p]; n[i] = { ...n[i], [field]: e.target.value, ...(REPORT_FIXTURE_TEXT_FIELDS.includes(field)?{_textOverrides:{...n[i]._textOverrides,[field]:true}}:{}) }; return n; })}
-                                    className="rpt-edit" style={{ width: field === "vessel" ? 155 : field === "load" || field === "disch" ? 145 : field === "charterer" ? 120 : 100, fontSize: 11 }} />
+                                    className="rpt-edit" style={{ width: field === "qty" ? 65 : field === "vessel" ? 155 : field === "load" || field === "disch" ? 145 : field === "charterer" ? 120 : 100, fontSize: 11 }} />
                                 )}
                               </td>
                             ))}
@@ -2606,12 +2606,12 @@ Any direction`}</pre>
                     <div style={{...reportHeadingStyle,marginBottom:8}}>Recent fixtures</div>
                     <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 10 }}>
                       <colgroup>
-                        <col style={{width:"17%"}}/><col style={{width:"12%"}}/><col style={{width:"10%"}}/>
-                        <col style={{width:"15%"}}/><col style={{width:"15%"}}/><col style={{width:"18%"}}/>
+                        <col style={{width:"16%"}}/><col style={{width:"11%"}}/><col style={{width:"7%"}}/><col style={{width:"10%"}}/>
+                        <col style={{width:"13%"}}/><col style={{width:"13%"}}/><col style={{width:"17%"}}/>
                         <col style={{width:"13%"}}/>
                       </colgroup>
                       <thead><tr style={{ background: "#eaf2fc" }}>
-                        {["Vessel", "Charterer", "Cargo", "Load", "Disch", "Laycan", "Freight"].map(h => (
+                        {["Vessel", "Charterer", "Qty", "Cargo", "Load", "Disch", "Laycan", "Freight"].map(h => (
                           <th key={h} style={{ padding: "4px 6px", textAlign: "left", fontWeight: 600, color: "#6b7280", whiteSpace:"nowrap" }}>{h}</th>
                         ))}
                       </tr></thead>
@@ -2620,6 +2620,7 @@ Any direction`}</pre>
                           <tr key={i} style={{ borderTop: "1px solid #d9e2ef" }}>
                             <td style={{ padding: "4px 6px" }}>{f.vessel || ""}</td>
                             <td style={{ padding: "4px 6px" }}>{f.charterer || ""}</td>
+                            <td style={{ padding: "4px 6px" }}>{f.qty ?? ""}</td>
                             <td style={{ padding: "4px 6px" }}>{f.cargo || ""}</td>
                             <td style={{ padding: "4px 6px" }}>{f.load || ""}</td>
                             <td style={{ padding: "4px 6px" }}>{f.disch || ""}</td>
