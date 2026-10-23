@@ -360,6 +360,19 @@ function mergeReportBenchmarkRows(rows,savedRows,appendNew=false){
   }))];
 }
 
+function savedMarketReportName(report){
+  return report.rate_grid?.__marketEditor?.reportName || report.report_type || "Report";
+}
+function marketReportSaveName(name,type,saveCopy,savedReports){
+  const base=name.trim()||type;
+  if(!saveCopy)return base;
+  const existing=new Set(savedReports.map(savedMarketReportName));
+  if(!existing.has(base))return base;
+  let copy=base+" (copy)",number=2;
+  while(existing.has(copy))copy=base+` (copy ${number++})`;
+  return copy;
+}
+
 function reportHeaderDate(value){const d=new Date(`${value}T12:00:00`);return Number.isNaN(d.getTime())?String(value||""):d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});}
 const REPORT_FIXTURE_TEXT_FIELDS=["charterer","cargo","vessel","load","disch"];
 function reportNaturalCase(value){
@@ -505,6 +518,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [deleteReportError, setDeleteReportError] = useState("");
   const [marketHeadings, setMarketHeadings] = useState({drivers:"Market drivers / What to watch",benchmark:"Benchmark rates",tce:"TCE earnings",handy:"Handy",ffa:"FFA trend (BALMO / +1 / +2)"});
   const [activeMarketReportId, setActiveMarketReportId] = useState(null);
+  const [reportName,setReportName]=useState("");
+  const [saveReportCopy,setSaveReportCopy]=useState(false);
   const [marketSaveStatus,setMarketSaveStatus] = useState("");
   const [marketSaveBusy,setMarketSaveBusy] = useState(false);
   const [deleteReportBusy,setDeleteReportBusy] = useState(false);
@@ -714,7 +729,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         if(data.report_type!=="Intermediate")throw new Error("Choose an Intermediate report");
         await loadReport(fixingImportChoice);
       }else{
-        setActiveMarketReportId(null);setReportType("Intermediate");setReportDate("2026-10-16");setIntermediateTitle("Intermediate Summary");
+        setActiveMarketReportId(null);setReportName("");setSaveReportCopy(false);setReportType("Intermediate");setReportDate("2026-10-16");setIntermediateTitle("Intermediate Summary");
         setCommentary("");setRateGrid({});setTceEarnings({});setQuotes([]);setFixtures([]);
         initRateGrid("Intermediate");
       }
@@ -757,7 +772,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         await loadReport(cargoImportChoice);
         setFixtures([...(Array.isArray(data.fixtures)?data.fixtures:[]).map(f=>normalizeReportFixture({...f,freight:reportFixtureFreight(f.freight)})),...incoming]);
       } else {
-        setActiveMarketReportId(null);
+        setActiveMarketReportId(null);setReportName("");setSaveReportCopy(false);
         setReportType("Intermediate");
         setReportDate(new Date().toISOString().split("T")[0]);
         setCommentary(""); setRateGrid({}); setTceEarnings({}); setQuotes([]);
@@ -1291,17 +1306,19 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if (marketSaveBusy) return;
     setMarketSaveBusy(true); setMarketSaveStatus("Saving...");
     try {
+      const savedName=marketReportSaveName(reportName,reportType,saveReportCopy,savedReports);
       const payload = { report_type: reportType, report_date: reportDate, commentary,
-        rate_grid: { ...rateGrid, __marketEditor: { headings: marketHeadings, intermediateTitle,
+        rate_grid: { ...rateGrid, __marketEditor: { headings: marketHeadings, intermediateTitle, reportName:savedName,
           benchmarks: benchmarkRows, drivers: driverBullets, tceStats, handy, handyCommentary, handySegments, importedFixingChart,routeColumns,routeTitles,intermediateRoutesLabel,marketHeadings, excludedFixtureIds, excludedBenchmarkKeys, excludedCharterers, recipientCharterer } },
         tce_earnings: tceEarnings, fixtures:fixtures.map(normalizeReportFixture), quotes };
-      // Editing an existing saved report updates that exact row. New reports insert once.
-      const query = activeMarketReportId
+      // A copy always inserts a new report, even when its date matches the original.
+      const query = activeMarketReportId && !saveReportCopy
         ? supabase.from("reports").update(payload).eq("id", activeMarketReportId).select("id").single()
         : supabase.from("reports").insert([payload]).select("id").single();
       const { data, error } = await query;
       if (error) throw error;
       if (data?.id) setActiveMarketReportId(data.id);
+      setReportName(savedName);setSaveReportCopy(false);
       setMarketSaveStatus("Saved!");
       await loadSavedReports();
     } catch (e) { setMarketSaveStatus("Save failed: " + (e.message || e)); }
@@ -1316,6 +1333,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       setImportedFixingChart(data.rate_grid?.__marketEditor?.importedFixingChart||null);
       setTceEarnings(data.tce_earnings && typeof data.tce_earnings==="object" ? data.tce_earnings : {}); setFixtures(Array.isArray(data.fixtures)?data.fixtures.map(normalizeReportFixture):[]); setQuotes(Array.isArray(data.quotes)?data.quotes:[]);
       const editor = data.rate_grid?.__marketEditor;
+      setReportName(editor?.reportName || "");setSaveReportCopy(false);
       setIntermediateTitle(editor?.intermediateTitle || "Intermediate Summary");
       setExcludedFixtureIds(Array.isArray(editor?.excludedFixtureIds)?editor.excludedFixtureIds:[]);
       setExcludedBenchmarkKeys(Array.isArray(editor?.excludedBenchmarkKeys)?editor.excludedBenchmarkKeys:[]);
@@ -1795,7 +1813,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
           <label style={{display:"block",fontSize:11,color:C.dim,marginBottom:6}}>DESTINATION REPORT</label>
           <select value={fixingImportChoice} onChange={e=>setFixingImportChoice(e.target.value)} style={{width:"100%",padding:"10px 12px",borderRadius:5,background:C.bg3,color:C.tx,border:"1px solid "+C.bd,fontSize:13}}>
             <option value="new">+ New Intermediate report</option>
-            {(Array.isArray(savedReports)?savedReports:[]).filter(r=>r.report_type==="Intermediate").map(r=><option key={r.id} value={r.id}>Intermediate — {r.report_date||"No date"}</option>)}
+            {(Array.isArray(savedReports)?savedReports:[]).filter(r=>r.report_type==="Intermediate").map(r=><option key={r.id} value={r.id}>{savedMarketReportName(r)} — {r.report_date||"No date"}</option>)}
           </select>
           <div style={{fontSize:11,color:C.dim,marginTop:12}}>The imported graph will replace the fixing-window graph in this report. Click Save afterwards to store it in Supabase.</div>
           {fixingImportError&&<div style={{color:"#ff8585",fontSize:12,marginTop:10}}>{fixingImportError}</div>}
@@ -1813,7 +1831,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
           <label style={{display:"block",fontSize:11,color:C.dim,marginBottom:6}}>DESTINATION REPORT</label>
           <select value={cargoImportChoice} onChange={e=>setCargoImportChoice(e.target.value)} style={{width:"100%",padding:"10px 12px",borderRadius:5,background:C.bg3,color:C.tx,border:"1px solid "+C.bd,fontSize:13}}>
             <option value="new">+ New Intermediate report</option>
-            {(Array.isArray(savedReports)?savedReports:[]).filter(r=>MARKET_TYPES.includes(r.report_type)).map(r=><option key={r.id} value={r.id}>{r.report_type} — {r.report_date||"No date"}</option>)}
+            {(Array.isArray(savedReports)?savedReports:[]).filter(r=>MARKET_TYPES.includes(r.report_type)).map(r=><option key={r.id} value={r.id}>{savedMarketReportName(r)} — {r.report_date||"No date"}</option>)}
           </select>
           <div style={{fontSize:11,color:C.dim,marginTop:12}}>Imported cargoes will appear under Recent Fixtures. Review and save the report afterwards.</div>
           {cargoImportError&&<div style={{color:"#ff8585",fontSize:12,marginTop:10}}>{cargoImportError}</div>}
@@ -1876,7 +1894,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
           <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px" }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Report type</div>
             {MARKET_TYPES.map(t => (
-              <button key={t} onClick={() => { setReportType(t); setActiveMarketReportId(null); setMarketSaveStatus(""); initRateGrid(t); }}
+              <button key={t} onClick={() => { setReportType(t); setActiveMarketReportId(null); setReportName(""); setSaveReportCopy(false); setMarketSaveStatus(""); initRateGrid(t); }}
                 style={{ display: "block", width: "100%", textAlign: "left", padding: "13px 14px", marginBottom: 9, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: reportType === t ? 700 : 400, border: `1px solid ${reportType === t ? ACCENT : C.bd}`, background: reportType === t ? "rgba(58,130,246,0.1)" : "transparent", color: "#ffffff", fontFamily: "inherit" }}>{t}</button>
             ))}
             {(Array.isArray(savedReports)?savedReports:[]).filter(r => r.report_type !== "Position List").length > 0 && (
@@ -1885,7 +1903,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                 {(Array.isArray(savedReports)?savedReports:[]).filter(r => r.report_type !== "Position List").map(r => (
                   <div key={r.id} onClick={() => loadReport(r.id)} style={{ padding: "5px 7px", borderRadius: 4, background: C.bg3, cursor: "pointer", marginBottom: 3, position: "relative", paddingRight: 28 }}>
                     <button title="Delete saved report" onClick={e => {e.stopPropagation();setPendingSavedDelete(r);setDeleteReportError("");}} style={{position:"absolute",right:4,top:5,border:"none",background:"transparent",color:"#fb7185",fontSize:15,cursor:"pointer"}}>×</button>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: ACCENT }}>{r.report_type}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: ACCENT }}>{savedMarketReportName(r)}</div>
                     <div style={{ fontSize: 10, color: C.dim }}>{new Date(r.report_date).toLocaleDateString("en-GB")}</div>
                   </div>
                 ))}
@@ -1939,7 +1957,7 @@ Any direction`}</pre>
       {pendingSavedDelete && <div className="no-export" style={{position:"fixed",left:20,bottom:20,zIndex:99999,maxWidth:"calc(100vw - 40px)"}}>
         <div style={{width:340,maxWidth:"100%",background:C.bg2,border:"1px solid rgba(248,113,113,.5)",borderRadius:8,padding:14,boxShadow:"0 8px 28px #0009"}}>
           <div style={{fontSize:13,fontWeight:700,color:C.tx,marginBottom:6}}>Delete saved report?</div>
-          <div style={{fontSize:12,color:C.dim,marginBottom:18}}>Delete {pendingSavedDelete.report_type} — {pendingSavedDelete.report_date}? This cannot be undone.</div>
+          <div style={{fontSize:12,color:C.dim,marginBottom:18}}>Delete {savedMarketReportName(pendingSavedDelete)} — {pendingSavedDelete.report_date}? This cannot be undone.</div>
           {deleteReportError && <div style={{color:"#fb7185",fontSize:12,marginBottom:10}}>{deleteReportError}</div>}
           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
             <button onClick={()=>setPendingSavedDelete(null)} style={{...SB,padding:"9px 13px"}}>Cancel</button>
@@ -2274,11 +2292,13 @@ Any direction`}</pre>
               `}</style>
 
               {/* ── Toolbar (not captured in export/print) ── */}
-              <div className="no-export" style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
+              <div className="no-export" style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", flexWrap:"wrap", gap: 8 }}>
                 {marketSaveStatus.startsWith("Save failed") && <span style={{ fontSize: 11, color: "#fb7185" }}>{marketSaveStatus}</span>}
                 {marketExportStatus && !marketExportStatus.startsWith("Copied") && marketExportStatus !== "Downloaded." && <span style={{ fontSize: 11, color: C.dim }}>{marketExportStatus}</span>}
+                <input aria-label="Report name" value={reportName} onChange={e=>setReportName(e.target.value)} placeholder={`${reportType} report name, e.g. Aramco`} style={{...IS,width:240,minWidth:120}} />
+                <label style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11,color:C.tx,whiteSpace:"nowrap",cursor:"pointer"}}><input type="checkbox" checked={saveReportCopy} onChange={e=>setSaveReportCopy(e.target.checked)} disabled={marketSaveBusy}/>Save as copy</label>
                 <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} style={IS} />
-                <button disabled={marketSaveBusy} onClick={saveReport} style={{ ...SB, background: marketSaveStatus === "Saved!" ? "rgba(63,185,80,.16)" : C.bg3, border: "1px solid " + (marketSaveStatus === "Saved!" ? "#3fb950" : C.bd), color: marketSaveStatus === "Saved!" ? "#65d68b" : C.tx }}>{marketSaveStatus === "Saved!" ? "✓ Saved!" : marketSaveBusy ? "Saving..." : "Save"}</button>
+                <button disabled={marketSaveBusy} onClick={saveReport} style={{ ...SB, background: marketSaveStatus === "Saved!" ? "rgba(63,185,80,.16)" : C.bg3, border: "1px solid " + (marketSaveStatus === "Saved!" ? "#3fb950" : C.bd), color: marketSaveStatus === "Saved!" ? "#65d68b" : C.tx }}>{marketSaveStatus === "Saved!" ? "✓ Saved!" : marketSaveBusy ? "Saving..." : saveReportCopy ? "Save copy" : "Save"}</button>
                 <button onClick={() => window.print()} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Print</button>
                 <button onClick={handleMarketCopyEmail} style={{ ...SB, background: marketExportStatus.startsWith("Copied") ? "rgba(63,185,80,.16)" : C.bg3, border: "1px solid " + (marketExportStatus.startsWith("Copied") ? "#3fb950" : C.bd), color: marketExportStatus.startsWith("Copied") ? "#65d68b" : C.tx }}>{marketExportStatus.startsWith("Copied") ? "✓ Copied!" : "Copy for email"}</button>
                 <button onClick={handleMarketDownloadPng} style={{ ...SB, background: marketExportStatus === "Downloaded." ? "rgba(63,185,80,.16)" : "transparent", border: "1px solid " + (marketExportStatus === "Downloaded." ? "#3fb950" : C.bd), color: marketExportStatus === "Downloaded." ? "#65d68b" : C.dim }}>{marketExportStatus === "Downloaded." ? "✓ Saved!" : "Download PNG"}</button>
@@ -2646,10 +2666,12 @@ Any direction`}</pre>
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 11, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: ACCENT }}>{reportType}</span>
-                  <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} style={IS} />
+                  <input aria-label="Report name" value={reportName} onChange={e=>setReportName(e.target.value)} placeholder={`${reportType} report name, e.g. Aramco`} style={{...IS,width:240,minWidth:120}} />
+                <label style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11,color:C.tx,whiteSpace:"nowrap",cursor:"pointer"}}><input type="checkbox" checked={saveReportCopy} onChange={e=>setSaveReportCopy(e.target.checked)} disabled={marketSaveBusy}/>Save as copy</label>
+                <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} style={IS} />
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <button disabled={marketSaveBusy} onClick={saveReport} style={{ ...SB, background: marketSaveStatus === "Saved!" ? "rgba(63,185,80,.16)" : C.bg3, border: "1px solid " + (marketSaveStatus === "Saved!" ? "#3fb950" : C.bd), color: marketSaveStatus === "Saved!" ? "#65d68b" : C.tx }}>{marketSaveStatus === "Saved!" ? "✓ Saved!" : marketSaveBusy ? "Saving..." : "Save"}</button>
+                  <button disabled={marketSaveBusy} onClick={saveReport} style={{ ...SB, background: marketSaveStatus === "Saved!" ? "rgba(63,185,80,.16)" : C.bg3, border: "1px solid " + (marketSaveStatus === "Saved!" ? "#3fb950" : C.bd), color: marketSaveStatus === "Saved!" ? "#65d68b" : C.tx }}>{marketSaveStatus === "Saved!" ? "✓ Saved!" : marketSaveBusy ? "Saving..." : saveReportCopy ? "Save copy" : "Save"}</button>
                   <button onClick={() => window.print()} style={{ ...SB, background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.45)", color: "#6366f1" }}>Print</button>
                   <button onClick={async () => { try { await navigator.clipboard.writeText(`${reportType} · ${reportDate}\n\n${commentary}`); } catch {} }} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Copy</button>
                 </div>
