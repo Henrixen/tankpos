@@ -179,9 +179,26 @@ function routeDefaults(r, defaults) {
 function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   const [rows, setRows] = useState(BENCHMARK_ROUTES.map(r => routeDefaults(r, defaults)));
   const [routeGroups,setRouteGroups,groupsReady,groupsError]=useCloudJson("tce-route-groups",{});
+  const [routeOrder,setRouteOrder,orderReady,orderError]=useCloudJson("tce-route-order",[]);
   const primaryKeys=new Set(["kaarstoe_ara","ara_thames","pjg_ara","ara_dublin","gdansk_ara"]);
   const deepseaLabel=(label)=>/asia|china|singapore|straits|india|japan|korea|usg|houston|transatlantic|america|brazil|atlantic|far east|gulf/i.test(label||"");
   const groupFor=(row)=>routeGroups[row.key]||(deepseaLabel(row.label)?"Deepsea":"Europe");
+  const orderedRows=[...rows].sort((a,b)=>{
+    const order=Array.isArray(routeOrder)?routeOrder:[];
+    const ai=order.indexOf(a.key),bi=order.indexOf(b.key);
+    if(ai>=0||bi>=0)return (ai<0?Infinity:ai)-(bi<0?Infinity:bi);
+    return Number(primaryKeys.has(b.key))-Number(primaryKeys.has(a.key));
+  });
+  function moveRoute(key,direction){
+    const row=orderedRows.find(r=>r.key===key);
+    if(!row||!orderReady||!groupsReady)return;
+    const groupRows=orderedRows.filter(r=>groupFor(r)===groupFor(row));
+    const index=groupRows.findIndex(r=>r.key===key),target=groupRows[index+direction];
+    if(!target)return;
+    const next=orderedRows.map(r=>r.key),from=next.indexOf(key),to=next.indexOf(target.key);
+    [next[from],next[to]]=[next[to],next[from]];
+    setRouteOrder(next);
+  }
   const [diffBase,setDiffBase]=useState("kaarstoe_ara");
   const [status, setStatus] = useState(null);
   const [expanded, setExpanded] = useState({});
@@ -364,7 +381,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   }
 
   async function exportSelected(){
-    const selected=rows.filter(r=>exportSel.has(r.key));
+    const selected=orderedRows.filter(r=>exportSel.has(r.key));
     if(!selected.length){setStatus("Select routes to export");setTimeout(()=>setStatus(null),1800);return;}
     const text=selected.map(r=>{
       const route=String(r.label||"").trim()
@@ -398,7 +415,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   return (
     <div style={CARD}>
       <div style={{ padding:"8px 12px", background:C.bg3, borderBottom:"1px solid "+C.bd2, fontSize:12, fontWeight:700, color:C.tx, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <span>📍 Benchmark Routes</span>
+        <span>📍 Benchmark Routes{orderError&&<span style={{marginLeft:8,fontSize:10,color:C.red}}>Could not save row order: {orderError}</span>}</span>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
           {status && <span style={{ fontSize:11, color:C.green, fontWeight:600 }}>{status}</span>}
           <button onClick={exportSelected} title="Copy selected routes in market-report format"
@@ -414,10 +431,10 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
       {["Europe","Deepsea"].map(group=><div key={group} style={{minWidth:0,border:"1px solid "+C.bd2,borderRadius:5}}>
       <div style={{padding:"6px 9px",fontSize:12,color:C.blue,fontWeight:700,background:C.bg3}}>{group} <span style={{color:C.faint,fontWeight:400}}>({rows.filter(r=>groupFor(r)===group).length})</span><button onClick={()=>addLeg(group)} style={{float:"right",background:"transparent",color:C.blue,border:"1px solid "+C.bd,borderRadius:4,cursor:"pointer",fontSize:10}}>+ Add leg</button></div>
       <div style={{display:"flex",flexDirection:"column",overflow:"visible"}}>
-        {rows.filter(r=>groupFor(r)===group).sort((a,b)=>Number(primaryKeys.has(b.key))-Number(primaryKeys.has(a.key))).map((r,routeIndex)=>{
+        {orderedRows.filter(r=>groupFor(r)===group).map((r,routeIndex)=>{
           const isOpen = !!expanded[r.key];
           return (
-          <div key={r.key} style={{ borderBottom:primaryKeys.has(r.key)&&!primaryKeys.has(rows.filter(x=>groupFor(x)===group).sort((a,b)=>Number(primaryKeys.has(b.key))-Number(primaryKeys.has(a.key)))[routeIndex+1]?.key)?"2px solid "+C.blue:"1px solid "+C.bd, padding:"7px 12px" }}>
+          <div key={r.key} style={{ borderBottom:primaryKeys.has(r.key)&&!primaryKeys.has(orderedRows.filter(x=>groupFor(x)===group)[routeIndex+1]?.key)?"2px solid "+C.blue:"1px solid "+C.bd, padding:"7px 12px" }}>
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
               
               <button onClick={()=>setExpanded(p=>({...p,[r.key]:!p[r.key]}))}
@@ -438,6 +455,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
               </button>
               <input value={r.label} onChange={e=>updateField(r.key,"label",e.target.value)} placeholder="Route name"
                 style={{ flex:"1 1 140px", minWidth:100, background:"transparent", border:"none", color:C.tx, fontSize:12, fontWeight:700, padding:"2px 0", outline:"none", fontFamily:"inherit" }}/>
+              <span style={{display:"inline-flex",gap:2}}>{[-1,1].map(direction=><button key={direction} type="button" title={direction<0?"Move route up":"Move route down"} aria-label={`${direction<0?"Move up":"Move down"} ${r.label}`} disabled={!orderReady||!groupsReady||(direction<0?routeIndex===0:routeIndex===orderedRows.filter(x=>groupFor(x)===group).length-1)} onClick={()=>moveRoute(r.key,direction)} style={{border:0,background:"transparent",color:C.blue,cursor:"pointer",padding:"2px 3px",opacity:!orderReady||!groupsReady||(direction<0?routeIndex===0:routeIndex===orderedRows.filter(x=>groupFor(x)===group).length-1)?0.3:1}}>{direction<0?"↑":"↓"}</button>)}</span>
               <FmtInput value={r.freight} onChange={val=>updateField(r.key,"freight",val)} width={100} placeholder="Freight USD" fontSize={12}/>
               <div style={{ fontSize:13, fontWeight:800, color: r.tce!=null ? (r.tce>=0?C.green:C.red) : C.faint, minWidth:90, textAlign:"right" }}>
                 {r.tce!=null ? "$"+r.tce.toLocaleString("nb-NO")+"/d" : "—"}
