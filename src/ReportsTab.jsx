@@ -345,6 +345,21 @@ function ImportedFixingWindowChart({snapshot}){
   </div>;
 }
 
+// Update shared route values by identity, keeping this report's own row order.
+function mergeReportBenchmarkRows(rows,savedRows,appendNew=false){
+  const savedByKey=new Map(savedRows.map(row=>[row.route_key,row]));
+  const updated=rows.map(row=>{
+    const saved=savedByKey.get(row.key);
+    return saved?{...row,label:saved.label??row.label,freight:String(saved.freight??""),tce:saved.tce??null,override:false}:row;
+  });
+  if(!appendNew)return updated;
+  const existingKeys=new Set(rows.map(row=>row.key));
+  return [...updated,...savedRows.filter(row=>!existingKeys.has(row.route_key)).map(row=>({
+    key:row.route_key,label:row.label||row.route_key,from:"",to:"",dist:row.nm_laden??null,
+    freight:String(row.freight??""),lastWeek:"",tce:row.tce??null,tceLastWeek:null,override:false,
+  }))];
+}
+
 function reportHeaderDate(value){const d=new Date(`${value}T12:00:00`);return Number.isNaN(d.getTime())?String(value||""):d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});}
 function reportNaturalCase(value){
   const s=String(value??"").trim();if(!s)return "";
@@ -650,14 +665,15 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   // Load saved benchmark route freight/TCE from Supabase for the Intermediate report
   useEffect(() => {
     if (reportType !== "Intermediate") return;
-    (async () => {
-      const { data, error } = await supabase.from("tce_routes").select("*");
-      if (error || !data) return;
-      setBenchmarkRows(prev => prev.map(r => {
-        const saved = data.find(d => d.route_key === r.key);
-        return saved ? { ...r, freight: String(saved.freight ?? ""), tce: saved.tce ?? null, override: false } : r;
-      }));
-    })();
+    let cancelled=false;
+    const refresh=async()=>{
+      const {data,error}=await supabase.from("tce_routes").select("*");
+      if(cancelled||error||!data)return;
+      setBenchmarkRows(prev=>mergeReportBenchmarkRows(prev,data));
+    };
+    refresh();
+    window.addEventListener("tankpos:tce-routes-saved",refresh);
+    return()=>{cancelled=true;window.removeEventListener("tankpos:tce-routes-saved",refresh);};
   }, [reportType]);
 
   // Dashboard fixing-window import: explicit destination and persisted chart snapshot.
@@ -768,20 +784,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       const { data, error } = await supabase.from("tce_routes").select("*");
       if (error) { setBenchmarkRefreshStatus("Refresh failed"); setTimeout(() => setBenchmarkRefreshStatus(null), 2500); return; }
       if (!data || !data.length) { setBenchmarkRefreshStatus("No saved routes found — save some in the TCE tab first"); setTimeout(() => setBenchmarkRefreshStatus(null), 3500); return; }
-      setBenchmarkRows(prev => {
-        const updated = BENCHMARK_ROUTES.map(base => {
-          const r = prev.find(x => x.key === base.key) || {...base,freight:"",lastWeek:"",tce:null,tceLastWeek:null};
-          const saved = data.find(d => d.route_key === r.key);
-          return saved ? { ...r, freight: String(saved.freight ?? ""), tce: saved.tce ?? null, override: false } : r;
-        });
-        // Pick up any custom routes ("+ Add leg") saved in the TCE tab that aren't in this report's list yet
-        const existingKeys = new Set(updated.map(r => r.key));
-        const extras = data.filter(d => !existingKeys.has(d.route_key)).map(d => ({
-          key: d.route_key, label: d.label || d.route_key, from: "", to: "", dist: d.nm_laden || null,
-          freight: String(d.freight ?? ""), lastWeek: "", tce: d.tce ?? null, tceLastWeek: null, override: false,
-        }));
-        return [...updated, ...extras];
-      });
+      setBenchmarkRows(prev=>mergeReportBenchmarkRows(prev,data,true));
       setBenchmarkRefreshStatus("Refreshed ✓");
       setTimeout(() => setBenchmarkRefreshStatus(null), 2000);
     })();
