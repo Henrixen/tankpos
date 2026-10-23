@@ -361,11 +361,23 @@ function mergeReportBenchmarkRows(rows,savedRows,appendNew=false){
 }
 
 function reportHeaderDate(value){const d=new Date(`${value}T12:00:00`);return Number.isNaN(d.getTime())?String(value||""):d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});}
+const REPORT_FIXTURE_TEXT_FIELDS=["charterer","cargo","vessel","load","disch"];
 function reportNaturalCase(value){
-  const s=String(value??"").trim();if(!s)return "";
-  if(s!==s.toUpperCase())return s;
-  const acronyms=new Set(["ARA","ULSD","UMS","CPP","HVO","FAME","UCO","MR","NWE","UKC","USG","BP","CSS","SA","ST"]);
-  return s.toLowerCase().replace(/\b[a-z][a-z'-]*\b/g,w=>acronyms.has(w.toUpperCase())?w.toUpperCase():w[0].toUpperCase()+w.slice(1));
+  const text=String(value??"").trim();
+  const acronyms=new Set(["ARA","WRG","ULSD","UMS","CPP","HVO","FAME","UCO","MR","NWE","UKC","USG","BP","CSS","SA","ST","SPK","LVN","HVN","LSR","HSFO","VLSFO","LSFO","MGO","IFO","LNG","LPG","MTBE","ETBE","BTX","EDC","MEG","SAF","TX","TBA","TBC"]);
+  return text.replace(/[\p{L}\p{N}]+(?:['’][\p{L}]+)*/gu,word=>{
+    if(acronyms.has(word.toUpperCase()))return word.toUpperCase();
+    // Preserve deliberate mixed-case names such as SeaRiver and McKinney.
+    if(word!==word.toUpperCase()&&word!==word.toLowerCase())return word;
+    return word.charAt(0).toUpperCase()+word.slice(1).toLowerCase();
+  });
+}
+function normalizeReportFixture(fixture){
+  const next={...fixture};
+  for(const field of REPORT_FIXTURE_TEXT_FIELDS){
+    if(!fixture._textOverrides?.[field])next[field]=reportNaturalCase(fixture[field]);
+  }
+  return next;
 }
 function reportFixtureFreight(value){
   const raw=String(value??"").trim();
@@ -728,7 +740,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     setCargoImportOpen(true);
     loadSavedReports();
   }, [selectedCargoes]);
-  const mapImportedCargo = c => ({
+  const mapImportedCargo = c => normalizeReportFixture({
     vessel:c.vessel||"", charterer:c.charterer||"", cargo:c.cargo||"",
     load:c.load||c.loadPort||"", disch:c.disch||c.dischPort||"",
     laycanFrom:c.from||c.laycanFrom||"", laycanTo:c.to||c.laycanTo||"",
@@ -743,7 +755,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         const {data,error} = await supabase.from("reports").select("*").eq("id",cargoImportChoice).single();
         if (error || !data) throw error || new Error("Saved report not found");
         await loadReport(cargoImportChoice);
-        setFixtures([...(Array.isArray(data.fixtures)?data.fixtures:[]).map(f=>({...f,freight:reportFixtureFreight(f.freight)})),...incoming]);
+        setFixtures([...(Array.isArray(data.fixtures)?data.fixtures:[]).map(f=>normalizeReportFixture({...f,freight:reportFixtureFreight(f.freight)})),...incoming]);
       } else {
         setActiveMarketReportId(null);
         setReportType("Intermediate");
@@ -1282,7 +1294,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       const payload = { report_type: reportType, report_date: reportDate, commentary,
         rate_grid: { ...rateGrid, __marketEditor: { headings: marketHeadings, intermediateTitle,
           benchmarks: benchmarkRows, drivers: driverBullets, tceStats, handy, handyCommentary, handySegments, importedFixingChart,routeColumns,routeTitles,intermediateRoutesLabel,marketHeadings, excludedFixtureIds, excludedBenchmarkKeys, excludedCharterers, recipientCharterer } },
-        tce_earnings: tceEarnings, fixtures, quotes };
+        tce_earnings: tceEarnings, fixtures:fixtures.map(normalizeReportFixture), quotes };
       // Editing an existing saved report updates that exact row. New reports insert once.
       const query = activeMarketReportId
         ? supabase.from("reports").update(payload).eq("id", activeMarketReportId).select("id").single()
@@ -1302,7 +1314,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       setReportType(data.report_type); setReportDate(data.report_date || reportDate);
       setCommentary(data.commentary || ""); setRateGrid(data.rate_grid && typeof data.rate_grid==="object" ? data.rate_grid : {});
       setImportedFixingChart(data.rate_grid?.__marketEditor?.importedFixingChart||null);
-      setTceEarnings(data.tce_earnings && typeof data.tce_earnings==="object" ? data.tce_earnings : {}); setFixtures(Array.isArray(data.fixtures)?data.fixtures:[]); setQuotes(Array.isArray(data.quotes)?data.quotes:[]);
+      setTceEarnings(data.tce_earnings && typeof data.tce_earnings==="object" ? data.tce_earnings : {}); setFixtures(Array.isArray(data.fixtures)?data.fixtures.map(normalizeReportFixture):[]); setQuotes(Array.isArray(data.quotes)?data.quotes:[]);
       const editor = data.rate_grid?.__marketEditor;
       setIntermediateTitle(editor?.intermediateTitle || "Intermediate Summary");
       setExcludedFixtureIds(Array.isArray(editor?.excludedFixtureIds)?editor.excludedFixtureIds:[]);
@@ -2462,7 +2474,7 @@ Any direction`}</pre>
                                     onBlur={() => setFixtures(p => p.map((row,j) => j===i ? {...row,freight:reportFixtureFreight(row.freight)} : row))}
                                     className="rpt-edit" style={{ width: 135, fontSize: 11 }} placeholder="USD 250K LS" />
                                 ) : (
-                                  <input value={reportNaturalCase(f[field])} onChange={e => setFixtures(p => { const n = [...p]; n[i] = { ...n[i], [field]: e.target.value }; return n; })}
+                                  <input value={f[field] || ""} onChange={e => setFixtures(p => { const n = [...p]; n[i] = { ...n[i], [field]: e.target.value, ...(REPORT_FIXTURE_TEXT_FIELDS.includes(field)?{_textOverrides:{...n[i]._textOverrides,[field]:true}}:{}) }; return n; })}
                                     className="rpt-edit" style={{ width: field === "vessel" ? 155 : field === "load" || field === "disch" ? 145 : field === "charterer" ? 120 : 100, fontSize: 11 }} />
                                 )}
                               </td>
@@ -2586,11 +2598,11 @@ Any direction`}</pre>
                       <tbody>
                         {visibleExportFixtures.map((f, i) => (
                           <tr key={i} style={{ borderTop: "1px solid #d9e2ef" }}>
-                            <td style={{ padding: "4px 6px" }}>{reportNaturalCase(f.vessel)}</td>
-                            <td style={{ padding: "4px 6px" }}>{reportNaturalCase(f.charterer)}</td>
-                            <td style={{ padding: "4px 6px" }}>{reportNaturalCase(f.cargo)}</td>
-                            <td style={{ padding: "4px 6px" }}>{reportNaturalCase(f.load)}</td>
-                            <td style={{ padding: "4px 6px" }}>{reportNaturalCase(f.disch)}</td>
+                            <td style={{ padding: "4px 6px" }}>{f.vessel || ""}</td>
+                            <td style={{ padding: "4px 6px" }}>{f.charterer || ""}</td>
+                            <td style={{ padding: "4px 6px" }}>{f.cargo || ""}</td>
+                            <td style={{ padding: "4px 6px" }}>{f.load || ""}</td>
+                            <td style={{ padding: "4px 6px" }}>{f.disch || ""}</td>
                             <td style={{ padding: "4px 6px", whiteSpace:"nowrap" }}>{[f.laycanFrom, f.laycanTo].filter(Boolean).join(" - ")}</td>
                             <td style={{ padding: "4px 6px", whiteSpace:"nowrap", paddingLeft:14 }}>{reportFixtureFreight(f.freight)}</td>
                           </tr>
