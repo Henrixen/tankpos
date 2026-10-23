@@ -1213,8 +1213,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const reportCharterers = [...new Set(fixtures.map(f => chartererKey(f.charterer)).filter(Boolean))].sort();
   const chartererIsExcluded = f => excludedCharterers.includes(chartererKey(f.charterer)) || (!!recipientCharterer && chartererKey(f.charterer) === recipientCharterer);
   const fixtureIsIncluded = (f, i) => !excludedFixtureIds.includes(fixtureId(f, i)) && !chartererIsExcluded(f);
-  const visibleExportFixtures = fixtures.filter((f, i) =>
-    fixtureIsIncluded(f, i)
+  const visibleExportFixtures = sortedFixtures.filter(f =>
+    fixtureIsIncluded(f, fixtures.indexOf(f))
   );
   const toggleExcluded = (setter, value) => setter(p => p.includes(value) ? p.filter(x => x !== value) : [...p, value]);
   const exportCheckboxStyle = {width:14,height:14,accentColor:"#377dc8",cursor:"pointer"};
