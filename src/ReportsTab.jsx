@@ -100,14 +100,34 @@ function groupVessels(list, by, sortByDate, regionMode, matchCustomRegion, outpu
   return out;
 }
 
+// Measure the actual plot area so report charts fill their panels without stretching text.
+function useReportPlotSize(defaultWidth,defaultHeight){
+  const ref=useRef(null);
+  const [size,setSize]=useState({width:defaultWidth,height:defaultHeight});
+  useEffect(()=>{
+    const node=ref.current;
+    if(!node)return;
+    const update=()=>{
+      const {width,height}=node.getBoundingClientRect();
+      if(width>0&&height>0)setSize(previous=>Math.abs(previous.width-width)<1&&Math.abs(previous.height-height)<1?previous:{width,height});
+    };
+    update();
+    const observer=new ResizeObserver(update);
+    observer.observe(node);
+    return()=>observer.disconnect();
+  });
+  return [ref,size];
+}
+
 // ─── Generic bar+line SVG chart ───────────────────────────────────────────────
-function BarLineChart({ data, barKey, lineKey, barLabel, lineLabel, title, accent = "#3a82f6", loading = false }) {
+function BarLineChart({ data, barKey, lineKey, barLabel, lineLabel, title, accent = "#3a82f6", loading = false, fillHeight = false }) {
+  const [plotRef,plotSize]=useReportPlotSize(440,170);
   if (!data?.length) return (
     <div style={{ padding: 20, textAlign: "center", color: "rgba(219,230,245,0.3)", fontSize: 11 }}>
       {title} · {loading ? "loading..." : "no data in this window"}
     </div>
   );
-  const W = 440, H = 170;
+  const W = fillHeight?plotSize.width:440, H = fillHeight?plotSize.height:170;
   const P = { t: 26, r: 44, b: 28, l: 26 };
   const w = W - P.l - P.r, h = H - P.t - P.b;
   const maxB = Math.max(...data.map(d => d[barKey] || 0), 1);
@@ -119,7 +139,7 @@ function BarLineChart({ data, barKey, lineKey, barLabel, lineLabel, title, accen
   const hasLine = lineKey && data.some(d => d[lineKey] > 0);
   const pts = hasLine ? data.map((d, i) => `${xc(i)},${yL(d[lineKey] || 0)}`).join(" ") : "";
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
+    <div ref={plotRef} style={{width:"100%",height:fillHeight?undefined:170,flex:fillHeight?1:undefined,minHeight:0}}><svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
       <text x={P.l} y={14} fill="#dbe6f5" fontSize="11" fontWeight="700">{title}</text>
       <rect x={P.l} y={5} width={9} height={9} fill={accent} opacity="0.55" rx="1" />
       <text x={P.l + 12} y={13} fill="rgba(219,230,245,0.65)" fontSize="9">{barLabel}</text>
@@ -148,19 +168,20 @@ function BarLineChart({ data, barKey, lineKey, barLabel, lineLabel, title, accen
         <text x={W - P.r + 3} y={P.t} fill="rgba(219,230,245,0.35)" fontSize="8" textAnchor="start">{maxL}d</text>
         <text x={W - P.r + 3} y={P.t + h} fill="rgba(219,230,245,0.35)" fontSize="8" textAnchor="start">0d</text>
       </>}
-    </svg>
+    </svg></div>
   );
 }
 
 // ─── Small TCE trend chart: Last month vs Spot, with a dashed YTD reference line ──
 function TCETrendMini({ lastMonth, current, ytd }) {
+  const [plotRef,plotSize]=useReportPlotSize(440,160);
   const lm = parseFloat(lastMonth) || null;
   const cur = parseFloat(current) || null;
   const y = parseFloat(ytd) || null;
   if (lm == null && cur == null) return (
     <div style={{ padding: 20, textAlign: "center", color: "rgba(219,230,245,0.3)", fontSize: 11 }}>Enter TCE figures below to see the trend</div>
   );
-  const W = 340, H = 178, P = { t: 28, r: 22, b: 25, l: 28 };
+  const W = plotSize.width, H = plotSize.height, P = { t: 28, r: 22, b: 25, l: 28 };
   const w = W - P.l - P.r, h = H - P.t - P.b;
   const vals = [lm, cur, y].filter(v => v != null);
   const maxV = Math.max(...vals, 1) * 1.15, minV = Math.min(...vals, 0) * 0.9;
@@ -168,7 +189,7 @@ function TCETrendMini({ lastMonth, current, ytd }) {
   const bw = w * 0.29;
   const x1 = P.l + w * 0.28, x2 = P.l + w * 0.72;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="178">
+    <div ref={plotRef} style={{width:"100%",flex:1,minHeight:0}}><svg viewBox={`0 0 ${W} ${H}`} width="100%" height="100%" style={{display:"block"}}>
       {y != null && <>
         <line x1={P.l} y1={yFor(y)} x2={W - P.r} y2={yFor(y)} stroke="#f0f6ff" strokeWidth="1.8" strokeDasharray="5,4" />
         <text x={W - P.r} y={13} fill="rgba(219,230,245,0.5)" fontSize="9" textAnchor="end">YTD AVG ${y.toLocaleString("nb-NO")}/d</text>
@@ -183,7 +204,7 @@ function TCETrendMini({ lastMonth, current, ytd }) {
         <text x={x2} y={Math.max(28,yFor(cur) - 7)} fill="#dbe6f5" fontSize="10" textAnchor="middle">${cur.toLocaleString("nb-NO")}/d</text>
         <text x={x2} y={H - 8} fill="#f0f6ff" fontSize="9" textAnchor="middle">Spot</text>
       </>}
-    </svg>
+    </svg></div>
   );
 }
 
@@ -281,10 +302,11 @@ function fixingWindowReportTitle(snapshot){
 }
 
 function ImportedFixingWindowChart({snapshot}){
+  const [plotRef,plotSize]=useReportPlotSize(440,160);
   const rows=Array.isArray(snapshot?.rows)?snapshot.rows:[];
   const segments=Array.isArray(snapshot?.segments)&&snapshot.segments.length?snapshot.segments:["Inter"];
   const colors={"Sub 10":"#8b949e",City:"#58a6ff",Inter:"#22d3ee",J19:"#a78bfa",Flexi:"#fd79a8",Handy:"#3fb950",MR:"#f5a623"};
-  const W=640,H=198,L=39,R=44,T=14,B=26,iw=W-L-R,ih=H-T-B;
+  const W=plotSize.width,H=plotSize.height,L=39,R=44,T=14,B=26,iw=W-L-R,ih=H-T-B;
   const valueAt=(row,seg)=>{const raw=row?.[seg];if(raw==null||raw==="")return null;const n=Number(raw);return Number.isFinite(n)&&n>=0?n:null;};
   const valid=segments.flatMap(seg=>rows.map(r=>valueAt(r,seg))).filter(v=>v!==null);
   if(!valid.length)return <div style={{fontSize:11,color:"#9fb4cd",padding:20}}>Imported fixing-window data has no values.</div>;
@@ -304,9 +326,9 @@ function ImportedFixingWindowChart({snapshot}){
   };
   const fmtDate=v=>{const str=String(v||"");const dt=new Date(str);return !Number.isNaN(dt.getTime())?dt.toLocaleDateString("en-GB",{day:"numeric",month:"short"}):str.slice(0,11);};
   const tickIndices=[0,Math.floor((rows.length-1)/4),Math.floor((rows.length-1)/2),Math.floor((rows.length-1)*3/4),rows.length-1].filter((v,i,a)=>a.indexOf(v)===i);
-  return <div style={{width:"100%",minWidth:0}}>
+  return <div style={{width:"100%",minWidth:0,flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
     <div style={{fontSize:11,color:"#dbe6f5",marginBottom:5,fontWeight:700,textAlign:"center"}}>{fixingWindowReportTitle(snapshot)}</div>
-    <svg viewBox={`0 0 ${W} ${H}`} style={{display:"block",width:"100%",height:"auto",overflow:"visible"}} role="img" aria-label="Imported fixing window historical average">
+    <div ref={plotRef} style={{width:"100%",flex:1,minHeight:0}}><svg viewBox={`0 0 ${W} ${H}`} style={{display:"block",width:"100%",height:"100%",overflow:"visible"}} role="img" aria-label="Imported fixing window historical average">
       {Array.from({length:6},(_,i)=>i/5).map(t=><g key={t}><line x1={L} y1={T+t*ih} x2={W-R} y2={T+t*ih} stroke="rgba(130,160,200,.18)"/><text x={L-9} y={T+t*ih+3.5} textAnchor="end" fontSize="10" fontWeight="600" fill="#a7bdd9">{Math.round(max*(1-t)).toLocaleString("en-GB")}</text></g>)}
       {segments.map(seg=>{
         const groups=[rows.map((r,i)=>{const v=valueAt(r,seg);return v===null?null:[x(i),y(v)];}).filter(Boolean)];
@@ -317,8 +339,8 @@ function ImportedFixingWindowChart({snapshot}){
           {last!==null&&<g><circle cx={x(lastIndex)} cy={y(last)} r="2.7" fill={colors[seg]||"#58a6ff"}/><text x={Math.min(W-6,x(lastIndex)+7)} y={Math.max(12,y(last)-7)} textAnchor={lastIndex===rows.length-1?"end":"start"} fontSize="10" fontWeight="750" fill={colors[seg]||"#58a6ff"}>{Math.round(last)}d</text></g>}
         </g>;
       })}
-      {tickIndices.map(i=><text key={i} x={x(i)} y={H-9} textAnchor={i===0?"start":i===rows.length-1?"end":"middle"} fontSize="10" fontWeight="600" fill="#a7bdd9">{fmtDate(rows[i]?.date||rows[i]?.label)}</text>)}
-    </svg>
+      {tickIndices.map(i=><text key={i} x={x(i)} y={H-9} textAnchor={i===0?"start":i===rows.length-1?"end":"middle"} fontSize={Math.min(10,W/36)} fontWeight="600" fill="#a7bdd9">{fmtDate(rows[i]?.date||rows[i]?.label)}</text>)}
+    </svg></div>
     <div style={{display:"flex",flexWrap:"wrap",gap:12,justifyContent:"center",marginTop:0}}>{segments.map(seg=><span key={seg} style={{fontSize:10,color:colors[seg]||"#58a6ff",fontWeight:700}}>● {seg==="Inter"?"Intermediate":seg}</span>)}</div>
   </div>;
 }
@@ -2463,15 +2485,15 @@ Any direction`}</pre>
 
               {/* ── TCE trend (50%) + Fixing window (50%) ── */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11, alignItems:"stretch" }}>
-                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10, minHeight:240,height:240,overflow:"hidden",boxSizing:"border-box" }}>
+                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10, minHeight:210,height:210,display:"flex",flexDirection:"column",overflow:"hidden",boxSizing:"border-box" }}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}><div style={{fontSize:11,fontWeight:700,color:C.tx}}>TCE trend</div>{emailSectionTick("tceChart")}</div>
                   <TCETrendMini lastMonth={tceStats.lastMonth} current={tceStats.current} ytd={tceStats.ytd} />
                 </div>
-                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10,minHeight:240,height:240,overflow:"hidden",boxSizing:"border-box" }}>
+                <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 10,minHeight:210,height:210,display:"flex",flexDirection:"column",overflow:"hidden",boxSizing:"border-box" }}>
                   <div style={{display:"flex",justifyContent:"flex-end",marginBottom:2}}>{emailSectionTick("fixingChart")}</div>
                   {importedFixingChart?.rows?.length
                     ? <ImportedFixingWindowChart snapshot={importedFixingChart}/>
-                    : <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" barLabel="No. of ships" lineLabel="Avg. fix window" title="Fixing window (days)" accent="#4a90e2" loading={fixHistoryLoading} />}
+                    : <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" barLabel="No. of ships" lineLabel="Avg. fix window" title="Fixing window (days)" accent="#4a90e2" loading={fixHistoryLoading} fillHeight={true} />}
                 </div>
               </div>
 
@@ -2591,14 +2613,14 @@ Any direction`}</pre>
 
                   {(emailSections.tceChart || emailSections.fixingChart) && (
                     <div style={{display:"grid",gridTemplateColumns:emailSections.tceChart&&emailSections.fixingChart?"1fr 1fr":"1fr",gap:12,padding:"12px 18px 12px",alignItems:"stretch"}}>
-                      {emailSections.tceChart && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0,height:245,overflow:"hidden",boxSizing:"border-box"}}>
+                      {emailSections.tceChart && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0,height:210,display:"flex",flexDirection:"column",overflow:"hidden",boxSizing:"border-box"}}>
                         <div style={{fontSize:11,fontWeight:700,marginBottom:6}}>TCE trend</div>
                         <TCETrendMini lastMonth={tceStats.lastMonth} current={tceStats.current} ytd={tceStats.ytd}/>
                       </div>}
-                      {emailSections.fixingChart && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0,height:245,overflow:"hidden",boxSizing:"border-box"}}>
+                      {emailSections.fixingChart && <div style={{background:"#0b1f3f",borderRadius:6,padding:10,color:"#dbe6f5",minWidth:0,height:210,display:"flex",flexDirection:"column",overflow:"hidden",boxSizing:"border-box"}}>
                         {importedFixingChart?.rows?.length
                           ? <ImportedFixingWindowChart snapshot={importedFixingChart}/>
-                          : <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" barLabel="No. of ships" lineLabel="Avg. fix window" title="Fixing window (days)" accent="#4a90e2" loading={fixHistoryLoading}/>}
+                          : <BarLineChart data={fixHistory} barKey="ships" lineKey="avgWindow" barLabel="No. of ships" lineLabel="Avg. fix window" title="Fixing window (days)" accent="#4a90e2" loading={fixHistoryLoading} fillHeight={true}/>}
                       </div>}
                     </div>
                   )}
