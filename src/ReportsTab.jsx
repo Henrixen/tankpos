@@ -2941,13 +2941,13 @@ Any direction`}</pre>
                       <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>Step 2 — Check &amp; edit ({quickRows.length} row{quickRows.length !== 1 ? "s" : ""}) — <span style={{ fontWeight: 400, color: C.faint }}>orange = operator not yet matched</span></div>
                       <button onClick={addQuickRow} style={{ fontSize: 12, color: ACCENT, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>+ Add row</button>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 85px 22px", background: ACCENT, color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 10px", gap: 6, flexShrink: 0 }}>
-                      {[["operator","OPERATOR"],["vessel","VESSEL"],["port","PORT"],["date","DATE"],["direction","COMMENT"],["updatedAt","UPDATED DATE"]].map(([key,label])=><button key={key} onClick={()=>sortQuickColumn(key)} title={key==="updatedAt"?"For selection only — excluded from output":"Sort by "+label} style={{background:"none",border:0,padding:0,color:"inherit",font:"inherit",textAlign:"left",cursor:"pointer"}}>{label}{quickTableSort.key===key?(quickTableSort.desc?" ▼":" ▲"):""}</button>)}<div></div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 85px 22px", background: ACCENT, color: "#fff", fontSize: 11, fontWeight: 700, padding: "5px 10px", gap: 6, flexShrink: 0 }}>
+                      {[["operator","OPERATOR"],["vessel","VESSEL"],["port","PORT"],["date","DATE"],["direction","COMMENT"],["updatedAt","UPDATED"]].map(([key,label])=><button key={key} onClick={()=>sortQuickColumn(key)} title={key==="updatedAt"?"For selection only — excluded from output":"Sort by "+label} style={{background:"none",border:0,padding:0,color:"inherit",font:"inherit",textAlign:"left",cursor:"pointer"}}>{label}{quickTableSort.key===key?(quickTableSort.desc?" ▼":" ▲"):""}</button>)}<div></div>
                     </div>
                     <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                       {quickEditorRows.map((r, i) => {
                         const iOp = r.operator ? C.tx : "#f5a623";
-                        const INP = (col) => ({ background: "transparent", border: "none", borderBottom: "1px solid rgba(58,130,246,0.28)", color: col || C.tx, fontSize: 11, outline: "none", padding: "1px 2px", width: "100%", fontFamily: "inherit", minWidth: 0 });
+                        const INP = (col) => ({ background: "transparent", border: "none", borderBottom: "1px solid rgba(58,130,246,0.28)", color: col || C.tx, fontSize: 10, outline: "none", padding: "1px 2px", width: "100%", fontFamily: "inherit", minWidth: 0 });
                         // Enter jumps to the same column, next row down — same field index across the grid
                         const jumpDown = (fieldIdx) => (e) => {
                           if (e.key !== "Enter") return;
@@ -2964,7 +2964,7 @@ Any direction`}</pre>
                             <input className="quick-row-input" style={INP()} value={String(r.port||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} onKeyDown={jumpDown(2)} placeholder="PORT" />
                             <input className="quick-row-input" style={INP()} value={String(r.date||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} onKeyDown={jumpDown(3)} placeholder="DATE" />
                             <input className="quick-row-input" style={{ ...INP(C.dim) }} value={String(r.comment??r.direction??"").toUpperCase()} onChange={e => updateQuickRow(r.id, "direction", e.target.value.toUpperCase())} onKeyDown={jumpDown(4)} placeholder="COMMENT" />
-                            <span title="Position last updated — excluded from output" style={{fontSize:11,color:C.dim}}>{quickUpdatedDate(r,allVessels).toUpperCase()}</span>
+                            <span title="Position last updated — excluded from output" style={{fontSize:10,color:C.dim}}>{quickUpdatedDate(r,allVessels).toUpperCase()}</span>
                             <button onClick={() => deleteQuickRow(r.id)} style={{ background: "none", border: "none", color: "rgba(239,68,68,0.55)", cursor: "pointer", fontSize: 12, padding: 0 }}>✕</button>
                           </div>
                         );
