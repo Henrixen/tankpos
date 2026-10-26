@@ -47,6 +47,96 @@ function sortNewbuildTable(rows,sort,upcoming=false){
   }).map(item=>item.row);
 }
 
+// Export only the current filtered/sorted rows; no database reads are needed.
+const NB_ORDERBOOK_EXPORT_COLUMNS=[
+  ["Starred","starred",10],["Vessel","vessel",25],["DWT","dwt",13],["CBM","cbm",13],
+  ["Coating","coating",18],["Delivery","delivery_date",16],["Operator","operator",24],
+  ["Owner","owner",26],["LOA","loa",12],["Beam","beam",12],["Tanks","tanks",10],
+  ["Segs","segs",10],["Yard","yard",30],["Fuel Data","fuel_type",24],
+  ["Other Data","other_data",40],["Comments","comments",45],["Note","note",40],["Segment","segment",22]
+];
+const NB_UPCOMING_EXPORT_COLUMNS=[
+  ["Vessel","vessel",25],["DWT","dwt",13],["Coating","coating",18],["Delivery","delivery",16],
+  ["Operator","operator",24],["Owner","owner",26],["Yard","yard",30],["Comment","comment",45],["Source","source",13]
+];
+function newbuildExportValue(row,key){
+  if(key==="vessel")return dispName(row.vessel);
+  if(key==="starred")return row.starred?"Yes":"No";
+  if(key==="segment")return row._seg?.label?.replace(/^\d+\.\s*/,"")||"";
+  return row[key]??"";
+}
+function newbuildExportCSV(list,columns){
+  const cell=value=>{
+    const text=String(value??"");
+    // Excel must treat free text as text, including notes beginning with '='.
+    const safe=/^[\s]*[=+@-]/.test(text)&&!/^[-+]?\d+(?:\.\d+)?$/.test(text)?"'"+text:text;
+    return '"'+safe.replace(/"/g,'""')+'"';
+  };
+  return "\uFEFF"+[columns.map(c=>c[0]),...list.map(row=>columns.map(([,key])=>newbuildExportValue(row,key)))].map(row=>row.map(cell).join(",")).join("\r\n");
+}
+function downloadNewbuildFile(blob,name){
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function upcomingOwner(position,orderbook){
+  if(position.owner)return position.owner;
+  const imo=String(position.imo||"").trim();
+  if(imo){const match=orderbook.find(n=>String(n.imo||"").trim()===imo);if(match?.owner)return match.owner;}
+  const name=dispName(position.vessel_name||position.vessel).toUpperCase();
+  if(!name)return "";
+  const owners=[...new Set(orderbook.filter(n=>dispName(n.vessel).toUpperCase()===name).map(n=>n.owner).filter(Boolean))];
+  return owners.length===1?owners[0]:"";
+}
+// Load the pinned browser exporter only when Excel is clicked, then reuse it.
+let newbuildExcelPromise=null;
+function loadNewbuildExcel(){
+  if(window.ExcelJS?.Workbook)return Promise.resolve(window.ExcelJS);
+  if(newbuildExcelPromise)return newbuildExcelPromise;
+  newbuildExcelPromise=new Promise((resolve,reject)=>{
+    const script=document.createElement("script");
+    const fail=()=>{clearTimeout(timer);script.remove();reject(new Error("Excel export could not load. Please check your connection and try again."));};
+    const timer=setTimeout(fail,25000);
+    script.src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js";
+    script.integrity="sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz";
+    script.crossOrigin="anonymous";script.async=true;
+    script.onload=()=>{if(!window.ExcelJS?.Workbook){fail();return;}clearTimeout(timer);resolve(window.ExcelJS);};
+    script.onerror=fail;document.head.appendChild(script);
+  }).catch(error=>{newbuildExcelPromise=null;throw error;});
+  return newbuildExcelPromise;
+}
+async function buildNewbuildExcel(ExcelJS,list,upcoming=false){
+  const columns=upcoming?NB_UPCOMING_EXPORT_COLUMNS:NB_ORDERBOOK_EXPORT_COLUMNS;
+  const workbook=new ExcelJS.Workbook();workbook.creator="Steem1960";workbook.created=new Date();
+  const sheet=workbook.addWorksheet(upcoming?"Upcoming Deliveries":"Full Orderbook",{views:[{state:"frozen",ySplit:1}]});
+  const numeric=new Set(["dwt","cbm","loa","beam","tanks","segs"]);
+  const rows=list.map(row=>columns.map(([,key])=>{
+    const value=newbuildExportValue(row,key);
+    if(value==="")return null;
+    if(numeric.has(key)){const n=Number(String(value).replace(/[\s,]/g,""));return Number.isFinite(n)?n:String(value);}
+    // Only complete ISO dates become dates; partial/uncertain dates retain their precision.
+    if((key==="delivery"||key==="delivery_date")&&/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(String(value))){
+      const date=new Date(String(value).slice(0,10)+"T00:00:00Z");if(!Number.isNaN(date.getTime()))return date;
+    }
+    return String(value);
+  }));
+  sheet.addTable({name:upcoming?"UpcomingDeliveries":"FullOrderbook",ref:"A1",headerRow:true,totalsRow:false,
+    style:{theme:"TableStyleMedium2",showRowStripes:true},columns:columns.map(([name])=>({name,filterButton:true})),rows});
+  columns.forEach(([,key,width],i)=>{
+    const col=sheet.getColumn(i+1);col.width=width;
+    if(numeric.has(key))col.numFmt=["loa","beam"].includes(key)?"#,##0.##":"#,##0";
+    if(key==="delivery"||key==="delivery_date")col.numFmt="d mmm yyyy";
+  });
+  sheet.eachRow((row,index)=>{
+    row.font={name:"Calibri",size:11};row.alignment={vertical:"top",wrapText:true};
+    row.height=index===1?28:Math.min(409,Math.max(22,...rows[index-2].map((v,i)=>18*(String(v??"").split("\n").reduce((n,line)=>n+Math.max(1,Math.ceil(line.length/(columns[i][2]-2))),0)))));
+  });
+  sheet.getRow(1).font={name:"Calibri",size:11,bold:true,color:{argb:"FFFFFFFF"}};
+  sheet.getRow(1).fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF17365D"}};
+  sheet.getRow(1).alignment={vertical:"middle",wrapText:true};
+  return workbook.xlsx.writeBuffer();
+}
+
 function segmentFor(dwt){
   if(!dwt) return null;
   return NB_SEGMENTS.find(s=>dwt>=s.dwt[0]&&dwt<=s.dwt[1])||null;
@@ -345,6 +435,8 @@ export default function NewbuildsTab(){
   const [pendingDel,setPendingDel]=useState(null);
   const [editingVessel,setEditingVessel]=useState(null);
   const [copyStatus,setCopyStatus]=useState(null);
+  const [excelExportBusy,setExcelExportBusy]=useState(null);
+  const [excelExportError,setExcelExportError]=useState(null);
   const [lastUpdated,setLastUpdated]=useState(null);
   const [pasteTab,setPasteTab]=useState("paste"); // paste | list
   const [existingFleet,setExistingFleet]=useState([]);
@@ -563,42 +655,23 @@ export default function NewbuildsTab(){
   }
 
   function handleExportCSV(list){
-    if(!list.length) return;
-    const headers=["Vessel","DWT","Coating","Segment","Operator","Owner","Yard"];
-    const rows=list.map(n=>{
-      const seg=n._seg?.label?.replace(/^\d+\.\s*/,"")||"";
-      return [dispName(n.vessel),n.dwt||"",n.coating||"",seg,n.operator||"",n.owner||"",n.yard||""];
-    });
-    const csv=[headers,...rows]
-      .map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(","))
-      .join("\n");
-    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");
-    a.href=url;
-    a.download=`newbuild_orderbook_${new Date().toISOString().slice(0,10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if(!list.length)return;
+    downloadNewbuildFile(new Blob([newbuildExportCSV(list,NB_ORDERBOOK_EXPORT_COLUMNS)],{type:"text/csv;charset=utf-8;"}),`newbuild_orderbook_${new Date().toISOString().slice(0,10)}.csv`);
   }
   function handleExportUpcomingCSV(list){
-    if(!list.length) return;
-    const headers=["Vessel","DWT","Coating","Delivery","Operator","Yard","Comment","Source"];
-    const rows=list.map(u=>[
-      dispName(u.vessel),u.dwt||"",u.coating||"",u.delivery||"",u.operator||"",u.yard||"",u.comment||"",u.source||""
-    ]);
-    const csv=[headers,...rows]
-      .map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(","))
-      .join("\n");
-    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");
-    a.href=url;
-    a.download=`newbuild_upcoming_deliveries_${new Date().toISOString().slice(0,10)}.csv`;
-    document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+    if(!list.length)return;
+    downloadNewbuildFile(new Blob([newbuildExportCSV(list,NB_UPCOMING_EXPORT_COLUMNS)],{type:"text/csv;charset=utf-8;"}),`newbuild_upcoming_deliveries_${new Date().toISOString().slice(0,10)}.csv`);
   }
-
+  async function handleExportExcel(list,upcoming=false){
+    if(!list.length||excelExportBusy)return;
+    const kind=upcoming?"upcoming":"orderbook";setExcelExportBusy(kind);setExcelExportError(null);
+    try{
+      const ExcelJS=await loadNewbuildExcel();
+      const buffer=await buildNewbuildExcel(ExcelJS,list,upcoming);
+      downloadNewbuildFile(new Blob([buffer],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),`newbuild_${upcoming?"upcoming_deliveries":"orderbook"}_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }catch(error){setExcelExportError({kind,message:error.message||"Excel export failed. Please try again."});}
+    finally{setExcelExportBusy(null);}
+  }
 
   // ── Derived data ──────────────────────────────────────────────────────
   const enriched=useMemo(()=>newbuilds.map(n=>({...n,_seg:segmentFor(Number(n.dwt)||0)})),[newbuilds]);
@@ -775,6 +848,7 @@ export default function NewbuildsTab(){
         imo:n.imo,
         vessel:n.vessel,
         operator:n.operator,
+        owner:n.owner,
         yard:n.yard,
         dwt:n.dwt,
         coating:n.coating,
@@ -786,6 +860,7 @@ export default function NewbuildsTab(){
       source:"manual",
       vessel:p.vessel_name,
       operator:p.operator,
+      owner:upcomingOwner(p,newbuilds),
       yard:p.yard||null,
       dwt:p.dwt||null,
       coating:p.coating||null,
@@ -800,7 +875,7 @@ export default function NewbuildsTab(){
       const db=b.delivery?new Date(b.delivery).getTime():0;
       return da-db;
     });
-  },[filtered,positions,cutoff,shipComments]);
+  },[filtered,positions,cutoff,shipComments,newbuilds]);
 
   const sortedUpcoming=useMemo(()=>sortNewbuildTable(upcoming,upcomingSort,true),[upcoming,upcomingSort]);
   const sortedOrderbook=useMemo(()=>sortNewbuildTable(filtered,orderbookSort),[filtered,orderbookSort]);
@@ -1156,7 +1231,9 @@ export default function NewbuildsTab(){
             title="Upcoming Deliveries"
             right={
               <div style={{display:"flex",gap:7,alignItems:"center"}}>
+                {excelExportError?.kind==="upcoming"&&<span role="alert" style={{fontSize:11,color:"#f87171"}}>{excelExportError.message}</span>}
                 <button onClick={()=>handleExportUpcomingCSV(sortedUpcoming)} style={{...BTN_SM,padding:"3px 9px",fontSize:10}}>⬇ Export CSV</button>
+                <button onClick={()=>handleExportExcel(sortedUpcoming,true)} disabled={!!excelExportBusy||!sortedUpcoming.length} style={{...BTN_SM,padding:"3px 9px",fontSize:10,opacity:excelExportBusy?0.6:1}}>{excelExportBusy==="upcoming"?"Exporting…":"⬇ Export Excel"}</button>
                 <div style={{width:1,height:20,background:C.bd,margin:"0 3px"}}/>
                 {[1,3,6,12].map(m=>(
                   <button
@@ -1184,7 +1261,7 @@ export default function NewbuildsTab(){
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                   <thead>
                     <tr style={{background:"rgba(8,18,38,0.9)"}}>
-                      {["Vessel","DWT","Coating","Delivery","Operator","Yard","Comment",""].map(h=>(
+                      {["Vessel","DWT","Coating","Delivery","Operator","Owner","Yard","Comment",""].map(h=>(
                         <th key={h} {...sortableHeader(h,upcomingSort,setUpcomingSort)} style={{
                           padding:"5px 9px",textAlign:"left",fontSize:10,fontWeight:700,
                           color:"rgba(120,160,220,0.5)",textTransform:"uppercase",
@@ -1239,6 +1316,8 @@ export default function NewbuildsTab(){
                             : (u.operator||"—")}
                         </td>
 
+                        <td style={{padding:"5px 9px",color:"rgba(200,220,255,0.6)",whiteSpace:"nowrap"}}>{u.owner||"—"}</td>
+
                         <td style={{padding:"5px 9px",color:C.faint,whiteSpace:"nowrap",maxWidth:170,overflow:"hidden",textOverflow:"ellipsis"}}>
                           {u.source==="manual"
                             ? <EditableCell value={u.yard} onSave={v=>updateManualPosition(u.id,"yard",v)} width={105}/>
@@ -1281,7 +1360,9 @@ export default function NewbuildsTab(){
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                 {copyStatus&&<span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>{copyStatus}</span>}
                 <button onClick={()=>handleCopy(sortedOrderbook)} style={{...BTN_SM}}>📋 Copy</button>
+                {excelExportError?.kind==="orderbook"&&<span role="alert" style={{fontSize:11,color:"#f87171"}}>{excelExportError.message}</span>}
                 <button onClick={()=>handleExportCSV(sortedOrderbook)} style={{...BTN_SM}}>⬇ Export CSV</button>
+                <button onClick={()=>handleExportExcel(sortedOrderbook)} disabled={!!excelExportBusy||!sortedOrderbook.length} style={{...BTN_SM,opacity:excelExportBusy?0.6:1}}>{excelExportBusy==="orderbook"?"Exporting…":"⬇ Export Excel"}</button>
               </div>
             }>
 
