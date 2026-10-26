@@ -15,6 +15,38 @@ const NB_SEGMENTS = [
   { key:"mr",    label:"MR (>40)",      color:"#22d3ee", dwt:[40001, 999999] },
 ];
 
+// Independent, view-only column sorting for the two main tables.
+const NB_SORT_FIELDS={"★":"starred",Vessel:"vessel",DWT:"dwt",CBM:"cbm",Coating:"coating",Delivery:"delivery_date",Operator:"operator",Owner:"owner",LOA:"loa",Beam:"beam",Tanks:"tanks",Segs:"segs",Yard:"yard","Fuel Data":"fuel_type","Other Data":"other_data",Comments:"comments",Note:"note",Comment:"comment"};
+function newbuildSortDate(value){
+  const text=String(value??"").trim();if(!text)return null;
+  let match=text.match(/^(\d{4})-(\d{2})(?:-(\d{2}))?/);
+  if(match)return Date.UTC(+match[1],+match[2]-1,+(match[3]||1));
+  const months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+  match=text.match(/^(\d{1,2})\s+([a-z]{3,})(?:\s+(\d{4}))?/i);
+  if(match&&months[match[2].slice(0,3).toLowerCase()]!=null)return Date.UTC(+(match[3]||new Date().getFullYear()),months[match[2].slice(0,3).toLowerCase()],+match[1]);
+  match=text.match(/^([a-z]{3,})\s+(\d{4})/i);
+  if(match&&months[match[1].slice(0,3).toLowerCase()]!=null)return Date.UTC(+match[2],months[match[1].slice(0,3).toLowerCase()],1);
+  return null;
+}
+function sortNewbuildTable(rows,sort,upcoming=false){
+  if(!sort.key)return rows;
+  const field=sort.key==="Delivery"&&upcoming?"delivery":NB_SORT_FIELDS[sort.key];
+  const numeric=["dwt","cbm","loa","beam","tanks","segs"].includes(field);
+  const value=row=>{
+    const raw=row[field];if(raw==null||String(raw).trim()===""||raw==="—")return null;
+    if(field==="starred")return raw?1:0;
+    if(sort.key==="Delivery")return newbuildSortDate(raw);
+    if(numeric){const number=Number(String(raw).replace(/[\s,]/g,""));return Number.isFinite(number)?number:null;}
+    return String(raw);
+  };
+  return rows.map((row,index)=>({row,index,value:value(row)})).sort((a,b)=>{
+    // Empty cells remain last in either direction; equal values keep source order.
+    if(a.value===null||b.value===null)return a.value===b.value?a.index-b.index:a.value===null?1:-1;
+    const result=typeof a.value==="number"?a.value-b.value:a.value.localeCompare(b.value,undefined,{numeric:true,sensitivity:"base"});
+    return result*(sort.desc?-1:1)||a.index-b.index;
+  }).map(item=>item.row);
+}
+
 function segmentFor(dwt){
   if(!dwt) return null;
   return NB_SEGMENTS.find(s=>dwt>=s.dwt[0]&&dwt<=s.dwt[1])||null;
@@ -288,6 +320,15 @@ function EditableCell({value,onSave,placeholder="—",width=100,color=null,displ
 
 export default function NewbuildsTab(){
   const [newbuilds,setNewbuilds]=useState([]);
+  const [upcomingSort,setUpcomingSort]=useState({key:null,desc:false});
+  const [orderbookSort,setOrderbookSort]=useState({key:null,desc:false});
+  const toggleTableSort=(setter,key)=>setter(previous=>({key,desc:previous.key===key?!previous.desc:false}));
+  const sortableHeader=(label,sort,setter)=>label?{
+    onClick:()=>toggleTableSort(setter,label),tabIndex:0,
+    onKeyDown:event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();toggleTableSort(setter,label);}},
+    "aria-sort":sort.key===label?(sort.desc?"descending":"ascending"):"none",
+    title:`Sort by ${label}${sort.key===label&&!sort.desc?" descending":" ascending"}`
+  }:{};
   const [loading,setLoading]=useState(true);
   const [positions,setPositions]=useState([]);
   const [segFilter,setSegFilter]=useState(null);
@@ -761,6 +802,9 @@ export default function NewbuildsTab(){
     });
   },[filtered,positions,cutoff,shipComments]);
 
+  const sortedUpcoming=useMemo(()=>sortNewbuildTable(upcoming,upcomingSort,true),[upcoming,upcomingSort]);
+  const sortedOrderbook=useMemo(()=>sortNewbuildTable(filtered,orderbookSort),[filtered,orderbookSort]);
+
   const deliveryTimeline=useMemo(()=>{
     const now=new Date();
     const currentQuarter=Math.floor(now.getMonth()/3);
@@ -1112,7 +1156,7 @@ export default function NewbuildsTab(){
             title="Upcoming Deliveries"
             right={
               <div style={{display:"flex",gap:7,alignItems:"center"}}>
-                <button onClick={()=>handleExportUpcomingCSV(upcoming)} style={{...BTN_SM,padding:"3px 9px",fontSize:10}}>⬇ Export CSV</button>
+                <button onClick={()=>handleExportUpcomingCSV(sortedUpcoming)} style={{...BTN_SM,padding:"3px 9px",fontSize:10}}>⬇ Export CSV</button>
                 <div style={{width:1,height:20,background:C.bd,margin:"0 3px"}}/>
                 {[1,3,6,12].map(m=>(
                   <button
@@ -1141,18 +1185,18 @@ export default function NewbuildsTab(){
                   <thead>
                     <tr style={{background:"rgba(8,18,38,0.9)"}}>
                       {["Vessel","DWT","Coating","Delivery","Operator","Yard","Comment",""].map(h=>(
-                        <th key={h} style={{
+                        <th key={h} {...sortableHeader(h,upcomingSort,setUpcomingSort)} style={{
                           padding:"5px 9px",textAlign:"left",fontSize:10,fontWeight:700,
                           color:"rgba(120,160,220,0.5)",textTransform:"uppercase",
                           letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.12)",
-                          whiteSpace:"nowrap"
-                        }}>{h}</th>
+                          whiteSpace:"nowrap",cursor:h?"pointer":"default",userSelect:"none"
+                        }}>{h}{h&&upcomingSort.key===h?(upcomingSort.desc?" ▼":" ▲"):""}</th>
                       ))}
                     </tr>
                   </thead>
 
                   <tbody>
-                    {upcoming.map((u,i)=>(
+                    {sortedUpcoming.map((u,i)=>(
                       <tr
                         key={`${u.source}-${u.id||u.vessel}-${i}`}
                         style={{background:u.source==="manual"?"rgba(167,139,250,0.06)":i%2===0?"rgba(7,15,28,0.5)":"transparent"}}>
@@ -1236,8 +1280,8 @@ export default function NewbuildsTab(){
             right={
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                 {copyStatus&&<span style={{fontSize:11,color:"#4ade80",fontWeight:600}}>{copyStatus}</span>}
-                <button onClick={()=>handleCopy(filtered)} style={{...BTN_SM}}>📋 Copy</button>
-                <button onClick={()=>handleExportCSV(filtered)} style={{...BTN_SM}}>⬇ Export CSV</button>
+                <button onClick={()=>handleCopy(sortedOrderbook)} style={{...BTN_SM}}>📋 Copy</button>
+                <button onClick={()=>handleExportCSV(sortedOrderbook)} style={{...BTN_SM}}>⬇ Export CSV</button>
               </div>
             }>
 
@@ -1255,18 +1299,18 @@ export default function NewbuildsTab(){
                   <thead>
                     <tr style={{background:"rgba(8,18,38,0.9)",position:"sticky",top:0}}>
                       {["★","Vessel","DWT","CBM","Coating","Delivery","Operator","Owner","LOA","Beam","Tanks","Segs","Yard","Fuel Data","Other Data","Comments","Note"].map(h=>(
-                        <th key={h} style={{
+                        <th key={h} {...sortableHeader(h,orderbookSort,setOrderbookSort)} style={{
                           padding:"5px 9px",textAlign:"left",fontSize:10,fontWeight:700,
                           color:"rgba(120,160,220,0.5)",textTransform:"uppercase",
                           letterSpacing:"0.06em",borderBottom:"1px solid rgba(58,130,246,0.12)",
-                          whiteSpace:"nowrap"
-                        }}>{h}</th>
+                          whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"
+                        }}>{h}{orderbookSort.key===h?(orderbookSort.desc?" ▼":" ▲"):""}</th>
                       ))}
                     </tr>
                   </thead>
 
                   <tbody>
-                    {filtered.map((n,i)=>(
+                    {sortedOrderbook.map((n,i)=>(
                       <tr key={n.imo||n.vessel||i} style={{background:i%2===0?"rgba(7,15,28,0.5)":"transparent"}}>
                         <td style={{padding:"4px 9px"}}>
                           <button
