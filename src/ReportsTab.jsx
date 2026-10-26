@@ -88,11 +88,35 @@ function reconcileQuickSelections(rows,vessels,selected,config,updatedFilter="al
   matching.forEach((v,key)=>{if(!key||existing.has(key))return;existing.add(key);kept.push({id:newPositionId(),operator:v.operator||"",vessel:v.vessel||"",port:v.openPort||"",date:fmtOpen(v.date),direction:"",updatedAt:v.updatedAt||v.updated_at||"",_quickTagImported:true});});
   return kept.length===rows.length&&kept.every((row,i)=>row===rows[i])?rows:kept;
 }
+function quickUpdatedValue(row,vessels){
+  if(row._quickTagImported){
+    const source=vessels.find(v=>positionNameKey(v)===positionNameKey(row));
+    return row.updatedAt||row.updated_at||source?.updatedAt||source?.updated_at||"";
+  }
+  if(row._quickAddedAt||row.updatedAt||row.updated_at)return row._quickAddedAt||row.updatedAt||row.updated_at;
+  // Older manual/parsed quick rows encoded their creation time in the ID.
+  const legacy=String(row.id||"").match(/^q(\d{13})/);
+  return legacy?new Date(Number(legacy[1])).toISOString():"";
+}
 function quickUpdatedDate(row,vessels){
-  const source=vessels.find(v=>positionNameKey(v)===positionNameKey(row));
-  const value=row.updatedAt||row.updated_at||source?.updatedAt||source?.updated_at;
+  const value=quickUpdatedValue(row,vessels);
   if(!value)return "";const date=new Date(value);
-  return Number.isNaN(date.getTime())?String(value):date.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
+  return Number.isNaN(date.getTime())?String(value):date.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+}
+function stampQuickRows(rows,now=new Date().toISOString()){
+  return rows.map(row=>({...row,id:row.id||newPositionId(),_quickAddedAt:now,updatedAt:now,_quickTagImported:false}));
+}
+// Common single-line broker format; ordinal dates do not require an AI call.
+function parseQuickOpenLine(line){
+  const open=String(line).trim().match(/^(.+?)\s+open\s+(.+)$/i);
+  if(!open)return null;
+  const match=open[2].match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b(?:\s+(\d{4}))?/i);
+  if(!match)return null;
+  const port=open[2].slice(0,match.index).trim().replace(/[–—,;-]+$/,"").trim();
+  const date=Number(match[1])+" "+match[2].slice(0,3).toUpperCase()+(match[3]?" "+match[3]:"");
+  if(!port||reportDay(date)===null)return null;
+  const direction=open[2].slice(match.index+match[0].length).trim().replace(/^[–—,;:-]+\s*/,"");
+  return {vessel:open[1].replace(/^[*_]+|[*_]+$/g,"").trim().toUpperCase(),port:port.toUpperCase(),date,direction};
 }
 // Quick-list presentation only: source position text stays untouched.
 const QUICK_ABBREVIATIONS = new Set(["ARA","WCUK","ECUK","UK","UKC","NWE","NWC","MED","US","USA","USG","USAC","USEC","USWC","EU","UAE","UCOME","IMO","DWT","CBM","PPT","TBC","TBN","ETA","ETD","AG","PG","WAF","EAF","SAF","WCNA","WCSA"]);
@@ -108,7 +132,8 @@ function quickDisplayDate(value) {
 }
 function quickRowLine(row,byDate=false){
   const vessel=quickDisplayText(row.vessel),port=quickDisplayText(row.port),date=quickDisplayDate(row.date);
-  return (byDate?[date,vessel,port]:[vessel,port,date]).filter(Boolean).join(" – ");
+  const comment=quickDisplayText(String(row.comment??row.direction??"").trim());
+  return (byDate?[date,comment,vessel,port]:[vessel,port,date,comment]).filter(Boolean).join(" – ");
 }
 const MN_SORT = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 const POSITION_COLUMNS=[
@@ -644,7 +669,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const quickEditorRows=useMemo(()=>{
     if(!quickTableSort.key)return quickRows;
     const key=quickTableSort.key;
-    const value=r=>key==="date"?dateSortKey(quickDisplayDate(r.date)):key==="updatedAt"?dateSortKey(quickUpdatedDate(r,allVessels)):String(r[key]||"");
+    const value=r=>key==="date"?dateSortKey(quickDisplayDate(r.date)):key==="updatedAt"?(Date.parse(quickUpdatedValue(r,allVessels))||0):String((key==="direction"?(r.comment??r.direction):r[key])||"");
     return [...quickRows].sort((a,b)=>{const av=value(a),bv=value(b);return (typeof av==="number"?av-bv:av.localeCompare(bv,undefined,{numeric:true,sensitivity:"base"}))*(quickTableSort.desc?-1:1);});
   },[quickRows,quickTableSort,allVessels]);
   function toggleQuickOperator(key){setQuickExcludedOperators(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);}
@@ -1521,7 +1546,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         rows.push({ id:"q"+Date.now()+Math.random().toString(36).slice(2), operator: lookupOp(vessel), vessel, port, date, direction: dir || curRegion });
       });
       if (rows.length) {
-        setQuickRows(p => [...p, ...rows]); setQuickPaste("");
+        appendQuickRows(rows); setQuickPaste("");
         const m = rows.filter(r=>!r.operator).length;
         setQuickParseMsg("✓ "+rows.length+" position"+(rows.length!==1?"s":"")+" parsed from table"+(m?" — "+m+" operators not found.":"."));
         return;
@@ -1566,7 +1591,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         rows.push({ id:"q"+Date.now()+Math.random().toString(36).slice(2), operator: lookupOp(vessel), vessel, port, date, direction: comment || curRegion });
       }
       if (rows.length) {
-        setQuickRows(p => [...p, ...rows]); setQuickPaste("");
+        appendQuickRows(rows); setQuickPaste("");
         const m = rows.filter(r=>!r.operator).length;
         setQuickParseMsg("✓ "+rows.length+" position"+(rows.length!==1?"s":"")+" parsed"+(m?" — "+m+" operators not found.":"."));
         return;
@@ -1604,6 +1629,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
     const rows = []; let curOp = "";
     nonEmpty.forEach(line => {
+      const openRow=parseQuickOpenLine(line);
+      if(openRow){rows.push({...openRow,id:newPositionId(),operator:curOp||lookupOp(openRow.vessel)});return;}
       if (/^\*[^*]+\*$/.test(line) || /^_[^_]+_$/.test(line)) {
         curOp = line.replace(/[*_]/g, "").trim(); return;
       }
@@ -1667,7 +1694,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
           });
         });
         if (dRows.length) {
-          setQuickRows(p => [...p, ...dRows]); setQuickPaste("");
+          appendQuickRows(dRows); setQuickPaste("");
           const m = dRows.filter(r => !r.operator).length;
           setQuickParseMsg("✓ " + dRows.length + " position" + (dRows.length !== 1 ? "s" : "") + " parsed" + (m ? " — " + m + " operators not found." : "."));
           return;
@@ -1710,7 +1737,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         });
       });
       if (eRows.length) {
-        setQuickRows(p => [...p, ...eRows]); setQuickPaste("");
+        appendQuickRows(eRows); setQuickPaste("");
         const m = eRows.filter(r => !r.operator).length;
         setQuickParseMsg("✓ " + eRows.length + " position" + (eRows.length !== 1 ? "s" : "") + " parsed" + (sharedOperator ? " — operator \"" + sharedOperator + "\" applied to all" : "") + " — date assumed current month (" + curMonth + "), check before sending" + (m ? "; " + m + " operators not found." : "."));
         return;
@@ -1741,11 +1768,11 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         const aiRows = (Array.isArray(parsed) ? parsed : []).filter(r => r.vessel).map(r => ({
           id: "q" + Date.now() + Math.random().toString(36).slice(2),
           operator: r.operator || lookupOp(r.vessel), vessel: (r.vessel || "").toUpperCase(),
-          port: (r.port || "").toUpperCase(), date: r.date || "", direction: r.direction || "",
+          port: (r.port || "").toUpperCase(), date: r.date || "", direction: r.comment ?? r.direction ?? "",
         }));
         setQuickImgParsing(false);
         if (aiRows.length) {
-          setQuickRows(p => [...p, ...aiRows]); setQuickPaste("");
+          appendQuickRows(aiRows); setQuickPaste("");
           const m = aiRows.filter(r => !r.operator).length;
           setQuickParseMsg("✓ " + aiRows.length + " position" + (aiRows.length !== 1 ? "s" : "") + " parsed by AI — check dates/fields before sending" + (m ? "; " + m + " operators not found." : "."));
         } else {
@@ -1759,15 +1786,18 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       return;
     }
     rows.forEach(r => { if (!r.operator) r.operator = lookupOp(r.vessel); });
-    setQuickRows(p => [...p, ...rows]); setQuickPaste("");
+    appendQuickRows(rows); setQuickPaste("");
     const missing = rows.filter(r => !r.operator).length;
     setQuickParseMsg("\u2713 "+rows.length+" position"+(rows.length!==1?"s":"")+" added"+(missing?" \u2014 "+missing+" operator(s) not found, fill in manually.":"."));
   }
 
+  function appendQuickRows(rows){setQuickRows(p=>[...p,...stampQuickRows(rows)]);}
   function addQuickRow() {
-    setQuickRows(p => [...p, { id: "q"+Date.now(), operator: "", vessel: "", port: "", date: "", direction: "" }]);
+    appendQuickRows([{id:newPositionId(),operator:"",vessel:"",port:"",date:"",direction:""}]);
   }
-  function updateQuickRow(id, field, val) { setQuickRows(p => p.map(r => r.id===id ? {...r,[field]:val} : r)); }
+  function updateQuickRow(id,field,val){
+    setQuickRows(p=>p.map(r=>r.id===id?{...r,[field]:val,...(field==="direction"?{comment:val}:{}),...(!r._quickTagImported?{_quickAddedAt:new Date().toISOString(),updatedAt:new Date().toISOString()}: {})}:r));
+  }
   function deleteQuickRow(id) { setQuickRows(p => p.filter(r => r.id!==id)); }
 
   function buildQuickText(whatsapp=false) {
@@ -1834,9 +1864,9 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         vessel: (r.vessel || "").toUpperCase(),
         port: (r.port || "").toUpperCase(),
         date: (r.date || "").toUpperCase(),
-        direction: r.direction || ""
+        direction: r.comment ?? r.direction ?? ""
       }));
-      setQuickRows(p => [...p, ...rows]);
+      appendQuickRows(rows);
       const missing = rows.filter(r => !r.operator).length;
       setQuickParseMsg(`✓ ${rows.length} position${rows.length !== 1 ? "s" : ""} extracted from image${missing ? ` — ${missing} operator(s) not matched, fill manually` : "."}`);
     } catch (err) {
@@ -2912,7 +2942,7 @@ Any direction`}</pre>
                       <button onClick={addQuickRow} style={{ fontSize: 12, color: ACCENT, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>+ Add row</button>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 85px 22px", background: ACCENT, color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 10px", gap: 6, flexShrink: 0 }}>
-                      {[["operator","OPERATOR"],["vessel","VESSEL"],["port","PORT"],["date","DATE"],["direction","DIRECTION (OPTIONAL)"],["updatedAt","UPDATED DATE"]].map(([key,label])=><button key={key} onClick={()=>sortQuickColumn(key)} title={key==="updatedAt"?"For selection only — excluded from output":"Sort by "+label} style={{background:"none",border:0,padding:0,color:"inherit",font:"inherit",textAlign:"left",cursor:"pointer"}}>{label}{quickTableSort.key===key?(quickTableSort.desc?" ▼":" ▲"):""}</button>)}<div></div>
+                      {[["operator","OPERATOR"],["vessel","VESSEL"],["port","PORT"],["date","DATE"],["direction","COMMENT"],["updatedAt","UPDATED DATE"]].map(([key,label])=><button key={key} onClick={()=>sortQuickColumn(key)} title={key==="updatedAt"?"For selection only — excluded from output":"Sort by "+label} style={{background:"none",border:0,padding:0,color:"inherit",font:"inherit",textAlign:"left",cursor:"pointer"}}>{label}{quickTableSort.key===key?(quickTableSort.desc?" ▼":" ▲"):""}</button>)}<div></div>
                     </div>
                     <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                       {quickEditorRows.map((r, i) => {
@@ -2933,7 +2963,7 @@ Any direction`}</pre>
                             <input className="quick-row-input" style={{ ...INP(), fontWeight: 600 }} value={String(r.vessel||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "vessel", e.target.value.toUpperCase())} onKeyDown={jumpDown(1)} placeholder="VESSEL" />
                             <input className="quick-row-input" style={INP()} value={String(r.port||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} onKeyDown={jumpDown(2)} placeholder="PORT" />
                             <input className="quick-row-input" style={INP()} value={String(r.date||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} onKeyDown={jumpDown(3)} placeholder="DATE" />
-                            <input className="quick-row-input" style={{ ...INP(C.dim) }} value={String(r.direction||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "direction", e.target.value.toUpperCase())} onKeyDown={jumpDown(4)} placeholder="Any direction / options..." />
+                            <input className="quick-row-input" style={{ ...INP(C.dim) }} value={String(r.comment??r.direction??"").toUpperCase()} onChange={e => updateQuickRow(r.id, "direction", e.target.value.toUpperCase())} onKeyDown={jumpDown(4)} placeholder="COMMENT" />
                             <span title="Position last updated — excluded from output" style={{fontSize:11,color:C.dim}}>{quickUpdatedDate(r,allVessels).toUpperCase()}</span>
                             <button onClick={() => deleteQuickRow(r.id)} style={{ background: "none", border: "none", color: "rgba(239,68,68,0.55)", cursor: "pointer", fontSize: 12, padding: 0 }}>✕</button>
                           </div>
