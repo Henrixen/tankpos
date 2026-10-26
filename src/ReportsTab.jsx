@@ -64,13 +64,79 @@ function parseTags(v) {
   return r.map(t => String(t).toUpperCase().trim()).filter(Boolean);
 }
 const MN_SORT = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-function dateSortKey(str) {
-  if (!str) return 9999;
-  const m = String(str).toUpperCase().match(/(\d{1,2})\s*([A-Z]{3})/);
-  if (!m) return 9999;
-  const day = parseInt(m[1]), mon = MN_SORT.indexOf(m[2]);
-  return mon === -1 ? 9999 : mon * 31 + day;
+const POSITION_COLUMNS=[
+  ["vessel","VESSEL",148],["dwt","DWT",62],["cbm","CBM",64],["built","BUILT",48],["coating","COATING",70],
+  ["date","OPEN",60],["openPort","PORT",86],["comment","COMMENT",104],["operator","OPERATOR",122],
+  ["loa","LOA",58],["beam","BEAM",58],["flag","FLAG",70],["iceClass","ICE CLASS",64],["tag","TAGS",90],
+  ["segment","SEGMENT",70],["superRegion","S.REGION",80],["updatedAt","UPDATED",75]
+].map(([key,label,width])=>({key,label,width}));
+const DEFAULT_POSITION_COLUMNS=["vessel","dwt","built","coating","date","openPort","comment","operator"];
+const positionNameKey=v=>String(v.vessel||"").trim().toUpperCase().replace(/\s+/g," ");
+const newPositionId=()=>"pos-"+(globalThis.crypto?.randomUUID?.()||Date.now()+"-"+Math.random().toString(36).slice(2));
+function normalizePositionRows(rows){
+  const names=new Set(),ids=new Set();
+  return (Array.isArray(rows)?rows:[]).filter(v=>v&&typeof v==="object").flatMap(v=>{
+    const name=positionNameKey(v);if(name&&names.has(name))return [];if(name)names.add(name);
+    const id=v._rid&&!ids.has(v._rid)?v._rid:newPositionId();ids.add(id);return [{...v,_rid:id}];
+  });
 }
+function reportDay(value,reference=new Date()){
+  const ref=new Date(reference),year=ref.getFullYear();
+  const today=Date.UTC(year,ref.getMonth(),ref.getDate())/86400000;
+  const text=String(value??"").trim();if(!text)return null;
+  if(/^(PPT|PROMPT|TODAY)$/i.test(text))return today;
+  if(/^TOMORROW$/i.test(text))return today+1;
+  let y=year,m,d,explicit=false,match=text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(match){[,y,m,d]=match.map(Number);m--;explicit=true;}
+  else{
+    match=text.match(/(\d{1,2})(?:\s*[-–]\s*\d{1,2})?\s*([A-Za-z]{3,})(?:\s+(\d{4}))?/);
+    if(match){d=+match[1];m=MN_SORT.indexOf(match[2].slice(0,3).toUpperCase());if(match[3]){y=+match[3];explicit=true;}}
+    else{match=text.match(/^(\d{1,2})[/.](\d{1,2})(?:[/.](\d{4}))?/);if(!match)return null;d=+match[1];m=+match[2]-1;if(match[3]){y=+match[3];explicit=true;}}
+  }
+  if(m<0||m>11||d<1||d>31)return null;
+  let day=Date.UTC(y,m,d)/86400000;
+  const check=new Date(day*86400000);if(check.getUTCMonth()!==m||check.getUTCDate()!==d)return null;
+  if(!explicit&&day-today>183)day=Date.UTC(y-1,m,d)/86400000;
+  else if(!explicit&&today-day>183)day=Date.UTC(y+1,m,d)/86400000;
+  return day;
+}
+function positionValue(v,key){return v[key]??v.spec?.[key]??(key==="updatedAt"?v.updated_at:"")??"";}
+function positionCell(v,key){const raw=positionValue(v,key);if(key==="dwt"||key==="cbm")return fmtDwt(raw);if(key==="date"||key==="updatedAt")return fmtOpen(raw);if(key==="coating")return fmtCoating(raw);return Array.isArray(raw)?raw.join(", "):String(raw??"");}
+function canonicalSegment(value){
+  const n=String(value||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+  if(/sub10|small/.test(n))return "sub10";if(/city/.test(n))return "city";if(/inter/.test(n))return "inter";
+  if(/j19/.test(n))return "j19";if(/flexi/.test(n))return "flexi";if(/handy/.test(n))return "handy";if(n==="mr"||/\dmr$/.test(n))return "mr";return n;
+}
+const canonicalRegion=value=>String(value||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+function positionDraftValue(key,fallback){try{return JSON.parse(localStorage.getItem(DRAFT_META_KEY)||"{}")[key]??fallback;}catch{return fallback;}}
+function defaultPositionChartSettings(){const today=new Date();const past=new Date(today);past.setDate(past.getDate()-84);return {anchor:today.toLocaleDateString("en-CA"),ahead:30,bars:5,bucketDays:7,historyFrom:past.toLocaleDateString("en-CA"),historyTo:today.toLocaleDateString("en-CA"),historyBars:12,maxWindow:60,segments:[],regions:[]};}
+function positionOpenBuckets(rows,settings){
+  const anchor=reportDay(settings.anchor),ahead=Math.max(2,Number(settings.ahead)||30),bars=Math.max(2,Math.min(20,Number(settings.bars)||5));
+  const result=[{label:"PPT",count:0}];
+  const interval=Math.max(1,+settings.bucketDays||7);
+  for(let i=0,start=2;i<bars-1&&start<=ahead;i++){
+    const end=i===bars-2?ahead:Math.min(ahead,Math.max(start,(i+1)*interval));
+    result.push({label:`${start}–${end}d`,count:0,start,end});start=end+1;
+  }
+  rows.forEach(v=>{const day=reportDay(v.date,new Date(settings.anchor+"T12:00:00"));if(day===null)return;const delta=day-anchor;if(delta<0||delta>ahead)return;if(delta<=1)result[0].count++;else{const bin=result.find(b=>delta>=b.start&&delta<=b.end);if(bin)bin.count++;}});
+  return result;
+}
+function buildPositionFixingHistory(rows,settings,segments,regions){
+  const from=reportDay(settings.historyFrom),to=reportDay(settings.historyTo),count=Math.max(1,Math.min(30,+settings.historyBars||12));
+  const span=Math.max(1,Math.ceil((to-from+1)/count));
+  const bins=Array.from({length:Math.ceil((to-from+1)/span)},(_,i)=>({start:from+i*span,ships:0,sum:0,cnt:0}));
+  rows.forEach(row=>{
+    if(!segments.includes(canonicalSegment(row.segment)))return;
+    if(regions.length&&!regions.includes(canonicalRegion(row.super_region)))return;
+    const updated=reportDay(row.updated_at),open=reportDay(row.open_date,new Date(row.updated_at));if(updated===null||open===null||updated<from||updated>to)return;
+    const days=open-updated;if(days<0||days>Math.max(1,+settings.maxWindow||60))return;
+    const bin=bins[Math.floor((updated-from)/span)];if(!bin)return;bin.ships++;bin.cnt++;bin.sum+=days;
+  });
+  if(!bins.some(b=>b.ships))return [];
+  return bins.map(b=>({label:new Date(b.start*86400000).toLocaleDateString("en-GB",{day:"2-digit",month:"short",timeZone:"UTC"}),ships:b.ships,avgWindow:b.cnt?Math.round(b.sum/b.cnt):0}));
+}
+
+function dateSortKey(str){return reportDay(str)??Number.MAX_SAFE_INTEGER;}
 
 function groupVessels(list, by, sortByDate, regionMode, matchCustomRegion, outputSort) {
   const fn = by === "region"
@@ -79,13 +145,12 @@ function groupVessels(list, by, sortByDate, regionMode, matchCustomRegion, outpu
         : v => v.superRegion || (matchCustomRegion && matchCustomRegion(v.openPort)) || classifyRegion(v.openPort) || "Other")
     : v => v.segment || "Other";
   const out = {};
-  list.forEach(v => { const k = fn(v); if (!out[k]) out[k] = []; out[k].push(v); });
+  list.forEach(v => { const k = v._reportGroups?.[by === "segment" ? "segment" : regionMode] ?? fn(v); if (!out[k]) out[k] = []; out[k].push(v); });
   if (outputSort?.key) {
-    const fields = {VESSEL:"vessel",DWT:"dwt",BUILT:"built",COATING:"coating",OPEN:"date",PORT:"openPort",COMMENT:"comment",OPERATOR:"operator"};
-    const field = fields[outputSort.key];
+    const field = POSITION_COLUMNS.find(c=>c.label===outputSort.key)?.key;
     Object.keys(out).forEach(k => out[k].sort((a,b) => {
-      const av = field === "date" ? dateSortKey(a.date) : (field === "dwt" || field === "built") ? Number(a[field]) || 0 : String(a[field] || "").toLowerCase();
-      const bv = field === "date" ? dateSortKey(b.date) : (field === "dwt" || field === "built") ? Number(b[field]) || 0 : String(b[field] || "").toLowerCase();
+      const av = field === "date" ? dateSortKey(a.date) : (["dwt","built","cbm","loa","beam"].includes(field)) ? Number(positionValue(a,field)) || 0 : String(positionValue(a,field) || "").toLowerCase();
+      const bv = field === "date" ? dateSortKey(b.date) : (["dwt","built","cbm","loa","beam"].includes(field)) ? Number(positionValue(b,field)) || 0 : String(positionValue(b,field) || "").toLowerCase();
       return (typeof av === "number" ? av - bv : av.localeCompare(bv)) * (outputSort.desc ? -1 : 1);
     }));
   } else if (sortByDate) {
@@ -120,7 +185,7 @@ function useReportPlotSize(defaultWidth,defaultHeight){
 }
 
 // ─── Generic bar+line SVG chart ───────────────────────────────────────────────
-function BarLineChart({ data, barKey, lineKey, barLabel, lineLabel, title, accent = "#3a82f6", loading = false, fillHeight = false }) {
+function BarLineChart({ data, barKey, lineKey, barLabel, lineLabel, title, accent = "#3a82f6", loading = false, fillHeight = false, separateTitle = false }) {
   const [plotRef,plotSize]=useReportPlotSize(440,170);
   if (!data?.length) return (
     <div style={{ padding: 20, textAlign: "center", color: "rgba(219,230,245,0.3)", fontSize: 11 }}>
@@ -128,7 +193,8 @@ function BarLineChart({ data, barKey, lineKey, barLabel, lineLabel, title, accen
     </div>
   );
   const W = fillHeight?plotSize.width:440, H = fillHeight?plotSize.height:170;
-  const P = { t: 26, r: 44, b: 28, l: 26 };
+  const P = { t: separateTitle?44:26, r: 44, b: 28, l: 26 };
+  const legendY=separateTitle?18:0;
   const w = W - P.l - P.r, h = H - P.t - P.b;
   const maxB = Math.max(...data.map(d => d[barKey] || 0), 1);
   const maxL = lineKey ? Math.max(...data.map(d => d[lineKey] || 0), 1) : 1;
@@ -141,11 +207,11 @@ function BarLineChart({ data, barKey, lineKey, barLabel, lineLabel, title, accen
   return (
     <div ref={plotRef} style={{width:"100%",height:fillHeight?undefined:170,flex:fillHeight?1:undefined,minHeight:0}}><svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
       <text x={P.l} y={14} fill="#dbe6f5" fontSize="11" fontWeight="700">{title}</text>
-      <rect x={P.l} y={5} width={9} height={9} fill={accent} opacity="0.55" rx="1" />
-      <text x={P.l + 12} y={13} fill="rgba(219,230,245,0.65)" fontSize="9">{barLabel}</text>
+      <rect x={P.l} y={5+legendY} width={9} height={9} fill={accent} opacity="0.55" rx="1" />
+      <text x={P.l + 12} y={13+legendY} fill="rgba(219,230,245,0.65)" fontSize="9">{barLabel}</text>
       {hasLine && <>
-        <line x1={P.l + 58} y1={10} x2={P.l + 72} y2={10} stroke="#9fd0ff" strokeWidth="2" />
-        <text x={P.l + 75} y={13} fill="rgba(219,230,245,0.65)" fontSize="9">{lineLabel}</text>
+        <line x1={P.l + 58} y1={10+legendY} x2={P.l + 72} y2={10+legendY} stroke="#9fd0ff" strokeWidth="2" />
+        <text x={P.l + 75} y={13+legendY} fill="rgba(219,230,245,0.65)" fontSize="9">{lineLabel}</text>
       </>}
       {data.map((d, i) => (
         <g key={i}>
@@ -239,56 +305,15 @@ function FfaSparkline({ aug, sep, oct }) {
 }
 
 // ─── Single interactive+capturable vessel row ─────────────────────────────────
-function VesselRow({ v, localIdx, globalIdx, editing, onEdit, onSave, onDelete,
-  onDragStart, onDragEnter, onDragEnd, isDragOver }) {
-  const [vals, setVals] = useState({ ...v });
-  useEffect(() => { if (editing) setVals({ ...v }); }, [editing]);
-  const upd = (k, val) => setVals(p => ({ ...p, [k]: val }));
-  const CELL = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 };
-  const INP = {
-    background: "transparent", border: "none",
-    borderBottom: "1px solid rgba(58,130,246,0.45)",
-    color: "#dbe6f5", fontSize: 11, width: "100%", outline: "none",
-    padding: "1px 2px", fontFamily: "inherit", minWidth: 0
-  };
-  // Alternate: even rows slightly lighter — subtle, not the harsh navy/black split
-  const rowBg = isDragOver
-    ? "rgba(58,130,246,0.18)"
-    : localIdx % 2 === 0 ? "#111f35" : "#0c1729";
-
-  if (editing) return (
-    <div style={{ display: "grid", gridTemplateColumns: GRID, width: "100%", boxSizing: "border-box", background: "rgba(58,130,246,0.1)", color: "#dbe6f5", fontSize: 11, padding: "5px 8px", borderTop: "1px solid rgba(58,130,246,0.16)", alignItems: "center", gap: 2 }}>
-      <input style={INP} value={vals.vessel || ""} onChange={e => upd("vessel", e.target.value)} autoFocus />
-      <input style={INP} value={vals.dwt || ""} onChange={e => upd("dwt", e.target.value)} />
-      <input style={INP} value={vals.built || ""} onChange={e => upd("built", e.target.value)} />
-      <input style={INP} value={vals.coating || ""} onChange={e => upd("coating", e.target.value)} />
-      <input style={INP} value={vals.date || ""} onChange={e => upd("date", e.target.value)} />
-      <input style={INP} value={vals.openPort || ""} onChange={e => upd("openPort", e.target.value)} />
-      <input style={INP} value={vals.comment || ""} onChange={e => upd("comment", e.target.value)} />
-      <input style={INP} value={vals.operator || ""} onChange={e => upd("operator", e.target.value)} onKeyDown={e => e.key === "Enter" && onSave(vals)} />
-      <button onClick={() => onSave(vals)} className="no-export"
-        style={{ background: "none", border: "none", color: "#43e97b", cursor: "pointer", fontSize: 14, padding: 0 }}>✓</button>
-    </div>
-  );
-
-  return (
-    <div
-      draggable onDragStart={onDragStart} onDragEnter={onDragEnter} onDragEnd={onDragEnd}
-      onDragOver={e => e.preventDefault()} onClick={onEdit} title="Click to edit · drag to reorder"
-      style={{ display: "grid", gridTemplateColumns: GRID, width: "100%", boxSizing: "border-box", background: rowBg, color: "#dbe6f5", fontSize: 11, padding: "4px 8px", borderTop: "1px solid rgba(58,130,246,0.1)", cursor: "pointer", alignItems: "center", gap: 2, userSelect: "none" }}
-    >
-      <div style={{ ...CELL, fontWeight: 700, color: "#58a6ff" }}>{v.vessel}</div>
-      <div style={CELL}>{fmtDwt(v.dwt)}</div>
-      <div style={CELL}>{v.built || ""}</div>
-      <div style={CELL}>{fmtCoating(v.coating)}</div>
-      <div style={CELL}>{fmtOpen(v.date)}</div>
-      <div style={CELL}>{v.openPort || ""}</div>
-      <div style={{ ...CELL, color: "rgba(219,230,245,0.6)" }} title={v.comment || ""}>{v.comment || ""}</div>
-      <div style={CELL}>{v.operator || ""}</div>
-      <button onClick={e => { e.stopPropagation(); onDelete(); }} className="no-export"
-        style={{ background: "none", border: "none", color: "rgba(239,68,68,0.55)", cursor: "pointer", fontSize: 12, padding: 0, lineHeight: 1 }}>✕</button>
-    </div>
-  );
+function VesselRow({v,localIdx,editing,onEdit,onSave,onDelete,onDragStart,onDragEnter,onDragEnd,onDrop,isDragOver,columns}){
+  const [vals,setVals]=useState({...v});
+  useEffect(()=>{if(editing)setVals({...v});},[editing,v]);
+  const grid=columns.map(c=>c.width+"fr").join(" ")+" 28fr";
+  const style={display:"grid",gridTemplateColumns:grid,width:"100%",boxSizing:"border-box",background:isDragOver?"#193657":localIdx%2===0?"#111f35":"#0c1729",color:"#dbe6f5",fontSize:11,padding:"5px 8px",borderTop:"1px solid rgba(58,130,246,.16)",alignItems:"center",gap:2};
+  return <div draggable={!editing} onDragStart={onDragStart} onDragEnter={onDragEnter} onDragEnd={onDragEnd} onDragOver={e=>e.preventDefault()} onDrop={onDrop} onClick={editing?undefined:onEdit} title="Click to edit · drag to reorder or move to another report group" style={style}>
+    {columns.map(c=>editing?<input key={c.key} aria-label={c.label} value={positionValue(vals,c.key)} onChange={e=>setVals(p=>({...p,[c.key]:e.target.value}))} onKeyDown={e=>{if(e.key==="Enter")onSave(vals);}} style={{width:"100%",minWidth:0,background:"transparent",border:0,borderBottom:"1px solid #3a82f6",color:"#dbe6f5",fontSize:11,fontFamily:"inherit",outline:"none"}}/>:<div key={c.key} title={positionCell(v,c.key)} style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0,fontWeight:c.key==="vessel"?700:400,color:c.key==="vessel"?"#58a6ff":c.key==="comment"?"rgba(219,230,245,.6)":"#dbe6f5"}}>{positionCell(v,c.key)}</div>)}
+    <button className="no-export" onClick={e=>{e.stopPropagation();editing?onSave(vals):onDelete();}} style={{background:"none",border:0,color:editing?"#43e97b":"#fb7185",cursor:"pointer",padding:0}}>{editing?"✓":"✕"}</button>
+  </div>;
 }
 
 function fixingWindowReportTitle(snapshot){
@@ -361,6 +386,8 @@ function mergeReportBenchmarkRows(rows,savedRows,appendNew=false){
 }
 
 function savedMarketReportName(report){
+  if(report.report_type==="Position List")return report.rate_grid?.__positionEditor?.name||report.pos_title||"Position List";
+  if(report.report_type==="Quick Positions")return report.rate_grid?.__quickEditor?.name||report.quick_title||"Quick Positions";
   return report.rate_grid?.__marketEditor?.reportName || report.report_type || "Report";
 }
 function marketReportSaveName(name,type,saveCopy,savedReports){
@@ -419,21 +446,34 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [section, setSection] = useState("poslist");
 
   // Position list
-  const [reportVessels, setReportVessels] = useState(() => {
-    try { const s = localStorage.getItem(DRAFT_KEY); return s ? JSON.parse(s) : []; } catch { return []; }
+  const [reportVessels, updateReportVessels] = useState(() => {
+    try { const s = localStorage.getItem(DRAFT_KEY); return normalizePositionRows(s ? JSON.parse(s) : []); } catch { return []; }
   });
+  const setReportVessels=update=>updateReportVessels(prev=>normalizePositionRows(typeof update==="function"?update(prev):update));
+  const [positionSettingsOpen,setPositionSettingsOpen]=useState(false);
+  const [positionColumns,setPositionColumns]=useState(()=>positionDraftValue("positionColumns",DEFAULT_POSITION_COLUMNS));
+  const [positionChartSettings,setPositionChartSettings]=useState(()=>({...defaultPositionChartSettings(),...positionDraftValue("positionChartSettings",{})}));
+  const [positionChartDraft,setPositionChartDraft]=useState(()=>({...defaultPositionChartSettings(),...positionDraftValue("positionChartSettings",{})}));
+  const [positionSettingsError,setPositionSettingsError]=useState("");
+  const [positionReportName,setPositionReportName]=useState(()=>positionDraftValue("positionReportName",""));
+  const [activePositionId,setActivePositionId]=useState(null);
+  const [positionSaveCopy,setPositionSaveCopy]=useState(false);
+  const [pendingClear,setPendingClear]=useState(null);
+  const [listSaveBusy,setListSaveBusy]=useState(false);
+  const positionColumnsChosen=POSITION_COLUMNS.filter(c=>positionColumns.includes(c.key));
+  const positionGrid=positionColumnsChosen.map(c=>c.width+"fr").join(" ")+" 28fr";
   const [posTitle, setPosTitle] = useState(() => {
     try { return JSON.parse(localStorage.getItem(DRAFT_META_KEY))?.title || "CHEMS & SPECIALIZED POSITION LIST"; } catch { return "CHEMS & SPECIALIZED POSITION LIST"; }
   });
   const [posSubtitle, setPosSubtitle] = useState(() => {
     try { return JSON.parse(localStorage.getItem(DRAFT_META_KEY))?.subtitle || "10-22,000 DWT · COATED AND STST"; } catch { return "10-22,000 DWT · COATED AND STST"; }
   });
-  const [posGroupBy, setPosGroupBy] = useState("segment");
-  const [outputSort, setOutputSort] = useState({key:null,desc:false});
-  const [positionCharts, setPositionCharts] = useState({open:true,fixing:true});
-  const [positionPreviewWidth, setPositionPreviewWidth] = useState(820);
-  const [segmentNames, setSegmentNames] = useState({});
-  const [regionMode, setRegionMode] = useState("superRegion"); // "superRegion" | "region"
+  const [posGroupBy, setPosGroupBy] = useState(()=>positionDraftValue("posGroupBy","segment"));
+  const [outputSort, setOutputSort] = useState(()=>positionDraftValue("outputSort",{key:null,desc:false}));
+  const [positionCharts, setPositionCharts] = useState(()=>positionDraftValue("positionCharts",{open:true,fixing:true}));
+  const [positionPreviewWidth, setPositionPreviewWidth] = useState(()=>positionDraftValue("positionPreviewWidth",820));
+  const [segmentNames, setSegmentNames] = useState(()=>positionDraftValue("segmentNames",{}));
+  const [regionMode, setRegionMode] = useState(()=>positionDraftValue("regionMode","superRegion")); // "superRegion" | "region"
 
   // Custom Region Filter Groups from Settings (localStorage — same key,
   // no import coupling needed). Falls back to the original hardcoded list
@@ -469,7 +509,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     }
     return null;
   }
-  const [sortByDate, setSortByDate] = useState(false);
+  const [sortByDate, setSortByDate] = useState(()=>positionDraftValue("sortByDate",false));
   const [posDate, setPosDate] = useState(new Date().toISOString().split("T")[0]);
   const [exportStatus, setExportStatus] = useState("");
   const [editingRid, setEditingRid] = useState(null);
@@ -501,7 +541,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   // Fixing window history (Supabase)
   const [fixHistory, setFixHistory] = useState([]);
-  const [posFixHistory, setPosFixHistory] = useState([]);
+  
   const [posFixHistoryLoading, setPosFixHistoryLoading] = useState(false);
 
   // Market report
@@ -551,6 +591,10 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   // Quick positions state
   const [quickRows, setQuickRows] = useState([]);
   const [quickTitle, setQuickTitle] = useState("Available tonnage");
+  const [quickReportName,setQuickReportName]=useState("");
+  const [activeQuickId,setActiveQuickId]=useState(null);
+  const [quickSaveCopy,setQuickSaveCopy]=useState(false);
+  const [quickWhatsAppCopied,setQuickWhatsAppCopied]=useState(false);
   const [quickPaste, setQuickPaste] = useState("");
   const [quickCopied, setQuickCopied] = useState(false);
   const [quickParseMsg, setQuickParseMsg] = useState("");
@@ -565,7 +609,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if (!selectedVessels?.length) return;
     const toAdd = selectedVessels
       .filter(v => !importedNames.current.has(v.vessel))
-      .map(v => ({ ...v, _rid: v.vessel + "_" + Date.now() + "_" + Math.random().toString(36).slice(2) }));
+      .map(v => ({ ...v, _rid: newPositionId() + "_" + Math.random().toString(36).slice(2) }));
     if (toAdd.length) {
       toAdd.forEach(v => importedNames.current.add(v.vessel));
       setReportVessels(p => [...p, ...toAdd]);
@@ -577,8 +621,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(reportVessels)); } catch {}
   }, [reportVessels]);
   useEffect(() => {
-    try { localStorage.setItem(DRAFT_META_KEY, JSON.stringify({ title: posTitle, subtitle: posSubtitle })); } catch {}
-  }, [posTitle, posSubtitle]);
+    try { localStorage.setItem(DRAFT_META_KEY, JSON.stringify({ title: posTitle, subtitle: posSubtitle,positionColumns,positionChartSettings,positionCharts,posGroupBy,regionMode,outputSort,sortByDate,segmentNames,positionReportName,positionPreviewWidth })); } catch {}
+  }, [posTitle,posSubtitle,positionColumns,positionChartSettings,positionCharts,posGroupBy,regionMode,outputSort,sortByDate,segmentNames,positionReportName,positionPreviewWidth]);
 
   useEffect(() => { loadSavedReports(); }, []);
 
@@ -627,63 +671,41 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     fetchFixHistory();
   }, []);
 
-  // Position List's own fixing window — scoped to whatever segments are
-  // actually in the list (not the Market report's hardcoded Intermediate/
-  // UKC-NWE filter, which rarely matches a real, varied position list).
-  useEffect(() => {
-    if (section !== "poslist" || !reportVessels.length) { setPosFixHistory([]); return; }
-    const segments = [...new Set(reportVessels.map(v => v.segment).filter(Boolean))];
-    if (!segments.length) { setPosFixHistory([]); return; }
-    let cancelled = false;
-    async function fetchPosFixHistory() {
-      setPosFixHistoryLoading(true);
-      try {
-        const since = new Date(); since.setDate(since.getDate() - 84);
-        // No SQL segment filter here — TankPos.jsx renames segment values for
-        // display (SEGMENT_RENAME), so what's on reportVessels may not match
-        // the raw DB value exactly. Fetch the date-windowed set and match
-        // segments client-side with normalized substring comparison instead.
-        const { data, error } = await supabase
-          .from("positions_latest")
-          .select("updated_at, open_date, segment")
-          .gte("updated_at", since.toISOString())
-          .not("open_date", "is", null)
-          .limit(3000);
-        if (cancelled) return;
-        if (error || !data?.length) { setPosFixHistory([]); setPosFixHistoryLoading(false); return; }
-        const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-        const wantedSegs = segments.map(norm);
-        const matches = data.filter(row => {
-          const rs = norm(row.segment);
-          return rs && wantedSegs.some(w => rs.includes(w) || w.includes(rs));
-        });
-        if (!matches.length) { setPosFixHistory([]); setPosFixHistoryLoading(false); return; }
-        const weeks = {};
-        matches.forEach(row => {
-          if (!row.updated_at) return;
-          const d = new Date(row.updated_at);
-          const ws = new Date(d); ws.setDate(d.getDate() - d.getDay());
-          const key = ws.toISOString().slice(0, 10);
-          if (!weeks[key]) weeks[key] = { ships: 0, totalDays: 0, cnt: 0 };
-          weeks[key].ships++;
-          if (row.open_date) {
-            const days = Math.round((new Date(row.open_date) - d) / 86400000);
-            if (days >= 0 && days <= 60) { weeks[key].totalDays += days; weeks[key].cnt++; }
-          }
-        });
-        setPosFixHistory(Object.entries(weeks)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([key, v]) => ({
-            label: new Date(key).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }),
-            ships: v.ships,
-            avgWindow: v.cnt > 0 ? Math.round(v.totalDays / v.cnt) : 0
-          })));
-      } catch (e) { console.error("posFixHistory:", e); }
-      if (!cancelled) setPosFixHistoryLoading(false);
+  const [positionHistoryRows,setPositionHistoryRows]=useState([]);
+  const [positionHistoryError,setPositionHistoryError]=useState("");
+  const historyCache=useRef(new Map());
+  const hasReportPositions=reportVessels.length>0;
+  const historyRangeKey=positionChartSettings.historyFrom+"|"+positionChartSettings.historyTo;
+  useEffect(()=>{
+    if(section!=="poslist"||!hasReportPositions)return;
+    let cancelled=false;
+    const cached=historyCache.current.get(historyRangeKey);
+    if(cached){setPositionHistoryRows(cached);setPosFixHistoryLoading(false);setPositionHistoryError("");return;}
+    async function load(){
+      setPosFixHistoryLoading(true);setPositionHistoryRows([]);setPositionHistoryError("");
+      try{
+        const records=[],end=new Date((reportDay(positionChartSettings.historyTo)+1)*86400000).toISOString();
+        for(let offset=0;;offset+=1000){
+          const {data,error}=await supabase.from("positions_latest").select("updated_at,open_date,segment,super_region").gte("updated_at",positionChartSettings.historyFrom+"T00:00:00Z").lt("updated_at",end).not("open_date","is",null).order("updated_at",{ascending:true}).range(offset,offset+999);
+          if(error)throw error;if(cancelled)return;records.push(...(data||[]));if(!data||data.length<1000)break;
+        }
+        historyCache.current.set(historyRangeKey,records);if(!cancelled)setPositionHistoryRows(records);
+      }catch(error){if(!cancelled)setPositionHistoryError(error.message||"Unable to load fixing-window data");}
+      finally{if(!cancelled)setPosFixHistoryLoading(false);}
     }
-    fetchPosFixHistory();
-    return () => { cancelled = true; };
-  }, [reportVessels, section]);
+    load();return()=>{cancelled=true;};
+  },[section,hasReportPositions,historyRangeKey]);
+  const positionSegmentOptions=[...new Set(reportVessels.map(v=>v.segment).filter(Boolean))];
+  const positionRegionOptions=[...new Set(reportVessels.map(v=>v.superRegion||classifyRegion(v.openPort)||"Other"))];
+  const fixingSegments=(positionChartSettings.segments.length?positionChartSettings.segments:positionSegmentOptions).map(canonicalSegment);
+  const fixingRegions=(positionChartSettings.regions.length?positionChartSettings.regions:positionRegionOptions).map(canonicalRegion);
+  const positionFixingData=buildPositionFixingHistory(positionHistoryRows,positionChartSettings,fixingSegments,fixingRegions);
+  function applyPositionSettings(){
+    const d=positionChartDraft;
+    if(!d.anchor||!d.historyFrom||!d.historyTo||reportDay(d.historyFrom)>reportDay(d.historyTo)){setPositionSettingsError("Enter valid dates; history end must be on or after start.");return;}
+    if(!Number.isFinite(+d.ahead)||+d.bucketDays<1||+d.ahead<2||+d.bars<2||+d.bars>20||+d.historyBars<1||+d.historyBars>30||+d.maxWindow<1){setPositionSettingsError("Use at least 2 days ahead, 2–20 open bars, 1–30 history bars and a positive maximum window.");return;}
+    setPositionChartSettings({...d});setPositionSettingsError("");
+  }
 
   // Load the shared vessel profile (same one used in TCECalculator) so
   // benchmark-route TCE figures stay consistent across the app.
@@ -886,32 +908,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const posGrouped = useMemo(() => groupVessels(reportVessels, posGroupBy, sortByDate, regionMode, matchCustomRegion, outputSort), [reportVessels, posGroupBy, sortByDate, regionMode, customRegionGroups, outputSort]);
   const reportedNames = useMemo(() => new Set(reportVessels.map(v => v.vessel)), [reportVessels]);
 
-  const openTimingData = useMemo(() => {
-    const B = {}; const today = new Date();
-    const ORDER = ["PPT", "1-7d", "7-14d", "14-21d", "21-30d", "30d+"];
-    reportVessels.forEach(v => {
-      // v.date is "D MMM" (e.g. "18 Mar") with no year — new Date() can't
-      // parse that reliably, so build the date manually using the current
-      // year, rolling to next year if it'd otherwise land far in the past.
-      let days = null;
-      if (v.date) {
-        const m = String(v.date).match(/(\d{1,2})\s*([A-Za-z]{3})/);
-        if (m) {
-          const day = parseInt(m[1]);
-          const mon = MN_SORT.indexOf(m[2].toUpperCase());
-          if (mon !== -1) {
-            let d = new Date(today.getFullYear(), mon, day);
-            if ((today - d) / 86400000 > 60) d = new Date(today.getFullYear() + 1, mon, day);
-            days = Math.round((d - today) / 86400000);
-          }
-        }
-      }
-      const k = days === null || days < 1 ? "PPT" : days <= 7 ? "1-7d" : days <= 14 ? "7-14d" : days <= 21 ? "14-21d" : days <= 30 ? "21-30d" : "30d+";
-      B[k] = (B[k] || 0) + 1;
-    });
-    return ORDER.filter(k => B[k]).map(k => ({ label: k, count: B[k] }));
-  }, [reportVessels]);
-
+  const openTimingData=useMemo(()=>positionOpenBuckets(reportVessels,positionChartSettings),[reportVessels,positionChartSettings]);
   const [dbTags, setDbTags] = useState([]);
 
   // Load all known filter values (tags + regions + segments) from Supabase
@@ -1007,7 +1004,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   const sortedVesselPool = useMemo(() => [...vesselPool].sort((a,b) => {
     const field = {Vessel:"vessel",DWT:"dwt",Built:"built",Coating:"coating","Open date":"date","Open port":"openPort",Operator:"operator",Updated:"updatedAt"}[poolSort.key] || "updatedAt";
-    const val = v => { const raw = v[field] ?? ""; if (field === "updatedAt") return new Date(raw || 0).getTime() || 0; if (field === "dwt" || field === "built") return Number(String(raw).replace(/[^0-9.]/g,"")) || 0; if (field === "date") { const t = Date.parse(raw); return Number.isFinite(t) ? t : String(raw).toLowerCase(); } return String(raw).toLowerCase(); };
+    const val = v => { const raw = v[field] ?? ""; if (field === "updatedAt") return new Date(raw || 0).getTime() || 0; if (["dwt","built","cbm","loa","beam"].includes(field)) return Number(String(raw).replace(/[^0-9.]/g,"")) || 0; if (field === "date") { const t = Date.parse(raw); return Number.isFinite(t) ? t : String(raw).toLowerCase(); } return String(raw).toLowerCase(); };
     const av=val(a),bv=val(b); const cmp=typeof av === "number" && typeof bv === "number" ? av-bv : String(av).localeCompare(String(bv)); return (poolSort.desc ? -1 : 1)*cmp;
   }), [vesselPool,poolSort]);
 
@@ -1054,8 +1051,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   function positionChartTick(key, label) {
     return <label className="no-export" title="Include this graph in copy, PNG and PDF export" style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10,color:"#dbe6f5",cursor:"pointer",fontWeight:650,whiteSpace:"nowrap"}}>
-      <input type="checkbox" checked={positionCharts[key]} onChange={e=>setPositionCharts(p=>({...p,[key]:e.target.checked}))} style={{appearance:"none",width:15,height:15,margin:0,border:"1px solid #6081ad",borderRadius:3,background:positionCharts[key]?"#225c9d":"#10213b",cursor:"pointer"}} />
-      <span style={{marginLeft:-19,width:15,textAlign:"center",color:"white",fontSize:12,pointerEvents:"none"}}>{positionCharts[key]?"✓":""}</span>
+      <input type="checkbox" checked={positionCharts[key]} onChange={e=>setPositionCharts(p=>({...p,[key]:e.target.checked}))} style={{width:15,height:15,margin:0,accentColor:"#377dc8",cursor:"pointer",flexShrink:0}}/>
       {label}
     </label>;
   }
@@ -1064,7 +1060,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   function addFromPool(v) {
     if (reportedNames.has(v.vessel)) return;
     importedNames.current.add(v.vessel);
-    setReportVessels(p => [...p, { ...v, _rid: v.vessel + "_" + Date.now() }]);
+    setReportVessels(p => [...p, { ...v, _rid: newPositionId() }]);
   }
 
   // Paste positions straight into this list — tries the two most common
@@ -1150,25 +1146,29 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   }
   function saveEdit(rid, vals) { setReportVessels(p => p.map(v => v._rid === rid ? { ...v, ...vals } : v)); setEditingRid(null); }
   function addManualVessel(bucket) {
-    const rid = "manual_" + Date.now();
+    const rid = newPositionId();
     const preset = bucket
-      ? (posGroupBy === "region" ? { superRegion: bucket } : { segment: bucket })
+      ? {_reportGroups:{[posGroupBy === "segment"?"segment":regionMode]:bucket}}
       : {};
     setReportVessels(p => [...p, { vessel: "", dwt: "", built: "", coating: "", date: "", openPort: "", comment: "", operator: "", segment: "", superRegion: "", ...preset, _rid: rid }]);
     setEditingRid(rid);
   }
-  function clearAll() {
-    if (!window.confirm(`Remove all ${reportVessels.length} vessels from this position list?`)) return;
-    importedNames.current = new Set(); setReportVessels([]);
+  function clearAll(){importedNames.current=new Set();setReportVessels([]);setEditingRid(null);setPendingClear(null);}
+  function dragStart(id,event){dragFrom.current=id;dragTo.current=null;if(event?.dataTransfer){event.dataTransfer.effectAllowed="move";event.dataTransfer.setData("text/plain",id);}}
+  function dragEnter(id){dragTo.current=id;setDragOver(id);}
+  function dragEnd(){dragFrom.current=null;dragTo.current=null;setDragOver(null);}
+  function dropPosition(bucket,targetId,event){
+    event.preventDefault();event.stopPropagation();
+    const id=dragFrom.current;if(!id)return;
+    const ordered=Object.values(posGrouped).flat(),item=ordered.find(v=>v._rid===id);if(!item){dragEnd();return;}
+    if(id===targetId){dragEnd();return;}
+    const next=ordered.filter(v=>v._rid!==id),groupKey=posGroupBy==="segment"?"segment":regionMode;
+    const moved={...item,_reportGroups:{...item._reportGroups,[groupKey]:bucket}};
+    let at=targetId?next.findIndex(v=>v._rid===targetId):-1;
+    if(at<0){const ids=new Set((posGrouped[bucket]||[]).map(v=>v._rid));at=next.reduce((index,v,i)=>ids.has(v._rid)?i+1:index,-1);}
+    next.splice(at<0?next.length:at,0,moved);setOutputSort({key:null,desc:false});setSortByDate(false);setReportVessels(next);dragEnd();
   }
-  function dragStart(i) { dragFrom.current = i; }
-  function dragEnter(i) { dragTo.current = i; setDragOver(i); }
-  function dragEnd() {
-    if (dragFrom.current !== null && dragTo.current !== null && dragFrom.current !== dragTo.current) {
-      setReportVessels(p => { const a = [...p], [item] = a.splice(dragFrom.current, 1); a.splice(dragTo.current, 0, item); return a; });
-    }
-    dragFrom.current = null; dragTo.current = null; setDragOver(null);
-  }
+
 
   // ── Export ────────────────────────────────────────────────────────────────
   const exportFilter = node => !node.classList?.contains("no-export") && !node.classList?.contains("exclude-position-chart");
@@ -1255,6 +1255,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       if (error) throw error;
       setSavedReports(prev => (Array.isArray(prev)?prev:[]).filter(r => r.id !== pendingSavedDelete.id));
       if (activeMarketReportId === pendingSavedDelete.id) setActiveMarketReportId(null);
+      if(activePositionId===pendingSavedDelete.id)setActivePositionId(null);
+      if(activeQuickId===pendingSavedDelete.id)setActiveQuickId(null);
       setPendingSavedDelete(null);
     } catch (e) { setDeleteReportError(e.message || "Could not delete report"); }
     finally { setDeleteReportBusy(false); }
@@ -1273,33 +1275,30 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   // handled Market report fields (commentary/rates/fixtures), never the
   // vessel list itself.
   const [posSaveStatus, setPosSaveStatus] = useState("");
-  async function savePositionList() {
-    setPosSaveStatus("Saving...");
-    try {
-      await supabase.from("reports").insert([{
-        report_type: "Position List",
-        report_date: posDate,
-        pos_title: posTitle,
-        pos_subtitle: posSubtitle,
-        pos_vessels: reportVessels,
-      }]);
-      setPosSaveStatus("Saved ✓");
-      loadSavedReports();
-    } catch (e) { console.error("savePositionList:", e); setPosSaveStatus("Save failed"); }
-    setTimeout(() => setPosSaveStatus(""), 2500);
+  async function savePositionList(){
+    if(listSaveBusy)return;setListSaveBusy(true);setPosSaveStatus("Saving...");
+    try{
+      const name=marketReportSaveName(positionReportName||posTitle,"Position List",positionSaveCopy,savedReports);
+      const payload={report_type:"Position List",report_date:posDate,pos_title:posTitle,pos_subtitle:posSubtitle,pos_vessels:reportVessels,
+        rate_grid:{__positionEditor:{name,columns:positionColumns,chartSettings:positionChartSettings,charts:positionCharts,posGroupBy,regionMode,outputSort,sortByDate,segmentNames,width:positionPreviewWidth}}};
+      const query=activePositionId&&!positionSaveCopy?supabase.from("reports").update(payload).eq("id",activePositionId):supabase.from("reports").insert([payload]);
+      const {data,error}=await query.select("id").single();if(error)throw error;
+      setActivePositionId(data.id);setPositionReportName(name);setPositionSaveCopy(false);setPosSaveStatus("Saved ✓");await loadSavedReports();
+    }catch(error){setPosSaveStatus("Save failed: "+(error.message||error));}
+    finally{setListSaveBusy(false);setTimeout(()=>setPosSaveStatus(""),3500);}
   }
-  async function loadPositionList(id) {
-    try {
-      const { data } = await supabase.from("reports").select("*").eq("id", id).single();
-      if (!data) return;
-      setPosTitle(data.pos_title || "CHEMS & SPECIALIZED POSITION LIST");
-      setPosSubtitle(data.pos_subtitle || "");
-      setPosDate(data.report_date || posDate);
-      const vessels = Array.isArray(data.pos_vessels)?data.pos_vessels:[];
-      importedNames.current = new Set(vessels.map(v => v.vessel));
-      setReportVessels(Array.isArray(vessels)?vessels:[]);
-      setSection("poslist");
-    } catch (e) { console.error("loadPositionList:", e); }
+  async function loadPositionList(id){
+    try{
+      const {data,error}=await supabase.from("reports").select("*").eq("id",id).single();if(error)throw error;if(!data)return;
+      const editor=data.rate_grid?.__positionEditor||{},rows=normalizePositionRows(data.pos_vessels);
+      setPosTitle(data.pos_title||"CHEMS & SPECIALIZED POSITION LIST");setPosSubtitle(data.pos_subtitle||"");setPosDate(data.report_date||posDate);
+      setPositionReportName(editor.name||data.pos_title||"");setActivePositionId(id);setPositionSaveCopy(false);
+      setPositionColumns(Array.isArray(editor.columns)&&editor.columns.length?editor.columns:DEFAULT_POSITION_COLUMNS);
+      const settings={...defaultPositionChartSettings(),...editor.chartSettings};setPositionChartSettings(settings);setPositionChartDraft(settings);
+      setPositionCharts(editor.charts||{open:true,fixing:true});setPosGroupBy(editor.posGroupBy||"segment");setRegionMode(editor.regionMode||"superRegion");
+      setOutputSort(editor.outputSort||{key:null,desc:false});setSortByDate(!!editor.sortByDate);setSegmentNames(editor.segmentNames||{});setPositionPreviewWidth(editor.width||820);
+      importedNames.current=new Set(rows.map(v=>v.vessel));setReportVessels(rows);setEditingRid(null);setPendingClear(null);setSection("poslist");
+    }catch(error){setPosSaveStatus("Load failed: "+(error.message||error));}
   }
 
   async function saveReport() {
@@ -1360,31 +1359,26 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   // ── Quick Positions save/load — same "reports" table, so drafts pick up
   // instantly on any device you're signed into, not just localStorage.
   const [quickSaveStatus, setQuickSaveStatus] = useState("");
-  async function saveQuickPositions() {
-    setQuickSaveStatus("Saving...");
-    try {
-      await supabase.from("reports").insert([{
-        report_type: "Quick Positions",
-        report_date: new Date().toISOString().split("T")[0],
-        quick_title: quickTitle,
-        quick_rows: quickRows,
-      }]);
-      setQuickSaveStatus("Saved ✓");
-      loadSavedReports();
-    } catch (e) { console.error("saveQuickPositions:", e); setQuickSaveStatus("Save failed"); }
-    setTimeout(() => setQuickSaveStatus(""), 2500);
+  async function saveQuickPositions(){
+    if(listSaveBusy)return;setListSaveBusy(true);setQuickSaveStatus("Saving...");
+    try{
+      const name=marketReportSaveName(quickReportName||quickTitle,"Quick Positions",quickSaveCopy,savedReports);
+      const payload={report_type:"Quick Positions",report_date:new Date().toISOString().slice(0,10),quick_title:quickTitle,quick_rows:quickRows,rate_grid:{__quickEditor:{name}}};
+      const query=activeQuickId&&!quickSaveCopy?supabase.from("reports").update(payload).eq("id",activeQuickId):supabase.from("reports").insert([payload]);
+      const {data,error}=await query.select("id").single();if(error)throw error;
+      setActiveQuickId(data.id);setQuickReportName(name);setQuickSaveCopy(false);setQuickSaveStatus("Saved ✓");await loadSavedReports();
+    }catch(error){setQuickSaveStatus("Save failed: "+(error.message||error));}
+    finally{setListSaveBusy(false);setTimeout(()=>setQuickSaveStatus(""),3500);}
   }
-  async function loadQuickPositions(id) {
-    try {
-      const { data } = await supabase.from("reports").select("*").eq("id", id).single();
-      if (!data) return;
-      setQuickTitle(data.quick_title || "Available tonnage");
-      setQuickRows(data.quick_rows || []);
-      setSection("quick");
-    } catch (e) { console.error("loadQuickPositions:", e); }
+  async function loadQuickPositions(id){
+    try{
+      const {data,error}=await supabase.from("reports").select("*").eq("id",id).single();if(error)throw error;if(!data)return;
+      setQuickTitle(data.quick_title||"Available tonnage");setQuickReportName(data.rate_grid?.__quickEditor?.name||data.quick_title||"");setActiveQuickId(id);setQuickSaveCopy(false);
+      setQuickRows((Array.isArray(data.quick_rows)?data.quick_rows:[]).map(r=>({...r,id:r.id||newPositionId()})));setPendingClear(null);setSection("quick");
+    }catch(error){setQuickSaveStatus("Load failed: "+(error.message||error));}
   }
 
-  const SB = { fontSize: 11, fontWeight: 600, padding: "6px 10px", borderRadius: 5, cursor: "pointer", border: "1px solid " + C.bd, fontFamily: "inherit", whiteSpace: "nowrap" };
+  const SB = { background:C.bg3,color:C.tx,fontSize: 11, fontWeight: 600, padding: "6px 10px", borderRadius: 5, cursor: "pointer", border: "1px solid " + C.bd, fontFamily: "inherit", whiteSpace: "nowrap" };
   const IS = { background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 11, padding: "5px 8px", outline: "none", fontFamily: "inherit" };
   const rateValues=Object.entries(rateGrid||{}).filter(([key,value])=>key!=="__marketEditor"&&value&&typeof value==="object").flatMap(([,group])=>Object.values(group).filter(v=>v!==null&&v!==undefined&&v!==""));
   const avgRate = rateValues.map(v=>parseFloat(v)||0).reduce((a,b)=>a+b,0)/Math.max(1,rateValues.length)||0;
@@ -1705,13 +1699,13 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   function updateQuickRow(id, field, val) { setQuickRows(p => p.map(r => r.id===id ? {...r,[field]:val} : r)); }
   function deleteQuickRow(id) { setQuickRows(p => p.filter(r => r.id!==id)); }
 
-  function buildQuickText() {
+  function buildQuickText(whatsapp=false) {
     if (!quickRows.length) return "";
     const byOp = {}; const opOrder = [];
     quickRows.forEach(r => { const op=r.operator||"Unknown"; if(!byOp[op]){byOp[op]=[];opOrder.push(op);} byOp[op].push(r); });
     const lines = ["|| " + quickTitle + " ||", ""];
     opOrder.forEach(op => {
-      lines.push("*" + op + "*");
+      lines.push(whatsapp?"*"+op+"*":op);
       // Only vessel – port – date, NO comments or direction
       byOp[op].forEach(r => lines.push([r.vessel, r.port, r.date].filter(Boolean).join(" \u2013 ")));
       lines.push("");
@@ -1721,15 +1715,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   function buildQuickTextByDate() {
     if (!quickRows.length) return "";
-    const MN = {JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
-    function sortKey(dateStr) {
-      if (!dateStr) return 99999;
-      const m1 = dateStr.match(/(\d{1,2})\s+([A-Z]{3})/i);
-      if (m1) return (MN[m1[2].toUpperCase()]||0)*100 + parseInt(m1[1]);
-      const m2 = dateStr.match(/(\d{1,2})\.(\d{1,2})/);
-      if (m2) return parseInt(m2[2])*100 + parseInt(m2[1]);
-      return 99999;
-    }
+    const sortKey=value=>dateSortKey(value);
     const sorted = [...quickRows].sort((a,b) => sortKey(a.date) - sortKey(b.date));
     const lines = ["|| " + quickTitle + " ||", ""];
     sorted.forEach(r => lines.push([r.date, r.vessel, r.port].filter(Boolean).join(" \u2013 ")));
@@ -1795,11 +1781,11 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     }
   }
 
-  async function copyQuick() {
-    const text = buildQuickText(); if (!text) return;
+  async function copyQuick(whatsapp=false) {
+    const text = buildQuickText(whatsapp); if (!text) return;
     try { await navigator.clipboard.writeText(text); }
     catch { const ta=document.createElement("textarea"); ta.value=text; ta.style.cssText="position:fixed;top:0;left:0;width:2px;height:2px;background:transparent;"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); }
-    setQuickCopied(true); setTimeout(()=>setQuickCopied(false), 2500);
+    const setter=whatsapp?setQuickWhatsAppCopied:setQuickCopied;setter(true);setTimeout(()=>setter(false),2500);
   }
 
   return (
@@ -1880,8 +1866,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
             <div style={{ flexShrink: 0, borderTop: "1px solid " + C.bd, padding: "8px 10px", maxHeight: 160, overflowY: "auto" }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Saved</div>
               {(Array.isArray(savedReports)?savedReports:[]).filter(r => r.report_type === "Position List").map(r => (
-                <div key={r.id} onClick={() => loadPositionList(r.id)} style={{ padding: "4px 7px", borderRadius: 3, background: C.bg3, cursor: "pointer", marginBottom: 3 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: ACCENT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.pos_title || "Position List"}</div>
+                <div key={r.id} onClick={() => loadPositionList(r.id)} style={{ position:"relative",padding: "6px 25px 6px 7px", borderRadius: 3, background: C.bg3, cursor: "pointer", marginBottom: 3 }}>
+                  <button aria-label="Delete saved report" title="Delete saved report" onClick={e=>{e.stopPropagation();setPendingSavedDelete(r);setDeleteReportError("");}} style={{position:"absolute",right:4,top:5,background:"none",border:0,color:"#fb7185",cursor:"pointer",fontSize:15}}>×</button><div style={{ fontSize: 11, fontWeight: 700, color: ACCENT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{savedMarketReportName(r)}</div>
                   <div style={{ fontSize: 10, color: C.dim }}>{(r.pos_vessels || []).length} vessels · {new Date(r.report_date).toLocaleDateString("en-GB")}</div>
                 </div>
               ))}
@@ -1897,12 +1883,12 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
               <button key={t} onClick={() => { setReportType(t); setActiveMarketReportId(null); setReportName(""); setSaveReportCopy(false); setMarketSaveStatus(""); initRateGrid(t); }}
                 style={{ display: "block", width: "100%", textAlign: "left", padding: "13px 14px", marginBottom: 9, borderRadius: 7, cursor: "pointer", fontSize: 13, fontWeight: reportType === t ? 700 : 400, border: `1px solid ${reportType === t ? ACCENT : C.bd}`, background: reportType === t ? "rgba(58,130,246,0.1)" : "transparent", color: "#ffffff", fontFamily: "inherit" }}>{t}</button>
             ))}
-            {(Array.isArray(savedReports)?savedReports:[]).filter(r => r.report_type !== "Position List").length > 0 && (
+            {(Array.isArray(savedReports)?savedReports:[]).filter(r => MARKET_TYPES.includes(r.report_type)).length > 0 && (
               <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid " + C.bd }}>
                 <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Saved</div>
-                {(Array.isArray(savedReports)?savedReports:[]).filter(r => r.report_type !== "Position List").map(r => (
+                {(Array.isArray(savedReports)?savedReports:[]).filter(r => MARKET_TYPES.includes(r.report_type)).map(r => (
                   <div key={r.id} onClick={() => loadReport(r.id)} style={{ padding: "5px 7px", borderRadius: 4, background: C.bg3, cursor: "pointer", marginBottom: 3, position: "relative", paddingRight: 28 }}>
-                    <button title="Delete saved report" onClick={e => {e.stopPropagation();setPendingSavedDelete(r);setDeleteReportError("");}} style={{position:"absolute",right:4,top:5,border:"none",background:"transparent",color:"#fb7185",fontSize:15,cursor:"pointer"}}>×</button>
+                    <button aria-label="Delete saved report" title="Delete saved report" onClick={e => {e.stopPropagation();setPendingSavedDelete(r);setDeleteReportError("");}} style={{position:"absolute",right:4,top:5,border:"none",background:"transparent",color:"#fb7185",fontSize:15,cursor:"pointer"}}>×</button>
                     <div style={{ fontSize: 11, fontWeight: 700, color: ACCENT }}>{savedMarketReportName(r)}</div>
                     <div style={{ fontSize: 10, color: C.dim }}>{new Date(r.report_date).toLocaleDateString("en-GB")}</div>
                   </div>
@@ -1935,8 +1921,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                 <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Saved</div>
                 {(Array.isArray(savedReports)?savedReports:[]).filter(r => r.report_type === "Quick Positions").map(r => (
                   <div key={r.id} onClick={() => loadQuickPositions(r.id)}
-                    style={{ padding: "5px 7px", borderRadius: 3, background: C.bg3, cursor: "pointer", marginBottom: 3 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: ACCENT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.quick_title || "Available tonnage"}</div>
+                    style={{ position:"relative",padding: "6px 25px 6px 7px", borderRadius: 3, background: C.bg3, cursor: "pointer", marginBottom: 3 }}>
+                    <button aria-label="Delete saved report" title="Delete saved report" onClick={e=>{e.stopPropagation();setPendingSavedDelete(r);setDeleteReportError("");}} style={{position:"absolute",right:4,top:5,background:"none",border:0,color:"#fb7185",cursor:"pointer",fontSize:15}}>×</button><div style={{ fontSize: 11, fontWeight: 700, color: ACCENT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{savedMarketReportName(r)}</div>
                     <div style={{ fontSize: 9, color: C.dim }}>{(r.quick_rows || []).length} rows · {new Date(r.report_date).toLocaleDateString("en-GB")}</div>
                   </div>
                 ))}
@@ -1954,6 +1940,10 @@ Any direction`}</pre>
         )}
       </div>
 
+      {pendingClear&&<div className="no-export" role="dialog" aria-label="Clear report positions" style={{position:"fixed",left:20,bottom:20,zIndex:99999,background:C.bg2,border:"1px solid #fb7185",borderRadius:7,padding:13,boxShadow:"0 8px 28px #0009",color:C.tx,maxWidth:"calc(100vw - 40px)"}}>
+        <div style={{fontSize:12,marginBottom:10}}>Remove all {pendingClear==="positions"?reportVessels.length:quickRows.length} positions from this report?</div>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:7}}><button onClick={()=>setPendingClear(null)} style={SB}>Cancel</button><button onClick={()=>{if(pendingClear==="positions")clearAll();else{setQuickRows([]);setQuickParseMsg("");setPendingClear(null);}}} style={{...SB,background:"#ef4444",border:"1px solid #ef4444",color:"white"}}>Delete</button></div>
+      </div>}
       {pendingSavedDelete && <div className="no-export" style={{position:"fixed",left:20,bottom:20,zIndex:99999,maxWidth:"calc(100vw - 40px)"}}>
         <div style={{width:340,maxWidth:"100%",background:C.bg2,border:"1px solid rgba(248,113,113,.5)",borderRadius:8,padding:14,boxShadow:"0 8px 28px #0009"}}>
           <div style={{fontSize:13,fontWeight:700,color:C.tx,marginBottom:6}}>Delete saved report?</div>
@@ -1973,15 +1963,19 @@ Any direction`}</pre>
           {/* Primary actions — separate from report layout settings */}
           <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 12px", background: C.bg2, borderBottom: "1px solid " + C.bd, flexWrap: "wrap", flexShrink: 0 }}>
             <span style={{ fontSize: 13, fontWeight: 750, color: C.tx, marginRight: 8 }}>POSITION LIST</span>
+            <input aria-label="Position report name" value={positionReportName} onChange={e=>setPositionReportName(e.target.value)} style={{...IS,width:180}} placeholder="Saved report name"/>
+            <label style={{fontSize:11,color:C.tx}}><input type="checkbox" checked={positionSaveCopy} onChange={e=>setPositionSaveCopy(e.target.checked)}/>Save as copy</label>
+            <button onClick={()=>{setActivePositionId(null);setPositionReportName("");setPositionSaveCopy(false);clearAll();}} style={{...SB,color:C.dim}}>New list</button>
+            <button onClick={()=>{setPositionChartDraft({...positionChartSettings});setPositionSettingsOpen(v=>!v);}} style={{...SB,color:ACCENT}}>Settings</button>
             <input type="date" value={posDate} onChange={e => setPosDate(e.target.value)} style={{ ...IS }} />
             <div style={{ flex: 1 }} />
             {posSaveStatus && <span style={{ fontSize: 10, color: posSaveStatus === "Saved ✓" ? "#43e97b" : C.dim }}>{posSaveStatus}</span>}
             {exportStatus && <span style={{ fontSize: 10, color: C.dim, maxWidth: 220 }}>{exportStatus}</span>}
             {reportVessels.length > 0 && (
-              <button onClick={() => { if (window.confirm(`Remove all ${reportVessels.length} vessels from this position list?`)) clearAll(); }}
+              <button onClick={() => { setPendingClear("positions"); }}
                 style={{ ...SB, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.45)", color: "#ef4444" }}>Clear all</button>
             )}
-            <button onClick={savePositionList} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Save</button>
+            <button disabled={listSaveBusy} onClick={savePositionList} style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>Save</button>
             <button onClick={handleCopyEmail} style={{ ...SB, background: exportStatus.startsWith("Copied") ? "rgba(63,185,80,.16)" : C.bg3, border: "1px solid " + (exportStatus.startsWith("Copied") ? "#3fb950" : C.bd), color: exportStatus.startsWith("Copied") ? "#65d68b" : C.tx }}>{exportStatus.startsWith("Copied") ? "✓ Copied!" : "Copy for Email"}</button>
             <button onClick={handleDownloadPng} style={{ ...SB, background: exportStatus === "Downloaded." ? "rgba(63,185,80,.16)" : "transparent", border: "1px solid " + (exportStatus === "Downloaded." ? "#3fb950" : C.bd), color: exportStatus === "Downloaded." ? "#65d68b" : C.dim }}>{exportStatus === "Downloaded." ? "✓ Saved!" : "Download PNG"}</button>
             <button onClick={() => window.print()} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Print / PDF</button>
@@ -2003,13 +1997,37 @@ Any direction`}</pre>
                   ))}
                 </>
               )}
-              <button onClick={() => setSortByDate(s => !s)}
+              <button onClick={() => {setOutputSort({key:null,desc:false});setSortByDate(s=>!s);}}
                 style={{ ...SB, border: `1px solid ${sortByDate ? ACCENT : C.bd}`, background: sortByDate ? C.bg4 : "transparent", color: sortByDate ? C.tx : C.dim }}>
                 {sortByDate ? "✓ " : ""}Sort by date ↑
               </button>
-              <button onClick={addManualVessel} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: ACCENT }}>+ Add manual row</button>
+              <button onClick={()=>addManualVessel()} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: ACCENT }}>+ Add manual row</button>
             </div>
           </div>
+          {positionSettingsOpen&&<div className="no-export" style={{padding:12,background:C.bg2,borderBottom:"1px solid "+C.bd,maxHeight:360,overflowY:"auto",flexShrink:0}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8,color:C.tx,fontWeight:700}}>Position report settings<button onClick={()=>setPositionSettingsOpen(false)} style={SB}>Close</button></div>
+            <div style={{fontSize:11,color:C.dim,marginBottom:6}}>Columns — applies to this report and its email, PNG and PDF output</div>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:12}}>{POSITION_COLUMNS.map(c=><label key={c.key} style={{color:C.tx,fontSize:11}}><input type="checkbox" checked={positionColumns.includes(c.key)} disabled={positionColumns.length===1&&positionColumns.includes(c.key)} onChange={e=>setPositionColumns(p=>e.target.checked?[...p,c.key]:p.filter(k=>k!==c.key))}/>{c.label}</label>)}</div>
+            <div style={{display:"flex",gap:18,flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:260,color:C.tx,fontSize:11}}><b>Open timing (vessels in this report)</b><div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
+                <label>Reference date <input type="date" value={positionChartDraft.anchor} onChange={e=>setPositionChartDraft(p=>({...p,anchor:e.target.value}))} style={IS}/></label>
+                <label>Days ahead <input type="number" min="2" max="365" value={positionChartDraft.ahead} onChange={e=>setPositionChartDraft(p=>({...p,ahead:e.target.value}))} style={{...IS,width:65}}/></label>
+                <label>Days per range <input type="number" min="1" value={positionChartDraft.bucketDays||7} onChange={e=>setPositionChartDraft(p=>({...p,bucketDays:e.target.value}))} style={{...IS,width:55}}/></label>
+                <label>Bars <input type="number" min="2" max="20" value={positionChartDraft.bars} onChange={e=>setPositionChartDraft(p=>({...p,bars:e.target.value}))} style={{...IS,width:55}}/></label>
+              </div><div style={{color:C.dim,marginTop:6}}>PPT = reference date and tomorrow. Overdue/unknown dates are excluded. Remaining days use non-overlapping ranges (default 2–7, 8–14, 15–21, 22–30). The last bar covers the rest of the horizon.</div></div>
+              <div style={{flex:1,minWidth:300,color:C.tx,fontSize:11}}><b>Fixing-window basis</b><div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
+                <label>From <input type="date" value={positionChartDraft.historyFrom} onChange={e=>setPositionChartDraft(p=>({...p,historyFrom:e.target.value}))} style={IS}/></label>
+                <label>To <input type="date" value={positionChartDraft.historyTo} onChange={e=>setPositionChartDraft(p=>({...p,historyTo:e.target.value}))} style={IS}/></label>
+                <label>Bars <input type="number" min="1" max="30" value={positionChartDraft.historyBars} onChange={e=>setPositionChartDraft(p=>({...p,historyBars:e.target.value}))} style={{...IS,width:55}}/></label>
+                <label>Max days ahead <input type="number" min="1" value={positionChartDraft.maxWindow} onChange={e=>setPositionChartDraft(p=>({...p,maxWindow:e.target.value}))} style={{...IS,width:55}}/></label>
+              </div>
+              <div style={{marginTop:7}}>Segments (none selected = all segments in report)</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{positionSegmentOptions.map(seg=><label key={seg}><input type="checkbox" checked={positionChartDraft.segments.includes(seg)} onChange={e=>setPositionChartDraft(p=>({...p,segments:e.target.checked?[...p.segments,seg]:p.segments.filter(v=>v!==seg)}))}/>{seg}</label>)}</div>
+              <div style={{marginTop:7}}>Super regions (none selected = all super regions in report)</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{positionRegionOptions.map(region=><label key={region}><input type="checkbox" checked={positionChartDraft.regions.includes(region)} onChange={e=>setPositionChartDraft(p=>({...p,regions:e.target.checked?[...p.regions,region]:p.regions.filter(v=>v!==region)}))}/>{region}</label>)}</div>
+              <div style={{color:C.dim,marginTop:7}}>Source: positions_latest, grouped by updated_at. Line = average days from update date to open_date; bars = matching records with a 0–{positionChartDraft.maxWindow} day lead time. This uses current position records, not historical daily snapshots or concluded fixtures. Date-range results are cached; no polling.</div></div>
+            </div>
+            {positionSettingsError&&<div style={{color:"#fb7185",fontSize:11,marginTop:6}}>{positionSettingsError}</div>}
+            <button onClick={applyPositionSettings} style={{...SB,marginTop:10,color:ACCENT}}>Apply graph settings</button>
+          </div>}
           {/* Editable title strip */}
           <div style={{ display: "flex", gap: 8, padding: "5px 12px", background: C.bg3, borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
             <input value={posTitle} onChange={e => setPosTitle(e.target.value)} style={{ ...IS, flex: 2 }} placeholder="Report title" />
@@ -2048,12 +2066,12 @@ Any direction`}</pre>
                   </div>
                 ) : <>
                   {/* Column headers */}
-                  <div style={{ display: "grid", gridTemplateColumns: GRID, width: "100%", boxSizing: "border-box", background: ACCENT, color: "#fff", fontSize: 10, fontWeight: 700, padding: "5px 8px", gap: 2 }}>
-                    {HEADS.map((h, i) => <div key={i} className="no-export-click" onClick={() => h && setOutputSort(p => ({key:h,desc:p.key === h ? !p.desc : false}))} title={h ? `Sort ${h.toLowerCase()} within each ${posGroupBy}` : undefined} style={{ overflow: "hidden", whiteSpace: "nowrap", cursor:h ? "pointer":"default", userSelect:"none" }}>{h}{outputSort.key === h ? (outputSort.desc ? " ▼" : " ▲") : ""}</div>)}
+                  <div style={{ display: "grid", gridTemplateColumns: positionGrid, width: "100%", boxSizing: "border-box", background: ACCENT, color: "#fff", fontSize: 10, fontWeight: 700, padding: "5px 8px", gap: 2 }}>
+                    {[...positionColumnsChosen.map(c=>c.label),""].map((h, i) => <div key={i} className="no-export-click" onClick={() => h && setOutputSort(p => ({key:h,desc:p.key === h ? !p.desc : false}))} title={h ? `Sort ${h.toLowerCase()} within each ${posGroupBy}` : undefined} style={{ overflow: "hidden", whiteSpace: "nowrap", cursor:h ? "pointer":"default", userSelect:"none" }}>{h}{outputSort.key === h ? (outputSort.desc ? " ▼" : " ▲") : ""}</div>)}
                   </div>
                   {/* Rows grouped */}
                   {Object.entries(posGrouped).map(([bucket, rows]) => (
-                    <div key={bucket}>
+                    <div key={bucket} onDragOver={e=>e.preventDefault()} onDrop={e=>dropPosition(bucket,null,e)}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(88,166,255,0.14)", borderTop: "1px solid rgba(88,166,255,0.25)", borderBottom: "1px solid rgba(88,166,255,0.25)" }}>
                         <span key={`${posGroupBy}-${regionMode}-${bucket}`} contentEditable suppressContentEditableWarning
                           onBlur={e => renameBucketInline(bucket, rows, e.currentTarget.textContent)}
@@ -2069,15 +2087,16 @@ Any direction`}</pre>
                         const globalIdx = reportVessels.findIndex(r => r._rid === v._rid);
                         return (
                           <VesselRow key={v._rid || v.vessel}
-                            v={v} localIdx={localIdx} globalIdx={globalIdx}
+                            v={v} localIdx={localIdx} columns={positionColumnsChosen}
                             editing={editingRid === (v._rid || v.vessel)}
                             onEdit={() => setEditingRid(editingRid === (v._rid || v.vessel) ? null : (v._rid || v.vessel))}
                             onSave={vals => saveEdit(v._rid || v.vessel, vals)}
                             onDelete={() => deleteRow(v._rid || v.vessel)}
-                            onDragStart={() => dragStart(globalIdx)}
-                            onDragEnter={() => dragEnter(globalIdx)}
+                            onDragStart={e=>dragStart(v._rid,e)}
+                            onDragEnter={()=>dragEnter(v._rid)}
+                            onDrop={e=>dropPosition(bucket,v._rid,e)}
                             onDragEnd={dragEnd}
-                            isDragOver={dragOver === globalIdx}
+                            isDragOver={dragOver === v._rid}
                           />
                         );
                       })}
@@ -2091,11 +2110,11 @@ Any direction`}</pre>
                 <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8, padding: "6px 6px 12px" }}>
                   <div className={positionCharts.open ? "" : "exclude-position-chart"} style={{ background: "#0c1729", border: "1px solid rgba(58,130,246,0.12)", padding: "8px 10px",minWidth:0 }}>
                     <div className="no-export" style={{display:"flex",justifyContent:"flex-end",paddingBottom:3}}>{positionChartTick("open","Include in export")}</div>
-                    <div className={positionCharts.open ? "" : "exclude-position-chart"}><BarLineChart data={openTimingData} barKey="count" title="Open timing" barLabel="Ships" accent={ACCENT} /></div>
+                    <div className={positionCharts.open ? "" : "exclude-position-chart"}><BarLineChart data={openTimingData} barKey="count" title="Open timing" barLabel="Ships" accent={ACCENT} separateTitle={true} /></div>
                   </div>
                   <div className={positionCharts.fixing ? "" : "exclude-position-chart"} style={{ background: "#0c1729", border: "1px solid rgba(58,130,246,0.12)", padding: "8px 10px",minWidth:0 }}>
                     <div className="no-export" style={{display:"flex",justifyContent:"flex-end",paddingBottom:3}}>{positionChartTick("fixing","Include in export")}</div>
-                    <div className={positionCharts.fixing ? "" : "exclude-position-chart"}><BarLineChart data={posFixHistory} barKey="ships" lineKey="avgWindow" title="Fixing window history (segments in this list)" barLabel="Ships" lineLabel="Avg days" accent={ACCENT} loading={posFixHistoryLoading} /></div>
+                    {positionHistoryError&&<div style={{fontSize:10,color:"#fb7185"}}>{positionHistoryError}</div>}<div className={positionCharts.fixing ? "" : "exclude-position-chart"}><BarLineChart data={positionFixingData} barKey="ships" lineKey="avgWindow" title="Open-date lead time by update date" barLabel="Ships" lineLabel="Avg days" accent={ACCENT} loading={posFixHistoryLoading} separateTitle={true} /></div>
                   </div>
                 </div>
               )}
@@ -2770,25 +2789,20 @@ Any direction`}</pre>
             {/* Toolbar */}
             <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 12px", background: C.bg2, borderBottom: "1px solid " + C.bd, flexWrap: "wrap", flexShrink: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>Quick Positions</span>
+              <input aria-label="Quick report name" value={quickReportName} onChange={e=>setQuickReportName(e.target.value)} style={{...IS,width:170}} placeholder="Saved report name"/>
+              <label style={{fontSize:12,color:C.tx}}><input type="checkbox" checked={quickSaveCopy} onChange={e=>setQuickSaveCopy(e.target.checked)}/>Save as copy</label>
+              <button onClick={()=>{setActiveQuickId(null);setQuickReportName("");setQuickSaveCopy(false);setQuickRows([]);}} style={{...SB,color:C.dim}}>New list</button>
               <input value={quickTitle} onChange={e => setQuickTitle(e.target.value)} style={{ ...IS, minWidth: 160 }} placeholder="Available tonnage" />
               <div style={{ flex: 1 }} />
-              {quickSaveStatus && <span style={{ fontSize: 11, color: quickSaveStatus === "Saved ✓" ? "#43e97b" : C.dim }}>{quickSaveStatus}</span>}
-              <button onClick={saveQuickPositions} disabled={!quickRows.length}
-                style={{ ...SB, opacity: quickRows.length ? 1 : 0.4, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>
+              {quickSaveStatus && <span style={{ fontSize: 13, color: quickSaveStatus === "Saved ✓" ? "#43e97b" : C.dim }}>{quickSaveStatus}</span>}
+              <button onClick={saveQuickPositions} disabled={listSaveBusy}
+                style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>
                 Save
               </button>
               {quickRows.length > 0 && (
-                <button onClick={() => { if (window.confirm("Clear all " + quickRows.length + " rows?")) { setQuickRows([]); setQuickParseMsg(""); } }}
+                <button onClick={() => { setPendingClear("quick"); }}
                   style={{ ...SB, background: "transparent", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444" }}>Clear all</button>
               )}
-              <button onClick={copyQuick} disabled={!quickRows.length}
-                style={{ ...SB, opacity: quickRows.length ? 1 : 0.4, background: quickCopied ? "rgba(67,233,123,0.15)" : "rgba(245,166,35,0.12)", border: "1px solid " + (quickCopied ? "rgba(67,233,123,0.5)" : "rgba(245,166,35,0.45)"), color: quickCopied ? "#43e97b" : "#f5a623" }}>
-                {quickCopied ? "✓ Copied!" : "Copy for WhatsApp"}
-              </button>
-              <button onClick={copyQuickByDate} disabled={!quickRows.length}
-                style={{ ...SB, opacity: quickRows.length ? 1 : 0.4, background: quickCopiedDate ? "rgba(67,233,123,0.15)" : "rgba(99,102,241,0.12)", border: "1px solid " + (quickCopiedDate ? "rgba(67,233,123,0.5)" : "rgba(99,102,241,0.45)"), color: quickCopiedDate ? "#43e97b" : "#a5b4fc" }}>
-                {quickCopiedDate ? "✓ Copied!" : "Copy by date ↑"}
-              </button>
             </div>
 
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -2796,38 +2810,36 @@ Any direction`}</pre>
               <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                 {/* Step 1 */}
                 <div style={{ flex: "0 0 25%", minWidth: 220, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT, marginBottom: 6 }}>Step 1 — Paste positions</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT, marginBottom: 6 }}>Step 1 — Paste positions</div>
                   <textarea value={quickPaste}
                     onChange={e => { setQuickPaste(e.target.value); setQuickParseMsg(""); }}
                     onPaste={handleImagePaste}
-                    placeholder="Paste text from WhatsApp or email, OR paste a screenshot directly (Ctrl/Cmd+V).\n\nText example:\n*MAERSK TANKERS*\nERIKA SCHULTE - GRANGEMOUTH - 6 JUL\nFURE VEN - THAMES - 6 JUL\n\nOperators auto-matched from your vessel database."
-                    style={{ width: "100%", minHeight: 200, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 11, padding: 9, outline: "none", resize: "vertical", fontFamily: "monospace", lineHeight: 1.6, boxSizing: "border-box", opacity: quickImgParsing ? 0.5 : 1 }} />
+                    placeholder="Paste text or picture"
+                    style={{ width: "100%", minHeight: 200, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 13, padding: 9, outline: "none", resize: "vertical", fontFamily: "monospace", lineHeight: 1.6, boxSizing: "border-box", opacity: quickImgParsing ? 0.5 : 1 }} />
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                    <button onClick={parsePaste} disabled={quickImgParsing} style={{ ...SB, background: ACCENT, color: "#fff", border: "none", opacity: quickImgParsing ? 0.5 : 1 }}>Parse &amp; add rows</button>
+                    <button onClick={parsePaste} disabled={quickImgParsing} style={{ ...SB, background: "#0c1729", color: "#79c0ff", border: "1px solid #377dc8", opacity: quickImgParsing ? 0.5 : 1 }}>▶ Parse and add</button>
                     {quickPaste.trim() && <button onClick={() => { setQuickPaste(""); setQuickParseMsg(""); }} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Clear paste</button>}
                     <button onClick={addQuickRow} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }} title="Add a blank row to fill in manually">+ Add row manually</button>
-                    {quickImgParsing && <span style={{ fontSize: 11, color: ACCENT }}>⏳ {quickParseMsg}</span>}
-                    {!quickImgParsing && quickParseMsg && <span style={{ fontSize: 11, color: quickParseMsg.startsWith("✓") ? "#43e97b" : "#f5a623" }}>{quickParseMsg}</span>}
+                    {quickImgParsing && <span style={{ fontSize: 13, color: ACCENT }}>⏳ {quickParseMsg}</span>}
+                    {!quickImgParsing && quickParseMsg && <span style={{ fontSize: 13, color: quickParseMsg.startsWith("✓") ? "#43e97b" : "#f5a623" }}>{quickParseMsg}</span>}
                   </div>
-                  <div style={{ fontSize: 9, color: C.faint, marginTop: 5 }}>
-                    💡 Works with text paste AND screenshot paste — just Ctrl/Cmd+V with an image in clipboard
-                  </div>
+
                 </div>
 
                 {/* Step 2: Edit */}
                 {quickRows.length > 0 && (
                   <div style={{ flex: "1 1 75%", minWidth: 0, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: 520 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT }}>Step 2 — Check &amp; edit ({quickRows.length} row{quickRows.length !== 1 ? "s" : ""}) — <span style={{ fontWeight: 400, color: C.faint }}>orange = operator not yet matched</span></div>
-                      <button onClick={addQuickRow} style={{ fontSize: 10, color: ACCENT, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>+ Add row</button>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>Step 2 — Check &amp; edit ({quickRows.length} row{quickRows.length !== 1 ? "s" : ""}) — <span style={{ fontWeight: 400, color: C.faint }}>orange = operator not yet matched</span></div>
+                      <button onClick={addQuickRow} style={{ fontSize: 12, color: ACCENT, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>+ Add row</button>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 22px", background: ACCENT, color: "#fff", fontSize: 10, fontWeight: 700, padding: "5px 10px", gap: 6, flexShrink: 0 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 22px", background: ACCENT, color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 10px", gap: 6, flexShrink: 0 }}>
                       <div>OPERATOR</div><div>VESSEL</div><div>PORT</div><div>DATE</div><div>DIRECTION (optional)</div><div></div>
                     </div>
                     <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                       {quickRows.map((r, i) => {
                         const iOp = r.operator ? C.tx : "#f5a623";
-                        const INP = (col) => ({ background: "transparent", border: "none", borderBottom: "1px solid rgba(58,130,246,0.28)", color: col || C.tx, fontSize: 11, outline: "none", padding: "1px 2px", width: "100%", fontFamily: "inherit", minWidth: 0 });
+                        const INP = (col) => ({ background: "transparent", border: "none", borderBottom: "1px solid rgba(58,130,246,0.28)", color: col || C.tx, fontSize: 13, outline: "none", padding: "1px 2px", width: "100%", fontFamily: "inherit", minWidth: 0 });
                         // Enter jumps to the same column, next row down — same field index across the grid
                         const jumpDown = (fieldIdx) => (e) => {
                           if (e.key !== "Enter") return;
@@ -2857,26 +2869,22 @@ Any direction`}</pre>
               {quickRows.length > 0 && (
                 <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: ACCENT }}>Step 3 — Copy &amp; send</div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={copyQuick} style={{ ...SB, background: quickCopied ? "rgba(67,233,123,0.15)" : "rgba(245,166,35,0.12)", border: "1px solid " + (quickCopied ? "rgba(67,233,123,0.5)" : "rgba(245,166,35,0.45)"), color: quickCopied ? "#43e97b" : "#f5a623" }}>
-                        {quickCopied ? "✓ Copied!" : "Copy by operator"}
-                      </button>
-                      <button onClick={copyQuickByDate} style={{ ...SB, background: quickCopiedDate ? "rgba(67,233,123,0.15)" : "rgba(99,102,241,0.12)", border: "1px solid " + (quickCopiedDate ? "rgba(67,233,123,0.5)" : "rgba(99,102,241,0.45)"), color: quickCopiedDate ? "#43e97b" : "#a5b4fc" }}>
-                        {quickCopiedDate ? "✓ Copied!" : "Copy by date ↑"}
-                      </button>
-                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>Step 3 — Copy &amp; send</div>
+
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     <div>
-                      <div style={{ fontSize: 9, color: C.faint, marginBottom: 4, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>By operator</div>
-                      <pre style={{ margin: 0, fontFamily: "monospace", fontSize: 12, color: C.tx, lineHeight: 1.9, whiteSpace: "pre-wrap", wordBreak: "break-word", background: C.bg3, padding: "10px 12px", borderRadius: 5 }}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:6}}><span style={{fontSize:12,color:C.dim,fontWeight:700}}>By operator</span><div style={{display:"flex",gap:6}}>
+                        <button onClick={()=>copyQuick(false)} style={{...SB,color:quickCopied?"#43e97b":"#79c0ff",background:quickCopied?"rgba(67,233,123,.15)":C.bg3,borderColor:quickCopied?"#43e97b":C.bd}}>{quickCopied?"✓ Copied!":"Copy by operator"}</button>
+                        <button onClick={()=>copyQuick(true)} style={{...SB,color:quickWhatsAppCopied?"#43e97b":"#79c0ff",background:quickWhatsAppCopied?"rgba(67,233,123,.15)":C.bg3,borderColor:quickWhatsAppCopied?"#43e97b":C.bd}}>{quickWhatsAppCopied?"✓ Copied!":"Copy for WhatsApp"}</button>
+                      </div></div>
+                      <pre style={{ margin: 0, fontFamily: "monospace", fontSize: 14, color: C.tx, lineHeight: 1.8, whiteSpace: "pre-wrap", wordBreak: "break-word", background: C.bg3, padding: "10px 12px", borderRadius: 5 }}>
                         {buildQuickText()}
                       </pre>
                     </div>
                     <div>
-                      <div style={{ fontSize: 9, color: C.faint, marginBottom: 4, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>By date (ascending)</div>
-                      <pre style={{ margin: 0, fontFamily: "monospace", fontSize: 12, color: C.tx, lineHeight: 1.9, whiteSpace: "pre-wrap", wordBreak: "break-word", background: C.bg3, padding: "10px 12px", borderRadius: 5 }}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:6}}><span style={{fontSize:12,color:C.dim,fontWeight:700}}>By date (ascending)</span><button onClick={copyQuickByDate} style={{...SB,color:quickCopiedDate?"#43e97b":"#79c0ff",background:quickCopiedDate?"rgba(67,233,123,.15)":C.bg3,borderColor:quickCopiedDate?"#43e97b":C.bd}}>{quickCopiedDate?"✓ Copied!":"Copy by date ↑"}</button></div>
+                      <pre style={{ margin: 0, fontFamily: "monospace", fontSize: 14, color: C.tx, lineHeight: 1.8, whiteSpace: "pre-wrap", wordBreak: "break-word", background: C.bg3, padding: "10px 12px", borderRadius: 5 }}>
                         {buildQuickTextByDate()}
                       </pre>
                     </div>
