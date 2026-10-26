@@ -63,6 +63,28 @@ function parseTags(v) {
   const r = Array.isArray(v.tag) ? v.tag : String(v.tag).split(",");
   return r.map(t => String(t).toUpperCase().trim()).filter(Boolean);
 }
+// Quick-list selection is report-local; it never changes source position tags.
+function quickInterUKC(v,config){
+  const cfg=config||{dwtMin:15,dwtMax:21,owners:["Stenersen","Furetank","Carl F","Maersk","Harren","Navix","Donso","Relet"],reletsFrom:["Exxon","Shell","Circle K","Essar","Total","CSS SA"]};
+  const dwt=parseFloat(v.dwt)||0,op=String(v.operator||"").toLowerCase();
+  return !(dwt>0&&(dwt<cfg.dwtMin*1000||dwt>cfg.dwtMax*1000))&&[...(cfg.owners||[]),...(cfg.reletsFrom||[])].some(name=>op.includes(String(name).toLowerCase()));
+}
+function quickPositionMatches(v,selected,config){
+  return selected.some(tag=>tag==="__INTER_UKC__"?quickInterUKC(v,config):parseTags(v).includes(tag));
+}
+function reconcileQuickSelections(rows,vessels,selected,config){
+  const matching=new Map(vessels.filter(v=>quickPositionMatches(v,selected,config)).map(v=>[positionNameKey(v),v]));
+  const kept=rows.filter(r=>!r._quickTagImported||matching.has(positionNameKey(r)));
+  const existing=new Set(kept.map(positionNameKey));
+  matching.forEach((v,key)=>{if(!key||existing.has(key))return;existing.add(key);kept.push({id:newPositionId(),operator:v.operator||"",vessel:v.vessel||"",port:v.openPort||"",date:fmtOpen(v.date),direction:"",updatedAt:v.updatedAt||v.updated_at||"",_quickTagImported:true});});
+  return kept.length===rows.length&&kept.every((row,i)=>row===rows[i])?rows:kept;
+}
+function quickUpdatedDate(row,vessels){
+  const source=vessels.find(v=>positionNameKey(v)===positionNameKey(row));
+  const value=row.updatedAt||row.updated_at||source?.updatedAt||source?.updated_at;
+  if(!value)return "";const date=new Date(value);
+  return Number.isNaN(date.getTime())?String(value):date.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
+}
 const MN_SORT = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 const POSITION_COLUMNS=[
   ["vessel","VESSEL",148],["dwt","DWT",62],["cbm","CBM",64],["built","BUILT",48],["coating","COATING",70],
@@ -590,6 +612,13 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const importedNames = useRef(new Set(reportVessels.map(v => v.vessel)));
   // Quick positions state
   const [quickRows, setQuickRows] = useState([]);
+  const [quickSelectedTags,setQuickSelectedTags]=useState([]);
+  const quickAvailableTags=useMemo(()=>[...new Set(allVessels.flatMap(parseTags))].sort(),[allVessels]);
+  useEffect(()=>{
+    let config=null;try{config=JSON.parse(localStorage.getItem("signal_interukc_config")||"null");}catch{}
+    setQuickRows(rows=>reconcileQuickSelections(rows,allVessels,quickSelectedTags,config));
+  },[quickSelectedTags,allVessels]);
+  function toggleQuickTag(tag){setQuickSelectedTags(tags=>tags.includes(tag)?tags.filter(t=>t!==tag):[...tags,tag]);}
   const [quickTitle, setQuickTitle] = useState("Available tonnage");
   const [quickReportName,setQuickReportName]=useState("");
   const [activeQuickId,setActiveQuickId]=useState(null);
@@ -1363,7 +1392,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if(listSaveBusy)return;setListSaveBusy(true);setQuickSaveStatus("Saving...");
     try{
       const name=marketReportSaveName(quickReportName||quickTitle,"Quick Positions",quickSaveCopy,savedReports);
-      const payload={report_type:"Quick Positions",report_date:new Date().toISOString().slice(0,10),quick_title:quickTitle,quick_rows:quickRows,rate_grid:{__quickEditor:{name}}};
+      const payload={report_type:"Quick Positions",report_date:new Date().toISOString().slice(0,10),quick_title:quickTitle,quick_rows:quickRows,rate_grid:{__quickEditor:{name,selectedTags:quickSelectedTags}}};
       const query=activeQuickId&&!quickSaveCopy?supabase.from("reports").update(payload).eq("id",activeQuickId):supabase.from("reports").insert([payload]);
       const {data,error}=await query.select("id").single();if(error)throw error;
       setActiveQuickId(data.id);setQuickReportName(name);setQuickSaveCopy(false);setQuickSaveStatus("Saved ✓");await loadSavedReports();
@@ -1374,6 +1403,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     try{
       const {data,error}=await supabase.from("reports").select("*").eq("id",id).single();if(error)throw error;if(!data)return;
       setQuickTitle(data.quick_title||"Available tonnage");setQuickReportName(data.rate_grid?.__quickEditor?.name||data.quick_title||"");setActiveQuickId(id);setQuickSaveCopy(false);
+      setQuickSelectedTags(Array.isArray(data.rate_grid?.__quickEditor?.selectedTags)?data.rate_grid.__quickEditor.selectedTags:[]);
       setQuickRows((Array.isArray(data.quick_rows)?data.quick_rows:[]).map(r=>({...r,id:r.id||newPositionId()})));setPendingClear(null);setSection("quick");
     }catch(error){setQuickSaveStatus("Load failed: "+(error.message||error));}
   }
@@ -1916,6 +1946,14 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
         {section === "quick" && (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "8px 10px", gap: 8, overflow: "hidden" }}>
+            <div style={{overflowY:"auto",maxHeight:"55%",flexShrink:1}}>
+              <div style={{fontSize:10,fontWeight:700,color:ACCENT,marginBottom:7}}>TAGS</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                {quickAvailableTags.map(tag=><button key={tag} aria-pressed={quickSelectedTags.includes(tag)} onClick={()=>toggleQuickTag(tag)} style={{...SB,fontSize:10,padding:"4px 7px",background:quickSelectedTags.includes(tag)?"rgba(88,166,255,0.2)":C.bg3,borderColor:quickSelectedTags.includes(tag)?ACCENT:C.bd,color:quickSelectedTags.includes(tag)?"#79c0ff":C.dim}}>{tag}</button>)}
+              </div>
+              <div style={{fontSize:10,fontWeight:700,color:ACCENT,marginTop:14,marginBottom:7}}>INTER UKC</div>
+              <button aria-pressed={quickSelectedTags.includes("__INTER_UKC__")} onClick={()=>toggleQuickTag("__INTER_UKC__")} style={{...SB,fontSize:10,padding:"4px 7px",background:quickSelectedTags.includes("__INTER_UKC__")?"rgba(88,166,255,0.2)":C.bg3,borderColor:quickSelectedTags.includes("__INTER_UKC__")?ACCENT:C.bd,color:quickSelectedTags.includes("__INTER_UKC__")?"#79c0ff":C.dim}}>INTER UKC</button>
+            </div>
             {(Array.isArray(savedReports)?savedReports:[]).filter(r => r.report_type === "Quick Positions").length > 0 && (
               <div style={{ borderTop: "1px solid " + C.bd, paddingTop: 8, maxHeight: 160, overflowY: "auto" }}>
                 <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Saved</div>
@@ -1942,7 +1980,7 @@ Any direction`}</pre>
 
       {pendingClear&&<div className="no-export" role="dialog" aria-label="Clear report positions" style={{position:"fixed",left:20,bottom:20,zIndex:99999,background:C.bg2,border:"1px solid #fb7185",borderRadius:7,padding:13,boxShadow:"0 8px 28px #0009",color:C.tx,maxWidth:"calc(100vw - 40px)"}}>
         <div style={{fontSize:12,marginBottom:10}}>Remove all {pendingClear==="positions"?reportVessels.length:quickRows.length} positions from this report?</div>
-        <div style={{display:"flex",justifyContent:"flex-end",gap:7}}><button onClick={()=>setPendingClear(null)} style={SB}>Cancel</button><button onClick={()=>{if(pendingClear==="positions")clearAll();else{setQuickRows([]);setQuickParseMsg("");setPendingClear(null);}}} style={{...SB,background:"#ef4444",border:"1px solid #ef4444",color:"white"}}>Delete</button></div>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:7}}><button onClick={()=>setPendingClear(null)} style={SB}>Cancel</button><button onClick={()=>{if(pendingClear==="positions")clearAll();else{setQuickSelectedTags([]);setQuickRows([]);setQuickParseMsg("");setPendingClear(null);}}} style={{...SB,background:"#ef4444",border:"1px solid #ef4444",color:"white"}}>Delete</button></div>
       </div>}
       {pendingSavedDelete && <div className="no-export" style={{position:"fixed",left:20,bottom:20,zIndex:99999,maxWidth:"calc(100vw - 40px)"}}>
         <div style={{width:340,maxWidth:"100%",background:C.bg2,border:"1px solid rgba(248,113,113,.5)",borderRadius:8,padding:14,boxShadow:"0 8px 28px #0009"}}>
@@ -2791,7 +2829,7 @@ Any direction`}</pre>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>Quick Positions</span>
               <input aria-label="Quick report name" value={quickReportName} onChange={e=>setQuickReportName(e.target.value)} style={{...IS,width:170}} placeholder="Saved report name"/>
               <label style={{fontSize:12,color:C.tx}}><input type="checkbox" checked={quickSaveCopy} onChange={e=>setQuickSaveCopy(e.target.checked)}/>Save as copy</label>
-              <button onClick={()=>{setActiveQuickId(null);setQuickReportName("");setQuickSaveCopy(false);setQuickRows([]);}} style={{...SB,color:C.dim}}>New list</button>
+              <button onClick={()=>{setActiveQuickId(null);setQuickReportName("");setQuickSaveCopy(false);setQuickSelectedTags([]);setQuickRows([]);}} style={{...SB,color:C.dim}}>New list</button>
               <input value={quickTitle} onChange={e => setQuickTitle(e.target.value)} style={{ ...IS, minWidth: 160 }} placeholder="Available tonnage" />
               <div style={{ flex: 1 }} />
               {quickSaveStatus && <span style={{ fontSize: 13, color: quickSaveStatus === "Saved ✓" ? "#43e97b" : C.dim }}>{quickSaveStatus}</span>}
@@ -2833,8 +2871,8 @@ Any direction`}</pre>
                       <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>Step 2 — Check &amp; edit ({quickRows.length} row{quickRows.length !== 1 ? "s" : ""}) — <span style={{ fontWeight: 400, color: C.faint }}>orange = operator not yet matched</span></div>
                       <button onClick={addQuickRow} style={{ fontSize: 12, color: ACCENT, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>+ Add row</button>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 22px", background: ACCENT, color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 10px", gap: 6, flexShrink: 0 }}>
-                      <div>OPERATOR</div><div>VESSEL</div><div>PORT</div><div>DATE</div><div>DIRECTION (optional)</div><div></div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 85px 22px", background: ACCENT, color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 10px", gap: 6, flexShrink: 0 }}>
+                      <div>OPERATOR</div><div>VESSEL</div><div>PORT</div><div>DATE</div><div>DIRECTION (optional)</div><div title="For selection only — excluded from previews and copied output">UPDATED DATE</div><div></div>
                     </div>
                     <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                       {quickRows.map((r, i) => {
@@ -2850,12 +2888,13 @@ Any direction`}</pre>
                           target?.focus();
                         };
                         return (
-                          <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 22px", background: i%2===0?"rgba(255,255,255,0.025)":"transparent", padding: "5px 10px", gap: 6, borderTop: "1px solid rgba(58,130,246,0.1)", alignItems: "center" }}>
+                          <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 85px 22px", background: i%2===0?"rgba(255,255,255,0.025)":"transparent", padding: "5px 10px", gap: 6, borderTop: "1px solid rgba(58,130,246,0.1)", alignItems: "center" }}>
                             <input className="quick-row-input" style={INP(iOp)} value={r.operator} onChange={e => updateQuickRow(r.id, "operator", e.target.value)} onKeyDown={jumpDown(0)} placeholder="Type operator..." title={r.operator ? r.operator : "Not found in DB — type it here"} />
                             <input className="quick-row-input" style={{ ...INP(), fontWeight: 600 }} value={r.vessel} onChange={e => updateQuickRow(r.id, "vessel", e.target.value.toUpperCase())} onKeyDown={jumpDown(1)} placeholder="VESSEL" />
                             <input className="quick-row-input" style={INP()} value={r.port} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} onKeyDown={jumpDown(2)} placeholder="PORT" />
                             <input className="quick-row-input" style={INP()} value={r.date} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} onKeyDown={jumpDown(3)} placeholder="DATE" />
                             <input className="quick-row-input" style={{ ...INP(C.dim) }} value={r.direction} onChange={e => updateQuickRow(r.id, "direction", e.target.value)} onKeyDown={jumpDown(4)} placeholder="Any direction / options..." />
+                            <span title="Position last updated — excluded from output" style={{fontSize:13,color:C.dim}}>{quickUpdatedDate(r,allVessels)}</span>
                             <button onClick={() => deleteQuickRow(r.id)} style={{ background: "none", border: "none", color: "rgba(239,68,68,0.55)", cursor: "pointer", fontSize: 12, padding: 0 }}>✕</button>
                           </div>
                         );
