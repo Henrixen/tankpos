@@ -94,6 +94,22 @@ function quickUpdatedDate(row,vessels){
   if(!value)return "";const date=new Date(value);
   return Number.isNaN(date.getTime())?String(value):date.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
 }
+// Quick-list presentation only: source position text stays untouched.
+const QUICK_ABBREVIATIONS = new Set(["ARA","WCUK","ECUK","UK","UKC","NWE","NWC","MED","US","USA","USG","USAC","USEC","USWC","EU","UAE","UCOME","IMO","DWT","CBM","PPT","TBC","TBN","ETA","ETD","AG","PG","WAF","EAF","SAF","WCNA","WCSA"]);
+const quickOperatorKey = value => String(value || "Unknown").trim().toUpperCase();
+function quickDisplayText(value) {
+  return String(value || "").toLowerCase().replace(/[\p{L}\p{N}]+/gu, word => QUICK_ABBREVIATIONS.has(word.toUpperCase()) ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1));
+}
+function quickDisplayDate(value) {
+  const raw=String(value||"").trim();
+  const iso=raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
+  if(iso){const month=Number(iso[2])-1;return month>=0&&month<12?Number(iso[3])+" "+quickDisplayText(MN_SORT[month]):raw;}
+  return quickDisplayText(raw).replace(/\b0(\d)\b/g,"$1").replace(/\bNo\b/g,"Nov");
+}
+function quickRowLine(row,byDate=false){
+  const vessel=quickDisplayText(row.vessel),port=quickDisplayText(row.port),date=quickDisplayDate(row.date);
+  return (byDate?[date,vessel,port]:[vessel,port,date]).filter(Boolean).join(" – ");
+}
 const MN_SORT = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 const POSITION_COLUMNS=[
   ["vessel","VESSEL",148],["dwt","DWT",62],["cbm","CBM",64],["built","BUILT",48],["coating","COATING",70],
@@ -621,6 +637,18 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const importedNames = useRef(new Set(reportVessels.map(v => v.vessel)));
   // Quick positions state
   const [quickRows, setQuickRows] = useState([]);
+  const [quickTableSort,setQuickTableSort]=useState({key:null,desc:false});
+  const [quickExcludedOperators,setQuickExcludedOperators]=useState([]);
+  const quickOperators=[...new Map(quickRows.map(r=>[quickOperatorKey(r.operator),r.operator||"Unknown"])).entries()];
+  const quickOutputRows=quickRows.filter(r=>!quickExcludedOperators.includes(quickOperatorKey(r.operator)));
+  const quickEditorRows=useMemo(()=>{
+    if(!quickTableSort.key)return quickRows;
+    const key=quickTableSort.key;
+    const value=r=>key==="date"?dateSortKey(quickDisplayDate(r.date)):key==="updatedAt"?dateSortKey(quickUpdatedDate(r,allVessels)):String(r[key]||"");
+    return [...quickRows].sort((a,b)=>{const av=value(a),bv=value(b);return (typeof av==="number"?av-bv:av.localeCompare(bv,undefined,{numeric:true,sensitivity:"base"}))*(quickTableSort.desc?-1:1);});
+  },[quickRows,quickTableSort,allVessels]);
+  function toggleQuickOperator(key){setQuickExcludedOperators(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);}
+  function sortQuickColumn(key){setQuickTableSort(p=>({key,desc:p.key===key?!p.desc:false}));}
   const [quickSelectedTags,setQuickSelectedTags]=useState([]);
   const [quickUpdatedFilter,setQuickUpdatedFilter]=useState("all");
   const quickAvailableTags=useMemo(()=>[...new Set(allVessels.flatMap(parseTags))].sort(),[allVessels]);
@@ -1402,7 +1430,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if(listSaveBusy)return;setListSaveBusy(true);setQuickSaveStatus("Saving...");
     try{
       const name=marketReportSaveName(quickReportName||quickTitle,"Quick Positions",quickSaveCopy,savedReports);
-      const payload={report_type:"Quick Positions",report_date:new Date().toISOString().slice(0,10),quick_title:quickTitle,quick_rows:quickRows,rate_grid:{__quickEditor:{name,selectedTags:quickSelectedTags,updatedFilter:quickUpdatedFilter}}};
+      const payload={report_type:"Quick Positions",report_date:new Date().toISOString().slice(0,10),quick_title:quickTitle,quick_rows:quickRows,rate_grid:{__quickEditor:{name,selectedTags:quickSelectedTags,updatedFilter:quickUpdatedFilter,excludedOperators:quickExcludedOperators,tableSort:quickTableSort}}};
       const query=activeQuickId&&!quickSaveCopy?supabase.from("reports").update(payload).eq("id",activeQuickId):supabase.from("reports").insert([payload]);
       const {data,error}=await query.select("id").single();if(error)throw error;
       setActiveQuickId(data.id);setQuickReportName(name);setQuickSaveCopy(false);setQuickSaveStatus("Saved ✓");await loadSavedReports();
@@ -1414,6 +1442,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       const {data,error}=await supabase.from("reports").select("*").eq("id",id).single();if(error)throw error;if(!data)return;
       setQuickTitle(data.quick_title||"Available tonnage");setQuickReportName(data.rate_grid?.__quickEditor?.name||data.quick_title||"");setActiveQuickId(id);setQuickSaveCopy(false);
       setQuickUpdatedFilter(data.rate_grid?.__quickEditor?.updatedFilter||"all");
+      setQuickExcludedOperators(data.rate_grid?.__quickEditor?.excludedOperators||[]);
+      setQuickTableSort(data.rate_grid?.__quickEditor?.tableSort||{key:null,desc:false});
       setQuickSelectedTags(Array.isArray(data.rate_grid?.__quickEditor?.selectedTags)?data.rate_grid.__quickEditor.selectedTags:[]);
       setQuickRows((Array.isArray(data.quick_rows)?data.quick_rows:[]).map(r=>({...r,id:r.id||newPositionId()})));setPendingClear(null);setSection("quick");
     }catch(error){setQuickSaveStatus("Load failed: "+(error.message||error));}
@@ -1741,26 +1771,21 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   function deleteQuickRow(id) { setQuickRows(p => p.filter(r => r.id!==id)); }
 
   function buildQuickText(whatsapp=false) {
-    if (!quickRows.length) return "";
-    const byOp = {}; const opOrder = [];
-    quickRows.forEach(r => { const op=r.operator||"Unknown"; if(!byOp[op]){byOp[op]=[];opOrder.push(op);} byOp[op].push(r); });
-    const lines = ["|| " + quickTitle + " ||", ""];
-    opOrder.forEach(op => {
-      lines.push(whatsapp?"*"+op+"*":op);
-      // Only vessel – port – date, NO comments or direction
-      byOp[op].forEach(r => lines.push([r.vessel, r.port, r.date].filter(Boolean).join(" \u2013 ")));
+    if (!quickOutputRows.length) return "";
+    const byOp = new Map();
+    quickOutputRows.forEach(r=>{const key=quickOperatorKey(r.operator);if(!byOp.has(key))byOp.set(key,[]);byOp.get(key).push(r);});
+    const lines=["|| "+quickDisplayText(quickTitle)+" ||",""];
+    byOp.forEach((rows,key)=>{
+      const op=quickDisplayText(key);lines.push(whatsapp?"*"+op+"*":op);
+      [...rows].sort((a,b)=>dateSortKey(quickDisplayDate(a.date))-dateSortKey(quickDisplayDate(b.date))).forEach(r=>lines.push(quickRowLine(r)));
       lines.push("");
     });
     return lines.join("\n").trim();
   }
-
   function buildQuickTextByDate() {
-    if (!quickRows.length) return "";
-    const sortKey=value=>dateSortKey(value);
-    const sorted = [...quickRows].sort((a,b) => sortKey(a.date) - sortKey(b.date));
-    const lines = ["|| " + quickTitle + " ||", ""];
-    sorted.forEach(r => lines.push([r.date, r.vessel, r.port].filter(Boolean).join(" \u2013 ")));
-    return lines.join("\n").trim();
+    if (!quickOutputRows.length) return "";
+    const sorted=[...quickOutputRows].sort((a,b)=>dateSortKey(quickDisplayDate(a.date))-dateSortKey(quickDisplayDate(b.date)));
+    return ["|| "+quickDisplayText(quickTitle)+" ||","",...sorted.map(r=>quickRowLine(r,true))].join("\n").trim();
   }
 
   const [quickCopiedDate, setQuickCopiedDate] = useState(false);
@@ -1995,7 +2020,7 @@ Any direction`}</pre>
 
       {pendingClear&&<div className="no-export" role="dialog" aria-label="Clear report positions" style={{position:"fixed",left:20,bottom:20,zIndex:99999,background:C.bg2,border:"1px solid #fb7185",borderRadius:7,padding:13,boxShadow:"0 8px 28px #0009",color:C.tx,maxWidth:"calc(100vw - 40px)"}}>
         <div style={{fontSize:12,marginBottom:10}}>Remove all {pendingClear==="positions"?reportVessels.length:quickRows.length} positions from this report?</div>
-        <div style={{display:"flex",justifyContent:"flex-end",gap:7}}><button onClick={()=>setPendingClear(null)} style={SB}>Cancel</button><button onClick={()=>{if(pendingClear==="positions")clearAll();else{setQuickSelectedTags([]);setQuickUpdatedFilter("all");setQuickRows([]);setQuickParseMsg("");setPendingClear(null);}}} style={{...SB,background:"#ef4444",border:"1px solid #ef4444",color:"white"}}>Delete</button></div>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:7}}><button onClick={()=>setPendingClear(null)} style={SB}>Cancel</button><button onClick={()=>{if(pendingClear==="positions")clearAll();else{setQuickSelectedTags([]);setQuickUpdatedFilter("all");setQuickExcludedOperators([]);setQuickTableSort({key:null,desc:false});setQuickRows([]);setQuickParseMsg("");setPendingClear(null);}}} style={{...SB,background:"#ef4444",border:"1px solid #ef4444",color:"white"}}>Delete</button></div>
       </div>}
       {pendingSavedDelete && <div className="no-export" style={{position:"fixed",left:20,bottom:20,zIndex:99999,maxWidth:"calc(100vw - 40px)"}}>
         <div style={{width:340,maxWidth:"100%",background:C.bg2,border:"1px solid rgba(248,113,113,.5)",borderRadius:8,padding:14,boxShadow:"0 8px 28px #0009"}}>
@@ -2844,7 +2869,7 @@ Any direction`}</pre>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>Quick Positions</span>
               <input aria-label="Quick report name" value={quickReportName} onChange={e=>setQuickReportName(e.target.value)} style={{...IS,width:170}} placeholder="Saved report name"/>
               <label style={{fontSize:12,color:C.tx}}><input type="checkbox" checked={quickSaveCopy} onChange={e=>setQuickSaveCopy(e.target.checked)}/>Save as copy</label>
-              <button onClick={()=>{setActiveQuickId(null);setQuickReportName("");setQuickSaveCopy(false);setQuickSelectedTags([]);setQuickUpdatedFilter("all");setQuickRows([]);}} style={{...SB,color:C.dim}}>New list</button>
+              <button onClick={()=>{setActiveQuickId(null);setQuickReportName("");setQuickSaveCopy(false);setQuickSelectedTags([]);setQuickUpdatedFilter("all");setQuickExcludedOperators([]);setQuickTableSort({key:null,desc:false});setQuickRows([]);}} style={{...SB,color:C.dim}}>New list</button>
               <input value={quickTitle} onChange={e => setQuickTitle(e.target.value)} style={{ ...IS, minWidth: 160 }} placeholder="Available tonnage" />
               <div style={{ flex: 1 }} />
               {quickSaveStatus && <span style={{ fontSize: 13, color: quickSaveStatus === "Saved ✓" ? "#43e97b" : C.dim }}>{quickSaveStatus}</span>}
@@ -2887,12 +2912,12 @@ Any direction`}</pre>
                       <button onClick={addQuickRow} style={{ fontSize: 12, color: ACCENT, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>+ Add row</button>
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 85px 22px", background: ACCENT, color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 10px", gap: 6, flexShrink: 0 }}>
-                      <div>OPERATOR</div><div>VESSEL</div><div>PORT</div><div>DATE</div><div>DIRECTION (optional)</div><div title="For selection only — excluded from previews and copied output">UPDATED DATE</div><div></div>
+                      {[["operator","OPERATOR"],["vessel","VESSEL"],["port","PORT"],["date","DATE"],["direction","DIRECTION (OPTIONAL)"],["updatedAt","UPDATED DATE"]].map(([key,label])=><button key={key} onClick={()=>sortQuickColumn(key)} title={key==="updatedAt"?"For selection only — excluded from output":"Sort by "+label} style={{background:"none",border:0,padding:0,color:"inherit",font:"inherit",textAlign:"left",cursor:"pointer"}}>{label}{quickTableSort.key===key?(quickTableSort.desc?" ▼":" ▲"):""}</button>)}<div></div>
                     </div>
                     <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-                      {quickRows.map((r, i) => {
+                      {quickEditorRows.map((r, i) => {
                         const iOp = r.operator ? C.tx : "#f5a623";
-                        const INP = (col) => ({ background: "transparent", border: "none", borderBottom: "1px solid rgba(58,130,246,0.28)", color: col || C.tx, fontSize: 13, outline: "none", padding: "1px 2px", width: "100%", fontFamily: "inherit", minWidth: 0 });
+                        const INP = (col) => ({ background: "transparent", border: "none", borderBottom: "1px solid rgba(58,130,246,0.28)", color: col || C.tx, fontSize: 11, outline: "none", padding: "1px 2px", width: "100%", fontFamily: "inherit", minWidth: 0 });
                         // Enter jumps to the same column, next row down — same field index across the grid
                         const jumpDown = (fieldIdx) => (e) => {
                           if (e.key !== "Enter") return;
@@ -2904,12 +2929,12 @@ Any direction`}</pre>
                         };
                         return (
                           <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 85px 22px", background: i%2===0?"rgba(255,255,255,0.025)":"transparent", padding: "5px 10px", gap: 6, borderTop: "1px solid rgba(58,130,246,0.1)", alignItems: "center" }}>
-                            <input className="quick-row-input" style={INP(iOp)} value={r.operator} onChange={e => updateQuickRow(r.id, "operator", e.target.value)} onKeyDown={jumpDown(0)} placeholder="Type operator..." title={r.operator ? r.operator : "Not found in DB — type it here"} />
-                            <input className="quick-row-input" style={{ ...INP(), fontWeight: 600 }} value={r.vessel} onChange={e => updateQuickRow(r.id, "vessel", e.target.value.toUpperCase())} onKeyDown={jumpDown(1)} placeholder="VESSEL" />
-                            <input className="quick-row-input" style={INP()} value={r.port} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} onKeyDown={jumpDown(2)} placeholder="PORT" />
-                            <input className="quick-row-input" style={INP()} value={r.date} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} onKeyDown={jumpDown(3)} placeholder="DATE" />
-                            <input className="quick-row-input" style={{ ...INP(C.dim) }} value={r.direction} onChange={e => updateQuickRow(r.id, "direction", e.target.value)} onKeyDown={jumpDown(4)} placeholder="Any direction / options..." />
-                            <span title="Position last updated — excluded from output" style={{fontSize:13,color:C.dim}}>{quickUpdatedDate(r,allVessels)}</span>
+                            <input className="quick-row-input" style={INP(iOp)} value={String(r.operator||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "operator", e.target.value.toUpperCase())} onKeyDown={jumpDown(0)} placeholder="Type operator..." title={r.operator ? r.operator : "Not found in DB — type it here"} />
+                            <input className="quick-row-input" style={{ ...INP(), fontWeight: 600 }} value={String(r.vessel||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "vessel", e.target.value.toUpperCase())} onKeyDown={jumpDown(1)} placeholder="VESSEL" />
+                            <input className="quick-row-input" style={INP()} value={String(r.port||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} onKeyDown={jumpDown(2)} placeholder="PORT" />
+                            <input className="quick-row-input" style={INP()} value={String(r.date||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} onKeyDown={jumpDown(3)} placeholder="DATE" />
+                            <input className="quick-row-input" style={{ ...INP(C.dim) }} value={String(r.direction||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "direction", e.target.value.toUpperCase())} onKeyDown={jumpDown(4)} placeholder="Any direction / options..." />
+                            <span title="Position last updated — excluded from output" style={{fontSize:11,color:C.dim}}>{quickUpdatedDate(r,allVessels).toUpperCase()}</span>
                             <button onClick={() => deleteQuickRow(r.id)} style={{ background: "none", border: "none", color: "rgba(239,68,68,0.55)", cursor: "pointer", fontSize: 12, padding: 0 }}>✕</button>
                           </div>
                         );
@@ -2924,6 +2949,9 @@ Any direction`}</pre>
                 <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>Step 3 — Copy &amp; send</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:10}} aria-label="Operators included in output">
+                      {quickOperators.map(([key,name])=><label key={key} style={{fontSize:12,color:C.tx,display:"flex",alignItems:"center",gap:4}}><input type="checkbox" checked={!quickExcludedOperators.includes(key)} onChange={()=>toggleQuickOperator(key)}/>{quickDisplayText(name)}</label>)}
+                    </div>
 
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
