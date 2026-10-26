@@ -88,6 +88,11 @@ function reconcileQuickSelections(rows,vessels,selected,config,updatedFilter="al
   matching.forEach((v,key)=>{if(!key||existing.has(key))return;existing.add(key);kept.push({id:newPositionId(),operator:v.operator||"",vessel:v.vessel||"",port:v.openPort||"",date:fmtOpen(v.date),direction:"",updatedAt:v.updatedAt||v.updated_at||"",_quickTagImported:true});});
   return kept.length===rows.length&&kept.every((row,i)=>row===rows[i])?rows:kept;
 }
+function savedQuickRows(report){
+  const rows=report.rate_grid?.__quickEditor?.rows;
+  return Array.isArray(rows)?rows:Array.isArray(report.quick_rows)?report.quick_rows:[];
+}
+function savedQuickTitle(report){return report.rate_grid?.__quickEditor?.title??report.quick_title??"Available tonnage";}
 function quickUpdatedValue(row,vessels){
   if(row._quickTagImported){
     const source=vessels.find(v=>positionNameKey(v)===positionNameKey(row));
@@ -1455,7 +1460,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if(listSaveBusy)return;setListSaveBusy(true);setQuickSaveStatus("Saving...");
     try{
       const name=marketReportSaveName(quickReportName||quickTitle,"Quick Positions",quickSaveCopy,savedReports);
-      const payload={report_type:"Quick Positions",report_date:new Date().toISOString().slice(0,10),quick_title:quickTitle,quick_rows:quickRows,rate_grid:{__quickEditor:{name,selectedTags:quickSelectedTags,updatedFilter:quickUpdatedFilter,excludedOperators:quickExcludedOperators,tableSort:quickTableSort}}};
+      const payload={report_type:"Quick Positions",report_date:new Date().toISOString().slice(0,10),rate_grid:{__quickEditor:{name,title:quickTitle,rows:quickRows,selectedTags:quickSelectedTags,updatedFilter:quickUpdatedFilter,excludedOperators:quickExcludedOperators,tableSort:quickTableSort}}};
       const query=activeQuickId&&!quickSaveCopy?supabase.from("reports").update(payload).eq("id",activeQuickId):supabase.from("reports").insert([payload]);
       const {data,error}=await query.select("id").single();if(error)throw error;
       setActiveQuickId(data.id);setQuickReportName(name);setQuickSaveCopy(false);setQuickSaveStatus("Saved ✓");await loadSavedReports();
@@ -1465,12 +1470,12 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   async function loadQuickPositions(id){
     try{
       const {data,error}=await supabase.from("reports").select("*").eq("id",id).single();if(error)throw error;if(!data)return;
-      setQuickTitle(data.quick_title||"Available tonnage");setQuickReportName(data.rate_grid?.__quickEditor?.name||data.quick_title||"");setActiveQuickId(id);setQuickSaveCopy(false);
+      setQuickTitle(savedQuickTitle(data));setQuickReportName(data.rate_grid?.__quickEditor?.name||savedQuickTitle(data));setActiveQuickId(id);setQuickSaveCopy(false);
       setQuickUpdatedFilter(data.rate_grid?.__quickEditor?.updatedFilter||"all");
       setQuickExcludedOperators(data.rate_grid?.__quickEditor?.excludedOperators||[]);
       setQuickTableSort(data.rate_grid?.__quickEditor?.tableSort||{key:null,desc:false});
       setQuickSelectedTags(Array.isArray(data.rate_grid?.__quickEditor?.selectedTags)?data.rate_grid.__quickEditor.selectedTags:[]);
-      setQuickRows((Array.isArray(data.quick_rows)?data.quick_rows:[]).map(r=>({...r,id:r.id||newPositionId()})));setPendingClear(null);setSection("quick");
+      setQuickRows(savedQuickRows(data).map(r=>({...r,id:r.id||newPositionId()})));setPendingClear(null);setSection("quick");
     }catch(error){setQuickSaveStatus("Load failed: "+(error.message||error));}
   }
 
@@ -2024,6 +2029,15 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
               <div style={{fontSize:10,fontWeight:700,color:ACCENT,marginTop:14,marginBottom:7}}>INTER UKC</div>
               <button aria-pressed={quickSelectedTags.includes("__INTER_UKC__")} onClick={()=>toggleQuickTag("__INTER_UKC__")} style={{...SB,fontSize:10,padding:"4px 7px",background:quickSelectedTags.includes("__INTER_UKC__")?"rgba(88,166,255,0.2)":C.bg3,borderColor:quickSelectedTags.includes("__INTER_UKC__")?ACCENT:C.bd,color:quickSelectedTags.includes("__INTER_UKC__")?"#79c0ff":C.dim}}>INTER UKC</button>
             </div>
+            {quickOperators.length>0 ? (
+              <div aria-label="Operators included in output" style={{flex:"1 1 160px",minHeight:60,overflowY:"auto",borderTop:"1px solid "+C.bd,paddingTop:8}}>
+                <div style={{fontSize:10,fontWeight:700,color:ACCENT,marginBottom:7}}>OPERATORS</div>
+                {quickOperators.map(([key,name])=><label key={key} style={{fontSize:11,color:C.tx,display:"flex",alignItems:"flex-start",gap:6,padding:"4px 2px",cursor:"pointer"}}>
+                  <input type="checkbox" checked={!quickExcludedOperators.includes(key)} onChange={()=>toggleQuickOperator(key)} style={{width:12,height:12,margin:"1px 0 0",flexShrink:0,accentColor:ACCENT}}/>
+                  <span style={{minWidth:0,overflowWrap:"anywhere"}}>{quickDisplayText(name)}</span>
+                </label>)}
+              </div>
+            ) : <div style={{flex:1}}/>}
             {(Array.isArray(savedReports)?savedReports:[]).filter(r => r.report_type === "Quick Positions").length > 0 && (
               <div style={{ borderTop: "1px solid " + C.bd, paddingTop: 8, maxHeight: 160, overflowY: "auto" }}>
                 <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Saved</div>
@@ -2031,12 +2045,11 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                   <div key={r.id} onClick={() => loadQuickPositions(r.id)}
                     style={{ position:"relative",padding: "6px 25px 6px 7px", borderRadius: 3, background: C.bg3, cursor: "pointer", marginBottom: 3 }}>
                     <button aria-label="Delete saved report" title="Delete saved report" onClick={e=>{e.stopPropagation();setPendingSavedDelete(r);setDeleteReportError("");}} style={{position:"absolute",right:4,top:5,background:"none",border:0,color:"#fb7185",cursor:"pointer",fontSize:15}}>×</button><div style={{ fontSize: 11, fontWeight: 700, color: ACCENT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{savedMarketReportName(r)}</div>
-                    <div style={{ fontSize: 9, color: C.dim }}>{(r.quick_rows || []).length} rows · {new Date(r.report_date).toLocaleDateString("en-GB")}</div>
+                    <div style={{ fontSize: 9, color: C.dim }}>{savedQuickRows(r).length} rows · {new Date(r.report_date).toLocaleDateString("en-GB")}</div>
                   </div>
                 ))}
               </div>
             )}
-            <div style={{ flex: 1 }} />
             <div style={{ paddingTop: 8, borderTop: "1px solid " + C.bd }}>
               <div style={{ fontSize: 9, color: C.faint, marginBottom: 4 }}>Output format:</div>
               <pre style={{ margin: 0, fontSize: 9, color: C.dim, fontFamily: "monospace", lineHeight: 1.7, background: C.bg3, padding: "6px 8px", borderRadius: 4 }}>{`|| Available tonnage ||
@@ -2979,9 +2992,6 @@ Any direction`}</pre>
                 <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>Step 3 — Copy &amp; send</div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:10}} aria-label="Operators included in output">
-                      {quickOperators.map(([key,name])=><label key={key} style={{fontSize:12,color:C.tx,display:"flex",alignItems:"center",gap:4}}><input type="checkbox" checked={!quickExcludedOperators.includes(key)} onChange={()=>toggleQuickOperator(key)}/>{quickDisplayText(name)}</label>)}
-                    </div>
 
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
