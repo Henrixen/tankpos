@@ -4,6 +4,20 @@ import { loadRates, saveRates } from "./supabaseHelpers";
 import { calcTCE, calcEuEts } from "./TCECalculator";
 import { supabase } from "./supabaseclient";
 
+// Stable component identity keeps both route fields focused through parent saves.
+function RouteLabel({from,to,onSave}){
+  const fromRef=useRef(null),toRef=useRef(null);
+  useEffect(()=>{if(fromRef.current&&document.activeElement!==fromRef.current)fromRef.current.value=from||"";},[from]);
+  useEffect(()=>{if(toRef.current&&document.activeElement!==toRef.current)toRef.current.value=to||"";},[to]);
+  const fieldStyle={width:"100%",minWidth:0,boxSizing:"border-box",background:"transparent",border:"1px solid transparent",borderRadius:3,color:"rgba(230,241,255,0.95)",fontFamily:"inherit",fontSize:12,fontWeight:400,padding:"1px 2px",outline:"none",textOverflow:"ellipsis"};
+  return <span style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:5,width:"100%",alignItems:"center"}}>
+    {[["from",from,fromRef,"Load port"],["to",to,toRef,"Discharge port"]].map(([field,value,ref,label])=><input key={field} ref={ref} defaultValue={value||""} aria-label={label} title={`${label}: ${value||""}`} style={fieldStyle}
+      onFocus={e=>{e.currentTarget.style.borderColor=C.blue;e.currentTarget.style.background="#162540";e.currentTarget.select();}}
+      onBlur={e=>{e.currentTarget.style.borderColor="transparent";e.currentTarget.style.background="transparent";if(e.currentTarget.value!==(value||""))onSave(field,e.currentTarget.value);}}
+      onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();e.currentTarget.blur();}if(e.key==="Escape"){e.preventDefault();e.currentTarget.value=value||"";e.currentTarget.blur();}}}/>) }
+  </span>;
+}
+
 function getBunkerState(){
   if(!window._bunkerState)window._bunkerState={val:TCE_DEFAULTS.bunker,listeners:[]};
   return window._bunkerState;
@@ -154,7 +168,6 @@ function RateMatrix({onBunkerChange}){
   // Editable route labels
   const [euRoutes,setEuRoutes]=useState(()=>EU_ROUTES.map(r=>({...r})));
   const [rateRoutes,setRateRoutes]=useState(()=>RATE_ROUTES.map(rg=>({...rg,routes:rg.routes.map(r=>({...r}))})));
-  const [editingRoute,setEditingRoute]=useState(null);
   const [pendingDeepseaDelete,setPendingDeepseaDelete]=useState(null); // {section,rgIdx,rtIdx,field}
   const [matrixBunker,setMatrixBunker]=useState(window._bunkerState?.val||TCE_DEFAULTS.bunker);
 
@@ -260,34 +273,6 @@ function RateMatrix({onBunkerChange}){
     setRateRoutes(next);saveRoutes(euRoutes,next);
   }
 
-  function RouteLabel({section,rgIdx,rtIdx,from,to}){
-    const key=section+"-"+rgIdx+"-"+rtIdx;
-    const isEdit=editingRoute===key;
-    if(isEdit){
-      return(
-        <span style={{display:"inline-flex",gap:2,alignItems:"center"}}>
-          {section==="rg"&&<button type="button" title="Delete route" onMouseDown={e=>e.preventDefault()} onClick={()=>deleteDeepseaRoute(rgIdx,rtIdx)} style={{background:"#612332",color:"#ffb7b7",border:"1px solid #ad4b57",borderRadius:3,cursor:"pointer",fontSize:11}}>Delete</button>}
-          <input autoFocus defaultValue={from}
-            onBlur={e=>{section==="eu"?updateEuRoute(rtIdx,"from",e.target.value):updateRgRoute(rgIdx,rtIdx,"from",e.target.value);setEditingRoute(null);}}
-            onKeyDown={e=>{if(e.key==="Tab"||e.key==="Enter"){e.preventDefault();const v=e.target.value;section==="eu"?updateEuRoute(rtIdx,"from",v):updateRgRoute(rgIdx,rtIdx,"from",v);e.target.blur();}if(e.key==="Escape")setEditingRoute(null);}}
-            style={{width:52,background:"#162540",border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"0 3px",outline:"none"}}/>
-          <span style={{color:"rgba(120,160,220,0.45)",fontSize:12}}>→</span>
-          <input defaultValue={to}
-            onBlur={e=>{section==="eu"?updateEuRoute(rtIdx,"to",e.target.value):updateRgRoute(rgIdx,rtIdx,"to",e.target.value);setEditingRoute(null);}}
-            onKeyDown={e=>{if(e.key==="Enter"||e.key==="Escape"){section==="eu"?updateEuRoute(rtIdx,"to",e.target.value):updateRgRoute(rgIdx,rtIdx,"to",e.target.value);setEditingRoute(null);}}}
-            style={{width:52,background:"#162540",border:"1px solid "+C.blue,borderRadius:3,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"0 3px",outline:"none"}}/>
-        </span>
-      );
-    }
-    return(
-      <span onClick={()=>setEditingRoute(key)} style={{cursor:"pointer"}} title="Click to edit route">
-        <span style={{fontWeight:400,fontSize:12,color:"rgba(230,241,255,0.95)"}}>{from}</span>
-        <span style={{color:"rgba(120,160,220,0.45)",fontSize:12}}> → </span>
-        <span style={{fontWeight:400,fontSize:12,color:"rgba(230,241,255,0.95)"}}>{to}</span>
-        <span style={{color:"rgba(120,160,220,0.45)",fontSize:10,marginLeft:3,opacity:0.8}}>✎</span>
-      </span>
-    );
-  }
 
   function onSave(key,val){
     const prev=matrixRef.current[key]||{};
@@ -371,7 +356,7 @@ function RateMatrix({onBunkerChange}){
         <table style={{minWidth:0,borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400,background:C.bg2,border:"1px solid "+C.bd,borderRadius:6}}>
           <thead><tr><th style={{...thS,width:"48%",fontWeight:600,textAlign:"left",color:"#b9d6fa"}}>Intra Europe</th><th style={{...thS,width:"26%",fontWeight:400}}>Rate LS</th><th style={{...thS,width:"26%",fontWeight:400}}>TCE</th></tr></thead>
           <tbody>{euRoutes.map((rt,i)=><tr key={rt.id} style={{background:i%2?"#111f34":"#0a172a"}}>
-            <td style={{...tdR,paddingLeft:3}}><RouteLabel section="eu" rgIdx={0} rtIdx={i} from={rt.from} to={rt.to}/></td>
+            <td style={{...tdR,paddingLeft:3}}><RouteLabel from={rt.from} to={rt.to} onSave={(field,value)=>updateEuRoute(i,field,value)}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-rate"} col={REGION_COLORS.Europe} rev={rev}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-tce"} col={C.green} rev={rev}/></td>
           </tr>)}</tbody>
@@ -379,7 +364,7 @@ function RateMatrix({onBunkerChange}){
         <table style={{minWidth:0,borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontWeight:400,background:C.bg2,border:"1px solid "+C.bd,borderRadius:6}}>
           <thead><tr><th style={{...thS,width:"40%",fontWeight:600,textAlign:"left",color:C.blue}}>Deepsea</th><th style={{...thS,width:"20%",fontWeight:400}}>5k pmt</th><th style={{...thS,width:"20%",fontWeight:400}}>10k pmt</th><th style={{...thS,width:"20%",fontWeight:400}}>15–20k pmt</th></tr></thead>
           <tbody>{rateRoutes.flatMap((rg,rgIdx)=>rg.routes.map((rt,rtIdx)=><tr key={rt.id} style={{background:(rateRoutes.slice(0,rgIdx).reduce((n,g)=>n+g.routes.length,0)+rtIdx)%2?"#111f34":"#0a172a"}}>
-            <td style={{...tdR,paddingLeft:3}}><div style={{display:"flex",alignItems:"center",gap:2,minWidth:0}}><span style={{flex:1,minWidth:0}}><RouteLabel section="rg" rgIdx={rgIdx} rtIdx={rtIdx} from={rt.from} to={rt.to}/></span><button type="button" title="Delete this route" aria-label={`Delete ${rt.from} to ${rt.to}`} onClick={()=>deleteDeepseaRoute(rgIdx,rtIdx)} style={{border:"none",background:"transparent",color:"#d87979",fontSize:11,cursor:"pointer",padding:"0 2px",flexShrink:0}}>×</button></div></td>
+            <td style={{...tdR,paddingLeft:3}}><div style={{display:"flex",alignItems:"center",gap:2,minWidth:0}}><span style={{flex:1,minWidth:0}}><RouteLabel from={rt.from} to={rt.to} onSave={(field,value)=>updateRgRoute(rgIdx,rtIdx,field,value)}/></span><button type="button" title="Delete this route" aria-label={`Delete ${rt.from} to ${rt.to}`} onClick={()=>deleteDeepseaRoute(rgIdx,rtIdx)} style={{border:"none",background:"transparent",color:"#d87979",fontSize:11,cursor:"pointer",padding:"0 2px",flexShrink:0}}>×</button></div></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-5kt"} col={REGION_COLORS[rg.region]} rev={rev}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-10kt"} col={REGION_COLORS[rg.region]} rev={rev}/></td>
             <td style={{...tdR,padding:0}}><RCell matrixRef={matrixRef} onSave={onSave} onComment={onComment} ck={rt.id+"-18kt"} col={REGION_COLORS[rg.region]} rev={rev}/></td>
