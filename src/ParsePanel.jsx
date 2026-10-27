@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
+import {createPortal} from "react-dom";
+import {getUsageEntries,getUsageCache,subscribeUsage,downloadUsageCSV} from "./aiUsage";
 import * as XLSX from "xlsx";
 import { C } from "./constants";
 import { loadImg, normaliseQty, rollOpenDateForward, dbLookup, resolveVesselName } from "./utils";
@@ -29,7 +31,8 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
   const [mode,setMode]=useState(lockedMode||"pos");
   const [text,setText]=useState("");const [img,setImg]=useState(null);
   const [busy,setBusy]=useState(false);const [status,setStatus]=useState(null);
-  const fRef=useRef(null);const xlsRef=useRef(null);
+  const fRef=useRef(null);const xlsRef=useRef(null);const parseLock=useRef(false);
+  const [usageOpen,setUsageOpen]=useState(false);
 
   // Auto-load vesselDB if empty (for spec enrichment)
   useEffect(() => {
@@ -39,8 +42,8 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
   }, [mode, vesselDB]);
 
   async function handleXls(file){
-    if(!file)return;
-    setBusy(true);setStatus({t:"info",m:"Reading spreadsheet…"});
+    if(!file||parseLock.current)return;
+    parseLock.current=true;setBusy(true);setStatus({t:"info",m:"Reading spreadsheet…"});
     try{
       const buf=await file.arrayBuffer();
       const wb=XLSX.read(buf,{type:"array",cellDates:true});
@@ -92,13 +95,14 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
         const lk=onAddCargoes(parsed);
         setStatus({t:"success",m:"✓ "+parsed.length+" fixtures imported from "+rows.length+" rows"+(lk?", "+lk+" pos updated":"")});
       }
-    }catch(e){setStatus({t:"error",m:"Import error: "+e.message});}finally{setBusy(false);}
+    }catch(e){setStatus({t:"error",m:"Import error: "+e.message});}finally{parseLock.current=false;setBusy(false);}
   }
 
   function onPaste(e){for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}
   async function go(){
+    if(parseLock.current)return;
     if(!text.trim()&&!img){setStatus({t:"error",m:"Paste text or attach image."});return;}
-    setBusy(true);setStatus({t:"info",m:img?"Reading image…":"Parsing…"});
+    parseLock.current=true;setBusy(true);setStatus({t:"info",m:img?"Reading image…":"Parsing…"});
     try{
       const knownVessels=vessels.map(v=>v.vessel).filter(Boolean);const knownCargo=[...new Set((cargoes||[]).map(c=>c.vessel).filter(Boolean))];const known=[...new Set([...knownVessels,...knownCargo])];
       if(mode==="pos"){
@@ -163,7 +167,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
         await onAddCargoes(stamped);setText("");setImg(null);
         setStatus({t:"success",m:"✓ "+p.length+" fixture(s) submitted"+(batch.source?" · Source: "+batch.source:"")});
       }
-    }catch(e){setStatus({t:"error",m:e.message});}finally{setBusy(false);}
+    }catch(e){setStatus({t:"error",m:e.message});}finally{parseLock.current=false;setBusy(false);}
   }
   const sc=status?.t==="success"?C.green:status?.t==="error"?C.red:C.blue;
   return(
@@ -185,12 +189,31 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
         <button onClick={()=>fRef.current?.click()} title="Upload image / screenshot" style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 10px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>🖼</button>
         {(mode==="pos"||mode==="cargo")&&<input type="text" value={posDate} onChange={e=>setPosDate(e.target.value)} placeholder="DD/MM/YYYY" title={mode==="pos"?"Date of this position list":"Date of this cargo list"} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:3,color:C.dim,fontFamily:"inherit",fontSize:12,padding:"2px 5px",outline:"none",width:118,flexShrink:0}}/>}
         <button onClick={()=>xlsRef.current?.click()} title="Upload Excel / CSV" style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.dim,padding:"3px 8px",fontFamily:"inherit",fontSize:12,cursor:"pointer",flexShrink:0}}>📊</button>
+        <button type="button" onClick={()=>setUsageOpen(true)} title="Actual token usage returned for requests in this browser" style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:"#79c0ff",padding:"4px 7px",fontSize:11,cursor:"pointer"}}>Usage</button>
         <input ref={fRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{loadImg(e.target.files?.[0],setImg);e.target.value="";}}/>
         <input ref={xlsRef} type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}} onChange={e=>handleXls(e.target.files?.[0])}/>
       </div>
+      {usageOpen&&createPortal(<ParsingUsageDialog onClose={()=>setUsageOpen(false)}/>,document.body)}
       {status&&<div style={{padding:"2px 8px 6px"}}><div style={{padding:"4px 10px",borderRadius:5,fontSize:12,background:sc+"18",color:sc,border:"1px solid "+sc+"44"}}>{status.m}</div></div>}
     </div>
   );
+}
+
+function ParsingUsageDialog({onClose}){
+ const [,setVersion]=useState(0);
+ useEffect(()=>subscribeUsage(()=>setVersion(x=>x+1)),[]);
+ const rows=getUsageEntries(),totals=getUsageCache();
+ const td={padding:"7px 8px",borderBottom:"1px solid #29405b",textAlign:"left",whiteSpace:"nowrap",fontSize:11};
+ const button={background:"#183956",color:"#cce8ff",border:"1px solid #46749c",borderRadius:4,padding:"7px 11px",cursor:"pointer"};
+ return <div onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:"fixed",inset:0,zIndex:60000,background:"#000a",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}><div role="dialog" aria-modal="true" aria-label="Parsing token usage" style={{width:"min(1100px,96vw)",maxHeight:"85vh",overflow:"auto",padding:18,borderRadius:8,border:"1px solid #46749c",background:"#0b1b30",color:"#d8eaff",fontFamily:"Arial,sans-serif"}}>
+ <div style={{display:"flex",alignItems:"center",gap:10}}><b style={{fontSize:17}}>Parsing usage · this browser</b><button style={{...button,marginLeft:"auto"}} onClick={downloadUsageCSV}>Export CSV</button><button style={button} onClick={onClose}>Close</button></div>
+ <p style={{fontSize:12,color:"#9bb9d8",lineHeight:1.6}}>Actual token counts when returned by /api/claude. Estimated standard API cost, not an Anthropic invoice or organisation total. Includes only instrumented requests in this browser (last 3,000). Other devices and separate report/image endpoints are not included. No usage-log database polling.</p>
+ <div style={{display:"flex",flexWrap:"wrap",gap:20,fontSize:13,marginBottom:12}}><span>Requests: <b>{totals.requests}</b></span><span>Input tokens: <b>{totals.input_tokens.toLocaleString()}</b></span><span>Output tokens: <b>{totals.output_tokens.toLocaleString()}</b></span><span>Today's recorded estimate: <b>${totals.today.toFixed(4)}</b>{totals.incomplete?" · incomplete":""}</span></div>
+ {(totals.usage_missing>0||totals.unpriced>0)&&<div style={{fontSize:12,color:"#f2c27d",paddingBottom:12}}>Missing usage: {totals.usage_missing} request(s). Unpriced: {totals.unpriced}. The server must forward Claude's usage and actual model to price those requests. They are not assumed to be free.</div>}
+ {totals.storage_failed&&<p>History could not be saved to browser storage. Export it before closing this page.</p>}
+ <div style={{overflowX:"auto"}}><table style={{borderCollapse:"collapse",width:"100%"}}><thead><tr>{["Time (Oslo)","User","Action","Actual model","Input","Output","Est. USD","Status"].map(h=><th style={td} key={h}>{h}</th>)}</tr></thead><tbody>{rows.slice(0,100).map(r=><tr key={r.id} title={`Request: ${r.request_id||r.id} · ${r.duration_ms||0} ms · ${r.input_chars||0} prompt characters${r.error?" · "+r.error:""}`}><td style={td}>{new Date(r.timestamp).toLocaleString("en-GB",{timeZone:"Europe/Oslo"})}</td><td style={td}>{r.user}</td><td style={td}>{r.action}</td><td style={td}>{r.model||"Not returned"}</td><td style={td}>{r.input_tokens??"Unknown"}</td><td style={td}>{r.output_tokens??"Unknown"}</td><td style={td}>{r.cost_usd==null?"Unknown":r.cost_usd.toFixed(6)}</td><td style={{...td,color:Number(r.status)>=400?"#fca5a5":"#a9d3ee"}}>{r.status}</td></tr>)}</tbody></table></div>
+ {!rows.length&&<div style={{padding:20,fontSize:12}}>No requests recorded yet. Parse something, then open Usage again. Identical cached parses do not make a new AI request.</div>}
+ </div></div>;
 }
 
 // ─── Inline edit cell ─────────────────────────────────────────────────────────
