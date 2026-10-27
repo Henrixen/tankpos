@@ -1488,10 +1488,9 @@ function Dashboard({vessels, cargoes, history, onImportFixingWindow}) {
           .dash-vlcc-block{height:270px!important;min-height:270px!important}
           .dash-vlcc-head{min-height:86px!important;margin:0!important;padding-top:2px!important}
           .dash-vlcc-earnings{
-            text-align:left!important;transform:none!important;padding-top:22px!important;
+            text-align:left!important;transform:none!important;padding-top:0!important;
           }
           .dash-vlcc-earnings > div:first-child{font-size:30px!important}
-          .dash-vlcc-head > div:last-child{top:54px!important;right:0!important}
 
           /* Worldscale charts: fuller graph area, less dead space */
           .dash-ws-wrap{height:390px!important;min-height:390px!important}
@@ -1622,13 +1621,15 @@ function Dashboard({vessels, cargoes, history, onImportFixingWindow}) {
             </div>
             {shippingPriceTab==="vlcc" ? (
               <>{activeVlccLatest ? <div className="dash-vlcc-block" style={{display:"flex",flexDirection:"column",height:346,minHeight:314}}>
-                <div className="dash-vlcc-head" style={{position:"relative",minHeight:46,margin:"-14px 0 0"}}>
-                  <div style={{position:"absolute",left:0,top:4,fontSize:9.5,fontWeight:850,color:"rgba(185,215,245,.72)",textTransform:"uppercase",letterSpacing:".06em"}}>{showingFixtureChart?"VLCC FIXTURE EARNINGS · TANKERS INTERNATIONAL":"TD3C MEG → China · Baltic"}</div>
-                  <div className="dash-vlcc-earnings" style={{textAlign:"center",paddingTop:0,transform:"translateY(-3px)"}}>
+                <div className="dash-vlcc-head" style={{display:"flex",flexDirection:"column",gap:6,minWidth:0,flexShrink:0,margin:"6px 0 8px"}}>
+                  <div style={{lineHeight:1.4,overflowWrap:"anywhere",fontSize:9.5,fontWeight:850,color:"rgba(185,215,245,.72)",textTransform:"uppercase",letterSpacing:".06em"}}>{showingFixtureChart?"VLCC FIXTURE EARNINGS · TANKERS INTERNATIONAL":"TD3C MEG → China · Baltic"}</div>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,minWidth:0}}>
+                  <div className="dash-vlcc-earnings" style={{textAlign:"left",minWidth:0,paddingTop:0}}>
                     <div style={{fontSize:36,fontWeight:900,color:D.tx,lineHeight:1}}>${Math.round(Number(activeVlccLatest.tce)/1000).toLocaleString("en-US").replace(/,/g," ")}k<span style={{fontSize:10.5,color:"rgba(190,215,245,.72)",fontWeight:650}}>/day</span></div>
                     <div style={{fontSize:9.5,color:"rgba(190,215,245,.66)",marginTop:3}}>{showingFixtureChart?`${activeVlccLatest.isoDate||activeVlccLatest.date} · ${fixtureChart.length} fixtures · reported earnings`:`${vlcc.latest.date||""} · ${vlcc.latest.ws!=null?"WS "+vlcc.latest.ws:"Baltic weekly"} · ${(vlcc.history||[]).length} obs`}</div>
                   </div>
-                  <div style={{position:"absolute",right:0,top:29}}><HorizonButtons value={vlccPeriod} onChange={setVlccPeriod} options={["14D","3M","6M","1Y","ALL"]}/></div>
+                  <div style={{marginLeft:"auto",maxWidth:"100%"}}><HorizonButtons value={vlccPeriod} onChange={setVlccPeriod} options={["14D","3M","6M","1Y","ALL"]}/></div>
+                  </div>
                 </div>
                 <div style={{flex:1,minHeight:0}}><VlccSparkline history={activeVlccHistory} period={vlccPeriod}/></div>
               </div> : <div style={{fontSize:11,color:vlccError?D.red:D.faint,padding:"10px 0"}}>
