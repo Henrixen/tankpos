@@ -37,6 +37,7 @@ const CalendarTab    = React.lazy(()=>import("./CalendarTab"));
 const SettingsTab    = React.lazy(()=>import("./SettingsTab"));
 const ReportsTab     = React.lazy(()=>import("./ReportsTab"));
 const FreightMapTab  = React.lazy(()=>import("./FreightMapTab"));
+const FreightsTCEHub = React.lazy(()=>import("./FreightsTCEHub"));
 const VesselPopout   = React.lazy(()=>import("./VesselPopout"));
 const ClientsTab     = React.lazy(()=>import("./ClientsTab"));
 const VesselUploader = React.lazy(()=>import("./VesselUploader"));
@@ -156,7 +157,7 @@ const NAV_CLOUD_KEY="navigation_config";
 const NAV_ITEMS=[
  ["pos","Positions","#58a6ff","🚢"],["cargo2","Cargoes","#faa356","🛢"],["fix","Fixing","#c792ea","◎"],["tcv","Time Charter","#fb923c","◷"],
  ["clients","Clients","#a8e6a3","♟"],["matrix","Matrix","#43e97b","⌗"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","∑"],
- ["dash","Dashboard","#43e97b","▦"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▤"],["map","Freight Map","#10b981","⌁"],
+ ["dash","Dashboard","#43e97b","▦"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▤"],["map","Freights | TCE","#10b981","⌁"],
  ["cal","Calendar","#4fc3f7","◫"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","⚓"],["newbuilds","Newbuilds","#fbbf24","△"]
 ];
 function navDefault(){return{mode:"classic",collapsed:false,order:NAV_ITEMS.map(x=>x[0]),hidden:[],groups:[
@@ -1599,9 +1600,10 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
     return()=>window.removeEventListener("navigation-config-updated",h);
   },[]);
   const navMeta=useMemo(()=>Object.fromEntries(NAV_ITEMS.map(([id,label,col,icon])=>[id,{label,col,icon}])),[]);
-  const navIds=useMemo(()=>navConfig.order.filter(id=>(!guestMode||userTabs.includes(id))&&!navConfig.hidden.includes(id)),[navConfig,guestMode,userTabs]);
+  const navIds=useMemo(()=>navConfig.order.filter(id=>id!=="tce"&&(!guestMode||userTabs.includes(id)||(id==="map"&&userTabs.includes("tce")))&&!navConfig.hidden.includes(id)),[navConfig,guestMode,userTabs]);
   const navCount=id=>id==="pos"?vessels.length:id==="cargo"?(cargoTotal||cargoes.length):0;
-  const goNav=id=>React.startTransition(()=>{setTab(id);setBucketFilters(new Set());setMobileNavOpen(false)});
+  const [freightHubTab,setFreightHubTab]=useState("tce");
+  const goNav=id=>React.startTransition(()=>{if(id==="tce")setFreightHubTab("tce");setTab(id==="tce"?"map":id);setBucketFilters(new Set());setMobileNavOpen(false)});
  const [posFileDaysBack,setPosFileDaysBack]=useState(90);
 const [posPage,setPosPage]=useState(1);
 const POS_PAGE_SIZE=100;
@@ -4092,11 +4094,6 @@ const filtV=useMemo(()=>{
         )}
 
         {/* ── DASHBOARD ── */}
-        {tab==="tce"&&(
-          <div style={{padding:"14px 0"}}>
-            <Suspense fallback={<TabFallback/>}><TCECalculator/></Suspense>
-          </div>
-        )}
         {tab==="dash"&&(
           <Suspense fallback={<TabFallback/>}><Dashboard vessels={vessels} cargoes={cargoes} history={history||[]} onImportFixingWindow={handleImportFixingWindow}/></Suspense>
         )}
@@ -4121,7 +4118,7 @@ const filtV=useMemo(()=>{
           </div>
         )}
         {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={reportCargoes} dashboardFixingImport={dashboardFixingImport} onDashboardFixingImportHandled={()=>setDashboardFixingImport(null)}/></Suspense></div>}
-        {tab==="map"&&<Suspense fallback={<TabFallback/>}><FreightMapTab/></Suspense>}
+        {(tab==="map"||tab==="tce")&&<Suspense fallback={<TabFallback/>}><FreightsTCEHub active={tab==="tce"?"tce":freightHubTab} onActive={setFreightHubTab} allowed={!guestMode?["tce","freights","map","assessment"]:[...(userTabs.includes("tce")?["tce"]:[]),...(userTabs.includes("map")?["freights","map","assessment"]:[])]}/></Suspense>}
       </TabErrorBoundary>
       </div>
 

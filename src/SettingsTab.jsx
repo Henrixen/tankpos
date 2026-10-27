@@ -231,8 +231,8 @@ const UI_ZOOM_KEY="signal_ui_zoom";
 const UI_ZOOM_CLOUD_KEY="ui_zoom";
 const NAV_ITEMS=[
  ["pos","Positions","#58a6ff","⌖"],["cargo2","Cargoes","#faa356","▤"],["fix","Fixing","#c792ea","✓"],["tcv","Time Charter","#fb923c","◷"],
- ["clients","Clients","#a8e6a3","♙"],["matrix","Matrix","#43e97b","▦"],["projects","Projects","#4fc3f7","◇"],["tce","TCE","#faa356","⚡"],
- ["dash","Dashboard","#43e97b","▥"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▧"],["map","Freight Map","#10b981","⌁"],
+ ["clients","Clients","#a8e6a3","♙"],["matrix","Matrix","#43e97b","▦"],["projects","Projects","#4fc3f7","◇"],["tce","TCE (under Freights | TCE)","#faa356","⚡"],
+ ["dash","Dashboard","#43e97b","▥"],["notes","Notes","#f472b6","✎"],["reports","Reports","#6366f1","▧"],["map","Freights | TCE","#10b981","⌁"],
  ["cal","Calendar","#4fc3f7","□"],["settings","Settings","#94a3b8","⚙"],["vessels","Fleet DB","#38bdf8","▣"],["fleet","Fleet","#2dd4bf","◈"],["newbuilds","Newbuilds","#fbbf24","△"]
 ];
 function navDefault(){return{mode:"classic",collapsed:false,order:NAV_ITEMS.map(x=>x[0]),hidden:[],groups:[
