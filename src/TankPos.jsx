@@ -27,6 +27,8 @@ export default function TankPos(){
   const cargoesRef=useRef([]);
   cargoesRef.current=cargoes;
   const initialRead=useRef(Promise.resolve());
+  const positionRefreshVersion=useRef(new Map());
+  const positionSyncSince=useRef(new Date(Date.now()-60000).toISOString());
   const saveQueueRef=useRef(new Map());
   const ownPositionAcks=useRef(new Map()),ownCargoAcks=useRef(new Map());
   useEffect(()=>{vesselsRef.current=vessels;},[vessels]);
@@ -499,13 +501,27 @@ export default function TankPos(){
       const next=new Map(cargoesRef.current.map(c=>[String(c.id),c]));
       for(const event of events){
         const row=event.eventType==='DELETE'?event.old:event.new,key=String(row?.id);
-        if(event.eventType==='DELETE')next.delete(key);else if(row?.id!=null)next.set(key,normaliseCargo(row));
+        if(event.eventType==='DELETE')next.delete(key);else if(row?.id!=null){const old=next.get(key);if(!old||!(Date.parse(old._brokerRaw?.updated)>Date.parse(row.updated)))next.set(key,normaliseCargo(row));}
       }
       const rows=[...next.values()];cargoesRef.current=rows;setCargoes(rows);setCargoTotal(rows.length);
     });
   }
   async function livePositions(identities){
-    const names=[...new Set(identities.map(x=>x.name).filter(Boolean))];
+    const version=Symbol('position-refresh');
+    const identityKeys=x=>[x.name&&'name:'+String(x.name).toUpperCase(),x.imo!=null&&'imo:'+String(x.imo)].filter(Boolean);
+    const keys=identities.flatMap(identityKeys);keys.forEach(k=>positionRefreshVersion.current.set(k,version));
+    const currentIdentity=x=>identityKeys(x).every(k=>!keys.includes(k)||positionRefreshVersion.current.get(k)===version);
+    const direct=identities.filter(x=>x.overrideEvent&&vesselsRef.current.some(v=>(x.imo!=null&&String(x.imo)===v.imoNo)||String(x.name).toUpperCase()===v.vessel));
+    if(direct.length)await applyWhenIdle(()=>{
+      const next=vesselsRef.current.map(v=>{
+        const event=direct.find(x=>(x.imo!=null&&String(x.imo)===v.imoNo)||String(x.name).toUpperCase()===v.vessel)?.overrideEvent;
+        if(!event||!currentIdentity({name:v.vessel,imo:v.imoNo}))return v;
+        const source=v._brokerSource?mapBrokerPosition(v._brokerSource):v;
+        return applyBrokerOverride({...source,coating:source.coating||(!v._brokerOverrides?.coating?v.coating:source.coating),flag:v.flag},event.eventType==='DELETE'?null:event.new);
+      });vesselsRef.current=next;setVessels(next);
+    });
+    identities=identities.filter(x=>!direct.includes(x));if(!identities.length)return;
+    const names=[...new Set(identities.filter(x=>x.imo==null||x.imo==='').map(x=>x.name).filter(Boolean))];
     const imos=[...new Set(identities.map(x=>x.imo!=null?String(x.imo):null).filter(Boolean))];
     const base=[],overrides=[];
     for(let offset=0;offset<Math.max(names.length,imos.length);offset+=50){
@@ -515,7 +531,7 @@ export default function TankPos(){
           supabase.from('positions_latest').select('*').in(column,values).limit(1000),
           supabase.from('vessel_overrides').select('*').in(column,values).limit(1000)
         ]);
-        if(error||manualError)throw error||manualError;base.push(...(data||[]));overrides.push(...(manual||[]));
+        if(error||manualError)throw new Error('Position refresh: '+(error||manualError).message);base.push(...(data||[]));overrides.push(...(manual||[]));
       }
     }
     const key=v=>v.imoNo?'imo:'+v.imoNo:'name:'+String(v.vessel||'').toUpperCase();
@@ -525,35 +541,39 @@ export default function TankPos(){
     await applyWhenIdle(()=>{
       const matching=v=>identities.some(x=>(x.imo!=null&&String(x.imo)===v.imoNo)||(x.name&&String(x.name).toUpperCase()===v.vessel));
       const next=[];
-      for(const v of vesselsRef.current){if(!matching(v)){next.push(v);continue;}const replacement=mapped.get(key(v));if(replacement){next.push(replacement);mapped.delete(key(v));}}
-      next.push(...mapped.values());vesselsRef.current=next;setVessels(next);
+      for(const v of vesselsRef.current){if(!matching(v)||!currentIdentity({name:v.vessel,imo:v.imoNo})){next.push(v);mapped.delete(key(v));continue;}const replacement=mapped.get(key(v));if(replacement){next.push(replacement);mapped.delete(key(v));}}
+      next.push(...[...mapped.values()].filter(v=>currentIdentity({name:v.vessel,imo:v.imoNo})));vesselsRef.current=next;setVessels(next);
     });
   }
   async function brokerReconcile(){
     await initialRead.current;
     const meta=async(table,columns)=>{
-      const all=[];for(let from=0;;from+=1000){const {data,error}=await supabase.from(table).select(columns).order(table==='cargoes'?'id':'vessel_name',{ascending:true}).range(from,from+999);if(error)throw error;all.push(...(data||[]));if(!data||data.length<1000)break;}return all;
+      const all=[];for(let from=0;;from+=1000){const {data,error}=await supabase.from(table).select(columns).order(table==='cargoes'?'id':'vessel_name',{ascending:true}).range(from,from+999);if(error)throw new Error(table+' metadata: '+error.message);all.push(...(data||[]));if(!data||data.length<1000)break;}return all;
     };
     // Metadata only after subscribing/reconnecting or returning to the page.
     // Normal live events do not re-download the full tables.
-    const [cm,pm,om]=await Promise.all([meta('cargoes','id,updated'),meta('positions_latest','vessel_name,imo_no,updated_at'),meta('vessel_overrides','vessel_name,imo_no,updated_at')]);
+    const catchupStarted=new Date().toISOString();
     const currentCargo=new Map(cargoesRef.current.map(c=>[String(c.id),c]));
+    const changed=async(table,column)=>{
+      const all=[];for(let offset=0;;offset+=500){
+        const {data,error}=await supabase.from(table).select('vessel_name,'+column).gte(column,positionSyncSince.current).order(column,{ascending:true}).order('vessel_name',{ascending:true}).range(offset,offset+499);
+        if(error)throw new Error(table+' catch-up: '+error.message);
+        all.push(...(data||[]));if(!data||data.length<500)break;
+      }return all;
+    };
+    // Query changed base records, never repeatedly sort/page the unified view.
+    const [cm,manual,external,om]=await Promise.all([meta('cargoes','id,updated'),changed('positions','updated_at'),changed('positions_external','last_update_spotship'),changed('vessel_overrides','updated_at')]);
     const cargoIds=new Set(cm.map(c=>String(c.id))),cargoChanges=[];
     for(const c of cm){const old=currentCargo.get(String(c.id));if(!old||old._brokerRaw?.updated!==c.updated)cargoChanges.push(c.id);}
-    const events=cargoesRef.current.filter(c=>!cargoIds.has(String(c.id))).map(c=>({eventType:'DELETE',old:{id:c.id}}));
+    const events=[...currentCargo.values()].filter(c=>!cargoIds.has(String(c.id))).map(c=>({eventType:'DELETE',old:{id:c.id}}));
     for(let i=0;i<cargoChanges.length;i+=100){const {data,error}=await supabase.from('cargoes').select('*').in('id',cargoChanges.slice(i,i+100));if(error)throw error;(data||[]).forEach(row=>events.push({eventType:'UPDATE',new:row}));}
     if(events.length)await liveCargoEvents(events);
-    const currentVessels=vesselsRef.current,changes=new Map();
-    for(const r of [...pm,...om]){
-      const old=currentVessels.find(v=>(r.imo_no!=null&&String(r.imo_no)===v.imoNo)||String(r.vessel_name).toUpperCase()===v.vessel);
-      const isOverride=om.includes(r),stamp=isOverride?old?._brokerOverrides?.updated_at:old?._brokerSourceUpdatedAt;
-      if(!old||stamp!==r.updated_at)changes.set(String(r.imo_no||r.vessel_name),{imo:r.imo_no,name:r.vessel_name});
-    }
-    for(const old of currentVessels)if(old._brokerOverrides?.id&&!om.some(r=>(r.imo_no!=null&&String(r.imo_no)===old.imoNo)||String(r.vessel_name).toUpperCase()===old.vessel))changes.set(old.imoNo||old.vessel,{imo:old.imoNo,name:old.vessel});
-    const sourceNames=new Set(pm.map(r=>String(r.vessel_name).toUpperCase()));
-    for(const old of currentVessels)if(!sourceNames.has(old.vessel))changes.set(old.imoNo||old.vessel,{imo:old.imoNo,name:old.vessel});
+    const changes=new Map();
+    for(const row of [...manual,...external,...om])if(row.vessel_name)changes.set(row.vessel_name,{name:row.vessel_name});
     if(changes.size)await livePositions([...changes.values()]);
+    positionSyncSince.current=new Date(Date.parse(catchupStarted)-60000).toISOString();
   }
+
   useBrokerLiveData(liveCargoEvents,livePositions,brokerReconcile);
 
   const props={vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
