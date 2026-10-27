@@ -18,11 +18,11 @@ function extract(text,now){
     if(heading && line.length<90){day=heading;continue;}
     if(!day || (now-day)/86400000>14 || (now-day)<-86400000)continue;
     // Markdown/text rendered cards: "C Vessel(2018)OprOperatorChtrCharterer Fixed 123k/Day".
-    const re=/\b([A-E])\s+([^\n()]{2,75}?)\s*\((\d{4})\)\s*(?:Opr\s*)?(.{0,140}?)\s*Chtr\s*(.{2,110}?)\s*(Failed|OnSubs|Fixed)\s*(No Data|[\d,.]+\s*k\/Day)/gi;
+    const re=/\b([A-E])\s+([^\n()]{2,75}?)\s*\((\d{4})\)\s*(?:Opr\s*)?(.{0,140}?)\s*Chtr\s*(.{2,110}?)\s*(Failed|On\s*Subs|Fixed)\s*(No Data|[\d,.]+\s*k\/Day)/gi;
     let m;
     while((m=re.exec(line))!==null){
       const earnings=/([\d,.]+)\s*k\/Day/i.exec(m[7]);
-      out.push({date:day.toISOString().slice(0,10),vessel:m[2].trim(),built:+m[3],operator:m[4].trim()||null,charterer:m[5].trim(),status:m[6],tce:earnings?Math.round(Number(earnings[1].replace(/,/g,''))*1000):null,route:null,rate:null,duration:null});
+      out.push({date:day.toISOString().slice(0,10),vessel:m[2].trim(),built:+m[3],operator:m[4].trim()||null,charterer:m[5].trim(),status:/^on\s*subs$/i.test(m[6])?'On Subs':m[6],tce:earnings?Math.round(Number(earnings[1].replace(/,/g,''))*1000):null,route:null,rate:null,duration:null});
     }
   }
   return [...new Map(out.filter(x=>Number.isFinite(x.tce)&&x.tce>0).map(x=>[`${x.date}|${x.vessel.toLowerCase()}|${x.charterer.toLowerCase()}|${x.status}`,x])).values()].sort((a,b)=>b.date.localeCompare(a.date));
