@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { C } from "./constants";
 import { toTCase,normaliseQty,fmtDateShort,fmtFreight } from "./utils";
 import { supabase } from "./supabaseclient";
+import {useWorkspacePreferences,BrokerActivity,personalCacheGet,personalCacheSet} from "./BrokerWorkspace";
 import { tagsForScope, tagColor } from "./TagManagement";
 import { readCargoExportFormat, readCargoExportSecondFormat, formatCargoExportRow, formatCargoWhatsAppRow, formatCargoWhatsAppTable } from "./cargoExportConfig";
 
@@ -284,7 +285,7 @@ function focusGrid(row,col){
 }
 
 function Editable({value,onSave,color,bold,align="left",row,col,maxCol}){
- const[e,setE]=useState(false),[v,setV]=useState(value??"");useEffect(()=>setV(value??""),[value]);
+ const[e,setE]=useState(false),[v,setV]=useState(value??"");useEffect(()=>{if(!e)setV(value??"");},[value,e]);
  return <td tabIndex={0} data-grid-row={row} data-grid-col={col} onDoubleClick={()=>setE(true)} onClick={()=>setE(true)} onKeyDown={x=>{if(!e){if(x.key==="Enter"){x.preventDefault();setE(true)}else if(x.key==="Tab"||x.key.startsWith("Arrow")){gridMove(x,null,row,col,maxCol)}else if(x.key.length===1&&!x.ctrlKey&&!x.metaKey&&!x.altKey){x.preventDefault();setV(x.key);setE(true)}}}} style={{...POS_TD,padding:e?"1px 2px":POS_TD.padding,color:color||C.tx,fontWeight:bold?700:500,textAlign:align}}>
  {e?<input autoFocus value={v} onChange={x=>setV(x.target.value)} onBlur={()=>{setE(false);if(v!==value)onSave(v)}} onKeyDown={x=>{if(x.key==="Enter"||x.key==="Tab"){gridMove(x,()=>{if(v!==value)onSave(v);setE(false)},row,col,maxCol)}else if(x.key==="Escape"){setV(value??"");setE(false)}}} style={{width:"100%",height:27,lineHeight:"25px",padding:"0 5px",margin:0,border:"1px solid rgba(58,130,246,.32)",borderRadius:4,outline:"none",boxShadow:"none",background:"rgba(20,39,66,.78)",color:color||C.tx,fontFamily:"inherit",fontSize:12,fontWeight:bold?700:500,textTransform:"uppercase",boxSizing:"border-box",textAlign:align}}/>:<span title={String(value||"")}>{value||""}</span>}</td>;
 }
@@ -331,10 +332,10 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
  const markCopied=(name)=>{clearTimeout(copiedTimer.current);setCopyFeedback(name);copiedTimer.current=setTimeout(()=>setCopyFeedback(""),1800);};
  const copyButtonStyle=(name)=>copyFeedback===name?{...btn(true),background:"rgba(16,185,129,.23)",borderColor:"#10b981",color:"#6ee7b7"}:btn();
  const [hideIntermediate,setHideIntermediate]=useState(false);
- const [panelWidths,setPanelWidths]=useState(()=>{try{return JSON.parse(localStorage.getItem("cargo_panel_widths_v1"))||[25,40,35]}catch{return [25,40,35]}});
+ const [panelWidths,setPanelWidths]=useState(()=>{try{return JSON.parse(personalCacheGet("cargo_panel_widths_v1"))||[25,40,35]}catch{return [25,40,35]}});
  const resizeRef=useRef(null);
  const beginPanelResize=(index,e)=>{e.preventDefault();const container=e.currentTarget.parentElement;const rect=container.getBoundingClientRect();const initial=[...panelWidths];const start=e.clientX;const onMove=ev=>{const delta=(ev.clientX-start)/rect.width*100;const pair=initial[index]+initial[index+1];const first=Math.max(index===0?12:16,Math.min(pair-(index===0?16:20),initial[index]+delta));setPanelWidths(prev=>{const next=[...prev];next[index]=first;next[index+1]=pair-first;return next;});};const onUp=()=>{window.removeEventListener("pointermove",onMove);window.removeEventListener("pointerup",onUp);document.body.style.cursor="";};document.body.style.cursor="col-resize";window.addEventListener("pointermove",onMove);window.addEventListener("pointerup",onUp);};
- useEffect(()=>{try{localStorage.setItem("cargo_panel_widths_v1",JSON.stringify(panelWidths))}catch{}},[panelWidths]);
+ useEffect(()=>{try{personalCacheSet("cargo_panel_widths_v1",JSON.stringify(panelWidths))}catch{}},[panelWidths]);
  useEffect(()=>()=>clearTimeout(copiedTimer.current),[]);
  const [pressedAction,setPressedAction]=useState("");
  const [copyToast,setCopyToast]=useState("");
@@ -380,8 +381,8 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
  const colsKeyFor=part=>"signal_qf_visible_columns_"+qfUser+"_"+part;
  const readCols=part=>{
    try{
-     const raw=localStorage.getItem(colsKeyFor(part))
-       || (part==="all"?(localStorage.getItem("signal_qf_visible_columns_"+qfUser)||localStorage.getItem("signal_qf_visible_columns")):null);
+     const raw=personalCacheGet(colsKeyFor(part))
+       || (part==="all"?(personalCacheGet("signal_qf_visible_columns_"+qfUser)||personalCacheGet("signal_qf_visible_columns")):null);
      const parsed=raw?JSON.parse(raw):null;
      if(Array.isArray(parsed))return new Set(parsed);
    }catch{}
@@ -395,21 +396,21 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
    return {...prev,[section]:new Set(next)};
  });
  useEffect(()=>{
-   try{localStorage.setItem(colsKeyFor("all"),JSON.stringify([...visibleBySection.all]));}catch{}
+   try{personalCacheSet(colsKeyFor("all"),JSON.stringify([...visibleBySection.all]));}catch{}
  },[qfUser,visibleBySection.all]);
  useEffect(()=>{
-   try{localStorage.setItem(colsKeyFor("inter"),JSON.stringify([...visibleBySection.inter]));}catch{}
+   try{personalCacheSet(colsKeyFor("inter"),JSON.stringify([...visibleBySection.inter]));}catch{}
  },[qfUser,visibleBySection.inter]);
- // Saved views are local to the signed-in PIN on this device.
+ // Saved views belong to the signed-in account and sync through workspace preferences.
  const viewKey="signal_qf_views_"+qfUser;
- const [savedViews,setSavedViews]=useState(()=>{try{const v=JSON.parse(localStorage.getItem(viewKey)||"[]");return Array.isArray(v)?v:[]}catch{return[]}});
+ const [savedViews,setSavedViews]=useState(()=>{try{const v=JSON.parse(personalCacheGet(viewKey)||"[]");return Array.isArray(v)?v:[]}catch{return[]}});
  const [selectedView,setSelectedView]=useState("");
  const saveView=()=>{
    const name=window.prompt("Name this Cargoes view:")?.trim();
    if(!name)return;
    const view={name,search,status,time,grade,tag,ex,toR,contributorFilter,laycanStart,laycanEnd,sort,dir,freightPositiveOnly,columns:[...visible]};
    const next=[...savedViews.filter(v=>v.name!==name),view];
-   setSavedViews(next);localStorage.setItem(viewKey,JSON.stringify(next));setSelectedView(name);
+   setSavedViews(next);personalCacheSet(viewKey,JSON.stringify(next));setSelectedView(name);
  };
  const applyView=name=>{
    setSelectedView(name);
@@ -427,8 +428,34 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
  const deleteView=()=>{
    if(!selectedView||!window.confirm(`Delete view "${selectedView}"?`))return;
    const next=savedViews.filter(v=>v.name!==selectedView);
-   setSavedViews(next);localStorage.setItem(viewKey,JSON.stringify(next));setSelectedView("");
+   setSavedViews(next);personalCacheSet(viewKey,JSON.stringify(next));setSelectedView("");
  };
+ const brokerCargoDefaults=useRef({...{"search": "", "time": "", "grade": "", "tag": "", "ex": "", "toR": "", "laycanStart": "", "laycanEnd": "", "contributorFilter": "", "selectedView": "", "status": "ALL", "sort": "updated", "dir": -1, "freightPositiveOnly": false, "duplicateOnly": false, "duplicateMode": "potential", "section": "all", "extraTags": [], "visualTab": "chart", "savedViews": [], "panelWidths": [25, 40, 35], "hideIntermediate": false},visibleBySection:{all:[...defaults],inter:[...defaults]}});
+ useWorkspacePreferences("cargoes",{search,status,time,grade,tag,ex,toR,sort,dir,freightPositiveOnly,duplicateOnly,duplicateMode,laycanStart,laycanEnd,section,contributorFilter,extraTags,visualTab,savedViews,selectedView,panelWidths,hideIntermediate,visibleBySection:{all:[...visibleBySection.all],inter:[...visibleBySection.inter]}},p=>{
+  setSearch(p.search);
+  setStatus(p.status);
+  setTime(p.time);
+  setGrade(p.grade);
+  setTag(p.tag);
+  setEx(p.ex);
+  setToR(p.toR);
+  setSort(p.sort);
+  setDir(p.dir);
+  setFreightPositiveOnly(p.freightPositiveOnly);
+  setDuplicateOnly(p.duplicateOnly);
+  setDuplicateMode(p.duplicateMode);
+  setLaycanStart(p.laycanStart);
+  setLaycanEnd(p.laycanEnd);
+  setSection(p.section);
+  setContributorFilter(p.contributorFilter);
+  setExtraTags(p.extraTags);
+  setVisualTab(p.visualTab);
+  setSavedViews(p.savedViews);
+  setSelectedView(p.selectedView);
+  setPanelWidths(p.panelWidths);
+  setHideIntermediate(p.hideIntermediate);
+  setVisibleBySection({all:new Set(p.visibleBySection?.all||defaults),inter:new Set(p.visibleBySection?.inter||defaults)});
+ },brokerCargoDefaults.current);
  const [colsOpen,setColsOpen]=useState(false),[colsPos,setColsPos]=useState({top:0,left:0});
  const [deleteCargo,setDeleteCargo]=useState(null);
  const [deletingCargo,setDeletingCargo]=useState(false);
@@ -449,7 +476,7 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
   const updateWithAudit=async(id,field,value)=>{
     const before=cargoes.find(c=>String(c.id)===String(id));
     if(!before||String(before[field]??"")===String(value??""))return;
-    const result=await onUpdateC(id,field,value);
+    const result=await onUpdateC(id,field,value);if(result===false)return false;
     const editor=String(localStorage.getItem("signal_user")||"H").trim();
     const {error}=await supabase.from("cargoes_audit").insert({cargo_id:String(id),editor,field,old_value:String(before[field]??""),new_value:String(value??"")});
     if(error){console.error("Cargo audit save failed",error);setAuditError(true)}
@@ -514,7 +541,7 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
    try{await navigator.clipboard.writeText(text);markCopied(csv?"csv":"all");}catch(e){window.prompt("Copy cargoes",text)}
  }
 
- return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+ return <div data-broker-scope="cargoes" style={{display:"flex",flexDirection:"column",gap:8}}>
   <style>{`
     .cargo-panel-handle{position:absolute;top:0;bottom:0;width:11px;transform:translateX(-50%);cursor:col-resize;z-index:80;touch-action:none;background:transparent;}
     .cargo-panel-handle:after{content:"";position:absolute;top:12%;bottom:12%;left:4px;width:3px;border-radius:3px;background:rgba(88,166,255,.32);}
@@ -573,7 +600,7 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
       .qf-actions-search{display:flex!important;position:relative!important;width:210px!important;flex:0 0 210px!important;align-items:center!important;}
     }
   `}</style>
-     <div className="qf-panel-header" style={{display:"grid",gridTemplateColumns:panelWidths.map(x=>`minmax(0,${x}fr)`).join(" "),alignItems:"center",gap:10}}><div style={{gridColumn:"1 / span 2",display:"flex",gap:6}}><button onClick={()=>{setSection("all");setVisualTab("chart")}} style={btn(section==="all")}>Cargoes · All</button><button onClick={()=>{setSection("inter");setVisualTab("rates")}} style={btn(section==="inter")}>Intermediate</button></div><div className="qf-header-chart-tabs" style={{gridColumn:"3",width:"100%",display:"flex",alignItems:"center",gap:5,boxSizing:"border-box",paddingLeft:0}}><button style={btn(visualTab==="rates")} onClick={()=>setVisualTab("rates")}>Rate Matrix</button><button style={btn(visualTab==="chart")} onClick={()=>setVisualTab("chart")}>Cargo Count</button><span style={{marginLeft:"auto"}}>{visualTab==="rates"&&<BunkerHeader/>}</span></div></div>
+     <div style={{display:"flex",justifyContent:"flex-end"}}><BrokerActivity scope="cargoes"/></div><div className="qf-panel-header" style={{display:"grid",gridTemplateColumns:panelWidths.map(x=>`minmax(0,${x}fr)`).join(" "),alignItems:"center",gap:10}}><div style={{gridColumn:"1 / span 2",display:"flex",gap:6}}><button onClick={()=>{setSection("all");setVisualTab("chart")}} style={btn(section==="all")}>Cargoes · All</button><button onClick={()=>{setSection("inter");setVisualTab("rates")}} style={btn(section==="inter")}>Intermediate</button></div><div className="qf-header-chart-tabs" style={{gridColumn:"3",width:"100%",display:"flex",alignItems:"center",gap:5,boxSizing:"border-box",paddingLeft:0}}><button style={btn(visualTab==="rates")} onClick={()=>setVisualTab("rates")}>Rate Matrix</button><button style={btn(visualTab==="chart")} onClick={()=>setVisualTab("chart")}>Cargo Count</button><span style={{marginLeft:"auto"}}>{visualTab==="rates"&&<BunkerHeader/>}</span></div></div>
 <div className="qf-top" style={{"--cargo-panel-cols":panelWidths.map(x=>`minmax(0,${x}fr)`).join(" "),display:"flex",gap:10,height:215,minHeight:0,overflow:"hidden",position:"relative"}}>
    <details className="qf-mobile-fold qf-parse-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Paste / Parse</summary><div className="qf-parse" style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}><div className="qf-parse-tags" style={{position:"absolute",top:5,right:7,zIndex:5,display:"flex",justifyContent:"flex-end",padding:0}}><div style={{position:"relative",minWidth:120}}><button type="button" aria-label="Tag parsed cargoes" aria-expanded={parseTagOpen} onClick={e=>{const rect=e.currentTarget.getBoundingClientRect();setParseTagPosition({top:rect.bottom+2,left:Math.max(8,Math.min(rect.right-160,window.innerWidth-168))});setParseTagOpen(v=>!v)}} style={{...btn(Boolean(parseTag)),width:"100%",height:24,background:C.bg3,color:parseTag?"#d9ecff":"#9fc3f5",textAlign:"left"}}>{parseTag||"Tag on parse"} <span style={{float:"right"}}>▾</span></button>{parseTagOpen&&createPortal(<><div onClick={()=>setParseTagOpen(false)} style={{position:"fixed",inset:0,zIndex:19980}}/><div style={{position:"fixed",top:parseTagPosition.top,left:parseTagPosition.left,width:160,maxHeight:"min(420px, calc(100vh - 65px))",overflowY:"auto",zIndex:19981,background:"#071223",border:"1px solid #315782",borderRadius:4,boxShadow:"0 10px 25px #0009"}}>{["",...tagList()].map(t=><button key={t} type="button" onClick={()=>{setParseTag(t);setParseTagOpen(false)}} style={{display:"block",width:"100%",padding:"7px 9px",background:parseTag===t?"#16365b":"#071223",border:0,textAlign:"left",color:"#9fc3f5",fontSize:11,fontWeight:700,cursor:"pointer"}}>{t||"Tag on parse"}</button>)}</div></>,document.body)}</div></div><div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden",height:"100%"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await (section==="inter"?parseInter:onAddCargoes)(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div></details>
    <div className="cargo-panel-handle" title="Drag to resize Parse and Filters" onPointerDown={e=>beginPanelResize(0,e)} style={{left:`calc(${panelWidths[0]}% - 5px)`}}/>
@@ -615,7 +642,7 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
       const rowBg=duplicateIds.has(c.id)?"rgba(216,159,63,.065)":POS_ROW(i);
       const navKeys=shown.map(x=>x[0]).filter(k=>!["tag","updated","source"].includes(k));
       const navCol=k=>navKeys.indexOf(k),navMax=navKeys.length-1;
-      return <tr key={c.id} onClick={e=>{if(!(e.ctrlKey||e.metaKey))return; if(e.target.closest("button,input,select,textarea,[role=checkbox]"))return; e.preventDefault(); e.stopPropagation(); setSelected(prev=>{const next=new Set(prev);next.has(c.id)?next.delete(c.id):next.add(c.id);return next;});}} style={{background:selected.has(c.id)?"rgba(58,130,246,0.16)":rowBg,height:32,boxShadow:selected.has(c.id)?"inset 3px 0 0 rgba(88,166,255,.65)":undefined}}><td onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} style={{...POS_TD,textAlign:"center",padding:"0 2px",overflow:"visible"}}><span role="checkbox" aria-checked={selected.has(c.id)} tabIndex={0} onClick={e=>{e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}} onKeyDown={e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}}} style={{fontSize:12,fontWeight:500,color:selected.has(c.id)?"#4fc3f7":C.faint,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>{selected.has(c.id)?"[✓]":"[ ]"}</span></td>
+      return <tr data-broker-record={String(c.id)} data-broker-label={c.vessel||c.charterer||String(c.id)} key={c.id} onClick={e=>{if(!(e.ctrlKey||e.metaKey))return; if(e.target.closest("button,input,select,textarea,[role=checkbox]"))return; e.preventDefault(); e.stopPropagation(); setSelected(prev=>{const next=new Set(prev);next.has(c.id)?next.delete(c.id):next.add(c.id);return next;});}} style={{background:selected.has(c.id)?"rgba(58,130,246,0.16)":rowBg,height:32,boxShadow:selected.has(c.id)?"inset 3px 0 0 rgba(88,166,255,.65)":undefined}}><td onClick={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} style={{...POS_TD,textAlign:"center",padding:"0 2px",overflow:"visible"}}><span role="checkbox" aria-checked={selected.has(c.id)} tabIndex={0} onClick={e=>{e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}} onKeyDown={e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();e.stopPropagation();setSelected(prev=>{const n=new Set(prev);n.has(c.id)?n.delete(c.id):n.add(c.id);return n})}}} style={{fontSize:12,fontWeight:500,color:selected.has(c.id)?"#4fc3f7":C.faint,cursor:"pointer",whiteSpace:"nowrap",userSelect:"none"}}>{selected.has(c.id)?"[✓]":"[ ]"}</span></td>
     {shown.map(([k])=>{
       if(k==="status")return <td key={k} tabIndex={0} data-grid-row={i} data-grid-col={navCol(k)} onKeyDown={e=>gridMove(e,null,i,navCol(k),navMax)} onClick={()=>{const o=["SUBS","FIXED","FAILED",""],n=o[(o.indexOf(c.status||"")+1)%o.length];updateWithAudit(c.id,"status",n)}} style={{...POS_TD,textAlign:"center",fontWeight:500,cursor:"pointer",color:c.status==="FIXED"?C.green:c.status==="SUBS"?C.purple:c.status==="FAILED"?C.red:C.faint}}>{c.status||""}</td>;
       if(k==="ex_region"||k==="to_region")return <RegionCell key={k} row={i} col={navCol(k)} maxCol={navMax} value={c[k]||""} onSave={v=>updateWithAudit(c.id,k,v)}/>;
@@ -638,3 +665,4 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
   )}
  </div>;
 }
+

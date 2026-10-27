@@ -3,6 +3,7 @@ import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
 import { loadHistory } from "./supabaseHelpers";
 import { supabase } from "./supabaseclient";
+import {brokerLogin,useBrokerActivity,useWorkspacePreferences,BrokerActivity,BrokerConflictDialog,personalCacheGet,personalCacheSet,personalCacheRemove} from "./BrokerWorkspace";
 
 // Every component lazy-loaded to fully break circular dependency chains
 const EC             = React.lazy(()=>import("./EC"));
@@ -1344,6 +1345,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [userTabs,setUserTabs] = React.useState(DEFAULT_USER_TABS);
   const [pinInput, setPinInput] = React.useState("");
   const [pinError, setPinError] = React.useState(false);
+  const [pinMessage,setPinMessage]=React.useState("");
   const [guestMode, setGuestMode] = React.useState(false); // true = restricted User (kept name to avoid unrelated navigation changes)
   const [currentAppUser,setCurrentAppUser] = React.useState(null);
 
@@ -1414,11 +1416,8 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
 
   async function submitPin(p){
     try{
-      const enc=new TextEncoder().encode(String(p));
-      const dig=await crypto.subtle.digest("SHA-256",enc);
-      const hash=[...new Uint8Array(dig)].map(x=>x.toString(16).padStart(2,"0")).join("");
-      const {data:user,error}=await supabase.from("app_users").select("id,name,initials,role,active,pin_hash").eq("pin_hash",hash).eq("active",true).maybeSingle();
-      if(error||!user)throw new Error("invalid");
+      setPinMessage("");
+      const user=await brokerLogin(String(p));
       const isAdmin=user.role==="admin";
       let tabs=DEFAULT_USER_TABS;
       if(!isAdmin){
@@ -1429,7 +1428,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
       localStorage.setItem("signal_user",String(user.initials||"").toUpperCase());
       setCurrentAppUser(user); setUserTabs(tabs); setGuestMode(!isAdmin); setUnlocked(true); setPinInput("");
     }catch(_){
-      setPinError(true); setPinInput(""); setTimeout(()=>setPinError(false),1200);
+      setPinMessage(String(_?.message||"Incorrect PIN"));setPinError(true); setPinInput(""); setTimeout(()=>setPinError(false),2500);
     }
   }
 
@@ -1476,14 +1475,14 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
   const [posTagFilter,setPosTagFilter]=useState(new Set());
   // Independent, refresh-persistent preview shortlist: tag choices and starred vessels.
   const [previewTags,setPreviewTags]=useState(()=>{
-    try{return new Set(JSON.parse(localStorage.getItem("steem_positions_preview_tags")||"[]"));}catch{return new Set();}
+    try{return new Set(JSON.parse(personalCacheGet("steem_positions_preview_tags")||"[]"));}catch{return new Set();}
   });
   const [confirmClearPreview,setConfirmClearPreview]=useState(false);
   const [previewSaved,setPreviewSaved]=useState(()=>{
-    try{return JSON.parse(localStorage.getItem("steem_positions_preview_saved")||"false");}catch{return false;}
+    try{return JSON.parse(personalCacheGet("steem_positions_preview_saved")||"false");}catch{return false;}
   });
-  useEffect(()=>{try{localStorage.setItem("steem_positions_preview_tags",JSON.stringify([...previewTags]));}catch{}},[previewTags]);
-  useEffect(()=>{try{localStorage.setItem("steem_positions_preview_saved",JSON.stringify(previewSaved));}catch{}},[previewSaved]);
+  useEffect(()=>{try{personalCacheSet("steem_positions_preview_tags",JSON.stringify([...previewTags]));}catch{}},[previewTags]);
+  useEffect(()=>{try{personalCacheSet("steem_positions_preview_saved",JSON.stringify(previewSaved));}catch{}},[previewSaved]);
 
   const [coatingFilter,setCoatingFilter]=useState(new Set());
   const [dwtRange,setDwtRange]=useState({min:"",max:""});
@@ -1674,15 +1673,15 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const QF_COLUMN_KEYS=["select","status","ex_region","to_region","p_and_c","intelligence","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment","tag","source","updated","badge","delete"];
   const QF_DEFAULT_VISIBLE=["select","status","ex_region","to_region","p_and_c","intelligence","vessel","charterer","qty","cargo","load","disch","from","to","freight","comment","badge","delete"];
   function loadVisibleCols(key,defaults){
-    try{const raw=JSON.parse(localStorage.getItem(key)||"null");return new Set(Array.isArray(raw)&&raw.length?raw:defaults);}
+    try{const raw=JSON.parse(personalCacheGet(key)||"null");return new Set(Array.isArray(raw)&&raw.length?raw:defaults);}
     catch{return new Set(defaults);}
   }
   const [cargoVisibleCols,setCargoVisibleCols]=useState(()=>loadVisibleCols("signal_cargo_visible_columns",CARGO_COLUMN_KEYS));
   const [qfVisibleCols,setQfVisibleCols]=useState(()=>loadVisibleCols("signal_qf_visible_columns",QF_DEFAULT_VISIBLE));
   const [cargoColumnsOpen,setCargoColumnsOpen]=useState(false);
   const [cargoColumnsPos,setCargoColumnsPos]=useState({top:0,left:0});
-  useEffect(()=>{try{localStorage.setItem("signal_cargo_visible_columns",JSON.stringify([...cargoVisibleCols]));}catch{}},[cargoVisibleCols]);
-  useEffect(()=>{try{localStorage.setItem("signal_qf_visible_columns",JSON.stringify([...qfVisibleCols]));}catch{}},[qfVisibleCols]);
+  useEffect(()=>{try{personalCacheSet("signal_cargo_visible_columns",JSON.stringify([...cargoVisibleCols]));}catch{}},[cargoVisibleCols]);
+  useEffect(()=>{try{personalCacheSet("signal_qf_visible_columns",JSON.stringify([...qfVisibleCols]));}catch{}},[qfVisibleCols]);
   const [cSortK,setCsortK]=useState("updated");
   const [selCargoes,setSelCargoes]=useState(()=>new Set());const [cSortD,setCsortD]=useState(-1);
   const [bulkCargoTagOpen,setBulkCargoTagOpen]=useState(false);
@@ -1700,59 +1699,10 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [showAddCargo,setShowAddCargo]=useState(false);
   // "Save for later" vessel set — persists in localStorage per session
   const [savedVessels,setSavedVessels]=useState(()=>{
-    try{return new Set(JSON.parse(localStorage.getItem("signal_saved_vessels")||"[]"));}catch{return new Set();}
+    try{return new Set(JSON.parse(personalCacheGet("signal_saved_vessels")||"[]"));}catch{return new Set();}
   });
 
-  // Saved/starred positions are tiny settings data. Keep them in Supabase so
-  // they sync across devices and do not depend on localStorage having free
-  // quota. localStorage is only a best-effort cache.
-  useEffect(()=>{
-    let alive=true;
-    (async()=>{
-      try{
-        const {data,error}=await supabase
-          .from("tag_settings")
-          .select("value")
-          .eq("key","saved_vessels")
-          .maybeSingle();
-
-        if(!error && alive && Array.isArray(data?.value)){
-          const next=new Set(data.value);
-          setSavedVessels(next);
-          try{
-            localStorage.setItem("signal_saved_vessels",JSON.stringify([...next]));
-          }catch(e){
-            console.warn("saved vessels local cache unavailable:",e?.name||e);
-          }
-        }
-      }catch(e){
-        console.warn("saved vessels cloud load failed:",e);
-      }
-    })();
-    return()=>{alive=false;};
-  },[]);
-
-  function persistSavedVessels(next){
-    const arr=[...next];
-
-    // Never let a full browser cache break the UI.
-    try{
-      localStorage.setItem("signal_saved_vessels",JSON.stringify(arr));
-    }catch(e){
-      console.warn("saved vessels local cache unavailable:",e?.name||e);
-    }
-
-    supabase
-      .from("tag_settings")
-      .upsert({
-        key:"saved_vessels",
-        value:arr,
-        updated_at:new Date().toISOString()
-      },{onConflict:"key"})
-      .then(({error})=>{
-        if(error) console.error("saved vessels cloud save failed:",error);
-      });
-  }
+  function persistSavedVessels(next){personalCacheSet("signal_saved_vessels",JSON.stringify([...next]));}
 
   function toggleSavedVessel(name){
     setSavedVessels(prev=>{
@@ -1763,21 +1713,7 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
     });
   }
 
-  function clearSavedVessels(){
-    const next=new Set();
-    setSavedVessels(next);
-    try{localStorage.removeItem("signal_saved_vessels");}catch{}
-    supabase
-      .from("tag_settings")
-      .upsert({
-        key:"saved_vessels",
-        value:[],
-        updated_at:new Date().toISOString()
-      },{onConflict:"key"})
-      .then(({error})=>{
-        if(error) console.error("saved vessels cloud clear failed:",error);
-      });
-  }
+  function clearSavedVessels(){setSavedVessels(new Set());personalCacheRemove("signal_saved_vessels");}
   // Inter UKC config — loaded from localStorage (editable in Settings)
   const [showSavedOnly,setShowSavedOnly]=useState(false);
   const [fixingPanelTab,setFixingPanelTab]=useState("Open Segments");
@@ -2564,12 +2500,49 @@ const filtV=useMemo(()=>{
   },[filtV]);
 
   // Resolve duplicate positions by freshness before applying independent preview tags.
+  const [previewExcluded,setPreviewExcluded]=useState(()=>new Set());
   const [previewSort,setPreviewSort]=useState({key:"operator",dir:1});
   const [previewFormat,setPreviewFormat]=useState("table");
   const [previewCopied,setPreviewCopied]=useState("");
   const previewCopyTimer=useRef(null);
   useEffect(()=>()=>clearTimeout(previewCopyTimer.current),[]);
   const previewColumns=[["operator","Operator"],["vessel","Vessel"],["dwt","DWT"],["built","Blt"],["date","Date"],["openPort","Port"],["comment","Comment"],["updatedAt","Updated"]];
+  useBrokerActivity(unlocked?(tab==="pos"?"positions":tab==="cargo"||tab==="cargo2"?"cargoes":""):"");
+  const brokerPositionDefaults=useRef({...{"search": "", "previewSaved": false, "dwtRange": {"min": "", "max": ""}, "builtRange": {"min": "", "max": ""}, "openDateFilter": {"quick": "", "from": "", "to": ""}, "opFilter": null, "updFilter": "", "sortK": "fileDate", "sortD": -1, "posFileDaysBack": 90, "showSavedOnly": false, "fixingPanelTab": "Open Segments", "fixingExpanded": false, "aisPanelTab": "Map", "positionsWidths": [32, 34, 34], "interUKCActive": false, "previewSort": {"key": "operator", "dir": 1}, "previewFormat": "table", "filters": [], "posTagFilter": [], "previewTags": [], "coatingFilter": [], "bucketFilters": [], "superRegionFilter": [], "segmentFilter": [], "dwtFilter": [], "builtFilter": [], "savedVessels": []},colWidthsV,previewExcluded:[],cargoVisibleCols:[...CARGO_COLUMN_KEYS],qfVisibleCols:[...QF_DEFAULT_VISIBLE]});
+  useWorkspacePreferences("positions",{filters:[...filters],posTagFilter:[...posTagFilter],previewTags:[...previewTags],coatingFilter:[...coatingFilter],bucketFilters:[...bucketFilters],superRegionFilter:[...superRegionFilter],segmentFilter:[...segmentFilter],dwtFilter:[...dwtFilter],builtFilter:[...builtFilter],savedVessels:[...savedVessels],previewExcluded:[...previewExcluded],cargoVisibleCols:[...cargoVisibleCols],qfVisibleCols:[...qfVisibleCols],search,previewSaved,dwtRange,builtRange,openDateFilter,opFilter,updFilter,sortK,sortD,posFileDaysBack,showSavedOnly,fixingPanelTab,fixingExpanded,aisPanelTab,positionsWidths,interUKCActive,colWidthsV,previewSort,previewFormat},p=>{
+    setFilters(new Set(p.filters||[]));
+    setPosTagFilter(new Set(p.posTagFilter||[]));
+    setPreviewTags(new Set(p.previewTags||[]));
+    setCoatingFilter(new Set(p.coatingFilter||[]));
+    setBucketFilters(new Set(p.bucketFilters||[]));
+    setSuperRegionFilter(new Set(p.superRegionFilter||[]));
+    setSegmentFilter(new Set(p.segmentFilter||[]));
+    setDwtFilter(new Set(p.dwtFilter||[]));
+    setBuiltFilter(new Set(p.builtFilter||[]));
+    setSavedVessels(new Set(p.savedVessels||[]));
+    setPreviewExcluded(new Set(p.previewExcluded||[]));
+    setCargoVisibleCols(new Set(p.cargoVisibleCols||CARGO_COLUMN_KEYS));
+    setQfVisibleCols(new Set(p.qfVisibleCols||QF_DEFAULT_VISIBLE));
+    setSearch(p.search);
+    setPreviewSaved(p.previewSaved);
+    setDwtRange(p.dwtRange);
+    setBuiltRange(p.builtRange);
+    setOpenDateFilter(p.openDateFilter);
+    setOpFilter(p.opFilter);
+    setUpdFilter(p.updFilter);
+    setSortK(p.sortK);
+    setSortD(p.sortD);
+    setPosFileDaysBack(p.posFileDaysBack);
+    setShowSavedOnly(p.showSavedOnly);
+    setFixingPanelTab(p.fixingPanelTab);
+    setFixingExpanded(p.fixingExpanded);
+    setAisPanelTab(p.aisPanelTab);
+    setPositionsWidths(p.positionsWidths);
+    setInterUKCActive(p.interUKCActive);
+    setColWidthsV(p.colWidthsV);
+    setPreviewSort(p.previewSort);
+    setPreviewFormat(p.previewFormat);
+  },brokerPositionDefaults.current);
   const previewVessels=useMemo(()=>{
     const tags=new Set([...previewTags].map(t=>String(t).trim().toUpperCase()));
     const latest=new Map();
@@ -2582,6 +2555,7 @@ const filtV=useMemo(()=>{
       if(!previous||freshness(v)>freshness(previous)||(freshness(v)===freshness(previous)&&timestamp(v.updatedAt)>timestamp(previous.updatedAt)))latest.set(key,v);
     }
     const rows=[...latest.values()].filter(v=>{
+      if(previewExcluded.has(String(v.vessel).toUpperCase()))return false;
       const vesselTags=(Array.isArray(v.tag)?v.tag.join("|"):String(v.tag||""))
         .split(/[|,;]+/).map(t=>t.trim().toUpperCase());
       return vesselTags.some(t=>tags.has(t))||(previewSaved&&savedVessels.has(v.vessel));
@@ -2598,14 +2572,9 @@ const filtV=useMemo(()=>{
       const result=typeof av==="number"?(av===bv?0:av<bv?-1:1):av.localeCompare(bv,undefined,{numeric:true,sensitivity:"base"});
       return result*previewSort.dir||String(a.vessel).localeCompare(String(b.vessel));
     });
-  },[vessels,previewTags,previewSaved,savedVessels,previewSort]);
-  async function removePreviewVessel(v){
-    const activeTags=new Set([...previewTags].map(t=>String(t).trim().toUpperCase()));
-    const tags=(Array.isArray(v.tag)?v.tag:String(v.tag||"").split(/[|,;]+/))
-      .map(t=>String(t).trim()).filter(Boolean);
-    const remaining=tags.filter(t=>!activeTags.has(t.toUpperCase()));
-    if(remaining.length!==tags.length)await Promise.resolve(onUpdateV(v.vessel,"tag",remaining.join("|")));
-    if(savedVessels.has(v.vessel))toggleSavedVessel(v.vessel);
+  },[vessels,previewTags,previewSaved,savedVessels,previewSort,previewExcluded]);
+  function removePreviewVessel(v){
+    setPreviewExcluded(prev=>new Set([...prev,String(v.vessel).toUpperCase()]));
   }
   function savePreviewCell(v,key,value){
     if(key==="vessel")return renameVesselAndRefreshSpecs(v.vessel,value);
@@ -2828,6 +2797,7 @@ const filtV=useMemo(()=>{
         ::-webkit-scrollbar { display: none; }
         html { overflow-x: hidden; }
       `}</style>}
+      <BrokerConflictDialog/>
       {/* ── PIN overlay — modern market terminal / responsive ── */}
       {!unlocked&&(
         <div style={{
@@ -2927,7 +2897,7 @@ const filtV=useMemo(()=>{
                     }}>{d}</button>)}
                   </div>
                   <div style={{height:mobile?15:20,marginTop:6,textAlign:"center"}}>
-                    {pinError&&<span style={{fontSize:mobile?10:12,fontWeight:750,color:"rgba(255,107,107,.95)"}}>Incorrect code</span>}
+                    {pinError&&<span style={{fontSize:mobile?10:12,fontWeight:750,color:"rgba(255,107,107,.95)"}}>{pinMessage||"Incorrect code"}</span>}
                   </div>
                 </div>
               </div>
@@ -3181,9 +3151,9 @@ const filtV=useMemo(()=>{
 
         {/* ── POSITIONS ── */}
         {tab==="pos"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div data-broker-scope="positions" style={{display:"flex",flexDirection:"column",gap:10}}>
 
-            <div style={{display:"flex",gap:8}}>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               <button onClick={()=>setPosOutsiderView(false)}
                 style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer", fontFamily:"inherit",
                   border:"1px solid "+(!posOutsiderView?"#58a6ff88":C.bd), background:!posOutsiderView?"#58a6ff22":"transparent",
@@ -3196,6 +3166,7 @@ const filtV=useMemo(()=>{
                   color:posOutsiderView?"#f5a623":C.faint }}>
                 🌏 Outsiders
               </button>
+              <BrokerActivity scope="positions"/>
             </div>
 
             {posOutsiderView ? (
@@ -3410,6 +3381,7 @@ const filtV=useMemo(()=>{
               </div>
             </div>
             <div style={{display:"flex",gap:4,flexShrink:0}}>
+              {previewExcluded.size>0&&<button style={fb(false)} onClick={()=>setPreviewExcluded(new Set())}>Restore removed ({previewExcluded.size})</button>}
               <select aria-label="Preview export format" value={previewFormat} onChange={e=>setPreviewFormat(e.target.value)} style={{...fb(false),background:C.bg2}}><option value="table">Table</option><option value="short">Short list</option></select>
               <button disabled={!previewVessels.length} style={{...fb(false),...(previewCopied==="copy"?{color:C.green,borderColor:C.green}:{} )}} onClick={()=>copyPreview(false)}>{previewCopied==="copy"?"✓ Copied!":`Copy (${previewVessels.length})`}</button>
               <button disabled={!previewVessels.length} style={{...fb(false),...(previewCopied==="email"?{color:C.green,borderColor:C.green}:{} )}} onClick={()=>copyPreview(true)}>{previewCopied==="email"?"✓ Copied!":`Copy for email (${previewVessels.length})`}</button>
@@ -3421,7 +3393,7 @@ const filtV=useMemo(()=>{
             <thead style={{position:"sticky",top:0,background:"#142034",zIndex:1}}>
               <tr>{previewColumns.map(([key,label])=><th key={key} onClick={()=>setPreviewSort(prev=>({key,dir:prev.key===key?-prev.dir:1}))} aria-sort={previewSort.key===key?(previewSort.dir===1?"ascending":"descending"):"none"} style={{padding:key==="operator"?"9px 7px 9px 15px":"9px 7px",width:key==="updatedAt"?72:undefined,fontSize:10,fontWeight:700,color:previewSort.key===key?C.blue:"#4977b4",letterSpacing:"0.06em",borderBottom:"1px solid "+C.bd,cursor:"pointer",userSelect:"none"}}>{label.toUpperCase()}{previewSort.key===key?(previewSort.dir===1?" ▲":" ▼"):""}</th>)}<th style={{width:22}} aria-label="Remove from shortlist"/></tr>
             </thead>
-            <tbody>{previewVessels.map((v,i)=><tr key={String(v.vessel).toUpperCase()} style={{background:i%2===0?"#0e192b":"#111e31",borderBottom:"1px solid rgba(58,100,180,0.08)",height:29}}>
+            <tbody>{previewVessels.map((v,i)=><tr data-broker-record={v.vessel} data-broker-label={v.vessel} key={String(v.vessel).toUpperCase()} style={{background:i%2===0?"#0e192b":"#111e31",borderBottom:"1px solid rgba(58,100,180,0.08)",height:29}}>
               {previewColumns.map(([key,label])=><EC
                 key={key}
                 value={key==="updatedAt"?fmtDateShort(v.updatedAt):key==="dwt"?fmtDwtFull(v.dwt):String(v[key]??"")}
@@ -3432,7 +3404,7 @@ const filtV=useMemo(()=>{
                 onSave={value=>savePreviewCell(v,key,value)}
                 style={{padding:key==="operator"?"0 1px 0 9px":"0 1px",fontFamily:"inherit",fontSize:12,fontWeight:400,color:C.dim,width:key==="updatedAt"?72:key==="comment"?"100%":undefined,minWidth:key==="comment"?120:key==="updatedAt"?72:60,maxWidth:key==="updatedAt"?72:undefined}}
               />)}
-              <td style={{padding:"0 4px",textAlign:"center"}}><button title="Remove active shortlist tags and saved star" aria-label={`Remove ${v.vessel} from shortlist`} onClick={()=>removePreviewVessel(v)} style={{border:"none",background:"transparent",color:C.faint,fontSize:14,padding:"2px",cursor:"pointer"}}>×</button></td>
+              <td style={{padding:"0 4px",textAlign:"center"}}><button title="Remove from your preview only" aria-label={`Remove ${v.vessel} from shortlist`} onClick={()=>removePreviewVessel(v)} style={{border:"none",background:"transparent",color:C.faint,fontSize:14,padding:"2px",cursor:"pointer"}}>×</button></td>
             </tr>)}</tbody>
           </table>
           {previewVessels.length===0&&<div style={{padding:20,textAlign:"center",fontSize:11,color:C.faint}}>No positions in preview. Click a tag or Saved ★ to add vessels.</div>}
@@ -3740,10 +3712,11 @@ const filtV=useMemo(()=>{
                       .pos-table th, .pos-table td{position:static!important;left:auto!important;right:auto!important;box-shadow:none!important;}
                     `}</style>}
                     <MatrixTable
-  key={`positions-${search}-${displayPosRows.length}-${sortK}-${sortD}-${posPage}-${[...filters].join("|")}-${[...posTagFilter].join("|")}`}
+  key="positions"
   columns={mobile ? posColumnsMobile : posColumns}
   data={displayPosRows.slice(0, posPage * POS_PAGE_SIZE)}
   keyField="vessel"
+  getRowProps={row=>({"data-broker-record":row.vessel,"data-broker-label":row.vessel})}
   selectedKey={sel}
   onRowClick={(row) => {
     const deselecting = sel === row.vessel;
@@ -4235,3 +4208,4 @@ const filtV=useMemo(()=>{
 }
 
 export default DesktopApp;
+

@@ -9,7 +9,7 @@ export default function UserManager(){
    await supabase.from("app_users").update({role:"user"}).eq("role","guest");
  }
  useEffect(()=>{normalizeRoles().finally(load)},[]);
- async function add(){const name=form.name.trim(),initials=form.initials.trim().toUpperCase().replace(/[^A-ZÆØÅ]/g,"").slice(0,2),pin=form.pin.replace(/\D/g,"").slice(0,4);if(!name||initials.length!==2||pin.length!==4){setMsg("Name, exactly 2 initials and a 4-digit PIN are required.");return}const {error}=await supabase.from("app_users").insert({name,initials,color:form.color,pin_hash:await sha256(pin),role:form.role,active:true});if(error){setMsg(error.message);return}setForm({name:"",initials:"",color:"#58a6ff",pin:"",role:"user"});setMsg("User added.");load()}
+ async function add(){const name=form.name.trim(),initials=form.initials.trim().toUpperCase().replace(/[^A-ZÆØÅ]/g,"").slice(0,2),pin=form.pin.replace(/\D/g,"").slice(0,4);if(!name||initials.length!==2||pin.length!==4){setMsg("Name, exactly 2 initials and a 4-digit PIN are required.");return}const pinHash=await sha256(pin);if(users.some(u=>u.active&&u.pin_hash===pinHash)){setMsg("This PIN is already assigned to another active user.");return}const {error}=await supabase.from("app_users").insert({name,initials,color:form.color,pin_hash:pinHash,role:form.role,active:true});if(error){setMsg(error.message);return}setForm({name:"",initials:"",color:"#58a6ff",pin:"",role:"user"});setMsg("User added.");load()}
  async function deleteUser(u){
    const current=String(localStorage.getItem("signal_user")||"").toUpperCase();
    if(current===String(u.initials||"").toUpperCase()){setMsg("You cannot delete the account currently signed in.");return}
@@ -24,13 +24,15 @@ export default function UserManager(){
    oldPin=String(oldPin||"").replace(/\D/g,"").slice(0,4);newPin=String(newPin||"").replace(/\D/g,"").slice(0,4);
    if(oldPin.length!==4||newPin.length!==4){setMsg("Enter the current 4-digit PIN and the new 4-digit PIN.");return false}
    if(await sha256(oldPin)!==currentHash){setMsg("Current PIN is incorrect.");return false}
-   const {error}=await supabase.from("app_users").update({pin_hash:await sha256(newPin)}).eq("id",id);
+   const pinHash=await sha256(newPin);
+   if(users.some(u=>u.id!==id&&u.active&&u.pin_hash===pinHash)){setMsg("This PIN is already assigned to another active user.");return false}
+   const {error}=await supabase.from("app_users").update({pin_hash:pinHash}).eq("id",id);
    if(error){setMsg(error.message);return false}
    await load();setMsg("PIN changed.");return true
  }
  return <div style={{background:"#0b172a",border:"1px solid rgba(88,166,255,.18)",borderRadius:8,padding:16}}>
   <div style={{fontSize:11,fontWeight:800,color:C.blue,letterSpacing:".08em",textTransform:"uppercase"}}>Users / Login</div>
-  <div style={{fontSize:11,color:C.faint,margin:"4px 0 12px"}}>Separate 4-digit PIN per colleague. Admin has full access; each User can have individual tab access.</div>
+  <div style={{fontSize:11,color:C.faint,margin:"4px 0 12px"}}>Separate 4-digit PIN per colleague. Columns, filters, saved vessels and Position Preview settings follow this user in Supabase, including on another device. Changing a PIN keeps the same user’s preferences.</div>
   <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.6fr) minmax(0,.55fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,.8fr) 90px",gap:7,alignItems:"center",marginBottom:12}}>
    <input style={input} placeholder="Full name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
    <input style={{...input,textTransform:"uppercase",textAlign:"center"}} placeholder="HH" maxLength={2} value={form.initials} onChange={e=>setForm({...form,initials:e.target.value})}/>
@@ -71,3 +73,4 @@ function Row({u,patch,changePin,deleteUser}){
  <button title={`Delete ${u.name}`} aria-label={`Delete ${u.name}`} onClick={()=>deleteUser(u)} style={{background:"rgba(255,75,85,.09)",border:"1px solid rgba(255,75,85,.4)",color:"#ff6677",borderRadius:4,height:25,cursor:"pointer",fontWeight:800}}>×</button>
  </div>
 }
+

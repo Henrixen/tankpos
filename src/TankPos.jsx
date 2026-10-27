@@ -2,11 +2,15 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabaseclient";
 import { isMobile } from "./constants";
-import { enrichV, normaliseCargo, mergeVessels, toISODate } from "./utils";
+import { enrichV, normaliseCargo as normaliseCargoBase, mergeVessels, toISODate } from "./utils";
 import { saveV, saveSnapshot, loadHistory } from "./supabaseHelpers";
 import { v4 as uuidv4 } from 'uuid';
 import DesktopApp from "./DesktopApp";
 
+
+import {useBrokerLiveData,getBrokerSession,brokerRpc,beginBrokerWrite,chooseBrokerConflict,applyWhenIdle} from "./BrokerWorkspace";
+import {mapBrokerPosition,applyBrokerOverride} from "./brokerData";
+const normaliseCargo=r=>({...normaliseCargoBase(r),_brokerRaw:{...r}});
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function TankPos(){
@@ -20,7 +24,11 @@ export default function TankPos(){
   const [hasMore,setHasMore]=useState(false);
   const searchTimer=useRef(null);
   const vesselsRef=useRef([]);
+  const cargoesRef=useRef([]);
+  cargoesRef.current=cargoes;
+  const initialRead=useRef(Promise.resolve());
   const saveQueueRef=useRef(new Map());
+  const ownPositionAcks=useRef(new Map()),ownCargoAcks=useRef(new Map());
   useEffect(()=>{vesselsRef.current=vessels;},[vessels]);
   const [mobile,setMobile]=useState(()=>isMobile());
   const [fileDate, setFileDate] = useState(() => new Date().toISOString().slice(0,10));
@@ -62,8 +70,7 @@ export default function TankPos(){
   }
   // Load vessels from local storage, cargoes from Supabase
   useEffect(()=>{
-  fetchPositions();
-  fetchCargoes();
+  initialRead.current=Promise.all([fetchPositions(),fetchCargoes()]);
 },[]);
 
   // Auto-load vesselDB on startup
@@ -99,32 +106,6 @@ export default function TankPos(){
   }
 
   async function fetchPositions(){
-  const REGION_RENAME={
-    "East Coast South America":"EC SAM",
-    "Europe (Mediterranean)":"Med",
-    "South-East-Asia Far-East":"SEA-FEA",
-    "West Africa":"WAF",
-    "West Coast US":"WC US",
-    "West Coast South America":"WC SAM",
-    "North West Europe":"NWE",
-    "Med-Black Sea":"Med",
-    "Arabian Gulf":"Suez-AG-India",
-    "AG":"Suez-AG-India",
-    "AG-India-Red Sea":"Suez-AG-India",
-    "Red Sea":"Suez-India",
-    "India":"Suez-India",
-    "West Pacific":"Pacific",
-    "Southern Ocean":"Pacific",
-  };
-  const SEGMENT_RENAME={
-    "1. Small (<10)":"Sub 10k",
-    "2. Cityclass (10-15)":"City",
-    "3. Intermediate (14-19)":"Inter",
-    "4. J19 (19-22)":"J19",
-    "5. Flexi (22-30)":"Flexi",
-    "6. Handy (30-40)":"Handy",
-    "7. MR (>40)":"MR",
-  };
   // The positions_latest view can fail transiently during startup (for example
   // while the database is waking up). Retry here rather than requiring a full
   // browser refresh and another dashboard login.
@@ -148,53 +129,14 @@ export default function TankPos(){
     return;
   }
   console.log("fetchPositions:",data.length,"rows");
-  const mn=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  setVessels((data||[]).map(r=>{
-    const rawDate=String(r.open_date||"");
-    let fmtDate=rawDate;
-    if(rawDate&&!/^\d{1,2}\s[A-Za-z]/.test(rawDate)){
-      const d=new Date(rawDate);
-      if(!isNaN(d))fmtDate=d.getDate()+" "+mn[d.getMonth()];
-    }
-    return{
-      id:          String(r.id||""),
-      vessel:      String(r.vessel_name||"").toUpperCase(),
-      imoNo:       r.imo_no!=null?String(r.imo_no):null,
-      operator:    r.operator||"",
-      openPort:    r.port_name||"",
-      date:        fmtDate,
-      dwt:         r.dwt||null,
-      built:       r.build_year||null,
-      loa:         r.overall_length||null,
-      beam:        r.beam||null,
-      cbm:         r.cbm||null,
-      coating:     r.coating_type_2||r.coating||r.coated||"",
-      tag:         r.tag||"",
-      comment:     r.details||"",
-      notes:       r.notes||"",
-      last3:       r.last_3_cargoes||"",
-      dirtyClean:  r.dirty_clean||"",
-      iceClass:    r.ice_class||"",
-      segment:     SEGMENT_RENAME[r.segment]||r.segment||"",
-      superRegion: REGION_RENAME[r.super_region]||r.super_region||"",
-      updatedAt:   r.updated_at||"",
-      fileDate:    r.file_date||null,
-      source:      r.source||"external",
-      spec: {
-        iceClass: r.ice_class||null,
-        lastCargo: r.last_3_cargoes||null,
-        segment: r.segment||null,
-        coated: r.coating_type_2||r.coating||r.coated||null,
-      }
-    };
-  }));
+  setVessels((data||[]).map(mapBrokerPosition));
 
   // Restore vessel-specific manual overrides, including tags and coating.
   // The positions_latest feed does not necessarily carry these fields.
   try {
     const {data: overrides, error: overrideError} = await supabase
       .from("vessel_overrides")
-      .select("imo_no,vessel_name,operator,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo,tag,tags,open_date,open_port,comment");
+      .select("id,updated_at,imo_no,vessel_name,operator,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo,tag,tags,open_date,open_port,comment");
     if (overrideError) console.warn("vessel_overrides load:", overrideError);
     if (overrides?.length) {
       const byImo = {}, byName = {};
@@ -205,26 +147,7 @@ export default function TankPos(){
       setVessels(prev => prev.map(v => {
         const o = (v.imoNo && byImo[v.imoNo]) || byName[v.vessel];
         if (!o) return v;
-        const merged = {...v, spec:{...(v.spec||{})}};
-        if (o.operator != null) merged.operator = o.operator;
-        if (o.note != null) merged.notes = o.note;
-        if (o.coating != null) merged.coating = o.coating;
-        if (o.loa != null) merged.loa = o.loa;
-        if (o.beam != null) merged.beam = o.beam;
-        if (o.cbm != null) merged.cbm = o.cbm;
-        if (o.dwt != null) merged.dwt = o.dwt;
-        if (o.built != null) merged.built = o.built;
-        if (o.tag != null || o.tags != null) merged.tag = o.tag ?? o.tags;
-        if (o.open_date != null) {
-          const dt = new Date(o.open_date + "T12:00:00");
-          merged.date = Number.isNaN(dt.getTime()) ? o.open_date : `${dt.getDate()} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][dt.getMonth()]}`;
-        }
-        if (o.open_port != null) merged.openPort = o.open_port;
-        if (o.comment != null) merged.comment = o.comment;
-        if (o.fuel != null) merged.spec.fuel = o.fuel;
-        if (o.ice_class != null) merged.spec.iceClass = o.ice_class;
-        if (o.last_cargo != null) merged.spec.lastCargo = o.last_cargo;
-        return merged;
+        return applyBrokerOverride(v,o);
       }));
     }
   } catch(e) { console.error("vessel_overrides load:",e); }
@@ -286,21 +209,32 @@ export default function TankPos(){
       }
     }
     const key = vessel.imoNo ? `imo:${vessel.imoNo}` : `name:${name}`;
+    const queued=saveQueueRef.current.has(key);
     const prior = saveQueueRef.current.get(key) || Promise.resolve();
     const task = prior.catch(()=>{}).then(async () => {
-      const table = supabase.from("vessel_overrides");
-      const query = vessel.imoNo ? table.select("id").eq("imo_no",String(vessel.imoNo)) : table.select("id").ilike("vessel_name",name);
-      const {data:existing,error:readError} = await query.limit(1);
-      if (readError) throw readError;
-      const patch = {[dbField]:dbValue,updated_at:new Date().toISOString()};
-      let result;
-      if (existing?.length) {
-        result = await supabase.from("vessel_overrides").update(patch).eq("id",existing[0].id).select("id");
-      } else {
-        result = await supabase.from("vessel_overrides").insert({vessel_name:name,imo_no:vessel.imoNo||null,...patch}).select("id");
-      }
-      if (result.error) throw result.error;
-      if (!result.data?.length) throw new Error("Supabase returned zero saved rows (check RLS permissions)");
+      const currentSession=getBrokerSession();if(!currentSession)throw new Error("Please log in again before saving.");
+      const endWrite=beginBrokerWrite();
+      try{
+        let expected=(queued&&ownPositionAcks.current.has(key+":"+dbField)?ownPositionAcks.current.get(key+":"+dbField):vessel._brokerOverrides?.[dbField])??null;
+        let result=await brokerRpc("broker_position_patch",{p_token:currentSession.token,p_name:name,p_imo:vessel.imoNo||null,p_field:dbField,p_value:dbValue,p_expected:expected});
+        while(result?.conflict){
+          const overwrite=await chooseBrokerConflict({record:name,field,mine:value,theirs:result.current});
+          if(!overwrite){
+            ownPositionAcks.current.set(key+":"+dbField,result.current??null);
+            const source=mapBrokerPosition(vessel._brokerSource||{});
+            setVessels(prev=>prev.map(v=>{
+              if(v.vessel!==name)return v;
+              const restored=applyBrokerOverride({...v,...(field.includes('.')?{spec:{...v.spec,[field.split('.')[1]]:source.spec?.[field.split('.')[1]]}}:{[field]:source[field]})},result.row||{});
+              return restored;
+            }));
+            return;
+          }
+          expected=result.current;
+          result=await brokerRpc("broker_position_patch",{p_token:currentSession.token,p_name:name,p_imo:vessel.imoNo||null,p_field:dbField,p_value:dbValue,p_expected:expected});
+        }
+        ownPositionAcks.current.set(key+":"+dbField,result.row?.[dbField]??null);
+        setVessels(prev=>prev.map(v=>v.vessel===name?{...v,_brokerOverrides:result.row||{}}:v));
+      }finally{endWrite();}
       console.info("Vessel amendment saved",name,field,dbValue);
     });
     saveQueueRef.current.set(key,task);
@@ -327,26 +261,34 @@ export default function TankPos(){
       const dt=new Date(dbValue+"T12:00:00");
       return dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});
     })():value;
-    const previous=cargoes.find(c=>String(c.id)===String(id))?.[field];
+    const baseRow=cargoesRef.current.find(c=>String(c.id)===String(id));
+    const previous=baseRow?.[field];
     const version=(cargoCellVersionRef.current.get(key)||0)+1;
     cargoCellVersionRef.current.set(key,version);
     setCargoes(prev=>prev.map(c=>{
       if(String(c.id)!==String(id))return c;
       return {...c,[field]:displayValue};
     }));
+    const queued=cargoCellQueueRef.current.has(key);
     const preceding=cargoCellQueueRef.current.get(key)||Promise.resolve();
     const task=preceding.catch(()=>{}).then(async()=>{
-      const {data,error}=await supabase.from("cargoes").update({[field]:dbValue}).eq("id",id).select("id");
-      if(error||!data?.length){
-        const message=error?.message||"No row was updated (check Supabase RLS permissions).";
-        console.error("Cargo save FAILED",{id,field,value,error});
-        // Never undo a newer edit when an older queued request fails.
-        if(cargoCellVersionRef.current.get(key)===version){
-          setCargoes(prev=>prev.map(c=>String(c.id)===String(id)&&c[field]===displayValue?{...c,[field]:previous}:c));
+      const currentSession=getBrokerSession();if(!currentSession)throw new Error("Please log in again before saving.");
+      const endWrite=beginBrokerWrite();
+      try{
+        let expected=(queued&&ownCargoAcks.current.has(key)?ownCargoAcks.current.get(key):baseRow?._brokerRaw?.[field])??null;
+        let result=await brokerRpc("broker_cargo_patch",{p_token:currentSession.token,p_id:String(id),p_field:field,p_value:dbValue,p_expected:expected});
+        while(result?.conflict){
+          const overwrite=await chooseBrokerConflict({record:baseRow?.vessel||baseRow?.charterer||String(id),field,mine:value,theirs:result.current});
+          if(!overwrite){ownCargoAcks.current.set(key,result.current??null);setCargoes(prev=>prev.map(c=>String(c.id)===String(id)?normaliseCargo(result.row):c));return false;}
+          expected=result.current;
+          result=await brokerRpc("broker_cargo_patch",{p_token:currentSession.token,p_id:String(id),p_field:field,p_value:dbValue,p_expected:expected});
         }
-        alert(`Cargo NOT saved (${field}): ${message}`);
-        throw error||new Error(message);
-      }
+        ownCargoAcks.current.set(key,result.row?.[field]??null);
+        setCargoes(prev=>prev.map(c=>String(c.id)===String(id)?{...c,_brokerRaw:result.row}:c));
+      }catch(error){
+        if(cargoCellVersionRef.current.get(key)===version)setCargoes(prev=>prev.map(c=>String(c.id)===String(id)&&c[field]===displayValue?{...c,[field]:previous}:c));
+        alert(`Cargo NOT saved (${field}): ${error.message}`);throw error;
+      }finally{endWrite();}
       return true;
     });
     cargoCellQueueRef.current.set(key,task);
@@ -552,6 +494,69 @@ export default function TankPos(){
     }
   },[]);
 
+  async function liveCargoEvents(events){
+    await applyWhenIdle(()=>{
+      const next=new Map(cargoesRef.current.map(c=>[String(c.id),c]));
+      for(const event of events){
+        const row=event.eventType==='DELETE'?event.old:event.new,key=String(row?.id);
+        if(event.eventType==='DELETE')next.delete(key);else if(row?.id!=null)next.set(key,normaliseCargo(row));
+      }
+      const rows=[...next.values()];cargoesRef.current=rows;setCargoes(rows);setCargoTotal(rows.length);
+    });
+  }
+  async function livePositions(identities){
+    const names=[...new Set(identities.map(x=>x.name).filter(Boolean))];
+    const imos=[...new Set(identities.map(x=>x.imo!=null?String(x.imo):null).filter(Boolean))];
+    const base=[],overrides=[];
+    for(let offset=0;offset<Math.max(names.length,imos.length);offset+=50){
+      for(const [column,values]of [['vessel_name',names.slice(offset,offset+50)],['imo_no',imos.slice(offset,offset+50)]]){
+        if(!values.length)continue;
+        const [{data,error},{data:manual,error:manualError}]=await Promise.all([
+          supabase.from('positions_latest').select('*').in(column,values).limit(1000),
+          supabase.from('vessel_overrides').select('*').in(column,values).limit(1000)
+        ]);
+        if(error||manualError)throw error||manualError;base.push(...(data||[]));overrides.push(...(manual||[]));
+      }
+    }
+    const key=v=>v.imoNo?'imo:'+v.imoNo:'name:'+String(v.vessel||'').toUpperCase();
+    const byImo=new Map(),byName=new Map();
+    overrides.forEach(o=>{if(o.imo_no!=null)byImo.set(String(o.imo_no),o);if(o.vessel_name)byName.set(String(o.vessel_name).toUpperCase(),o);});
+    const mapped=new Map(base.map(raw=>{const v=mapBrokerPosition(raw);return [key(v),applyBrokerOverride(v,(v.imoNo&&byImo.get(v.imoNo))||byName.get(v.vessel))];}));
+    await applyWhenIdle(()=>{
+      const matching=v=>identities.some(x=>(x.imo!=null&&String(x.imo)===v.imoNo)||(x.name&&String(x.name).toUpperCase()===v.vessel));
+      const next=[];
+      for(const v of vesselsRef.current){if(!matching(v)){next.push(v);continue;}const replacement=mapped.get(key(v));if(replacement){next.push(replacement);mapped.delete(key(v));}}
+      next.push(...mapped.values());vesselsRef.current=next;setVessels(next);
+    });
+  }
+  async function brokerReconcile(){
+    await initialRead.current;
+    const meta=async(table,columns)=>{
+      const all=[];for(let from=0;;from+=1000){const {data,error}=await supabase.from(table).select(columns).order(table==='cargoes'?'id':'vessel_name',{ascending:true}).range(from,from+999);if(error)throw error;all.push(...(data||[]));if(!data||data.length<1000)break;}return all;
+    };
+    // Metadata only after subscribing/reconnecting or returning to the page.
+    // Normal live events do not re-download the full tables.
+    const [cm,pm,om]=await Promise.all([meta('cargoes','id,updated'),meta('positions_latest','vessel_name,imo_no,updated_at'),meta('vessel_overrides','vessel_name,imo_no,updated_at')]);
+    const currentCargo=new Map(cargoesRef.current.map(c=>[String(c.id),c]));
+    const cargoIds=new Set(cm.map(c=>String(c.id))),cargoChanges=[];
+    for(const c of cm){const old=currentCargo.get(String(c.id));if(!old||old._brokerRaw?.updated!==c.updated)cargoChanges.push(c.id);}
+    const events=cargoesRef.current.filter(c=>!cargoIds.has(String(c.id))).map(c=>({eventType:'DELETE',old:{id:c.id}}));
+    for(let i=0;i<cargoChanges.length;i+=100){const {data,error}=await supabase.from('cargoes').select('*').in('id',cargoChanges.slice(i,i+100));if(error)throw error;(data||[]).forEach(row=>events.push({eventType:'UPDATE',new:row}));}
+    if(events.length)await liveCargoEvents(events);
+    const currentVessels=vesselsRef.current,changes=new Map();
+    for(const r of [...pm,...om]){
+      const old=currentVessels.find(v=>(r.imo_no!=null&&String(r.imo_no)===v.imoNo)||String(r.vessel_name).toUpperCase()===v.vessel);
+      const isOverride=om.includes(r),stamp=isOverride?old?._brokerOverrides?.updated_at:old?._brokerSourceUpdatedAt;
+      if(!old||stamp!==r.updated_at)changes.set(String(r.imo_no||r.vessel_name),{imo:r.imo_no,name:r.vessel_name});
+    }
+    for(const old of currentVessels)if(old._brokerOverrides?.id&&!om.some(r=>(r.imo_no!=null&&String(r.imo_no)===old.imoNo)||String(r.vessel_name).toUpperCase()===old.vessel))changes.set(old.imoNo||old.vessel,{imo:old.imoNo,name:old.vessel});
+    const sourceNames=new Set(pm.map(r=>String(r.vessel_name).toUpperCase()));
+    for(const old of currentVessels)if(!sourceNames.has(old.vessel))changes.set(old.imoNo||old.vessel,{imo:old.imoNo,name:old.vessel});
+    if(changes.size)await livePositions([...changes.values()]);
+  }
+  useBrokerLiveData(liveCargoEvents,livePositions,brokerReconcile);
+
   const props={vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
   return <DesktopApp {...props}/>;
 }
+
