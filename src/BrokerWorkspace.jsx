@@ -163,38 +163,49 @@ export function useBrokerLiveData(onCargo,onPositions,onReconnect){
  const current=useBrokerSession(),callbacks=useRef({onCargo,onPositions,onReconnect});callbacks.current={onCargo,onPositions,onReconnect};
  useEffect(()=>{
   if(!current)return;
-  let stopped=false,timer,busy=false,needsReconcile=true;
+  let stopped=false,timer,retryTimer,catchupTimer,busy=false,catching=false,connected=false,needsReconcile=true,failures=0,catchupFailures=0,dataError='',catchupError='';
   const cargo=new Map(),positions=new Map();
-  const schedule=()=>{clearTimeout(timer);timer=setTimeout(pump,350);};
+  const status=()=>{if(stopped)return;liveState=!connected?'Reconnecting':dataError?'Sync retry: '+dataError:catchupError?'Live · catch-up retry':'Live';emit();};
+  // A bounded batch window: more events do not keep postponing an existing batch.
+  const schedule=()=>{if(stopped||timer)return;timer=setTimeout(()=>{timer=null;pump();},120);};
+  const restore=(map,entries)=>{for(const [key,value]of entries)if(!map.has(key))map.set(key,value);};
   async function pump(){
-   if(stopped||busy)return;
-   if(!liveCanApply()){timer=setTimeout(pump,350);return;}
+   if(stopped||busy||retryTimer)return;
+   if(!liveCanApply()){schedule();return;}
    busy=true;
    try{
-    const c=[...cargo.values()],p=[...positions.values()];cargo.clear();positions.clear();
-    if(c.length)await callbacks.current.onCargo(c);
-    if(p.length)await callbacks.current.onPositions(p);
-    if(needsReconcile&&liveCanApply()){needsReconcile=false;await callbacks.current.onReconnect();}
-   }catch(error){liveState='Sync error — refresh needed';emit();console.error('Broker live sync:',error);}
-   finally{busy=false;if(cargo.size||positions.size||needsReconcile)schedule();}
+    if(cargo.size){const batch=[...cargo];cargo.clear();try{await callbacks.current.onCargo(batch.map(x=>x[1]));}catch(error){restore(cargo,batch);throw error;}}
+    if(positions.size){const batch=[...positions];positions.clear();try{await callbacks.current.onPositions(batch.map(x=>x[1]));}catch(error){restore(positions,batch);throw error;}}
+    failures=0;dataError='';status();
+   }catch(error){
+    dataError=error.message||String(error);status();console.error('Broker live sync:',dataError,error);
+    const delay=Math.min(30000,1000*2**Math.min(failures++,5));retryTimer=setTimeout(()=>{retryTimer=null;schedule();},delay);
+   }finally{busy=false;if(!stopped&&!retryTimer&&(cargo.size||positions.size))schedule();}
+  }
+  function scheduleCatchup(delay=400){if(stopped||catchupTimer||catching)return;catchupTimer=setTimeout(()=>{catchupTimer=null;catchup();},delay);}
+  async function catchup(){
+   if(stopped||catching||!needsReconcile)return;
+   if(!connected||!liveCanApply()){scheduleCatchup(500);return;}
+   catching=true;needsReconcile=false;
+   try{await callbacks.current.onReconnect();catchupFailures=0;catchupError='';status();}
+   catch(error){needsReconcile=true;catchupError=error.message||String(error);status();console.error('Broker catch-up:',catchupError,error);}
+   finally{catching=false;if(!stopped&&needsReconcile&&catchupFailures<3)scheduleCatchup(Math.min(30000,2000*2**catchupFailures++));}
   }
   const channel=supabase.channel('broker-data-'+crypto.randomUUID());
   channel.on('postgres_changes',{event:'*',schema:'public',table:'cargoes'},event=>{const id=event.new?.id??event.old?.id;if(id!=null)cargo.set(String(id),event);schedule();});
   for(const table of ['positions','positions_external','vessel_overrides'])channel.on('postgres_changes',{event:'*',schema:'public',table},event=>{
    const ident=liveIdentity(event.eventType==='DELETE'?event.old:event.new);
-   if(ident.imo||ident.name)positions.set(String(ident.imo||ident.name),ident);
-   else{liveState='Position refresh needed';emit();}
-   schedule();
+   if(ident.imo||ident.name){if(table==='vessel_overrides')ident.overrideEvent=event;positions.set(table+':'+String(ident.imo||ident.name),ident);}
+   else{needsReconcile=true;scheduleCatchup();}schedule();
   });
-  channel.subscribe(status=>{
-   if(stopped)return;
-   if(status==='SUBSCRIBED'){liveState='Live';needsReconcile=true;schedule();}
-   else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){liveState='Reconnecting';needsReconcile=true;}
-   emit();
+  channel.subscribe(state=>{
+   if(stopped)return;connected=state==='SUBSCRIBED';
+   if(connected){needsReconcile=true;catchupFailures=0;schedule();scheduleCatchup();}status();
   });
-  const visible=()=>{if(document.visibilityState==='visible'){needsReconcile=true;schedule();}};
-  document.addEventListener('visibilitychange',visible);flushListeners.add(schedule);
-  return()=>{stopped=true;clearTimeout(timer);flushListeners.delete(schedule);document.removeEventListener('visibilitychange',visible);supabase.removeChannel(channel);};
+  const visible=()=>{if(document.visibilityState==='visible'){needsReconcile=true;catchupFailures=0;scheduleCatchup();schedule();}};
+  const flush=()=>{schedule();if(needsReconcile)scheduleCatchup();};
+  document.addEventListener('visibilitychange',visible);flushListeners.add(flush);
+  return()=>{stopped=true;clearTimeout(timer);clearTimeout(retryTimer);clearTimeout(catchupTimer);flushListeners.delete(flush);document.removeEventListener('visibilitychange',visible);supabase.removeChannel(channel);};
  },[current?.user.id]);
 }
 
