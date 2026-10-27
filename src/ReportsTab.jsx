@@ -2016,8 +2016,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         )}
 
         {section === "quick" && (
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "8px 10px", gap: 8, overflow: "hidden" }}>
-            <div style={{overflowY:"auto",maxHeight:"55%",flexShrink:1}}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "8px 10px", gap: 8, overflow: "hidden", minHeight: 0 }}>
+            <div style={{overflowY:"auto",maxHeight:"55%",flexShrink:1,minHeight:0}}>
               <div style={{fontSize:10,fontWeight:700,color:ACCENT,marginBottom:7}}>TAGS</div>
               <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
                 {quickAvailableTags.map(tag=><button key={tag} aria-pressed={quickSelectedTags.includes(tag)} onClick={()=>toggleQuickTag(tag)} style={{...SB,fontSize:10,padding:"4px 7px",background:quickSelectedTags.includes(tag)?"rgba(88,166,255,0.2)":C.bg3,borderColor:quickSelectedTags.includes(tag)?ACCENT:C.bd,color:quickSelectedTags.includes(tag)?"#79c0ff":C.dim}}>{tag}</button>)}
@@ -2030,16 +2030,16 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
               <button aria-pressed={quickSelectedTags.includes("__INTER_UKC__")} onClick={()=>toggleQuickTag("__INTER_UKC__")} style={{...SB,fontSize:10,padding:"4px 7px",background:quickSelectedTags.includes("__INTER_UKC__")?"rgba(88,166,255,0.2)":C.bg3,borderColor:quickSelectedTags.includes("__INTER_UKC__")?ACCENT:C.bd,color:quickSelectedTags.includes("__INTER_UKC__")?"#79c0ff":C.dim}}>INTER UKC</button>
             </div>
             {quickOperators.length>0 ? (
-              <div aria-label="Operators included in output" style={{flex:"1 1 160px",minHeight:60,overflowY:"auto",borderTop:"1px solid "+C.bd,paddingTop:8}}>
+              <div aria-label="Operators included in output" style={{flex:"0 1 auto",minHeight:0,maxHeight:"min(36vh, 430px)",overflowY:"auto",borderTop:"1px solid "+C.bd,paddingTop:8}}>
                 <div style={{fontSize:10,fontWeight:700,color:ACCENT,marginBottom:7}}>OPERATORS</div>
                 {quickOperators.map(([key,name])=><label key={key} style={{fontSize:11,color:C.tx,display:"flex",alignItems:"flex-start",gap:6,padding:"4px 2px",cursor:"pointer"}}>
                   <input type="checkbox" checked={!quickExcludedOperators.includes(key)} onChange={()=>toggleQuickOperator(key)} style={{width:12,height:12,margin:"1px 0 0",flexShrink:0,accentColor:ACCENT}}/>
                   <span style={{minWidth:0,overflowWrap:"anywhere"}}>{quickDisplayText(name)}</span>
                 </label>)}
               </div>
-            ) : <div style={{flex:1}}/>}
+            ) : null}
             {(Array.isArray(savedReports)?savedReports:[]).filter(r => r.report_type === "Quick Positions").length > 0 && (
-              <div style={{ borderTop: "1px solid " + C.bd, paddingTop: 8, maxHeight: 160, overflowY: "auto" }}>
+              <div style={{ flexShrink: 0, borderTop: "1px solid " + C.bd, paddingTop: 8, maxHeight: "min(200px, 26vh)", overflowY: "auto" }}>
                 <div style={{ fontSize: 9, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Saved</div>
                 {(Array.isArray(savedReports)?savedReports:[]).filter(r => r.report_type === "Quick Positions").map(r => (
                   <div key={r.id} onClick={() => loadQuickPositions(r.id)}
@@ -2050,7 +2050,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                 ))}
               </div>
             )}
-            <div style={{ paddingTop: 8, borderTop: "1px solid " + C.bd }}>
+            <div style={{ flexShrink: 0, paddingTop: 8, borderTop: "1px solid " + C.bd }}>
               <div style={{ fontSize: 9, color: C.faint, marginBottom: 4 }}>Output format:</div>
               <pre style={{ margin: 0, fontSize: 9, color: C.dim, fontFamily: "monospace", lineHeight: 1.7, background: C.bg3, padding: "6px 8px", borderRadius: 4 }}>{`|| Available tonnage ||
 *Operator*
