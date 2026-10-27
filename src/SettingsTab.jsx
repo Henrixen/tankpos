@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, createContext, useContext } from "react";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
 import UserManager from "./UserManager";
@@ -12,10 +12,16 @@ const DEFAULT_CONFIG = {
   reletsFrom: ["Exxon","Shell","Circle K","Essar","Total","CSS SA"],
 };
 
+const SettingsCategoryContext=createContext("general");
+const SETTINGS_CATEGORIES=[["general","General"],["users","Users / Login"],["positions","Positions"],["cargoes","Cargoes"],["fixing","Fixing"],["tags","Tags"]];
+const SETTINGS_SCOPES={"Navigation / Menu":["general"],"Users / Login":["users"],"Tag Management":["tags","positions","cargoes"],"Cargoes / Copy Format":["cargoes"],"Cargoes / WhatsApp Format":["cargoes"],"Positions / WhatsApp Format":["positions"],"Fixing":["fixing"],"Inter UKC Pool":["positions","cargoes"],"Cargo Filter Groups":["cargoes"],"Region Filter Groups":["positions"]};
+
 // Shared section card wrapper — matches Tag Management styling
 function SectionCard({title,subtitle,children}){
+  const category=useContext(SettingsCategoryContext);
+  const visible=(SETTINGS_SCOPES[title]||["general"]).includes(category);
   return(
-    <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:8,padding:"14px 16px",width:"100%",boxSizing:"border-box",position:"relative"}}>
+    <div style={{background:C.bg3,border:"1px solid "+C.bd2,borderRadius:8,padding:"14px 16px",width:"100%",boxSizing:"border-box",position:"relative",minWidth:0,overflowX:"auto",display:visible?"block":"none"}}>
       <div style={{borderBottom:"1px solid rgba(58,130,246,0.14)",paddingBottom:10,marginBottom:12}}>
         <div style={{fontSize:12,fontWeight:700,color:"rgba(120,160,220,0.7)",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:4}}>{title}</div>
         {subtitle&&<div style={{fontSize:12,color:"rgba(180,200,230,0.45)"}}>{subtitle}</div>}
@@ -249,9 +255,9 @@ function UserAccessEditor(){
  const [users,setUsers]=useState([]),[selected,setSelected]=useState(""),[tabs,setTabs]=useState([]),[status,setStatus]=useState("");
  async function loadUsers(){
    const {data}=await supabase.from("app_users").select("id,name,initials,role,active").eq("active",true).order("name");
-   const rows=(data||[]).filter(u=>u.role!=="admin"); setUsers(rows); if(!selected&&rows[0])setSelected(rows[0].id);
+   const rows=(data||[]).filter(u=>u.role!=="admin"); setUsers(rows); setSelected(current=>rows.some(u=>u.id===current)?current:(rows[0]?.id||""));
  }
- useEffect(()=>{loadUsers();},[]);
+ useEffect(()=>{loadUsers();window.addEventListener("broker-users-updated",loadUsers);return()=>window.removeEventListener("broker-users-updated",loadUsers);},[]);
  useEffect(()=>{if(!selected)return;(async()=>{
    const {data}=await supabase.from("tag_settings").select("value").eq("key","user_tabs_"+selected).maybeSingle();
    const raw=data?.value, next=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
@@ -481,6 +487,7 @@ function CargoExportEditor(){
 }
 
 export default function SettingsTab() {
+  const [settingsCategory,setSettingsCategory]=useState("general");
   const [groups, setGroups] = useState(loadGroups);
   useEffect(()=>{ saveGroups(groups); },[groups]);
   const [editing, setEditing] = useState(null);
@@ -532,8 +539,15 @@ export default function SettingsTab() {
   }
 
   return(
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1.3fr",gap:16,padding:"0 0 20px",fontFamily:"Inter,sans-serif",alignItems:"start"}}>
-      <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0}}>
+    <SettingsCategoryContext.Provider value={settingsCategory}>
+    <div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0,width:"100%",fontFamily:"Inter,sans-serif",paddingBottom:20}}>
+      <div role="tablist" aria-label="Settings categories" style={{display:"flex",flexWrap:"wrap",gap:8,padding:"10px 0",borderBottom:"1px solid "+C.bd2}}>
+        {SETTINGS_CATEGORIES.map(([id,label])=><button key={id} role="tab" aria-selected={settingsCategory===id} onClick={()=>setSettingsCategory(id)} style={{padding:"8px 16px",borderRadius:5,border:"1px solid "+(settingsCategory===id?"#86efac":C.bd2),background:settingsCategory===id?"rgba(134,239,172,.16)":C.bg3,color:settingsCategory===id?"#bbf7d0":C.tx,fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:"pointer"}}>{label}</button>)}
+      </div>
+      {(settingsCategory==="positions"||settingsCategory==="cargoes")&&<div style={{color:C.faint,fontSize:12}}>Tag Management and Inter UKC Pool are shared settings. Changes apply wherever those settings are used.</div>}
+      <div role="tabpanel" style={{display:"grid",gridTemplateColumns:settingsCategory==="users"?"minmax(0,1fr)":"repeat(auto-fit,minmax(min(100%,520px),1fr))",gap:16,alignItems:"start",minWidth:0}}>
+
+      <div style={{display:"contents"}}>
         <SectionCard title="Navigation / Menu" subtitle="Choose menu style, order existing tabs, visibility and grouped headings."><NavigationEditor/><AppScaleControl/></SectionCard>
         <SectionCard title="Users / Login" subtitle="Add colleagues with separate PINs. Admin has full access; each User can have individual tab access.">
           <UserManager/>
@@ -543,7 +557,7 @@ export default function SettingsTab() {
         </SectionCard>
       </div>
 
-      <div style={{display:"flex",flexDirection:"column",gap:16,minWidth:0}}>
+      <div style={{display:"contents"}}>
         <SectionCard title="Tag Management">
           <TagManagement/>
         </SectionCard>
@@ -680,6 +694,8 @@ export default function SettingsTab() {
           </div>
         </SectionCard>
       </div>
+      </div>
     </div>
+    </SettingsCategoryContext.Provider>
   );
 }

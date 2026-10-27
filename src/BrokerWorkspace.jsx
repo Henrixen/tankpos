@@ -22,7 +22,16 @@ export async function brokerLogin(pin){
  if(conflictResolve){conflictResolve(false);conflictResolve=null;conflict=null;}
  session={user:data.user,token:data.token,settings:data.settings||{}};
  try{localStorage.setItem('signal_user',String(data.user.initials||'').toUpperCase());}catch{}
+ try{await brokerRpc('broker_remember_login_pin',{p_token:data.token,p_pin:String(pin)});}catch{}
  sessionListeners.forEach(fn=>fn());emit();return data.user;
+}
+export function refreshBrokerIdentity(user){
+ if(!session||String(session.user.id)!==String(user.id))return;
+ const {pin,pin_hash,...publicUser}=user;
+ session={...session,user:{...session.user,...publicUser}};
+ try{localStorage.setItem('signal_user',String(session.user.initials||'').toUpperCase());}catch{}
+ sessionListeners.forEach(fn=>fn());emit();publishActivity();
+ window.dispatchEvent(new CustomEvent('broker-identity-updated',{detail:session.user}));
 }
 export function isBrokerEditing(){
  const el=typeof document!=='undefined'?document.activeElement:null;

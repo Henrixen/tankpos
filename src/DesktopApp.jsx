@@ -1414,6 +1414,8 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
 
   // No sessionStorage — PIN required on every load/refresh/new tab
 
+  useEffect(()=>{const update=e=>setCurrentAppUser(e.detail);window.addEventListener('broker-identity-updated',update);return()=>window.removeEventListener('broker-identity-updated',update);},[]);
+
   async function submitPin(p){
     try{
       setPinMessage("");
@@ -4115,9 +4117,6 @@ const filtV=useMemo(()=>{
         )}
         {tab==="settings"&&(
           <div style={{display:"flex",flexDirection:"column",gap:16,padding:"0 0 20px"}}>
-            <TagManager/>
-            <div style={{height:1,background:C.bd2,margin:"4px 0"}}/>
-            {/* Original settings component */}
             <Suspense fallback={<TabFallback/>}><SettingsTab/></Suspense>
           </div>
         )}

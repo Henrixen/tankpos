@@ -1,76 +1,37 @@
 import React,{useEffect,useState} from "react";
-import {supabase} from "./supabaseclient"; import {C} from "./constants";
-async function sha256(t){const b=new TextEncoder().encode(String(t)),d=await crypto.subtle.digest("SHA-256",b);return [...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,"0")).join("")}
-const input={background:"#081425",border:"1px solid rgba(88,166,255,.22)",borderRadius:5,color:"#dcecff",fontFamily:"inherit",fontSize:12,padding:"6px 8px",outline:"none"};
+import {C} from "./constants";
+import {brokerRpc,getBrokerSession,refreshBrokerIdentity,flushPreferences} from "./BrokerWorkspace";
+const input={width:"100%",minWidth:0,boxSizing:"border-box",background:"#081425",border:"1px solid #29425e",borderRadius:5,color:"#dcecff",fontFamily:"inherit",fontSize:12,padding:"7px 8px"};
 export default function UserManager(){
- const [users,setUsers]=useState([]),[form,setForm]=useState({name:"",initials:"",color:"#58a6ff",pin:"",role:"user"}),[msg,setMsg]=useState("");
- async function load(){const {data,error}=await supabase.from("app_users").select("id,name,initials,color,role,active,created_at,pin_hash").order("name");if(error){setMsg("Run the supplied Supabase migration first.");return}setUsers(data||[]);const m={};(data||[]).filter(x=>x.active).forEach(x=>m[String(x.initials).toUpperCase()]=x);localStorage.setItem("signal_users_cache",JSON.stringify(m))}
- async function normalizeRoles(){
-   await supabase.from("app_users").update({role:"user"}).eq("role","guest");
- }
- useEffect(()=>{normalizeRoles().finally(load)},[]);
- async function add(){const name=form.name.trim(),initials=form.initials.trim().toUpperCase().replace(/[^A-ZÆØÅ]/g,"").slice(0,2),pin=form.pin.replace(/\D/g,"").slice(0,4);if(!name||initials.length!==2||pin.length!==4){setMsg("Name, exactly 2 initials and a 4-digit PIN are required.");return}const pinHash=await sha256(pin);if(users.some(u=>u.active&&u.pin_hash===pinHash)){setMsg("This PIN is already assigned to another active user.");return}const {error}=await supabase.from("app_users").insert({name,initials,color:form.color,pin_hash:pinHash,role:form.role,active:true});if(error){setMsg(error.message);return}setForm({name:"",initials:"",color:"#58a6ff",pin:"",role:"user"});setMsg("User added.");load()}
- async function deleteUser(u){
-   const current=String(localStorage.getItem("signal_user")||"").toUpperCase();
-   if(current===String(u.initials||"").toUpperCase()){setMsg("You cannot delete the account currently signed in.");return}
-   if(u.role==="admin"&&users.filter(x=>x.role==="admin"&&x.active).length<=1){setMsg("You cannot delete the last active administrator.");return}
-   if(!window.confirm(`Permanently delete ${u.name} (${u.initials})? This removes their login access. Existing cargoes and positions are not deleted.`))return;
-   const {error}=await supabase.from("app_users").delete().eq("id",u.id);
-   if(error){setMsg("Could not delete user: "+error.message);return}
-   setMsg(`${u.name} deleted.`);await load();
- }
- async function patch(id,v){const {error}=await supabase.from("app_users").update(v).eq("id",id);if(error)setMsg(error.message);else load()}
- async function changePin(id,oldPin,newPin,currentHash){
-   oldPin=String(oldPin||"").replace(/\D/g,"").slice(0,4);newPin=String(newPin||"").replace(/\D/g,"").slice(0,4);
-   if(oldPin.length!==4||newPin.length!==4){setMsg("Enter the current 4-digit PIN and the new 4-digit PIN.");return false}
-   if(await sha256(oldPin)!==currentHash){setMsg("Current PIN is incorrect.");return false}
-   const pinHash=await sha256(newPin);
-   if(users.some(u=>u.id!==id&&u.active&&u.pin_hash===pinHash)){setMsg("This PIN is already assigned to another active user.");return false}
-   const {error}=await supabase.from("app_users").update({pin_hash:pinHash}).eq("id",id);
-   if(error){setMsg(error.message);return false}
-   await load();setMsg("PIN changed.");return true
- }
- return <div style={{background:"#0b172a",border:"1px solid rgba(88,166,255,.18)",borderRadius:8,padding:16}}>
-  <div style={{fontSize:11,fontWeight:800,color:C.blue,letterSpacing:".08em",textTransform:"uppercase"}}>Users / Login</div>
-  <div style={{fontSize:11,color:C.faint,margin:"4px 0 12px"}}>Separate 4-digit PIN per colleague. Columns, filters, saved vessels and Position Preview settings follow this user in Supabase, including on another device. Changing a PIN keeps the same user’s preferences.</div>
-  <div style={{display:"grid",gridTemplateColumns:"minmax(0,1.6fr) minmax(0,.55fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,.8fr) 90px",gap:7,alignItems:"center",marginBottom:12}}>
-   <input style={input} placeholder="Full name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
-   <input style={{...input,textTransform:"uppercase",textAlign:"center"}} placeholder="HH" maxLength={2} value={form.initials} onChange={e=>setForm({...form,initials:e.target.value})}/>
-   <input type="color" title="Initial colour" value={form.color} onChange={e=>setForm({...form,color:e.target.value})} style={{width:"100%",height:31,background:"transparent",border:"none"}}/>
-   <input style={{...input,textAlign:"center"}} inputMode="numeric" placeholder="PIN" maxLength={4} value={form.pin} onChange={e=>setForm({...form,pin:e.target.value.replace(/\D/g,"").slice(0,4)})}/>
-   <select style={input} value={form.role} onChange={e=>setForm({...form,role:e.target.value})}><option value="user">User</option><option value="admin">Admin</option></select>
-   <button onClick={add} style={{...input,cursor:"pointer",color:C.green,fontWeight:800,width:"100%",height:31,boxSizing:"border-box"}}>+ Add</button>
-  </div>
-  {[...users].sort((a,b)=>(a.role==="admin"?0:1)-(b.role==="admin"?0:1)||a.name.localeCompare(b.name)).map((u,i,arr)=><div key={u.id} style={i>0&&arr[i-1].role==="admin"&&u.role!=="admin"?{borderTop:"1px solid rgba(88,166,255,.22)",paddingTop:9,marginTop:9}:{}}><Row u={u} patch={patch} changePin={changePin} deleteUser={deleteUser}/></div>)}
-  {msg&&<div style={{fontSize:11,color:C.faint,marginTop:10}}>{msg}</div>}
- </div>
+ const [users,setUsers]=useState([]),[msg,setMsg]=useState(""),[busy,setBusy]=useState(false);
+ async function request(action="list",user=null,patch={}){const token=getBrokerSession()?.token;if(!token)throw Error("Log in with your administrator PIN first.");return brokerRpc("broker_admin_users",{p_token:token,p_action:action,p_user_id:user?.id==null?null:String(user.id),p_patch:patch});}
+ function accept(rows){setUsers(rows);try{const cache={};rows.filter(u=>u.active).forEach(u=>{const {pin,...publicUser}=u;cache[String(u.initials).toUpperCase()]=publicUser;});localStorage.setItem("signal_users_cache",JSON.stringify(cache));}catch{}window.dispatchEvent(new CustomEvent("broker-users-updated"));}
+ useEffect(()=>{let active=true;request().then(rows=>{if(active)accept(rows)}).catch(e=>{if(active)setMsg("Could not load users. Run settings_user_slots.sql first. "+e.message)});return()=>{active=false};},[]);
+ async function action(kind,user,patch){if(busy)return false;setBusy(true);setMsg("");try{await flushPreferences();const rows=await request(kind,user,patch);accept(rows);if(kind==="reset"){try{for(const key of Object.keys(localStorage)){if(key.startsWith("broker:"+user.id+":")||key.startsWith("broker:workspace:"+user.id+":")||key==="signal_saved_pin_"+user.id)localStorage.removeItem(key);}}catch{}}const current=rows.find(u=>String(u.id)===String(getBrokerSession()?.user.id));if(current)refreshBrokerIdentity(current);setMsg(kind==="reset"?`User ${user.user_slot} reset. The empty slot is ready to reuse.`:kind==="add_slot"?"New empty user slot added.":`User ${user.user_slot} saved. Personal settings retained.`);return true;}catch(e){setMsg(e.message);return false;}finally{setBusy(false);}}
+ return <div style={{minWidth:0,color:C.tx}}>
+  <div style={{fontSize:12,color:C.faint,lineHeight:1.6,marginBottom:12}}>Each numbered slot keeps the same identity when you change its name, initials or PIN. Reset clears its personal preferences and sessions and leaves an empty slot. Shared cargoes, positions and edit history are retained.</div>
+  <div style={{fontSize:11,color:C.faint,marginBottom:12}}>One PIN field: replace its value and Save. Existing PINs appear after that user next logs in; until then you may enter a replacement. PINs are shown only to administrators.</div>
+  <div style={{display:"flex",flexDirection:"column",gap:12}}>{users.map(user=><UserRow key={user.id} user={user} busy={busy} onSave={patch=>action("save",user,patch)} onReset={()=>{if(window.confirm(`Reset User ${user.user_slot} (${user.name||"empty slot"})? This clears their login, tab access and personal settings. Shared business records stay intact.`))action("reset",user);}}/>)}</div>
+  <button disabled={busy} onClick={()=>action("add_slot")} style={{...input,width:"auto",marginTop:14,cursor:"pointer",color:"#86efac"}}>+ Add user slot</button>
+  {msg&&<div role="status" style={{fontSize:12,marginTop:12,color:"#a6c7ed",whiteSpace:"pre-wrap"}}>{msg}</div>}
+ </div>;
 }
-function Row({u,patch,changePin,deleteUser}){
- const pinKey=`signal_saved_pin_${u.id}`;
- const [oldPin,setOldPin]=useState(()=>{try{return localStorage.getItem(pinKey)||""}catch{return ""}}),[newPin,setNewPin]=useState("");
- const [remember,setRemember]=useState(()=>{try{return !!localStorage.getItem(pinKey)}catch{return false}});
- const [pinNote,setPinNote]=useState("");const col=u.color||"#58a6ff";
- async function toggleRemember(checked){
-   if(!checked){try{localStorage.removeItem(pinKey)}catch{}setRemember(false);setPinNote("");return}
-   if(oldPin.length!==4 || await sha256(oldPin)!==u.pin_hash){setPinNote("Enter the correct current PIN before saving it.");return}
-   if(!window.confirm("Save this PIN as readable text on this device? Anyone with access to this browser profile may be able to view it."))return;
-   try{localStorage.setItem(pinKey,oldPin);setRemember(true);setPinNote("Saved on this device")}catch{setPinNote("Could not save PIN")}
- }
- const clean=v=>v.replace(/\D/g,"").slice(0,4);
- return <div style={{display:"grid",gridTemplateColumns:"34px minmax(0,1.35fr) minmax(0,.5fr) minmax(0,.55fr) minmax(0,.7fr) minmax(0,1.65fr) 28px",gap:8,alignItems:"center",padding:"6px 8px",background:"rgba(255,255,255,.018)",borderRadius:5,marginTop:4}}>
-  <span style={{width:22,height:22,borderRadius:"50%",display:"inline-flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box",padding:0,fontSize:9,fontWeight:800,lineHeight:"1",letterSpacing:0,textAlign:"center",color:col,background:col+"22",border:"1px solid "+col+"88"}}>{u.initials}</span>
-  <span style={{fontSize:12,color:C.tx,fontWeight:700}}>{u.name}</span><select style={{...input,padding:"4px 6px",fontSize:10,textTransform:"uppercase"}} value={u.role==="admin"?"admin":"user"} onChange={e=>patch(u.id,{role:e.target.value})}><option value="user">User</option><option value="admin">Admin</option></select>
-  <input type="color" value={col} onChange={e=>patch(u.id,{color:e.target.value})} style={{width:34,height:24,background:"transparent",border:"none"}}/>
-  <label style={{fontSize:10,color:u.active?C.green:C.faint}}><input type="checkbox" checked={!!u.active} onChange={e=>patch(u.id,{active:e.target.checked})}/> Active</label>
-  <div style={{display:"flex",gap:4,alignItems:"center"}}>
-   <input value={oldPin} onChange={e=>{const v=clean(e.target.value);setOldPin(v);if(remember){try{localStorage.removeItem(pinKey)}catch{}setRemember(false)}}} inputMode="numeric" type="text" maxLength={4} placeholder="Current PIN" title={u.pin_hash?"PIN configured. Enter the current PIN to change it.":"No PIN configured"} style={{...input,width:66,padding:"4px 6px",textAlign:"center"}}/>
-   <span style={{fontSize:10,color:C.faint}}>→</span>
-   <input value={newPin} onChange={e=>setNewPin(clean(e.target.value))} inputMode="numeric" type="text" maxLength={4} placeholder="New PIN" style={{...input,width:66,padding:"4px 6px",textAlign:"center"}}/>
-   <button onClick={async()=>{if(await changePin(u.id,oldPin,newPin,u.pin_hash)){if(remember){try{localStorage.setItem(pinKey,newPin)}catch{}}setOldPin(remember?newPin:"");setNewPin("")}}} style={{...input,padding:"4px 7px",cursor:"pointer",whiteSpace:"nowrap"}}>Change</button>
-   <label title="Optional: saves the PIN in readable form in this browser's local storage" style={{fontSize:9,color:C.faint,whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:3}}><input type="checkbox" checked={remember} onChange={e=>toggleRemember(e.target.checked)}/> Remember</label>
-   {pinNote&&<span style={{fontSize:9,color:C.faint}}>{pinNote}</span>}
+function UserRow({user,busy,onSave,onReset}){
+ const [draft,setDraft]=useState(user),[dirty,setDirty]=useState(false),[note,setNote]=useState("");
+ useEffect(()=>{setDraft({...user,pin:user.pin||""});setDirty(false);},[user]);
+ function change(key,value){setDraft(p=>({...p,[key]:value}));setDirty(true);setNote("");}
+ const current=String(getBrokerSession()?.user.id)===String(user.id);
+ async function save(){if(!draft.name.trim()||!/^[A-ZÆØÅ]{2}$/.test(draft.initials.toUpperCase())||!/^#[a-f0-9]{6}$/i.test(draft.color||"")){setNote("Enter name, two initials and a colour.");return;}if(draft.pin&&!/^\d{4}$/.test(draft.pin)){setNote("Enter a four-digit PIN.");return;}await onSave({name:draft.name,initials:draft.initials.toUpperCase(),color:draft.color,role:draft.role,active:draft.active,pin:draft.pin||null});}
+ return <div style={{border:"1px solid #29425e",background:"#0b172a",borderRadius:7,padding:12,minWidth:0}}>
+  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,flexWrap:"wrap"}}><b style={{color:"#8fc4ff"}}>User {user.user_slot}</b><span style={{color:C.faint,fontSize:11}}>{user.name||"Empty slot"}{current?" · signed in":""}</span></div>
+  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(125px,1fr))",gap:10,alignItems:"end"}}>
+   <label style={{fontSize:11}}>Name<input aria-label={`User ${user.user_slot} name`} style={input} value={draft.name||""} onChange={e=>change("name",e.target.value)}/></label>
+   <label style={{fontSize:11}}>Initials<input aria-label={`User ${user.user_slot} initials`} style={input} maxLength={2} value={draft.initials||""} onChange={e=>change("initials",e.target.value.toUpperCase())}/></label>
+   <label style={{fontSize:11}}>Colour<div style={{display:"flex",gap:5,alignItems:"center"}}><input aria-label={`User ${user.user_slot} colour`} type="color" style={{...input,height:33}} value={draft.color||"#58a6ff"} onChange={e=>change("color",e.target.value)}/>{!draft.color&&<button style={{...input,width:"auto"}} onClick={()=>change("color","#58a6ff")}>Set</button>}</div></label>
+   <label style={{fontSize:11}}>PIN<input aria-label={`User ${user.user_slot} PIN`} autoComplete="off" style={input} inputMode="numeric" maxLength={4} placeholder={user.name?"Enter / replace PIN":"PIN"} value={draft.pin||""} onChange={e=>change("pin",e.target.value.replace(/\D/g,"").slice(0,4))}/></label>
+   <label style={{fontSize:11}}>Role<select style={input} value={draft.role||"user"} onChange={e=>change("role",e.target.value)}><option value="user">User</option><option value="admin">Admin</option></select></label>
+   <label style={{fontSize:12,padding:8}}><input type="checkbox" checked={!!draft.active} onChange={e=>change("active",e.target.checked)}/> Active</label>
   </div>
- <button title={`Delete ${u.name}`} aria-label={`Delete ${u.name}`} onClick={()=>deleteUser(u)} style={{background:"rgba(255,75,85,.09)",border:"1px solid rgba(255,75,85,.4)",color:"#ff6677",borderRadius:4,height:25,cursor:"pointer",fontWeight:800}}>×</button>
- </div>
+  <div style={{display:"flex",gap:8,alignItems:"center",marginTop:10,flexWrap:"wrap"}}><button disabled={busy||!dirty} onClick={save} style={{...input,width:"auto",color:"#86efac",cursor:"pointer"}}>Save</button><button disabled={busy||current} onClick={onReset} style={{...input,width:"auto",color:"#ff9a9a",cursor:"pointer"}}>Reset slot</button>{note&&<span role="alert" style={{fontSize:12,color:"#ffbd7a"}}>{note}</span>}</div>
+ </div>;
 }
-
