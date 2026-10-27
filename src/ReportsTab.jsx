@@ -2050,13 +2050,6 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                 ))}
               </div>
             )}
-            <div style={{ flexShrink: 0, paddingTop: 8, borderTop: "1px solid " + C.bd }}>
-              <div style={{ fontSize: 9, color: C.faint, marginBottom: 4 }}>Output format:</div>
-              <pre style={{ margin: 0, fontSize: 9, color: C.dim, fontFamily: "monospace", lineHeight: 1.7, background: C.bg3, padding: "6px 8px", borderRadius: 4 }}>{`|| Available tonnage ||
-*Operator*
-VESSEL – PORT – DATE
-Any direction`}</pre>
-            </div>
           </div>
         )}
       </div>
