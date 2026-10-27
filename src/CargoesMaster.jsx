@@ -351,14 +351,14 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
  const [duplicateMode,setDuplicateMode]=useState("potential");
  const [laycanStart,setLaycanStart]=useState("");
   const [laycanEnd,setLaycanEnd]=useState("");
-  const [section,setSection]=useState("all");
+  const [section,setSection]=useState("inter");
  const [contributorFilter,setContributorFilter]=useState("");
  const [extraTags,setExtraTags]=useState([]);
  const activeTags=tag?[tag,...extraTags]:extraTags;
  const chooseTag=(value,ctrl)=>{if(ctrl){const next=new Set(activeTags);next.has(value)?next.delete(value):next.add(value);const a=[...next];setTag(a[0]||"");setExtraTags(a.slice(1));}else{setTag(tag===value&&extraTags.length===0?"":value);setExtraTags([]);}};
  const deferredSearch=useDeferredValue(search);
  const clearFilters=()=>{setSearch("");setStatus("ALL");setTime("");setGrade("");setTag("");setExtraTags([]);setEx("");setToR("");setContributorFilter("");setLaycanStart("");setLaycanEnd("");setDuplicateOnly(false);setFreightPositiveOnly(false);};
-  const [visualTab,setVisualTab]=useState("chart");
+  const [visualTab,setVisualTab]=useState("rates");
  // Intermediate is a segment in the same cargoes master table.
  const addInter=async c=>onAddC({...c,market_segment:"INTERMEDIATE"});
  const parseInter=async rows=>onAddCargoes(rows.map(r=>({...r,market_segment:"INTERMEDIATE"})));
@@ -430,8 +430,8 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
    const next=savedViews.filter(v=>v.name!==selectedView);
    setSavedViews(next);personalCacheSet(viewKey,JSON.stringify(next));setSelectedView("");
  };
- const brokerCargoDefaults=useRef({...{"search": "", "time": "", "grade": "", "tag": "", "ex": "", "toR": "", "laycanStart": "", "laycanEnd": "", "contributorFilter": "", "selectedView": "", "status": "ALL", "sort": "updated", "dir": -1, "freightPositiveOnly": false, "duplicateOnly": false, "duplicateMode": "potential", "section": "all", "extraTags": [], "visualTab": "chart", "savedViews": [], "panelWidths": [25, 40, 35], "hideIntermediate": false},visibleBySection:{all:[...defaults],inter:[...defaults]}});
- useWorkspacePreferences("cargoes",{search,status,time,grade,tag,ex,toR,sort,dir,freightPositiveOnly,duplicateOnly,duplicateMode,laycanStart,laycanEnd,section,contributorFilter,extraTags,visualTab,savedViews,selectedView,panelWidths,hideIntermediate,visibleBySection:{all:[...visibleBySection.all],inter:[...visibleBySection.inter]}},p=>{
+ const brokerCargoDefaults=useRef({...{"search": "", "time": "", "grade": "", "tag": "", "ex": "", "toR": "", "laycanStart": "", "laycanEnd": "", "contributorFilter": "", "selectedView": "", "status": "ALL", "sort": "updated", "dir": -1, "freightPositiveOnly": false, "duplicateOnly": false, "duplicateMode": "potential", "section": "inter", "extraTags": [], "visualTab": "rates", "savedViews": [], "panelWidths": [25, 40, 35], "hideIntermediate": false},visibleBySection:{all:[...defaults],inter:[...defaults]}});
+ useWorkspacePreferences("cargoes",{search,status,time,grade,tag,ex,toR,sort,dir,freightPositiveOnly,duplicateOnly,duplicateMode,laycanStart,laycanEnd,contributorFilter,extraTags,savedViews,selectedView,panelWidths,hideIntermediate,visibleBySection:{all:[...visibleBySection.all],inter:[...visibleBySection.inter]}},p=>{
   setSearch(p.search);
   setStatus(p.status);
   setTime(p.time);
@@ -446,10 +446,8 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
   setDuplicateMode(p.duplicateMode);
   setLaycanStart(p.laycanStart);
   setLaycanEnd(p.laycanEnd);
-  setSection(p.section);
   setContributorFilter(p.contributorFilter);
   setExtraTags(p.extraTags);
-  setVisualTab(p.visualTab);
   setSavedViews(p.savedViews);
   setSelectedView(p.selectedView);
   setPanelWidths(p.panelWidths);
@@ -600,7 +598,17 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
       .qf-actions-search{display:flex!important;position:relative!important;width:210px!important;flex:0 0 210px!important;align-items:center!important;}
     }
   `}</style>
-     <div style={{display:"flex",justifyContent:"flex-end"}}><BrokerActivity scope="cargoes"/></div><div className="qf-panel-header" style={{display:"grid",gridTemplateColumns:panelWidths.map(x=>`minmax(0,${x}fr)`).join(" "),alignItems:"center",gap:10}}><div style={{gridColumn:"1 / span 2",display:"flex",gap:6}}><button onClick={()=>{setSection("all");setVisualTab("chart")}} style={btn(section==="all")}>Cargoes · All</button><button onClick={()=>{setSection("inter");setVisualTab("rates")}} style={btn(section==="inter")}>Intermediate</button></div><div className="qf-header-chart-tabs" style={{gridColumn:"3",width:"100%",display:"flex",alignItems:"center",gap:5,boxSizing:"border-box",paddingLeft:0}}><button style={btn(visualTab==="rates")} onClick={()=>setVisualTab("rates")}>Rate Matrix</button><button style={btn(visualTab==="chart")} onClick={()=>setVisualTab("chart")}>Cargo Count</button><span style={{marginLeft:"auto"}}>{visualTab==="rates"&&<BunkerHeader/>}</span></div></div>
+     <div className="qf-panel-header" style={{display:"grid",gridTemplateColumns:panelWidths.map(x=>`minmax(0,${x}fr)`).join(" "),alignItems:"center",gap:10}}>
+       <div style={{gridColumn:"1 / span 2",display:"flex",alignItems:"center",gap:8,minWidth:0,flexWrap:"wrap"}}>
+         {[["all","Cargoes · All","chart"],["inter","Intermediate","rates"]].map(([key,label,visual])=><button key={key} onClick={()=>{setSection(key);setVisualTab(visual)}} style={{...btn(),fontSize:12,padding:"7px 16px",minHeight:31,borderRadius:5,borderColor:section===key?"#86efac":C.bd,background:section===key?"rgba(134,239,172,.20)":C.bg3,color:section===key?"#bbf7d0":"#9fc3f5"}}>{label}</button>)}
+         <span style={{marginLeft:"auto"}}>{visualTab==="rates"&&<BunkerHeader/>}</span>
+       </div>
+       <div className="qf-header-chart-tabs" style={{gridColumn:"3",width:"100%",display:"flex",alignItems:"center",gap:5,boxSizing:"border-box",paddingLeft:0,flexWrap:"wrap"}}>
+         <button style={btn(visualTab==="rates")} onClick={()=>setVisualTab("rates")}>Rate Matrix</button>
+         <button style={btn(visualTab==="chart")} onClick={()=>setVisualTab("chart")}>Cargo Count</button>
+         <div style={{marginLeft:"auto",flexShrink:0}}><BrokerActivity scope="cargoes"/></div>
+       </div>
+     </div>
 <div className="qf-top" style={{"--cargo-panel-cols":panelWidths.map(x=>`minmax(0,${x}fr)`).join(" "),display:"flex",gap:10,height:215,minHeight:0,overflow:"hidden",position:"relative"}}>
    <details className="qf-mobile-fold qf-parse-fold" open={typeof window!=="undefined"&&window.innerWidth>700}><summary>Paste / Parse</summary><div className="qf-parse" style={{flex:"0 0 25%",minWidth:0,height:"100%",display:"flex",flexDirection:"column",gap:4,overflow:"hidden"}}><div className="qf-parse-tags" style={{position:"absolute",top:5,right:7,zIndex:5,display:"flex",justifyContent:"flex-end",padding:0}}><div style={{position:"relative",minWidth:120}}><button type="button" aria-label="Tag parsed cargoes" aria-expanded={parseTagOpen} onClick={e=>{const rect=e.currentTarget.getBoundingClientRect();setParseTagPosition({top:rect.bottom+2,left:Math.max(8,Math.min(rect.right-160,window.innerWidth-168))});setParseTagOpen(v=>!v)}} style={{...btn(Boolean(parseTag)),width:"100%",height:24,background:C.bg3,color:parseTag?"#d9ecff":"#9fc3f5",textAlign:"left"}}>{parseTag||"Tag on parse"} <span style={{float:"right"}}>▾</span></button>{parseTagOpen&&createPortal(<><div onClick={()=>setParseTagOpen(false)} style={{position:"fixed",inset:0,zIndex:19980}}/><div style={{position:"fixed",top:parseTagPosition.top,left:parseTagPosition.left,width:160,maxHeight:"min(420px, calc(100vh - 65px))",overflowY:"auto",zIndex:19981,background:"#071223",border:"1px solid #315782",borderRadius:4,boxShadow:"0 10px 25px #0009"}}>{["",...tagList()].map(t=><button key={t} type="button" onClick={()=>{setParseTag(t);setParseTagOpen(false)}} style={{display:"block",width:"100%",padding:"7px 9px",background:parseTag===t?"#16365b":"#071223",border:0,textAlign:"left",color:"#9fc3f5",fontSize:11,fontWeight:700,cursor:"pointer"}}>{t||"Tag on parse"}</button>)}</div></>,document.body)}</div></div><div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column",overflow:"hidden",height:"100%"}}><Suspense fallback={null}><ParsePanel vessels={vessels} cargoes={cargoes} onAddVessels={onAddVessels} onAddCargoes={async p=>{const r=await (section==="inter"?parseInter:onAddCargoes)(p.map(c=>({...c,tag:parseTag||c.tag||""})));setParseTag("");return r}} lockedMode="cargo" vesselDB={{}}/></Suspense></div></div></details>
    <div className="cargo-panel-handle" title="Drag to resize Parse and Filters" onPointerDown={e=>beginPanelResize(0,e)} style={{left:`calc(${panelWidths[0]}% - 5px)`}}/>
