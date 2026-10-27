@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { C } from "./constants";
 import { toTCase,normaliseQty,fmtDateShort,fmtFreight } from "./utils";
 import { supabase } from "./supabaseclient";
-import {useWorkspacePreferences,BrokerActivity,personalCacheGet,personalCacheSet} from "./BrokerWorkspace";
+import {useWorkspacePreferences,BrokerActivity,getBrokerSession,personalCacheGet,personalCacheSet} from "./BrokerWorkspace";
 import { tagsForScope, tagColor } from "./TagManagement";
 import { readCargoExportFormat, readCargoExportSecondFormat, formatCargoExportRow, formatCargoWhatsAppRow, formatCargoWhatsAppTable } from "./cargoExportConfig";
 
@@ -253,6 +253,19 @@ function RegionCell({value,onSave,row,col,maxCol}){
    {edit&&<div onMouseDown={e=>e.preventDefault()} onClick={e=>e.stopPropagation()} style={{position:"absolute",left:8,top:"calc(100% - 1px)",zIndex:99999,minWidth:"calc(100% - 16px)",width:180,background:"#071223",border:"1px solid "+C.bd,borderRadius:5,padding:3,boxShadow:"0 8px 25px rgba(0,0,0,.65)",overflow:"visible"}}>{matches.map((r,i)=><div key={r} onMouseEnter={()=>setActiveIdx(i)} onMouseDown={e=>{e.preventDefault();e.stopPropagation();commit(r)}} style={{padding:"5px 7px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",background:i===activeIdx?"rgba(58,130,246,.18)":r===value?"rgba(58,130,246,.12)":"transparent",color:i===activeIdx?"#79c0ff":r===value?"#79c0ff":C.tx}}>{r}</div>)}</div>}
  </td>;
 }
+function cargoAuditEditor(session,legacy){
+ const user=session?.user;
+ const usable=value=>{const text=String(value??"").trim();return text&&!/^(unknown|null|undefined)$/i.test(text)?text:"";};
+ return usable(user?.name)||usable(user?.initials)||usable(legacy)||"Unidentified editor";
+}
+function cargoAuditChange(entry){
+ const key=String(entry.field||"").trim();
+ const label=({comment:"Comment",comments:"Comment",freight:"Freight",status:"Status"})[key]||key.replace(/_/g," ").replace(/^./,c=>c.toUpperCase());
+ const clean=value=>{const text=String(value??"").trim();return /^(?:—|–|-) $/.test(text+" ")?"":text;};
+ const display=value=>key==="freight"?value.replace(/\busd\b/ig,"USD").replace(/\bls\b/ig,"ls").replace(/(\d)\s*K\b/g,"$1k"):value;
+ const before=display(clean(entry.old_value)),after=display(clean(entry.new_value));
+ return `${label}: ${before?before+" > ":""}${after||"Cleared"}`;
+}
 function editorInitials(v){
  const x=String(v??"").trim().toUpperCase();
  if(!x)return "";
@@ -474,8 +487,9 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
   const updateWithAudit=async(id,field,value)=>{
     const before=cargoes.find(c=>String(c.id)===String(id));
     if(!before||String(before[field]??"")===String(value??""))return;
+    let legacyEditor="";try{legacyEditor=localStorage.getItem("signal_user")||"";}catch{}
+    const editor=cargoAuditEditor(getBrokerSession(),legacyEditor);
     const result=await onUpdateC(id,field,value);if(result===false)return false;
-    const editor=String(localStorage.getItem("signal_user")||"H").trim();
     const {error}=await supabase.from("cargoes_audit").insert({cargo_id:String(id),editor,field,old_value:String(before[field]??""),new_value:String(value??"")});
     if(error){console.error("Cargo audit save failed",error);setAuditError(true)}
     else{auditLoaded.current.delete(id);setAuditRows(p=>({...p,[id]:[{editor,field,old_value:String(before[field]??""),new_value:String(value??""),changed_at:new Date().toISOString()},...(p[id]||[])].slice(0,12)}));}
@@ -660,7 +674,7 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
       if(k==="updated")return <td key={k} style={{...POS_TD,textAlign:"center",color:C.faint}}>{c.updated?new Date(c.updated).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):""}</td>;
       const val=k==="charterer"?toTCase(c[k]||""):k==="qty"?normaliseQty(c[k]):k==="from"||k==="to"?fmtDateShort(c[k]):k==="freight"?(fmtFreight(c[k])||c[k]||""):c[k]||"";
       return <Editable key={k} row={i} col={navCol(k)} maxCol={navMax} value={val} align={["from","to"].includes(k)?"center":"left"} bold={k==="charterer"} color={k==="vessel"?C.blue:k==="charterer"?"#79c0ff":k==="qty"?"#fff":k==="freight"?"#a8e6a3":C.tx} onSave={v=>updateWithAudit(c.id,k,k==="charterer"||k==="load"||k==="disch"?toTCase(v):k==="qty"?normaliseQty(v):k==="freight"?(fmtFreight(v)||v):v)}/>;
-    })}<td style={{...POS_TD,textAlign:"center",padding:0,verticalAlign:"middle",lineHeight:0,position:"relative",overflow:"visible"}} onMouseLeave={()=>setHoverRowId(null)}>{editorInitials(c.entered_by)&&<span onMouseEnter={()=>showAudit(c.id)} title={`Original: ${c.entered_by||"Unknown"}`} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,padding:0,margin:0,borderRadius:"50%",boxSizing:"border-box",fontSize:10,fontWeight:800,letterSpacing:"0.7px",lineHeight:"1",paddingTop:2,textAlign:"center",verticalAlign:"middle",color:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?C.blue:C.green,border:"1px solid "+((c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{editorInitials(c.entered_by)}</span>}{hoverRowId===c.id&&<div style={{position:"absolute",right:30,top:"100%",zIndex:30000,width:340,maxHeight:240,overflowY:"auto",padding:10,textAlign:"left",background:"#071223",border:"1px solid #3976b8",borderRadius:6,boxShadow:"0 12px 35px #000a",color:"#d9e8ff",fontSize:11,lineHeight:1.6}}><b>Original contributor: {c.entered_by||"—"}</b><div style={{color:"#79c0ff",marginTop:5}}>Edit history</div>{(auditRows[c.id]||[]).length?(auditRows[c.id]||[]).map((a,j)=><div key={j} style={{borderTop:"1px solid #26374c",padding:"5px 0"}}><b>{a.editor}</b> · {new Date(a.changed_at).toLocaleString("en-GB")}<div>{a.field}: {a.old_value||"—"} → {a.new_value||"—"}</div></div>):<div>{auditError?"Audit table unavailable — run supplied SQL":"No edits recorded yet"}</div>}</div>}</td><td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>setDeleteCargo(c)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td></tr>})}</tbody>
+    })}<td style={{...POS_TD,textAlign:"center",padding:0,verticalAlign:"middle",lineHeight:0,position:"relative",overflow:"visible"}} onMouseLeave={()=>setHoverRowId(null)}>{editorInitials(c.entered_by)&&<span onMouseEnter={()=>showAudit(c.id)} title={`Original: ${c.entered_by||"Unknown"}`} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,padding:0,margin:0,borderRadius:"50%",boxSizing:"border-box",fontSize:10,fontWeight:800,letterSpacing:"0.7px",lineHeight:"1",paddingTop:2,textAlign:"center",verticalAlign:"middle",color:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?C.blue:C.green,border:"1px solid "+((c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.55)":"rgba(67,233,123,.55)"),background:(c.entered_by==="H"||editorInitials(c.entered_by)==="HH")?"rgba(88,166,255,.08)":"rgba(67,233,123,.08)"}}>{editorInitials(c.entered_by)}</span>}{hoverRowId===c.id&&<div style={{position:"absolute",right:30,top:"100%",zIndex:30000,width:340,maxHeight:240,overflowY:"auto",padding:10,textAlign:"left",background:"#071223",border:"1px solid #3976b8",borderRadius:6,boxShadow:"0 12px 35px #000a",color:"#d9e8ff",fontSize:11,lineHeight:1.6}}><b>Original contributor: {c.entered_by||"—"}</b><div style={{color:"#79c0ff",marginTop:5}}>Edit history</div>{(auditRows[c.id]||[]).length?(auditRows[c.id]||[]).map((a,j)=><div key={j} style={{borderTop:"1px solid #26374c",padding:"5px 0"}}><b>{a.editor}</b> · {new Date(a.changed_at).toLocaleString("en-GB")}<div style={{textTransform:"none"}}>{cargoAuditChange(a)}</div></div>):<div>{auditError?"Audit table unavailable — run supplied SQL":"No edits recorded yet"}</div>}</div>}</td><td style={{...POS_TD,textAlign:"center",padding:"0 2px"}}><button onClick={()=>setDeleteCargo(c)} style={{border:0,background:"none",color:C.red,cursor:"pointer"}}>×</button></td></tr>})}</tbody>
    </table>
   </div>
   {cargoTotal>cargoes.length&&<div style={{padding:"6px 10px",fontSize:11,color:C.faint}}>Loading cargo history: {cargoes.length.toLocaleString("nb-NO")} / {cargoTotal.toLocaleString("nb-NO")}…</div>}
