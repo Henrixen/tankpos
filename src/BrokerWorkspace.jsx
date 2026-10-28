@@ -3,10 +3,10 @@ import {supabase} from './supabaseclient';
 
 // Session tokens stay in memory; caches contain only personal view preferences.
 let session=null,view='',peers=[],liveState='Connecting',preferenceError='',conflict=null,pendingWrites=0;
-let activityChannel=null,activityCleanup=null,conflictResolve=null;
+let activityChannel=null,activityCleanup=null,conflictResolve=null,presenceStatus='Connecting';
 const listeners=new Set(),sessionListeners=new Set(),flushListeners=new Set();
-let snapshot={session,peers,liveState,preferenceError,conflict};
-const emit=()=>{snapshot={session,peers,liveState,preferenceError,conflict};listeners.forEach(fn=>fn());};
+let snapshot={session,peers,liveState,presenceStatus,preferenceError,conflict};
+const emit=()=>{snapshot={session,peers,liveState,presenceStatus,preferenceError,conflict};listeners.forEach(fn=>fn());};
 const subscribe=fn=>{listeners.add(fn);return()=>listeners.delete(fn);};
 const getSnapshot=()=>snapshot;
 export const getBrokerSession=()=>session;
@@ -127,7 +127,7 @@ const presenceViews=new Map();
 function visiblePresenceScope(){for(const item of [...presenceViews.values()].reverse()){if(item.node?.isConnected&&!item.node.closest('[hidden],[aria-hidden="true"]'))return normalisePresenceScope(item.scope);}return normalisePresenceScope(view);}
 function publishActivity(){
  if(!activityChannel||!session)return;
- activityChannel.track({sessionId:activityChannel._brokerKey,userId:session.user.id,name:session.user.name,initials:session.user.initials,color:session.user.color,view:visiblePresenceScope(),editing:editingDetail()}).catch(()=>{});
+ activityChannel.track({sessionId:activityChannel._brokerKey,userId:session.user.id,name:session.user.name,initials:session.user.initials,color:session.user.color,view:visiblePresenceScope(),editing:editingDetail()}).then(result=>{if(result==='error'||result==='timed out'||result?.error){presenceStatus='Reconnecting';emit();}}).catch(()=>{presenceStatus='Reconnecting';emit();});
 }
 export function useBrokerActivity(scope){
  const current=useBrokerSession();
@@ -138,14 +138,16 @@ export function useBrokerActivity(scope){
  useEffect(()=>{
   if(!current)return;
   activityCleanup?.();
+  presenceStatus='Connecting';emit();
   const key=crypto.randomUUID();
   const channel=supabase.channel('broker-workspace-presence-v1',{config:{presence:{key}}});channel._brokerKey=key;activityChannel=channel;
-  channel.on('presence',{event:'sync'},()=>{peers=Object.values(channel.presenceState()).flat().filter(p=>p.sessionId!==key);emit();}).subscribe(status=>{if(status==='SUBSCRIBED')publishActivity();});
+  const syncPeers=()=>{if(activityChannel!==channel)return;peers=Object.entries(channel.presenceState()).flatMap(([presenceKey,entries])=>entries.map(p=>({...p,sessionId:p.sessionId||presenceKey}))).filter(p=>p.sessionId!==key);presenceStatus='Live';emit();};
+  channel.on('presence',{event:'sync'},syncPeers).on('presence',{event:'join'},syncPeers).on('presence',{event:'leave'},syncPeers).subscribe(status=>{if(activityChannel!==channel)return;if(status==='SUBSCRIBED'){presenceStatus='Live';emit();publishActivity();}else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){presenceStatus='Reconnecting';emit();}});
   let blurTimer;
   const focus=()=>{clearTimeout(blurTimer);publishActivity();};
   const blur=()=>{clearTimeout(blurTimer);blurTimer=setTimeout(()=>{publishActivity();flushListeners.forEach(fn=>fn());},180);};
   document.addEventListener('focusin',focus,true);document.addEventListener('focusout',blur,true);
-  const cleanup=()=>{clearTimeout(blurTimer);document.removeEventListener('focusin',focus,true);document.removeEventListener('focusout',blur,true);if(activityChannel===channel)activityChannel=null;supabase.removeChannel(channel);peers=[];emit();};
+  const cleanup=()=>{clearTimeout(blurTimer);document.removeEventListener('focusin',focus,true);document.removeEventListener('focusout',blur,true);if(activityChannel===channel){activityChannel=null;peers=[];presenceStatus='Connecting';emit();}supabase.removeChannel(channel);};
   activityCleanup=cleanup;return()=>{cleanup();if(activityCleanup===cleanup)activityCleanup=null;};
  },[current?.user.id]);
 }
@@ -153,16 +155,17 @@ export function BrokerActivity({scope}){
  const state=useSyncExternalStore(subscribe,getSnapshot,getSnapshot),[open,setOpen]=useState(false),presenceRef=useRef(null);
  useEffect(()=>{if(!state.session)return;const key=Symbol('visible-presence');presenceViews.set(key,{scope,node:presenceRef.current});publishActivity();return()=>{presenceViews.delete(key);publishActivity();};},[scope,state.session?.user.id]);
  if(!state.session)return null;
- const relevant=state.peers.filter(p=>normalisePresenceScope(p.view)===normalisePresenceScope(scope)||normalisePresenceScope(p.editing?.scope)===normalisePresenceScope(scope)),editing=relevant.filter(p=>normalisePresenceScope(p.editing?.scope)===normalisePresenceScope(scope));
+ const relevant=[...new Map(state.peers.filter(p=>!p.userId||String(p.userId)!==String(state.session.user.id)).map(p=>[p.userId||p.sessionId,p])).values()],editing=relevant.filter(p=>p.editing);
+ const label=s=>({positions:"Positions",cargoes:"Cargoes"})[normalisePresenceScope(s)]||s||"Dashboard";
  return <div ref={presenceRef} data-presence-scope={scope} style={{marginLeft:'auto',position:'relative',fontSize:11,color:'#a8c9ec',maxWidth:320,alignSelf:'center'}}>
   <button type="button" onClick={()=>setOpen(v=>!v)} style={{background:'#10223b',border:'1px solid #34577b',borderRadius:5,color:'#b7d9fa',padding:'5px 9px',font:'inherit',cursor:'pointer'}} title="See who is online and editing">
-   <span style={{color:state.liveState==='Live'?'#4ade80':'#e6a854'}}>●</span> {state.liveState} · {editing.length?editing.map(p=>p.initials).join(', ')+' editing':relevant.length+' other online'} ▾
+   <span style={{color:state.presenceStatus==='Live'?'#4ade80':'#e6a854'}}>●</span> {state.presenceStatus==='Live'?'Live · '+relevant.length+' other online':state.presenceStatus+' presence…'}{editing.length?' · '+editing.map(p=>p.initials||p.name).join(', ')+' editing':''} ▾
   </button>
   {open&&<div style={{position:'absolute',right:0,top:'100%',marginTop:5,width:310,maxWidth:'85vw',maxHeight:250,overflowY:'auto',zIndex:20000,background:'#0b172a',border:'1px solid #34577b',borderRadius:6,padding:10,boxShadow:'0 8px 24px #0008'}}>
-   <div style={{marginBottom:7,fontWeight:700}}>Online / editing · {scope}</div>
+   <div style={{marginBottom:7,fontWeight:700}}>Online colleagues</div>
    <div>{state.session.user.name} · you</div>
-   {relevant.map((p,i)=><div key={p.sessionId||i} style={{padding:'6px 0',borderTop:'1px solid #203853',marginTop:5}}><b style={{color:p.color||'#79c0ff'}}>{p.name||p.initials}</b><div>{p.editing?`${p.editing.record} · ${p.editing.field}`:'Viewing '+scope}</div></div>)}
-   {!relevant.length&&<div style={{marginTop:7}}>No other colleagues in this view.</div>}
+   {relevant.map((p,i)=><div key={p.sessionId||i} style={{padding:'6px 0',borderTop:'1px solid #203853',marginTop:5}}><b style={{color:p.color||'#79c0ff'}}>{p.name||p.initials}</b><div>{p.editing?`${label(p.editing.scope||p.view)} · ${p.editing.record} · ${p.editing.field}`:'Viewing '+label(p.view)}</div></div>)}
+   {!relevant.length&&<div style={{marginTop:7}}>No other colleagues currently connected.</div>}
    <div style={{fontSize:10,marginTop:8,color:'#849bb4'}}>Editing indicators are advisory; conflicting saves require a choice.</div>
   </div>}
   {state.preferenceError&&<div role="alert" style={{color:'#f8b36b',fontSize:10,maxWidth:310}}>{state.preferenceError} <button onClick={flushPreferences}>Retry</button></div>}
