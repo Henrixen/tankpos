@@ -1787,6 +1787,14 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
     setPosPage(1);
   }
   const [interUKCActive,setInterUKCActive]=useState(false);
+  const [posSubTags,setPosSubTags]=useState(new Set()),[previewSubTags,setPreviewSubTags]=useState(new Set());
+  const availableSubTags=[...new Set(["Inter UKC",...vessels.flatMap(v=>v.subTags||[])])].sort();
+  const previewMode=aisPanelTab==="Positions Preview";
+  const activeSubTags=previewMode?previewSubTags:new Set([...posSubTags,...(interUKCActive?["Inter UKC"]:[])]);
+  function toggleSubTag(tag){if(previewMode){setPreviewSubTags(prev=>{const n=new Set(prev);n.has(tag)?n.delete(tag):n.add(tag);return n;});}else{if(tag==="Inter UKC")setInterUKCActive(v=>!v);else setPosSubTags(prev=>{const n=new Set(prev);n.has(tag)?n.delete(tag):n.add(tag);return n;});setPosPage(1);}}
+  function toggleSavedFilter(){if(previewMode)setPreviewSaved(v=>!v);else{setShowSavedOnly(v=>!v);setPosPage(1);}}
+  function clearSubTagFilter(){if(previewMode)setPreviewSubTags(new Set());else{setInterUKCActive(false);setPosSubTags(new Set());setPosPage(1);}}
+
   const subTagSeed=useSeedPositionSubTags({vessels,ready:positionsReady&&unlocked,config:getInterUKCConfig()||defaultInterUKCConfig});
   const [restoreMsg,setRestoreMsg]=useState("");
   const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
@@ -2370,14 +2378,14 @@ const filtV=useMemo(()=>{
   }
 
   // Inter UKC filter
-  if(interUKCActive){
+  if(interUKCActive||posSubTags.size){
     const cfg=getInterUKCConfig()||defaultInterUKCConfig;
-    list=list.filter(v=>subTagSeed.initialized?(v.subTags||[]).includes("Inter UKC"):matchLegacyInterUKC(v,cfg));
+    list=list.filter(v=>(interUKCActive&&(subTagSeed.initialized?(v.subTags||[]).includes("Inter UKC"):matchLegacyInterUKC(v,cfg)))||[...posSubTags].some(t=>(v.subTags||[]).includes(t)));
   }
 
   // Saved filter — OR with interUKC means: show if saved OR matches interUKC
   if(showSavedOnly){
-    if(interUKCActive){
+    if(interUKCActive||posSubTags.size){
       // Already have interUKC results; add any saved vessels not yet in list
       const inList=new Set(list.map(v=>v.vessel));
       const extra=vessels.filter(v=>savedVessels.has(v.vessel)&&!inList.has(v.vessel));
@@ -2484,6 +2492,7 @@ const filtV=useMemo(()=>{
   [...dwtFilter].join(),
   [...builtFilter].join(),
   interUKCActive,
+  [...posSubTags].join(),subTagSeed.initialized,
   showSavedOnly,
   savedVessels,
 ]);
@@ -2509,10 +2518,11 @@ const filtV=useMemo(()=>{
   useEffect(()=>()=>clearTimeout(previewCopyTimer.current),[]);
   const previewColumns=[["operator","Operator"],["vessel","Vessel"],["dwt","DWT"],["built","Blt"],["date","Date"],["openPort","Port"],["comment","Comment"],["updatedAt","Updated"]];
   useBrokerActivity(unlocked?(tab==="pos"?"positions":tab==="cargo"||tab==="cargo2"?"cargoes":""):"");
-  const brokerPositionDefaults=useRef({...{"search": "", "previewSaved": false, "dwtRange": {"min": "", "max": ""}, "builtRange": {"min": "", "max": ""}, "openDateFilter": {"quick": "", "from": "", "to": ""}, "opFilter": null, "updFilter": "", "sortK": "fileDate", "sortD": -1, "posFileDaysBack": 90, "showSavedOnly": false, "fixingPanelTab": "Open Segments", "fixingExpanded": false, "aisPanelTab": "Map", "positionsWidths": [32, 34, 34], "interUKCActive": false, "previewSort": {"key": "operator", "dir": 1}, "previewFormat": "table", "filters": [], "posTagFilter": [], "previewTags": [], "coatingFilter": [], "bucketFilters": [], "superRegionFilter": [], "segmentFilter": [], "dwtFilter": [], "builtFilter": [], "savedVessels": []},colWidthsV,previewExcluded:[],cargoVisibleCols:[...CARGO_COLUMN_KEYS],qfVisibleCols:[...QF_DEFAULT_VISIBLE]});
-  useWorkspacePreferences("positions",{filters:[...filters],posTagFilter:[...posTagFilter],previewTags:[...previewTags],coatingFilter:[...coatingFilter],bucketFilters:[...bucketFilters],superRegionFilter:[...superRegionFilter],segmentFilter:[...segmentFilter],dwtFilter:[...dwtFilter],builtFilter:[...builtFilter],savedVessels:[...savedVessels],previewExcluded:[...previewExcluded],cargoVisibleCols:[...cargoVisibleCols],qfVisibleCols:[...qfVisibleCols],search,previewSaved,dwtRange,builtRange,openDateFilter,opFilter,updFilter,sortK,sortD,posFileDaysBack,showSavedOnly,fixingPanelTab,fixingExpanded,aisPanelTab,positionsWidths,interUKCActive,colWidthsV,previewSort,previewFormat},p=>{
+  const brokerPositionDefaults=useRef({...{"search": "", "previewSaved": false, "dwtRange": {"min": "", "max": ""}, "builtRange": {"min": "", "max": ""}, "openDateFilter": {"quick": "", "from": "", "to": ""}, "opFilter": null, "updFilter": "", "sortK": "fileDate", "sortD": -1, "posFileDaysBack": 90, "showSavedOnly": false, "fixingPanelTab": "Open Segments", "fixingExpanded": false, "aisPanelTab": "Map", "positionsWidths": [32, 34, 34], "interUKCActive": false, "previewSort": {"key": "operator", "dir": 1}, "previewFormat": "table", "filters": [], "posTagFilter": [], "previewTags": [], "coatingFilter": [], "bucketFilters": [], "superRegionFilter": [], "segmentFilter": [], "dwtFilter": [], "builtFilter": [], "savedVessels": []},colWidthsV,previewExcluded:[],posSubTags:[],previewSubTags:[],cargoVisibleCols:[...CARGO_COLUMN_KEYS],qfVisibleCols:[...QF_DEFAULT_VISIBLE]});
+  useWorkspacePreferences("positions",{posSubTags:[...posSubTags],previewSubTags:[...previewSubTags],filters:[...filters],posTagFilter:[...posTagFilter],previewTags:[...previewTags],coatingFilter:[...coatingFilter],bucketFilters:[...bucketFilters],superRegionFilter:[...superRegionFilter],segmentFilter:[...segmentFilter],dwtFilter:[...dwtFilter],builtFilter:[...builtFilter],savedVessels:[...savedVessels],previewExcluded:[...previewExcluded],cargoVisibleCols:[...cargoVisibleCols],qfVisibleCols:[...qfVisibleCols],search,previewSaved,dwtRange,builtRange,openDateFilter,opFilter,updFilter,sortK,sortD,posFileDaysBack,showSavedOnly,fixingPanelTab,fixingExpanded,aisPanelTab,positionsWidths,interUKCActive,colWidthsV,previewSort,previewFormat},p=>{
     setFilters(new Set(p.filters||[]));
     setPosTagFilter(new Set(p.posTagFilter||[]));
+    setPosSubTags(new Set(p.posSubTags||[]));setPreviewSubTags(new Set(p.previewSubTags||[]));
     setPreviewTags(new Set(p.previewTags||[]));
     setCoatingFilter(new Set(p.coatingFilter||[]));
     setBucketFilters(new Set(p.bucketFilters||[]));
@@ -2559,7 +2569,7 @@ const filtV=useMemo(()=>{
       if(previewExcluded.has(String(v.vessel).toUpperCase()))return false;
       const vesselTags=(Array.isArray(v.tag)?v.tag.join("|"):String(v.tag||""))
         .split(/[|,;]+/).map(t=>t.trim().toUpperCase());
-      return vesselTags.some(t=>tags.has(t))||(previewSaved&&savedVessels.has(v.vessel));
+      return vesselTags.some(t=>tags.has(t))||[...previewSubTags].some(t=>t==="Inter UKC"&&!subTagSeed.initialized?matchLegacyInterUKC(v,getInterUKCConfig()||defaultInterUKCConfig):(v.subTags||[]).includes(t))||(previewSaved&&savedVessels.has(v.vessel));
     });
     const sortValue=v=>{
       const value=v[previewSort.key];
@@ -2573,7 +2583,7 @@ const filtV=useMemo(()=>{
       const result=typeof av==="number"?(av===bv?0:av<bv?-1:1):av.localeCompare(bv,undefined,{numeric:true,sensitivity:"base"});
       return result*previewSort.dir||String(a.vessel).localeCompare(String(b.vessel));
     });
-  },[vessels,previewTags,previewSaved,savedVessels,previewSort,previewExcluded]);
+  },[vessels,previewTags,previewSubTags,subTagSeed.initialized,previewSaved,savedVessels,previewSort,previewExcluded]);
   function removePreviewVessel(v){
     setPreviewExcluded(prev=>new Set([...prev,String(v.vessel).toUpperCase()]));
   }
@@ -3281,7 +3291,7 @@ const filtV=useMemo(()=>{
                         <>
                           {/* Tags */}
                           <FilterRow label="Tags" col="#79c0ff">
-                            {(()=>{const available=getTagListFor("position");return available.length?available.map(t=>(<Chip key={t} col="#79c0ff" active={posTagFilter.has(t)} onClick={()=>{if(aisPanelTab==="Positions Preview"){setPreviewTags(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});}else{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPreviewTags(prev=>new Set([...prev,t]));setPosPage(1);}}}>{t.toUpperCase()}</Chip>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>NONE</span>;})()}
+                            {(()=>{const available=getTagListFor("position");return available.length?available.map(t=>(<Chip key={t} col="#79c0ff" active={previewMode?previewTags.has(t):posTagFilter.has(t)} onClick={()=>{if(aisPanelTab==="Positions Preview"){setPreviewTags(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});}else{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPreviewTags(prev=>new Set([...prev,t]));setPosPage(1);}}}>{t.toUpperCase()}</Chip>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>NONE</span>;})()}
                             {posTagFilter.size>0&&<Chip col={C.red} active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}>✕</Chip>}
                             {vessels.some(v=>(v.tag||"").trim().toUpperCase()==="OUTSIDER")&&(
                               <button onClick={syncOutsiderTaggedVessels} title="Adds/updates OUTSIDER-tagged vessels with a known date+port into the static Outsider list"
@@ -3291,6 +3301,11 @@ const filtV=useMemo(()=>{
                               </button>
                             )}
                             {outsiderSyncStatus&&<span style={{ fontSize:11, color:C.faint }}>{outsiderSyncStatus}</span>}
+                          </FilterRow>
+                          <FilterRow label="Sub-tags" col="#4fc3f7">
+                            {availableSubTags.map(t=><Chip key={t} col="#4fc3f7" active={activeSubTags.has(t)} onClick={()=>toggleSubTag(t)}>{t}</Chip>)}
+                            <Chip col="#fbbf24" active={previewMode?previewSaved:showSavedOnly} onClick={toggleSavedFilter}><span style={{display:"flex",alignItems:"center",gap:6}}>Saved ({savedVessels.size}) ★{savedVessels.size>0&&<span onClick={e=>{e.stopPropagation();setPendingDel({type:"clearsaved",label:`all ${savedVessels.size} saved vessels`});}} style={{color:C.red,cursor:"pointer"}}>✕</span>}</span></Chip>
+                            {activeSubTags.size>0&&<Chip col={C.red} active={false} onClick={clearSubTagFilter}>✕ Clear</Chip>}
                           </FilterRow>
                           {/* Coating */}
                           <FilterRow label="Coating" col="#2dd4bf">
@@ -3327,17 +3342,6 @@ const filtV=useMemo(()=>{
                           <FilterRow label="Flag" col={C.amber}>
                             {flagOptions.map(flag=>["FLAG:"+flag,flag]).map(([f,l])=>(<Chip key={f} col={C.amber} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</Chip>))}
                             {filters.size>0&&<Chip col={C.red} active={false} onClick={()=>setFilters(new Set())}>✕ Clear</Chip>}
-                          </FilterRow>
-                          {/* Inter UKC */}
-                          <FilterRow label="Inter UKC" col="#4fc3f7">
-                            <Chip col="#4fc3f7" active={interUKCActive} onClick={()=>{setInterUKCActive(v=>!v);setPosPage(1);}}>Inter UKC</Chip>
-                            <Chip col="#fbbf24" active={showSavedOnly} onClick={()=>{if(aisPanelTab==="Positions Preview")setPreviewSaved(v=>!v);else{setShowSavedOnly(v=>!v);setPreviewSaved(true);}}}>
-                              <span style={{display:"flex",alignItems:"center",gap:6}}>
-                                Saved ({savedVessels.size}) ★
-                                {savedVessels.size>0&&<span onClick={e=>{e.stopPropagation();setPendingDel({type:"clearsaved",label:`all ${savedVessels.size} saved vessels`});}} style={{color:C.red,cursor:"pointer"}}>✕</span>}
-                              </span>
-                            </Chip>
-                            {interUKCActive&&<Chip col={C.red} active={false} onClick={()=>{setInterUKCActive(false);}}>✕ Clear</Chip>}
                           </FilterRow>
                           {/* Segment */}
                           <FilterRow label="Segment" col={C.green}>
@@ -3377,8 +3381,9 @@ const filtV=useMemo(()=>{
               <div style={{fontSize:11,fontWeight:800,color:C.blue,letterSpacing:"0.04em"}}>POSITIONS PREVIEW <span style={{color:C.tx}}>({previewVessels.length})</span></div>
               <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:5}}>
                 {[...previewTags].map(t=><button key={t} title={`Remove ${t} from preview only`} onClick={()=>setPreviewTags(prev=>{const next=new Set(prev);next.delete(t);return next;})} style={{fontSize:9,fontWeight:700,padding:"3px 6px",border:"1px solid #376ca6",borderRadius:4,background:"#142c49",color:"#8dc5ff",cursor:"pointer",fontFamily:"inherit"}}>{String(t).toUpperCase()} <span style={{color:"#ff8b8b",marginLeft:3}}>×</span></button>)}
+                {[...previewSubTags].map(t=><button key={"sub:"+t} title="Remove sub-tag from preview only" onClick={()=>setPreviewSubTags(prev=>{const n=new Set(prev);n.delete(t);return n;})} style={{fontSize:9,fontWeight:700,padding:"3px 6px",border:"1px solid #4b97b9",borderRadius:4,background:"#123448",color:"#9bdfff",cursor:"pointer"}}>{t} ×</button>)}
                 {previewSaved&&<button title="Remove Saved ★ from preview only" onClick={()=>setPreviewSaved(false)} style={{fontSize:9,fontWeight:700,padding:"3px 6px",border:"1px solid #b58a35",borderRadius:4,background:"#302617",color:"#ffd17b",cursor:"pointer",fontFamily:"inherit"}}>SAVED ★ <span style={{color:"#ff8b8b",marginLeft:3}}>×</span></button>}
-                {!previewTags.size&&!previewSaved&&<span style={{fontSize:9,color:C.faint}}>Click a tag or Saved ★ to build the shortlist</span>}
+                {!previewTags.size&&!previewSubTags.size&&!previewSaved&&<span style={{fontSize:9,color:C.faint}}>Click a tag or Saved ★ to build the shortlist</span>}
               </div>
             </div>
             <div style={{display:"flex",gap:4,flexShrink:0}}>
@@ -3410,11 +3415,11 @@ const filtV=useMemo(()=>{
           </table>
           {previewVessels.length===0&&<div style={{padding:20,textAlign:"center",fontSize:11,color:C.faint}}>No positions in preview. Click a tag or Saved ★ to add vessels.</div>}
           <div style={{display:"flex",justifyContent:"flex-end",padding:"9px",borderTop:"1px solid "+C.bd}}>
-            <button disabled={!previewTags.size&&!previewSaved} onClick={()=>setConfirmClearPreview(true)} style={{...fb(false),color:"#ff8b8b",borderColor:"rgba(255,107,107,0.45)",opacity:(!previewTags.size&&!previewSaved)?0.4:1}}>Clear preview</button>
+            <button disabled={!previewTags.size&&!previewSubTags.size&&!previewSaved} onClick={()=>setConfirmClearPreview(true)} style={{...fb(false),color:"#ff8b8b",borderColor:"rgba(255,107,107,0.45)",opacity:(!previewTags.size&&!previewSubTags.size&&!previewSaved)?0.4:1}}>Clear preview</button>
           </div>
           {confirmClearPreview&&<div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:C.bg2,border:"1px solid "+C.red,borderRadius:8,padding:"12px 20px",zIndex:9999,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.5)",fontFamily:"sans-serif",fontSize:12,minWidth:300}}>
             <span style={{color:C.tx,flex:1}}>Clear positions preview ({previewVessels.length})?</span>
-            <button onClick={()=>{setPreviewTags(new Set());setPreviewSaved(false);setConfirmClearPreview(false);}} style={{background:C.red,border:"none",borderRadius:5,color:"#fff",padding:"5px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>Clear</button>
+            <button onClick={()=>{setPreviewTags(new Set());setPreviewSubTags(new Set());setPreviewSaved(false);setConfirmClearPreview(false);}} style={{background:C.red,border:"none",borderRadius:5,color:"#fff",padding:"5px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>Clear</button>
             <button onClick={()=>setConfirmClearPreview(false)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,padding:"5px 14px",cursor:"pointer",fontSize:12}}>Cancel</button>
           </div>}
         </div>
@@ -3502,6 +3507,10 @@ const filtV=useMemo(()=>{
                           {(()=>{const available=getTagListFor("position");return available.length?available.map(t=>(<B key={t} active={posTagFilter.has(t)} onClick={()=>{setPosTagFilter(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;});setPosPage(1);}}>{t.toUpperCase()}</B>)):<span style={{fontSize:11,color:"rgba(140,170,210,0.35)"}}>NONE</span>;})()}
                           {posTagFilter.size>0&&<B active={false} onClick={()=>{setPosTagFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
                         </COL>
+                        <COL label="Sub-tags" col="#4fc3f7">
+                          {availableSubTags.map(t=><B key={t} active={activeSubTags.has(t)} onClick={()=>toggleSubTag(t)}>{t}</B>)}
+                          <B active={previewMode?previewSaved:showSavedOnly} onClick={toggleSavedFilter}>Saved ({savedVessels.size}) ★</B>
+                        </COL>
                         <COL label="Coating" col="#2dd4bf">
                           {[...new Set(vessels.map(v=>String(fmtCoating(v.coating)||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(c=>(
                             <B key={c} active={coatingFilter.has(c)} onClick={()=>{setCoatingFilter(prev=>{const n=new Set(prev);n.has(c)?n.delete(c):n.add(c);return n;});setPosPage(1);}}>{c}</B>
@@ -3529,10 +3538,6 @@ const filtV=useMemo(()=>{
                         <COL label="Segment" col={C.green}>
                           {(()=>{const ORDER=["Sub 10k","City","Inter","J19","Flexi","Handy","MR"];return[...new Set(vessels.map(v=>v.segment).filter(Boolean))].sort((a,b)=>(ORDER.indexOf(a)===-1?99:ORDER.indexOf(a))-(ORDER.indexOf(b)===-1?99:ORDER.indexOf(b))).map(s=>(<B key={s} active={segmentFilter.has(s)} onClick={()=>{setSegmentFilter(prev=>prev.size===1&&prev.has(s)?new Set():new Set([s]));setPosPage(1);}}>{s}</B>));})()}
                           {segmentFilter.size>0&&<B active={false} onClick={()=>{setSegmentFilter(new Set());setPosPage(1);}}><span style={{color:C.red}}>✕</span></B>}
-                        </COL>
-                        <COL label="Inter UKC / Saved" col="#4fc3f7">
-                          <B active={interUKCActive} onClick={()=>{setInterUKCActive(v=>!v);setPosPage(1);}}>Inter UKC</B>
-                          <B active={showSavedOnly} onClick={()=>setShowSavedOnly(v=>!v)}>Saved ({savedVessels.size}) ★</B>
                         </COL>
                         <COL label="DWT" col="#f59e0b">
                           {[["<10","<10k"],["10-15","10-15k"],["15-20","15-20k"],["20-30","20-30k"],["30-40","30-40k"],[">40",">40k"]].map(([v,l])=>(<B key={v} active={dwtFilter.has(v)} onClick={()=>{setDwtFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</B>))}
@@ -3581,7 +3586,7 @@ const filtV=useMemo(()=>{
                       >
                         🗑 Delete ({selVessels.size})
                       </button>
-                      <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setCoatingFilter(new Set());setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());setSelVessels(new Set());setOpFilter(null);}}
+                      <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setCoatingFilter(new Set());setInterUKCActive(false);setPosSubTags(new Set());setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());setSelVessels(new Set());setOpFilter(null);}}
                         style={{fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",border:"1px solid "+C.bd,background:C.bg2,color:C.tx}}>
                         ✕ Clear all
                       </button>
