@@ -9,7 +9,10 @@ import DesktopApp from "./DesktopApp";
 
 
 import {useBrokerLiveData,getBrokerSession,brokerRpc,beginBrokerWrite,chooseBrokerConflict,applyWhenIdle} from "./BrokerWorkspace";
-import {mapBrokerPosition,applyBrokerOverride} from "./brokerData";
+import {mapBrokerPosition as mapPositionBase,applyBrokerOverride as applyOverrideBase} from "./brokerData";
+import {dedupePositions,positionEditor,selectPositionOverrides} from "./PositionHistory";
+const mapBrokerPosition=r=>({...mapPositionBase(r),entered_by:r.entered_by||null});
+const applyBrokerOverride=(v,o)=>({...applyOverrideBase(v,o),entered_by:o?o.entered_by||null:v.entered_by||null});
 const normaliseCargo=r=>({...normaliseCargoBase(r),_brokerRaw:{...r}});
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
@@ -131,18 +134,18 @@ export default function TankPos(){
     return;
   }
   console.log("fetchPositions:",data.length,"rows");
-  setVessels((data||[]).map(mapBrokerPosition));
+  setVessels(dedupePositions((data||[]).map(mapBrokerPosition)));
 
   // Restore vessel-specific manual overrides, including tags and coating.
   // The positions_latest feed does not necessarily carry these fields.
   try {
     const {data: overrides, error: overrideError} = await supabase
       .from("vessel_overrides")
-      .select("id,updated_at,imo_no,vessel_name,operator,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo,tag,tags,open_date,open_port,comment");
+      .select("id,updated_at,entered_by,imo_no,vessel_name,operator,note,coating,ice_class,fuel,loa,beam,cbm,dwt,built,last_cargo,tag,tags,open_date,open_port,comment");
     if (overrideError) console.warn("vessel_overrides load:", overrideError);
     if (overrides?.length) {
       const byImo = {}, byName = {};
-      overrides.forEach(o => {
+      selectPositionOverrides(overrides).forEach(o => {
         if (o.imo_no != null) byImo[String(o.imo_no)] = o;
         if (o.vessel_name) byName[String(o.vessel_name).trim().toUpperCase()] = o;
       });
@@ -172,12 +175,13 @@ export default function TankPos(){
   const updateV = useCallback(async (name, field, value) => {
     const vessel = vesselsRef.current.find(v => v.vessel === name);
     if (!vessel) { alert(`Cannot save ${name}: vessel not found`); return; }
+    const actor=positionEditor(getBrokerSession()?.user?.initials);
     const now = new Date().toISOString();
     const cleanValue = value === "" || value === undefined ? null : value;
     setVessels(prev => {
       const next = prev.map(v => v.vessel !== name ? v : field.includes(".")
-        ? {...v, updatedAt:now, [field.split(".")[0]]:{...(v[field.split(".")[0]]||{}),[field.split(".")[1]]:cleanValue}}
-        : {...v, updatedAt:now, [field]:cleanValue, ...(field === "operator" ? {operatorManual:true} : {})});
+        ? {...v, entered_by:actor||v.entered_by, updatedAt:now, [field.split(".")[0]]:{...(v[field.split(".")[0]]||{}),[field.split(".")[1]]:cleanValue}}
+        : {...v, entered_by:actor||v.entered_by, updatedAt:now, [field]:cleanValue, ...(field === "operator" ? {operatorManual:true} : {})});
       saveV(next);
       return next;
     });
@@ -235,7 +239,8 @@ export default function TankPos(){
           result=await brokerRpc("broker_position_patch",{p_token:currentSession.token,p_name:name,p_imo:vessel.imoNo||null,p_field:dbField,p_value:dbValue,p_expected:expected});
         }
         ownPositionAcks.current.set(key+":"+dbField,result.row?.[dbField]??null);
-        setVessels(prev=>prev.map(v=>v.vessel===name?{...v,_brokerOverrides:result.row||{}}:v));
+        setVessels(prev=>dedupePositions(prev.map(v=>v.vessel===name?applyBrokerOverride(v,result.row||{}):v)));
+        window.dispatchEvent(new CustomEvent("position-saved",{detail:{name,imo:vessel.imoNo}}));
       }finally{endWrite();}
       console.info("Vessel amendment saved",name,field,dbValue);
     });
@@ -518,7 +523,7 @@ export default function TankPos(){
         if(!event||!currentIdentity({name:v.vessel,imo:v.imoNo}))return v;
         const source=v._brokerSource?mapBrokerPosition(v._brokerSource):v;
         return applyBrokerOverride({...source,coating:source.coating||(!v._brokerOverrides?.coating?v.coating:source.coating),flag:v.flag},event.eventType==='DELETE'?null:event.new);
-      });vesselsRef.current=next;setVessels(next);
+      });vesselsRef.current=dedupePositions(next);setVessels(vesselsRef.current);
     });
     identities=identities.filter(x=>!direct.includes(x));if(!identities.length)return;
     const names=[...new Set(identities.filter(x=>x.imo==null||x.imo==='').map(x=>x.name).filter(Boolean))];
@@ -536,13 +541,13 @@ export default function TankPos(){
     }
     const key=v=>v.imoNo?'imo:'+v.imoNo:'name:'+String(v.vessel||'').toUpperCase();
     const byImo=new Map(),byName=new Map();
-    overrides.forEach(o=>{if(o.imo_no!=null)byImo.set(String(o.imo_no),o);if(o.vessel_name)byName.set(String(o.vessel_name).toUpperCase(),o);});
-    const mapped=new Map(base.map(raw=>{const v=mapBrokerPosition(raw);return [key(v),applyBrokerOverride(v,(v.imoNo&&byImo.get(v.imoNo))||byName.get(v.vessel))];}));
+    selectPositionOverrides(overrides).forEach(o=>{if(o.imo_no!=null)byImo.set(String(o.imo_no),o);if(o.vessel_name)byName.set(String(o.vessel_name).toUpperCase(),o);});
+    const mapped=new Map(dedupePositions(base.map(mapBrokerPosition)).map(v=>{return [key(v),applyBrokerOverride(v,(v.imoNo&&byImo.get(v.imoNo))||byName.get(v.vessel))];}));
     await applyWhenIdle(()=>{
       const matching=v=>identities.some(x=>(x.imo!=null&&String(x.imo)===v.imoNo)||(x.name&&String(x.name).toUpperCase()===v.vessel));
       const next=[];
       for(const v of vesselsRef.current){if(!matching(v)||!currentIdentity({name:v.vessel,imo:v.imoNo})){next.push(v);mapped.delete(key(v));continue;}const replacement=mapped.get(key(v));if(replacement){next.push(replacement);mapped.delete(key(v));}}
-      next.push(...[...mapped.values()].filter(v=>currentIdentity({name:v.vessel,imo:v.imoNo})));vesselsRef.current=next;setVessels(next);
+      next.push(...[...mapped.values()].filter(v=>currentIdentity({name:v.vessel,imo:v.imoNo})));vesselsRef.current=dedupePositions(next);setVessels(vesselsRef.current);
     });
   }
   async function brokerReconcile(){

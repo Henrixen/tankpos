@@ -3,6 +3,7 @@ import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
 import { loadHistory } from "./supabaseHelpers";
 import { supabase } from "./supabaseclient";
+import {PositionHistory,positionEditor,positionIMO} from "./PositionHistory";
 import {brokerLogin,useBrokerActivity,useWorkspacePreferences,BrokerActivity,BrokerConflictDialog,personalCacheGet,personalCacheSet,personalCacheRemove} from "./BrokerWorkspace";
 
 // Every component lazy-loaded to fully break circular dependency chains
@@ -3870,16 +3871,8 @@ const filtV=useMemo(()=>{
               color:savedVessels.has(v.vessel)?"#fbbf24":"rgba(120,160,200,0.15)",lineHeight:1}}>
             {savedVessels.has(v.vessel)?"⭐":"☆"}
           </button>
-          {(v.entered_by==="H"||v.entered_by==="L")&&(
-            <span title={v.entered_by==="H"?"Entered by Henriksen":"Entered by Løken"}
-              style={{display:"inline-flex",alignItems:"center",justifyContent:"center",
-                width:14,height:14,borderRadius:"50%",fontSize:8,fontWeight:700,lineHeight:1,
-                background:v.entered_by==="H"?"rgba(88,166,255,0.25)":"rgba(74,222,128,0.25)",
-                color:v.entered_by==="H"?"#79c0ff":"#4ade80",
-                border:"1px solid "+(v.entered_by==="H"?"rgba(88,166,255,0.5)":"rgba(74,222,128,0.5)")}}>
-              {v.entered_by}
-            </span>
-          )}
+          {positionEditor(v.entered_by)&&<span title={`Updated by ${positionEditor(v.entered_by)}${/^[HL]$/.test(v.entered_by||"")?" (legacy initials)":""}`} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:19,height:16,borderRadius:4,fontSize:9,fontWeight:700,background:"rgba(88,166,255,.2)",color:"#9bcaff"}}>{positionEditor(v.entered_by)}</span>}
+
           </div>
         </td>
       )}
@@ -3921,7 +3914,7 @@ const filtV=useMemo(()=>{
                       `}</style>
                       <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
                         <div>
-                          <div style={{display:"flex",alignItems:"center",gap:12}}><div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>{selV.imoNo&&<span style={{fontSize:12,color:C.amber}}>IMO {selV.imoNo}</span>}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:12}}><div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>{positionIMO(selV)&&<span style={{fontSize:12,color:C.amber,whiteSpace:"nowrap"}}>IMO {positionIMO(selV)}</span>}</div>
                           <div style={{fontSize:12,color:C.purple}}>{selV.operator||""}</div>
                         </div>
                         <button onClick={()=>{setSel(null);setSelectedAISVessels([]);}} style={{background:"none",border:"none",color:C.dim,fontSize:14,cursor:"pointer"}}>✕</button>
@@ -3970,6 +3963,8 @@ const filtV=useMemo(()=>{
                             marginTop:4
                           }}
                         />
+
+                        <PositionHistory vessel={selV}/>
 
                         {selFixes.length > 0 && (
                           <>
