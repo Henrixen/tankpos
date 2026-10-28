@@ -94,7 +94,6 @@ function Toolbar({onInsertTable,onHighlight}){
     <div style={{display:"flex",gap:4,padding:0,borderBottom:"none",background:"transparent",flexWrap:"wrap",alignItems:"center"}}>
       {btn("\u2022 List","insertUnorderedList")}{btn("1. List","insertOrderedList")}
       <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px",height:14}}/>
-      <span style={{fontSize:10,color:"rgba(160,200,255,.65)",whiteSpace:"nowrap"}}>Mark</span>
       {HIGHLIGHT_COLORS.map(c=><button key={c.label} title={"Highlight selected text: "+c.label}
         onMouseDown={e=>{e.preventDefault();if(highlightSelection(c.value))onHighlight?.();}}
         style={{width:15,height:15,flexShrink:0,borderRadius:"50%",background:c.value,border:"1px solid rgba(255,255,255,.35)",cursor:"pointer",padding:0}}/>)}
@@ -369,23 +368,23 @@ export function NotesAlertBanner(){
 // ── Compose header: title + active topic tags + "+" for more ────────────────
 function ComposeHeader({title,setTitle,selTopics,setSelTopics,pill,titleInputRef,onTitleTab}){
   const [showPicker,setShowPicker]=useState(false);
-  const ref=useRef(null);
+  const ref=useRef(null),pickerRef=useRef(null);
   useEffect(()=>{
     if(!showPicker)return;
-    function h(e){if(ref.current&&!ref.current.contains(e.target))setShowPicker(false);}
+    function h(e){if(ref.current&&!ref.current.contains(e.target)&&!pickerRef.current?.contains(e.target))setShowPicker(false);}
     document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);
   },[showPicker]);
   const btnRef=useRef(null);
   function getPos(){
     if(!btnRef.current)return{position:"fixed",top:60,left:0};
     const r=btnRef.current.getBoundingClientRect();
-    return{position:"fixed",top:r.bottom+4,left:Math.min(r.left,window.innerWidth-270),zIndex:9999};
+    return{position:"fixed",top:r.bottom+5,left:Math.max(8,Math.min(r.right-260,window.innerWidth-268)),width:260,boxSizing:"border-box",zIndex:9999};
   }
   const inactive=TOPICS.filter(t=>!selTopics.includes(t));
   return(
     <div ref={ref} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",
       borderBottom:"1px solid rgba(58,130,246,0.08)",flexWrap:"wrap"}}>
-      <input ref={titleInputRef} value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();onTitleTab?.();}}} placeholder="Title (optional)..."
+      <input ref={titleInputRef} value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();onTitleTab?.();}}} placeholder="Title..."
         style={{flex:"1 1 140px",minWidth:100,background:"transparent",border:"none",color:"#e8f2ff",
           fontFamily:"inherit",fontSize:13,fontWeight:600,outline:"none"}}/>
       {/* Active tags inline next to title */}
@@ -404,13 +403,13 @@ function ComposeHeader({title,setTitle,selTopics,setSelTopics,pill,titleInputRef
             color:"rgba(110,155,215,0.55)",cursor:"pointer",fontFamily:"inherit",
             display:"flex",alignItems:"center",gap:2,lineHeight:1.4,
           }}>+ tag</button>
-          {showPicker&&(
-            <div style={{...getPos(),background:"#0c1729",border:"1px solid rgba(88,166,255,0.28)",
+          {showPicker&&createPortal((
+            <div ref={pickerRef} style={{...getPos(),background:"#0c1729",border:"1px solid rgba(88,166,255,0.28)",
               borderRadius:7,padding:"10px",boxShadow:"0 8px 24px rgba(0,0,0,0.6)",
               display:"flex",flexWrap:"wrap",gap:4,maxWidth:280}}>
               {inactive.map(t=>pill(t,false,()=>{setSelTopics(p=>[...p,t]);setShowPicker(false);}))}
             </div>
-          )}
+          ),document.body)}
         </div>
       )}
     </div>
@@ -445,6 +444,13 @@ function ColorPicker({value,onChange}){
       {NOTE_COLORS.map(x=><button key={x.name} type="button" onClick={()=>{onChange(x.value);setOpen(false)}} style={{width:"100%",display:"flex",alignItems:"center",gap:7,background:value===x.value?"rgba(88,166,255,.12)":"transparent",border:"none",borderRadius:4,color:"#e8f2ff",fontFamily:"inherit",fontSize:11,padding:"5px 7px",cursor:"pointer",textAlign:"left"}}><span style={{width:10,height:10,borderRadius:"50%",background:x.value||"transparent",border:"1px solid "+(x.value||"rgba(140,200,255,.45)")}}/>{x.name}</button>)}
     </div>}
   </div>;
+}
+
+function NoteColourFilter({value,onChange}){
+ const [open,setOpen]=useState(false),ref=useRef(null);
+ useEffect(()=>{if(!open)return;const outside=e=>{if(!ref.current?.contains(e.target))setOpen(false);};const escape=e=>{if(e.key==="Escape")setOpen(false);};document.addEventListener("pointerdown",outside);document.addEventListener("keydown",escape);return()=>{document.removeEventListener("pointerdown",outside);document.removeEventListener("keydown",escape);};},[open]);
+ const swatch=(color,size=15)=>({width:size,height:size,borderRadius:"50%",display:"inline-block",background:color==="all"?"conic-gradient(#58a6ff,#3fb950,#f5a623,#ff6b6b,#a78bfa,#58a6ff)":color==="default"?"transparent":color,border:"1px solid #7194b6",boxSizing:"border-box"});
+ return <div ref={ref} style={{position:"relative"}}><button type="button" aria-label="Filter notes by thumbnail colour" aria-expanded={open} title={value==="all"?"All colours":value==="default"?"Default colour":NOTE_COLORS.find(c=>c.value===value)?.name} onClick={()=>setOpen(p=>!p)} style={{display:"flex",gap:6,alignItems:"center",padding:"5px 8px",background:"#0c1729",border:"1px solid #345b82",borderRadius:5,color:"#8cc8ff",cursor:"pointer"}}><span style={swatch(value)}/><span aria-hidden="true">▾</span></button>{open&&<div role="group" aria-label="Thumbnail colours" style={{position:"absolute",left:0,top:"calc(100% + 5px)",zIndex:10000,display:"flex",gap:6,flexWrap:"wrap",width:180,padding:9,background:"#0c1729",border:"1px solid #345b82",borderRadius:6,boxShadow:"0 8px 20px #0008"}}>{[{name:"All colours",value:"all"},...NOTE_COLORS.map(c=>({...c,value:c.value||"default"}))].map(c=><button type="button" key={c.value} aria-label={c.name} aria-pressed={value===c.value} title={c.name} onClick={()=>{onChange(c.value);setOpen(false);}} style={{padding:3,display:"flex",background:"transparent",border:value===c.value?"2px solid #aed7ff":"2px solid transparent",borderRadius:"50%",cursor:"pointer"}}><span style={swatch(c.value,18)}/></button>)}</div>}</div>;
 }
 
 // ── Worklist (persistent right sidebar) ──────────────────────────────────────
@@ -482,6 +488,15 @@ function Worklist({topOffset=0}) {
       }).catch(() => {});
   }, []);
 
+  function pasteWorklist(e){
+    const selection=window.getSelection();const savedRange=selection?.rangeCount&&ref.current?.contains(selection.getRangeAt(0).commonAncestorContainer)?selection.getRangeAt(0).cloneRange():null;
+    pasteNoteContent(e,dataUrl=>{
+      const editor=ref.current;if(!editor)return;const image=document.createElement("img");image.src=dataUrl;image.alt="Worklist screenshot";image.style.cssText="display:block;max-width:100%;max-height:260px;object-fit:contain;margin:6px 0;border-radius:4px;";
+      const line=document.createElement("p");line.appendChild(document.createElement("br"));const fragment=document.createDocumentFragment();fragment.append(image,line);
+      if(savedRange&&editor.contains(savedRange.commonAncestorContainer)){savedRange.deleteContents();savedRange.insertNode(fragment);}else editor.appendChild(fragment);
+      const range=document.createRange();range.selectNodeContents(line);range.collapse(true);editor.focus();const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);handleInput();syncDB();
+    });
+  }
   function handleInput() { setText(ref.current?.innerHTML || ""); }
   function handleKey(e) {
     if (e.key === "Tab") {
@@ -494,11 +509,11 @@ function Worklist({topOffset=0}) {
     <div className="notes-worklist" style={{
       width:"100%", minWidth:0, minHeight:170, boxSizing:"border-box", flexShrink:0, display:"flex", flexDirection:"column",
       border:"1px solid rgba(58,130,246,0.16)", borderRadius:7,
-      background:"rgba(6,13,28,0.97)", overflow:"hidden",
+      background:"#0c1729", overflow:"hidden",
       position:"relative", marginTop:0, maxHeight:300, alignSelf:"stretch"
     }}>
       <div style={{
-        padding:"5px 10px", background:"rgba(10,20,42,0.99)",
+        padding:"5px 10px", background:"#0c1729",
         borderBottom:"1px solid rgba(58,130,246,0.10)",
         display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0
       }}>
@@ -520,7 +535,7 @@ function Worklist({topOffset=0}) {
         onInput={handleInput}
         onBlur={syncDB}
         onKeyDown={handleKey}
-        onPaste={e=>pasteNoteContent(e,()=>{})}
+        onPaste={pasteWorklist}
         data-placeholder="Tasks, reminders, to-do…"
         style={{
           flex:1, padding:"10px 12px", color:"#ffffff",
@@ -1098,7 +1113,7 @@ export default function NotesTab(){
         <div ref={editorRef} className="notes-plain-content" contentEditable suppressContentEditableWarning
           onPaste={handlePaste}
           onKeyDown={e=>{if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();saveBtnRef.current?.focus();return;}if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))save();}}
-          data-placeholder="Write your note\u2026 (Ctrl+Enter to save, paste screenshots)"
+          data-placeholder="Ctrl+Enter to save, paste screenshots"
           style={{minHeight:80,maxHeight:220,overflowY:"auto",padding:"10px 14px",color:"#e8f2ff",
             fontFamily:"inherit",fontSize:12,outline:"none",lineHeight:1.65,caretColor:"#58a6ff"}}/>
         {images.length>0&&(
@@ -1158,7 +1173,7 @@ export default function NotesTab(){
               }}>
                 {DATE_FILTERS.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}
               </select>
-              <select aria-label="Thumbnail colour filter" value={colorFilter} onChange={e=>setColorFilter(e.target.value)} style={{background:"#0c1729",border:"1px solid rgba(88,166,255,.35)",borderRadius:5,color:"#8cc8ff",fontFamily:"inherit",fontSize:11,padding:"5px 9px",maxWidth:150}}><option value="all">All colours</option>{NOTE_COLORS.map(c=><option key={c.name} value={c.value||"default"}>{c.name}</option>)}</select>
+              <NoteColourFilter value={colorFilter} onChange={setColorFilter}/>
               <span className="notes-filter-count" style={{marginLeft:"auto",fontSize:11,color:"rgba(110,155,215,0.45)"}}>
                 {filtered.length} note{filtered.length!==1?"s":""}
               </span>
