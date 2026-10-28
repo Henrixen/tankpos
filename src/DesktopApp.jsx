@@ -3911,8 +3911,8 @@ const filtV=useMemo(()=>{
                       `}</style>
                       <div style={{padding:"8px 12px",background:C.bg,borderBottom:"1px solid "+C.bd2,display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
                         <div>
-                          <div style={{display:"flex",alignItems:"center",gap:12}}><div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>{positionIMO(selV)&&<span style={{fontSize:12,color:C.amber,whiteSpace:"nowrap"}}>IMO {positionIMO(selV)}</span>}</div>
-                          <div style={{fontSize:12,color:C.purple}}>{selV.operator||""}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:12}}><div style={{fontFamily:"sans-serif",fontWeight:800,fontSize:12,color:C.blue}}>{toTCase(selV.vessel)}</div>{positionIMO(selV)&&<span style={{fontSize:12,color:"#9ac8ee",whiteSpace:"nowrap"}}>IMO {positionIMO(selV)}</span>}</div>
+                          <div style={{fontSize:12,color:"#9ac8ee"}}>{selV.operator||""}</div>
                         </div>
                         <button onClick={()=>{setSel(null);setSelectedAISVessels([]);}} style={{background:"none",border:"none",color:C.dim,fontSize:14,cursor:"pointer"}}>✕</button>
                       </div>
@@ -3921,7 +3921,7 @@ const filtV=useMemo(()=>{
                         {[["Open Port","openPort",C.amber],["Date","date",C.blue],["Comment","comment",C.dim],["Operator","operator",C.purple],["Built","built",C.dim],["DWT","dwt",C.amber],["Coating","coating",C.green],["LOA","loa",C.dim],["Beam","beam",C.dim],["CBM","cbm",C.dim]].map(([l,f,col])=>(
                           <div key={f} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderBottom:"1px solid "+C.bg,gap:4}}>
                             <span style={{fontSize:12,color:C.faint,minWidth:55,flexShrink:0}}>{l}</span>
-                            <PanelEC value={selV[f]} displayValue={(f==="dwt"||f==="cbm")&&selV[f]!=null&&selV[f]!==""?fmtDwtFull(selV[f]):undefined} color={col} placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
+                            <PanelEC value={selV[f]} displayValue={(f==="dwt"||f==="cbm")&&selV[f]!=null&&selV[f]!==""?fmtDwtFull(selV[f]):undefined} color="#9ac8ee" placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
                           </div>
                         ))}
 
@@ -3930,11 +3930,12 @@ const filtV=useMemo(()=>{
                           return(
                             <div key={f} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderBottom:"1px solid "+C.bg,gap:4}}>
                               <span style={{fontSize:12,color:C.faint,minWidth:55,flexShrink:0}}>{l}</span>
-                              <PanelEC value={val} color={col} placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
+                              <PanelEC value={val} color="#9ac8ee" placeholder="—" onSave={v2=>onUpdateV(selV.vessel,f,v2)}/>
                             </div>
                           );
                         })}
 
+                        <PositionSubTags vessel={selV} vessels={vessels} onSave={tags=>onUpdateV(selV.vessel,"subTags",tags)} seedState={subTagSeed}/>
                         <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.09em",padding:"6px 0 3px",borderBottom:"1px solid "+C.bd2,marginTop:4}}>Notes</div>
                         <textarea 
                           defaultValue={selV.notes||""}
@@ -3951,7 +3952,7 @@ const filtV=useMemo(()=>{
                             background:C.bg3,
                             border:"1px solid "+C.bd,
                             borderRadius:4,
-                            color:C.dim,
+                            color:"#9ac8ee",
                             fontSize:12,
                             padding:"6px 8px",
                             fontFamily:"inherit",
@@ -3961,7 +3962,6 @@ const filtV=useMemo(()=>{
                           }}
                         />
 
-                        <PositionSubTags vessel={selV} vessels={vessels} onSave={tags=>onUpdateV(selV.vessel,"subTags",tags)} seedState={subTagSeed}/>
                         <PositionHistory vessel={selV}/>
 
                         {selFixes.length > 0 && (
