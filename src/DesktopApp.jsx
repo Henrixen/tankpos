@@ -3,6 +3,7 @@ import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
 import { loadHistory } from "./supabaseHelpers";
 import { supabase } from "./supabaseclient";
+import {PositionSubTags,matchLegacyInterUKC,useSeedPositionSubTags} from "./PositionSubTags";
 import {PositionHistory,positionEditor,positionIMO} from "./PositionHistory";
 import {brokerLogin,useBrokerActivity,useWorkspacePreferences,BrokerActivity,BrokerConflictDialog,personalCacheGet,personalCacheSet,personalCacheRemove} from "./BrokerWorkspace";
 
@@ -1339,7 +1340,7 @@ function PositionControlsWrap({children,mobile}) { return mobile ? (
     </details>
   ) : <>{children}</>; }
 
-function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
+function DesktopApp({positionsReady,vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
   // ── PIN config ───────────────────────────────────────────────────────────
   const DEFAULT_USER_TABS = ["pos","cargo","clients"];
 
@@ -1786,6 +1787,7 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
     setPosPage(1);
   }
   const [interUKCActive,setInterUKCActive]=useState(false);
+  const subTagSeed=useSeedPositionSubTags({vessels,ready:positionsReady&&unlocked,config:getInterUKCConfig()||defaultInterUKCConfig});
   const [restoreMsg,setRestoreMsg]=useState("");
   const restoreRef=useRef(null); // {type:'vessel'|'cargo'|'all', id, label}
   // Use mobile state from TankPos (reactive, with manual override) — must be before colWidths
@@ -2174,6 +2176,7 @@ const quoteFixtureColumns = [
     // Rename first so spec overrides are stored against the corrected vessel
     // name rather than the shortened/incorrect pasted name.
     if(onRenameV) await Promise.resolve(onRenameV(oldName,newName));
+    setSel(prev=>prev===oldName?newName:prev);
 
     const db=(window.vesselDB||{});
     const d=db[newName.toLowerCase().trim()];
@@ -2369,14 +2372,7 @@ const filtV=useMemo(()=>{
   // Inter UKC filter
   if(interUKCActive){
     const cfg=getInterUKCConfig()||defaultInterUKCConfig;
-    list=list.filter(v=>{
-      const dwt=parseFloat(v.dwt)||0;
-      if(dwt>0&&(dwt<cfg.dwtMin*1000||dwt>cfg.dwtMax*1000)) return false;
-      const op=(v.operator||"").toLowerCase();
-      const isOwner=cfg.owners.some(o=>op.includes(o.toLowerCase()));
-      const isRelet=cfg.reletsFrom.some(r=>op.includes(r.toLowerCase()));
-      return isOwner||isRelet;
-    });
+    list=list.filter(v=>subTagSeed.initialized?(v.subTags||[]).includes("Inter UKC"):matchLegacyInterUKC(v,cfg));
   }
 
   // Saved filter — OR with interUKC means: show if saved OR matches interUKC
@@ -3721,8 +3717,9 @@ const filtV=useMemo(()=>{
   columns={mobile ? posColumnsMobile : posColumns}
   data={displayPosRows.slice(0, posPage * POS_PAGE_SIZE)}
   keyField="vessel"
-  getRowProps={row=>({"data-broker-record":row.vessel,"data-broker-label":row.vessel})}
+  getRowProps={row=>({"data-broker-record":row.vessel,"data-broker-label":row.vessel,onClickCapture:e=>{if(!(e.ctrlKey||e.metaKey)||e.target.closest("button,input,select,textarea,[role=checkbox]"))return;e.preventDefault();e.stopPropagation();setSelVessels(prev=>{const n=new Set(prev);n.has(row.vessel)?n.delete(row.vessel):n.add(row.vessel);return n;});},style:selVessels.has(row.vessel)?{background:"rgba(58,130,246,.16)",boxShadow:"inset 3px 0 0 #58a6ff"}:undefined})}
   selectedKey={sel}
+  getRowStyle={row=>selVessels.has(row.vessel)?"rgba(58,130,246,.16)":sel===row.vessel?"rgba(88,166,255,.14)":undefined}
   onRowClick={(row) => {
     const deselecting = sel === row.vessel;
     setSel(deselecting ? null : row.vessel);
@@ -3964,6 +3961,7 @@ const filtV=useMemo(()=>{
                           }}
                         />
 
+                        <PositionSubTags vessel={selV} vessels={vessels} onSave={tags=>onUpdateV(selV.vessel,"subTags",tags)} seedState={subTagSeed}/>
                         <PositionHistory vessel={selV}/>
 
                         {selFixes.length > 0 && (

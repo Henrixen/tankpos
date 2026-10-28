@@ -126,11 +126,14 @@ const normalisePresenceScope=value=>({pos:"positions",position:"positions",cargo
 const presenceViews=new Map();
 function visiblePresenceScope(){for(const item of [...presenceViews.values()].reverse()){if(item.node?.isConnected&&!item.node.closest('[hidden],[aria-hidden="true"]'))return normalisePresenceScope(item.scope);}return normalisePresenceScope(view);}
 function publishActivity(){
- if(!activityChannel||!session)return;
- activityChannel.track({sessionId:activityChannel._brokerKey,userId:session.user.id,name:session.user.name,initials:session.user.initials,color:session.user.color,view:visiblePresenceScope(),editing:editingDetail()}).then(result=>{if(result==='error'||result==='timed out'||result?.error){presenceStatus='Reconnecting';emit();}}).catch(()=>{presenceStatus='Reconnecting';emit();});
+ const channel=activityChannel;if(!channel||!channel._presenceReady||!session)return;
+ const payload={sessionId:channel._brokerKey,userId:session.user.id,name:session.user.name,initials:session.user.initials,color:session.user.color,view:visiblePresenceScope(),editing:editingDetail()};
+ channel._pendingPresence=payload;if(channel._publishingPresence)return;
+ const send=async()=>{channel._publishingPresence=true;try{while(channel===activityChannel&&channel._presenceReady&&channel._pendingPresence){const next=channel._pendingPresence;channel._pendingPresence=null;const signature=JSON.stringify(next);if(signature===channel._lastPresence)continue;const result=await channel.track(next);if(channel!==activityChannel)return;if(result==='error'||result==='timed out'||result?.error){presenceStatus='Presence unavailable';channel._lastPresence=null;emit();break;}channel._lastPresence=signature;presenceStatus='Live';emit();}}catch(e){if(channel===activityChannel){presenceStatus='Presence unavailable';channel._lastPresence=null;emit();}}finally{channel._publishingPresence=false;}};send();
 }
 export function useBrokerActivity(scope){
- const current=useBrokerSession();
+ const current=useBrokerSession(),[presenceRetry,setPresenceRetry]=useState(0);
+ useEffect(()=>{const retry=()=>setPresenceRetry(x=>x+1);window.addEventListener("broker-presence-retry",retry);return()=>window.removeEventListener("broker-presence-retry",retry);},[]);
  useEffect(()=>{
   if(!current)return;view=scope||'';publishActivity();
   return()=>{view='';publishActivity();};
@@ -142,14 +145,14 @@ export function useBrokerActivity(scope){
   const key=crypto.randomUUID();
   const channel=supabase.channel('broker-workspace-presence-v1',{config:{presence:{key}}});channel._brokerKey=key;activityChannel=channel;
   const syncPeers=()=>{if(activityChannel!==channel)return;peers=Object.entries(channel.presenceState()).flatMap(([presenceKey,entries])=>entries.map(p=>({...p,sessionId:p.sessionId||presenceKey}))).filter(p=>p.sessionId!==key);presenceStatus='Live';emit();};
-  channel.on('presence',{event:'sync'},syncPeers).on('presence',{event:'join'},syncPeers).on('presence',{event:'leave'},syncPeers).subscribe(status=>{if(activityChannel!==channel)return;if(status==='SUBSCRIBED'){presenceStatus='Live';emit();publishActivity();}else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){presenceStatus='Reconnecting';emit();}});
+  channel.on('presence',{event:'sync'},syncPeers).on('presence',{event:'join'},syncPeers).on('presence',{event:'leave'},syncPeers).subscribe(status=>{if(activityChannel!==channel)return;if(status==='SUBSCRIBED'){channel._presenceReady=true;channel._lastPresence=null;presenceStatus='Live';emit();publishActivity();}else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){channel._presenceReady=false;presenceStatus='Reconnecting';emit();}});
   let blurTimer;
   const focus=()=>{clearTimeout(blurTimer);publishActivity();};
   const blur=()=>{clearTimeout(blurTimer);blurTimer=setTimeout(()=>{publishActivity();flushListeners.forEach(fn=>fn());},180);};
   document.addEventListener('focusin',focus,true);document.addEventListener('focusout',blur,true);
   const cleanup=()=>{clearTimeout(blurTimer);document.removeEventListener('focusin',focus,true);document.removeEventListener('focusout',blur,true);if(activityChannel===channel){activityChannel=null;peers=[];presenceStatus='Connecting';emit();}supabase.removeChannel(channel);};
   activityCleanup=cleanup;return()=>{cleanup();if(activityCleanup===cleanup)activityCleanup=null;};
- },[current?.user.id]);
+ },[current?.user.id,presenceRetry]);
 }
 export function BrokerActivity({scope}){
  const state=useSyncExternalStore(subscribe,getSnapshot,getSnapshot),[open,setOpen]=useState(false),presenceRef=useRef(null);
@@ -166,6 +169,7 @@ export function BrokerActivity({scope}){
    <div>{state.session.user.name} · you</div>
    {relevant.map((p,i)=><div key={p.sessionId||i} style={{padding:'6px 0',borderTop:'1px solid #203853',marginTop:5}}><b style={{color:p.color||'#79c0ff'}}>{p.name||p.initials}</b><div>{p.editing?`${label(p.editing.scope||p.view)} · ${p.editing.record} · ${p.editing.field}`:'Viewing '+label(p.view)}</div></div>)}
    {!relevant.length&&<div style={{marginTop:7}}>No other colleagues currently connected.</div>}
+   <button type="button" onClick={()=>window.dispatchEvent(new Event("broker-presence-retry"))} style={{marginTop:7,background:"#163550",color:"#b9dcff",border:"1px solid #365a78",borderRadius:4,padding:"4px 7px"}}>Reconnect live users</button>
    <div style={{fontSize:10,marginTop:8,color:'#849bb4'}}>Editing indicators are advisory; conflicting saves require a choice.</div>
   </div>}
   {state.preferenceError&&<div role="alert" style={{color:'#f8b36b',fontSize:10,maxWidth:310}}>{state.preferenceError} <button onClick={flushPreferences}>Retry</button></div>}
