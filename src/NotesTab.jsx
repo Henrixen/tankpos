@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "./supabaseclient";
 import { C } from "./constants";
 
@@ -54,6 +55,16 @@ function pasteNoteContent(e,onImage){
   if(text)document.execCommand("insertText",false,text.replace(/\r\n?/g,"\n"));
 }
 
+// Restore contrast for both existing and newly marked text without changing the note contents.
+function readableNoteHtml(html){
+ const template=document.createElement("template");template.innerHTML=html||"";
+ template.content.querySelectorAll("[style],mark").forEach(el=>{
+  const bg=el.style.backgroundColor||el.style.background||(el.tagName==="MARK"?"#ffff00":"");if(!bg||bg==="transparent")return;
+  const probe=document.createElement("span");probe.style.color=bg;let c=probe.style.color;let rgb=c.match(/^rgba?\(([^)]+)\)/i)?.[1]?.split(/[, /]+/).map(Number);
+  if(!rgb&&/^#[0-9a-f]{3,6}$/i.test(c)){let h=c.slice(1);if(h.length===3)h=h.split("").map(x=>x+x).join("");rgb=[0,2,4].map(i=>parseInt(h.slice(i,i+2),16));}
+  if(rgb&&(!Number.isFinite(rgb[3])||rgb[3]>=.5)&&(.2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2])>145){el.setAttribute("data-note-highlight","true");el.style.setProperty("color","#14283f","important");el.querySelectorAll("*").forEach(child=>child.style.setProperty("color","#14283f","important"));}
+ });return template.innerHTML;
+}
 // Highlight only the selected text in an editable note; stored as HTML with the note.
 const HIGHLIGHT_COLORS=[{label:"Yellow",value:"#ffe066"},{label:"Green",value:"#98f5a0"},{label:"Orange",value:"#ffbd69"},{label:"Pink",value:"#ff9bc2"},{label:"Blue",value:"#8bd5ff"}];
 function highlightSelection(color){
@@ -64,6 +75,7 @@ function highlightSelection(color){
   if(!editable?.closest?.('[contenteditable="true"]'))return false;
   document.execCommand("styleWithCSS",false,true);
   document.execCommand("hiliteColor",false,color);
+  document.execCommand("foreColor",false,"#14283f");
   document.execCommand("styleWithCSS",false,false);
   return true;
 }
@@ -79,7 +91,7 @@ function Toolbar({onInsertTable,onHighlight}){
     }}>{label}</button>
   );
   return(
-    <div style={{display:"flex",gap:4,padding:0,borderBottom:"none",background:"transparent",flexWrap:"nowrap",alignItems:"center"}}>
+    <div style={{display:"flex",gap:4,padding:0,borderBottom:"none",background:"transparent",flexWrap:"wrap",alignItems:"center"}}>
       {btn("\u2022 List","insertUnorderedList")}{btn("1. List","insertOrderedList")}
       <div style={{width:1,background:"rgba(58,130,246,0.10)",margin:"0 2px",height:14}}/>
       <span style={{fontSize:10,color:"rgba(160,200,255,.65)",whiteSpace:"nowrap"}}>Mark</span>
@@ -480,10 +492,10 @@ function Worklist({topOffset=0}) {
 
   return (
     <div className="notes-worklist" style={{
-      width:240, flexShrink:0, display:"flex", flexDirection:"column",
+      width:"100%", minWidth:0, minHeight:170, boxSizing:"border-box", flexShrink:0, display:"flex", flexDirection:"column",
       border:"1px solid rgba(58,130,246,0.16)", borderRadius:7,
       background:"rgba(6,13,28,0.97)", overflow:"hidden",
-      position:"sticky", top:56, marginTop:topOffset, maxHeight:"calc(100vh - 120px)"
+      position:"relative", marginTop:0, maxHeight:300, alignSelf:"stretch"
     }}>
       <div style={{
         padding:"5px 10px", background:"rgba(10,20,42,0.99)",
@@ -528,6 +540,7 @@ export default function NotesTab(){
   const [search,setSearch]=useState("");
   const [topicFilter,setTopicFilter]=useState(null);
   const [dateFilter,setDateFilter]=useState("all");
+  const [colorFilter,setColorFilter]=useState("all");
   const [viewMode,setViewMode]=useState(()=>localStorage.getItem(VM_KEY)||"list");
   const [selTopics,setSelTopics]=useState([]);
   const [title,setTitle]=useState("");
@@ -638,6 +651,7 @@ export default function NotesTab(){
   }
 
   const filtered=notes.filter(n=>{
+    if(colorFilter!=="all"&&String(n.color||"").toLowerCase()!==(colorFilter==="default"?"":colorFilter.toLowerCase()))return false;
     if(topicFilter&&!(n.topics||[]).includes(topicFilter))return false;
     if(!n.pinned&&!passesDate(n.created_at,dateFilter))return false;
     if(search){
@@ -734,7 +748,7 @@ export default function NotesTab(){
               <div className="note-preview-html notes-plain-content"
                 style={{fontSize:12,color:"rgba(160,200,255,0.65)",lineHeight:1.5,
                   height:"100%",overflow:"hidden",pointerEvents:"none"}}
-                dangerouslySetInnerHTML={{__html:note.body}}/>
+                dangerouslySetInnerHTML={{__html:readableNoteHtml(note.body)}}/>
             )}
             {imgs.length>0&&(
               <div style={{position:"absolute",bottom:0,right:0}} onClick={e=>e.stopPropagation()}>
@@ -799,7 +813,7 @@ export default function NotesTab(){
               <div className="note-preview-html notes-plain-content"
                 style={{fontSize:12,color:"rgba(160,200,255,0.65)",lineHeight:1.45,
                   height:"100%",overflow:"hidden",pointerEvents:"none"}}
-                dangerouslySetInnerHTML={{__html:note.body}}/>
+                dangerouslySetInnerHTML={{__html:readableNoteHtml(note.body)}}/>
             )}
           </div>
 
@@ -848,7 +862,7 @@ export default function NotesTab(){
 
     React.useEffect(()=>{
       if(bodyRef.current&&!savedOnce.current){
-        bodyRef.current.innerHTML=note.body||"";
+        bodyRef.current.innerHTML=readableNoteHtml(note.body||"");
       }
     },[]);
 
@@ -881,17 +895,16 @@ export default function NotesTab(){
       scheduleSave();setShowTblPicker(false);
     }
 
-    return(
+    return createPortal((
       <div onClick={e=>{if(e.target===e.currentTarget)closeModal();}}
         style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:500,
-          display:"flex",alignItems:"flex-start",justifyContent:"center",
-          paddingTop:"clamp(16px,5vh,60px)",paddingLeft:16,paddingRight:16,paddingBottom:16,
-          overflowY:"auto"}}>
+          display:"flex",alignItems:"center",justifyContent:"center",
+          padding:16,boxSizing:"border-box",overflow:"hidden"}}>
         {showTblPicker&&<TablePicker onPick={insertModalTable} onClose={()=>setShowTblPicker(false)}/>}
-        <div style={{width:"100%",maxWidth:720,background:"#0c1729",
+        <div role="dialog" aria-modal="true" aria-label="Edit note" style={{width:"100%",maxWidth:720,minHeight:0,boxSizing:"border-box",background:"#0c1729",
           border:"1px solid "+(note.pinned?"rgba(88,166,255,0.4)":"rgba(58,130,246,0.28)"),
           borderRadius:10,overflow:"hidden",boxShadow:"0 16px 48px rgba(0,0,0,0.7)",
-          maxHeight:"calc(100dvh - 80px)",display:"flex",flexDirection:"column"}}>
+          height:"min(760px, calc(100dvh - 32px))",maxHeight:"calc(100dvh - 32px)",display:"flex",flexDirection:"column"}}>
 
           {/* Header */}
           <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
@@ -954,14 +967,13 @@ export default function NotesTab(){
           <div ref={bodyRef} className="notes-plain-content" contentEditable suppressContentEditableWarning
             onInput={scheduleSave}
             onPaste={modalPaste}
-            style={{flex:1,overflowY:"auto",padding:"12px 16px",color:"#e8f2ff",
-              fontFamily:"inherit",fontSize:13,outline:"none",lineHeight:1.7,caretColor:"#58a6ff",
-              minHeight:120}}/>
+            style={{flex:"1 1 0",minHeight:0,overflowY:"auto",overscrollBehavior:"contain",overflowWrap:"anywhere",padding:"12px 16px",color:"#e8f2ff",
+              fontFamily:"inherit",fontSize:13,outline:"none",lineHeight:1.7,caretColor:"#58a6ff"}}/>
 
           {/* Images in modal */}
           {imgsDisplay.length>0&&(
             <div style={{display:"flex",gap:8,padding:"6px 12px 10px",flexWrap:"wrap",alignItems:"flex-start",
-              borderTop:"1px solid rgba(58,130,246,0.08)",flexShrink:0}}>
+              borderTop:"1px solid rgba(58,130,246,0.08)",flexShrink:0,maxHeight:110,overflowY:"auto"}}>
               {imgsDisplay.map((src,i)=>(
                 <div key={i} style={{position:"relative",flexShrink:0}}>
                   <img src={src} onClick={()=>setLightbox(src)}
@@ -981,7 +993,7 @@ export default function NotesTab(){
           )}
         </div>
       </div>
-    );
+    ),document.body);
   },()=>true);
 
   function NoteList({items}){
@@ -1067,6 +1079,7 @@ export default function NotesTab(){
         </div>
       )}
 
+      <div className="notes-top-layout" style={{display:"grid",gridTemplateColumns:"minmax(0, 3fr) minmax(260px, 2fr)",gap:12,alignItems:"stretch",flexShrink:0}}>
       {/* Compose panel */}
       <div style={{background:"#0c1729",border:"1px solid rgba(58,130,246,0.18)",borderRadius:8,overflow:"hidden",flexShrink:0}}
         onDrop={handleDrop} onDragOver={e=>e.preventDefault()}>
@@ -1075,18 +1088,18 @@ export default function NotesTab(){
           selTopics={selTopics} setSelTopics={setSelTopics}
           titleInputRef={titleInputRef} onTitleTab={()=>editorRef.current?.focus()}
           pill={pill}/>
-        {/* Compact compose controls: reminder + colour left, formatting right */}
+        {/* Compact compose controls: formatting immediately next to note colour */}
         <div className="notes-compose-tools" style={{display:"flex",alignItems:"center",gap:8,padding:"5px 12px",borderBottom:"1px solid rgba(58,130,246,0.08)",background:"rgba(4,10,22,0.25)"}}>
           <AlertPicker value={alertAt} onChange={setAlertAt} onClear={()=>setAlertAt("")}/>
           <ColorPicker value={noteColor} onChange={setNoteColor}/>
-          <span style={{flex:1}}/>
           <Toolbar onInsertTable={()=>setShowTablePicker(true)}/>
+          <span style={{flex:1}}/>
         </div>
         <div ref={editorRef} className="notes-plain-content" contentEditable suppressContentEditableWarning
           onPaste={handlePaste}
           onKeyDown={e=>{if(e.key==="Tab"&&!e.shiftKey){e.preventDefault();saveBtnRef.current?.focus();return;}if(e.key==="Enter"&&(e.ctrlKey||e.metaKey))save();}}
           data-placeholder="Write your note\u2026 (Ctrl+Enter to save, paste screenshots)"
-          style={{minHeight:80,padding:"10px 14px",color:"#e8f2ff",
+          style={{minHeight:80,maxHeight:220,overflowY:"auto",padding:"10px 14px",color:"#e8f2ff",
             fontFamily:"inherit",fontSize:12,outline:"none",lineHeight:1.65,caretColor:"#58a6ff"}}/>
         {images.length>0&&(
           <div style={{display:"flex",gap:8,padding:"6px 12px",borderTop:"1px solid rgba(58,130,246,0.08)",flexWrap:"wrap",alignItems:"flex-start"}}>
@@ -1116,6 +1129,9 @@ export default function NotesTab(){
         </div>
       </div>
 
+      <Worklist/>
+      </div>
+
       {/* Filter bar */}
       {(()=>{
         const usedTopics=TOPICS.filter(t=>notes.some(n=>(n.topics||[]).includes(t)));
@@ -1142,6 +1158,7 @@ export default function NotesTab(){
               }}>
                 {DATE_FILTERS.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}
               </select>
+              <select aria-label="Thumbnail colour filter" value={colorFilter} onChange={e=>setColorFilter(e.target.value)} style={{background:"#0c1729",border:"1px solid rgba(88,166,255,.35)",borderRadius:5,color:"#8cc8ff",fontFamily:"inherit",fontSize:11,padding:"5px 9px",maxWidth:150}}><option value="all">All colours</option>{NOTE_COLORS.map(c=><option key={c.name} value={c.value||"default"}>{c.name}</option>)}</select>
               <span className="notes-filter-count" style={{marginLeft:"auto",fontSize:11,color:"rgba(110,155,215,0.45)"}}>
                 {filtered.length} note{filtered.length!==1?"s":""}
               </span>
@@ -1167,7 +1184,7 @@ export default function NotesTab(){
           {loading&&<div style={{fontSize:12,color:"rgba(110,155,215,0.45)",padding:"20px",textAlign:"center"}}>Loading...</div>}
           {!loading&&filtered.length===0&&(
             <div style={{fontSize:12,color:"rgba(110,155,215,0.45)",padding:"20px",textAlign:"center",fontStyle:"italic"}}>
-              {search||topicFilter||dateFilter!=="all"?"No notes match your filter.":"No notes yet. Write one above."}
+              {search||topicFilter||dateFilter!=="all"||colorFilter!=="all"?"No notes match your filter.":"No notes yet. Write one above."}
             </div>
           )}
           {pinned.length>0&&(
@@ -1187,11 +1204,13 @@ export default function NotesTab(){
           )}
         </div>
 
-        {/* Worklist sidebar */}
-        <Worklist topOffset={pinned.length>0?22:0}/>
+
       </div>
 
       <style>{`
+        .notes-plain-content [data-note-highlight],.notes-plain-content [data-note-highlight] *{color:#14283f!important;}
+        .notes-top-layout .notes-compose-tools{flex-wrap:wrap!important;}
+        @media(max-width:900px){.notes-top-layout{grid-template-columns:minmax(0,1fr)!important;}.notes-top-layout .notes-worklist{min-height:110px!important;max-height:170px!important;}}
         [data-placeholder]:empty:before{content:attr(data-placeholder);color:rgba(110,155,215,0.35);pointer-events:none;}
         [contenteditable] ul{padding-left:18px;margin:4px 0;}
         [contenteditable] ol{padding-left:18px;margin:4px 0;}
@@ -1214,9 +1233,9 @@ export default function NotesTab(){
           .notes-content-layout{flex-direction:column!important;gap:8px!important;overflow:visible!important;}
           .notes-worklist{order:-1!important;width:100%!important;max-height:145px!important;position:relative!important;top:auto!important;margin-top:0!important;flex-shrink:0!important;}
           .notes-list-pane{width:100%!important;overflow-y:visible!important;height:auto!important;}
-          .notes-compose-tools{flex-wrap:nowrap!important;overflow-x:auto!important;}
+          .notes-compose-tools{flex-wrap:wrap!important;overflow-x:visible!important;}
           .notes-compose-tools > div:last-child{margin-left:auto!important;}
-          .notes-filter-row{flex-wrap:nowrap!important;width:100%!important;}
+          .notes-filter-row{flex-wrap:wrap!important;width:100%!important;}
           .notes-search-wrap{flex:1 1 auto!important;min-width:105px!important;}
           .notes-date-filter{flex:0 0 112px!important;min-width:0!important;padding-right:20px!important;}
           .notes-filter-count{display:none!important;}
