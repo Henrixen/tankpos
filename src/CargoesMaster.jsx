@@ -1,7 +1,8 @@
+import {formatCargoFreight as fmtFreight,normalizeCargoEntry} from "./cargoNormalization";
 import React,{useEffect,useMemo,useRef,useState,useDeferredValue,Suspense} from "react";
 import { createPortal } from "react-dom";
 import { C } from "./constants";
-import { toTCase,normaliseQty,fmtDateShort,fmtFreight } from "./utils";
+import { toTCase,normaliseQty,fmtDateShort } from "./utils";
 import { supabase } from "./supabaseclient";
 import {useWorkspacePreferences,BrokerActivity,getBrokerSession,personalCacheGet,personalCacheSet} from "./BrokerWorkspace";
 import { tagsForScope, tagColor } from "./TagManagement";
@@ -339,7 +340,8 @@ function InlineCargoAddRow({shown,onSave,onClose}){
   </tr>;
 }
 
-export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpdateC,onAddCargoes,onAddC,onDelC,onAddVessels,onCargoSearch}){
+export default function QuotesFixtures({vessels=[],cargoes:rawCargoes=[],cargoTotal=0,onUpdateC,onAddCargoes,onAddC,onDelC,onAddVessels,onCargoSearch}){
+ const cargoes=useMemo(()=>rawCargoes.map(row=>normalizeCargoEntry(row)),[rawCargoes]);
  const [copyFeedback,setCopyFeedback]=useState("");
  const copiedTimer=useRef(null);
  const markCopied=(name)=>{clearTimeout(copiedTimer.current);setCopyFeedback(name);copiedTimer.current=setTimeout(()=>setCopyFeedback(""),1800);};
@@ -508,6 +510,16 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
     return ()=>{active=false};
   },[cargoTotal]);
  const groups=useMemo(()=>{try{return JSON.parse(localStorage.getItem("signal_cargo_filter_groups")||"[]")}catch{return[]}},[cargoes.length]),grades=groups.filter(g=>(g.category||"grade")==="grade"),tags=[...new Set(cargoes.map(c=>c.tag).filter(Boolean))].sort();
+ // Capture sort values for this sort selection so an edit cannot move a row.
+ // A deliberate column sort starts a fresh snapshot; new rows get their own values.
+ const sortSnapshot=useRef({key:null,rows:new Map()});
+ const stableSortRows=useMemo(()=>{
+   const key=JSON.stringify([sort,dir]);
+   if(sortSnapshot.current.key!==key)sortSnapshot.current={key,rows:new Map()};
+   const rows=sortSnapshot.current.rows;
+   for(const c of cargoes)if(!rows.has(String(c.id)))rows.set(String(c.id),{...c});
+   return rows;
+ },[cargoes,sort,dir]);
  const filteredBase=useMemo(()=>{let a=cargoes.filter(c=>{if(section==="inter"&&c.market_segment!=="INTERMEDIATE")return false;if(section==="all"&&hideIntermediate&&String(c.market_segment||"").trim().toUpperCase()==="INTERMEDIATE")return false;if(contributorFilter&&editorInitials(c.entered_by)!==contributorFilter)return false;if(freightPositiveOnly&&cargoFreightAmount(c.freight)===null)return false;if(ex&&c.ex_region!==ex)return false;if(toR&&c.to_region!==toR)return false;if(status!=="ALL"&&c.status!==status)return false;if(activeTags.length&&!activeTags.some(t=>String(c.tag||"").split(/[,;|]/).map(s=>s.trim()).includes(t)))return false;if(laycanStart||laycanEnd){
   // The two small inputs define a strict range in the current calendar month.
   // Both laycan endpoints must be within it (inclusive).
@@ -523,7 +535,7 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
   const laycanTo=cargoLaycanDate(c.to,laycanFrom||periodEnd);
   if(!laycanFrom||!laycanTo)return false;
   if(laycanFrom<periodStart||laycanTo>periodEnd||laycanTo<laycanFrom)return false;
-}if(time){const d=new Date(c.updated||c.added||0),now=new Date(),[tw0,tw1]=weekBounds(0),[lw0,lw1]=weekBounds(-1);tw1.setHours(23,59,59,999);lw1.setHours(23,59,59,999);if(time==="tw"&&!(d>=tw0&&d<=tw1))return false;if(time==="lw"&&!(d>=lw0&&d<=lw1))return false;if(time==="ytd"&&d<new Date(now.getFullYear(),0,1))return false;}if(grade&&!String(c.cargo||"").toLowerCase().includes(grade.toLowerCase()))return false;if(deferredSearch&&!JSON.stringify(c).toLowerCase().includes(deferredSearch.toLowerCase()))return false;return true});const f=sort==="added"?"added":sort;return [...a].sort((x,y)=>{let A=x[f]||x.updated||"",B=y[f]||y.updated||"";if(f==="added"||f==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime()}if(f==="freight"){
+}if(time){const d=new Date(c.updated||c.added||0),now=new Date(),[tw0,tw1]=weekBounds(0),[lw0,lw1]=weekBounds(-1);tw1.setHours(23,59,59,999);lw1.setHours(23,59,59,999);if(time==="tw"&&!(d>=tw0&&d<=tw1))return false;if(time==="lw"&&!(d>=lw0&&d<=lw1))return false;if(time==="ytd"&&d<new Date(now.getFullYear(),0,1))return false;}if(grade&&!String(c.cargo||"").toLowerCase().includes(grade.toLowerCase()))return false;if(deferredSearch&&!JSON.stringify(c).toLowerCase().includes(deferredSearch.toLowerCase()))return false;return true});const f=sort==="added"?"added":sort;return [...a].sort((currentX,currentY)=>{const x=stableSortRows.get(String(currentX.id))||currentX,y=stableSortRows.get(String(currentY.id))||currentY;let A=x[f]||"",B=y[f]||"";if(f==="added"||f==="updated"){A=new Date(A||0).getTime();B=new Date(B||0).getTime()}if(f==="freight"){
   const amountA=cargoFreightAmount(x.freight),amountB=cargoFreightAmount(y.freight);
   if(amountA===null&&amountB!==null)return 1;
   if(amountB===null&&amountA!==null)return -1;
@@ -531,7 +543,7 @@ export default function QuotesFixtures({vessels=[],cargoes=[],cargoTotal=0,onUpd
 }const primary=f==="freight"?0:(A<B?-1:A>B?1:0)*dir;if(primary)return primary;
 // Stable tie-breakers: editing Intel/regions/etc must never change row position.
 const xa=new Date(x.added||0).getTime()||0,ya=new Date(y.added||0).getTime()||0;if(xa!==ya)return ya-xa;
-return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hideIntermediate,deferredSearch,status,time,tag,extraTags,grade,ex,toR,contributorFilter,laycanStart,laycanEnd,sort,dir,freightPositiveOnly]);
+return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hideIntermediate,deferredSearch,status,time,tag,extraTags,grade,ex,toR,contributorFilter,laycanStart,laycanEnd,sort,dir,freightPositiveOnly,stableSortRows]);
  // Duplicate matching runs only against the cargoes currently passing every active filter.
  // A duplicate pair must have at least two entries within this filtered set.
  const duplicateGroups=useMemo(()=>duplicateOnly?duplicateCargoGroups(filteredBase,duplicateMode):[],[filteredBase,duplicateMode,duplicateOnly]);

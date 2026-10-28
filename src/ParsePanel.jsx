@@ -1,3 +1,4 @@
+import {normalizeCargoEntry} from "./cargoNormalization";
 import React, { useState, useRef, useEffect } from "react";
 import {createPortal} from "react-dom";
 import {getUsageEntries,getUsageCache,subscribeUsage,downloadUsageCSV} from "./aiUsage";
@@ -51,7 +52,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
       const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
       if(!rows.length){setStatus({t:"error",m:"Empty file."});return;}
       const hdr=Object.keys(rows[0]);
-      const fnd=(keys)=>hdr.find(h=>keys.some(k=>h.toLowerCase().includes(k)))||null;
+      const fnd=keys=>{const norm=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,"");return keys.map(k=>hdr.find(h=>norm(h)===norm(k))).find(Boolean)||keys.map(k=>hdr.find(h=>norm(h).includes(norm(k)))).find(Boolean)||null;};
       if(mode==="pos"){
         const cVessel=fnd(["vessel","ship","name"]);
         const cOp=fnd(["operator","commercial","pool","manager","owner","company","opr"]);
@@ -92,7 +93,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
           return {id:"xls-"+Date.now()+"-"+idx+"-"+Math.random().toString(36).slice(2,5),charterer:String(r[cCharterer]||"").trim(),vessel,qty:fmtQ(r[cQty]),cargo:String(r[cProduct]||"").trim().toUpperCase(),load:String(r[cLoad]||"").trim(),disch:String(r[cDisch]||"").trim(),from:ls,to:le,freight:String(r[cFreight]||"").trim(),comment:String(r[cComment]||"").trim(),status,updated:addedAt};
         }).filter(r=>r.charterer||r.vessel||r.load);
         if(!parsed.length){setStatus({t:"error",m:"No cargo rows found. Check column headers."});return;}
-        const lk=onAddCargoes(parsed);
+        const lk=onAddCargoes(parsed.map(row=>normalizeCargoEntry(row)));
         setStatus({t:"success",m:"✓ "+parsed.length+" fixtures imported from "+rows.length+" rows"+(lk?", "+lk+" pos updated":"")});
       }
     }catch(e){setStatus({t:"error",m:"Import error: "+e.message});}finally{parseLock.current=false;setBusy(false);}

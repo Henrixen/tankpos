@@ -1,3 +1,4 @@
+import {normalizeCargoEntry} from "./cargoNormalization";
 import {logUsage,calcCost} from "./aiUsage";
 
 function xJSON(raw){if(!raw)throw new Error("Empty");const cl=raw.trim().replace(/^```[\w]*/,"").replace(/```/g,"").trim();try{return JSON.parse(cl);}catch(_){}const s=cl.indexOf("["),e=cl.lastIndexOf("]");if(s>=0&&e>s){try{return JSON.parse(cl.slice(s,e+1));}catch(_){}}throw new Error("Parse failed: "+raw.slice(0,60));}
@@ -68,9 +69,9 @@ async function parseCargo(text,img,known=[]){
   const kv=candidates.length?"Relevant vessel names: "+candidates.join(", "):"";
   const sys308="Maritime cargo fixture parser. Output ONLY raw JSON array, no markdown, no explanation.";
   const mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][new Date().getMonth()];
-  const prompt308="Parse cargo fixtures to JSON. "+kv+"\n\nFields: {vessel,charterer,cargo,qty,load,disch,from,to,freight,status,comment}\n\nRules:\n- qty: kt e.g. '15kt' or '7-10kt'. 12000mt->12kt.\n- from/to: laycan dates. ALWAYS expand to 'DD Mon'. If only day numbers like '13-15' use current month ("+mo+") -> from:'13 "+mo+"' to:'15 "+mo+"'. Never leave as bare numbers.\n- Ports: 'X - Y' or 'X to Y' means load=X disch=Y. The port AFTER the dash/to is the DISCHARGE port.\n- charterer: 'acct X' or 'a/c X' means charterer=X. Capitalise each word: eni->Eni, bp->BP, exxon->Exxon.\n- cargo: expand abbreviations: nap->Naphtha, go->Gasoil, hvo->HVO, lco->LCO, jet->Jet, gtl->GTL, fo->Fuel Oil.\n- status: FIXED, SUBS, or FAILED only, blank if unknown.\n- vessel: blank if TBN or not named.\n- Only include fields present in input.\n\nData:\n"+t;
+  const prompt308="Parse cargo fixtures to JSON. "+kv+"\n\nFields: {vessel,charterer,cargo,qty,load,disch,from,to,freight,status,comment}\n\nRules:\n- qty: kt e.g. '15kt' or '7-10kt'. 12000mt->12kt.\n- from/to: laycan dates. ALWAYS expand to 'DD Mon'. If only day numbers like '13-15' use current month ("+mo+") -> from:'13 "+mo+"' to:'15 "+mo+"'. Never leave as bare numbers.\n- Ports: 'X - Y' or 'X to Y' means load=X disch=Y. The port AFTER the dash/to is the DISCHARGE port.\n- charterer: 'acct X' or 'a/c X' means charterer=X. Capitalise each word: eni->Eni, bp->BP, exxon->Exxon.\n- cargo: expand abbreviations: nap->Naphtha, go->Gasoil, hvo->HVO, lco->LCO, jet->Jet, gtl->GTL, fo->Fuel Oil.\n- status: FIXED, SUBS, or FAILED only, blank if unknown.\n- vessel: named ship goes here, blank if TBN. Never copy its name into comment.\n- comment: actual remarks only; preserve relets, alternative ships, failed attempts and conditions.\n- freight: copy the full rate including currency, units and qualifiers; never put it in vessel. Bare 2-3 digit rate = PMT; K/M or large amounts = lump sum. Local code formats rates.\n- Only include fields present in input.\n\nData:\n"+t;
   const raw=await apiCall(sys308,parserMessages(prompt308,img),{action:img?"cargoes-image":"cargoes-text",cache:true,expectJSON:true});
-  return xJSON(raw);
+  return xJSON(raw).map(row=>normalizeCargoEntry(row,known));
 }
 
 // re-export for use in other modules
