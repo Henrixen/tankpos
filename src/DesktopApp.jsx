@@ -1397,7 +1397,7 @@ function DesktopApp({vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,on
       finally{if(alive)setLoginFeedLoading(false);}
     };
     loadLoginFeeds();
-    const timer=setInterval(loadLoginFeeds,10*60*1000);
+    const timer=setInterval(loadLoginFeeds,60*60*1000);
     return()=>{alive=false;clearInterval(timer);};
   },[unlocked]);
 
