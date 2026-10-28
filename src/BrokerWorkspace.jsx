@@ -122,9 +122,12 @@ function editingDetail(){
  const header=td?.closest('table')?.querySelectorAll('thead th')?.[td.cellIndex]?.textContent?.trim();
  return {scope,record:row?.dataset.brokerLabel||row?.dataset.brokerRecord||'Filters / controls',field:el.dataset.brokerField||td?.dataset.brokerField||header||el.getAttribute('aria-label')||el.placeholder||'Editing'};
 }
+const normalisePresenceScope=value=>({pos:"positions",position:"positions",cargo:"cargoes",cargo2:"cargoes"})[value]||value||"";
+const presenceViews=new Map();
+function visiblePresenceScope(){for(const item of [...presenceViews.values()].reverse()){if(item.node?.isConnected&&!item.node.closest('[hidden],[aria-hidden="true"]'))return normalisePresenceScope(item.scope);}return normalisePresenceScope(view);}
 function publishActivity(){
  if(!activityChannel||!session)return;
- activityChannel.track({sessionId:activityChannel._brokerKey,userId:session.user.id,name:session.user.name,initials:session.user.initials,color:session.user.color,view,editing:editingDetail()}).catch(()=>{});
+ activityChannel.track({sessionId:activityChannel._brokerKey,userId:session.user.id,name:session.user.name,initials:session.user.initials,color:session.user.color,view:visiblePresenceScope(),editing:editingDetail()}).catch(()=>{});
 }
 export function useBrokerActivity(scope){
  const current=useBrokerSession();
@@ -147,10 +150,11 @@ export function useBrokerActivity(scope){
  },[current?.user.id]);
 }
 export function BrokerActivity({scope}){
- const state=useSyncExternalStore(subscribe,getSnapshot,getSnapshot),[open,setOpen]=useState(false);
+ const state=useSyncExternalStore(subscribe,getSnapshot,getSnapshot),[open,setOpen]=useState(false),presenceRef=useRef(null);
+ useEffect(()=>{if(!state.session)return;const key=Symbol('visible-presence');presenceViews.set(key,{scope,node:presenceRef.current});publishActivity();return()=>{presenceViews.delete(key);publishActivity();};},[scope,state.session?.user.id]);
  if(!state.session)return null;
- const relevant=state.peers.filter(p=>p.view===scope||p.editing?.scope===scope),editing=relevant.filter(p=>p.editing?.scope===scope);
- return <div style={{marginLeft:'auto',position:'relative',fontSize:11,color:'#a8c9ec',maxWidth:320,alignSelf:'center'}}>
+ const relevant=state.peers.filter(p=>normalisePresenceScope(p.view)===normalisePresenceScope(scope)||normalisePresenceScope(p.editing?.scope)===normalisePresenceScope(scope)),editing=relevant.filter(p=>normalisePresenceScope(p.editing?.scope)===normalisePresenceScope(scope));
+ return <div ref={presenceRef} data-presence-scope={scope} style={{marginLeft:'auto',position:'relative',fontSize:11,color:'#a8c9ec',maxWidth:320,alignSelf:'center'}}>
   <button type="button" onClick={()=>setOpen(v=>!v)} style={{background:'#10223b',border:'1px solid #34577b',borderRadius:5,color:'#b7d9fa',padding:'5px 9px',font:'inherit',cursor:'pointer'}} title="See who is online and editing">
    <span style={{color:state.liveState==='Live'?'#4ade80':'#e6a854'}}>●</span> {state.liveState} · {editing.length?editing.map(p=>p.initials).join(', ')+' editing':relevant.length+' other online'} ▾
   </button>
