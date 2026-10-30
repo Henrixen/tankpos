@@ -2518,6 +2518,19 @@ const filtV=useMemo(()=>{
   useEffect(()=>()=>clearTimeout(previewCopyTimer.current),[]);
   const previewColumns=[["operator","Operator"],["vessel","Vessel"],["dwt","DWT"],["built","Blt"],["date","Date"],["openPort","Port"],["comment","Comment"],["updatedAt","Updated"]];
   useBrokerActivity(unlocked?(tab==="pos"?"positions":tab==="cargo"||tab==="cargo2"?"cargoes":""):"");
+  const positionsClearVisible=previewMode
+    ? Boolean(previewTags.size||previewSubTags.size||previewSaved)
+    : Boolean(filters.size||posTagFilter.size||posSubTags.size||coatingFilter.size||bucketFilters.size||superRegionFilter.size||segmentFilter.size||dwtFilter.size||builtFilter.size||interUKCActive||showSavedOnly||search||opFilter||updFilter||dwtRange.min||dwtRange.max||builtRange.min||builtRange.max||openDateFilter.quick||openDateFilter.from||openDateFilter.to);
+  function clearPositionFilters(){
+    if(previewMode){setPreviewTags(new Set());setPreviewSubTags(new Set());setPreviewSaved(false);return;}
+    setFilters(new Set());setPosTagFilter(new Set());setPosSubTags(new Set());setCoatingFilter(new Set());
+    setBucketFilters(new Set());setSuperRegionFilter(new Set());setSegmentFilter(new Set());
+    setDwtFilter(new Set());setBuiltFilter(new Set());setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});
+    setOpenDateFilter({quick:"",from:"",to:""});setUpdFilter("");setOpFilter(null);setSearch("");
+    setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);
+  }
+  const positionsClearButton=(style={})=>positionsClearVisible?<button type="button" aria-label="Clear all position filters" title={previewMode?"Clear preview filters only":"Clear all position filters"} onClick={clearPositionFilters} style={{fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:4,border:"1px solid rgba(255,107,107,.5)",background:"#301c29",color:"#ff808b",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",...style}}>× Clear</button>:null;
+
   const brokerPositionDefaults=useRef({...{"search": "", "previewSaved": false, "dwtRange": {"min": "", "max": ""}, "builtRange": {"min": "", "max": ""}, "openDateFilter": {"quick": "", "from": "", "to": ""}, "opFilter": null, "updFilter": "", "sortK": "fileDate", "sortD": -1, "posFileDaysBack": 90, "showSavedOnly": false, "fixingPanelTab": "Open Segments", "fixingExpanded": false, "aisPanelTab": "Map", "positionsWidths": [32, 34, 34], "interUKCActive": false, "previewSort": {"key": "operator", "dir": 1}, "previewFormat": "table", "filters": [], "posTagFilter": [], "previewTags": [], "coatingFilter": [], "bucketFilters": [], "superRegionFilter": [], "segmentFilter": [], "dwtFilter": [], "builtFilter": [], "savedVessels": []},colWidthsV,previewExcluded:[],posSubTags:[],previewSubTags:[],cargoVisibleCols:[...CARGO_COLUMN_KEYS],qfVisibleCols:[...QF_DEFAULT_VISIBLE]});
   useWorkspacePreferences("positions",{posSubTags:[...posSubTags],previewSubTags:[...previewSubTags],filters:[...filters],posTagFilter:[...posTagFilter],previewTags:[...previewTags],coatingFilter:[...coatingFilter],bucketFilters:[...bucketFilters],superRegionFilter:[...superRegionFilter],segmentFilter:[...segmentFilter],dwtFilter:[...dwtFilter],builtFilter:[...builtFilter],savedVessels:[...savedVessels],previewExcluded:[...previewExcluded],cargoVisibleCols:[...cargoVisibleCols],qfVisibleCols:[...qfVisibleCols],search,previewSaved,dwtRange,builtRange,openDateFilter,opFilter,updFilter,sortK,sortD,posFileDaysBack,showSavedOnly,fixingPanelTab,fixingExpanded,aisPanelTab,positionsWidths,interUKCActive,colWidthsV,previewSort,previewFormat},p=>{
     setFilters(new Set(p.filters||[]));
@@ -3265,7 +3278,8 @@ const filtV=useMemo(()=>{
                   since Regional Snapshot is now a tab inside the AIS Map panel on the right) */}
               {positionsDivider(0)}
               {!mobile&&(
-                <div style={{width:`calc(${positionsWidths[1]}% - 6px)`,minWidth:0,height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+                <div style={{width:`calc(${positionsWidths[1]}% - 6px)`,minWidth:0,height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"visible",position:"relative",display:"flex",flexDirection:"column"}}>
+                  {positionsClearButton({position:"absolute",left:7,top:-29,zIndex:3})}
                   <HScrollStyle/>
                   {(opFilter||bucketFilters.size>0)&&(
                     <div style={{flexShrink:0,padding:"8px 12px 0 12px",display:"flex",flexDirection:"column",gap:4}}>
@@ -3481,6 +3495,7 @@ const filtV=useMemo(()=>{
                 </MobileCollapse>
 
                 <MobileCollapse title="🏷️ Tags & Filters" color="#f5a623">
+                  {positionsClearButton({marginBottom:8})}
                   <HScrollStyle/>
                   {(opFilter||bucketFilters.size>0)&&(
                     <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
