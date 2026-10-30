@@ -14,7 +14,7 @@ function manualBenchmarkTce(value){
  return /k\b/i.test(text)||Math.abs(n)<1000?n*1000:n;
 }
 function benchmarkTceValue(row,last=false){const value=last?row.manualTceLastWeek:row.manualTce;return manualBenchmarkTce(value)??(last?row.tceLastWeek:row.tce);}
-function benchmarkTceLabel(row,last=false){const value=last?row.manualTceLastWeek:row.manualTce,n=benchmarkTceValue(row,last);return n!=null?`USD ${Number((n/1000).toFixed(2)).toLocaleString("en-US")}k pd`:String(value||"");}
+function benchmarkTceLabel(row,last=false){const value=last?row.manualTceLastWeek:row.manualTce,n=benchmarkTceValue(row,last);return n!=null?`USD ${Math.round(n/1000).toLocaleString("en-US")}k pd`:String(value||"");}
 function moveReportRow(rows,from,to){if(from<0||to<0||from===to||from>=rows.length||to>=rows.length)return rows;const next=[...rows];next.splice(to,0,next.splice(from,1)[0]);return next;}
 
 // Asia–Europe report editor and dated weekly benchmark history.
