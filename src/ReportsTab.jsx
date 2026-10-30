@@ -1,8 +1,21 @@
+import {useReportLive,ReportLiveStatus} from "./ReportLive";
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from "react";
 import { C } from "./constants";
 import { supabase } from "./supabaseclient";
 import { classifyRegion, fmtDateShort } from "./utils";
 import { calcTCE, lookupDist, BENCHMARK_ROUTES, loadTCEDefaults } from "./TCECalculator";
+
+const REPORT_ABBREVIATIONS=new Set("ARA WRG CNR VNR WCUK ECUK UK UKC NWE NWC MED US USA USG USAC USEC USWC EU UAE UCOME IMO DWT CBM PPT TBC TBN ETA ETD AG PG WAF EAF SAF WCNA WCSA ULSD UMS CPP DPP HVO FAME UCO MR LR NAP BP CSS CSSSA SA ST SPK LVN HVN LSR HSFO VLSFO LSFO MGO IFO LNG LPG MTBE ETBE BTX EDC MEG TX TBA USD EUR GBP LS PMT PD PDPR COA TCT STST IGS FFA TC6 TC7 TC23".split(" "));
+function reportAbbreviations(value){return String(value??"").replace(/\b[A-Za-z][A-Za-z0-9]*\b/g,w=>REPORT_ABBREVIATIONS.has(w.toUpperCase())?w.toUpperCase():w);}
+function manualBenchmarkTce(value){
+ const text=String(value??"").trim();if(!text)return null;
+ const n=Number(text.replace(/USD|\$|PDPR|PD|PER DAY|\/DAY/gi,"").replace(/\s/g,"").replace(/k$/i,"").replace(/,(?=\d{3}(?:\D|$))/g,"").replace(",","."));
+ if(!Number.isFinite(n))return null;
+ return /k\b/i.test(text)||Math.abs(n)<1000?n*1000:n;
+}
+function benchmarkTceValue(row,last=false){const value=last?row.manualTceLastWeek:row.manualTce;return manualBenchmarkTce(value)??(last?row.tceLastWeek:row.tce);}
+function benchmarkTceLabel(row,last=false){const value=last?row.manualTceLastWeek:row.manualTce,n=benchmarkTceValue(row,last);return n!=null?`USD ${Number((n/1000).toFixed(2)).toLocaleString("en-US")}k pd`:String(value||"");}
+function moveReportRow(rows,from,to){if(from<0||to<0||from===to||from>=rows.length||to>=rows.length)return rows;const next=[...rows];next.splice(to,0,next.splice(from,1)[0]);return next;}
 
 // Asia–Europe report editor and dated weekly benchmark history.
 function GrowText({value,style,...props}){
@@ -37,7 +50,14 @@ function asiaNewbuildValue(key,value){
 }
 function parseAsiaPaste(text,vessels=[],format="auto"){
  const keys=["charterer","vessel","qty","cargo","laycan","rate","comment"],blank=()=>Object.fromEntries(keys.map(k=>[k,""]));
- const field=h=>{const n=h.toLowerCase().replace(/[^a-z0-9]/g,"");return ({charterer:"charterer",charterers:"charterer",chrtr:"charterer",vessel:"vessel",vesselname:"vessel",ship:"vessel",qty:"qty",quantity:"qty",size:"qty",cargo:"cargo",product:"cargo",laycan:"laycan",open:"laycan",opendate:"laycan",rate:"rate",freight:"rate",comment:"comment",comments:"comment",remarks:"comment",load:"load",loading:"load",disch:"disch",discharge:"disch",status:"status",terms:"terms",dwt:"dwt",sdwt:"dwt"})[n]||null;};
+ const field=h=>{const n=h.toLowerCase().replace(/[^a-z0-9]/g,"");
+ if(/^(?:qty|quantity|size)(?:mt|mts|kt|ktons?|metrictons?|metrictonnes?|tons?|tonnes?)?$/.test(n))return "qty";
+ if(["grade","grades","cargograde"].includes(n))return "cargo";
+ if(["loaddelivery","loadingdelivery","delivery","loadport","loadingport"].includes(n))return "load";
+ if(["dischargeredelivery","dischredelivery","redelivery","dischargeport","dischport"].includes(n))return "disch";
+ if(["freighthire","ratehire","hire","freightrate"].includes(n))return "rate";
+ if(["notes","note","additionalnotes"].includes(n))return "comment";
+ return ({charterer:"charterer",charterers:"charterer",chrtr:"charterer",vessel:"vessel",vesselname:"vessel",ship:"vessel",qty:"qty",quantity:"qty",size:"qty",cargo:"cargo",product:"cargo",laycan:"laycan",open:"laycan",opendate:"laycan",rate:"rate",freight:"rate",comment:"comment",comments:"comment",remarks:"comment",load:"load",loading:"load",disch:"disch",discharge:"disch",status:"status",terms:"terms",dwt:"dwt",sdwt:"dwt"})[n]||null;};
  const split=line=>{const sep=line.includes("|")?"|":line.includes("\t")?"\t":line.includes("·")?"·":null;if(!sep)return null;const out=line.split(sep).map(t=>t.trim());if(sep==="|"){if(out[0]==="")out.shift();if(out[out.length-1]==="")out.pop();}return out;};
  let headers=null;const rows=[];
  for(const raw of text.split(/\r?\n/)){const line=raw.trim();if(!line||/^\s*\|?\s*:?-{2,}/.test(line))continue;const parts=split(line);
@@ -60,6 +80,7 @@ function parseAsiaPaste(text,vessels=[],format="auto"){
  if(extra.length)cells.comment=[cells.comment,...extra].filter(Boolean).join(" · ");
  // Header-labelled positions use DWT only for vessel-size grouping, never cargo quantity.
  const section=classifyAsiaLine([cells.qty&&cells.qty+(/^[\d,. ]+$/.test(cells.qty)?" mt":""),cells.rate,cells.vessel,dwt?dwt+" dwt":"",!parsed?line:""].filter(Boolean).join(" "),vessels);
+ for(const k of keys)cells[k]=reportAbbreviations(cells[k]);
  rows.push({text:line,cells,section,parsed});
  }
  return rows;
@@ -72,7 +93,7 @@ function asiaFixtureCells(f){
   if(p.length>=9&&/^[\d.]+$/.test(p[2])&&/^[\d,.]+$/.test(p[3]))return parseAsiaPaste("Region|Vessel|YR|DWT|CUB|Ice class|Area|Open|Status|Comments\n"+raw)[0]?.cells||f._asiaCells;
   if(p.length===7)return parseAsiaPaste(raw)[0].cells;
  }
- if(f._asiaCells)return f._asiaCells;
+ if(f._asiaCells)return Object.fromEntries(Object.entries(f._asiaCells).map(([k,v])=>[k,reportAbbreviations(v)]));
  const cells={charterer:f.charterer||"",vessel:f.vessel||"",qty:f.qty||"",cargo:f.cargo||"",laycan:f.laycan||[f.laycanFrom,f.laycanTo].filter(Boolean).join("–"),rate:f.freight||f.rate||"",comment:f.comment||f.comments||""};
  // Keep legacy pasted text intact when its columns cannot be identified reliably.
  if(f._asiaText){
@@ -85,6 +106,7 @@ function asiaFixtureCells(f){
 }
 function AsiaReportEditor({value,onChange,date,name,setName,saveCopy,setSaveCopy,onSave,busy,status,commentary,setCommentary,previewRef,onCopy,onDownload,exportStatus,setDate,fixtures,setFixtures,logo,Sparkline,ffaMonths,vessels=[]}){
  const a=normalizeAsiaReport(value),[message,setMessage]=useState(""),[paste,setPaste]=useState(""),[review,setReview]=useState([]),[pasteFormat,setPasteFormat]=useState("auto"),[exporting,setExporting]=useState(false),files=useRef([]);
+ const matrixDrag=useRef(null),[matrixDrop,setMatrixDrop]=useState(null);
  const set=(key,val)=>onChange(p=>({...normalizeAsiaReport(p),[key]:val}));
  const input={width:"100%",boxSizing:"border-box",border:0,background:"#f3f7fb",borderRadius:3,color:"#143656",fontFamily:"Arial,sans-serif",fontSize:13,padding:"3px 4px",lineHeight:"18px",outlineColor:"#7caff0"};
  const btn={padding:"7px 12px",background:"#e2f0ff",color:"#14548c",border:"1px solid #8abbe9",borderRadius:5,cursor:"pointer",fontWeight:700,fontSize:12};
@@ -117,7 +139,7 @@ function AsiaReportEditor({value,onChange,date,name,setName,saveCopy,setSaveCopy
  <GrowText style={{...input,background:"#f4f8ff",minHeight:115,marginTop:10}} value={paste} onChange={e=>setPaste(e.target.value)} placeholder="Paste a table with its header row (pipe-separated or tab-separated), or one fixture per line. Review extracted columns before adding."/>
  <div style={{fontSize:12,margin:"8px 0",lineHeight:1.6}}>Use tabs from Excel or <b>|</b> between columns, one cargo per line. Paste the header row when possible.<br/><code>Charterer | Status | Qty | Cargo | Load | Discharge | Laycan | Vessel | Freight | Terms | Comment</code></div>
  <label style={{fontSize:12}}>Paste format <select aria-label="Cargo paste format" value={pasteFormat} onChange={e=>setPasteFormat(e.target.value)} style={{...input,width:260,margin:"0 10px"}}><option value="auto">Auto / use pasted headers</option><option value="cargo11">Cargo table · 11 columns</option><option value="report7">Report table · 7 columns</option></select></label><button style={btn} onClick={prepare}>Review cargoes</button>
- {!!review.length&&<div style={{overflowX:"auto",marginTop:8}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}><thead><tr>{["Section","Charterer","Vessel","Qty","Cargo","Laycan","Rate","Comment",""].map((t,i)=><th key={i} style={{textAlign:"left",padding:5,color:"#dcecff"}}>{t}</th>)}</tr></thead><tbody>{reviewRows.map(({row:r,index:i},position)=><React.Fragment key={i}>{(position===0||reviewRows[position-1].row.section!=="Review"&&r.section==="Review"||reviewRows[position-1].row.section==="Review"&&r.section!=="Review")&&<tr><td colSpan={9} style={{padding:8,background:"#204e70",color:"#e6f4ff",fontWeight:700}}>{r.section==="Review"?`Needs review (${review.filter(x=>x.section==="Review").length})`:"Categorised cargoes"}</td></tr>}<tr style={{background:r.section==="Review"?"#cce7fa":r.section==="Exclude"?"#283342":"#102c43"}}><td style={{padding:4}}><select aria-label={`Paste section ${i+1}`} value={r.section} onChange={e=>setReview(p=>p.map((x,j)=>i===j?{...x,section:e.target.value}:x))} style={{...input,width:110,fontWeight:700,background:r.section==="Review"?"#dff1ff":r.section==="Exclude"?"#d9dee5":"#e7f1fa",color:r.section==="Review"?"#164a70":"#173653"}}>{["Review","Exclude","Sub 20k","Handy–MR","MR TCT"].map(g=><option key={g}>{g}</option>)}</select></td>{["charterer","vessel","qty","cargo","laycan","rate","comment"].map(k=><td key={k} style={{padding:3,verticalAlign:"top"}}><GrowText aria-label={`Paste ${k} ${i+1}`} value={r.cells[k]||""} style={{...input,minWidth:k==="comment"?180:70,fontSize:11}} onChange={e=>setReview(p=>p.map((x,j)=>i===j?{...x,cells:{...x.cells,[k]:e.target.value}}:x))}/></td>)}<td><button aria-label={`Remove pasted row ${i+1}`} style={red} onClick={()=>setReview(p=>p.filter((_,j)=>j!==i))}>×</button></td></tr></React.Fragment>)}</tbody></table><div style={{fontSize:11,color:"#a8d8fc",padding:6}}>Light blue Review rows are grouped first and need a section. Choose Exclude to skip a row. Uncertain text remains in Comment for your review.</div></div>}
+ {!!review.length&&<div style={{overflowX:"auto",marginTop:8}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}><thead><tr>{["Section","Charterer","Vessel","Qty","Cargo","Laycan","Rate","Comment",""].map((t,i)=><th key={i} style={{textAlign:"left",padding:5,color:"#dcecff"}}>{t}</th>)}</tr></thead><tbody>{reviewRows.map(({row:r,index:i},position)=><React.Fragment key={i}>{(position===0||reviewRows[position-1].row.section!=="Review"&&r.section==="Review"||reviewRows[position-1].row.section==="Review"&&r.section!=="Review")&&<tr><td colSpan={9} style={{padding:8,background:"#204e70",color:"#e6f4ff",fontWeight:700}}>{r.section==="Review"?`Needs review (${review.filter(x=>x.section==="Review").length})`:"Categorised cargoes"}</td></tr>}<tr style={{background:r.section==="Review"?"#cce7fa":r.section==="Exclude"?"#283342":"#102c43"}}><td style={{padding:4}}><select aria-label={`Paste section ${i+1}`} value={r.section} onChange={e=>setReview(p=>p.map((x,j)=>i===j?{...x,section:e.target.value}:x))} style={{...input,width:110,fontWeight:700,background:r.section==="Review"?"#dff1ff":r.section==="Exclude"?"#d9dee5":"#e7f1fa",color:r.section==="Review"?"#164a70":"#173653"}}>{["Review","Exclude","Sub 20k","Handy–MR","MR TCT"].map(g=><option key={g}>{g}</option>)}</select></td>{["charterer","vessel","qty","cargo","laycan","rate","comment"].map(k=><td key={k} style={{padding:3,verticalAlign:"top"}}><GrowText aria-label={`Paste ${k} ${i+1}`} value={r.cells[k]||""} style={{...input,minWidth:k==="comment"?180:70,fontSize:11}} onChange={e=>setReview(p=>p.map((x,j)=>i===j?{...x,cells:{...x.cells,[k]:reportAbbreviations(e.target.value)}}:x))}/></td>)}<td><button aria-label={`Remove pasted row ${i+1}`} style={red} onClick={()=>setReview(p=>p.filter((_,j)=>j!==i))}>×</button></td></tr></React.Fragment>)}</tbody></table><div style={{fontSize:11,color:"#a8d8fc",padding:6}}>Light blue Review rows are grouped first and need a section. Choose Exclude to skip a row. Uncertain text remains in Comment for your review.</div></div>}
  {!!review.length&&<button style={{...btn,marginTop:10}} onClick={importLines}>Add reviewed cargoes</button>}
  </details>
  {message&&<div role="status" style={{color:"#9dccf6",fontSize:12}}>{message}</div>}
@@ -125,10 +147,10 @@ function AsiaReportEditor({value,onChange,date,name,setName,saveCopy,setSaveCopy
  <style>{`.asia-report textarea{display:block;min-height:24px}.asia-report [data-field]{background:#eef5fb}.asia-report[data-export="true"] input,.asia-report[data-export="true"] textarea{background:transparent!important;border-color:transparent!important;box-shadow:none!important}.asia-report[data-export="true"] input::placeholder,.asia-report[data-export="true"] textarea::placeholder{color:transparent!important}.asia-report[data-export="true"] .no-export{display:none!important}`}</style>
  <div style={{display:"grid",gridTemplateColumns:"1fr 190px 1fr",gap:15,alignItems:"center",paddingBottom:16,borderBottom:"3px solid #173f64"}}><input aria-label="Asia report title" style={{...input,background:"transparent",fontFamily:"Georgia,serif",fontSize:24,fontWeight:600,letterSpacing:"-.3px"}} value={a.title} onChange={e=>set("title",e.target.value)}/><img src={logo} style={{width:180,justifySelf:"center"}} alt="Steem1960"/><div style={{textAlign:"right",fontFamily:"Georgia,serif",fontSize:14}}>{date?new Date(date+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}):""}</div></div>
  <div className="asia-top-grid" style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:"12px 12px",marginTop:14,alignItems:"stretch"}}>
- <section className={exportClass("commentary")} style={{minWidth:0,display:"flex",flexDirection:"column",background:"#eef6fc"}}><div style={{...heading,margin:"0 0 5px"}}>Market commentary</div><GrowText aria-label="Market commentary" style={{...input,background:"#eef6fc",minHeight:175,flex:1,padding:"8px 10px"}} value={commentaryText} onChange={e=>setCommentary(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();const el=e.currentTarget,pos=el.selectionStart;setCommentary(el.value.slice(0,pos)+"\n• "+el.value.slice(el.selectionEnd));requestAnimationFrame(()=>el.setSelectionRange(pos+3,pos+3));}}} placeholder="• Market commentary…"/></section>
+ <section className={exportClass("commentary")} style={{minWidth:0,display:"flex",flexDirection:"column",background:"#eef6fc"}}><div style={{...heading,margin:"0 0 5px"}}>Market commentary</div><GrowText aria-label="Market commentary" style={{...input,background:"#eef6fc",minHeight:175,flex:1,padding:"8px 10px"}} value={commentaryText} onChange={e=>setCommentary(reportAbbreviations(e.target.value))} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();const el=e.currentTarget,pos=el.selectionStart;setCommentary(el.value.slice(0,pos)+"\n• "+el.value.slice(el.selectionEnd));requestAnimationFrame(()=>el.setSelectionRange(pos+3,pos+3));}}} placeholder="• Market commentary…"/></section>
  <section className={exportClass("assessment")} style={{minWidth:0}}>
  <div style={{...heading,margin:"0 0 5px"}}><input aria-label="Freight assessment title" value={a.matrixTitle} style={titleInput} onChange={e=>set("matrixTitle",e.target.value)}/></div>
- <table style={{width:"100%",borderCollapse:"collapse",borderSpacing:0,tableLayout:"fixed"}}><colgroup><col style={{width:"36%"}}/><col style={{width:"30%"}}/><col/><col className="no-export" style={{width:25}}/></colgroup><thead><tr>{["Trade","Rate","Comment"].map((x,i)=><th key={i} style={matrixTh}><input aria-label={`Matrix header ${i+1}`} value={a.matrixHeaders?.[i]??x} style={{...input,color:"white",background:"transparent",fontWeight:750,fontSize:12,letterSpacing:0}} onChange={e=>set("matrixHeaders",["Trade","Rate","Comment"].map((v,j)=>i===j?e.target.value:a.matrixHeaders?.[j]??v))}/></th>)}<th className="no-export" style={matrixTh}/></tr></thead><tbody>{a.matrix.map((r,i)=><tr key={i}>{["route","current","comment"].map(k=><td style={{padding:"1px 6px",background:i%2?"#f1f7fc":"#eaf3fa",borderBottom:"1px solid #e1eaf1"}} key={k}><GrowText aria-label={`Matrix ${k} ${i+1}`} value={r[k]??""} style={{...input,background:"transparent",fontWeight:k==="route"?750:400}} onChange={e=>set("matrix",a.matrix.map((x,j)=>i===j?{...x,[k]:e.target.value}:x))}/></td>)}<td className="no-export"><button style={red} aria-label="Remove route" onClick={()=>set("matrix",a.matrix.filter((_,j)=>i!==j))}>×</button></td></tr>)}</tbody></table>
+ <table style={{width:"100%",borderCollapse:"collapse",borderSpacing:0,tableLayout:"fixed"}}><colgroup><col style={{width:"36%"}}/><col style={{width:"30%"}}/><col/><col className="no-export" style={{width:45}}/></colgroup><thead><tr>{["Trade","Rate","Comment"].map((x,i)=><th key={i} style={matrixTh}><input aria-label={`Matrix header ${i+1}`} value={a.matrixHeaders?.[i]??x} style={{...input,color:"white",background:"transparent",fontWeight:750,fontSize:12,letterSpacing:0}} onChange={e=>set("matrixHeaders",["Trade","Rate","Comment"].map((v,j)=>i===j?e.target.value:a.matrixHeaders?.[j]??v))}/></th>)}<th className="no-export" style={matrixTh}/></tr></thead><tbody>{a.matrix.map((r,i)=><tr key={i} onDragOver={e=>{if(matrixDrag.current!==null){e.preventDefault();setMatrixDrop(i);}}} onDrop={e=>{if(matrixDrag.current!==null){e.preventDefault();set("matrix",moveReportRow(a.matrix,matrixDrag.current,i));matrixDrag.current=null;setMatrixDrop(null);}}} style={{outline:matrixDrop===i?"2px solid #79c0ff":undefined}}>{["route","current","comment"].map(k=><td style={{padding:"1px 6px",background:i%2?"#f1f7fc":"#eaf3fa",borderBottom:"1px solid #e1eaf1"}} key={k}><GrowText aria-label={`Matrix ${k} ${i+1}`} value={r[k]??""} style={{...input,background:"transparent",fontWeight:k==="route"?750:400}} onChange={e=>set("matrix",a.matrix.map((x,j)=>i===j?{...x,[k]:reportAbbreviations(e.target.value)}:x))}/></td>)}<td className="no-export"><span draggable role="button" tabIndex={0} aria-label={`Drag assessment row ${i+1}`} title="Drag to reorder. Keyboard: Alt + Up/Down." onDragStart={e=>{matrixDrag.current=i;e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",String(i));}} onDragEnd={()=>{matrixDrag.current=null;setMatrixDrop(null);}} onKeyDown={e=>{if(e.altKey&&["ArrowUp","ArrowDown"].includes(e.key)){e.preventDefault();set("matrix",moveReportRow(a.matrix,i,i+(e.key==="ArrowUp"?-1:1)));}}} style={{cursor:"grab",color:"#246ba6",fontSize:17}}>⠿</span><button style={red} aria-label="Remove route" onClick={()=>set("matrix",a.matrix.filter((_,j)=>i!==j))}>×</button></td></tr>)}</tbody></table>
  <button className="no-export" style={{...btn,marginTop:8}} onClick={()=>set("matrix",[...a.matrix,{route:"",current:"",comment:""}])}>+ Add trade</button><input style={{...input,background:"transparent",fontSize:11,fontStyle:"italic",marginTop:4}} value={a.basis} onChange={e=>set("basis",e.target.value)}/>
  </section>
  {a.charts.map((src,i)=><div key={i} className={exportClass("graph"+i)} tabIndex={0} aria-label={`Paste graph ${i+1}`} onPaste={e=>{const item=[...e.clipboardData.items].find(x=>x.type.startsWith("image/"));if(item){e.preventDefault();imageFile(item.getAsFile(),i);}}} style={{position:"relative",minWidth:0,minHeight:src?0:110,border:src?0:"1px dashed #84b9e9",borderRadius:6,background:src?"transparent":"#f2f8ff",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -136,8 +158,8 @@ function AsiaReportEditor({value,onChange,date,name,setName,saveCopy,setSaveCopy
  </div>
  <div className={exportClass("activities")} style={{...heading,display:"flex",gap:8,alignItems:"center"}}><input aria-label="Recent Activities title" style={{...titleInput,flex:1}} value={a.activityTitle??"Recent Activities"} onChange={e=>set("activityTitle",e.target.value)}/></div>
  <table className={exportClass("activities")} aria-label="Recent Activities cargoes" style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed"}}><colgroup>{[14,16,8,11,14,16,21].map((w,i)=><col key={i} style={{width:w+"%"}}/>)}<col className="no-export" style={{width:100}}/></colgroup><thead><tr>{["Charterer","Vessel","Qty","Cargo","Laycan","Rate","Comment"].map(t=><th key={t} style={th}>{t}</th>)}<th className="no-export" style={th}/></tr></thead><tbody>
- {a.groups.map((g,gi)=><React.Fragment key={g.title}><tr className={exportClass("group:"+g.title)}><td colSpan={8} style={{padding:"8px 0 3px"}}><div style={{background:"#e4f1fa",padding:"4px 7px",borderRadius:3,display:"flex",gap:8,alignItems:"center"}}><input aria-label={`Section title ${gi+1}`} style={{...titleInput,fontSize:13,flex:1}} value={g.label??g.title} onChange={e=>set("groups",a.groups.map((x,j)=>gi===j?{...x,label:e.target.value}:x))}/><button className="no-export" aria-label={`Add cargo to ${g.label??g.title}`} title="Add cargo line" style={{...btn,padding:"0 8px",fontSize:20,background:"#174f80",color:"white"}} onClick={()=>addCargo(g.title)}>+</button></div></td></tr>
- {fixtures.map((f,i)=>{if(category(f)!==g.title)return null;const cells=asiaFixtureCells(f);return <tr className={exportClass("group:"+g.title)} key={f._reportExportId||i}>{["charterer","vessel","qty","cargo","laycan","rate","comment"].map(k=><td key={k} style={{...td,padding:"2px 3px",verticalAlign:"top"}}><GrowText aria-label={`Cargo ${k} ${i+1}`} value={cells[k]??""} style={{...input,fontWeight:k==="charterer"||k==="rate"?700:400}} onChange={e=>{const text=e.target.value;setFixtures(p=>p.map((x,j)=>i===j?{...x,_asiaCells:{...asiaFixtureCells(x),[k]:text},[k==="rate"?"freight":k]:text}:x));}}/></td>)}<td className="no-export" style={{...td,padding:"2px 2px",verticalAlign:"top"}}><div style={{display:"flex",alignItems:"center"}}><select aria-label={`Fixture category ${i+1}`} value={g.title} style={{...input,width:78,fontSize:9}} onChange={e=>setFixtures(p=>p.map((x,j)=>i===j?{...x,_asiaSection:e.target.value}:x))}><option value="Exclude">Exclude</option>{a.groups.map(x=><option key={x.title} value={x.title}>{x.label??x.title}</option>)}</select><button aria-label={`Remove cargo ${i+1}`} style={red} onClick={()=>setFixtures(p=>p.filter((_,j)=>i!==j))}>×</button></div></td></tr>;})}
+ {a.groups.map((g,gi)=><React.Fragment key={g.title}><tr className={exportClass("group:"+g.title)}><td colSpan={8} style={{padding:"8px 0 3px"}}><div style={{background:"#e4f1fa",padding:"4px 7px",borderRadius:3,display:"flex",gap:8,alignItems:"center"}}><input aria-label={`Section title ${gi+1}`} style={{...titleInput,fontSize:13,flex:1}} value={g.label??g.title} onChange={e=>set("groups",a.groups.map((x,j)=>gi===j?{...x,label:reportAbbreviations(e.target.value)}:x))}/><button className="no-export" aria-label={`Add cargo to ${g.label??g.title}`} title="Add cargo line" style={{...btn,padding:"0 8px",fontSize:20,background:"#174f80",color:"white"}} onClick={()=>addCargo(g.title)}>+</button></div></td></tr>
+ {fixtures.map((f,i)=>{if(category(f)!==g.title)return null;const cells=asiaFixtureCells(f);return <tr className={exportClass("group:"+g.title)} key={f._reportExportId||i}>{["charterer","vessel","qty","cargo","laycan","rate","comment"].map(k=><td key={k} style={{...td,padding:"2px 3px",verticalAlign:"top"}}><GrowText aria-label={`Cargo ${k} ${i+1}`} value={cells[k]??""} style={{...input,fontWeight:k==="charterer"||k==="rate"?700:400}} onChange={e=>{const text=reportAbbreviations(e.target.value);setFixtures(p=>p.map((x,j)=>i===j?{...x,_asiaCells:{...asiaFixtureCells(x),[k]:text},[k==="rate"?"freight":k]:text}:x));}}/></td>)}<td className="no-export" style={{...td,padding:"2px 2px",verticalAlign:"top"}}><div style={{display:"flex",alignItems:"center"}}><select aria-label={`Fixture category ${i+1}`} value={g.title} style={{...input,width:78,fontSize:9}} onChange={e=>setFixtures(p=>p.map((x,j)=>i===j?{...x,_asiaSection:e.target.value}:x))}><option value="Exclude">Exclude</option>{a.groups.map(x=><option key={x.title} value={x.title}>{x.label??x.title}</option>)}</select><button aria-label={`Remove cargo ${i+1}`} style={red} onClick={()=>setFixtures(p=>p.filter((_,j)=>i!==j))}>×</button></div></td></tr>;})}
  {!fixtures.some(f=>category(f)===g.title)&&<tr className={exportClass("group:"+g.title)}><td colSpan={8} style={{height:24,borderBottom:"1px solid #dce5ee"}}/></tr>}
  </React.Fragment>)}
  </tbody></table>
@@ -148,7 +170,7 @@ function AsiaReportEditor({value,onChange,date,name,setName,saveCopy,setSaveCopy
 
  </section>
  <div className="no-export" style={{display:"flex",gap:8,marginTop:14}}><button style={btn} onClick={importNB}>Import refined Newbuilds list</button>{a.newbuilds&&<button style={red} onClick={()=>set("newbuilds",null)}>×</button>}</div>
- {a.newbuilds&&<section className={exportClass("newbuilds")}><div style={heading}><input aria-label="Newbuilds section title" style={titleInput} value={a.newbuilds.title??"Newbuilds · coming next 3 months"} onChange={e=>set("newbuilds",{...a.newbuilds,title:e.target.value})}/></div><table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed",fontSize:11}}><colgroup>{[17,7,9,12,13,13,15,11].map((w,i)=><col key={i} style={{width:w+"%"}}/>)}<col className="no-export" style={{width:22}}/></colgroup><thead><tr>{["Vessel","DWT","Coating","Delivery","Operator","Owner","Yard","Comment"].map((t,i)=><th key={i} style={th}><GrowText aria-label={`Newbuild header ${i+1}`} value={a.newbuilds.headers?.[i]??t} style={{...input,color:"white",background:"#234e73",fontSize:10,fontWeight:700}} onChange={e=>set("newbuilds",{...a.newbuilds,headers:["Vessel","DWT","Coating","Delivery","Operator","Owner","Yard","Comment"].map((v,j)=>i===j?e.target.value:a.newbuilds.headers?.[j]??v)})}/></th>)}<th className="no-export"/></tr></thead><tbody>{a.newbuilds.rows.map((r,i)=><tr key={i}>{["vessel","dwt","coating","delivery","operator","owner","yard","comment"].map(k=><td key={k} style={{...td,padding:"5px 3px",verticalAlign:"top"}}><GrowText aria-label={`Newbuild ${k} ${i+1}`} value={asiaNewbuildValue(k,r[k])} style={{...input,fontSize:11}} onChange={e=>set("newbuilds",{...a.newbuilds,rows:a.newbuilds.rows.map((x,j)=>i===j?{...x,[k]:e.target.value}:x)})}/></td>)}<td className="no-export"><button aria-label="Remove newbuild" style={red} onClick={()=>set("newbuilds",{...a.newbuilds,rows:a.newbuilds.rows.filter((_,j)=>i!==j)})}>×</button></td></tr>)}</tbody></table></section>}
+ {a.newbuilds&&<section className={exportClass("newbuilds")}><div style={heading}><input aria-label="Newbuilds section title" style={titleInput} value={a.newbuilds.title??"Newbuilds · coming next 3 months"} onChange={e=>set("newbuilds",{...a.newbuilds,title:e.target.value})}/></div><table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed",fontSize:11}}><colgroup>{[17,7,9,12,13,13,15,11].map((w,i)=><col key={i} style={{width:w+"%"}}/>)}<col className="no-export" style={{width:22}}/></colgroup><thead><tr>{["Vessel","DWT","Coating","Delivery","Operator","Owner","Yard","Comment"].map((t,i)=><th key={i} style={th}><GrowText aria-label={`Newbuild header ${i+1}`} value={a.newbuilds.headers?.[i]??t} style={{...input,color:"white",background:"#234e73",fontSize:10,fontWeight:700}} onChange={e=>set("newbuilds",{...a.newbuilds,headers:["Vessel","DWT","Coating","Delivery","Operator","Owner","Yard","Comment"].map((v,j)=>i===j?e.target.value:a.newbuilds.headers?.[j]??v)})}/></th>)}<th className="no-export"/></tr></thead><tbody>{a.newbuilds.rows.map((r,i)=><tr key={i}>{["vessel","dwt","coating","delivery","operator","owner","yard","comment"].map(k=><td key={k} style={{...td,padding:"5px 3px",verticalAlign:"top"}}><GrowText aria-label={`Newbuild ${k} ${i+1}`} value={asiaNewbuildValue(k,r[k])} style={{...input,fontSize:11}} onChange={e=>set("newbuilds",{...a.newbuilds,rows:a.newbuilds.rows.map((x,j)=>i===j?{...x,[k]:reportAbbreviations(e.target.value)}:x)})}/></td>)}<td className="no-export"><button aria-label="Remove newbuild" style={red} onClick={()=>set("newbuilds",{...a.newbuilds,rows:a.newbuilds.rows.filter((_,j)=>i!==j)})}>×</button></td></tr>)}</tbody></table></section>}
  </div></div></>;
 }
 
@@ -159,10 +181,15 @@ function historyNumber(value){if(value==null||String(value).trim()==="")return n
 function WeeklyBenchmarkPlot({values={},date,title="Benchmark freight · 12 weeks",light=false}){
  const weeks=historyWeeks(date),points=weeks.map((w,i)=>({x:i,value:historyNumber(values[w]),week:w})).filter(p=>p.value!=null);
  if(!points.length)return <div style={{padding:15,color:light?"#64748b":"#91accb",fontSize:12}}>Enter weekly values to display the chart.</div>;
- const W=820,H=185,L=72,R=22,T=20,B=32;const rawMin=Math.min(...points.map(p=>p.value)),rawMax=Math.max(...points.map(p=>p.value)),span=rawMax-rawMin||Math.max(Math.abs(rawMax)*.1,1),lo=rawMin-span*.15,hi=rawMax+span*.15;
+ const W=820,L=72,R=22,T=20,B=32;const rawMin=Math.min(...points.map(p=>p.value)),rawMax=Math.max(...points.map(p=>p.value));
+ // Inputs such as 250 represent USD 250k; full-dollar values use 25,000 steps.
+ const tickStep=Math.max(Math.abs(rawMin),Math.abs(rawMax))>=10000?25000:25;
+ const lo=Math.floor(rawMin/tickStep)*tickStep,hi=Math.max(lo+tickStep,Math.ceil(rawMax/tickStep)*tickStep);
+ const ticks=Array.from({length:Math.round((hi-lo)/tickStep)+1},(_,i)=>lo+i*tickStep);
+ const H=Math.max(185,T+B+(ticks.length-1)*19);
  const x=i=>L+i/11*(W-L-R),y=v=>H-B-(v-lo)/(hi-lo)*(H-T-B),ink=light?"#46637d":"#a7c5e9",line=light?"#246ba6":"#79c0ff";
  const path=weeks.map((w,i)=>{const n=historyNumber(values[w]);return n==null?null:{i,n};}).reduce((a,p,i,all)=>a+(p?`${i&&all[i-1]?"L":"M"}${x(p.i)},${y(p.n)} `:""),"");
- return <div style={{padding:"8px 10px",color:ink}}><div style={{fontSize:12,fontWeight:700,marginBottom:6}}>{title}</div><svg role="img" aria-label={title} viewBox={`0 0 ${W} ${H}`} style={{display:"block",width:"100%",height:"auto"}}>{[0,1,2,3].map(i=>{const v=lo+(hi-lo)*i/3;return <g key={i}><line x1={L} x2={W-R} y1={y(v)} y2={y(v)} stroke={light?"#dce6ef":"#2c425a"}/><text x={L-8} y={y(v)+4} fill={ink} textAnchor="end" fontSize="10">{Math.round(v).toLocaleString("en-US")}</text></g>})}<path d={path} fill="none" stroke={line} strokeWidth="2.5"/>{points.map(p=><g key={p.week}><circle cx={x(p.x)} cy={y(p.value)} r="3" fill={line}/><title>{p.week+": "+p.value.toLocaleString("en-US")}</title></g>)}{weeks.map((w,i)=><text key={w} x={x(i)} y={H-10} fill={ink} textAnchor="middle" fontSize="9">{new Date(w+"T12:00:00Z").toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:"UTC"})}</text>)}</svg></div>;
+ return <div style={{padding:"8px 10px",color:ink}}><div style={{fontSize:12,fontWeight:700,marginBottom:6}}>{title}</div><svg role="img" aria-label={title} viewBox={`0 0 ${W} ${H}`} style={{display:"block",width:"100%",height:"auto"}}>{ticks.map(v=>{return <g key={v}><line x1={L} x2={W-R} y1={y(v)} y2={y(v)} stroke={light?"#dce6ef":"#2c425a"}/><text x={L-8} y={y(v)+4} fill={ink} textAnchor="end" fontSize="10">{Math.round(v).toLocaleString("en-US")}</text></g>})}<path d={path} fill="none" stroke={line} strokeWidth="2.5"/>{points.map(p=><g key={p.week}><circle cx={x(p.x)} cy={y(p.value)} r="3" fill={line}/><title>{p.week+": "+p.value.toLocaleString("en-US")}</title></g>)}{weeks.map((w,i)=><text key={w} x={x(i)} y={H-10} fill={ink} textAnchor="middle" fontSize="9">{new Date(w+"T12:00:00Z").toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:"UTC"})}</text>)}</svg></div>;
 }
 function WeeklyBenchmarkHistory({history,setHistory,rows,date}){
  const key=history.routeKey||rows[0]?.key||"",values=history.series?.[key]||{},route=rows.find(r=>r.key===key);
@@ -660,7 +687,7 @@ function reportNaturalCase(value){
   const text=String(value??"").trim();
   const acronyms=new Set(["ARA","WRG","ULSD","UMS","CPP","HVO","FAME","UCO","MR","NWE","UKC","USG","BP","CSS","SA","ST","SPK","LVN","HVN","LSR","HSFO","VLSFO","LSFO","MGO","IFO","LNG","LPG","MTBE","ETBE","BTX","EDC","MEG","SAF","TX","TBA","TBC"]);
   return text.replace(/[\p{L}\p{N}]+(?:['’][\p{L}]+)*/gu,word=>{
-    if(acronyms.has(word.toUpperCase()))return word.toUpperCase();
+    if(REPORT_ABBREVIATIONS.has(word.toUpperCase())||acronyms.has(word.toUpperCase()))return word.toUpperCase();
     // Preserve deliberate mixed-case names such as SeaRiver and McKinney.
     if(word!==word.toUpperCase()&&word!==word.toLowerCase())return word;
     return word.charAt(0).toUpperCase()+word.slice(1).toLowerCase();
@@ -670,6 +697,7 @@ function normalizeReportFixture(fixture){
   const next={...fixture};
   for(const field of REPORT_FIXTURE_TEXT_FIELDS){
     if(!fixture._textOverrides?.[field])next[field]=reportNaturalCase(fixture[field]);
+    next[field]=reportAbbreviations(next[field]);
   }
   return next;
 }
@@ -1480,7 +1508,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [fixtureSort,setFixtureSort] = useState({key:null,dir:1});
   const sortedFixtures = fixtureSort.key ? [...fixtures].sort((a,b)=>fixtureSort.dir*String(a[fixtureSort.key]??"").localeCompare(String(b[fixtureSort.key]??""),undefined,{numeric:true,sensitivity:"base"})) : fixtures;
   const toggleFixtureSort = key=>setFixtureSort(p=>({key,dir:p.key===key?-p.dir:1}));
-  const moveBenchmarkRow=(from,to)=>setBenchmarkRows(prev=>{if(to<0||to>=prev.length)return prev;const next=[...prev];next.splice(to,0,next.splice(from,1)[0]);return next;});
+  const benchmarkDrag=useRef(null),[benchmarkDrop,setBenchmarkDrop]=useState(null);
+  const dropBenchmark=to=>{const key=benchmarkDrag.current;if(key==null)return;setBenchmarkRows(rows=>moveReportRow(rows,rows.findIndex(r=>r.key===key),rows.findIndex(r=>r.key===to)));benchmarkDrag.current=null;setBenchmarkDrop(null);};
   const reportHeadingStyle={background:"#d8e7f8",color:"#0b2850",padding:"7px 10px",borderLeft:"4px solid #377dc8",fontWeight:800,fontSize:12,letterSpacing:"0.055em",textTransform:"uppercase"};
   // Export-only visibility: keep the underlying fixtures and benchmark rows intact.
   const [excludedFixtureIds, setExcludedFixtureIds] = useState([]);
@@ -1555,6 +1584,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   // vessel list itself.
   const [posSaveStatus, setPosSaveStatus] = useState("");
   async function savePositionList(){
+    if(!reportLive.canSave())return;
     if(listSaveBusy)return;setListSaveBusy(true);setPosSaveStatus("Saving...");
     try{
       const name=marketReportSaveName(positionReportName||posTitle,"Position List",positionSaveCopy,savedReports);
@@ -1562,13 +1592,14 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         rate_grid:{__positionEditor:{name,columns:positionColumns,chartSettings:positionChartSettings,charts:positionCharts,posGroupBy,regionMode,outputSort,sortByDate,segmentNames,width:positionPreviewWidth}}};
       const query=activePositionId&&!positionSaveCopy?supabase.from("reports").update(payload).eq("id",activePositionId):supabase.from("reports").insert([payload]);
       const {data,error}=await query.select("id").single();if(error)throw error;
-      setActivePositionId(data.id);setPositionReportName(name);setPositionSaveCopy(false);setPosSaveStatus("Saved ✓");await loadSavedReports();
+      setActivePositionId(data.id);setPositionReportName(name);setPositionSaveCopy(false);setPosSaveStatus("Saved ✓");reportLive.saved(data.id);await loadSavedReports();
     }catch(error){setPosSaveStatus("Save failed: "+(error.message||error));}
     finally{setListSaveBusy(false);setTimeout(()=>setPosSaveStatus(""),3500);}
   }
-  async function loadPositionList(id){
+  async function loadPositionList(id,canApply=()=>true){
     try{
-      const {data,error}=await supabase.from("reports").select("*").eq("id",id).single();if(error)throw error;if(!data)return;
+      const {data,error}=await supabase.from("reports").select("*").eq("id",id).single();if(error)throw error;if(!data||!canApply())return;
+      reportLive.loaded();
       const editor=data.rate_grid?.__positionEditor||{},rows=normalizePositionRows(data.pos_vessels);
       setPosTitle(data.pos_title||"CHEMS & SPECIALIZED POSITION LIST");setPosSubtitle(data.pos_subtitle||"");setPosDate(data.report_date||posDate);
       setPositionReportName(editor.name||data.pos_title||"");setActivePositionId(id);setPositionSaveCopy(false);
@@ -1590,12 +1621,13 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if(!source){setPriorReportStatus("No saved Intermediate report from an earlier week.");return;}
     const editor=source.rate_grid?.__marketEditor||{},prior=editor.benchmarks||[];
     const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");let matched=0;
-    setBenchmarkRows(rows=>rows.map(row=>{const hit=prior.find(x=>x.key===row.key)||prior.find(x=>norm(x.label)===norm(row.label));if(!hit)return row;matched++;return {...row,lastWeek:hit.freight??"",tceLastWeek:hit.tce??null};}));
+    setBenchmarkRows(rows=>rows.map(row=>{const hit=prior.find(x=>x.key===row.key)||prior.find(x=>norm(x.label)===norm(row.label));if(!hit)return row;matched++;return {...row,lastWeek:hit.freight??"",tceLastWeek:benchmarkTceValue(hit),manualTceLastWeek:hit.manualTce??""};}));
     setWeeklyHistory(current=>{const incoming=editor.weeklyHistory||{series:{}};const series={...current.series};for(const [key,values] of Object.entries(incoming.series||{}))series[key]={...values,...series[key]};return {...current,routeKey:current.routeKey||incoming.routeKey||"",series};});
     setRouteColumns(p=>({...p,lastWeek:true}));setPriorReportOpen(false);setPriorReportStatus(`Imported last-week rates and history from ${source.rate_grid?.__marketEditor?.reportName||source.report_type} · ${source.report_date}. Unmatched routes retained.`);
   }
 
   async function saveReport() {
+    if(!reportLive.canSave())return;
     if (marketSaveBusy) return;
     setMarketSaveBusy(true); setMarketSaveStatus("Saving...");
     try {
@@ -1613,14 +1645,15 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       if (data?.id) setActiveMarketReportId(data.id);
       setReportName(savedName);setSaveReportCopy(false);
       setMarketSaveStatus("Saved!");
-      await loadSavedReports();
+      reportLive.saved(data.id);await loadSavedReports();
     } catch (e) { setMarketSaveStatus("Save failed: " + (e.message || e)); }
     finally { setMarketSaveBusy(false); setTimeout(() => setMarketSaveStatus(""), 2800); }
   }
-  async function loadReport(id) {
+  async function loadReport(id,canApply=()=>true) {
     try {
       const { data, error } = await supabase.from("reports").select("*").eq("id", id).single();
-      if (error || !data) return;
+      if (error || !data || !canApply()) return;
+      reportLive.loaded();
       setAsiaReport(normalizeAsiaReport(data.rate_grid?.__marketEditor?.asiaReport || asiaBlank()));
       setReportType(data.report_type); setReportDate(data.report_date || reportDate);
       setCommentary(data.commentary || ""); setRateGrid(data.rate_grid && typeof data.rate_grid==="object" ? data.rate_grid : {});
@@ -1656,19 +1689,21 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   // instantly on any device you're signed into, not just localStorage.
   const [quickSaveStatus, setQuickSaveStatus] = useState("");
   async function saveQuickPositions(){
+    if(!reportLive.canSave())return;
     if(listSaveBusy)return;setListSaveBusy(true);setQuickSaveStatus("Saving...");
     try{
       const name=marketReportSaveName(quickReportName||quickTitle,"Quick Positions",quickSaveCopy,savedReports);
       const payload={report_type:"Quick Positions",report_date:new Date().toISOString().slice(0,10),rate_grid:{__quickEditor:{name,title:quickTitle,rows:quickRows,selectedTags:quickSelectedTags,updatedFilter:quickUpdatedFilter,excludedOperators:quickExcludedOperators,tableSort:quickTableSort}}};
       const query=activeQuickId&&!quickSaveCopy?supabase.from("reports").update(payload).eq("id",activeQuickId):supabase.from("reports").insert([payload]);
       const {data,error}=await query.select("id").single();if(error)throw error;
-      setActiveQuickId(data.id);setQuickReportName(name);setQuickSaveCopy(false);setQuickSaveStatus("Saved ✓");await loadSavedReports();
+      setActiveQuickId(data.id);setQuickReportName(name);setQuickSaveCopy(false);setQuickSaveStatus("Saved ✓");reportLive.saved(data.id);await loadSavedReports();
     }catch(error){setQuickSaveStatus("Save failed: "+(error.message||error));}
     finally{setListSaveBusy(false);setTimeout(()=>setQuickSaveStatus(""),3500);}
   }
-  async function loadQuickPositions(id){
+  async function loadQuickPositions(id,canApply=()=>true){
     try{
-      const {data,error}=await supabase.from("reports").select("*").eq("id",id).single();if(error)throw error;if(!data)return;
+      const {data,error}=await supabase.from("reports").select("*").eq("id",id).single();if(error)throw error;if(!data||!canApply())return;
+      reportLive.loaded();
       setQuickTitle(savedQuickTitle(data));setQuickReportName(data.rate_grid?.__quickEditor?.name||savedQuickTitle(data));setActiveQuickId(id);setQuickSaveCopy(false);
       setQuickUpdatedFilter(data.rate_grid?.__quickEditor?.updatedFilter||"all");
       setQuickExcludedOperators(data.rate_grid?.__quickEditor?.excludedOperators||[]);
@@ -1677,6 +1712,11 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       setQuickRows(savedQuickRows(data).map(r=>({...r,id:r.id||newPositionId()})));setPendingClear(null);setSection("quick");
     }catch(error){setQuickSaveStatus("Load failed: "+(error.message||error));}
   }
+
+  const liveReportId=section==="market"?activeMarketReportId:section==="quick"?activeQuickId:section==="poslist"?activePositionId:null;
+  const liveReportLabel=section==="market"?`${reportType||"Market"} · ${reportName||reportDate||"New report"}`:section==="quick"?`Quick Positions · ${quickReportName||quickTitle}`:section==="poslist"?`Position List · ${positionReportName||posTitle}`:"Reports";
+  const liveDraft=section==="market"?{reportType,reportDate,reportName,commentary,rateGrid,marketHeadings,intermediateTitle,asiaReport,weeklyHistory,benchmarkRows,driverBullets,tceStats,handy,handyCommentary,handySegments,importedFixingChart,routeColumns,routeTitles,intermediateRoutesLabel,excludedFixtureIds,excludedBenchmarkKeys,excludedCharterers,recipientCharterer,tceEarnings,fixtures,quotes}:section==="quick"?{quickReportName,quickTitle,quickRows,quickSelectedTags,quickUpdatedFilter,quickExcludedOperators,quickTableSort}:{positionReportName,posTitle,posSubtitle,posDate,reportVessels,positionColumns,positionChartSettings,positionCharts,posGroupBy,regionMode,outputSort,sortByDate,segmentNames,positionPreviewWidth};
+  const reportLive=useReportLive({id:liveReportId,label:liveReportLabel,draft:liveDraft,busy:marketSaveBusy||listSaveBusy,onList:loadSavedReports,onLoad:(id,safe)=>section==="market"?loadReport(id,safe):section==="quick"?loadQuickPositions(id,safe):loadPositionList(id,safe)});
 
   const SB = { background:C.bg3,color:C.tx,fontSize: 11, fontWeight: 600, padding: "6px 10px", borderRadius: 5, cursor: "pointer", border: "1px solid " + C.bd, fontFamily: "inherit", whiteSpace: "nowrap" };
   const IS = { background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 11, padding: "5px 8px", outline: "none", fontFamily: "inherit" };
@@ -2089,7 +2129,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   }
 
   return (
-    <div style={{ display: "flex", width: "100%", height: "100%", background: C.bg, fontFamily: "Inter,system-ui,sans-serif", overflow: "hidden" }}>
+    <div style={{display:"flex",flexDirection:"column",width:"100%",height:"100%",minHeight:0}}><ReportLiveStatus live={reportLive}/>
+    <div style={{ flex:1,minHeight:0,display: "flex", width: "100%", height: "100%", background: C.bg, fontFamily: "Inter,system-ui,sans-serif", overflow: "hidden" }}>
       <style>{`@media print{body>*{visibility:hidden;}.pos-print,.pos-print *{visibility:visible;}.pos-print{position:absolute;left:0;top:0;width:100%;}.pos-print-wrap{height:auto!important;overflow:visible!important;}.no-export,.exclude-position-chart{display:none!important;}}.pool-row:hover{background:rgba(58,130,246,0.14)!important;}`}</style>
 
       {fixingImportOpen && <div className="no-export" style={{position:"fixed",inset:0,zIndex:100001,background:"rgba(0,0,0,.76)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
@@ -2708,15 +2749,16 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                     </tr></thead>
                     <tbody>
                       {benchmarkRows.map((r, i) => (
-                        <tr key={r.key} style={{ borderTop: "1px solid " + C.bd, background: i % 2 === 0 ? C.bg3 : C.bg2 }}>
+                        <tr key={r.key} onDragOver={e=>{if(benchmarkDrag.current!=null){e.preventDefault();e.dataTransfer.dropEffect="move";setBenchmarkDrop(r.key);}}} onDrop={e=>{if(benchmarkDrag.current!=null){e.preventDefault();dropBenchmark(r.key);}}} style={{ borderTop: "1px solid " + C.bd, outline:benchmarkDrop===r.key?"2px solid #79c0ff":undefined,background: i % 2 === 0 ? C.bg3 : C.bg2 }}>
                           <td style={{ padding: "6px 10px", fontWeight: 700, color: C.tx }}><div style={{display:"flex",alignItems:"center",gap:5}}>
                             <input className="no-export" type="checkbox" style={exportCheckboxStyle} aria-label={`Include ${r.label} benchmark in email`} checked={!excludedBenchmarkKeys.includes(String(r.key))} onChange={()=>toggleExcluded(setExcludedBenchmarkKeys,String(r.key))}/>
-                            <input aria-label="Route name" className="rpt-edit" value={r.label} onChange={e=>setBenchmarkRows(p=>p.map(x=>x.key===r.key?{...x,label:e.target.value}:x))} style={{width:155,fontWeight:700,fontSize:12}} />
-                            <span className="no-export" style={{display:"inline-flex",gap:2}}><button title="Move route up" onClick={()=>moveBenchmarkRow(i,i-1)} style={{border:0,background:"transparent",color:C.blue,cursor:"pointer"}}>↑</button><button title="Move route down" onClick={()=>moveBenchmarkRow(i,i+1)} style={{border:0,background:"transparent",color:C.blue,cursor:"pointer"}}>↓</button></span><button title="Remove benchmark row" onClick={()=>setBenchmarkRows(p=>p.filter(x=>x.key!==r.key))} style={{border:"none",background:"transparent",color:"#fb7185",cursor:"pointer"}}>×</button>
+                            <input aria-label="Route name" className="rpt-edit" value={r.label} onChange={e=>setBenchmarkRows(p=>p.map(x=>x.key===r.key?{...x,label:reportAbbreviations(e.target.value)}:x))} style={{width:155,fontWeight:700,fontSize:12}} />
+                            <span className="no-export" draggable role="button" tabIndex={0} aria-label={`Drag to reorder ${r.label}`} title="Drag up or down to reorder. Keyboard: Alt + Up/Down." onDragStart={e=>{benchmarkDrag.current=r.key;e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",String(r.key));}} onDragEnd={()=>{benchmarkDrag.current=null;setBenchmarkDrop(null);}} onKeyDown={e=>{if(e.altKey&&["ArrowUp","ArrowDown"].includes(e.key)){e.preventDefault();setBenchmarkRows(rows=>moveReportRow(rows,i,i+(e.key==="ArrowUp"?-1:1)));}}} style={{cursor:"grab",padding:"2px 5px",fontSize:18,color:C.blue,userSelect:"none"}}>⠿</span><button title="Remove benchmark row" onClick={()=>setBenchmarkRows(p=>p.filter(x=>x.key!==r.key))} style={{border:"none",background:"transparent",color:"#fb7185",cursor:"pointer"}}>×</button>
                           </div></td>
                           <td style={{ padding: "6px 10px" }}>
                             <input aria-label="Spot freight" className="rpt-edit" value={r.freight ?? ""} onChange={e=>updateBenchmarkFreight(r.key,e.target.value)} placeholder="USD" style={{width:110,fontSize:12,fontWeight:600,color:C.tx}} />
-                            {(r.key?.startsWith("custom-") || r.override && !r.from && !r.to) ? <input aria-label="Manual TCE in USD thousands per day" className="rpt-edit" value={r.manualTce||""} onChange={e=>setBenchmarkRows(p=>p.map(x=>x.key===r.key?{...x,manualTce:e.target.value}:x))} placeholder="USD XXk pd" title="Enter TCE manually, e.g. 25 or USD 25k pd" style={{width:108,fontSize:10,color:C.faint,marginLeft:6}}/> : r.tce != null && <span style={{ fontSize: 10, color: C.faint, marginLeft: 6 }}>(USD {Math.round(r.tce / 1000)}k pd)</span>}
+                            <input aria-label={`Spot TCE override ${r.label}`} className="rpt-edit" value={r.manualTce??""} onChange={e=>setBenchmarkRows(p=>p.map(x=>x.key===r.key?{...x,manualTce:e.target.value}:x))} placeholder={benchmarkTceLabel({...r,manualTce:""})||"Enter TCE"} title="Manual TCE override: 25 or 25k means USD 25,000/day; 25000 also works. Clear to use calculated TCE." style={{width:120,fontSize:10,color:r.manualTce?C.blue:C.faint,marginLeft:6,background:"rgba(80,140,200,.08)"}}/>
+
                           </td>
                           {routeColumns.lastWeek&&<td style={{ padding: "6px 10px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -2725,7 +2767,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                                 onBlur={e => { const n = parseFloat(e.target.value.replace(/[^0-9.\-]/g, "")); if (!isNaN(n)) e.target.value = n.toLocaleString("nb-NO"); }}
                                 placeholder="USD" className="rpt-edit"
                                 style={{ width: 90, fontSize: 12, color: C.faint }} />
-                              <span style={{ fontSize: 10, color: C.faint }}>{r.tceLastWeek != null ? `(USD ${Math.round(r.tceLastWeek / 1000)}k pd)` : ""}</span>
+                              <input aria-label={`Last week TCE override ${r.label}`} className="rpt-edit" value={r.manualTceLastWeek??""} onChange={e=>setBenchmarkRows(p=>p.map(x=>x.key===r.key?{...x,manualTceLastWeek:e.target.value}:x))} placeholder={benchmarkTceLabel({...r,manualTceLastWeek:""},true)||"Enter TCE"} title="Manual last-week TCE. Clear to use calculated TCE." style={{width:120,fontSize:10,color:r.manualTceLastWeek?C.blue:C.faint,background:"rgba(80,140,200,.08)"}}/>
                             </div>
                           </td>}{routeColumns.comment&&<td style={{padding:"6px 10px"}}><input className="rpt-edit" aria-label="Route comment" value={r.comment||""} onChange={e=>setBenchmarkRows(p=>p.map(x=>x.key===r.key?{...x,comment:e.target.value}:x))} style={{width:"100%",minWidth:110}}/></td>}
                         </tr>
@@ -2901,8 +2943,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                         {benchmarkRows.filter(r=>!excludedBenchmarkKeys.includes(String(r.key))).map((r, i) => (
                           <tr key={r.key} style={{ borderTop: "1px solid #d9e2ef" }}>
                             <td style={{ padding: "5px 8px", fontWeight: 700 }}>{r.label}</td>
-                            <td style={{ padding: "5px 8px" }}>{r.freight ? fmtUSD(r.freight) : "—"} {r.manualTce?.trim() ? <span style={{color:"#6b7280"}}>({/^usd/i.test(r.manualTce.trim())?r.manualTce.trim():`USD ${r.manualTce.trim().replace(/\s*k\s*(pd)?$/i,"")}k pd`})</span> : r.tce != null && <span style={{ color: "#6b7280" }}>(USD {Math.round(r.tce / 1000)}k pd)</span>}</td>
-                            {routeColumns.lastWeek&&<td style={{padding:"5px 8px",color:"#6b7280"}}>{r.lastWeek ? fmtUSD(r.lastWeek) : "—"} {r.tceLastWeek != null && `(USD ${Math.round(r.tceLastWeek / 1000)}k pd)`}</td>}
+                            <td style={{ padding: "5px 8px" }}>{r.freight ? fmtUSD(r.freight) : "—"} {benchmarkTceLabel(r)&&<span style={{color:"#6b7280"}}>({benchmarkTceLabel(r)})</span>}</td>
+                            {routeColumns.lastWeek&&<td style={{padding:"5px 8px",color:"#6b7280"}}>{r.lastWeek ? fmtUSD(r.lastWeek) : "—"} {benchmarkTceLabel(r,true)&&`(${benchmarkTceLabel(r,true)})`}</td>}
                             {routeColumns.comment&&<td style={{padding:"5px 8px",color:"#6b7280"}}>{r.comment||""}</td>}
                           </tr>
                         ))}
@@ -3066,7 +3108,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
               )}
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, padding: 13 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.tx, marginBottom: 10 }}>Market Commentary</div>
-                <textarea value={commentary} onChange={e => setCommentary(e.target.value)} placeholder="Market analysis, trends, outlook..."
+                <textarea value={commentary} onChange={e => setCommentary(reportAbbreviations(e.target.value))} placeholder="Market analysis, trends, outlook..."
                   style={{ width: "100%", minHeight: 80, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 4, color: C.tx, fontSize: 12, padding: 9, outline: "none", resize: "vertical", fontFamily: "inherit", lineHeight: 1.6, boxSizing: "border-box" }} />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11, alignItems:"stretch" }}>
@@ -3216,7 +3258,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
           </div>
         )}
       </div>
-    </div>
+    </div></div>
   );
 }
 
