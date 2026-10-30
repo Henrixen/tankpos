@@ -699,6 +699,7 @@ function normalizeReportFixture(fixture){
     if(!fixture._textOverrides?.[field])next[field]=reportNaturalCase(fixture[field]);
     next[field]=reportAbbreviations(next[field]);
   }
+  if(!fixture._textOverrides?.freight)next.freight=reportFixtureFreight(fixture.freight);
   return next;
 }
 function reportFixtureFreight(value){
@@ -720,7 +721,7 @@ function reportFixtureFreight(value){
   const amount=n*multiplier;
   const format=x=>Number(x.toFixed(2)).toLocaleString("de-DE",{maximumFractionDigits:2,useGrouping:false});
   if(perTon || (!suffix&&!lumpSum&&amount<1000))return `USD ${format(amount)} PMT`;
-  return `USD ${format(amount/1000)}K LS`;
+  return amount>=1000000?`USD ${format(amount/1000000)}M LS`:`USD ${format(amount/1000)}K LS`;
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -1099,7 +1100,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         const {data,error} = await supabase.from("reports").select("*").eq("id",cargoImportChoice).single();
         if (error || !data) throw error || new Error("Saved report not found");
         await loadReport(cargoImportChoice);
-        setFixtures([...(Array.isArray(data.fixtures)?data.fixtures:[]).map(f=>normalizeReportFixture({...f,freight:reportFixtureFreight(f.freight)})),...incoming]);
+        setFixtures([...(Array.isArray(data.fixtures)?data.fixtures:[]).map(f=>normalizeReportFixture({...f,freight:f._textOverrides?.freight?f.freight:reportFixtureFreight(f.freight)})),...incoming]);
       } else {
         setActiveMarketReportId(null);setReportName("");setSaveReportCopy(false);
         setReportType("Intermediate");
@@ -2866,9 +2867,9 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                             {["charterer", "vessel", "qty", "cargo", "load", "disch", "laycanFrom", "laycanTo", "freight"].map(field => (
                               <td key={field} style={{ padding: "3px 5px" }}>
                                 {field === "freight" ? (
-                                  <input value={f.freight || ""} onChange={e => setFixtures(p => { const n = [...p]; n[i] = { ...n[i], freight: e.target.value }; return n; })}
+                                  <input value={(f._textOverrides?.freight?f.freight:reportFixtureFreight(f.freight)) || ""} onChange={e => setFixtures(p => { const n = [...p]; n[i] = { ...n[i], freight: e.target.value, _textOverrides:{...n[i]._textOverrides,freight:true} }; return n; })}
                                     
-                                    onBlur={() => setFixtures(p => p.map((row,j) => j===i ? {...row,freight:reportFixtureFreight(row.freight)} : row))}
+                                    
                                     className="rpt-edit" style={{ width: 135, fontSize: 11 }} placeholder="USD 250K LS" />
                                 ) : (
                                   <input value={f[field] || ""} onChange={e => setFixtures(p => { const n = [...p]; n[i] = { ...n[i], [field]: e.target.value, ...(REPORT_FIXTURE_TEXT_FIELDS.includes(field)?{_textOverrides:{...n[i]._textOverrides,[field]:true}}:{}) }; return n; })}
@@ -3006,7 +3007,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                             <td style={{ padding: "4px 6px" }}>{f.load || ""}</td>
                             <td style={{ padding: "4px 6px" }}>{f.disch || ""}</td>
                             <td style={{ padding: "4px 6px", whiteSpace:"nowrap" }}>{[f.laycanFrom, f.laycanTo].filter(Boolean).join(" - ")}</td>
-                            <td style={{ padding: "4px 6px", whiteSpace:"nowrap", paddingLeft:14 }}>{reportFixtureFreight(f.freight)}</td>
+                            <td style={{ padding: "4px 6px", whiteSpace:"nowrap", paddingLeft:14 }}>{f._textOverrides?.freight?f.freight:reportFixtureFreight(f.freight)}</td>
                           </tr>
                         ))}
                       </tbody>
