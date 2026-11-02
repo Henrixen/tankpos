@@ -1,3 +1,4 @@
+import {useWorkspacePreferences} from "./BrokerWorkspace";
 import {useReportLive,ReportLiveStatus} from "./ReportLive";
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from "react";
 import { C } from "./constants";
@@ -374,12 +375,34 @@ function parseQuickOpenLine(line){
 }
 // Quick-list presentation only: source position text stays untouched.
 const QUICK_ABBREVIATIONS = new Set(["ARA","WCUK","ECUK","UK","UKC","NWE","NWC","MED","US","USA","USG","USAC","USEC","USWC","EU","UAE","UCOME","IMO","DWT","CBM","PPT","TBC","TBN","ETA","ETD","AG","PG","WAF","EAF","SAF","WCNA","WCSA"]);
+const QUICK_REGION_DEFAULTS=[
+ {name:"UKC",aliases:"UKC, ARA, ECUK, EC UK, GNS, Rotterdam, Rdam, Amsterdam, Antwerp, Hamburg, Thames, Immingham, Grangemouth, Dunkirk, Dunkerque, Le Havre, Port Jerome, Rouen, Tees, Teesport, Ghent, Gent, Flushing, Vlissingen, Zeebrugge, Terneuzen, Brunsbuttel, Wilhelmshaven, Bremen, Bremerhaven, N.France"},
+ {name:"Skaw",aliases:"Skaw, Skagen, Oslo, Slagen, Gothenburg, Goteborg, Copenhagen, Kobenhavn, Aalborg, Aarhus, Frederikshavn, Fredericia, Stenungsund, Brofjorden, Lysekil, Uddevalla, Halmstad, Larvik, Moss, Kristiansand"},
+ {name:"Baltic",aliases:"Baltic, Gdansk, Gdynia, Porvoo, Stockholm, Klaipeda, Riga, Ventspils, Tallinn, Paldiski, Helsinki, Kotka, Hamina, Turku, Naantali, Kaliningrad, Ust Luga, St Petersburg, Sillamae, Nynashamn, Sodertalje, Gavle, Lulea, Szczecin, Swinoujscie, Rostock, Lubeck, Malmo"},
+ {name:"WCUK",aliases:"WCUK, WC UK, Stanlow, Dublin, Clydebank, Clyde, Plymouth, Avonmouth, Bristol, Liverpool, Manchester, Eastham, Pembroke, Milford Haven, Swansea, Falmouth, Fowey, Belfast, Londonderry, Derry, Cork, Whitegate, Shannon, Greenock, Grangemouth West"},
+ {name:"Biscay",aliases:"Biscay, Brest, Pauillac, Paulliac, Bordeaux, Donges, Bilbao, Nantes, Saint Nazaire, St Nazaire, La Rochelle, Bayonne, Santander, Gijon, Aviles, A Coruna, Corunna, Ferrol"},
+ {name:"Med",aliases:"Med, Emed, Wmed, Cmed, Mediterranean, Barcelona, Barcelone, Gibraltar, Gib, Algeciras, Tarragona, Valencia, Castellon, Cartagena, Malaga, Motril, Huelva, Fos, Lavera, Marseille, Marseilles, Genoa, Genova, Livorno, Trieste, Venice, Ravenna, Naples, Augusta, Milazzo, Palermo, Cagliari, Porto Romano, Durres, Piraeus, Eleusis, Thessaloniki, Izmit, Aliaga, Mersin, Ceyhan, Rijeka, Koper, Bar, Istanbul, Tuzla, Ploce"},
+ {name:"Other",aliases:""}
+];
+const quickPlaceKey=v=>String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+const quickVesselKey=v=>quickPlaceKey(v).replace(/\s/g,"");
+function quickRegion(port,rules=QUICK_REGION_DEFAULTS){
+ const text=" "+quickPlaceKey(port)+" ";let found=null;
+ for(const group of rules){if(group.name==="Other")continue;for(const raw of String(group.aliases||"").split(/[,;\n]/)){const alias=quickPlaceKey(raw);if(alias&&text.includes(" "+alias+" ")&&(!found||alias.length>found.length))found={name:group.name,length:alias.length};}}
+ return found?.name||"Other";
+}
+function quickDateKey(value,reference=new Date()){return reportDay(String(value||"").replace(/(?<=\d)[-–](?=[A-Za-z])/g," "),reference)??Number.MAX_SAFE_INTEGER;}
+function quickCompareDates(a,b){const n=quickDateKey(a.date)-quickDateKey(b.date);return n||String(a.vessel||"").localeCompare(String(b.vessel||""),undefined,{sensitivity:"base"});}
+function QuickPositionSettings({regions,setRegions,operators,setOperators,remember}){
+ return <details style={{background:"#0e1d32",border:"1px solid #294767",borderRadius:6,padding:10,marginBottom:10,color:"#b7d9fa",fontSize:11}}><summary style={{cursor:"pointer",fontWeight:700}}>Quick-list settings · Regions &amp; remembered operators</summary><p>Settings are saved for your user. Port aliases match whole words; the longest matching alias wins. Unrecognised ports go to Other. No AI calls are used.</p>{regions.map((g,i)=><label key={i} style={{display:"grid",gridTemplateColumns:"80px 1fr",gap:8,marginBottom:6}}><span>{g.name==="Other"?<b>Other</b>:<><input aria-label={`Region name ${i+1}`} value={g.name} onChange={e=>setRegions(p=>p.map((x,j)=>i===j?{...x,name:e.target.value}:x))} style={{width:75,boxSizing:"border-box",background:"#14283e",color:"#d5e7fa",border:"1px solid #34516e"}}/><button type="button" aria-label={`Remove region ${g.name}`} onClick={()=>setRegions(p=>p.filter((_,j)=>j!==i))} style={{color:"#ff808b",background:"transparent",border:0,cursor:"pointer"}}>×</button></>}</span>{g.name!=="Other"?<textarea aria-label={`Ports in ${g.name}`} value={g.aliases} onChange={e=>setRegions(p=>p.map((x,j)=>i===j?{...x,aliases:e.target.value}:x))} rows={2} style={{background:"#14283e",color:"#d5e7fa",border:"1px solid #34516e",borderRadius:4,width:"100%",boxSizing:"border-box",font:"inherit"}}/>:<span>All unmatched ports</span>}</label>)}<button type="button" onClick={()=>setRegions(p=>[...p.filter(g=>g.name!=="Other"),{name:"New region",aliases:""},...p.filter(g=>g.name==="Other")])} style={{marginRight:8}}>+ Add region</button><button type="button" onClick={()=>setRegions(QUICK_REGION_DEFAULTS)} style={{marginRight:8}}>Reset region aliases</button><button type="button" onClick={remember}>Remember operators in this list</button><p>Manual operator/owner matches are reused for this quick list only; the master vessel database is unchanged.</p>{Object.entries(operators).map(([key,v])=><div key={key} style={{display:"flex",gap:8,marginTop:4}}><span style={{minWidth:150}}>{v.vessel||key}</span><input aria-label={`Remembered operator ${v.vessel||key}`} value={v.operator||""} onChange={e=>setOperators(p=>({...p,[key]:{...p[key],operator:e.target.value.toUpperCase()}}))} style={{background:"#14283e",color:"#d5e7fa",border:"1px solid #34516e"}}/><button type="button" onClick={()=>setOperators(p=>{const n={...p};delete n[key];return n;})}>Forget</button></div>)}</details>;
+}
 const quickOperatorKey = value => String(value || "Unknown").trim().toUpperCase();
 function quickDisplayText(value) {
   return String(value || "").toLowerCase().replace(/[\p{L}\p{N}]+/gu, word => QUICK_ABBREVIATIONS.has(word.toUpperCase()) ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1));
 }
 function quickDisplayDate(value) {
-  const raw=String(value||"").trim();
+  const original=String(value||"").trim();
+  const raw=/^(ppt|prompt|today)$/i.test(original)?new Date().toLocaleDateString("en-CA"):original.replace(/(?<=\d)[-–](?=[A-Za-z])/g," ");
   const iso=raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
   if(iso){const month=Number(iso[2])-1;return month>=0&&month<12?Number(iso[3])+" "+quickDisplayText(MN_SORT[month]):raw;}
   return quickDisplayText(raw).replace(/\b0(\d)\b/g,"$1").replace(/\bNo\b/g,"Nov");
@@ -387,7 +410,7 @@ function quickDisplayDate(value) {
 function quickRowLine(row,byDate=false){
   const vessel=quickDisplayText(row.vessel),port=quickDisplayText(row.port),date=quickDisplayDate(row.date);
   const comment=quickDisplayText(String(row.comment??row.direction??"").trim());
-  return (byDate?[date,comment,vessel,port]:[vessel,port,date,comment]).filter(Boolean).join(" – ");
+  return byDate?[date,vessel,port].filter(Boolean).join(" – ")+(comment?" ("+comment+")":""):[vessel,port,date,comment].filter(Boolean).join(" – ");
 }
 const MN_SORT = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 const POSITION_COLUMNS=[
@@ -923,14 +946,19 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const importedNames = useRef(new Set(reportVessels.map(v => v.vessel)));
   // Quick positions state
   const [quickRows, setQuickRows] = useState([]);
-  const [quickTableSort,setQuickTableSort]=useState({key:null,desc:false});
+  const [quickTableSort,setQuickTableSort]=useState({key:"date",desc:false});
+  const [quickRememberedOps,setQuickRememberedOps]=useState({});
+  const [quickRegions,setQuickRegions]=useState(QUICK_REGION_DEFAULTS);
+  useWorkspacePreferences("quickPositions",{operators:quickRememberedOps,regions:quickRegions},p=>{setQuickRememberedOps(p.operators||{});setQuickRegions(Array.isArray(p.regions)&&p.regions.length?p.regions:QUICK_REGION_DEFAULTS);},{operators:{},regions:QUICK_REGION_DEFAULTS});
+  function applyQuickOperator(row){const hit=quickRememberedOps[quickVesselKey(row.vessel)];return hit?.operator?{...row,operator:hit.operator}:row;}
+  function rememberQuickOperators(){setQuickRememberedOps(p=>{const n={...p};quickRows.forEach(r=>{if(r.vessel?.trim()&&r.operator?.trim())n[quickVesselKey(r.vessel)]={vessel:r.vessel,operator:r.operator.trim()};});return n;});}
+  function rememberQuickOperator(row){if(!row?.vessel?.trim()||!row.operator?.trim())return;setQuickRememberedOps(p=>({...p,[quickVesselKey(row.vessel)]:{vessel:row.vessel,operator:row.operator.trim()}}));}
   const [quickExcludedOperators,setQuickExcludedOperators]=useState([]);
   const quickOperators=[...new Map(quickRows.map(r=>[quickOperatorKey(r.operator),r.operator||"Unknown"])).entries()];
   const quickOutputRows=quickRows.filter(r=>!quickExcludedOperators.includes(quickOperatorKey(r.operator)));
   const quickEditorRows=useMemo(()=>{
-    if(!quickTableSort.key)return quickRows;
-    const key=quickTableSort.key;
-    const value=r=>key==="date"?dateSortKey(quickDisplayDate(r.date)):key==="updatedAt"?(Date.parse(quickUpdatedValue(r,allVessels))||0):String((key==="direction"?(r.comment??r.direction):r[key])||"");
+    const key=quickTableSort.key||"date";
+    const value=r=>key==="date"?quickDateKey(r.date):key==="updatedAt"?(Date.parse(quickUpdatedValue(r,allVessels))||0):String((key==="direction"?(r.comment??r.direction):r[key])||"");
     return [...quickRows].sort((a,b)=>{const av=value(a),bv=value(b);return (typeof av==="number"?av-bv:av.localeCompare(bv,undefined,{numeric:true,sensitivity:"base"}))*(quickTableSort.desc?-1:1);});
   },[quickRows,quickTableSort,allVessels]);
   function toggleQuickOperator(key){setQuickExcludedOperators(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);}
@@ -940,8 +968,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const quickAvailableTags=useMemo(()=>[...new Set(allVessels.flatMap(parseTags))].sort(),[allVessels]);
   useEffect(()=>{
     let config=null;try{config=JSON.parse(localStorage.getItem("signal_interukc_config")||"null");}catch{}
-    setQuickRows(rows=>reconcileQuickSelections(rows,allVessels,quickSelectedTags,config,quickUpdatedFilter));
-  },[quickSelectedTags,quickUpdatedFilter,allVessels]);
+    setQuickRows(rows=>reconcileQuickSelections(rows,allVessels,quickSelectedTags,config,quickUpdatedFilter).map(applyQuickOperator));
+  },[quickSelectedTags,quickUpdatedFilter,allVessels,quickRememberedOps]);
   function toggleQuickTag(tag){setQuickSelectedTags(tags=>tags.includes(tag)?tags.filter(t=>t!==tag):[...tags,tag]);}
   const [quickTitle, setQuickTitle] = useState("Available tonnage");
   const [quickReportName,setQuickReportName]=useState("");
@@ -1742,7 +1770,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       const payload={report_type:"Quick Positions",report_date:new Date().toISOString().slice(0,10),rate_grid:{__quickEditor:{name,title:quickTitle,rows:quickRows,selectedTags:quickSelectedTags,updatedFilter:quickUpdatedFilter,excludedOperators:quickExcludedOperators,tableSort:quickTableSort}}};
       const query=activeQuickId&&!quickSaveCopy?supabase.from("reports").update(payload).eq("id",activeQuickId):supabase.from("reports").insert([payload]);
       const {data,error}=await query.select("id").single();if(error)throw error;
-      setActiveQuickId(data.id);setQuickReportName(name);setQuickSaveCopy(false);setQuickSaveStatus("Saved ✓");reportLive.saved(data.id);await loadSavedReports();
+      rememberQuickOperators();setActiveQuickId(data.id);setQuickReportName(name);setQuickSaveCopy(false);setQuickSaveStatus("Saved ✓");reportLive.saved(data.id);await loadSavedReports();
     }catch(error){setQuickSaveStatus("Save failed: "+(error.message||error));}
     finally{setListSaveBusy(false);setTimeout(()=>setQuickSaveStatus(""),3500);}
   }
@@ -1753,9 +1781,9 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       setQuickTitle(savedQuickTitle(data));setQuickReportName(data.rate_grid?.__quickEditor?.name||savedQuickTitle(data));setActiveQuickId(id);setQuickSaveCopy(false);
       setQuickUpdatedFilter(data.rate_grid?.__quickEditor?.updatedFilter||"all");
       setQuickExcludedOperators(data.rate_grid?.__quickEditor?.excludedOperators||[]);
-      setQuickTableSort(data.rate_grid?.__quickEditor?.tableSort||{key:null,desc:false});
+      setQuickTableSort(data.rate_grid?.__quickEditor?.tableSort?.key?data.rate_grid.__quickEditor.tableSort:{key:"date",desc:false});
       setQuickSelectedTags(Array.isArray(data.rate_grid?.__quickEditor?.selectedTags)?data.rate_grid.__quickEditor.selectedTags:[]);
-      setQuickRows(savedQuickRows(data).map(r=>({...r,id:r.id||newPositionId()})));setPendingClear(null);setSection("quick");
+      setQuickRows(savedQuickRows(data).map(r=>applyQuickOperator({...r,id:r.id||newPositionId()})));setPendingClear(null);setSection("quick");
     }catch(error){setQuickSaveStatus("Load failed: "+(error.message||error));}
   }
 
@@ -1790,7 +1818,9 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   }, [section]);
   // ── Quick Positions helpers ───────────────────────────────────────────────
   function lookupOp(vesselName) {
-    if (!vesselName || !Object.keys(vesselOpDb).length) return "";
+    if(!vesselName)return "";
+    const remembered=quickRememberedOps[quickVesselKey(vesselName)];if(remembered?.operator)return remembered.operator;
+    if(!Object.keys(vesselOpDb).length)return "";
     const key = vesselName.toUpperCase().trim();
     if (vesselOpDb[key]) return vesselOpDb[key];
     const match = Object.keys(vesselOpDb).find(k => k.startsWith(key) || key.startsWith(k));
@@ -2081,7 +2111,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     setQuickParseMsg("\u2713 "+rows.length+" position"+(rows.length!==1?"s":"")+" added"+(missing?" \u2014 "+missing+" operator(s) not found, fill in manually.":"."));
   }
 
-  function appendQuickRows(rows){setQuickRows(p=>[...p,...stampQuickRows(rows)]);}
+  function appendQuickRows(rows){setQuickRows(p=>[...p,...stampQuickRows(rows.map(applyQuickOperator))]);}
   function addQuickRow() {
     appendQuickRows([{id:newPositionId(),operator:"",vessel:"",port:"",date:"",direction:""}]);
   }
@@ -2097,17 +2127,25 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     const lines=["|| "+quickDisplayText(quickTitle)+" ||",""];
     byOp.forEach((rows,key)=>{
       const op=quickDisplayText(key);lines.push(whatsapp?"*"+op+"*":op);
-      [...rows].sort((a,b)=>dateSortKey(quickDisplayDate(a.date))-dateSortKey(quickDisplayDate(b.date))).forEach(r=>lines.push(quickRowLine(r)));
+      [...rows].sort((a,b)=>quickCompareDates(a,b)).forEach(r=>lines.push(quickRowLine(r)));
       lines.push("");
     });
     return lines.join("\n").trim();
   }
   function buildQuickTextByDate() {
     if (!quickOutputRows.length) return "";
-    const sorted=[...quickOutputRows].sort((a,b)=>dateSortKey(quickDisplayDate(a.date))-dateSortKey(quickDisplayDate(b.date)));
+    const sorted=[...quickOutputRows].sort((a,b)=>quickCompareDates(a,b));
     return ["|| "+quickDisplayText(quickTitle)+" ||","",...sorted.map(r=>quickRowLine(r,true))].join("\n").trim();
   }
 
+  function buildQuickTextByRegion(){
+    if(!quickOutputRows.length)return "";
+    const lines=["|| "+quickDisplayText(quickTitle)+" ||",""];
+    for(const group of quickRegions){const rows=quickOutputRows.filter(r=>quickRegion(r.port,quickRegions)===group.name).sort(quickCompareDates);if(!rows.length)continue;lines.push(group.name);rows.forEach(r=>lines.push(quickRowLine(r,true)));lines.push("");}
+    return lines.join("\n").trim();
+  }
+  const [quickCopiedRegion,setQuickCopiedRegion]=useState(false);
+  async function copyQuickByRegion(){const text=buildQuickTextByRegion();if(!text)return;try{await navigator.clipboard.writeText(text);setQuickCopiedRegion(true);setTimeout(()=>setQuickCopiedRegion(false),2500);}catch{setQuickParseMsg("Could not copy regional list. Select and copy the preview text.");}}
   const [quickCopiedDate, setQuickCopiedDate] = useState(false);
   async function copyQuickByDate() {
     const text = buildQuickTextByDate(); if (!text) return;
@@ -3214,16 +3252,17 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
             </div>
 
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+              <QuickPositionSettings regions={quickRegions} setRegions={setQuickRegions} operators={quickRememberedOps} setOperators={setQuickRememberedOps} remember={rememberQuickOperators}/>
               {/* Step 1 (25%) + Step 2 (75%) side by side */}
-              <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "stretch" }}>
                 {/* Step 1 */}
-                <div style={{ flex: "0 0 25%", minWidth: 220, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px" }}>
+                <div style={{ flex: "0 0 25%", minWidth: 220, height:quickRows.length?520:undefined,boxSizing:"border-box",display:"flex",flexDirection:"column", background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT, marginBottom: 6 }}>Step 1 — Paste positions</div>
                   <textarea value={quickPaste}
                     onChange={e => { setQuickPaste(e.target.value); setQuickParseMsg(""); }}
                     onPaste={handleImagePaste}
                     placeholder="Paste text or picture"
-                    style={{ width: "100%", minHeight: 200, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 13, padding: 9, outline: "none", resize: "vertical", fontFamily: "monospace", lineHeight: 1.6, boxSizing: "border-box", opacity: quickImgParsing ? 0.5 : 1 }} />
+                    style={{ width: "100%", minHeight: 200,flex:1, background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 13, padding: 9, outline: "none", resize: "none", fontFamily: "monospace", lineHeight: 1.6, boxSizing: "border-box", opacity: quickImgParsing ? 0.5 : 1 }} />
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                     <button onClick={parsePaste} disabled={quickImgParsing} style={{ ...SB, background: "#0c1729", color: "#79c0ff", border: "1px solid #377dc8", opacity: quickImgParsing ? 0.5 : 1 }}>▶ Parse and add</button>
                     {quickPaste.trim() && <button onClick={() => { setQuickPaste(""); setQuickParseMsg(""); }} style={{ ...SB, background: "transparent", border: "1px solid " + C.bd, color: C.dim }}>Clear paste</button>}
@@ -3236,7 +3275,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
                 {/* Step 2: Edit */}
                 {quickRows.length > 0 && (
-                  <div style={{ flex: "1 1 75%", minWidth: 0, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: 520 }}>
+                  <div style={{ flex: "1 1 75%", minWidth: 0, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, overflow: "hidden", display: "flex", flexDirection: "column", height:520,boxSizing:"border-box" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", borderBottom: "1px solid " + C.bd, flexShrink: 0 }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>Step 2 — Check &amp; edit ({quickRows.length} row{quickRows.length !== 1 ? "s" : ""}) — <span style={{ fontWeight: 400, color: C.faint }}>orange = operator not yet matched</span></div>
                       <button onClick={addQuickRow} style={{ fontSize: 12, color: ACCENT, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>+ Add row</button>
@@ -3250,16 +3289,16 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                         const INP = (col) => ({ background: "transparent", border: "none", borderBottom: "1px solid rgba(58,130,246,0.28)", color: col || C.tx, fontSize: 10, outline: "none", padding: "1px 2px", width: "100%", fontFamily: "inherit", minWidth: 0 });
                         // Enter jumps to the same column, next row down — same field index across the grid
                         const jumpDown = (fieldIdx) => (e) => {
-                          if (e.key !== "Enter") return;
+                          if(!["Enter","ArrowDown","ArrowUp"].includes(e.key))return;
                           e.preventDefault();
                           const cells = document.querySelectorAll(".quick-row-input");
                           const cols = 5; // operator, vessel, port, date, direction
-                          const target = cells[(i + 1) * cols + fieldIdx];
+                          const target = cells[(i+(e.key==="ArrowUp"?-1:1))*cols+fieldIdx];
                           target?.focus();
                         };
                         return (
                           <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 85px 22px", background: i%2===0?"rgba(255,255,255,0.025)":"transparent", padding: "5px 10px", gap: 6, borderTop: "1px solid rgba(58,130,246,0.1)", alignItems: "center" }}>
-                            <input className="quick-row-input" style={INP(iOp)} value={String(r.operator||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "operator", e.target.value.toUpperCase())} onKeyDown={jumpDown(0)} placeholder="Type operator..." title={r.operator ? r.operator : "Not found in DB — type it here"} />
+                            <input className="quick-row-input" style={INP(iOp)} value={String(r.operator||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "operator", e.target.value.toUpperCase())} onKeyDown={jumpDown(0)} onBlur={()=>rememberQuickOperator(r)} placeholder="Type operator..." title={r.operator ? r.operator : "Not found in DB — type it here"} />
                             <input className="quick-row-input" style={{ ...INP(), fontWeight: 600 }} value={String(r.vessel||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "vessel", e.target.value.toUpperCase())} onKeyDown={jumpDown(1)} placeholder="VESSEL" />
                             <input className="quick-row-input" style={INP()} value={String(r.port||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} onKeyDown={jumpDown(2)} placeholder="PORT" />
                             <input className="quick-row-input" style={INP()} value={String(r.date||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} onKeyDown={jumpDown(3)} placeholder="DATE" />
@@ -3281,7 +3320,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                     <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>Step 3 — Copy &amp; send</div>
 
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8 }}>
                     <div>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:6}}><span style={{fontSize:12,color:C.dim,fontWeight:700}}>By operator</span><div style={{display:"flex",gap:6}}>
                         <button onClick={()=>copyQuick(false)} style={{...SB,color:quickCopied?"#43e97b":"#79c0ff",background:quickCopied?"rgba(67,233,123,.15)":C.bg3,borderColor:quickCopied?"#43e97b":C.bd}}>{quickCopied?"✓ Copied!":"Copy by operator"}</button>
@@ -3296,7 +3335,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                       <pre style={{ margin: 0, fontFamily: "monospace", fontSize: 14, color: C.tx, lineHeight: 1.8, whiteSpace: "pre-wrap", wordBreak: "break-word", background: C.bg3, padding: "10px 12px", borderRadius: 5 }}>
                         {buildQuickTextByDate()}
                       </pre>
-                    </div>
+                    </div><div><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:6}}><span style={{fontSize:12,color:C.dim,fontWeight:700}}>By region · date ascending</span><button onClick={copyQuickByRegion} style={{...SB,color:quickCopiedRegion?"#43e97b":"#79c0ff"}}>{quickCopiedRegion?"✓ Copied!":"Copy by region"}</button></div><pre style={{margin:0,fontFamily:"monospace",fontSize:14,color:C.tx,lineHeight:1.8,whiteSpace:"pre-wrap",wordBreak:"break-word",background:C.bg3,padding:"10px 12px",borderRadius:5}}>{buildQuickTextByRegion()}</pre></div>
                   </div>
                 </div>
               )}
