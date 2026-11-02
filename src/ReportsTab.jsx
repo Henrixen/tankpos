@@ -1013,7 +1013,10 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   function rememberQuickOperator(row){if(!row?.vessel?.trim()||!row.operator?.trim())return;setQuickRememberedOps(p=>({...p,[quickVesselKey(row.vessel)]:{vessel:row.vessel,operator:row.operator.trim()}}));}
   const [quickExcludedOperators,setQuickExcludedOperators]=useState([]);
   const quickOperators=[...new Map(quickRows.map(r=>[quickOperatorKey(r.operator),r.operator||"Unknown"])).entries()];
-  const quickOutputRows=quickRows.filter(r=>!quickExcludedOperators.includes(quickOperatorKey(r.operator))).map(r=>{const v=allVessels.find(v=>quickVesselKey(v.vessel||v.vessel_name)===quickVesselKey(r.vessel));return {...r,dwt:r.dwt??v?.dwt??"",built:r.built??v?.built??""};});
+  const [quickMinAge,setQuickMinAge]=useState(0),[quickExcludeOther,setQuickExcludeOther]=useState(false),[quickNapStar,setQuickNapStar]=useState(false);
+  const [quickSent,setQuickSent]=useState(null),[quickComparison,setQuickComparison]=useState(null),[quickCompareIncluded,setQuickCompareIncluded]=useState(false);
+  const sentQuickReports=savedReports.filter(r=>r.report_type==="Quick Positions"&&r.rate_grid?.__quickEditor?.sent?.summary).sort((a,b)=>String(b.rate_grid.__quickEditor.sent.at).localeCompare(String(a.rate_grid.__quickEditor.sent.at)));
+  const quickOutputRows=quickRows.filter(r=>!quickExcludedOperators.includes(quickOperatorKey(r.operator))).map(r=>{const v=allVessels.find(v=>quickVesselKey(v.vessel||v.vessel_name)===quickVesselKey(r.vessel));return {...r,dwt:r.dwt??v?.dwt??"",built:r.built??v?.built??""};}).filter(r=>{const year=Number(r.built),age=new Date().getFullYear()-year;return (!quickExcludeOther||(r.regionOverride||quickRegion(r.port,quickRegions))!=="Other")&&(!quickMinAge||!year||age>=quickMinAge);});
   const quickEditorRows=useMemo(()=>{
     const key=quickTableSort.key||"date";
     const value=r=>key==="date"?quickDateKey(r.date):key==="updatedAt"?(Date.parse(quickUpdatedValue(r,allVessels))||0):String((key==="direction"?(r.comment??r.direction):key==="regionOverride"?(r.regionOverride||quickRegion(r.port,quickRegions)):r[key])||"");
@@ -1823,15 +1826,17 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   // ── Quick Positions save/load — same "reports" table, so drafts pick up
   // instantly on any device you're signed into, not just localStorage.
   const [quickSaveStatus, setQuickSaveStatus] = useState("");
-  async function saveQuickPositions(){
+  async function saveQuickPositions(markSent=false){
+    markSent=markSent===true;
     if(!reportLive.canSave())return;
     if(listSaveBusy)return;setListSaveBusy(true);setQuickSaveStatus("Saving...");
     try{
       const name=marketReportSaveName(quickReportName||quickTitle,"Quick Positions",quickSaveCopy,savedReports);
-      const payload={report_type:"Quick Positions",report_date:new Date().toISOString().slice(0,10),rate_grid:{__quickEditor:{name,title:quickTitle,rows:quickRows,selectedTags:quickSelectedTags,updatedFilter:quickUpdatedFilter,excludedOperators:quickExcludedOperators,tableSort:quickTableSort,exportSections:quickExportSections,includeSpecs:quickSpecs}}};
-      const query=activeQuickId&&!quickSaveCopy?supabase.from("reports").update(payload).eq("id",activeQuickId):supabase.from("reports").insert([payload]);
+      const sent=markSent?{at:new Date().toISOString(),summary:quickWindowSummary()}:null;
+      const payload={report_type:"Quick Positions",report_date:new Date().toISOString().slice(0,10),rate_grid:{__quickEditor:{name,title:quickTitle,rows:quickRows,selectedTags:quickSelectedTags,updatedFilter:quickUpdatedFilter,excludedOperators:quickExcludedOperators,tableSort:quickTableSort,exportSections:quickExportSections,includeSpecs:quickSpecs,minAge:quickMinAge,excludeOther:quickExcludeOther,napStar:quickNapStar,comparison:quickComparison,compareIncluded:quickCompareIncluded,sent}}};
+      const query=activeQuickId&&!quickSaveCopy&&!quickSent&&!markSent?supabase.from("reports").update(payload).eq("id",activeQuickId):supabase.from("reports").insert([payload]);
       const {data,error}=await query.select("id").single();if(error)throw error;
-      rememberQuickOperators();setActiveQuickId(data.id);setQuickReportName(name);setQuickSaveCopy(false);setQuickSaveStatus("Saved ✓");reportLive.saved(data.id);await loadSavedReports();
+      rememberQuickOperators();setActiveQuickId(data.id);setQuickReportName(name);setQuickSaveCopy(false);setQuickSent(sent);setQuickSaveStatus(markSent?"Marked as sent ✓":"Saved ✓");reportLive.saved(data.id);await loadSavedReports();
     }catch(error){setQuickSaveStatus("Save failed: "+(error.message||error));}
     finally{setListSaveBusy(false);setTimeout(()=>setQuickSaveStatus(""),3500);}
   }
@@ -1839,6 +1844,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     try{
       const {data,error}=await supabase.from("reports").select("*").eq("id",id).single();if(error)throw error;if(!data||!canApply())return;
       reportLive.loaded();
+      const settings=data.rate_grid?.__quickEditor||{};setQuickMinAge(settings.minAge||0);setQuickExcludeOther(!!settings.excludeOther);setQuickNapStar(!!settings.napStar);setQuickSent(settings.sent||null);setQuickComparison(settings.comparison||null);setQuickCompareIncluded(!!settings.compareIncluded);
       setQuickExportSections({operator:true,date:true,region:true,fixing:true,availability:true,...data.rate_grid?.__quickEditor?.exportSections});setQuickSpecs(data.rate_grid?.__quickEditor?.includeSpecs!==false);setQuickTitle(savedQuickTitle(data));setQuickReportName(data.rate_grid?.__quickEditor?.name||savedQuickTitle(data));setActiveQuickId(id);setQuickSaveCopy(false);
       setQuickUpdatedFilter(data.rate_grid?.__quickEditor?.updatedFilter||"all");
       setQuickExcludedOperators(data.rate_grid?.__quickEditor?.excludedOperators||[]);
@@ -1850,7 +1856,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   const liveReportId=section==="market"?activeMarketReportId:section==="quick"?activeQuickId:section==="poslist"?activePositionId:null;
   const liveReportLabel=section==="market"?`${reportType||"Market"} · ${reportName||reportDate||"New report"}`:section==="quick"?`Quick Positions · ${quickReportName||quickTitle}`:section==="poslist"?`Position List · ${positionReportName||posTitle}`:"Reports";
-  const liveDraft=section==="market"?{reportType,reportDate,reportName,commentary,rateGrid,marketHeadings,intermediateTitle,asiaReport,weeklyHistory,benchmarkRows,driverBullets,tceStats,handy,handyCommentary,handySegments,importedFixingChart,routeColumns,routeTitles,intermediateRoutesLabel,excludedFixtureIds,excludedBenchmarkKeys,excludedCharterers,recipientCharterer,tceEarnings,fixtures,quotes}:section==="quick"?{quickReportName,quickTitle,quickRows,quickSelectedTags,quickUpdatedFilter,quickExcludedOperators,quickTableSort,quickExportSections,quickSpecs}:{positionReportName,posTitle,posSubtitle,posDate,reportVessels,positionColumns,positionChartSettings,positionCharts,posGroupBy,regionMode,outputSort,sortByDate,segmentNames,positionPreviewWidth};
+  const liveDraft=section==="market"?{reportType,reportDate,reportName,commentary,rateGrid,marketHeadings,intermediateTitle,asiaReport,weeklyHistory,benchmarkRows,driverBullets,tceStats,handy,handyCommentary,handySegments,importedFixingChart,routeColumns,routeTitles,intermediateRoutesLabel,excludedFixtureIds,excludedBenchmarkKeys,excludedCharterers,recipientCharterer,tceEarnings,fixtures,quotes}:section==="quick"?{quickReportName,quickTitle,quickRows,quickSelectedTags,quickUpdatedFilter,quickExcludedOperators,quickTableSort,quickExportSections,quickSpecs,quickMinAge,quickExcludeOther,quickNapStar,quickComparison,quickCompareIncluded,quickSent}:{positionReportName,posTitle,posSubtitle,posDate,reportVessels,positionColumns,positionChartSettings,positionCharts,posGroupBy,regionMode,outputSort,sortByDate,segmentNames,positionPreviewWidth};
   const reportLive=useReportLive({id:liveReportId,label:liveReportLabel,draft:liveDraft,busy:marketSaveBusy||listSaveBusy,onList:loadSavedReports,onLoad:(id,safe)=>section==="market"?loadReport(id,safe):section==="quick"?loadQuickPositions(id,safe):loadPositionList(id,safe)});
 
   const SB = { background:C.bg3,color:C.tx,fontSize: 11, fontWeight: 600, padding: "6px 10px", borderRadius: 5, cursor: "pointer", border: "1px solid " + C.bd, fontFamily: "inherit", whiteSpace: "nowrap" };
@@ -2181,14 +2187,15 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   }
   function deleteQuickRow(id) { setQuickRows(p => p.filter(r => r.id!==id)); }
 
+  function quickMarkedLine(row,byDate=false){return quickRowLine(row,byDate)+(quickNapStar&&/\bnap[\s.-]*cln\b/i.test(String(row.comment??row.direction??""))?" ★":"");}
   function buildQuickText(whatsapp=false) {
     if (!quickOutputRows.length) return "";
     const byOp = new Map();
     quickOutputRows.forEach(r=>{const key=quickOperatorKey(r.operator);if(!byOp.has(key))byOp.set(key,[]);byOp.get(key).push(r);});
     const lines=["|| "+quickDisplayText(quickTitle)+" ||",""];
-    byOp.forEach((rows,key)=>{
+    [...byOp.entries()].sort(([a],[b])=>a.localeCompare(b,"en",{sensitivity:"base",numeric:true})).forEach(([key,rows])=>{
       const op=quickDisplayText(key);lines.push(whatsapp?"*"+op+"*":op);
-      [...rows].sort((a,b)=>quickCompareDates(a,b)).forEach(r=>lines.push(quickRowLine(quickSpecs?r:{...r,dwt:"",built:""})));
+      [...rows].sort((a,b)=>quickCompareDates(a,b)).forEach(r=>lines.push(quickMarkedLine(quickSpecs?r:{...r,dwt:"",built:""})));
       lines.push("");
     });
     return lines.join("\n").trim();
@@ -2196,13 +2203,13 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   function buildQuickTextByDate() {
     if (!quickOutputRows.length) return "";
     const sorted=[...quickOutputRows].sort((a,b)=>quickCompareDates(a,b));
-    return ["|| "+quickDisplayText(quickTitle)+" ||","",...sorted.map(r=>quickRowLine(quickSpecs?r:{...r,dwt:"",built:""},true))].join("\n").trim();
+    return ["|| "+quickDisplayText(quickTitle)+" ||","",...sorted.map(r=>quickMarkedLine(quickSpecs?r:{...r,dwt:"",built:""},true))].join("\n").trim();
   }
 
   function buildQuickTextByRegion(){
     if(!quickOutputRows.length)return "";
     const lines=["|| "+quickDisplayText(quickTitle)+" ||",""];
-    for(const group of [...quickRegions,...[...new Set(quickOutputRows.map(r=>r.regionOverride).filter(Boolean))].filter(name=>!quickRegions.some(g=>g.name===name)).map(name=>({name}))]){const rows=quickOutputRows.filter(r=>(r.regionOverride||quickRegion(r.port,quickRegions))===group.name).sort(quickCompareDates);if(!rows.length)continue;lines.push(group.name);rows.forEach(r=>lines.push(quickRowLine(quickSpecs?r:{...r,dwt:"",built:""},true)));lines.push("");}
+    for(const group of [...quickRegions,...[...new Set(quickOutputRows.map(r=>r.regionOverride).filter(Boolean))].filter(name=>!quickRegions.some(g=>g.name===name)).map(name=>({name}))]){const rows=quickOutputRows.filter(r=>(r.regionOverride||quickRegion(r.port,quickRegions))===group.name).sort(quickCompareDates);if(!rows.length)continue;lines.push(group.name);rows.forEach(r=>lines.push(quickMarkedLine(quickSpecs?r:{...r,dwt:"",built:""},true)));lines.push("");}
     return lines.join("\n").trim();
   }
   const [quickCopiedRegion,setQuickCopiedRegion]=useState(false);
@@ -2223,18 +2230,18 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if(quickExportSections.operator)groups.push(["By operator",buildQuickText()]);
     if(quickExportSections.date)groups.push(["By date",buildQuickTextByDate()]);
     if(quickExportSections.region)groups.push(["By region",buildQuickTextByRegion()]);
-    const summary=quickWindowSummary();
+    const summary=quickWindowSummary(),prior=quickCompareIncluded?quickComparison?.summary:null;
     const sectionTitle=text=>'<div style="margin-top:14px;margin-bottom:8px;padding:10px 12px;background:#d5e6f8;border-left:4px solid #3988d0;color:#122f51;font-size:14px;font-weight:bold;text-transform:uppercase">'+esc(text)+'</div>';
     const headingSet=new Set([...quickRegions.map(g=>g.name),...quickOutputRows.map(r=>r.regionOverride).filter(Boolean)]);
     const columns=groups.map(([title,text])=>'<td style="vertical-align:top;padding:0"><div style="background:#1b4565;color:white;padding:10px;font-weight:bold">'+title+'</div>'+text.split('\n').slice(2).map((line,i)=>{
       if(!line)return '';
       const heading=title==="By region"?headingSet.has(line):title==="By operator"&&!line.includes(" – ");
-      return heading?sectionTitle(line):'<div style="padding:6px 8px;border-bottom:1px solid #dce7f2;font-size:12px;line-height:1.45;background:'+(i%2?'#fff':'#edf5fc')+';overflow-wrap:anywhere">'+esc(line)+'</div>';
+      return heading?sectionTitle(line):'<div style="padding:6px 8px;border-bottom:1px solid #dce7f2;font-size:12px;line-height:1.45;background:'+(i%2?'#fff':'#edf5fc')+';overflow-wrap:anywhere">'+esc(line.replace(/ ★$/,''))+(line.endsWith(' ★')?'<span style="float:right;color:#173f64;margin-left:8px">★</span>':'')+'</div>';
     }).join('')+'</td>').join('');
-    const max=Math.max(1,...summary.buckets),labels=["Today / Tomorrow","Open in 3-5d","Open in 6-9d","Open in >10d"];
-    const bars='<table role="presentation" style="width:100%;border-collapse:collapse">'+labels.map((label,i)=>'<tr><td style="width:200px;padding:8px;color:#23486a;font-size:13px">'+label+'</td><td style="padding:6px;background:#f3f7fb"><div style="width:'+Math.max(0,summary.buckets[i]/max*100)+'%;height:23px;background:#3988cf;border-radius:3px"></div></td><td style="width:45px;text-align:right;font-weight:bold;color:#173452">'+summary.buckets[i]+'</td></tr>').join('')+'</table>';
-    const fixing=quickExportSections.fixing?sectionTitle("FIXING WINDOW AVG.")+'<div style="padding:18px;background:#edf5fc"><b style="font-size:32px;color:#1c568a">'+(summary.average===null?'—':summary.average.toFixed(1))+' days</b></div>':'';
-    const availability=quickExportSections.availability?sectionTitle("Next Available")+bars:'';
+    const max=Math.max(1,...summary.buckets,...(prior?.buckets||[])),labels=["Today / Tomorrow","Open in 3-5d","Open in 6-9d","Open in >10d"];
+    const bars='<table role="presentation" style="width:100%;border-collapse:collapse">'+labels.map((label,i)=>'<tr><td style="width:200px;padding:8px;color:#23486a;font-size:13px">'+label+'</td><td style="padding:6px;background:#f3f7fb"><div style="position:relative;height:23px"><div style="width:'+Math.max(0,summary.buckets[i]/max*100)+'%;height:23px;background:#3988cf;border-radius:3px"></div>'+(prior?'<span title="Previous sent: '+esc(prior.buckets[i])+'" style="position:absolute;left:'+Math.min(98,prior.buckets[i]/max*100)+'%;top:0;transform:translateX(-50%);color:#173f64;font-size:22px;line-height:23px">▼</span>':'')+'</div></td><td style="width:45px;text-align:right;font-weight:bold;color:#173452">'+summary.buckets[i]+'</td></tr>').join('')+'</table>';
+    const fixing=quickExportSections.fixing?sectionTitle("FIXING WINDOW AVG.")+'<div style="padding:18px;background:#edf5fc"><b style="font-size:32px;color:#1c568a">'+(summary.average===null?'—':summary.average.toFixed(1))+' days</b>'+(prior?'<div style="margin-top:8px;font-size:12px;color:#94a3b8">(Last week: '+(prior.average==null?'—':Number(prior.average).toFixed(1))+' days)</div>':'')+'</div>':'';
+    const availability=quickExportSections.availability?sectionTitle("Next Available")+bars+(prior?'<div style="font-size:11px;color:#94a3b8;padding:4px 8px">▼ Previous sent · '+esc(quickComparison.name)+' · '+esc(String(quickComparison.at||"").slice(0,10))+'</div>':''):'';
     const top=(fixing||availability)?'<table role="presentation" style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:8px"><tr>'+(fixing?'<td style="vertical-align:top;width:'+(availability?'32%':'100%')+'">'+fixing+'</td>':'')+(availability?'<td style="vertical-align:top">'+availability+'</td>':'')+'</tr></table>':'';
     return '<div style="width:1120px;padding:28px;box-sizing:border-box;border:1px solid #173f64;background:white;color:#173452;font-family:Arial,sans-serif"><table role="presentation" style="width:100%;table-layout:fixed;border-collapse:collapse;background:#102743;color:#fff;margin-bottom:16px"><tr><td style="padding:18px;width:33.333%;box-sizing:border-box;font-size:19px;font-weight:bold">'+esc(quickTitle)+'</td><td style="text-align:center;width:33.333%;box-sizing:border-box"><img src="'+STEEM_LOGO+'" style="width:180px;background:white;padding:6px;border-radius:4px" /></td><td style="padding:18px;text-align:right;width:33.333%;box-sizing:border-box;font-size:12px">'+esc(new Date().toLocaleDateString("en-GB",{timeZone:"Europe/Oslo",day:"numeric",month:"short",year:"numeric"}))+'</td></tr></table>'+top+(groups.length?'<table role="presentation" style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:8px"><tr>'+columns+'</tr></table>':'')+'</div>';
   }
@@ -2477,7 +2484,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                 {(Array.isArray(savedReports)?savedReports:[]).filter(r => r.report_type === "Quick Positions").map(r => (
                   <div key={r.id} onClick={() => loadQuickPositions(r.id)}
                     style={{ position:"relative",padding: "6px 25px 6px 7px", borderRadius: 3, background: C.bg3, cursor: "pointer", marginBottom: 3 }}>
-                    <button aria-label="Delete saved report" title="Delete saved report" onClick={e=>{e.stopPropagation();setPendingSavedDelete(r);setDeleteReportError("");}} style={{position:"absolute",right:4,top:5,background:"none",border:0,color:"#fb7185",cursor:"pointer",fontSize:15}}>×</button><div style={{ fontSize: 11, fontWeight: 700, color: ACCENT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{savedMarketReportName(r)}</div>
+                    <button aria-label="Delete saved report" title="Delete saved report" onClick={e=>{e.stopPropagation();setPendingSavedDelete(r);setDeleteReportError("");}} style={{position:"absolute",right:4,top:5,background:"none",border:0,color:"#fb7185",cursor:"pointer",fontSize:15}}>×</button><div style={{ fontSize: 11, fontWeight: 700, color: ACCENT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{savedMarketReportName(r)}{r.rate_grid?.__quickEditor?.sent&&<span style={{color:"#43e97b",marginLeft:6}}>✓ Sent</span>}</div>
                     <div style={{ fontSize: 9, color: C.dim }}>{savedQuickRows(r).length} rows · {new Date(r.report_date).toLocaleDateString("en-GB")}</div>
                   </div>
                 ))}
@@ -3347,14 +3354,15 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
               <span style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>Quick Positions</span>
               <input aria-label="Quick report name" value={quickReportName} onChange={e=>setQuickReportName(e.target.value)} style={{...IS,width:170}} placeholder="Saved report name"/>
               <label style={{fontSize:12,color:C.tx}}><input type="checkbox" checked={quickSaveCopy} onChange={e=>setQuickSaveCopy(e.target.checked)}/>Save as copy</label>
-              <button onClick={()=>{setActiveQuickId(null);setQuickReportName("");setQuickSaveCopy(false);setQuickSelectedTags([]);setQuickUpdatedFilter("all");setQuickExcludedOperators([]);setQuickTableSort({key:null,desc:false});setQuickRows([]);}} style={{...SB,color:C.dim}}>New list</button>
+              <button onClick={()=>{setActiveQuickId(null);setQuickReportName("");setQuickSaveCopy(false);setQuickSelectedTags([]);setQuickUpdatedFilter("all");setQuickExcludedOperators([]);setQuickTableSort({key:null,desc:false});setQuickRows([]);setQuickMinAge(0);setQuickExcludeOther(false);setQuickNapStar(false);setQuickSent(null);setQuickComparison(null);setQuickCompareIncluded(false);}} style={{...SB,color:C.dim}}>New list</button>
               <input value={quickTitle} onChange={e => setQuickTitle(e.target.value)} style={{ ...IS, minWidth: 160 }} placeholder="Avail inter tonnage" />
               <div style={{ flex: 1 }} />
               {quickSaveStatus && <span style={{ fontSize: 13, color: quickSaveStatus === "Saved ✓" ? "#43e97b" : C.dim }}>{quickSaveStatus}</span>}
-              <button onClick={saveQuickPositions} disabled={listSaveBusy}
+              <button onClick={()=>saveQuickPositions()} disabled={listSaveBusy}
                 style={{ ...SB, background: C.bg3, border: "1px solid " + C.bd, color: C.tx }}>
                 Save
               </button>
+              <button disabled={listSaveBusy||!quickOutputRows.length} onClick={()=>saveQuickPositions(true)} style={{...SB,color:quickSent?"#43e97b":"#79c0ff"}}>{quickSent?"✓ Sent · "+new Date(quickSent.at).toLocaleDateString("en-GB"):"Mark as sent"}</button>
               {quickRows.length > 0 && (
                 <button onClick={() => { setPendingClear("quick"); }}
                   style={{ ...SB, background: "transparent", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444" }}>Clear all</button>
@@ -3363,6 +3371,14 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{fontSize:11,color:"#a8d8ff",marginBottom:8}}>{quickSharedStatus} <button style={{...SB,color:"#79c0ff",borderColor:"#315678"}} onClick={saveQuickShared}>Save shared settings</button> <button style={SB} onClick={()=>{if(JSON.stringify(quickSharedLatest.current)===quickShared.current.baseline||window.confirm("Discard unsaved shared-setting changes and reload?"))loadQuickShared(true);}}>Reload shared settings</button></div><QuickPositionSettings buttonStyle={SB} regions={quickRegions} setRegions={setQuickRegions} operators={quickRememberedOps} setOperators={setQuickRememberedOps} remember={rememberQuickOperators}/>
+              <div style={{display:"flex",gap:14,alignItems:"center",flexWrap:"wrap",background:C.bg2,padding:10,border:"1px solid "+C.bd,borderRadius:5,fontSize:12}}>
+                <label>Exclude age <select value={quickMinAge} onChange={e=>setQuickMinAge(Number(e.target.value))} style={IS}><option value={0}>None</option><option value={15}>Under 15 years</option><option value={20}>Under 20 years</option></select></label>
+                <label><input type="checkbox" checked={quickExcludeOther} onChange={e=>setQuickExcludeOther(e.target.checked)}/> Exclude Other region</label>
+                <button style={{...SB,color:quickNapStar?"#43e97b":"#79c0ff"}} aria-pressed={quickNapStar} onClick={()=>setQuickNapStar(p=>!p)}>★ Nap cln {quickNapStar?"on":"off"}</button><span style={{color:C.dim}}>{quickOutputRows.length} / {quickRows.length} positions in output</span>
+                <label><input type="checkbox" checked={quickCompareIncluded} onChange={e=>setQuickCompareIncluded(e.target.checked)}/> Add comparison</label>
+                <select aria-label="Compare with sent report" value={quickComparison?.id||""} style={{...IS,maxWidth:300}} onChange={e=>{const report=sentQuickReports.find(r=>String(r.id)===e.target.value);if(!report){setQuickComparison(null);return;}const sent=report.rate_grid.__quickEditor.sent;setQuickComparison({id:String(report.id),name:savedMarketReportName(report),at:sent.at,summary:sent.summary});}}><option value="">Choose sent report…</option>{quickComparison&&!sentQuickReports.some(r=>String(r.id)===quickComparison.id)&&<option value={quickComparison.id}>{quickComparison.name} · saved comparison</option>}{sentQuickReports.map(r=><option key={r.id} value={String(r.id)}>{savedMarketReportName(r)} · {new Date(r.rate_grid.__quickEditor.sent.at).toLocaleDateString("en-GB")}</option>)}</select>
+                {quickCompareIncluded&&!quickComparison&&<span style={{color:C.dim}}>Choose a sent report to show comparison.</span>}
+              </div>
               {/* Step 1 (25%) + Step 2 (75%) side by side */}
               <div style={{ display: "flex", gap: 10, alignItems: "stretch" }}>
                 {/* Step 1 */}
