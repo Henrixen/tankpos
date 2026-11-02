@@ -408,9 +408,12 @@ function quickDisplayDate(value) {
   return quickDisplayText(raw).replace(/\b0(\d)\b/g,"$1").replace(/\bNo\b/g,"Nov");
 }
 function quickRowLine(row,byDate=false){
-  const vessel=quickDisplayText(row.vessel),port=quickDisplayText(row.port),date=quickDisplayDate(row.date);
+  const dwtRaw=String(row.dwt??"").trim(),n=Number(dwtRaw.replace(/\s/g,"").replace(",",".").replace(/k.*$/i,""));
+  const dwt=dwtRaw&&Number.isFinite(n)?(n>=1000?n/1000:n).toLocaleString("de-DE",{maximumFractionDigits:1})+"k dwt":dwtRaw;
+  const specs=[dwt,row.built?String(row.built)+" blt":""].filter(Boolean).join(" ");
+  const vessel=quickDisplayText(row.vessel)+(specs?" ("+specs+")":""),port=quickDisplayText(row.port),date=quickDisplayDate(row.date);
   const comment=quickDisplayText(String(row.comment??row.direction??"").trim());
-  return byDate?[date,vessel,port].filter(Boolean).join(" – ")+(comment?" ("+comment+")":""):[vessel,port,date,comment].filter(Boolean).join(" – ");
+  return byDate?(date?date+" | ":"")+[vessel,port].filter(Boolean).join(" - ")+(comment?" ("+comment+")":""):[vessel,port,date,comment].filter(Boolean).join(" – ");
 }
 const MN_SORT = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 const POSITION_COLUMNS=[
@@ -977,7 +980,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   function rememberQuickOperator(row){if(!row?.vessel?.trim()||!row.operator?.trim())return;setQuickRememberedOps(p=>({...p,[quickVesselKey(row.vessel)]:{vessel:row.vessel,operator:row.operator.trim()}}));}
   const [quickExcludedOperators,setQuickExcludedOperators]=useState([]);
   const quickOperators=[...new Map(quickRows.map(r=>[quickOperatorKey(r.operator),r.operator||"Unknown"])).entries()];
-  const quickOutputRows=quickRows.filter(r=>!quickExcludedOperators.includes(quickOperatorKey(r.operator)));
+  const quickOutputRows=quickRows.filter(r=>!quickExcludedOperators.includes(quickOperatorKey(r.operator))).map(r=>{const v=allVessels.find(v=>quickVesselKey(v.vessel||v.vessel_name)===quickVesselKey(r.vessel));return {...r,dwt:r.dwt??v?.dwt??"",built:r.built??v?.built??""};});
   const quickEditorRows=useMemo(()=>{
     const key=quickTableSort.key||"date";
     const value=r=>key==="date"?quickDateKey(r.date):key==="updatedAt"?(Date.parse(quickUpdatedValue(r,allVessels))||0):String((key==="direction"?(r.comment??r.direction):r[key])||"");
@@ -993,6 +996,9 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     setQuickRows(rows=>reconcileQuickSelections(rows,allVessels,quickSelectedTags,config,quickUpdatedFilter).map(applyQuickOperator));
   },[quickSelectedTags,quickUpdatedFilter,allVessels,quickRememberedOps]);
   function toggleQuickTag(tag){setQuickSelectedTags(tags=>tags.includes(tag)?tags.filter(t=>t!==tag):[...tags,tag]);}
+  const [quickExportSections,setQuickExportSections]=useState({operator:true,date:true,region:true});
+  const [quickSpecs,setQuickSpecs]=useState(true);
+  const [quickExportStatus,setQuickExportStatus]=useState("");
   const [quickTitle, setQuickTitle] = useState("Available tonnage");
   const [quickReportName,setQuickReportName]=useState("");
   const [activeQuickId,setActiveQuickId]=useState(null);
@@ -1789,7 +1795,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if(listSaveBusy)return;setListSaveBusy(true);setQuickSaveStatus("Saving...");
     try{
       const name=marketReportSaveName(quickReportName||quickTitle,"Quick Positions",quickSaveCopy,savedReports);
-      const payload={report_type:"Quick Positions",report_date:new Date().toISOString().slice(0,10),rate_grid:{__quickEditor:{name,title:quickTitle,rows:quickRows,selectedTags:quickSelectedTags,updatedFilter:quickUpdatedFilter,excludedOperators:quickExcludedOperators,tableSort:quickTableSort}}};
+      const payload={report_type:"Quick Positions",report_date:new Date().toISOString().slice(0,10),rate_grid:{__quickEditor:{name,title:quickTitle,rows:quickRows,selectedTags:quickSelectedTags,updatedFilter:quickUpdatedFilter,excludedOperators:quickExcludedOperators,tableSort:quickTableSort,exportSections:quickExportSections,includeSpecs:quickSpecs}}};
       const query=activeQuickId&&!quickSaveCopy?supabase.from("reports").update(payload).eq("id",activeQuickId):supabase.from("reports").insert([payload]);
       const {data,error}=await query.select("id").single();if(error)throw error;
       rememberQuickOperators();setActiveQuickId(data.id);setQuickReportName(name);setQuickSaveCopy(false);setQuickSaveStatus("Saved ✓");reportLive.saved(data.id);await loadSavedReports();
@@ -1800,7 +1806,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     try{
       const {data,error}=await supabase.from("reports").select("*").eq("id",id).single();if(error)throw error;if(!data||!canApply())return;
       reportLive.loaded();
-      setQuickTitle(savedQuickTitle(data));setQuickReportName(data.rate_grid?.__quickEditor?.name||savedQuickTitle(data));setActiveQuickId(id);setQuickSaveCopy(false);
+      setQuickExportSections({operator:true,date:true,region:true,...data.rate_grid?.__quickEditor?.exportSections});setQuickSpecs(data.rate_grid?.__quickEditor?.includeSpecs!==false);setQuickTitle(savedQuickTitle(data));setQuickReportName(data.rate_grid?.__quickEditor?.name||savedQuickTitle(data));setActiveQuickId(id);setQuickSaveCopy(false);
       setQuickUpdatedFilter(data.rate_grid?.__quickEditor?.updatedFilter||"all");
       setQuickExcludedOperators(data.rate_grid?.__quickEditor?.excludedOperators||[]);
       setQuickTableSort(data.rate_grid?.__quickEditor?.tableSort?.key?data.rate_grid.__quickEditor.tableSort:{key:"date",desc:false});
@@ -1811,7 +1817,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
   const liveReportId=section==="market"?activeMarketReportId:section==="quick"?activeQuickId:section==="poslist"?activePositionId:null;
   const liveReportLabel=section==="market"?`${reportType||"Market"} · ${reportName||reportDate||"New report"}`:section==="quick"?`Quick Positions · ${quickReportName||quickTitle}`:section==="poslist"?`Position List · ${positionReportName||posTitle}`:"Reports";
-  const liveDraft=section==="market"?{reportType,reportDate,reportName,commentary,rateGrid,marketHeadings,intermediateTitle,asiaReport,weeklyHistory,benchmarkRows,driverBullets,tceStats,handy,handyCommentary,handySegments,importedFixingChart,routeColumns,routeTitles,intermediateRoutesLabel,excludedFixtureIds,excludedBenchmarkKeys,excludedCharterers,recipientCharterer,tceEarnings,fixtures,quotes}:section==="quick"?{quickReportName,quickTitle,quickRows,quickSelectedTags,quickUpdatedFilter,quickExcludedOperators,quickTableSort}:{positionReportName,posTitle,posSubtitle,posDate,reportVessels,positionColumns,positionChartSettings,positionCharts,posGroupBy,regionMode,outputSort,sortByDate,segmentNames,positionPreviewWidth};
+  const liveDraft=section==="market"?{reportType,reportDate,reportName,commentary,rateGrid,marketHeadings,intermediateTitle,asiaReport,weeklyHistory,benchmarkRows,driverBullets,tceStats,handy,handyCommentary,handySegments,importedFixingChart,routeColumns,routeTitles,intermediateRoutesLabel,excludedFixtureIds,excludedBenchmarkKeys,excludedCharterers,recipientCharterer,tceEarnings,fixtures,quotes}:section==="quick"?{quickReportName,quickTitle,quickRows,quickSelectedTags,quickUpdatedFilter,quickExcludedOperators,quickTableSort,quickExportSections,quickSpecs}:{positionReportName,posTitle,posSubtitle,posDate,reportVessels,positionColumns,positionChartSettings,positionCharts,posGroupBy,regionMode,outputSort,sortByDate,segmentNames,positionPreviewWidth};
   const reportLive=useReportLive({id:liveReportId,label:liveReportLabel,draft:liveDraft,busy:marketSaveBusy||listSaveBusy,onList:loadSavedReports,onLoad:(id,safe)=>section==="market"?loadReport(id,safe):section==="quick"?loadQuickPositions(id,safe):loadPositionList(id,safe)});
 
   const SB = { background:C.bg3,color:C.tx,fontSize: 11, fontWeight: 600, padding: "6px 10px", borderRadius: 5, cursor: "pointer", border: "1px solid " + C.bd, fontFamily: "inherit", whiteSpace: "nowrap" };
@@ -2149,7 +2155,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     const lines=["|| "+quickDisplayText(quickTitle)+" ||",""];
     byOp.forEach((rows,key)=>{
       const op=quickDisplayText(key);lines.push(whatsapp?"*"+op+"*":op);
-      [...rows].sort((a,b)=>quickCompareDates(a,b)).forEach(r=>lines.push(quickRowLine(r)));
+      [...rows].sort((a,b)=>quickCompareDates(a,b)).forEach(r=>lines.push(quickRowLine(quickSpecs?r:{...r,dwt:"",built:""})));
       lines.push("");
     });
     return lines.join("\n").trim();
@@ -2157,16 +2163,32 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   function buildQuickTextByDate() {
     if (!quickOutputRows.length) return "";
     const sorted=[...quickOutputRows].sort((a,b)=>quickCompareDates(a,b));
-    return ["|| "+quickDisplayText(quickTitle)+" ||","",...sorted.map(r=>quickRowLine(r,true))].join("\n").trim();
+    return ["|| "+quickDisplayText(quickTitle)+" ||","",...sorted.map(r=>quickRowLine(quickSpecs?r:{...r,dwt:"",built:""},true))].join("\n").trim();
   }
 
   function buildQuickTextByRegion(){
     if(!quickOutputRows.length)return "";
     const lines=["|| "+quickDisplayText(quickTitle)+" ||",""];
-    for(const group of quickRegions){const rows=quickOutputRows.filter(r=>quickRegion(r.port,quickRegions)===group.name).sort(quickCompareDates);if(!rows.length)continue;lines.push(group.name);rows.forEach(r=>lines.push(quickRowLine(r,true)));lines.push("");}
+    for(const group of quickRegions){const rows=quickOutputRows.filter(r=>quickRegion(r.port,quickRegions)===group.name).sort(quickCompareDates);if(!rows.length)continue;lines.push(group.name);rows.forEach(r=>lines.push(quickRowLine(quickSpecs?r:{...r,dwt:"",built:""},true)));lines.push("");}
     return lines.join("\n").trim();
   }
   const [quickCopiedRegion,setQuickCopiedRegion]=useState(false);
+  function quickExportHtml(){
+    const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    const groups=[];
+    if(quickExportSections.operator)groups.push(["By operator",buildQuickText()]);
+    if(quickExportSections.date)groups.push(["By date",buildQuickTextByDate()]);
+    if(quickExportSections.region)groups.push(["By region",buildQuickTextByRegion()]);
+    return '<div style="width:1120px;padding:28px;box-sizing:border-box;background:white;color:#173452;font-family:Arial,sans-serif"><h1 style="text-align:center;font-size:24px;border-bottom:2px solid #1b4565;padding-bottom:14px">'+esc(quickDisplayText(quickTitle))+'</h1><table role="presentation" style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:8px"><tr>'+groups.map(([title,text])=>'<td style="vertical-align:top;padding:0"><div style="background:#1b4565;color:white;padding:10px;font-weight:bold">'+title+'</div>'+text.split('\n').slice(2).map((line,i)=>line?'<div style="padding:5px 8px;font-size:12px;line-height:1.4;background:'+(i%2?'#fff':'#eaf3fb')+';overflow-wrap:anywhere">'+esc(line)+'</div>':'<div style="height:8px;background:#d5e7f7"></div>').join('')+'</td>').join('')+'</tr></table></div>';
+  }
+  async function exportQuick(format){
+    if(!Object.values(quickExportSections).some(Boolean)){setQuickExportStatus("Select at least one section");return;}
+    setQuickExportStatus("Preparing…");let host;
+    try{const html=quickExportHtml();
+      if(format==="email"){await navigator.clipboard.write([new ClipboardItem({"text/html":new Blob([html],{type:"text/html"}),"text/plain":new Blob([[quickExportSections.operator?buildQuickText():"",quickExportSections.date?buildQuickTextByDate():"",quickExportSections.region?buildQuickTextByRegion():""].filter(Boolean).join("\n\n")],{type:"text/plain"})})]);setQuickExportStatus("Copied — paste into email");}
+      else {host=document.createElement("div");host.style.cssText="position:fixed;left:-20000px;top:0";host.innerHTML=html;document.body.appendChild(host);const lib=await loadHTI();const url=await lib.toPng(host.firstElementChild,{backgroundColor:"#fff",pixelRatio:2});const link=document.createElement("a");link.download="Quick-Positions.png";link.href=url;link.click();setQuickExportStatus("PNG downloaded");}
+    }catch(e){setQuickExportStatus("Export failed: "+e.message);}finally{host?.remove();}
+  }
   async function copyQuickByRegion(){const text=buildQuickTextByRegion();if(!text)return;try{await navigator.clipboard.writeText(text);setQuickCopiedRegion(true);setTimeout(()=>setQuickCopiedRegion(false),2500);}catch{setQuickParseMsg("Could not copy regional list. Select and copy the preview text.");}}
   const [quickCopiedDate, setQuickCopiedDate] = useState(false);
   async function copyQuickByDate() {
@@ -3302,8 +3324,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                       <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>Step 2 — Check &amp; edit ({quickRows.length} row{quickRows.length !== 1 ? "s" : ""}) — <span style={{ fontWeight: 400, color: C.faint }}>orange = operator not yet matched</span></div>
                       <button onClick={addQuickRow} style={{ fontSize: 12, color: ACCENT, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>+ Add row</button>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 85px 22px", background: ACCENT, color: "#fff", fontSize: 11, fontWeight: 700, padding: "5px 10px", gap: 6, flexShrink: 0 }}>
-                      {[["operator","OPERATOR"],["vessel","VESSEL"],["port","PORT"],["date","DATE"],["direction","COMMENT"],["updatedAt","UPDATED"]].map(([key,label])=><button key={key} onClick={()=>sortQuickColumn(key)} title={key==="updatedAt"?"For selection only — excluded from output":"Sort by "+label} style={{background:"none",border:0,padding:0,color:"inherit",font:"inherit",textAlign:"left",cursor:"pointer"}}>{label}{quickTableSort.key===key?(quickTableSort.desc?" ▼":" ▲"):""}</button>)}<div></div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 65px 55px 0.85fr 0.65fr 1fr 70px 22px", background: ACCENT, color: "#fff", fontSize: 11, fontWeight: 700, padding: "5px 10px", gap: 6, flexShrink: 0 }}>
+                      {[["operator","OPERATOR"],["vessel","VESSEL"],["dwt","DWT"],["built","BLT"],["port","PORT"],["date","DATE"],["direction","COMMENT"],["updatedAt","UPDATED"]].map(([key,label])=><button key={key} onClick={()=>sortQuickColumn(key)} title={key==="updatedAt"?"For selection only — excluded from output":"Sort by "+label} style={{background:"none",border:0,padding:0,color:"inherit",font:"inherit",textAlign:"left",cursor:"pointer"}}>{label}{quickTableSort.key===key?(quickTableSort.desc?" ▼":" ▲"):""}</button>)}<div></div>
                     </div>
                     <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                       {quickEditorRows.map((r, i) => {
@@ -3314,17 +3336,19 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                           if(!["Enter","ArrowDown","ArrowUp"].includes(e.key))return;
                           e.preventDefault();
                           const cells = document.querySelectorAll(".quick-row-input");
-                          const cols = 5; // operator, vessel, port, date, direction
+                          const cols = 7; // operator, vessel, dwt, built, port, date, comment
                           const target = cells[(i+(e.key==="ArrowUp"?-1:1))*cols+fieldIdx];
                           target?.focus();
                         };
                         return (
-                          <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.85fr 0.65fr 1fr 85px 22px", background: i%2===0?"rgba(255,255,255,0.025)":"transparent", padding: "5px 10px", gap: 6, borderTop: "1px solid rgba(58,130,246,0.1)", alignItems: "center" }}>
+                          <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 65px 55px 0.85fr 0.65fr 1fr 70px 22px", background: i%2===0?"rgba(255,255,255,0.025)":"transparent", padding: "5px 10px", gap: 6, borderTop: "1px solid rgba(58,130,246,0.1)", alignItems: "center" }}>
                             <input className="quick-row-input" style={INP(iOp)} value={String(r.operator||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "operator", e.target.value.toUpperCase())} onKeyDown={jumpDown(0)} onBlur={()=>rememberQuickOperator(r)} placeholder="Type operator..." title={r.operator ? r.operator : "Not found in DB — type it here"} />
                             <input className="quick-row-input" style={{ ...INP(), fontWeight: 600 }} value={String(r.vessel||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "vessel", e.target.value.toUpperCase())} onKeyDown={jumpDown(1)} placeholder="VESSEL" />
-                            <input className="quick-row-input" style={INP()} value={String(r.port||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} onKeyDown={jumpDown(2)} placeholder="PORT" />
-                            <input className="quick-row-input" style={INP()} value={String(r.date||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} onKeyDown={jumpDown(3)} placeholder="DATE" />
-                            <input className="quick-row-input" style={{ ...INP(C.dim) }} value={String(r.comment??r.direction??"").toUpperCase()} onChange={e => updateQuickRow(r.id, "direction", e.target.value.toUpperCase())} onKeyDown={jumpDown(4)} placeholder="COMMENT" />
+                            <input className="quick-row-input" style={INP()} value={r.dwt??""} onChange={e=>updateQuickRow(r.id,"dwt",e.target.value)} onKeyDown={jumpDown(2)} placeholder="DWT" />
+                            <input className="quick-row-input" style={INP()} value={r.built??""} onChange={e=>updateQuickRow(r.id,"built",e.target.value)} onKeyDown={jumpDown(3)} placeholder="BLT" />
+                            <input className="quick-row-input" style={INP()} value={String(r.port||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} onKeyDown={jumpDown(4)} placeholder="PORT" />
+                            <input className="quick-row-input" style={INP()} value={String(r.date||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} onKeyDown={jumpDown(5)} placeholder="DATE" />
+                            <input className="quick-row-input" style={{ ...INP(C.dim) }} value={String(r.comment??r.direction??"").toUpperCase()} onChange={e => updateQuickRow(r.id, "direction", e.target.value.toUpperCase())} onKeyDown={jumpDown(6)} placeholder="COMMENT" />
                             <span title="Position last updated — excluded from output" style={{fontSize:10,color:C.dim}}>{quickUpdatedDate(r,allVessels).toUpperCase()}</span>
                             <button onClick={() => deleteQuickRow(r.id)} style={{ background: "none", border: "none", color: "rgba(239,68,68,0.55)", cursor: "pointer", fontSize: 12, padding: 0 }}>✕</button>
                           </div>
@@ -3339,12 +3363,12 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
               {quickRows.length > 0 && (
                 <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>Step 3 — Copy &amp; send</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>Step 3 — Copy &amp; send</div><div style={{display:"flex",gap:8,alignItems:"center",fontSize:11}}><label><input type="checkbox" checked={quickSpecs} onChange={e=>setQuickSpecs(e.target.checked)}/> Include DWT / BLT</label><button style={SB} onClick={()=>exportQuick("email")}>Copy to email</button><button style={SB} onClick={()=>exportQuick("png")}>Download one-page PNG</button><span>{quickExportStatus}</span></div>
 
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8 }}>
                     <div>
-                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:6}}><span style={{fontSize:12,color:C.dim,fontWeight:700}}>By operator</span><div style={{display:"flex",gap:6}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:6}}><span style={{fontSize:12,color:C.dim,fontWeight:700}}><input type="checkbox" checked={quickExportSections.operator} onChange={e=>setQuickExportSections(p=>({...p,operator:e.target.checked}))}/> By operator</span><div style={{display:"flex",gap:6}}>
                         <button onClick={()=>copyQuick(false)} style={{...SB,color:quickCopied?"#43e97b":"#79c0ff",background:quickCopied?"rgba(67,233,123,.15)":C.bg3,borderColor:quickCopied?"#43e97b":C.bd}}>{quickCopied?"✓ Copied!":"Copy by operator"}</button>
                         <button onClick={()=>copyQuick(true)} style={{...SB,color:quickWhatsAppCopied?"#43e97b":"#79c0ff",background:quickWhatsAppCopied?"rgba(67,233,123,.15)":C.bg3,borderColor:quickWhatsAppCopied?"#43e97b":C.bd}}>{quickWhatsAppCopied?"✓ Copied!":"Copy for WhatsApp"}</button>
                       </div></div>
@@ -3353,11 +3377,11 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                       </pre>
                     </div>
                     <div>
-                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:6}}><span style={{fontSize:12,color:C.dim,fontWeight:700}}>By date (ascending)</span><button onClick={copyQuickByDate} style={{...SB,color:quickCopiedDate?"#43e97b":"#79c0ff",background:quickCopiedDate?"rgba(67,233,123,.15)":C.bg3,borderColor:quickCopiedDate?"#43e97b":C.bd}}>{quickCopiedDate?"✓ Copied!":"Copy by date ↑"}</button></div>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:6}}><span style={{fontSize:12,color:C.dim,fontWeight:700}}><input type="checkbox" checked={quickExportSections.date} onChange={e=>setQuickExportSections(p=>({...p,date:e.target.checked}))}/> By date (ascending)</span><button onClick={copyQuickByDate} style={{...SB,color:quickCopiedDate?"#43e97b":"#79c0ff",background:quickCopiedDate?"rgba(67,233,123,.15)":C.bg3,borderColor:quickCopiedDate?"#43e97b":C.bd}}>{quickCopiedDate?"✓ Copied!":"Copy by date ↑"}</button></div>
                       <pre style={{ margin: 0, fontFamily: "monospace", fontSize: 14, color: C.tx, lineHeight: 1.8, whiteSpace: "pre-wrap", wordBreak: "break-word", background: C.bg3, padding: "10px 12px", borderRadius: 5 }}>
                         {buildQuickTextByDate()}
                       </pre>
-                    </div><div><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:6}}><span style={{fontSize:12,color:C.dim,fontWeight:700}}>By region · date ascending</span><button onClick={copyQuickByRegion} style={{...SB,color:quickCopiedRegion?"#43e97b":"#79c0ff"}}>{quickCopiedRegion?"✓ Copied!":"Copy by region"}</button></div><pre style={{margin:0,fontFamily:"monospace",fontSize:14,color:C.tx,lineHeight:1.8,whiteSpace:"pre-wrap",wordBreak:"break-word",background:C.bg3,padding:"10px 12px",borderRadius:5}}>{buildQuickTextByRegion()}</pre></div>
+                    </div><div><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:6}}><span style={{fontSize:12,color:C.dim,fontWeight:700}}><input type="checkbox" checked={quickExportSections.region} onChange={e=>setQuickExportSections(p=>({...p,region:e.target.checked}))}/> By region · date ascending</span><button onClick={copyQuickByRegion} style={{...SB,color:quickCopiedRegion?"#43e97b":"#79c0ff"}}>{quickCopiedRegion?"✓ Copied!":"Copy by region"}</button></div><pre style={{margin:0,fontFamily:"monospace",fontSize:14,color:C.tx,lineHeight:1.8,whiteSpace:"pre-wrap",wordBreak:"break-word",background:C.bg3,padding:"10px 12px",borderRadius:5}}>{buildQuickTextByRegion()}</pre></div>
                   </div>
                 </div>
               )}
