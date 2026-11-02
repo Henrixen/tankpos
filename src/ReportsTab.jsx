@@ -1004,9 +1004,9 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const quickOutputRows=quickRows.filter(r=>!quickExcludedOperators.includes(quickOperatorKey(r.operator))).map(r=>{const v=allVessels.find(v=>quickVesselKey(v.vessel||v.vessel_name)===quickVesselKey(r.vessel));return {...r,dwt:r.dwt??v?.dwt??"",built:r.built??v?.built??""};});
   const quickEditorRows=useMemo(()=>{
     const key=quickTableSort.key||"date";
-    const value=r=>key==="date"?quickDateKey(r.date):key==="updatedAt"?(Date.parse(quickUpdatedValue(r,allVessels))||0):String((key==="direction"?(r.comment??r.direction):r[key])||"");
+    const value=r=>key==="date"?quickDateKey(r.date):key==="updatedAt"?(Date.parse(quickUpdatedValue(r,allVessels))||0):String((key==="direction"?(r.comment??r.direction):key==="regionOverride"?(r.regionOverride||quickRegion(r.port,quickRegions)):r[key])||"");
     return [...quickRows].sort((a,b)=>{const av=value(a),bv=value(b);return (typeof av==="number"?av-bv:av.localeCompare(bv,undefined,{numeric:true,sensitivity:"base"}))*(quickTableSort.desc?-1:1);});
-  },[quickRows,quickTableSort,allVessels]);
+  },[quickRows,quickTableSort,allVessels,quickRegions]);
   function toggleQuickOperator(key){setQuickExcludedOperators(p=>p.includes(key)?p.filter(k=>k!==key):[...p,key]);}
   function sortQuickColumn(key){setQuickTableSort(p=>({key,desc:p.key===key?!p.desc:false}));}
   const [quickSelectedTags,setQuickSelectedTags]=useState([]);
@@ -2190,7 +2190,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   function buildQuickTextByRegion(){
     if(!quickOutputRows.length)return "";
     const lines=["|| "+quickDisplayText(quickTitle)+" ||",""];
-    for(const group of quickRegions){const rows=quickOutputRows.filter(r=>quickRegion(r.port,quickRegions)===group.name).sort(quickCompareDates);if(!rows.length)continue;lines.push(group.name);rows.forEach(r=>lines.push(quickRowLine(quickSpecs?r:{...r,dwt:"",built:""},true)));lines.push("");}
+    for(const group of [...quickRegions,...[...new Set(quickOutputRows.map(r=>r.regionOverride).filter(Boolean))].filter(name=>!quickRegions.some(g=>g.name===name)).map(name=>({name}))]){const rows=quickOutputRows.filter(r=>(r.regionOverride||quickRegion(r.port,quickRegions))===group.name).sort(quickCompareDates);if(!rows.length)continue;lines.push(group.name);rows.forEach(r=>lines.push(quickRowLine(quickSpecs?r:{...r,dwt:"",built:""},true)));lines.push("");}
     return lines.join("\n").trim();
   }
   const [quickCopiedRegion,setQuickCopiedRegion]=useState(false);
@@ -2200,7 +2200,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     for(const row of quickOutputRows){
       const open=quickDateKey(row.date);if(open===Number.MAX_SAFE_INTEGER){unknown++;continue;}
       const offset=open-today;
-      if(offset<0)overdue++;else buckets[offset<=1?0:offset<=4?1:offset<=7?2:3]++;
+      if(offset<0)overdue++;else buckets[offset<=1?0:offset<=4?1:offset<=8?2:3]++;
       const updated=reportDay(row.updatedAt||row._quickAddedAt);if(updated!==null&&open>=updated&&open-updated<=60){total+=open-updated;count++;}
     }
     return {buckets,unknown,overdue,count,average:count?total/count:null,todayText};
@@ -2213,17 +2213,18 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if(quickExportSections.region)groups.push(["By region",buildQuickTextByRegion()]);
     const summary=quickWindowSummary();
     const sectionTitle=text=>'<div style="margin-top:14px;margin-bottom:8px;padding:10px 12px;background:#d5e6f8;border-left:4px solid #3988d0;color:#122f51;font-size:14px;font-weight:bold;text-transform:uppercase">'+esc(text)+'</div>';
-    const headingSet=new Set(quickRegions.map(g=>g.name));
+    const headingSet=new Set([...quickRegions.map(g=>g.name),...quickOutputRows.map(r=>r.regionOverride).filter(Boolean)]);
     const columns=groups.map(([title,text])=>'<td style="vertical-align:top;padding:0"><div style="background:#1b4565;color:white;padding:10px;font-weight:bold">'+title+'</div>'+text.split('\n').slice(2).map((line,i)=>{
       if(!line)return '';
       const heading=title==="By region"?headingSet.has(line):title==="By operator"&&!line.includes(" – ");
       return heading?sectionTitle(line):'<div style="padding:6px 8px;border-bottom:1px solid #dce7f2;font-size:12px;line-height:1.45;background:'+(i%2?'#fff':'#edf5fc')+';overflow-wrap:anywhere">'+esc(line)+'</div>';
     }).join('')+'</td>').join('');
-    const max=Math.max(1,...summary.buckets),labels=["Prompt (today/tomorrow)","Open 3–5d","Open 6–8 days","Open later"];
+    const max=Math.max(1,...summary.buckets),labels=["Today / Tomorrow","Open in 3-5d","Open in 6-9d","Open in >10d"];
     const bars='<table role="presentation" style="width:100%;border-collapse:collapse">'+labels.map((label,i)=>'<tr><td style="width:200px;padding:8px;color:#23486a;font-size:13px">'+label+'</td><td style="padding:6px;background:#f3f7fb"><div style="width:'+Math.max(0,summary.buckets[i]/max*100)+'%;height:23px;background:#3988cf;border-radius:3px"></div></td><td style="width:45px;text-align:right;font-weight:bold;color:#173452">'+summary.buckets[i]+'</td></tr>').join('')+'</table>';
-    const fixing=quickExportSections.fixing?sectionTitle("Fixing window · current list")+'<div style="padding:12px;background:#edf5fc;font-size:14px"><b style="font-size:24px;color:#1c568a">'+(summary.average===null?'—':summary.average.toFixed(1))+' days</b> · Average update-to-open interval · '+summary.count+' dated positions</div><div style="font-size:11px;color:#61778b;padding:6px">Uses each included position’s Updated date and Open date (valid intervals 0–60 days); this is a current-list indication, not a record of concluded fixtures.</div>':'';
-    const availability=quickExportSections.availability?sectionTitle("Next available · "+summary.todayText)+bars+'<div style="font-size:11px;color:#61778b;padding:6px">Counts included position rows. Today is day 1: Prompt = today/tomorrow; day 3–5 = 2–4 days ahead; day 6–8 = 5–7 days ahead; later = 8+ days ahead. '+summary.overdue+' past-date and '+summary.unknown+' undated rows are excluded from bars.</div>':'';
-    return '<div style="width:1120px;padding:28px;box-sizing:border-box;background:white;color:#173452;font-family:Arial,sans-serif"><table role="presentation" style="width:100%;background:#102743;color:#fff;margin-bottom:16px"><tr><td style="padding:18px;width:38%;font-size:19px;font-weight:bold">'+esc(quickDisplayText(quickTitle))+'</td><td style="text-align:center;width:30%"><img src="'+STEEM_LOGO+'" style="width:180px;background:white;padding:6px;border-radius:4px" /></td><td style="padding:18px;text-align:right;font-size:12px">'+esc(new Date().toLocaleDateString("en-GB",{timeZone:"Europe/Oslo",day:"numeric",month:"short",year:"numeric"}))+'</td></tr></table>'+fixing+availability+(groups.length?'<table role="presentation" style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:8px"><tr>'+columns+'</tr></table>':'')+'</div>';
+    const fixing=quickExportSections.fixing?sectionTitle("Fixing window")+'<div style="padding:18px;background:#edf5fc"><b style="font-size:32px;color:#1c568a">'+(summary.average===null?'—':summary.average.toFixed(1))+' days</b><div style="margin-top:8px;font-size:12px;color:#315c80">Average update-to-open interval</div></div>':'';
+    const availability=quickExportSections.availability?sectionTitle("Next Available")+bars:'';
+    const top=(fixing||availability)?'<table role="presentation" style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:8px"><tr>'+(fixing?'<td style="vertical-align:top;width:'+(availability?'32%':'100%')+'">'+fixing+'</td>':'')+(availability?'<td style="vertical-align:top">'+availability+'</td>':'')+'</tr></table>':'';
+    return '<div style="width:1120px;padding:28px;box-sizing:border-box;background:white;color:#173452;font-family:Arial,sans-serif"><table role="presentation" style="width:100%;background:#102743;color:#fff;margin-bottom:16px"><tr><td style="padding:18px;width:38%;font-size:19px;font-weight:bold">'+esc(quickDisplayText(quickTitle))+'</td><td style="text-align:center;width:30%"><img src="'+STEEM_LOGO+'" style="width:180px;background:white;padding:6px;border-radius:4px" /></td><td style="padding:18px;text-align:right;font-size:12px">'+esc(new Date().toLocaleDateString("en-GB",{timeZone:"Europe/Oslo",day:"numeric",month:"short",year:"numeric"}))+'</td></tr></table>'+top+(groups.length?'<table role="presentation" style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:8px"><tr>'+columns+'</tr></table>':'')+'</div>';
   }
   async function exportQuick(format){
     if(!Object.values(quickExportSections).some(Boolean)){setQuickExportStatus("Select at least one section");return;}
@@ -3368,8 +3369,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                       <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>Step 2 — Check &amp; edit ({quickRows.length} row{quickRows.length !== 1 ? "s" : ""}) — <span style={{ fontWeight: 400, color: C.faint }}>orange = operator not yet matched</span></div>
                       <button onClick={addQuickRow} style={{ fontSize: 12, color: ACCENT, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>+ Add row</button>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 65px 55px 0.85fr 0.65fr 1fr 70px 22px", background: ACCENT, color: "#fff", fontSize: 11, fontWeight: 700, padding: "5px 10px", gap: 6, flexShrink: 0 }}>
-                      {[["operator","OPERATOR"],["vessel","VESSEL"],["dwt","DWT"],["built","BLT"],["port","PORT"],["date","DATE"],["direction","COMMENT"],["updatedAt","UPDATED"]].map(([key,label])=><button key={key} onClick={()=>sortQuickColumn(key)} title={key==="updatedAt"?"For selection only — excluded from output":"Sort by "+label} style={{background:"none",border:0,padding:0,color:"inherit",font:"inherit",textAlign:"left",cursor:"pointer"}}>{label}{quickTableSort.key===key?(quickTableSort.desc?" ▼":" ▲"):""}</button>)}<div></div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 65px 55px 0.85fr 100px 0.65fr 1fr 70px 22px", background: ACCENT, color: "#fff", fontSize: 11, fontWeight: 700, padding: "5px 10px", gap: 6, flexShrink: 0 }}>
+                      {[["operator","OPERATOR"],["vessel","VESSEL"],["dwt","DWT"],["built","BLT"],["port","PORT"],["regionOverride","REGION"],["date","DATE"],["direction","COMMENT"],["updatedAt","UPDATED"]].map(([key,label])=><button key={key} onClick={()=>sortQuickColumn(key)} title={key==="updatedAt"?"For selection only — excluded from output":"Sort by "+label} style={{background:"none",border:0,padding:0,color:"inherit",font:"inherit",textAlign:"left",cursor:"pointer"}}>{label}{quickTableSort.key===key?(quickTableSort.desc?" ▼":" ▲"):""}</button>)}<div></div>
                     </div>
                     <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                       {quickEditorRows.map((r, i) => {
@@ -3380,19 +3381,20 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                           if(!["Enter","ArrowDown","ArrowUp"].includes(e.key))return;
                           e.preventDefault();
                           const cells = document.querySelectorAll(".quick-row-input");
-                          const cols = 7; // operator, vessel, dwt, built, port, date, comment
+                          const cols = 8; // operator, vessel, dwt, built, port, region, date, comment
                           const target = cells[(i+(e.key==="ArrowUp"?-1:1))*cols+fieldIdx];
                           target?.focus();
                         };
                         return (
-                          <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 65px 55px 0.85fr 0.65fr 1fr 70px 22px", background: i%2===0?"rgba(255,255,255,0.025)":"transparent", padding: "5px 10px", gap: 6, borderTop: "1px solid rgba(58,130,246,0.1)", alignItems: "center" }}>
+                          <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 65px 55px 0.85fr 100px 0.65fr 1fr 70px 22px", background: i%2===0?"rgba(255,255,255,0.025)":"transparent", padding: "5px 10px", gap: 6, borderTop: "1px solid rgba(58,130,246,0.1)", alignItems: "center" }}>
                             <input className="quick-row-input" style={INP(iOp)} value={String(r.operator||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "operator", e.target.value.toUpperCase())} onKeyDown={jumpDown(0)} onBlur={()=>rememberQuickOperator(r)} placeholder="Type operator..." title={r.operator ? r.operator : "Not found in DB — type it here"} />
                             <input className="quick-row-input" style={{ ...INP(), fontWeight: 600 }} value={String(r.vessel||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "vessel", e.target.value.toUpperCase())} onKeyDown={jumpDown(1)} placeholder="VESSEL" />
                             <input className="quick-row-input" style={INP()} value={r.dwt??""} onChange={e=>updateQuickRow(r.id,"dwt",e.target.value)} onKeyDown={jumpDown(2)} placeholder="DWT" />
                             <input className="quick-row-input" style={INP()} value={r.built??""} onChange={e=>updateQuickRow(r.id,"built",e.target.value)} onKeyDown={jumpDown(3)} placeholder="BLT" />
                             <input className="quick-row-input" style={INP()} value={String(r.port||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} onKeyDown={jumpDown(4)} placeholder="PORT" />
-                            <input className="quick-row-input" style={INP()} value={String(r.date||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} onKeyDown={jumpDown(5)} placeholder="DATE" />
-                            <input className="quick-row-input" style={{ ...INP(C.dim) }} value={String(r.comment??r.direction??"").toUpperCase()} onChange={e => updateQuickRow(r.id, "direction", e.target.value.toUpperCase())} onKeyDown={jumpDown(6)} placeholder="COMMENT" />
+                            <select className="quick-row-input" aria-label={`Region for ${r.vessel}`} style={{...INP(),background:C.bg3,color:r.regionOverride?C.tx:C.dim}} value={r.regionOverride||""} onChange={e=>updateQuickRow(r.id,"regionOverride",e.target.value)} onKeyDown={jumpDown(5)}><option value="">Auto · {quickRegion(r.port,quickRegions)}</option>{r.regionOverride&&!quickRegions.some(g=>g.name===r.regionOverride)&&<option value={r.regionOverride}>{r.regionOverride}</option>}{quickRegions.map(g=><option key={g.name} value={g.name}>{g.name}</option>)}</select>
+                            <input className="quick-row-input" style={INP()} value={String(r.date||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} onKeyDown={jumpDown(6)} placeholder="DATE" />
+                            <input className="quick-row-input" style={{ ...INP(C.dim) }} value={String(r.comment??r.direction??"").toUpperCase()} onChange={e => updateQuickRow(r.id, "direction", e.target.value.toUpperCase())} onKeyDown={jumpDown(7)} placeholder="COMMENT" />
                             <span title="Position last updated — excluded from output" style={{fontSize:10,color:C.dim}}>{quickUpdatedDate(r,allVessels).toUpperCase()}</span>
                             <button onClick={() => deleteQuickRow(r.id)} style={{ background: "none", border: "none", color: "rgba(239,68,68,0.55)", cursor: "pointer", fontSize: 12, padding: 0 }}>✕</button>
                           </div>
