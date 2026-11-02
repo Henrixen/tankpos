@@ -1,5 +1,5 @@
 // CACHE_BUSTER_030
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "./supabaseclient";
 import { isMobile } from "./constants";
 import { enrichV, normaliseCargo as normaliseCargoBase, mergeVessels, toISODate } from "./utils";
@@ -14,6 +14,19 @@ import {dedupePositions,positionEditor,selectPositionOverrides} from "./Position
 const mapBrokerPosition=r=>({...mapPositionBase(r),entered_by:r.entered_by||null});
 const applyBrokerOverride=(v,o)=>{const merged=applyOverrideBase(v,o);const source=v._brokerSource||{};const baseTime=source.updated_at||v._brokerSourceUpdatedAt||v.updatedAt||"";const positionTime=o?.position_updated_at;return {...merged,_positionName:v._positionName||source.vessel_name||v.vessel,vessel:o?.display_name||v.vessel,subTags:Array.isArray(o?.sub_tags)?o.sub_tags:[],updatedAt:positionTime&&Date.parse(positionTime)>Date.parse(baseTime||"1970-01-01")?positionTime:baseTime,entered_by:o?o.entered_by||null:v.entered_by||null};};
 const normaliseCargo=r=>({...normaliseCargoBase(r),_brokerRaw:{...r}});
+
+// One display format for manual, parsed and external position dates.
+function positionDateDisplay(value){
+  if(value==null||value==="")return value;
+  const text=String(value).trim();
+  const months=["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+  const iso=text.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
+  if(iso){const month=Number(iso[2]),day=Number(iso[3]);if(month>=1&&month<=12&&day>=1&&day<=31)return `${day} ${months[month-1]}`;}
+  const named=text.match(/^(\d{1,2})[\s-]+(JAN(?:UARY)?|FEB(?:RUARY)?|MAR(?:CH)?|APR(?:IL)?|MAY|JUN(?:E)?|JUL(?:Y)?|AUG(?:UST)?|SEP(?:TEMBER)?|OCT(?:OBER)?|NOV(?:EMBER)?|DEC(?:EMBER)?)(?:[\s-]+(\d{4}))?$/i);
+  if(named&&Number(named[1])>=1&&Number(named[1])<=31)return `${Number(named[1])} ${named[2].slice(0,3).toUpperCase()}${named[3]?" "+named[3]:""}`;
+  if(/^ppt$/i.test(text))return "PPT";
+  return value;
+}
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function TankPos(){
@@ -581,7 +594,8 @@ export default function TankPos(){
 
   useEffect(()=>{const refresh=()=>fetchPositions();window.addEventListener("position-subtags-seeded",refresh);return()=>window.removeEventListener("position-subtags-seeded",refresh);},[]);
 
-  const props={positionsReady,vessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
+  const displayVessels=useMemo(()=>vessels.map(v=>{const date=positionDateDisplay(v.date);return date===v.date?v:{...v,date};}),[vessels]);
+  const props={positionsReady,vessels:displayVessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
   return <DesktopApp {...props}/>;
 }
 
