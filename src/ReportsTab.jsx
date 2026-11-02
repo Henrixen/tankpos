@@ -429,11 +429,16 @@ function quickDisplayText(value) {
   return String(value || "").toLowerCase().replace(/[\p{L}\p{N}]+/gu, word => QUICK_ABBREVIATIONS.has(word.toUpperCase()) ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1));
 }
 function quickDisplayDate(value) {
-  const original=String(value||"").trim();
-  const raw=/^(ppt|prompt|today)$/i.test(original)?new Date().toLocaleDateString("en-CA"):original.replace(/(?<=\d)[-–](?=[A-Za-z])/g," ");
+  const original=String(value??"").trim();
+  const today=new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Oslo"});
+  const raw=/^(ppt|prompt|today)$/i.test(original)?today:original;
   const iso=raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
-  if(iso){const month=Number(iso[2])-1;return month>=0&&month<12?Number(iso[3])+" "+quickDisplayText(MN_SORT[month]):raw;}
-  return quickDisplayText(raw).replace(/\b0(\d)\b/g,"$1").replace(/\bNo\b/g,"Nov");
+  if(iso){const month=Number(iso[2])-1;return month>=0&&month<12?Number(iso[3])+" "+MN_SORT[month]:raw.toUpperCase();}
+  return raw.toUpperCase().replace(/(\d)[-–](?=[A-Z])/g,"$1 ").replace(/\b0(\d)\b/g,"$1").replace(/\s+/g," ");
+}
+function QuickPositionDateInput({value,onChange,onCommit,...props}){
+  const [focused,setFocused]=useState(false);
+  return <input {...props} value={focused?String(value??""):quickDisplayDate(value)} onFocus={()=>setFocused(true)} onChange={onChange} onBlur={()=>{setFocused(false);const formatted=/^(ppt|prompt|today)$/i.test(String(value??"").trim())?"PPT":quickDisplayDate(value);if(formatted!==String(value??""))onCommit(formatted);}}/>;
 }
 function quickRowLine(row,byDate=false){
   const dwtRaw=String(row.dwt??"").trim(),n=Number(dwtRaw.replace(/\s/g,"").replace(",",".").replace(/k.*$/i,""));
@@ -2237,8 +2242,17 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if(!Object.values(quickExportSections).some(Boolean)){setQuickExportStatus("Select at least one section");return;}
     setQuickExportStatus("Preparing…");let host;
     try{const html=quickExportHtml();
-      if(format==="email"){await navigator.clipboard.write([new ClipboardItem({"text/html":new Blob([html],{type:"text/html"}),"text/plain":new Blob([[quickExportSections.operator?buildQuickText():"",quickExportSections.date?buildQuickTextByDate():"",quickExportSections.region?buildQuickTextByRegion():"",quickExportSections.fixing?"Fixing window: "+(quickWindowSummary().average?.toFixed(1)??"—")+" days (update-to-open)":"",quickExportSections.availability?"Next available: "+quickWindowSummary().buckets.join(" | "):""].filter(Boolean).join("\n\n")],{type:"text/plain"})})]);setQuickExportStatus("Copied — paste into email");}
-      else {host=document.createElement("div");host.style.cssText="position:fixed;left:-20000px;top:0";host.innerHTML=html;document.body.appendChild(host);const lib=await loadHTI();const url=await lib.toPng(host.firstElementChild,{backgroundColor:"#fff",pixelRatio:2});const link=document.createElement("a");link.download="Quick-Positions.png";link.href=url;link.click();setQuickExportStatus("PNG downloaded");}
+      host=document.createElement("div");host.style.cssText="position:fixed;left:-20000px;top:0";host.innerHTML=html;document.body.appendChild(host);
+      await document.fonts?.ready;
+      const lib=await loadHTI(),node=host.firstElementChild;
+      if(format==="email"){
+        const blob=await lib.toBlob(node,{backgroundColor:"#fff",pixelRatio:2});
+        if(!blob)throw new Error("Could not render the report image. Please try again.");
+        await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);
+        setQuickExportStatus("Copied — paste into your email body.");
+      }else{
+        const url=await lib.toPng(node,{backgroundColor:"#fff",pixelRatio:2});const link=document.createElement("a");link.download="Quick-Positions.png";link.href=url;link.click();setQuickExportStatus("PNG downloaded");
+      }
     }catch(e){setQuickExportStatus("Export failed: "+e.message);}finally{host?.remove();}
   }
   async function copyQuickByRegion(){const text=buildQuickTextByRegion();if(!text)return;try{await navigator.clipboard.writeText(text);setQuickCopiedRegion(true);setTimeout(()=>setQuickCopiedRegion(false),2500);}catch{setQuickParseMsg("Could not copy regional list. Select and copy the preview text.");}}
@@ -3400,7 +3414,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                             <input className="quick-row-input" style={INP()} value={r.built??""} onChange={e=>updateQuickRow(r.id,"built",e.target.value)} onKeyDown={jumpDown(3)} placeholder="BLT" />
                             <input className="quick-row-input" style={INP()} value={String(r.port||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "port", e.target.value.toUpperCase())} onKeyDown={jumpDown(4)} placeholder="PORT" />
                             <select className="quick-row-input" aria-label={`Region for ${r.vessel}`} style={{...INP(),background:C.bg3,color:r.regionOverride?C.tx:C.dim}} value={r.regionOverride||""} onChange={e=>updateQuickRow(r.id,"regionOverride",e.target.value)} onKeyDown={jumpDown(5)}><option value="">Auto · {quickRegion(r.port,quickRegions)}</option>{r.regionOverride&&!quickRegions.some(g=>g.name===r.regionOverride)&&<option value={r.regionOverride}>{r.regionOverride}</option>}{quickRegions.map(g=><option key={g.name} value={g.name}>{g.name}</option>)}</select>
-                            <input className="quick-row-input" style={INP()} value={String(r.date||"").toUpperCase()} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} onKeyDown={jumpDown(6)} placeholder="DATE" />
+                            <QuickPositionDateInput className="quick-row-input" style={INP()} value={r.date||""} onChange={e => updateQuickRow(r.id, "date", e.target.value.toUpperCase())} onCommit={value=>updateQuickRow(r.id,"date",value)} onKeyDown={jumpDown(6)} placeholder="DATE" />
                             <input className="quick-row-input" style={{ ...INP(C.dim) }} value={String(r.comment??r.direction??"").toUpperCase()} onChange={e => updateQuickRow(r.id, "direction", e.target.value.toUpperCase())} onKeyDown={jumpDown(7)} placeholder="COMMENT" />
                             <span title="Position last updated — excluded from output" style={{fontSize:10,color:C.dim}}>{quickUpdatedDate(r,allVessels).toUpperCase()}</span>
                             <button onClick={() => deleteQuickRow(r.id)} style={{ background: "none", border: "none", color: "rgba(239,68,68,0.55)", cursor: "pointer", fontSize: 12, padding: 0 }}>✕</button>
