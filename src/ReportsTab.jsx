@@ -1,4 +1,4 @@
-import {useWorkspacePreferences} from "./BrokerWorkspace";
+import {useBrokerSession,brokerRpc} from "./BrokerWorkspace";
 import {useReportLive,ReportLiveStatus} from "./ReportLive";
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from "react";
 import { C } from "./constants";
@@ -394,7 +394,7 @@ function quickRegion(port,rules=QUICK_REGION_DEFAULTS){
 function quickDateKey(value,reference=new Date()){return reportDay(String(value||"").replace(/(?<=\d)[-–](?=[A-Za-z])/g," "),reference)??Number.MAX_SAFE_INTEGER;}
 function quickCompareDates(a,b){const n=quickDateKey(a.date)-quickDateKey(b.date);return n||String(a.vessel||"").localeCompare(String(b.vessel||""),undefined,{sensitivity:"base"});}
 function QuickPositionSettings({regions,setRegions,operators,setOperators,remember}){
- return <details style={{background:"#0e1d32",border:"1px solid #294767",borderRadius:6,padding:10,marginBottom:10,color:"#b7d9fa",fontSize:11}}><summary style={{cursor:"pointer",fontWeight:700}}>Quick-list settings · Regions &amp; remembered operators</summary><p>Settings are saved for your user. Port aliases match whole words; the longest matching alias wins. Unrecognised ports go to Other. No AI calls are used.</p>{regions.map((g,i)=><label key={i} style={{display:"grid",gridTemplateColumns:"80px 1fr",gap:8,marginBottom:6}}><span>{g.name==="Other"?<b>Other</b>:<><input aria-label={`Region name ${i+1}`} value={g.name} onChange={e=>setRegions(p=>p.map((x,j)=>i===j?{...x,name:e.target.value}:x))} style={{width:75,boxSizing:"border-box",background:"#14283e",color:"#d5e7fa",border:"1px solid #34516e"}}/><button type="button" aria-label={`Remove region ${g.name}`} onClick={()=>setRegions(p=>p.filter((_,j)=>j!==i))} style={{color:"#ff808b",background:"transparent",border:0,cursor:"pointer"}}>×</button></>}</span>{g.name!=="Other"?<textarea aria-label={`Ports in ${g.name}`} value={g.aliases} onChange={e=>setRegions(p=>p.map((x,j)=>i===j?{...x,aliases:e.target.value}:x))} rows={2} style={{background:"#14283e",color:"#d5e7fa",border:"1px solid #34516e",borderRadius:4,width:"100%",boxSizing:"border-box",font:"inherit"}}/>:<span>All unmatched ports</span>}</label>)}<button type="button" onClick={()=>setRegions(p=>[...p.filter(g=>g.name!=="Other"),{name:"New region",aliases:""},...p.filter(g=>g.name==="Other")])} style={{marginRight:8}}>+ Add region</button><button type="button" onClick={()=>setRegions(QUICK_REGION_DEFAULTS)} style={{marginRight:8}}>Reset region aliases</button><button type="button" onClick={remember}>Remember operators in this list</button><p>Manual operator/owner matches are reused for this quick list only; the master vessel database is unchanged.</p>{Object.entries(operators).map(([key,v])=><div key={key} style={{display:"flex",gap:8,marginTop:4}}><span style={{minWidth:150}}>{v.vessel||key}</span><input aria-label={`Remembered operator ${v.vessel||key}`} value={v.operator||""} onChange={e=>setOperators(p=>({...p,[key]:{...p[key],operator:e.target.value.toUpperCase()}}))} style={{background:"#14283e",color:"#d5e7fa",border:"1px solid #34516e"}}/><button type="button" onClick={()=>setOperators(p=>{const n={...p};delete n[key];return n;})}>Forget</button></div>)}</details>;
+ return <details style={{background:"#0e1d32",border:"1px solid #294767",borderRadius:6,padding:10,marginBottom:10,color:"#b7d9fa",fontSize:11}}><summary style={{cursor:"pointer",fontWeight:700}}>Quick-list settings · Regions &amp; remembered operators</summary><p>Settings are shared with all colleagues. Click Save shared settings after changing regions or remembered operators. Port aliases match whole words; the longest matching alias wins. Unrecognised ports go to Other. No AI calls are used.</p>{regions.map((g,i)=><label key={i} style={{display:"grid",gridTemplateColumns:"80px 1fr",gap:8,marginBottom:6}}><span>{g.name==="Other"?<b>Other</b>:<><input aria-label={`Region name ${i+1}`} value={g.name} onChange={e=>setRegions(p=>p.map((x,j)=>i===j?{...x,name:e.target.value}:x))} style={{width:75,boxSizing:"border-box",background:"#14283e",color:"#d5e7fa",border:"1px solid #34516e"}}/><button type="button" aria-label={`Remove region ${g.name}`} onClick={()=>setRegions(p=>p.filter((_,j)=>j!==i))} style={{color:"#ff808b",background:"transparent",border:0,cursor:"pointer"}}>×</button></>}</span>{g.name!=="Other"?<textarea aria-label={`Ports in ${g.name}`} value={g.aliases} onChange={e=>setRegions(p=>p.map((x,j)=>i===j?{...x,aliases:e.target.value}:x))} rows={2} style={{background:"#14283e",color:"#d5e7fa",border:"1px solid #34516e",borderRadius:4,width:"100%",boxSizing:"border-box",font:"inherit"}}/>:<span>All unmatched ports</span>}</label>)}<button type="button" onClick={()=>setRegions(p=>[...p.filter(g=>g.name!=="Other"),{name:"New region",aliases:""},...p.filter(g=>g.name==="Other")])} style={{marginRight:8}}>+ Add region</button><button type="button" onClick={()=>setRegions(QUICK_REGION_DEFAULTS)} style={{marginRight:8}}>Reset region aliases</button><button type="button" onClick={remember}>Remember operators in this list</button><p>Manual operator/owner matches are reused in Quick Positions for all users; the master vessel database is unchanged.</p>{Object.entries(operators).map(([key,v])=><div key={key} style={{display:"flex",gap:8,marginTop:4}}><span style={{minWidth:150}}>{v.vessel||key}</span><input aria-label={`Remembered operator ${v.vessel||key}`} value={v.operator||""} onChange={e=>setOperators(p=>({...p,[key]:{...p[key],operator:e.target.value.toUpperCase()}}))} style={{background:"#14283e",color:"#d5e7fa",border:"1px solid #34516e"}}/><button type="button" onClick={()=>setOperators(p=>{const n={...p};delete n[key];return n;})}>Forget</button></div>)}</details>;
 }
 const quickOperatorKey = value => String(value || "Unknown").trim().toUpperCase();
 function quickDisplayText(value) {
@@ -949,7 +949,29 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [quickTableSort,setQuickTableSort]=useState({key:"date",desc:false});
   const [quickRememberedOps,setQuickRememberedOps]=useState({});
   const [quickRegions,setQuickRegions]=useState(QUICK_REGION_DEFAULTS);
-  useWorkspacePreferences("quickPositions",{operators:quickRememberedOps,regions:quickRegions},p=>{setQuickRememberedOps(p.operators||{});setQuickRegions(Array.isArray(p.regions)&&p.regions.length?p.regions:QUICK_REGION_DEFAULTS);},{operators:{},regions:QUICK_REGION_DEFAULTS});
+  const quickSession=useBrokerSession();
+  const [quickSharedStatus,setQuickSharedStatus]=useState("Loading shared settings…");
+  const quickShared=useRef({version:0,loaded:false,baseline:"",busy:false});
+  const quickSharedValue={operators:quickRememberedOps,regions:quickRegions};
+  const quickSharedLatest=useRef(quickSharedValue);quickSharedLatest.current=quickSharedValue;
+  const quickSharedSerialized=JSON.stringify(quickSharedValue);
+  async function loadQuickShared(force=false){
+    const st=quickShared.current;if(!quickSession||st.busy||(!force&&st.loaded&&JSON.stringify(quickSharedLatest.current)!==st.baseline))return;
+    st.busy=true;
+    try{const data=await brokerRpc("broker_quick_settings_get",{p_token:quickSession.token});
+      const personal=quickSession.settings?.quickPositions;
+      const next=data.settings||{operators:personal?.operators||{},regions:personal?.regions||QUICK_REGION_DEFAULTS};
+      if(force||!st.loaded||JSON.stringify(quickSharedLatest.current)===st.baseline){st.version=data.version;st.loaded=true;st.baseline=JSON.stringify(next);setQuickRememberedOps(next.operators||{});setQuickRegions(next.regions||QUICK_REGION_DEFAULTS);setQuickSharedStatus(data.settings?"Shared settings loaded":"Personal settings ready — click Save shared settings to share them");}
+    }catch(e){setQuickSharedStatus(e.message);}finally{st.busy=false;}
+  }
+  async function saveQuickShared(){
+    const st=quickShared.current;if(!quickSession||!st.loaded||st.busy)return;
+    const next=quickSharedLatest.current;st.busy=true;setQuickSharedStatus("Saving shared settings…");
+    try{const data=await brokerRpc("broker_quick_settings_save",{p_token:quickSession.token,p_version:st.version,p_settings:next});st.version=data.version;st.baseline=JSON.stringify(next);setQuickSharedStatus("Shared settings saved ✓");}
+    catch(e){setQuickSharedStatus(e.message+" — reload shared settings before retrying if a colleague changed them.");}finally{st.busy=false;}
+  }
+  useEffect(()=>{quickShared.current={version:0,loaded:false,baseline:"",busy:false};loadQuickShared(true);const timer=setInterval(()=>loadQuickShared(),15000);return()=>clearInterval(timer);},[quickSession?.token]);
+
   function applyQuickOperator(row){const hit=quickRememberedOps[quickVesselKey(row.vessel)];return hit?.operator?{...row,operator:hit.operator}:row;}
   function rememberQuickOperators(){setQuickRememberedOps(p=>{const n={...p};quickRows.forEach(r=>{if(r.vessel?.trim()&&r.operator?.trim())n[quickVesselKey(r.vessel)]={vessel:r.vessel,operator:r.operator.trim()};});return n;});}
   function rememberQuickOperator(row){if(!row?.vessel?.trim()||!row.operator?.trim())return;setQuickRememberedOps(p=>({...p,[quickVesselKey(row.vessel)]:{vessel:row.vessel,operator:row.operator.trim()}}));}
@@ -3252,7 +3274,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
             </div>
 
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-              <QuickPositionSettings regions={quickRegions} setRegions={setQuickRegions} operators={quickRememberedOps} setOperators={setQuickRememberedOps} remember={rememberQuickOperators}/>
+              <div style={{fontSize:11,color:"#a8d8ff",marginBottom:8}}>{quickSharedStatus} <button onClick={saveQuickShared}>Save shared settings</button> <button onClick={()=>{if(JSON.stringify(quickSharedLatest.current)===quickShared.current.baseline||window.confirm("Discard unsaved shared-setting changes and reload?"))loadQuickShared(true);}}>Reload shared settings</button></div><QuickPositionSettings regions={quickRegions} setRegions={setQuickRegions} operators={quickRememberedOps} setOperators={setQuickRememberedOps} remember={rememberQuickOperators}/>
               {/* Step 1 (25%) + Step 2 (75%) side by side */}
               <div style={{ display: "flex", gap: 10, alignItems: "stretch" }}>
                 {/* Step 1 */}
