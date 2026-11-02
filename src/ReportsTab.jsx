@@ -24,9 +24,26 @@ function GrowText({value,style,...props}){
  useLayoutEffect(()=>{const el=ref.current;if(el){el.style.height="auto";el.style.height=Math.max(el.scrollHeight,24)+"px";}},[value]);
  return <textarea rows={1} {...props} ref={ref} value={value} style={{...style,overflow:"hidden",resize:"none"}}/>;
 }
+function asiaNumber(value){
+ const raw=String(value??"").replace(/\s/g,"");
+ return Number(/,\d{1,2}$/.test(raw)&&!raw.includes(".")?raw.replace(",","."):raw.replace(/,/g,""));
+}
+function asiaQuantity(value){
+ const raw=String(value??"").trim();if(!raw||/^[—–-]+$/.test(raw))return raw;
+ const m=raw.match(/^([\d,. ]+)(?:\s*[-–]\s*([\d,. ]+))?\s*(kt|ktons?|k|mt|tons?|tonnes?)?\s*(\*)?$/i);if(!m)return raw;
+ const convert=x=>{const n=asiaNumber(x);return /^(?:mt|tons?|tonnes?)$/i.test(m[3]||"")?n/1000:/^k/i.test(m[3]||"")?n:n>=1000?n/1000:n;};
+ const values=[m[1],m[2]].filter(Boolean).map(convert);if(values.some(n=>!Number.isFinite(n)||n<=0))return raw;
+ return values.map(n=>n.toLocaleString("de-DE",{useGrouping:false,maximumFractionDigits:3})).join("-")+"kt"+(m[4]||"");
+}
+function asiaFreight(value){
+ const raw=String(value??"").trim();
+ const daily=raw.match(/^(?:USD|US\$|\$)?\s*([\d,. ]+)\s*([km]?)\s*(?:PDPR|PD|PER\s*DAY|\/DAY)$/i);
+ if(daily){const n=asiaNumber(daily[1])*(daily[2].toLowerCase()==="m"?1e6:daily[2]?1000:1);if(Number.isFinite(n)&&n>0)return "USD "+(n>=1000?n/1000:n).toLocaleString("de-DE",{useGrouping:false,maximumFractionDigits:3})+(n>=1000?"K":"")+" PD";}
+ return reportFixtureFreight(raw);
+}
 function classifyAsiaLine(text,vessels=[]){
  if(/\b(?:TCT|time\s*charter\s*trip)\b|\b(?:pdpr|pdp?r?|per\s*day|daily)\b|\/\s*day\b/i.test(text))return "MR TCT";
- const num=x=>Number(String(x).replace(/[,\s]/g,""));
+ const num=asiaNumber;
  const dwt=text.match(/\b([\d,]+(?:\.\d+)?)\s*(k)?\s*(?:dwt|sdwt)\b/i);
  const explicitDwt=dwt?num(dwt[1])*(dwt[2]?1000:1):null;
  const vessel=vessels.find(v=>String(v.vessel||v.vessel_name||"").length>3&&text.toLowerCase().includes(String(v.vessel||v.vessel_name).toLowerCase()));
@@ -34,8 +51,9 @@ function classifyAsiaLine(text,vessels=[]){
  const withoutDwt=text.replace(/\b[\d,.]+\s*k?\s*(?:dwt|sdwt)\b/ig,"");
  const qty=withoutDwt.match(/\b([\d,]+(?:\.\d+)?)\s*(k\s*(?:t(?:ons?|onnes?)?)?|m(?:e?tric\s*)?t|tons?|tonnes?)\b/i);
  const amount=qty?num(qty[1])*(/^k/i.test(qty[2])?1000:1):null;
- if((amount!=null&&amount<20000)||(shipDwt>0&&shipDwt<25000))return "Sub 20k";
+ if(amount!=null&&amount<20000)return "Sub 20k";
  if(amount>=30000&&amount<=50000)return "Handy–MR";
+ if(shipDwt>0&&shipDwt<25000)return "Sub 20k";
  if(shipDwt>=30000&&shipDwt<=50000)return "Handy–MR";
  if(/\b(?:quote[ds]?|quoting|inquiry)\b/i.test(text))return "Review";
  return "Review";
@@ -60,6 +78,8 @@ function asiaRouteCells(cells={},fixture={}){
  if(!next.cargo)next.cargo=text.match(/(?:^| · )(?:Cargo|Grade):\s*([^·]+)/i)?.[1]?.trim()||"";
  next.comment=text.split(" · ").filter(part=>!next.cargo||!new RegExp("^(Cargo|Grade):\\s*"+String(next.cargo).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"$","i").test(part.trim())).join(" · ");
  if(cells.disch&&cells.to&&cells.disch!==cells.to)next.comment=[next.comment,"Disch: "+cells.disch].filter(Boolean).join(" · ");
+ if(!next.charterer){const match=String(next.comment||"").match(/(?:^| · )(?:harterer|arterer|charterer):\s*([^·]+)/i);if(match){next.charterer=match[1].trim();next.comment=String(next.comment).replace(/(?:^| · )(?:harterer|arterer|charterer):\s*[^·]+/i,"").replace(/^ · /,"");}}
+ next.qty=asiaQuantity(next.qty);
  delete next.disch;
  return next;
 }
@@ -73,7 +93,7 @@ function parseAsiaPaste(text,vessels=[],format="auto"){
  if(n==="disch"||n==="dischport")return "to";
  if(["freighthire","ratehire","hire","freightrate"].includes(n))return "rate";
  if(["notes","note","additionalnotes","coomment"].includes(n))return "comment";
- return ({charterer:"charterer",charterers:"charterer",chrtr:"charterer",vessel:"vessel",vesselname:"vessel",ship:"vessel",qty:"qty",quantity:"qty",size:"qty",cargo:"cargo",product:"cargo",laycan:"laycan",open:"laycan",opendate:"laycan",rate:"rate",freight:"rate",comment:"comment",comments:"comment",remarks:"comment",load:"load",loading:"load",disch:"disch",discharge:"disch",status:"status",terms:"terms",dwt:"dwt",sdwt:"dwt"})[n]||null;};
+ return ({charterer:"charterer",charterers:"charterer",harterer:"charterer",arterer:"charterer",chrtr:"charterer",vessel:"vessel",vesselname:"vessel",ship:"vessel",qty:"qty",quantity:"qty",size:"qty",cargo:"cargo",product:"cargo",laycan:"laycan",open:"laycan",opendate:"laycan",rate:"rate",freight:"rate",comment:"comment",comments:"comment",remarks:"comment",load:"load",loading:"load",disch:"disch",discharge:"disch",status:"status",terms:"terms",dwt:"dwt",sdwt:"dwt"})[n]||null;};
  const split=line=>{
   const sep=line.includes("|")?"|":line.includes("\t")?"\t":line.includes("·")?"·":line.includes(",")?",":null;
   if(!sep)return null;
@@ -108,8 +128,9 @@ function parseAsiaPaste(text,vessels=[],format="auto"){
  cells.comment=line;
  }
  if(extra.length)cells.comment=[cells.comment,...extra].filter(Boolean).join(" · ");
- // Header-labelled positions use DWT only for vessel-size grouping, never cargo quantity.
- const section=classifyAsiaLine([cells.qty&&cells.qty+(/^[\d,. ]+$/.test(cells.qty)?" mt":""),cells.rate,cells.vessel,dwt?dwt+" dwt":"",!parsed?line:""].filter(Boolean).join(" "),vessels);
+ cells.qty=asiaQuantity(cells.qty);cells.rate=asiaFreight(cells.rate);
+ // Classify only after quantity units are resolved; 35 means 35kt, not 35 mt.
+ const section=classifyAsiaLine([cells.qty,cells.rate,cells.vessel,dwt?dwt+" dwt":"",!parsed?line:""].filter(Boolean).join(" "),vessels);
  for(const k of new Set([...keys,...ASIA_CARGO_FIELDS]))cells[k]=reportAbbreviations(cells[k]);
  rows.push({text:line,cells:asiaRouteCells(cells),section,parsed});
  }
@@ -181,7 +202,7 @@ function AsiaReportEditor({value,onChange,date,name,setName,saveCopy,setSaveCopy
  <GrowText style={{...input,background:"#f4f8ff",minHeight:115,marginTop:10}} value={paste} onChange={e=>setPaste(e.target.value)} placeholder="Paste a table with its header row (pipe-separated or tab-separated), or one fixture per line. Review extracted columns before adding."/>
  <div style={{fontSize:12,margin:"8px 0",lineHeight:1.6}}>Use <b>|</b>, commas, or tabs between columns, one cargo per line. Without headers, use the order below. Quote comma-separated text containing commas.<br/><code>Charterer | Vessel | Qty | Grade | From | To | Laycan | Rate | Comment</code></div>
  <label style={{fontSize:12}}>Paste format <select aria-label="Cargo paste format" value={pasteFormat} onChange={e=>setPasteFormat(e.target.value)} style={{...input,width:260,margin:"0 10px"}}><option value="auto">Auto · headers optional</option><option value="cargo11">Cargo table · 11 columns</option><option value="report7">Legacy report · 7 columns</option><option value="report9">Report table · 9 columns</option></select></label><button style={btn} onClick={prepare}>Review cargoes</button>
- {!!review.length&&<div style={{overflowX:"auto",marginTop:8}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}><thead><tr>{["Section",...ASIA_CARGO_HEADERS,""].map((t,i)=><th key={i} style={{textAlign:"left",padding:5,color:"#dcecff"}}>{t}</th>)}</tr></thead><tbody>{reviewRows.map(({row:r,index:i},position)=><React.Fragment key={i}>{(position===0||reviewRows[position-1].row.section!=="Review"&&r.section==="Review"||reviewRows[position-1].row.section==="Review"&&r.section!=="Review")&&<tr><td colSpan={11} style={{padding:8,background:"#204e70",color:"#e6f4ff",fontWeight:700}}>{r.section==="Review"?`Needs review (${review.filter(x=>x.section==="Review").length})`:"Categorised cargoes"}</td></tr>}<tr style={{background:r.section==="Review"?"#cce7fa":r.section==="Exclude"?"#283342":"#102c43"}}><td style={{padding:4}}><select aria-label={`Paste section ${i+1}`} value={r.section} onChange={e=>setReview(p=>p.map((x,j)=>i===j?{...x,section:e.target.value}:x))} style={{...input,width:110,fontWeight:700,background:r.section==="Review"?"#dff1ff":r.section==="Exclude"?"#d9dee5":"#e7f1fa",color:r.section==="Review"?"#164a70":"#173653"}}>{["Review","Exclude","Sub 20k","Handy–MR","MR TCT"].map(g=><option key={g}>{g}</option>)}</select></td>{ASIA_CARGO_FIELDS.map(k=><td key={k} style={{padding:3,verticalAlign:"top"}}><GrowText aria-label={`Paste ${k} ${i+1}`} value={r.cells[k]||""} style={{...input,minWidth:k==="comment"?180:70,fontSize:11}} onChange={e=>setReview(p=>p.map((x,j)=>i===j?{...x,cells:{...x.cells,[k]:reportAbbreviations(e.target.value)}}:x))}/></td>)}<td><button aria-label={`Remove pasted row ${i+1}`} style={red} onClick={()=>setReview(p=>p.filter((_,j)=>j!==i))}>×</button></td></tr></React.Fragment>)}</tbody></table><div style={{fontSize:11,color:"#a8d8fc",padding:6}}>Light blue Review rows are grouped first and need a section. Choose Exclude to skip a row. Uncertain text remains in Comment for your review.</div></div>}
+ {!!review.length&&<div style={{overflowX:"auto",marginTop:8}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}><thead><tr>{["Section",...ASIA_CARGO_HEADERS,""].map((t,i)=><th key={i} style={{textAlign:"left",padding:5,color:"#dcecff"}}>{t}</th>)}</tr></thead><tbody>{reviewRows.map(({row:r,index:i},position)=><React.Fragment key={i}>{(position===0||reviewRows[position-1].row.section!=="Review"&&r.section==="Review"||reviewRows[position-1].row.section==="Review"&&r.section!=="Review")&&<tr><td colSpan={11} style={{padding:8,background:"#204e70",color:"#e6f4ff",fontWeight:700}}>{r.section==="Review"?`Needs review (${review.filter(x=>x.section==="Review").length})`:"Categorised cargoes"}</td></tr>}<tr style={{background:r.section==="Review"?"#cce7fa":r.section==="Exclude"?"#283342":"#102c43"}}><td style={{padding:4}}><select aria-label={`Paste section ${i+1}`} value={r.section} onChange={e=>setReview(p=>p.map((x,j)=>i===j?{...x,section:e.target.value}:x))} style={{...input,width:110,fontWeight:700,background:r.section==="Review"?"#dff1ff":r.section==="Exclude"?"#d9dee5":"#e7f1fa",color:r.section==="Review"?"#164a70":"#173653"}}>{["Review","Exclude","Sub 20k","Handy–MR","MR TCT"].map(g=><option key={g}>{g}</option>)}</select></td>{ASIA_CARGO_FIELDS.map(k=><td key={k} style={{padding:3,verticalAlign:"top"}}><GrowText aria-label={`Paste ${k} ${i+1}`} value={r.cells[k]||""} onBlur={()=>{if(k==="qty"||k==="rate")setReview(p=>p.map((x,j)=>i===j?{...x,cells:{...x.cells,[k]:k==="qty"?asiaQuantity(x.cells[k]):asiaFreight(x.cells[k])}}:x));}} style={{...input,minWidth:k==="comment"?180:70,fontSize:11}} onChange={e=>setReview(p=>p.map((x,j)=>i===j?{...x,cells:{...x.cells,[k]:reportAbbreviations(e.target.value)}}:x))}/></td>)}<td><button aria-label={`Remove pasted row ${i+1}`} style={red} onClick={()=>setReview(p=>p.filter((_,j)=>j!==i))}>×</button></td></tr></React.Fragment>)}</tbody></table><div style={{fontSize:11,color:"#a8d8fc",padding:6}}>Light blue Review rows are grouped first and need a section. Choose Exclude to skip a row. Uncertain text remains in Comment for your review.</div></div>}
  {!!review.length&&<button style={{...btn,marginTop:10}} onClick={importLines}>Add reviewed cargoes</button>}
  </details>
  {message&&<div role="status" style={{color:"#9dccf6",fontSize:12}}>{message}</div>}
@@ -996,7 +1017,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     setQuickRows(rows=>reconcileQuickSelections(rows,allVessels,quickSelectedTags,config,quickUpdatedFilter).map(applyQuickOperator));
   },[quickSelectedTags,quickUpdatedFilter,allVessels,quickRememberedOps]);
   function toggleQuickTag(tag){setQuickSelectedTags(tags=>tags.includes(tag)?tags.filter(t=>t!==tag):[...tags,tag]);}
-  const [quickExportSections,setQuickExportSections]=useState({operator:true,date:true,region:true});
+  const [quickExportSections,setQuickExportSections]=useState({operator:true,date:true,region:true,fixing:true,availability:true});
   const [quickSpecs,setQuickSpecs]=useState(true);
   const [quickExportStatus,setQuickExportStatus]=useState("");
   const [quickTitle, setQuickTitle] = useState("Available tonnage");
@@ -1806,7 +1827,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     try{
       const {data,error}=await supabase.from("reports").select("*").eq("id",id).single();if(error)throw error;if(!data||!canApply())return;
       reportLive.loaded();
-      setQuickExportSections({operator:true,date:true,region:true,...data.rate_grid?.__quickEditor?.exportSections});setQuickSpecs(data.rate_grid?.__quickEditor?.includeSpecs!==false);setQuickTitle(savedQuickTitle(data));setQuickReportName(data.rate_grid?.__quickEditor?.name||savedQuickTitle(data));setActiveQuickId(id);setQuickSaveCopy(false);
+      setQuickExportSections({operator:true,date:true,region:true,fixing:true,availability:true,...data.rate_grid?.__quickEditor?.exportSections});setQuickSpecs(data.rate_grid?.__quickEditor?.includeSpecs!==false);setQuickTitle(savedQuickTitle(data));setQuickReportName(data.rate_grid?.__quickEditor?.name||savedQuickTitle(data));setActiveQuickId(id);setQuickSaveCopy(false);
       setQuickUpdatedFilter(data.rate_grid?.__quickEditor?.updatedFilter||"all");
       setQuickExcludedOperators(data.rate_grid?.__quickEditor?.excludedOperators||[]);
       setQuickTableSort(data.rate_grid?.__quickEditor?.tableSort?.key?data.rate_grid.__quickEditor.tableSort:{key:"date",desc:false});
@@ -2173,19 +2194,42 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     return lines.join("\n").trim();
   }
   const [quickCopiedRegion,setQuickCopiedRegion]=useState(false);
+  function quickWindowSummary(){
+    const todayText=new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Oslo"});
+    const today=reportDay(todayText),buckets=[0,0,0,0];let unknown=0,overdue=0,total=0,count=0;
+    for(const row of quickOutputRows){
+      const open=quickDateKey(row.date);if(open===Number.MAX_SAFE_INTEGER){unknown++;continue;}
+      const offset=open-today;
+      if(offset<0)overdue++;else buckets[offset<=1?0:offset<=4?1:offset<=7?2:3]++;
+      const updated=reportDay(row.updatedAt||row._quickAddedAt);if(updated!==null&&open>=updated&&open-updated<=60){total+=open-updated;count++;}
+    }
+    return {buckets,unknown,overdue,count,average:count?total/count:null,todayText};
+  }
   function quickExportHtml(){
     const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
     const groups=[];
     if(quickExportSections.operator)groups.push(["By operator",buildQuickText()]);
     if(quickExportSections.date)groups.push(["By date",buildQuickTextByDate()]);
     if(quickExportSections.region)groups.push(["By region",buildQuickTextByRegion()]);
-    return '<div style="width:1120px;padding:28px;box-sizing:border-box;background:white;color:#173452;font-family:Arial,sans-serif"><h1 style="text-align:center;font-size:24px;border-bottom:2px solid #1b4565;padding-bottom:14px">'+esc(quickDisplayText(quickTitle))+'</h1><table role="presentation" style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:8px"><tr>'+groups.map(([title,text])=>'<td style="vertical-align:top;padding:0"><div style="background:#1b4565;color:white;padding:10px;font-weight:bold">'+title+'</div>'+text.split('\n').slice(2).map((line,i)=>line?'<div style="padding:5px 8px;font-size:12px;line-height:1.4;background:'+(i%2?'#fff':'#eaf3fb')+';overflow-wrap:anywhere">'+esc(line)+'</div>':'<div style="height:8px;background:#d5e7f7"></div>').join('')+'</td>').join('')+'</tr></table></div>';
+    const summary=quickWindowSummary();
+    const sectionTitle=text=>'<div style="margin-top:14px;margin-bottom:8px;padding:10px 12px;background:#d5e6f8;border-left:4px solid #3988d0;color:#122f51;font-size:14px;font-weight:bold;text-transform:uppercase">'+esc(text)+'</div>';
+    const headingSet=new Set(quickRegions.map(g=>g.name));
+    const columns=groups.map(([title,text])=>'<td style="vertical-align:top;padding:0"><div style="background:#1b4565;color:white;padding:10px;font-weight:bold">'+title+'</div>'+text.split('\n').slice(2).map((line,i)=>{
+      if(!line)return '';
+      const heading=title==="By region"?headingSet.has(line):title==="By operator"&&!line.includes(" – ");
+      return heading?sectionTitle(line):'<div style="padding:6px 8px;border-bottom:1px solid #dce7f2;font-size:12px;line-height:1.45;background:'+(i%2?'#fff':'#edf5fc')+';overflow-wrap:anywhere">'+esc(line)+'</div>';
+    }).join('')+'</td>').join('');
+    const max=Math.max(1,...summary.buckets),labels=["Prompt (today/tomorrow)","Open 3–5d","Open 6–8 days","Open later"];
+    const bars='<table role="presentation" style="width:100%;border-collapse:collapse">'+labels.map((label,i)=>'<tr><td style="width:200px;padding:8px;color:#23486a;font-size:13px">'+label+'</td><td style="padding:6px;background:#f3f7fb"><div style="width:'+Math.max(0,summary.buckets[i]/max*100)+'%;height:23px;background:#3988cf;border-radius:3px"></div></td><td style="width:45px;text-align:right;font-weight:bold;color:#173452">'+summary.buckets[i]+'</td></tr>').join('')+'</table>';
+    const fixing=quickExportSections.fixing?sectionTitle("Fixing window · current list")+'<div style="padding:12px;background:#edf5fc;font-size:14px"><b style="font-size:24px;color:#1c568a">'+(summary.average===null?'—':summary.average.toFixed(1))+' days</b> · Average update-to-open interval · '+summary.count+' dated positions</div><div style="font-size:11px;color:#61778b;padding:6px">Uses each included position’s Updated date and Open date (valid intervals 0–60 days); this is a current-list indication, not a record of concluded fixtures.</div>':'';
+    const availability=quickExportSections.availability?sectionTitle("Next available · "+summary.todayText)+bars+'<div style="font-size:11px;color:#61778b;padding:6px">Counts included position rows. Today is day 1: Prompt = today/tomorrow; day 3–5 = 2–4 days ahead; day 6–8 = 5–7 days ahead; later = 8+ days ahead. '+summary.overdue+' past-date and '+summary.unknown+' undated rows are excluded from bars.</div>':'';
+    return '<div style="width:1120px;padding:28px;box-sizing:border-box;background:white;color:#173452;font-family:Arial,sans-serif"><table role="presentation" style="width:100%;background:#102743;color:#fff;margin-bottom:16px"><tr><td style="padding:18px;width:38%;font-size:19px;font-weight:bold">'+esc(quickDisplayText(quickTitle))+'</td><td style="text-align:center;width:30%"><img src="'+STEEM_LOGO+'" style="width:180px;background:white;padding:6px;border-radius:4px" /></td><td style="padding:18px;text-align:right;font-size:12px">'+esc(new Date().toLocaleDateString("en-GB",{timeZone:"Europe/Oslo",day:"numeric",month:"short",year:"numeric"}))+'</td></tr></table>'+fixing+availability+(groups.length?'<table role="presentation" style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:8px"><tr>'+columns+'</tr></table>':'')+'</div>';
   }
   async function exportQuick(format){
     if(!Object.values(quickExportSections).some(Boolean)){setQuickExportStatus("Select at least one section");return;}
     setQuickExportStatus("Preparing…");let host;
     try{const html=quickExportHtml();
-      if(format==="email"){await navigator.clipboard.write([new ClipboardItem({"text/html":new Blob([html],{type:"text/html"}),"text/plain":new Blob([[quickExportSections.operator?buildQuickText():"",quickExportSections.date?buildQuickTextByDate():"",quickExportSections.region?buildQuickTextByRegion():""].filter(Boolean).join("\n\n")],{type:"text/plain"})})]);setQuickExportStatus("Copied — paste into email");}
+      if(format==="email"){await navigator.clipboard.write([new ClipboardItem({"text/html":new Blob([html],{type:"text/html"}),"text/plain":new Blob([[quickExportSections.operator?buildQuickText():"",quickExportSections.date?buildQuickTextByDate():"",quickExportSections.region?buildQuickTextByRegion():"",quickExportSections.fixing?"Fixing window: "+(quickWindowSummary().average?.toFixed(1)??"—")+" days (update-to-open)":"",quickExportSections.availability?"Next available: "+quickWindowSummary().buckets.join(" | "):""].filter(Boolean).join("\n\n")],{type:"text/plain"})})]);setQuickExportStatus("Copied — paste into email");}
       else {host=document.createElement("div");host.style.cssText="position:fixed;left:-20000px;top:0";host.innerHTML=html;document.body.appendChild(host);const lib=await loadHTI();const url=await lib.toPng(host.firstElementChild,{backgroundColor:"#fff",pixelRatio:2});const link=document.createElement("a");link.download="Quick-Positions.png";link.href=url;link.click();setQuickExportStatus("PNG downloaded");}
     }catch(e){setQuickExportStatus("Export failed: "+e.message);}finally{host?.remove();}
   }
@@ -3359,6 +3403,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                 )}
               </div>
 
+              {quickRows.length>0&&<div style={{margin:"12px 0",padding:12,background:C.bg2,border:"1px solid "+C.bd,borderRadius:6}}><label style={{marginRight:18}}><input type="checkbox" checked={quickExportSections.fixing!==false} onChange={e=>setQuickExportSections(p=>({...p,fixing:e.target.checked}))}/> Include fixing window</label><label><input type="checkbox" checked={quickExportSections.availability!==false} onChange={e=>setQuickExportSections(p=>({...p,availability:e.target.checked}))}/> Include availability bar chart</label><details style={{marginTop:10}}><summary style={{cursor:"pointer",color:ACCENT}}>Report preview</summary><div style={{overflowX:"auto",marginTop:10}} dangerouslySetInnerHTML={{__html:quickExportHtml()}}/></details></div>}
               {/* Step 3: Preview + Copy */}
               {quickRows.length > 0 && (
                 <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 7, padding: "10px 12px" }}>
