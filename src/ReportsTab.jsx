@@ -2253,7 +2253,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     const lines=["|| "+quickDisplayText(quickTitle)+" ||",""];
     [...byOp.entries()].sort(([a],[b])=>a.localeCompare(b,"en",{sensitivity:"base",numeric:true})).forEach(([key,rows])=>{
       const op=quickDisplayText(key);lines.push(whatsapp?"*"+op+"*":op);
-      [...rows].sort((a,b)=>quickCompareDates(a,b)).forEach(r=>lines.push(quickMarkedLine(quickSpecs?r:{...r,dwt:"",built:""})));
+      [...rows].sort((a,b)=>quickCompareDates(a,b)).forEach(r=>lines.push(quickMarkedLine(quickSpecs?r:{...r,dwt:"",built:""},true)));
       lines.push("");
     });
     return lines.join("\n").trim();
