@@ -35,10 +35,14 @@ function asiaQuantity(value){
  const values=[m[1],m[2]].filter(Boolean).map(convert);if(values.some(n=>!Number.isFinite(n)||n<=0))return raw;
  return values.map(n=>n.toLocaleString("de-DE",{useGrouping:false,maximumFractionDigits:3})).join("-")+"kt"+(m[4]||"");
 }
-// Keep quantity keystrokes local so normalised report values cannot move the caret.
+// Quantity is an uncontrolled text field while focused: React never rewrites keystrokes.
 function AsiaActivityInput({quantity=false,value,onChange,...props}){
- const [draft,setDraft]=useState(""),[focused,setFocused]=useState(false);
- return <input {...props} value={quantity&&focused?draft:value} onFocus={()=>{if(quantity){setDraft(String(value??""));setFocused(true);}}} onChange={e=>{if(quantity)setDraft(e.target.value);else onChange(e);}} onBlur={()=>{if(quantity){setFocused(false);onChange({target:{value:asiaQuantity(draft)}});}}/>;
+ const ref=useRef(null);
+ useEffect(()=>{const el=ref.current;if(quantity&&el&&document.activeElement!==el)el.value=String(value??"");},[quantity,value]);
+ if(!quantity)return <input {...props} value={value} onChange={onChange}/>;
+ return <input {...props} ref={ref} type="text" inputMode="decimal" defaultValue={value??""}
+ onFocus={e=>{e.currentTarget.value=e.currentTarget.value.replace(/kt$/i,"");}}
+ onBlur={e=>{const text=asiaQuantity(e.currentTarget.value);e.currentTarget.value=text;onChange({target:{value:text}});}}/>;
 }
 function asiaFreight(value){
  const raw=String(value??"").trim();
