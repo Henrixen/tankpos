@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { C, TCE_DEFAULTS } from "./constants";
 import { supabase } from "./supabaseclient";
 
@@ -74,18 +74,17 @@ const ETS_EUR_PER_T=65;
 const ETS_USD_EUR=1.08;
 const ETS_EU_SCOPE=0.5;
 
+// Indicative CO2e cost. Sea scopes are per leg; EEA port emissions are covered at 100%.
 function calcEuEts(ballastNm,ladenNm,consBallast,consLaden,consLoad,consDisch,consIdle,
-  daysLoad,noticeLoad,daysDisch,noticeDisch,daysWaiting,speed,isIntraEU=true){
-  if(!ladenNm||!speed)return 0;
-  const wf=1.08;
-  const daysBallast=ballastNm>0?(ballastNm/(speed*24))*wf:0;
-  const daysLaden=(ladenNm/(speed*24))*wf;
-  const fuelSail=daysBallast*consBallast+daysLaden*consLaden;
-  const fuelPort=(daysLoad+noticeLoad)*consLoad+(daysDisch+noticeDisch)*consDisch+daysWaiting*consIdle;
-  const fuelTons=fuelSail+fuelPort;
-  const co2=fuelTons*ETS_CO2_FACTOR;
-  const scope=isIntraEU?1.0:ETS_EU_SCOPE;
-  return Math.round(co2*scope*ETS_EUR_PER_T*ETS_USD_EUR);
+ daysLoad,noticeLoad,daysDisch,noticeDisch,daysWaiting,speed,isIntraEU=true,options={}){
+ if(!speed)return 0;
+ const n=v=>numD(v),wf=1+Math.max(0,n(options.weatherPct??8))/100;
+ const scope=isIntraEU?100:50,sea=(nm,cons,pct)=>Math.max(0,n(nm))/(n(speed)*24)*wf*n(cons)*Math.max(0,Math.min(100,n(pct)))/100;
+ const fuel=sea(ballastNm,consBallast,options.ballastScope??scope)+sea(ladenNm,consLaden,options.ladenScope??scope)+sea(options.repoNm??0,consBallast,options.repoScope??scope)
+  +(options.loadEEA===false?0:(n(daysLoad)+n(noticeLoad))*n(consLoad))
+  +(options.dischEEA===false?0:(n(daysDisch)+n(noticeDisch))*n(consDisch))
+  +n(daysWaiting)*n(consIdle)*Math.max(0,Math.min(100,n(options.waitScope??100)))/100;
+ return Math.round(fuel*n(options.co2Factor??ETS_CO2_FACTOR)*n(options.euaPrice??ETS_EUR_PER_T)*n(options.fx??ETS_USD_EUR));
 }
 
 // ─── Distance table ───────────────────────────────────────────────────────────
@@ -109,7 +108,7 @@ function numD(v){const n=parseFloat(String(v).replace(/[^0-9.\-]/g,""));return i
 function calcTCE({freight,otherRevenue=0,otherExpenses=0,ballastNm,ladenNm,repoNm=0,
   qty,consBallast,consLaden,consLoad,consDisch,consIdle,
   daysLoad,noticeLoad,daysDisch,noticeDisch,daysWaiting,
-  bunker,commission,speed,canalCost,euEts,
+  bunker,commission,speed,canalCost,euEts,weatherPct=8,
   loadPortCosts=[],dischPortCosts=[]}){
   const f=numD(freight),bNm=numD(ballastNm),lNm=numD(ladenNm),rNm=numD(repoNm);
   const cb=numD(consBallast),cl=numD(consLaden),clo=numD(consLoad),cd=numD(consDisch),ci=numD(consIdle);
@@ -119,7 +118,7 @@ function calcTCE({freight,otherRevenue=0,otherExpenses=0,ballastNm,ladenNm,repoN
   const dpc=dischPortCosts.reduce((a,x)=>a+numD(x.cost),0);
   const orev=numD(otherRevenue),oexp=numD(otherExpenses);
   if(!f||!lNm||!bn||!spd)return null;
-  const wf=1.08;
+  const wf=1+Math.max(0,numD(weatherPct))/100;
   const daysBallast=(bNm/(spd*24))*wf;
   const daysLaden=(lNm/(spd*24))*wf;
   const daysRepo=rNm>0?(rNm/(spd*24))*wf:0;
@@ -129,7 +128,7 @@ function calcTCE({freight,otherRevenue=0,otherExpenses=0,ballastNm,ladenNm,repoN
   const bunkLoad=(dl+nl)*clo;
   const bunkDisch=(dd+nd)*cd;
   const bunkIdle=dw*ci;
-  const totalBunkers=(bunkBallast+bunkLaden+bunkLoad+bunkDisch+bunkIdle)*bn;
+  const totalBunkers=(bunkBallast+bunkLaden+daysRepo*cb+bunkLoad+bunkDisch+bunkIdle)*bn;
   const commAmt=f*(comm/100);
   const totalExpenses=totalBunkers+commAmt+cc+ets+lpc+dpc+oexp;
   const netRevenue=f+orev-totalExpenses;
@@ -180,6 +179,10 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   const [rows, setRows] = useState(BENCHMARK_ROUTES.map(r => routeDefaults(r, defaults)));
   const [routeGroups,setRouteGroups,groupsReady,groupsError]=useCloudJson("tce-route-groups",{});
   const [routeOrder,setRouteOrder,orderReady,orderError]=useCloudJson("tce-route-order",[]);
+  const [routeInputs,setRouteInputs,inputsReady,inputsError]=useCloudJson("tce-route-inputs-v2",{});
+  const drag=useRef(null),DIVIDER="__main_legs_divider__";
+  const extraFields=["daysLoad","noticeLoad","daysDisch","noticeDisch","daysWaiting","weatherPct","consBallast","consLoad","consDisch","consIdle","ballastScope","ladenScope","repoScope","waitScope","loadEEA","dischEEA","euaPrice","fx","co2Factor"];
+  const effective=row=>({...row,...Object.fromEntries(extraFields.map(k=>[k,routeInputs[row.key]?.[k]??defaults[k]??({weatherPct:8,ballastScope:100,ladenScope:100,repoScope:100,waitScope:100,loadEEA:true,dischEEA:true,euaPrice:65,fx:1.08,co2Factor:3.114}[k])]))});
   const primaryKeys=new Set(["kaarstoe_ara","ara_thames","pjg_ara","ara_dublin","gdansk_ara"]);
   const deepseaLabel=(label)=>/asia|china|singapore|straits|india|japan|korea|usg|houston|transatlantic|america|brazil|atlantic|far east|gulf/i.test(label||"");
   const groupFor=(row)=>routeGroups[row.key]||(deepseaLabel(row.label)?"Deepsea":"Europe");
@@ -189,6 +192,13 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
     if(ai>=0||bi>=0)return (ai<0?Infinity:ai)-(bi<0?Infinity:bi);
     return Number(primaryKeys.has(b.key))-Number(primaryKeys.has(a.key));
   });
+  const savedOrder=Array.isArray(routeOrder)?routeOrder:[];
+  const routeTokens=orderedRows.map(r=>r.key);
+  const dividerIndex=savedOrder.includes(DIVIDER)?savedOrder.slice(0,savedOrder.indexOf(DIVIDER)).filter(k=>routeTokens.includes(k)).length:orderedRows.filter(r=>primaryKeys.has(r.key)).length;
+  routeTokens.splice(dividerIndex,0,DIVIDER);
+  function dropRoute(e,target){e.preventDefault();const source=drag.current;drag.current=null;if(!orderReady||!source||source===target)return;const tokenGroup=k=>k===DIVIDER?"Europe":groupFor(orderedRows.find(r=>r.key===k));if(tokenGroup(source)!==tokenGroup(target))return;const next=[...routeTokens],from=next.indexOf(source);if(from<0)return;next.splice(from,1);const at=next.indexOf(target);next.splice(at<0?next.length:at+(e.clientY>e.currentTarget.getBoundingClientRect().top+e.currentTarget.getBoundingClientRect().height/2?1:0),0,source);setRouteOrder(next);}
+  const dragProps=key=>({onDragOver:e=>{if(drag.current)e.preventDefault();},onDrop:e=>dropRoute(e,key)});
+  const handleDrag=(e,key)=>{drag.current=key;e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",key);};
   function moveRoute(key,direction){
     const row=orderedRows.find(r=>r.key===key);
     if(!row||!orderReady||!groupsReady)return;
@@ -239,10 +249,11 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
     // saved route whose key is not one of the built-in benchmark keys.
     const baseKeys = new Set(BENCHMARK_ROUTES.map(r => r.key));
     const custom = data.filter(d => !baseKeys.has(d.route_key)).map(fromDb);
-    setRows([...base, ...custom]);
+    setRows([...base, ...custom].map(r=>({...r,tce:recalc(r)})));
   }
 
   function recalc(row, bunkerOverride) {
+    row=effective(row);
     const f = numD(row.freight);
     const lNm = numD(row.nmLaden);
     if (!f || !lNm) return null;
@@ -252,12 +263,12 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
       ballastNm: numD(row.nmBallast),
       ladenNm: lNm,
       repoNm: numD(row.nmRepo),
-      consBallast: cons, consLaden: cons,
-      consLoad: defaults.consLoad, consDisch: defaults.consDisch, consIdle: defaults.consIdle,
-      daysLoad: defaults.daysLoad, noticeLoad: defaults.noticeLoad,
-      daysDisch: defaults.daysDisch, noticeDisch: defaults.noticeDisch, daysWaiting: defaults.daysWaiting,
+      consBallast: row.consBallast, consLaden: cons,
+      consLoad: row.consLoad, consDisch: row.consDisch, consIdle: row.consIdle,
+      daysLoad: row.daysLoad, noticeLoad: row.noticeLoad,
+      daysDisch: row.daysDisch, noticeDisch: row.noticeDisch, daysWaiting: row.daysWaiting,
       bunker: numD(bunkerOverride ?? sharedBunker), commission: numD(row.commission), speed: numD(row.speed),
-      canalCost: defaults.canalCost, euEts: numD(row.euEts),
+      canalCost: defaults.canalCost, euEts: numD(row.euEts), weatherPct:row.weatherPct,
       loadPortCosts: [{ cost: numD(row.pdaLoad) }],
       dischPortCosts: [{ cost: numD(row.pdaDisch) }],
     });
@@ -268,9 +279,10 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   // in sync via an effect since the bunker input now lives outside this component).
   useEffect(() => {
     setRows(prev => prev.map(r => ({ ...r, tce: recalc(r) })));
-  }, [sharedBunker]);
+  }, [sharedBunker,defaults,routeInputs]);
 
   function updateField(key, field, val) {
+    if(extraFields.includes(field)){if(!inputsReady){setStatus("Route settings are still loading");return;}setRouteInputs(p=>({...p,[key]:{...p[key],[field]:val}}));return;}
     setRows(prev => prev.map(r => {
       if (r.key !== key) return r;
       const next = { ...r, [field]: val };
@@ -319,29 +331,23 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   const miniInp = (row, field, label, width = 54) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
       <span style={{ fontSize: 9, color: C.faint, textTransform: "uppercase" }}>{label}</span>
-      <FmtInput value={row[field]} onChange={val => updateField(row.key, field, val)} width={width} fontSize={12}/>
+      <FmtInput value={effective(row)[field]} onChange={val => updateField(row.key, field, val)} width={width} fontSize={12}/>
     </div>
   );
 
   // EU ETS mini-calculator popout — reuses the same calcEuEts formula as the
   // main calculator's "auto" toggle, applied to this route's own distance/speed.
   function EtsPopout({ row }) {
-    const [scope, setScope] = useState(100); // 100 | 50
-    const ets = calcEuEts(numD(row.nmBallast), numD(row.nmLaden), numD(row.cons), numD(row.cons),
-      defaults.consLoad, defaults.consDisch, defaults.consIdle, defaults.daysLoad, defaults.noticeLoad,
-      defaults.daysDisch, defaults.noticeDisch, defaults.daysWaiting, numD(row.speed), scope === 100);
+    const opts=effective(row);
+    const ets = calcEuEts(numD(row.nmBallast),numD(row.nmLaden),numD(opts.consBallast),numD(row.cons),
+      opts.consLoad,opts.consDisch,opts.consIdle,opts.daysLoad,opts.noticeLoad,opts.daysDisch,opts.noticeDisch,opts.daysWaiting,numD(row.speed),true,{...opts,repoNm:row.nmRepo});
     return (
-      <div style={{ position: "absolute", zIndex: 20, marginTop: 4, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 6, padding: 10, boxShadow: "0 4px 14px rgba(0,0,0,0.4)", width: 200 }}>
+      <div style={{ position: "absolute", zIndex: 20, marginTop: 4, background: C.bg2, border: "1px solid " + C.bd, borderRadius: 6, padding: 10, boxShadow: "0 4px 14px rgba(0,0,0,0.4)", width: 340 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: C.tx, marginBottom: 6 }}>EU ETS calculator</div>
-        <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-          {[100, 50].map(s => (
-            <button key={s} onClick={() => setScope(s)}
-              style={{ flex: 1, fontSize: 11, fontWeight: 700, padding: "4px 0", borderRadius: 4, cursor: "pointer", fontFamily: "inherit",
-                border: "1px solid " + (scope === s ? C.blue : C.bd), background: scope === s ? "rgba(88,166,255,0.15)" : "transparent", color: scope === s ? C.blue : C.dim }}>
-              {s}%
-            </button>
-          ))}
-        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+        {[["ballastScope","Ballast scope %"],["ladenScope","Laden scope %"],["repoScope","Repo scope %"],["waitScope","Wait scope %"],["euaPrice","EUA EUR/t"],["fx","USD per EUR"],["co2Factor","t CO2e / t fuel"]].map(([k,label])=><React.Fragment key={k}>{miniInp(row,k,label,85)}</React.Fragment>)}
+        {["loadEEA","dischEEA"].map(k=><label key={k} style={{fontSize:11}}><input type="checkbox" checked={opts[k]!==false} onChange={e=>updateField(row.key,k,e.target.checked)}/>{k==="loadEEA"?"Load port EEA":"Disch port EEA"}</label>)}
+        </div><div style={{fontSize:10,color:C.dim,margin:"6px 0"}}>2026 emissions: 100% phase-in. Sea scopes: 0 / 50 / 100%. EEA ports: 100%. Price / FX are assumptions. CO2e factor must include fuel-specific CH4/N2O for a full estimate.</div>
         <div style={{ fontSize: 16, fontWeight: 800, color: C.blue, marginBottom: 8 }}>${ets.toLocaleString("nb-NO")}</div>
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={() => { updateField(row.key, "euEts", String(ets)); setEtsPopout(null); }}
@@ -415,7 +421,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   return (
     <div style={CARD}>
       <div style={{ padding:"8px 12px", background:C.bg3, borderBottom:"1px solid "+C.bd2, fontSize:12, fontWeight:700, color:C.tx, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <span>📍 Benchmark Routes{orderError&&<span style={{marginLeft:8,fontSize:10,color:C.red}}>Could not save row order: {orderError}</span>}</span>
+        <span>📍 Benchmark Routes{(orderError||inputsError)&&<span style={{marginLeft:8,fontSize:10,color:C.red}}>Could not save row order: {orderError||inputsError}</span>}</span>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
           {status && <span style={{ fontSize:11, color:C.green, fontWeight:600 }}>{status}</span>}
           <button onClick={exportSelected} title="Copy selected routes in market-report format"
@@ -431,12 +437,15 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
       {["Europe","Deepsea"].map(group=><div key={group} style={{minWidth:0,border:"1px solid "+C.bd2,borderRadius:5}}>
       <div style={{padding:"6px 9px",fontSize:12,color:C.blue,fontWeight:700,background:C.bg3}}>{group} <span style={{color:C.faint,fontWeight:400}}>({rows.filter(r=>groupFor(r)===group).length})</span><button onClick={()=>addLeg(group)} style={{float:"right",background:"transparent",color:C.blue,border:"1px solid "+C.bd,borderRadius:4,cursor:"pointer",fontSize:10}}>+ Add leg</button></div>
       <div style={{display:"flex",flexDirection:"column",overflow:"visible"}}>
-        {orderedRows.filter(r=>groupFor(r)===group).map((r,routeIndex)=>{
+        {routeTokens.filter(token=>token===DIVIDER?group==="Europe":groupFor(orderedRows.find(r=>r.key===token))===group).map((token,routeIndex)=>{
+          if(token===DIVIDER)return <div key={DIVIDER} {...dragProps(DIVIDER)} draggable={orderReady} onDragStart={e=>handleDrag(e,DIVIDER)} onDragEnd={()=>{drag.current=null;}} style={{padding:"9px 12px",cursor:"grab",color:C.blue,fontSize:11,fontWeight:700,borderTop:"2px solid "+C.blue}}>⠿ Main legs above · Other legs below — drag to move divider</div>;
+          const r=orderedRows.find(x=>x.key===token);if(!r)return null;
           const isOpen = !!expanded[r.key];
           return (
-          <div key={r.key} style={{ borderBottom:primaryKeys.has(r.key)&&!primaryKeys.has(orderedRows.filter(x=>groupFor(x)===group)[routeIndex+1]?.key)?"2px solid "+C.blue:"1px solid "+C.bd, padding:"7px 12px" }}>
+          <div key={r.key} {...dragProps(r.key)} style={{borderBottom:"1px solid rgba(255,255,255,.05)",padding:"7px 12px"}}>
             <div style={{ display:"flex", gap:8, alignItems:"center" }}>
               
+              <span draggable={orderReady} onDragStart={e=>handleDrag(e,r.key)} onDragEnd={()=>{drag.current=null;}} title="Drag route to reorder" style={{cursor:"grab",color:C.dim}}>⠿</span>
               <button onClick={()=>setExpanded(p=>({...p,[r.key]:!p[r.key]}))}
                 style={{background:"none", border:"none", color:C.faint, cursor:"pointer", fontSize:16, padding:0, width:18}}>
                 {isOpen?"▾":"▸"}
@@ -455,7 +464,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
               </button>
               <input value={r.label} onChange={e=>updateField(r.key,"label",e.target.value)} placeholder="Route name"
                 style={{ flex:"1 1 140px", minWidth:100, background:"transparent", border:"none", color:C.tx, fontSize:12, fontWeight:700, padding:"2px 0", outline:"none", fontFamily:"inherit" }}/>
-              <span style={{display:"inline-flex",gap:2}}>{[-1,1].map(direction=><button key={direction} type="button" title={direction<0?"Move route up":"Move route down"} aria-label={`${direction<0?"Move up":"Move down"} ${r.label}`} disabled={!orderReady||!groupsReady||(direction<0?routeIndex===0:routeIndex===orderedRows.filter(x=>groupFor(x)===group).length-1)} onClick={()=>moveRoute(r.key,direction)} style={{border:0,background:"transparent",color:C.blue,cursor:"pointer",padding:"2px 3px",opacity:!orderReady||!groupsReady||(direction<0?routeIndex===0:routeIndex===orderedRows.filter(x=>groupFor(x)===group).length-1)?0.3:1}}>{direction<0?"↑":"↓"}</button>)}</span>
+
               <FmtInput value={r.freight} onChange={val=>updateField(r.key,"freight",val)} width={100} placeholder="Freight USD" fontSize={12}/>
               <div style={{ fontSize:13, fontWeight:800, color: r.tce!=null ? (r.tce>=0?C.green:C.red) : C.faint, minWidth:90, textAlign:"right" }}>
                 {r.tce!=null ? "$"+r.tce.toLocaleString("nb-NO")+"/d" : "—"}
@@ -482,11 +491,14 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
                           style={{ fontSize:9, padding:"0 5px", borderRadius:4, border:"1px solid "+C.bd, background:"transparent", color:C.blue, cursor:"pointer", fontFamily:"inherit" }}>calc</button>
                       </div>
                     </div>
-                    {etsPopout===r.key && <EtsPopout row={r}/>}
+                    {etsPopout===r.key && EtsPopout({row:r})}
                   </div>
                   {miniInp(r,"commission","Comm %")}
                   {miniInp(r,"speed","Speed")}
                   {miniInp(r,"cons","Cons")}
+                  {[["consBallast","Ballast mt/d"],["consLoad","Load mt/d"],["consDisch","Disch mt/d"],["consIdle","Idle mt/d"],["daysLoad","Load days"],["noticeLoad","NOR load days"],["daysDisch","Disch days"],["noticeDisch","NOR disch days"],["daysWaiting","Waiting days"],["weatherPct","Weather %"]].map(([k,label])=><React.Fragment key={k}>{miniInp(r,k,label,75)}</React.Fragment>)}
+                  <div style={{width:"100%",fontSize:10,color:C.dim}}>Time and consumption inherit Standard Variables until overridden. Weather adds to sailing days (ballast, laden, repo), including fuel use.</div>
+
                 </div>
                 <div style={{ marginTop:8 }}>
                   {pendingDelete===r.key ? (
@@ -534,7 +546,7 @@ function DifferentialWorkbench({rows,primaryKeys}){
   return <div style={{padding:12,borderTop:"1px solid #284363"}}>
     <div style={{display:"flex",gap:7,alignItems:"center",marginBottom:12}}>
       <button onClick={()=>setTab("differentials")} style={btn(tab==="differentials")}>Route differentials</button>
-      <button onClick={()=>setTab("notes")} style={btn(tab==="notes")}>Market / Contract notes ({notes.length})</button>
+      <button onClick={()=>setTab("notes")} style={btn(tab==="notes")}>Market notes, diffs and TCE ({notes.length})</button>
     </div>
     {tab==="differentials"?<div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:9,overflowX:"auto"}}>
       {groups.map(r=><div key={r.key} style={{minWidth:190,border:"1px solid #284363",borderRadius:6,overflow:"hidden"}}>
@@ -555,7 +567,7 @@ function DifferentialWorkbench({rows,primaryKeys}){
         <button disabled={!notesReady||!subject.trim()||!body.trim()} onClick={()=>{setNotes(v=>[{id:Date.now(),subject:subject.trim(),body:body.trim()},...v]);setSubject("");setBody("")}} style={btn()}>Save note</button>
       </div>
       <div style={{display:"flex",flexWrap:"wrap",gap:7}}>{notes.map(n=><div key={n.id} style={{border:"1px solid #284363",padding:7,borderRadius:5,maxWidth:350}}>
-        <div style={{display:"flex",gap:6,alignItems:"center"}}><button onClick={()=>setExpandedNote(v=>v===n.id?null:n.id)} title={n.body.slice(0,180)} style={{...btn(expandedNote===n.id),textAlign:"left"}}>{n.subject} · {n.body.slice(0,45)}{n.body.length>45?"…":""}</button><button title="Delete note" onClick={()=>setPendingDelete({type:"note",id:n.id,label:n.subject})} style={{background:"none",border:0,color:"#ef7474",cursor:"pointer",fontSize:17}}>×</button></div>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}><button onClick={()=>setExpandedNote(v=>v===n.id?null:n.id)} title={n.body.slice(0,180)} style={{...btn(expandedNote===n.id),textAlign:"left"}}>{n.subject}</button><button title="Delete note" onClick={()=>setPendingDelete({type:"note",id:n.id,label:n.subject})} style={{background:"none",border:0,color:"#ef7474",cursor:"pointer",fontSize:17}}>×</button></div>
         {expandedNote===n.id&&<div style={{whiteSpace:"pre-wrap",fontSize:11,color:"#b8cee9",paddingTop:8}}>{n.body}</div>}
       </div>)}</div>
     </>}
@@ -753,10 +765,10 @@ function TCECalculator(){
         numD(defaults.consLoad),numD(defaults.consDisch),numD(defaults.consIdle),
         numD(defaults.daysLoad),numD(defaults.noticeLoad),
         numD(defaults.daysDisch),numD(defaults.noticeDisch),numD(defaults.daysWaiting),
-        numD(defaults.speed),isIntraEU);
+        numD(defaults.speed),isIntraEU,{repoNm:numD(v.repoNm),weatherPct:defaults.weatherPct??8});
       setEuEts(ets);
     }
-  },[v.ballastNm,v.ladenNm,defaults.consBallast,defaults.consLaden,defaults.speed,isIntraEU,autoEts]);
+  },[v.ballastNm,v.ladenNm,v.repoNm,defaults,isIntraEU,autoEts]);
 
   // Auto-fill distances from port names
   useEffect(()=>{
@@ -947,6 +959,7 @@ function TCECalculator(){
               {numInp("Days disch","daysDisch",defaults.daysDisch,sD,"days")}
               {numInp("Notice disch","noticeDisch",defaults.noticeDisch,sD,"days")}
               {numInp("Days waiting","daysWaiting",defaults.daysWaiting,sD,"days")}
+              {numInp("Weather allowance","weatherPct",defaults.weatherPct??8,sD,"% sea time")}
               <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:".07em",marginTop:10,marginBottom:4}}>Costs</div>
               {numInp("Bunker price","bunker",defaults.bunker,sD,"$/mt","",true)}
               {numInp("Commission","commission",defaults.commission,sD,"%")}
