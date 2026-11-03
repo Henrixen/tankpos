@@ -2,14 +2,15 @@ import React,{useEffect,useRef,useState,Suspense} from "react";
 import {supabase} from "./supabaseclient";
 import {C} from "./constants";
 const TCE=React.lazy(()=>import("./TCECalculator"));
+const WWAssessment=React.lazy(()=>import("./WWAssessment"));
 const Map=React.lazy(()=>import("./FreightMapTab"));
-const TABS=[["tce","TCE"],["freights","Freights"],["map","Freight Map"],["assessment","Assessement"]];
+const TABS=[["tce","TCE"],["freights","Freights"],["map","Freight Map"],["assessment","WW Assessment"]];
 const KEY="monthly_freight_matrix_v1";
 const input={width:"100%",minWidth:0,boxSizing:"border-box",border:"1px solid #2c4869",borderRadius:4,padding:"8px 10px",background:"#0b1a2e",color:"#cee6ff",fontFamily:"inherit",fontSize:12};
 export default function FreightsTCEHub({active="tce",onActive,allowed=["tce","freights","map","assessment"]}){
  const selected=allowed.includes(active)?active:allowed[0];
  return <div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0}}><div role="tablist" aria-label="Freights and TCE tools" style={{display:"flex",gap:8,flexWrap:"wrap",borderBottom:"1px solid "+C.bd,paddingBottom:12}}>{TABS.filter(([id])=>allowed.includes(id)).map(([id,label])=><button role="tab" aria-selected={selected===id} key={id} onClick={()=>onActive(id)} style={{padding:"8px 17px",fontSize:12,fontWeight:700,fontFamily:"inherit",borderRadius:5,border:"1px solid "+(selected===id?"#86efac":C.bd),background:selected===id?"rgba(134,239,172,.18)":C.bg3,color:selected===id?"#bbf7d0":"#9fc3f5",cursor:"pointer"}}>{label}</button>)}</div>
- <div role="tabpanel"><Suspense fallback={<div style={{color:C.faint,padding:20}}>Loading…</div>}>{selected==="tce"?<TCE/>:selected==="map"?<Map/>:null}</Suspense>{allowed.includes("freights")&&<div style={{display:selected==="freights"?"block":"none"}}><FreightTable/></div>}</div></div>;
+ <div role="tabpanel"><Suspense fallback={<div style={{color:C.faint,padding:20}}>Loading…</div>}>{selected==="tce"?<TCE/>:selected==="map"?<Map/>:selected==="assessment"?<WWAssessment/>:null}</Suspense>{allowed.includes("freights")&&<div style={{display:selected==="freights"?"block":"none"}}><FreightTable/></div>}</div></div>;
 }
 export function FreightTable(){
  const [rows,setRows]=useState([]),[loaded,setLoaded]=useState(false),[status,setStatus]=useState(""),[busy,setBusy]=useState(false),[dirty,setDirty]=useState(false),[month,setMonth]=useState(""),[search,setSearch]=useState(""),[sort,setSort]=useState({key:"date",direction:-1});
