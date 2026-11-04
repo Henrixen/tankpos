@@ -1,3 +1,10 @@
+// A plain query is a phrase; + and comma require every term across row values.
+function brokerSearchTerms(query){return String(query??"").normalize("NFKC").toLowerCase().split(/[+,]/).map(s=>s.trim().replace(/^["'](.*)["']$/, "$1").replace(/\s+/g," ")).filter(Boolean);}
+function brokerMatchesSearch(row,terms){
+ if(!terms.length)return true;
+ const values=[];const collect=v=>{if(v==null)return;if(typeof v==="object"){Object.values(v).forEach(collect);return;}values.push(String(v).normalize("NFKC").toLowerCase().replace(/\s+/g," "));};collect(row);
+ return terms.every(term=>values.some(value=>value.includes(term)));
+}
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react";
 import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
@@ -1735,6 +1742,8 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
   const [aisPanelTab,setAisPanelTab]=useState("Map");
   // Positions top-row widths (percent). Drag either divider to resize adjacent panels.
   const [positionsWidths,setPositionsWidths]=useState([32,34,34]);
+  const [positionsRightCollapsed,setPositionsRightCollapsed]=useState(false);
+  const positionsVisibleWidths=positionsRightCollapsed?[positionsWidths[0],positionsWidths[1]+positionsWidths[2],0]:positionsWidths;
   const positionsTopRef=useRef(null);
   const positionsDragRef=useRef(null);
   useEffect(()=>{
@@ -1748,7 +1757,7 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
       const change=Math.max(16-widths[i],Math.min(delta,widths[i+1]-16));
       widths[i]+=change;
       widths[i+1]-=change;
-      setPositionsWidths(widths);
+      if(drag.collapsed){const remaining=100-widths[0],ratio=drag.originalWidths[1]/(drag.originalWidths[1]+drag.originalWidths[2]);setPositionsWidths([widths[0],remaining*ratio,remaining*(1-ratio)]);}else setPositionsWidths(widths);
     };
     const up=()=>{positionsDragRef.current=null;document.body.style.cursor="";document.body.style.userSelect="";};
     window.addEventListener("pointermove",move);
@@ -1756,15 +1765,18 @@ const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
     return()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);};
   },[]);
   const startPositionsResize=(index,e)=>{
+    if(index===1&&positionsRightCollapsed)return;
     e.preventDefault();
-    positionsDragRef.current={index,startX:e.clientX,widths:[...positionsWidths]};
+    positionsDragRef.current={index,startX:e.clientX,widths:[...positionsVisibleWidths],originalWidths:[...positionsWidths],collapsed:positionsRightCollapsed};
     document.body.style.cursor="col-resize";
     document.body.style.userSelect="none";
   };
+  const togglePositionsRight=()=>{positionsDragRef.current=null;document.body.style.cursor="";document.body.style.userSelect="";setPositionsRightCollapsed(p=>!p);};
   const positionsDivider=index=>(
-    <div onPointerDown={e=>startPositionsResize(index,e)}
-      title="Drag to resize panels"
-      style={{width:8,flex:"0 0 8px",cursor:"col-resize",alignSelf:"stretch",display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none"}}>
+    <div onPointerDown={e=>startPositionsResize(index,e)} onDoubleClick={index===1?togglePositionsRight:undefined}
+      title={index===1?"Drag to resize · double-click to hide/show AIS and preview":"Drag to resize panels"}
+      style={{width:index===1?18:8,flex:index===1?"0 0 18px":"0 0 8px",cursor:"col-resize",alignSelf:"stretch",display:"flex",flexDirection:"column",gap:8,alignItems:"center",justifyContent:"center",touchAction:"none"}}>
+      {index===1&&<button type="button" aria-label={positionsRightCollapsed?"Expand AIS and preview":"Collapse AIS and preview"} aria-expanded={!positionsRightCollapsed} title={positionsRightCollapsed?"Show AIS / preview":"Hide AIS / preview and expand tags"} onPointerDown={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();togglePositionsRight();}} style={{width:18,height:28,padding:0,border:"1px solid #365476",borderRadius:3,background:C.bg3,color:C.blue,cursor:"pointer",fontSize:12}}>{positionsRightCollapsed?"◀":"▶"}</button>}
       <div style={{height:52,width:2,borderRadius:2,background:"#365476"}}/>
     </div>
   );
@@ -2247,13 +2259,10 @@ const quoteFixtureColumns = [
     vessels.filter(v=>!isEUFlag(v)).map(v=>vesselFlag(v).toUpperCase()).filter(Boolean)
   )).sort((a,b)=>a.localeCompare(b))];
 
-  // Multi-token search across all text fields
-  const tokens=search.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  function matchesSearch(v){
-  if(!tokens.length)return true;
-  const hay=JSON.stringify(v).toLowerCase();
-  return tokens.every(t=>hay.includes(t));
-}
+  // Phrase search by default; explicit + or comma joins terms with AND.
+  const tokens=brokerSearchTerms(search);
+  function matchesSearch(v){return brokerMatchesSearch(v,tokens);}
+
 
 const superRegionOptions=["ALL", ...Array.from(new Set(
   vessels.map(v=>String(v.superRegion||"").trim()).filter(Boolean)
@@ -2757,7 +2766,7 @@ const filtV=useMemo(()=>{
   },[selV]);
 
   const selFixes=sel?cargoes.filter(c=>c.vessel&&c.vessel.toLowerCase()===sel.toLowerCase()):[];
-  const cTokens=cSearch.trim().toLowerCase().split(",").map(g=>g.trim().split(/\s+/).filter(Boolean)).filter(g=>g.length);
+  const cTokens=brokerSearchTerms(cSearch);
   const filtC=useMemo(()=>{
     const now=new Date();
     const startOfWeek=(d)=>{const r=new Date(d);r.setHours(0,0,0,0);r.setDate(r.getDate()-r.getDay()+1);return r;};
@@ -2782,7 +2791,7 @@ const filtV=useMemo(()=>{
       
       if(cDateFilter){const hay=(c.from||" ")+" "+(c.to||"");if(!hay.toLowerCase().includes(cDateFilter.toLowerCase()))return false;}
       if(!cTokens.length)return true;
-      return cTokens.some(terms=>terms.every(t=>JSON.stringify(c).toLowerCase().includes(t)));
+      return brokerMatchesSearch(c,cTokens);
     });
     if(cSortK){
       list=[...list].sort((a,b)=>{
@@ -3278,7 +3287,7 @@ const filtV=useMemo(()=>{
                   since Regional Snapshot is now a tab inside the AIS Map panel on the right) */}
               {positionsDivider(0)}
               {!mobile&&(
-                <div style={{width:`calc(${positionsWidths[1]}% - 6px)`,minWidth:0,height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"visible",position:"relative",display:"flex",flexDirection:"column"}}>
+                <div style={{width:`calc(${positionsVisibleWidths[1]}% - 12px)`,minWidth:0,height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"visible",position:"relative",display:"flex",flexDirection:"column"}}>
                   {positionsClearButton({position:"absolute",left:7,top:-29,zIndex:3})}
                   <HScrollStyle/>
                   {(opFilter||bucketFilters.size>0)&&(
@@ -3384,7 +3393,7 @@ const filtV=useMemo(()=>{
               {/* RIGHT: AIS Map / Regional Snapshot / Positions Preview */}
               {positionsDivider(1)}
 {!mobile&&(
-  <div style={{width:`calc(${positionsWidths[2]}% - 6px)`,minWidth:0}}>
+  <div style={{display:positionsRightCollapsed?"none":undefined,width:`calc(${positionsVisibleWidths[2]}% - 12px)`,minWidth:0}}>
     <TabbedPanel tabs={["Map","Regional Snapshot","Positions Preview"]} active={aisPanelTab} onChange={setAisPanelTab} height={460}>
       {aisPanelTab==="Map" ? (
         <Suspense fallback={null}><AISMap selectedVessels={selectedAISVessels} vessels={vessels} onAisVesselsChange={setAisVesselSet}/></Suspense>
@@ -3583,7 +3592,7 @@ const filtV=useMemo(()=>{
                 }}>
                   {mobile&&<div style={{position:"relative",display:"flex",alignItems:"center",width:"100%"}}>
                     <input value={search} onChange={e=>setSearch(e.target.value)}
-                      placeholder="🔍 Multi-search: e.g. belfast ulsd 1A"
+                      placeholder="Search phrase or nap+mong" title="Spaces match a phrase. Use + or comma to require all terms, e.g. med baltic or nap+mong."
                       style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"7px 30px 7px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}/>
                     {search&&<button onClick={()=>setSearch("")} style={{position:"absolute",right:7,top:"50%",transform:"translateY(-50%)",background:C.bd,border:"none",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:C.faint,fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>}
                   </div>}
@@ -3643,7 +3652,7 @@ const filtV=useMemo(()=>{
                     <input
                       value={search}
                       onChange={e=>setSearch(e.target.value)}
-                      placeholder="🔍 Multi-search: e.g. belfast ulsd 1A"
+                      placeholder="Search phrase or nap+mong" title="Spaces match a phrase. Use + or comma to require all terms, e.g. med baltic or nap+mong."
                       style={{background:C.bg,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 28px 5px 10px",outline:"none",width:"100%",boxSizing:"border-box"}}
                     />
                     {search&&(
