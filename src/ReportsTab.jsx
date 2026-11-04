@@ -306,11 +306,22 @@ function AsiaReportEditor({value,onChange,date,name,setName,saveCopy,setSaveCopy
 }
 
 function reportWeek(date){const d=new Date(date+"T12:00:00Z");if(Number.isNaN(d.getTime()))return "";d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));return d.toISOString().slice(0,10);}
-function historyWeeks(date){const anchor=reportWeek(date);if(!anchor)return [];return Array.from({length:12},(_,i)=>{const d=new Date(anchor+"T12:00:00Z");d.setUTCDate(d.getUTCDate()-(11-i)*7);return d.toISOString().slice(0,10);});}
-function trimWeeklyHistory(history,date){const weeks=new Set(historyWeeks(date));return {...history,series:Object.fromEntries(Object.entries(history.series||{}).map(([key,values])=>[key,Object.fromEntries(Object.entries(values).filter(([day])=>weeks.has(day)))]))};}
+function historyWeeks(date,values={}){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date||""))return [];
+ const shift=(day,n)=>{const d=new Date(day+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);};
+ const days=Object.keys(values).filter(day=>/^\d{4}-\d{2}-\d{2}$/.test(day)&&day<=date).sort();
+ if(!days.length)return Array.from({length:12},(_,i)=>shift(date,-(11-i)*7));
+ const result=[];for(const day of days){if(result.length){let prior=result[result.length-1];while((new Date(day)-new Date(prior))/86400000>=14){prior=shift(prior,7);result.push(prior);}}result.push(day);}
+ let prior=result[result.length-1];while((new Date(date)-new Date(prior))/86400000>=14){prior=shift(prior,7);result.push(prior);}
+ if(result[result.length-1]!==date)result.push(date);
+ while(result.length<12)result.unshift(shift(result[0],-7));return result.slice(-12);
+}
+function trimWeeklyHistory(history,date){return {...history,schema:2,series:Object.fromEntries(Object.entries(history.series||{}).map(([key,values])=>{const weeks=historyWeeks(date,values);return [key,Object.fromEntries(weeks.map(day=>[day,values[day]??""]))];}))};}
+function mergeWeeklySeries(...sources){const out={};for(const source of sources)for(const [key,values] of Object.entries(source||{}))out[key]={...out[key],...values};return out;}
+function savedWeeklySeries(reports){let series={};for(const report of [...reports].sort((a,b)=>String(a.updated_at||a.created_at).localeCompare(String(b.updated_at||b.created_at)))){const h=report.rate_grid?.__marketEditor?.weeklyHistory;if(!h)continue;const incoming={};for(const [key,values] of Object.entries(h.series||{})){incoming[key]={...values};if(h.schema!==2&&Object.hasOwn(incoming[key],reportWeek(report.report_date))){const day=reportWeek(report.report_date);incoming[key][report.report_date]=incoming[key][day];if(day!==report.report_date)delete incoming[key][day];}}series=mergeWeeklySeries(series,incoming);}return series;}
 function historyNumber(value){if(value==null||String(value).trim()==="")return null;const s=String(value).replace(/USD|\$/ig,"").replace(/[,\s]/g,"");const n=parseFloat(s);return Number.isFinite(n)?n*(/\d(?:\.\d+)?k\b/i.test(s)?1000:1):null;}
 function WeeklyBenchmarkPlot({values={},date,title="Benchmark freight · 12 weeks",light=false,onTitleChange}){
- const weeks=historyWeeks(date),points=weeks.map((w,i)=>({x:i,value:historyNumber(values[w]),week:w})).filter(p=>p.value!=null);
+ const weeks=historyWeeks(date,values),points=weeks.map((w,i)=>({x:i,value:historyNumber(values[w]),week:w})).filter(p=>p.value!=null);
  if(!points.length)return <div style={{padding:15,color:light?"#64748b":"#91accb",fontSize:12}}>Enter weekly values to display the chart.</div>;
  const W=820,L=light?36:48,R=light?8:16,T=20,B=32;const rawMin=Math.min(...points.map(p=>p.value)),rawMax=Math.max(...points.map(p=>p.value));
  // Inputs such as 250 represent USD 250k; full-dollar values use 25,000 steps.
@@ -325,8 +336,8 @@ function WeeklyBenchmarkPlot({values={},date,title="Benchmark freight · 12 week
 function WeeklyBenchmarkHistory({history,setHistory,rows,date}){
  const key=history.routeKey||rows[0]?.key||"",values=history.series?.[key]||{},route=rows.find(r=>r.key===key);
  return <div style={{background:"#0e1d32",border:"1px solid #2b4563",borderRadius:7,padding:12,color:"#cce1f8"}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><b style={{fontSize:12}}>Weekly benchmark · rolling 12 weeks</b><label className="no-export" style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11,whiteSpace:"nowrap",marginLeft:"auto"}}><input type="checkbox" aria-label="Include weekly benchmark graph in exports" checked={history.includeInExport!==false} onChange={e=>setHistory(p=>({...p,includeInExport:e.target.checked}))} style={{accentColor:"#377dc8"}}/>Include</label><select aria-label="Benchmark history route" value={key} onChange={e=>setHistory(p=>({...p,routeKey:e.target.value}))} style={{marginLeft:"auto",background:"#10233c",color:"#bdd9f7",padding:6,border:"1px solid #42678d",borderRadius:4}}>{rows.map(r=><option key={r.key} value={r.key}>{r.label}</option>)}</select></div>
- <div style={{fontSize:11,color:"#91accb",marginBottom:8}}>Weeks follow the report date. Import the preceding report to carry its history forward; changing to a later week opens a blank current-week cell.</div>
- <div style={{overflowX:"auto"}}><table style={{borderCollapse:"collapse",width:"100%",minWidth:760}}><thead><tr>{historyWeeks(date).map((w,i)=><th key={w} style={{padding:5,fontSize:10,color:i===11?"#86efac":"#91accb"}}>{new Date(w+"T12:00:00Z").toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:"UTC"})}</th>)}</tr></thead><tbody><tr>{historyWeeks(date).map((w,i)=><td key={w} style={{padding:3}}><input aria-label={`Benchmark week ${w}`} value={values[w]??""} onChange={e=>setHistory(p=>({...p,routeKey:key,series:{...p.series,[key]:{...p.series?.[key],[w]:e.target.value}}}))} placeholder={i===11?"This week":""} style={{boxSizing:"border-box",width:"100%",minWidth:55,padding:"6px 4px",fontSize:11,border:"1px solid "+(i===11?"#70b994":"#34516e"),background:"#0a1728",color:"#dcecff",borderRadius:3}}/></td>)}</tr></tbody></table></div>
+ <div style={{fontSize:11,color:"#91accb",marginBottom:8}}>History loads automatically by route. The last cell uses the report date; missed weeks stay blank. Save report to store the rolling history in Supabase.</div>
+ <div style={{overflowX:"auto"}}><table style={{borderCollapse:"collapse",width:"100%",minWidth:760}}><thead><tr>{historyWeeks(date,values).map((w,i)=><th key={w} style={{padding:5,fontSize:10,color:i===11?"#86efac":"#91accb"}}>{new Date(w+"T12:00:00Z").toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:"UTC"})}</th>)}</tr></thead><tbody><tr>{historyWeeks(date,values).map((w,i)=><td key={w} style={{padding:3}}><input aria-label={`Benchmark week ${w}`} value={values[w]??""} onChange={e=>setHistory(p=>({...p,routeKey:key,series:{...p.series,[key]:{...p.series?.[key],[w]:e.target.value}}}))} placeholder={i===11?"This week":""} style={{boxSizing:"border-box",width:"100%",minWidth:55,padding:"6px 4px",fontSize:11,border:"1px solid "+(i===11?"#70b994":"#34516e"),background:"#0a1728",color:"#dcecff",borderRadius:3}}/></td>)}</tr></tbody></table></div>
  <WeeklyBenchmarkPlot values={values} date={date} title={history.chartTitles?.[key]??`${route?.label||"Benchmark"} · weekly freight`} onTitleChange={title=>setHistory(p=>({...p,chartTitles:{...p.chartTitles,[key]:title}}))}/></div>;
 }
 
@@ -1000,9 +1011,20 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [tceEarnings, setTceEarnings] = useState({});
   const [fixtures, setFixtures] = useState([]);
   const [quotes, setQuotes] = useState([]);
-  const [reportDate, setReportDate] = useState("2026-10-16");
+  const [reportDate, setReportDate] = useState(()=>new Date().toLocaleDateString("sv-SE",{timeZone:"Europe/Oslo"}));
   const [intermediateTitle, setIntermediateTitle] = useState("Intermediate Summary");
   const [savedReports, setSavedReports] = useState([]);
+  const [weeklyArchive,setWeeklyArchive]=useState({}),[weeklyArchiveReady,setWeeklyArchiveReady]=useState(false),[weeklyArchiveError,setWeeklyArchiveError]=useState("");
+  const weeklyDirty=useRef({}),weeklyStored=useRef({});
+  useEffect(()=>{let live=true;(async()=>{try{const series={};for(let offset=0;;offset+=1000){const {data,error}=await supabase.from("tag_settings").select("key,value").like("key","weekly-benchmark:v2:%").order("key").range(offset,offset+999);if(error)throw error;for(const row of data||[]){const p=row.value;if(p?.route&&p?.date){series[p.route]={...series[p.route],[p.date]:p.value??""};}}if((data||[]).length<1000)break;}if(live){weeklyStored.current=series;setWeeklyArchive(series);setWeeklyArchiveReady(true);}}catch(e){if(live)setWeeklyArchiveError(e.message||String(e));}})();return()=>{live=false;};},[]);
+  const rollingHistory={...weeklyHistory,schema:2,series:mergeWeeklySeries(savedWeeklySeries(savedReports),weeklyHistory.series,weeklyArchive,weeklyDirty.current)};
+  function editWeeklyHistory(updater){const next=typeof updater==="function"?updater(rollingHistory):updater;for(const [key,values] of Object.entries(next.series||{}))for(const [day,value] of Object.entries(values))if(value!==rollingHistory.series?.[key]?.[day])weeklyDirty.current[key]={...weeklyDirty.current[key],[day]:value};setWeeklyHistory(next);}
+  async function saveWeeklyArchive(snapshot){
+    if(!weeklyArchiveReady)throw Error(weeklyArchiveError||"Weekly history is still loading. Please retry shortly.");
+    const writes=[];for(const [route,values] of Object.entries(snapshot.series||{}))for(const [date,value] of Object.entries(values)){if(Object.hasOwn(weeklyDirty.current[route]||{},date)||!Object.hasOwn(weeklyStored.current[route]||{},date))writes.push({key:"weekly-benchmark:v2:"+encodeURIComponent(route)+":"+date,value:{route,date,value},updated_at:new Date().toISOString()});}
+    for(let i=0;i<writes.length;i+=200){const {error}=await supabase.from("tag_settings").upsert(writes.slice(i,i+200),{onConflict:"key"});if(error)throw error;}
+    const committed={};for(const row of writes){const p=row.value;committed[p.route]={...committed[p.route],[p.date]:p.value};}weeklyStored.current=mergeWeeklySeries(weeklyStored.current,committed);setWeeklyArchive(p=>mergeWeeklySeries(p,committed));weeklyDirty.current={};
+  }
   const [pendingSavedDelete, setPendingSavedDelete] = useState(null);
   const [deleteReportError, setDeleteReportError] = useState("");
   const [marketHeadings, setMarketHeadings] = useState({drivers:"Market drivers / What to watch",benchmark:"Benchmark rates",tce:"TCE earnings",handy:"Handy",ffa:"FFA trend (BALMO / +1 / +2)"});
@@ -1253,7 +1275,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
         if(data.report_type!=="Intermediate")throw new Error("Choose an Intermediate report");
         await loadReport(fixingImportChoice);
       }else{
-        setActiveMarketReportId(null);setReportName("");setSaveReportCopy(false);setReportType("Intermediate");setReportDate("2026-10-16");setIntermediateTitle("Intermediate Summary");
+        setActiveMarketReportId(null);setReportName("");setSaveReportCopy(false);setReportType("Intermediate");setReportDate(new Date().toLocaleDateString("sv-SE",{timeZone:"Europe/Oslo"}));setIntermediateTitle("Intermediate Summary");
         setCommentary("");setRateGrid({});setTceEarnings({});setQuotes([]);setFixtures([]);
         initRateGrid("Intermediate");
       }
@@ -1818,7 +1840,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     const editor=source.rate_grid?.__marketEditor||{},prior=editor.benchmarks||[];
     const norm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");let matched=0;
     setBenchmarkRows(rows=>rows.map(row=>{const hit=prior.find(x=>x.key===row.key)||prior.find(x=>norm(x.label)===norm(row.label));if(!hit)return row;matched++;return {...row,lastWeek:hit.freight??"",tceLastWeek:benchmarkTceValue(hit),manualTceLastWeek:hit.manualTce??""};}));
-    setWeeklyHistory(current=>{const incoming=editor.weeklyHistory||{series:{}};const series={...current.series};for(const [key,values] of Object.entries(incoming.series||{}))series[key]={...values,...series[key]};return {...current,routeKey:current.routeKey||incoming.routeKey||"",series};});
+    setWeeklyHistory(current=>{const incoming={...editor.weeklyHistory,series:savedWeeklySeries([source])};const series={...current.series};for(const [key,values] of Object.entries(incoming.series||{}))series[key]={...values,...series[key]};return {...current,routeKey:current.routeKey||incoming.routeKey||"",series};});
     setRouteColumns(p=>({...p,lastWeek:true}));setPriorReportOpen(false);setPriorReportStatus(`Imported last-week rates and history from ${source.rate_grid?.__marketEditor?.reportName||source.report_type} · ${source.report_date}. Unmatched routes retained.`);
   }
 
@@ -1827,9 +1849,11 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if (marketSaveBusy) return;
     setMarketSaveBusy(true); setMarketSaveStatus("Saving...");
     try {
+      const historyForSave=trimWeeklyHistory({...rollingHistory,series:mergeWeeklySeries(rollingHistory.series,...benchmarkRows.map(r=>({[r.key]:{...rollingHistory.series?.[r.key],[reportDate]:rollingHistory.series?.[r.key]?.[reportDate]??""}})))},reportDate);
+      if(reportType==="Intermediate")await saveWeeklyArchive(historyForSave);
       const savedName=marketReportSaveName(reportName,reportType,saveReportCopy,savedReports);
       const payload = { report_type: reportType, report_date: reportDate, commentary,
-        rate_grid: { ...rateGrid, __marketEditor: { headings: marketHeadings, intermediateTitle, reportName:savedName, asiaReport, weeklyHistory:trimWeeklyHistory(weeklyHistory,reportDate),
+        rate_grid: { ...rateGrid, __marketEditor: { headings: marketHeadings, intermediateTitle, reportName:savedName, asiaReport, weeklyHistory:historyForSave,
           benchmarks: benchmarkRows, drivers: driverBullets, tceStats, handy, handyCommentary, handySegments, importedFixingChart,routeColumns,routeTitles,intermediateRoutesLabel,marketHeadings, excludedFixtureIds, excludedBenchmarkKeys, excludedCharterers, recipientCharterer } },
         tce_earnings: tceEarnings, fixtures:fixtures.map(normalizeReportFixture), quotes };
       // A copy always inserts a new report, even when its date matches the original.
@@ -1856,7 +1880,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
       setImportedFixingChart(data.rate_grid?.__marketEditor?.importedFixingChart||null);
       setTceEarnings(data.tce_earnings && typeof data.tce_earnings==="object" ? data.tce_earnings : {}); setFixtures(Array.isArray(data.fixtures)?data.fixtures.map(normalizeReportFixture):[]); setQuotes(Array.isArray(data.quotes)?data.quotes:[]);
       const editor = data.rate_grid?.__marketEditor;
-      setWeeklyHistory(editor?.weeklyHistory||{routeKey:"",series:{}});
+      setWeeklyHistory({...editor?.weeklyHistory,schema:2,series:savedWeeklySeries([data])});weeklyDirty.current={};
       setReportName(editor?.reportName || "");setSaveReportCopy(false);
       setIntermediateTitle(editor?.intermediateTitle || "Intermediate Summary");
       setExcludedFixtureIds(Array.isArray(editor?.excludedFixtureIds)?editor.excludedFixtureIds:[]);
@@ -3037,7 +3061,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
               </div>
 
               {priorReportStatus&&<div style={{fontSize:11,color:C.dim}}>{priorReportStatus}</div>}
-              <WeeklyBenchmarkHistory history={weeklyHistory} setHistory={setWeeklyHistory} rows={benchmarkRows} date={reportDate}/>
+              {weeklyArchiveError&&<div style={{color:C.red,fontSize:11}}>Weekly history load failed: {weeklyArchiveError}</div>}<WeeklyBenchmarkHistory history={rollingHistory} setHistory={editWeeklyHistory} rows={benchmarkRows} date={reportDate}/>
               {/* ── TCE earnings ── */}
               <div style={{ background: C.bg2, border: "1px solid " + C.bd, borderRadius: 8, overflow:"hidden" }}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 13px",background:"rgba(74,144,226,0.17)",borderLeft:"4px solid #377dc8"}}>{editMarketHeading("tce",{fontSize:12,fontWeight:700,color:"#79c0ff",textTransform:"uppercase",letterSpacing:"0.05em"})}{emailSectionTick("tce")}</div><div style={{padding:13}}>
@@ -3212,7 +3236,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                   </div>
                   )}
 
-                  {weeklyHistory.includeInExport!==false&&historyWeeks(reportDate).some(w=>String(weeklyHistory.series?.[weeklyHistory.routeKey||benchmarkRows[0]?.key]?.[w]??"").trim())&&<WeeklyBenchmarkPlot light values={weeklyHistory.series?.[weeklyHistory.routeKey||benchmarkRows[0]?.key]||{}} date={reportDate} title={weeklyHistory.chartTitles?.[weeklyHistory.routeKey||benchmarkRows[0]?.key]??((benchmarkRows.find(r=>r.key===(weeklyHistory.routeKey||benchmarkRows[0]?.key))?.label||"Benchmark")+" · weekly freight")}/>}
+                  {weeklyHistory.includeInExport!==false&&historyWeeks(reportDate,rollingHistory.series?.[weeklyHistory.routeKey||benchmarkRows[0]?.key]||{}).some(w=>String(rollingHistory.series?.[weeklyHistory.routeKey||benchmarkRows[0]?.key]?.[w]??"").trim())&&<WeeklyBenchmarkPlot light values={rollingHistory.series?.[weeklyHistory.routeKey||benchmarkRows[0]?.key]||{}} date={reportDate} title={weeklyHistory.chartTitles?.[weeklyHistory.routeKey||benchmarkRows[0]?.key]??((benchmarkRows.find(r=>r.key===(weeklyHistory.routeKey||benchmarkRows[0]?.key))?.label||"Benchmark")+" · weekly freight")}/>}
 
                   {emailSections.handy && (
                   <div>
