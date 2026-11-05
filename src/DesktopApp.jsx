@@ -47,6 +47,7 @@ const SettingsTab    = React.lazy(()=>import("./SettingsTab"));
 const ReportsTab     = React.lazy(()=>import("./ReportsTab"));
 const FreightMapTab  = React.lazy(()=>import("./FreightMapTab"));
 const FreightsTCEHub = React.lazy(()=>import("./FreightsTCEHub"));
+const HeaderQuickAccess = React.lazy(()=>import("./HeaderQuickAccess"));
 const VesselPopout   = React.lazy(()=>import("./VesselPopout"));
 const ClientsTab     = React.lazy(()=>import("./ClientsTab"));
 const VesselUploader = React.lazy(()=>import("./VesselUploader"));
@@ -1353,6 +1354,7 @@ function DesktopApp({positionsReady,vessels,cargoes,cargoTotal,onUpdateV,onRenam
 
   const [unlocked, setUnlocked] = React.useState(false); // always ask on load
   const [userTabs,setUserTabs] = React.useState(DEFAULT_USER_TABS);
+  const [quickAccess,setQuickAccess] = React.useState([]);
   const [pinInput, setPinInput] = React.useState("");
   const [pinError, setPinError] = React.useState(false);
   const [pinMessage,setPinMessage]=React.useState("");
@@ -1370,7 +1372,9 @@ function DesktopApp({positionsReady,vessels,cargoes,cargoTotal,onUpdateV,onRenam
   React.useEffect(()=>{
     const onUserAccess=e=>{if(currentAppUser?.id===e.detail?.userId&&Array.isArray(e.detail?.tabs))setUserTabs(e.detail.tabs.filter(id=>id!=="settings"));};
     window.addEventListener("user-access-updated",onUserAccess);
-    return()=>window.removeEventListener("user-access-updated",onUserAccess);
+    const refreshQuick=e=>{if(String(currentAppUser?.id)===String(e.detail?.userId))setQuickAccess(e.detail?.quick||[])};
+    window.addEventListener("quick-access-updated",refreshQuick);
+    return()=>{window.removeEventListener("user-access-updated",onUserAccess);window.removeEventListener("quick-access-updated",refreshQuick)};
   },[currentAppUser?.id]);
 
   React.useEffect(()=>{
@@ -1437,6 +1441,8 @@ function DesktopApp({positionsReady,vessels,cargoes,cargoTotal,onUpdateV,onRenam
         const raw=access?.value, configured=Array.isArray(raw)?raw:Array.isArray(raw?.tabs)?raw.tabs:null;
         tabs=(configured||DEFAULT_USER_TABS).filter(id=>id!=="settings");
       }
+      if(isAdmin)setQuickAccess(["ask_ai","intel_vault","fleet_quick","worklist"]);
+      else {const {data:qaccess}=await supabase.from("tag_settings").select("value").eq("key","user_quick_access_"+user.id).maybeSingle();setQuickAccess(Array.isArray(qaccess?.value)?qaccess.value:[])}
       localStorage.setItem("signal_user",String(user.initials||"").toUpperCase());
       setCurrentAppUser(user); setUserTabs(tabs); setGuestMode(!isAdmin); setUnlocked(true); setPinInput("");
     }catch(_){
@@ -3052,21 +3058,22 @@ const filtV=useMemo(()=>{
           </div>
           {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}
           {/* ASK AI — hidden on mobile (too small) */}
-          {!mobile&&(
-            <div style={{flex:1,minWidth:0,position:"relative",paddingBottom:10}}>
+          {!mobile&&(!guestMode||quickAccess.includes("ask_ai"))&&(
+            <div style={{flex:"0 1 27%",minWidth:0,position:"relative",paddingBottom:10}}>
               <Suspense fallback={null}><AskAIStrip vessels={vessels} cargoes={cargoes} intelItems={intelItems}/></Suspense>
             </div>
           )}
           {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}
           {/* INTEL VAULT — hidden on mobile */}
-          {!mobile&&(
-            <div style={{flex:1,minWidth:0,paddingBottom:10}}
-              onFocusCapture={e=>{e.currentTarget.style.flex="2";e.currentTarget.style.zIndex="10";}}
-              onBlurCapture={e=>{e.currentTarget.style.flex="1";e.currentTarget.style.zIndex="";}}
+          {!mobile&&(!guestMode||quickAccess.includes("intel_vault"))&&(
+            <div style={{flex:"0 1 29%",minWidth:0,paddingBottom:10}}
+              onFocusCapture={e=>{e.currentTarget.style.zIndex="10";}}
+              onBlurCapture={e=>{e.currentTarget.style.zIndex="";}}
             >
               <Suspense fallback={null}><IntelVaultStrip onVaultUpdate={setIntelItems}/></Suspense>
             </div>
           )}
+          {!mobile&&(quickAccess.includes("fleet_quick")||quickAccess.includes("worklist"))&&<div style={{flex:"1 1 25%",minWidth:0,paddingBottom:10}}><Suspense fallback={null}><HeaderQuickAccess showFleet={quickAccess.includes("fleet_quick")} showWorklist={quickAccess.includes("worklist")}/></Suspense></div>}
           {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}          <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0,paddingBottom:10}}>
             {/* ⚙ Settings dropdown */}
             <SettingsMenu mobile={mobile} onToggleLayout={onToggleLayout} layoutOverride={layoutOverride}/>
@@ -4140,7 +4147,7 @@ const filtV=useMemo(()=>{
           </div>
         )}
         {tab==="reports"&&<div style={{margin:"-12px -20px",height:"calc(100vh - 48px)",overflow:"hidden",display:"flex"}}><Suspense fallback={<TabFallback/>}><ReportsTab selectedVessels={filtV.filter(v=>selVessels.has(v.vessel))} allVessels={vessels} selectedCargoes={reportCargoes} dashboardFixingImport={dashboardFixingImport} onDashboardFixingImportHandled={()=>setDashboardFixingImport(null)}/></Suspense></div>}
-        {(tab==="map"||tab==="tce")&&<Suspense fallback={<TabFallback/>}><FreightsTCEHub active={tab==="tce"?"tce":freightHubTab} onActive={setFreightHubTab} allowed={!guestMode?["tce","freights","map","assessment"]:[...(userTabs.includes("tce")?["tce"]:[]),...(userTabs.includes("map")?["freights","map","assessment"]:[])]}/></Suspense>}
+        {(tab==="map"||tab==="tce")&&<Suspense fallback={<TabFallback/>}><FreightsTCEHub active={tab==="tce"?"tce":freightHubTab} onActive={setFreightHubTab} allowed={!guestMode?["tce","freights","map","assessment"]:[...(userTabs.some(x=>x.startsWith("freight:"))?["tce","freights","map","assessment"].filter(x=>userTabs.includes("freight:"+x)):[...(userTabs.includes("tce")?["tce"]:[]),...(userTabs.includes("map")?["freights","map","assessment"]:[])])]}/></Suspense>}
       </TabErrorBoundary>
       </div>
 

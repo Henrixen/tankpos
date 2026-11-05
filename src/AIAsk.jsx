@@ -88,6 +88,7 @@ export function AskAIStrip({vessels,cargoes,intelItems}){
   const [answer,setAnswer]=useState("");
   const [busy,setBusy]=useState(false);
   const [showAnswer,setShowAnswer]=useState(false);
+  const [answeredAt,setAnsweredAt]=useState(null);
   const inputRef=React.useRef(null);
   const [answerPos,setAnswerPos]=useState({top:0,left:0,width:400});
 
@@ -115,13 +116,13 @@ export function AskAIStrip({vessels,cargoes,intelItems}){
       const d=await res.json();
       if(d.usage) logUsage({type:"ask_strip",inputTokens:d.usage.input_tokens||0,outputTokens:d.usage.output_tokens||0,note:q.slice(0,60)});
       const a=(d.content||[]).map(b=>b.text||"").join("").trim().replace(/\*\*(.*?)\*\*/g,"$1").replace(/\*(.*?)\*/g,"$1");
-      setAnswer(a);setQuestion("");
+      setAnswer(a);setAnsweredAt(new Date().toISOString());setQuestion("");
     }catch(e){setAnswer("Error: "+e.message);}finally{setBusy(false);}
   }
 
   return(
     <div style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"0 12px"}}>
-      <span style={{fontSize:10,fontWeight:700,color:"rgba(88,166,255,0.6)",textTransform:"uppercase",
+      <span style={{fontSize:10,fontWeight:700,color:"#8fc9ff",textTransform:"uppercase",
         letterSpacing:"0.1em",flexShrink:0,whiteSpace:"nowrap"}}>Ask AI</span>
       <input ref={inputRef} value={question} onChange={e=>setQuestion(e.target.value)}
         onKeyDown={e=>{
@@ -152,6 +153,7 @@ export function AskAIStrip({vessels,cargoes,intelItems}){
           {busy&&!answer&&(
             <div style={{fontSize:12,color:"rgba(120,160,220,0.5)",fontStyle:"italic"}}>Thinking…</div>
           )}
+          {answer&&answeredAt&&<div style={{fontSize:10,color:"#8fc9ff",marginBottom:7}}>{new Date(answeredAt).toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</div>}
           {answer&&(
             <div style={{fontSize:12,color:"rgba(210,230,255,0.9)",lineHeight:1.65,whiteSpace:"pre-wrap",
               maxHeight:300,overflowY:"auto"}}>{answer}</div>

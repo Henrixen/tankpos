@@ -225,7 +225,7 @@ export function IntelVaultStrip({onVaultUpdate}){
 
   return(
     <div style={{display:"flex",alignItems:"center",gap:6,padding:"0 10px",height:"100%"}}>
-      <span style={{fontSize:10,fontWeight:700,color:"rgba(250,163,86,0.55)",textTransform:"uppercase",letterSpacing:"0.08em",flexShrink:0,whiteSpace:"nowrap"}}>
+      <span style={{fontSize:10,fontWeight:700,color:"#8fc9ff",textTransform:"uppercase",letterSpacing:"0.08em",flexShrink:0,whiteSpace:"nowrap"}}>
         Intel Vault {count>0&&<span style={{color:"rgba(250,163,86,0.4)",fontWeight:400}}>· {count}</span>}
       </span>
       <textarea value={text} onChange={e=>setText(e.target.value)}
