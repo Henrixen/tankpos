@@ -856,67 +856,67 @@ function TCECalculator(){
         {/* ── LEFT: Voyage Inputs ── */}
         <div style={{...CARD,minWidth:0}}>
           <div style={{padding:"8px 12px",background:C.bg3,borderBottom:"1px solid "+C.bd2,fontSize:12,fontWeight:700,color:C.tx}}>
-            {panelMode==="freight"?"Enter freight → get TCE":"Enter target TCE → get required freight"}
+            {panelMode==="freight"?"TCE calc":"Target TCE"}
           </div>
           <div style={{padding:"10px 14px"}}>
-            <div style={{fontSize:12,fontWeight:700,color:C.tx,textTransform:"uppercase",letterSpacing:".04em",marginBottom:6}}>Ports</div>
-            <PortCostRow label="Load Port(s)" ports={loadPorts} onChange={setLoadPorts} col={C.blue}/>
-            <PortCostRow label="Discharge Port(s)" ports={dischPorts} onChange={setDischPorts} col={C.green}/>
-
-            <div style={{fontSize:12,fontWeight:700,color:C.faint,textTransform:"uppercase",marginTop:12,marginBottom:5}}>Distance</div>
-            <div style={{display:"flex",flexDirection:"column",gap:5,borderBottom:"1px solid "+C.bg3,paddingBottom:8}}>
-              {[["ballastNm","Ballast NM"],["ladenNm","Laden NM"],["repoNm","Repo NM"]].map(([k,label])=>(
-                <div key={k} style={{display:"flex",flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:10,flex:1}}>
-                  <span style={{fontSize:11,color:C.dim,textTransform:"uppercase",minWidth:95}}>{label}</span>
-                  <input value={v[k]} onChange={e=>{sV(k,e.target.value);setResult(null);}} placeholder={k==="repoNm"?"0":""}
-                    style={{width:130,maxWidth:"60%",background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 8px",outline:"none",textAlign:"right",boxSizing:"border-box"}}/>
-                </div>
-              ))}
-            </div>
-
-            <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:1,maxWidth:260}}>
-              <span style={{fontSize:12,fontWeight:700,color:C.tx,textTransform:"uppercase"}}>{panelMode==="freight"?"Freight":"Target TCE"}</span>
-              <input value={panelMode==="freight"&&typeof v.freight==="number"?v.freight.toLocaleString("nb-NO"):(panelMode==="freight"?v.freight:v.targetTCE)}
-                onChange={e=>{sV(panelMode==="freight"?"freight":"targetTCE",e.target.value);setResult(null);}}
-                onFocus={e=>{if(panelMode==="freight")e.target.value=String(v.freight).replace(/\s/g,"");}}
-                onBlur={e=>{if(panelMode==="freight"){const n=parseFloat(e.target.value.replace(/[^0-9.\-]/g,""));if(!isNaN(n))sV("freight",n);}}}
-                placeholder={panelMode==="freight"?"USD":"$/day"}
-                style={{width:"100%",background:C.bg3,border:"1px solid "+C.blue,borderRadius:5,color:C.tx,fontFamily:"inherit",fontSize:17,fontWeight:700,padding:"9px 10px",outline:"none",textAlign:"right",boxSizing:"border-box"}}/>
-            </div>
-
-            <div style={{fontSize:12,fontWeight:700,color:C.tx,textTransform:"uppercase",letterSpacing:".04em",marginTop:10,marginBottom:4}}>Costs</div>
-            {numInp("Canal cost","canalCost",defaults.canalCost,sD,"USD","",true)}
-
-            {/* EU ETS */}
-            <div style={{display:"flex",alignItems:"center",gap:6,padding:"3px 0",borderBottom:"1px solid "+C.bg3}}>
-              <span style={{flex:"0 0 110px",fontSize:12,color:C.dim}}>EU ETS</span>
-              <input value={autoEts?euEts:euEts} onChange={e=>{setEuEts(numD(e.target.value));setAutoEts(false);setResult(null);}}
-                style={{width:90,background:C.bg3,border:"1px solid "+(autoEts?C.green:C.bd),borderRadius:4,color:autoEts?C.green:C.tx,
-                  fontFamily:"inherit",fontSize:12,padding:"3px 6px",outline:"none",textAlign:"right"}}/>
-              <span style={{fontSize:12,color:C.faint,minWidth:28}}>USD</span>
-              <button onClick={()=>setAutoEts(a=>!a)} title={autoEts?"Auto-calculated — click to override":"Manual — click to auto-calc"}
-                style={{background:"none",border:"1px solid "+(autoEts?C.green:C.bd),borderRadius:3,color:autoEts?C.green:C.faint,fontSize:8,padding:"1px 4px",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                {autoEts?"auto":"manual"}
-              </button>
-            </div>
-            {autoEts&&<div style={{display:"flex",gap:4,paddingLeft:136,marginTop:4}}>
-              {[[true,"100%"],[false,"50%"]].map(([val,label])=>(
-                <button key={label} onClick={()=>setIsIntraEU(val)}
-                  style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",
-                    border:"1px solid "+(isIntraEU===val?C.green:C.bd),background:isIntraEU===val?"rgba(63,185,80,0.12)":"transparent",color:isIntraEU===val?C.green:C.dim}}>
-                  {label}
+            {/* Compact voyage inputs: all editable fields in a short top grid. */}
+            <div className="tce-compact-inputs" style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:"7px 12px",alignItems:"start"}}>
+              <div style={{minWidth:0}}>
+                <PortCostRow label="Load port(s)" ports={loadPorts} onChange={setLoadPorts} col={C.blue}/>
+              </div>
+              <div style={{minWidth:0}}>
+                <PortCostRow label="Discharge port(s)" ports={dischPorts} onChange={setDischPorts} col={C.green}/>
+              </div>
+              <div style={{gridColumn:"1 / -1",display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8}}>
+                {[["ballastNm","Ballast NM"],["ladenNm","Laden NM"],["repoNm","Repo NM"]].map(([k,label])=>(
+                  <label key={k} style={{minWidth:0,display:"flex",flexDirection:"column",gap:3}}>
+                    <span style={{fontSize:10,color:C.dim,textTransform:"uppercase"}}>{label}</span>
+                    <input value={v[k]} onChange={e=>{sV(k,e.target.value);setResult(null);}} placeholder={k==="repoNm"?"0":""}
+                      style={{width:"100%",boxSizing:"border-box",background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 7px",outline:"none",textAlign:"right"}}/>
+                  </label>
+                ))}
+              </div>
+              <label style={{minWidth:0,display:"flex",flexDirection:"column",gap:3}}>
+                <span style={{fontSize:10,fontWeight:700,color:C.tx,textTransform:"uppercase"}}>{panelMode==="freight"?"Freight (USD)":"Target TCE (USD/day)"}</span>
+                <input value={panelMode==="freight"&&typeof v.freight==="number"?v.freight.toLocaleString("nb-NO"):(panelMode==="freight"?v.freight:v.targetTCE)}
+                  onChange={e=>{sV(panelMode==="freight"?"freight":"targetTCE",e.target.value);setResult(null);}}
+                  onFocus={e=>{if(panelMode==="freight")e.target.value=String(v.freight).replace(/\\s/g,"");}}
+                  onBlur={e=>{if(panelMode==="freight"){const n=parseFloat(e.target.value.replace(/[^0-9.\\-]/g,""));if(!isNaN(n))sV("freight",n);}}}
+                  placeholder={panelMode==="freight"?"USD":"$/day"}
+                  style={{width:"100%",boxSizing:"border-box",background:C.bg3,border:"1px solid "+C.blue,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:13,fontWeight:700,padding:"5px 7px",outline:"none",textAlign:"right"}}/>
+              </label>
+              <div style={{minWidth:0}}>
+                <span style={{display:"block",fontSize:10,fontWeight:700,color:C.tx,textTransform:"uppercase",marginBottom:3}}>Canal cost (USD)</span>
+                <input value={typeof defaults.canalCost==="number"?defaults.canalCost.toLocaleString("nb-NO"):defaults.canalCost}
+                  onChange={e=>{sD("canalCost",e.target.value);setResult(null);}}
+                  onBlur={e=>{const n=parseFloat(e.target.value.replace(/[^0-9.\\-]/g,""));if(!isNaN(n))sD("canalCost",n);}}
+                  style={{width:"100%",boxSizing:"border-box",background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 7px",outline:"none",textAlign:"right"}}/>
+              </div>
+              <div style={{gridColumn:"1 / -1",display:"flex",alignItems:"center",flexWrap:"wrap",gap:7}}>
+                <span style={{fontSize:10,fontWeight:700,color:C.dim}}>EU ETS (USD)</span>
+                <input value={euEts} onChange={e=>{setEuEts(numD(e.target.value));setAutoEts(false);setResult(null);}}
+                  style={{width:95,background:C.bg3,border:"1px solid "+(autoEts?C.green:C.bd),borderRadius:4,color:autoEts?C.green:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 7px",outline:"none",textAlign:"right"}}/>
+                <button onClick={()=>setAutoEts(a=>!a)} title={autoEts?"Auto-calculated — click to override":"Manual — click to auto-calc"}
+                  style={{background:"none",border:"1px solid "+(autoEts?C.green:C.bd),borderRadius:3,color:autoEts?C.green:C.faint,fontSize:10,padding:"4px 6px",cursor:"pointer"}}>
+                  {autoEts?"auto":"manual"}
                 </button>
-              ))}
-            </div>}
+                {autoEts&&[[true,"100%"],[false,"50%"]].map(([val,label])=>(
+                  <button key={label} onClick={()=>setIsIntraEU(val)}
+                    style={{fontSize:10,fontWeight:700,padding:"4px 8px",borderRadius:4,cursor:"pointer",border:"1px solid "+(isIntraEU===val?C.green:C.bd),background:isIntraEU===val?"rgba(63,185,80,0.12)":"transparent",color:isIntraEU===val?C.green:C.dim}}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <button onClick={()=>calculate(panelMode)}
-              style={{marginTop:12,background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,color:"#fff",
+              style={{marginTop:8,background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,color:"#fff",
                 fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"9px",cursor:"pointer",width:"100%"}}>
               {panelMode==="freight"?"Calculate TCE →":"Calculate Required Freight →"}
             </button>
 
             {/* ── Result — now inside the same card as the inputs, right below Calculate ── */}
-            <div style={{marginTop:12,background:panelMode==="freight"?"rgba(79,195,247,.07)":"rgba(67,233,123,.07)",borderRadius:6,padding:"10px 12px"}}>
+            <div style={{marginTop:8,background:panelMode==="freight"?"rgba(79,195,247,.07)":"rgba(67,233,123,.07)",borderRadius:6,padding:"10px 12px"}}>
               <div style={{fontSize:10,color:C.faint,textTransform:"uppercase",letterSpacing:".07em"}}>TCE</div>
               {panelMode==="freight"
                 ? <div style={{fontSize:24,fontWeight:800,color:panelResult&&panelResult.tce!=null?(panelResult.tce>=0?C.green:C.red):C.faint,lineHeight:1.1}}>
