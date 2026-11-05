@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "./supabaseclient";
 import { C, SEGMENTS } from "./constants";
 import { classifyRegion, daysBetween, stripHtml } from "./utils";
@@ -9,6 +10,16 @@ const JOB_STATUS = ["OPEN","WORKING","SUBS","FIXED","FAILED","WDWF"];
 const JOB_STATUS_COL = {OPEN:C.blue,WORKING:C.amber,SUBS:C.purple,FIXED:C.green,FAILED:C.red,WDWF:"rgba(148,163,184,0.85)"};
 const TRADES = ["UKC","Med","EU Feast","AG","TA West","Ex US","Asia"];
 const EDIT_FIELDS = ["cargo_details","notes","indications","subs_fixed"];
+const jobSearchText = j => [j.charterer,j.product,j.qty,j.load,j.disch,j.laycan,j.outcome,j.fixed_owner,j.fixed_vessel,j.added_date,j.status,j.segment,j.trade,j.cargo_details,j.notes,j.indications,j.subs_fixed,j.laytime, ...(Array.isArray(j.owners)?j.owners:[])].map(v=>stripHtml(String(v||""))).join(" ").toLowerCase();
+function SearchHit({text,query}){
+  const value=String(text||"");
+  const q=query.trim();
+  if(!q)return value;
+  const i=value.toLowerCase().indexOf(q.toLowerCase());
+  if(i<0)return value;
+  return <>{value.slice(0,i)}<mark style={{background:"rgba(88,166,255,0.42)",color:"#fff",borderRadius:2}}>{value.slice(i,i+q.length)}</mark>{value.slice(i+q.length)}</>;
+}
+
 
 // Manually curated client logos — key = lowercase client name, value = image URL
 const CLIENT_LOGOS = {
@@ -544,13 +555,27 @@ function ClientCard({charterer,jobs,expandedJob,setExpandedJob,clients,editingCl
 function MultiSelectDropdown({options,selected,onChange,placeholder,color}){
   const [open,setOpen]=useState(false);
   const ref=React.useRef(null);
+  const popupRef=React.useRef(null);
+  const [popupPos,setPopupPos]=useState({});
   const sel=Array.isArray(selected)?selected:(selected?[selected]:[]);
   React.useEffect(()=>{
     if(!open)return;
-    function close(e){if(ref.current&&!ref.current.contains(e.target))setOpen(false);}
+    function close(e){if(ref.current&&!ref.current.contains(e.target)&&!popupRef.current?.contains(e.target))setOpen(false);}
     document.addEventListener("mousedown",close);
     return()=>document.removeEventListener("mousedown",close);
   },[open]);
+  useEffect(()=>{
+    if(!open)return;
+    const position=()=>{
+      const r=ref.current?.getBoundingClientRect();if(!r)return;
+      const h=Math.min(260,options.length*30+12);
+      const below=window.innerHeight-r.bottom;
+      const top=below>=h||below>=r.top?r.bottom+3:Math.max(5,r.top-h-3);
+      setPopupPos({position:"fixed",top,left:Math.max(5,Math.min(r.left,window.innerWidth-Math.max(r.width,150)-6)),width:Math.max(r.width,150),maxHeight:Math.min(h,window.innerHeight-12),overflowY:"auto",zIndex:20000});
+    };
+    position();window.addEventListener("resize",position);window.addEventListener("scroll",position,true);
+    return()=>{window.removeEventListener("resize",position);window.removeEventListener("scroll",position,true);};
+  },[open,options.length]);
   function toggle(v){onChange(sel.includes(v)?sel.filter(x=>x!==v):[...sel,v]);}
   return(
     <div ref={ref} style={{position:"relative",width:"100%"}}>
@@ -561,8 +586,8 @@ function MultiSelectDropdown({options,selected,onChange,placeholder,color}){
         <span style={{overflow:"hidden",textOverflow:"ellipsis",flex:1}}>{sel.length?sel.join(", "):placeholder}</span>
         <span style={{fontSize:9,flexShrink:0,color:"rgba(120,160,220,0.4)"}}>▾</span>
       </div>
-      {open&&(
-        <div style={{position:"absolute",top:"100%",left:0,zIndex:9999,background:C.bg2,border:"1px solid rgba(88,166,255,0.3)",borderRadius:5,padding:"4px 0",minWidth:"100%",boxShadow:"0 6px 20px rgba(0,0,0,0.6)"}}>
+      {open&&createPortal(
+        <div ref={popupRef} style={{...popupPos,background:C.bg2,border:"1px solid rgba(88,166,255,0.3)",borderRadius:5,padding:"4px 0",boxShadow:"0 6px 20px rgba(0,0,0,0.6)"}}>
           {options.map(o=>(
             <label key={o} style={{display:"flex",alignItems:"center",gap:6,padding:"3px 8px",cursor:"pointer",color:sel.includes(o)?color:"rgba(180,210,255,0.65)",fontSize:11,userSelect:"none"}}
               onClick={e=>e.stopPropagation()}>
@@ -571,7 +596,7 @@ function MultiSelectDropdown({options,selected,onChange,placeholder,color}){
               {o}
             </label>
           ))}
-        </div>
+        </div>,document.body
       )}
     </div>
   );
@@ -629,6 +654,7 @@ function FixingTab({vessels}){
   const [editingClient,setEditingClient]=useState(null);
   const [showNewClient,setShowNewClient]=useState(false);
   const [showOwnerDir,setShowOwnerDir]=useState(false);
+  const [dragOwner,setDragOwner]=useState(null);
   const [expandedOwnerId,setExpandedOwnerId]=useState(null);
   const [statusFilter,setStatusFilter]=useState("ALL");
   const [clientFilter,setClientFilter]=useState("ALL");
@@ -706,7 +732,7 @@ function FixingTab({vessels}){
   const filteredJobs=useMemo(()=>jobs.filter(j=>{
     if(statusFilter!=="ALL"&&j.status!==statusFilter)return false;
     if(clientFilter!=="ALL"&&j.charterer!==clientFilter)return false;
-    if(jobSearch.trim()){const t=jobSearch.trim().toLowerCase();const hay=[j.charterer,j.product,j.qty,j.load,j.disch,j.laycan,j.outcome,j.fixed_owner,j.fixed_vessel].filter(Boolean).join(" ").toLowerCase();if(!hay.includes(t))return false;}
+    if(jobSearch.trim()&&!jobSearch.trim().toLowerCase().split(/\s+/).every(t=>jobSearchText(j).includes(t)))return false;
     return true;
   }),[jobs,statusFilter,clientFilter,jobSearch]);
 
@@ -719,7 +745,7 @@ function FixingTab({vessels}){
     const source=clientFilter==="ALL"?allNames:[clientFilter];
     // Filter by search/status — remove names with no matching filtered jobs (only if search/status active)
     const filtered= (jobSearch.trim()||statusFilter!=="ALL")
-      ? source.filter(name=>filteredJobs.some(j=>(j.charterer||"")===name)||clients.some(c=>c.name===name&&!jobs.some(j=>j.charterer===name)))
+      ? source.filter(name=>filteredJobs.some(j=>(j.charterer||"")===name)||(statusFilter==="ALL"&&!jobSearch.trim()&&clients.some(c=>c.name===name&&!jobs.some(j=>j.charterer===name))))
       : source;
     if(clientSort==="name") return filtered.sort((a,b)=>a.localeCompare(b));
     return filtered.sort((a,b)=>{
@@ -729,6 +755,27 @@ function FixingTab({vessels}){
     });
   },[jobs,filteredJobs,clients,clientFilter,clientSort,jobSearch,statusFilter]);
 
+  useEffect(()=>{
+    if(!jobSearch.trim())return;
+    const first=filteredJobs[0]?.charterer;
+    if(first)setExpandedJob(first);
+  },[jobSearch,filteredJobs.length]);
+
+  function moveOwnerPic(sourceId,targetId){
+    if(!sourceId||sourceId===targetId)return;
+    const next=[...owners];const from=next.findIndex(o=>o.id===sourceId);const to=next.findIndex(o=>o.id===targetId);
+    if(from<0||to<0)return;
+    const [item]=next.splice(from,1);next.splice(next.findIndex(o=>o.id===targetId),0,item);
+    saveOwnerDir(next);
+  }
+  function moveOwnerCompany(sourceKey,targetKey){
+    if(!sourceKey||sourceKey===targetKey)return;
+    const source=owners.filter(o=>(o.company||"").trim().toLowerCase()===sourceKey);
+    const rest=owners.filter(o=>(o.company||"").trim().toLowerCase()!==sourceKey);
+    const at=rest.findIndex(o=>(o.company||"").trim().toLowerCase()===targetKey);
+    if(at<0)return;
+    rest.splice(at,0,...source);saveOwnerDir(rest);
+  }
   const inpS=useMemo(()=>({background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"4px 7px",outline:"none",boxSizing:"border-box"}),[]);
   const fb2=useCallback((on,col)=>({fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:4,border:"1px solid "+(on?col||C.blue:C.bd),background:on?(col||C.blue)+"22":"transparent",color:on?col||C.blue:C.dim,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}),[]);
 
@@ -857,7 +904,8 @@ function FixingTab({vessels}){
               ))}
             </div>
             {clientFilter!=="ALL"&&<button onClick={()=>setClientFilter("ALL")} style={{fontSize:10,background:"rgba(88,166,255,.1)",border:"1px solid rgba(88,166,255,.3)",borderRadius:4,color:C.blue,padding:"2px 7px",cursor:"pointer",fontFamily:"inherit"}}>🔍 {clientFilter} ✕</button>}
-            <span style={{marginLeft:"auto",fontSize:11,color:C.faint}}>{filteredJobs.length} job{filteredJobs.length!==1?"s":""}</span>
+            <button onClick={()=>setShowOwnerDir(v=>!v)} style={{marginLeft:"auto",fontSize:10,fontWeight:800,padding:"4px 9px",borderRadius:4,border:"1px solid "+(showOwnerDir?"rgba(88,166,255,.7)":"rgba(88,166,255,.3)"),background:showOwnerDir?"rgba(88,166,255,.18)":"rgba(88,166,255,.04)",color:"#79c0ff",cursor:"pointer",fontFamily:"inherit"}}>{showOwnerDir?"◀ Hide":"▶ Owner Directory"}</button>
+             <span style={{fontSize:11,color:C.faint}}>{filteredJobs.length} job{filteredJobs.length!==1?"s":""}</span>
           </div>
 
           {/* Search */}
@@ -1150,8 +1198,8 @@ function FixingTab({vessels}){
                                     {job.status||"—"}
                                   </span>
                                 </td>
-                                <td style={{padding:"6px 10px",color:"rgba(200,220,255,0.8)",fontWeight:600,maxWidth:400,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{titleText}</td>
-                                <td style={{padding:"6px 10px",color:"rgba(160,200,255,0.55)",maxWidth:250,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:11}}>{job.indications?stripHtml(job.indications).split("\n")[0]:"—"}</td>
+                                <td style={{padding:"6px 10px",color:"rgba(200,220,255,0.8)",fontWeight:600,maxWidth:400,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><SearchHit text={titleText} query={jobSearch}/></td>
+                                <td style={{padding:"6px 10px",color:"rgba(160,200,255,0.55)",maxWidth:250,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:11}}><SearchHit text={job.indications?stripHtml(job.indications).split("\n")[0]:"—"} query={jobSearch}/></td>
                                 <td style={{padding:"6px 8px",textAlign:"center",color:"rgba(88,166,255,0.4)",fontSize:10}}>{isRowExpanded?"▲":"▼"}</td>
                               </tr>
                               {isRowExpanded&&(
@@ -1209,14 +1257,15 @@ function FixingTab({vessels}){
                       background:"rgba(7,15,28,0.34)",
                       boxShadow:"0 1px 0 rgba(88,166,255,0.04) inset"
                     }:{borderTop:"1px solid "+C.bd2,padding:"10px 12px"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                        <input type="date" value={jobDateToISO(job.added_date)} onChange={e=>updateJob(job.id,{added_date:isoToJobDate(e.target.value)})}
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"6px 8px",border:"1px solid rgba(88,166,255,0.30)",borderRadius:6,background:"rgba(88,166,255,0.045)"}}>
+                         <input type="date" value={jobDateToISO(job.added_date)} onChange={e=>updateJob(job.id,{added_date:isoToJobDate(e.target.value)})}
                           style={{...inpS,minWidth:128,width:128,padding:"3px 8px",fontSize:12,color:C.faint}}/>
-                        <span style={{fontSize:12,color:C.tx,flex:1,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{titleText}</span>
+                        <span style={{fontSize:12,color:C.tx,flex:1,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}><SearchHit text={titleText} query={jobSearch}/></span>
                         <button onClick={e=>{e.stopPropagation();setPendingDelJob({id:job.id,label:titleText||job.charterer||"job"});}}
                           style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12,opacity:0.4,padding:"0 2px"}}>✕</button>
                       </div>
-      {/* 3 editors — sync height AND expand/collapse together */}
+                             {jobSearch.trim()&&(()=>{const q=jobSearch.trim().toLowerCase();const fields=[["Cargo",job.cargo_details],["Notes",job.notes],["Indications",job.indications],["Subs / Fixed",job.subs_fixed]];const hits=fields.map(([label,html])=>{const txt=stripHtml(String(html||""));const at=txt.toLowerCase().indexOf(q);return at<0?null:{label,excerpt:txt.slice(Math.max(0,at-55),Math.min(txt.length,at+q.length+85))};}).filter(Boolean);return hits.length?<div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:8}}>{hits.map((h,i)=><span key={i} style={{fontSize:10,color:"#a8d4ff",border:"1px solid rgba(88,166,255,.24)",background:"rgba(88,166,255,.07)",padding:"3px 6px",borderRadius:4,maxWidth:"100%"}}><b>{h.label}:</b> <SearchHit text={h.excerpt} query={jobSearch}/></span>)}</div>:null;})()}
+       {/* 3 editors — sync height AND expand/collapse together */}
                       {(()=>{
                         const client=clients.find(c=>c.name===charterer);
                         const syncH=Math.max(
@@ -1370,7 +1419,7 @@ function FixingTab({vessels}){
         </div>
 
         {/* Owner Directory — desktop unchanged; on mobile it sits below all clients and is collapsed by default */}
-        <div style={{flex:mobile?"0 0 auto":"0 0 460px",width:mobile?"100%":460,display:"flex",flexDirection:"column",gap:6}}>
+        <div style={{flex:mobile?"0 0 auto":showOwnerDir?"0 0 460px":"0 0 0px",width:mobile?"100%":showOwnerDir?460:0,display:showOwnerDir?"flex":"none",flexDirection:"column",gap:6,transition:"width .18s ease, flex-basis .18s ease"}}>
           {pendingDelOwner&&(
             <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:C.bg2,border:"1px solid "+C.red,borderRadius:8,padding:"12px 20px",zIndex:9999,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.5)",fontFamily:"sans-serif",fontSize:12,minWidth:280}}>
               <span style={{color:C.tx,flex:1}}>Remove <strong>{owners.find(o=>o.id===pendingDelOwner)?.company||"entry"}</strong>?</span>
@@ -1378,10 +1427,7 @@ function FixingTab({vessels}){
               <button onClick={()=>setPendingDelOwner(null)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,padding:"5px 14px",cursor:"pointer",fontSize:12}}>Cancel</button>
             </div>
           )}
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <span style={{fontSize:11,fontWeight:700,color:C.faint,textTransform:"uppercase",letterSpacing:"0.07em"}}>Owner Directory</span>
-            <button onClick={()=>setShowOwnerDir(s=>!s)} style={{fontSize:11,background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.blue,padding:"2px 8px",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>{showOwnerDir?"▲":"▼"}</button>
-          </div>
+          <button onClick={()=>setShowOwnerDir(s=>!s)} title={showOwnerDir?"Collapse Owner Directory":"Expand Owner Directory"} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,width:"100%",padding:"7px 9px",background:showOwnerDir?"rgba(88,166,255,.18)":"rgba(88,166,255,.045)",border:"1px solid "+(showOwnerDir?"rgba(88,166,255,.7)":"rgba(88,166,255,.3)"),borderRadius:5,color:showOwnerDir?"#a8d4ff":"#79c0ff",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:800,letterSpacing:".035em",whiteSpace:"nowrap"}}><span>OWNER DIRECTORY</span><span>{showOwnerDir?"◀":"▶"}</span></button>
           {showOwnerDir&&(
             <div style={{display:"flex",flexDirection:"column",gap:5}}>
               <style>{`
@@ -1398,7 +1444,7 @@ function FixingTab({vessels}){
               <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
                 {fixingTrades.map(t=>(
                   <button key={t} onClick={()=>setOwnerTradeFilter(f=>f===t?null:t)}
-                    style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,border:"1px solid "+(ownerTradeFilter===t?C.amber:C.bd),background:ownerTradeFilter===t?"rgba(255,209,102,.2)":"transparent",color:ownerTradeFilter===t?C.amber:C.faint,cursor:"pointer",fontFamily:"inherit"}}>{t}</button>
+                    style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:3,border:"1px solid "+(ownerTradeFilter===t?C.blue:C.bd),background:ownerTradeFilter===t?"rgba(88,166,255,.2)":"transparent",color:ownerTradeFilter===t?C.blue:C.faint,cursor:"pointer",fontFamily:"inherit"}}>{t}</button>
                 ))}
               </div>
               {/* Add company / first PIC */}
@@ -1406,7 +1452,7 @@ function FixingTab({vessels}){
                 <input value={newOwnerEntry.company} onChange={e=>setNewOwnerEntry(p=>({...p,company:e.target.value}))} placeholder="Company" style={{...inpS,padding:"2px 4px",fontSize:11}}/>
                 <MultiSelectDropdown options={fixingSegments} selected={newOwnerEntry.segments||[]} onChange={v=>setNewOwnerEntry(p=>({...p,segments:v}))} placeholder="Segment…" color="rgba(88,166,255,0.8)"/>
                 <input value={newOwnerEntry.pic} onChange={e=>setNewOwnerEntry(p=>({...p,pic:e.target.value}))} placeholder="PIC" style={{...inpS,padding:"2px 4px",fontSize:11}}/>
-                <MultiSelectDropdown options={fixingTrades} selected={newOwnerEntry.trades||[]} onChange={v=>setNewOwnerEntry(p=>({...p,trades:v}))} placeholder="Trade…" color="rgba(250,163,86,0.75)"/>
+                <MultiSelectDropdown options={fixingTrades} selected={newOwnerEntry.trades||[]} onChange={v=>setNewOwnerEntry(p=>({...p,trades:v}))} placeholder="Trade…" color="#79c0ff"/>
                 <button onClick={addOwnerEntry} style={{background:"rgba(88,166,255,.18)",border:"1px solid rgba(88,166,255,.4)",borderRadius:4,color:C.blue,fontFamily:"inherit",fontWeight:700,fontSize:11,padding:"3px 7px",cursor:"pointer",whiteSpace:"nowrap"}}>+ Add</button>
               </div>
               {(()=>{
@@ -1418,23 +1464,19 @@ function FixingTab({vessels}){
                   companyMap.get(key).rows.push(o);
                 });
 
+                const search=(ownerDirSearch||"").trim().toLowerCase();
                 const companies=[...companyMap.values()].map(g=>{
-                  const segments=[...new Set(g.rows.flatMap(o=>o.segments||(o.segment?[o.segment]:[])))];
-                  const trades=[...new Set(g.rows.flatMap(o=>o.trades||(o.trade?[o.trade]:[])))];
-                  return {...g,segments,trades};
-                }).filter(g=>{
-                  if(ownerSegFilter&&!g.segments.includes(ownerSegFilter))return false;
-                  if(ownerTradeFilter&&!g.trades.includes(ownerTradeFilter))return false;
-                  if(ownerDirSearch){
-                    const t=ownerDirSearch.toLowerCase();
-                    const hay=[
-                      g.name,...g.segments,...g.trades,
-                      ...g.rows.flatMap(o=>[o.pic,o.comment])
-                    ].filter(Boolean).join(" ").toLowerCase();
-                    if(!hay.includes(t))return false;
-                  }
-                  return true;
-                }).sort((a,b)=>a.name.localeCompare(b.name));
+                  const companyMatches=search&&g.name.toLowerCase().includes(search);
+                  const rows=g.rows.filter(o=>{
+                    const segs=o.segments||(o.segment?[o.segment]:[]);
+                    const trades=o.trades||(o.trade?[o.trade]:[]);
+                    if(ownerSegFilter&&!segs.includes(ownerSegFilter))return false;
+                    if(ownerTradeFilter&&!trades.includes(ownerTradeFilter))return false;
+                    if(search&&!companyMatches&&![o.pic,o.comment,...segs,...trades].filter(Boolean).join(" ").toLowerCase().includes(search))return false;
+                    return true;
+                  });
+                  return {...g,rows,segments:[...new Set(rows.flatMap(o=>o.segments||(o.segment?[o.segment]:[])))],trades:[...new Set(rows.flatMap(o=>o.trades||(o.trade?[o.trade]:[])))]};
+                }).filter(g=>g.rows.length);
 
                 if(!companies.length)return <div style={{fontSize:11,color:C.faint,fontStyle:"italic"}}>No entries.</div>;
 
@@ -1445,13 +1487,14 @@ function FixingTab({vessels}){
                       const isOpen=expandedOwnerId===groupId;
                       return(
                         <div key={g.key} style={{borderBottom:gi<companies.length-1?"1px solid "+C.bd2:"none"}}>
-                          <div onClick={()=>setExpandedOwnerId(isOpen?null:groupId)}
-                            style={{
+                          <div draggable={!ownerDirSearch&&!ownerSegFilter&&!ownerTradeFilter} onDragStart={e=>{e.dataTransfer.effectAllowed="move";setDragOwner({type:"company",key:g.key});}} onDragOver={e=>{if(dragOwner?.type==="company")e.preventDefault();}} onDrop={e=>{e.preventDefault();if(dragOwner?.type==="company")moveOwnerCompany(dragOwner.key,g.key);setDragOwner(null);}} onDragEnd={()=>setDragOwner(null)} onClick={()=>setExpandedOwnerId(isOpen?null:groupId)}
+                             style={{
                               display:"flex",alignItems:"center",gap:8,padding:"8px 10px",cursor:"pointer",
                               background:isOpen?"rgba(88,166,255,0.08)":"transparent"
                             }}>
+                                                        <span title="Drag to reorder companies" style={{fontSize:13,color:"rgba(120,160,220,.45)",cursor:"grab"}}>⠿</span>
                             <span style={{
-                              width:18,fontSize:17,fontWeight:900,lineHeight:1,color:isOpen?"#79c0ff":"rgba(150,190,235,0.55)",
+                               width:18,fontSize:17,fontWeight:900,lineHeight:1,color:isOpen?"#79c0ff":"rgba(150,190,235,0.55)",
                               transform:isOpen?"rotate(90deg)":"none",transition:"transform 0.12s",flexShrink:0
                             }}>▸</span>
                             <span style={{flex:1,fontSize:12,fontWeight:650,color:isOpen?"#79c0ff":C.tx}}>{g.name}</span>
@@ -1494,7 +1537,7 @@ function FixingTab({vessels}){
                               {/* Quick-edit PIC table — no extra edit/save buttons */}
                               <div style={{display:mobile?"none":"grid",gridTemplateColumns:"minmax(105px,0.9fr) minmax(130px,1.1fr) minmax(145px,1.4fr)",gap:3,alignItems:"center",marginBottom:3}}>
                                 <div style={{fontSize:9,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>PIC</div>
-                                <div style={{fontSize:9,fontWeight:800,color:"rgba(250,163,86,0.7)",textTransform:"uppercase",letterSpacing:"0.06em"}}>Trade</div>
+                                <div style={{fontSize:9,fontWeight:800,color:"#79c0ff",textTransform:"uppercase",letterSpacing:"0.06em"}}>Trade</div>
                                 <div style={{fontSize:9,fontWeight:800,color:C.faint,textTransform:"uppercase",letterSpacing:"0.06em"}}>Notes</div>
                               </div>
 
@@ -1502,7 +1545,7 @@ function FixingTab({vessels}){
                                 {g.rows.map(o=>{
                                   const trs=o.trades||(o.trade?[o.trade]:[]);
                                   return(
-                                    <div key={o.id} style={{display:"grid",gridTemplateColumns:mobile?"1fr":"minmax(105px,0.9fr) minmax(130px,1.1fr) minmax(145px,1.4fr)",gap:3,alignItems:"center"}}>
+                                    <div key={o.id} draggable={!ownerDirSearch&&!ownerSegFilter&&!ownerTradeFilter} onDragStart={e=>{e.stopPropagation();e.dataTransfer.effectAllowed="move";setDragOwner({type:"pic",id:o.id});}} onDragOver={e=>{if(dragOwner?.type==="pic")e.preventDefault();}} onDrop={e=>{e.stopPropagation();e.preventDefault();if(dragOwner?.type==="pic")moveOwnerPic(dragOwner.id,o.id);setDragOwner(null);}} onDragEnd={()=>setDragOwner(null)} style={{display:"grid",gridTemplateColumns:mobile?"1fr":"minmax(105px,0.9fr) minmax(130px,1.1fr) minmax(145px,1.4fr)",gap:3,alignItems:"center",borderLeft:"2px solid rgba(88,166,255,.12)",paddingLeft:3}} title="Drag row to reorder PICs">
                                       <input value={o.pic||""}
                                         onChange={e=>updateOwnerEntry(o.id,"pic",e.target.value)}
                                         placeholder="PIC"
@@ -1512,11 +1555,11 @@ function FixingTab({vessels}){
                                         selected={trs}
                                         onChange={v=>updateOwnerEntry(o.id,"trades",v)}
                                         placeholder="Trade…"
-                                        color="rgba(250,163,86,0.78)"/>
+                                        color="#79c0ff"/>
                                       <input value={o.comment||""}
                                         onChange={e=>updateOwnerEntry(o.id,"comment",e.target.value)}
-                                        placeholder="Notes…"
-                                        style={{...inpS,width:"100%",padding:"3px 5px",fontSize:11,color:"rgba(200,220,245,0.78)"}}/>
+                                        placeholder=""
+                                         style={{...inpS,width:"100%",padding:"3px 5px",fontSize:11,color:"rgba(200,220,245,0.78)"}}/>
                                     </div>
                                   );
                                 })}
