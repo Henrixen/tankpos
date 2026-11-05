@@ -12,7 +12,7 @@ import {useBrokerLiveData,getBrokerSession,brokerRpc,beginBrokerWrite,chooseBrok
 import {mapBrokerPosition as mapPositionBase,applyBrokerOverride as applyOverrideBase} from "./brokerData";
 import {dedupePositions,positionEditor,selectPositionOverrides} from "./PositionHistory";
 const mapBrokerPosition=r=>({...mapPositionBase(r),entered_by:r.entered_by||null});
-const applyBrokerOverride=(v,o)=>{const merged=applyOverrideBase(v,o);const source=v._brokerSource||{};const baseTime=source.updated_at||v._brokerSourceUpdatedAt||v.updatedAt||"";const positionTime=o?.position_updated_at;return {...merged,_positionName:v._positionName||source.vessel_name||v.vessel,vessel:o?.display_name||v.vessel,subTags:Array.isArray(o?.sub_tags)?o.sub_tags:[],updatedAt:positionTime&&Date.parse(positionTime)>Date.parse(baseTime||"1970-01-01")?positionTime:baseTime,entered_by:o?o.entered_by||null:v.entered_by||null};};
+const applyBrokerOverride=(v,o)=>{const merged=applyOverrideBase(v,o);const source=v._brokerSource||{};const baseTime=source.updated_at||v._brokerSourceUpdatedAt||v.updatedAt||"";const positionTime=o?.position_updated_at;return {...merged,_positionName:v._positionName||source.vessel_name||v.vessel,vessel:o?.display_name||v.vessel,subTags:Array.isArray(o?.sub_tags)?o.sub_tags:[],updatedAt:positionTime&&Date.parse(positionTime)>Date.parse(baseTime||"1970-01-01")?positionTime:baseTime,entered_by:o?.entered_by||v.entered_by||null};};
 const normaliseCargo=r=>({...normaliseCargoBase(r),_brokerRaw:{...r}});
 
 // One display format for manual, parsed and external position dates.
@@ -148,7 +148,17 @@ export default function TankPos(){
     return;
   }
   console.log("fetchPositions:",data.length,"rows");
-  setVessels(dedupePositions((data||[]).map(mapBrokerPosition)));
+  setVessels(prev => {
+    const previous = new Map(prev.map(v => [String(v._positionName || v.vessel || "").trim().toUpperCase(), v]));
+    return dedupePositions((data||[]).map(row => {
+      const incoming = mapBrokerPosition(row);
+      const old = previous.get(String(incoming._positionName || incoming.vessel || "").trim().toUpperCase());
+      return old ? {...incoming,
+        coating: incoming.coating || old.coating || "",
+        entered_by: incoming.entered_by || old.entered_by || null
+      } : incoming;
+    }));
+  });
 
   // Restore vessel-specific manual overrides, including tags and coating.
   // The positions_latest feed does not necessarily carry these fields.
@@ -349,6 +359,14 @@ export default function TankPos(){
       return next;
     });
 
+    const names = parsed.map(v => String(v.vessel || "").trim()).filter(Boolean);
+    const {data: existingRows, error: existingError} = await supabase.from("positions")
+      .select("*").in("vessel_name", names);
+    if(existingError) {
+      console.error("Cannot safely import positions without checking existing rows",existingError);
+      throw existingError;
+    }
+    const existingByName = new Map((existingRows||[]).map(row => [String(row.vessel_name).trim().toUpperCase(),row]));
     const rows = parsed.map(v => {
       const base = enrichV(v, vdb);
       const master = vdb[String(v.vessel || "").toLowerCase().trim()];
@@ -359,38 +377,44 @@ export default function TankPos(){
       const dbVessel = vdb[vesselKey?.toLowerCase()];
       
       // Priority: use spec from parsed object first, then fallback to vesselDB
-      const spec = v.spec || (dbVessel ? {
-        iceClass: dbVessel.ice_class,
-        lastCargo: dbVessel.last_cargo,
-        segment: dbVessel.segment,
-      } : {});
+      const spec = {
+        ...(dbVessel ? {
+          iceClass: dbVessel.ice_class,
+          lastCargo: dbVessel.last_cargo,
+          segment: dbVessel.segment,
+        } : {}),
+        ...(v.spec || {}),
+      };
       
       console.log("Saving to DB - vessel:", ev.vessel, "spec:", spec);
       
+      const previous = existingByName.get(String(ev.vessel||"").trim().toUpperCase());
+      const keep = (next, old) => next === null || next === undefined || next === "" ? (old ?? null) : next;
       return {
-  id: uuidv4(),
+  ...(previous || {}),
+  id: previous?.id || uuidv4(),
   vessel_name: ev.vessel,
-  operator: ev.operator || null,
+  operator: keep(ev.operator, previous?.operator),
   port_name: ev.openPort || null,
   open_date: ev.date || null,
-  dwt: ev.dwt || null,
-  build_year: ev.built || null,
-  overall_length: ev.loa || null,
-  beam: ev.beam || null,
-  cbm: ev.cbm || null,
-  coating: ev.coating || extractCoating(ev.comment||"") || null,
-  details: ev.comment || null,
+  dwt: keep(ev.dwt, previous?.dwt),
+  build_year: keep(ev.built, previous?.build_year),
+  overall_length: keep(ev.loa, previous?.overall_length),
+  beam: keep(ev.beam, previous?.beam),
+  cbm: keep(ev.cbm, previous?.cbm),
+  coating: keep(ev.coating || v.spec?.coated || dbVessel?.coating_type_2 || dbVessel?.coating || dbVessel?.coated || extractCoating(ev.comment||""), previous?.coating),
+  details: keep(ev.comment, previous?.details),
   file_date: nowIso,
-  updated_at_manual: nowIso,
+  updated_at_manual: previous?.updated_at_manual || nowIso,
   updated_at: nowIso,
-  spec: spec,
+  spec: {...(previous?.spec || {}), ...Object.fromEntries(Object.entries(spec).filter(([,val]) => val !== null && val !== undefined && val !== ""))},
 };
     });
 
     const { error } = await supabase
   .from("positions")
   .upsert(rows, { onConflict: 'vessel_name' });
-    if (error) console.error("positions insert error:", error);
+    if (error) { console.error("positions insert error:", error); throw error; }
     else console.log("positions saved ok:", rows.length, "rows");
     
     return r;
