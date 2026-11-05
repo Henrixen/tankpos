@@ -479,7 +479,14 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
               <input value={r.label} onChange={e=>updateField(r.key,"label",e.target.value)} placeholder="Route name"
                 style={{ flex:"1 1 140px", minWidth:100, background:"transparent", border:"none", color:C.tx, fontSize:12, fontWeight:700, padding:"2px 0", outline:"none", fontFamily:"inherit" }}/>
 
-              <FmtInput value={r.freight} onChange={val=>updateField(r.key,"freight",val)} width={100} placeholder="Freight USD" fontSize={12}/>
+              <span title={rateDates[r.key] ? "Freight last amended: "+new Date(rateDates[r.key]).toLocaleString("en-GB") : "No recorded freight amendment date yet — save an amended rate to start tracking"}
+                style={{fontSize:10,color:C.faint,minWidth:64,textAlign:"right",whiteSpace:"nowrap",fontVariantNumeric:"tabular-nums"}}>
+                {rateDates[r.key] && !Number.isNaN(new Date(rateDates[r.key]).getTime())
+                  ? new Date(rateDates[r.key]).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"})
+                  : "—"}
+              </span>
+              <FmtInput value={r.freight} onChange={val=>updateField(r.key,"freight",val)} width={100} placeholder="Freight USD" fontSize={12}
+                color={rateDates[r.key] && Date.now()-new Date(rateDates[r.key]).getTime()>7*86400000 ? C.red : C.tx}/>
               <div title={rateDates[r.key]?"Rate last amended: "+new Date(rateDates[r.key]).toLocaleString("en-GB"):"No recorded rate amendment date"} style={{ fontSize:13, fontWeight:800, color: rateDates[r.key] && Date.now()-new Date(rateDates[r.key]).getTime()>7*86400000 ? C.red : (r.tce!=null ? (r.tce>=0?C.green:C.red) : C.faint), minWidth:90, textAlign:"right" }}>
                 {r.tce!=null ? "$"+r.tce.toLocaleString("nb-NO")+"/d" : "—"}
               </div>
@@ -892,6 +899,18 @@ function TCECalculator(){
                   onBlur={e=>{const n=parseFloat(e.target.value.replace(/[^0-9.\\-]/g,""));if(!isNaN(n))sD("canalCost",n);}}
                   style={{width:"100%",boxSizing:"border-box",background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 7px",outline:"none",textAlign:"right"}}/>
               </div>
+              <label style={{minWidth:0,display:"flex",flexDirection:"column",gap:3}}>
+                <span style={{fontSize:10,fontWeight:700,color:C.dim}}>Idle / tank cleaning (days)</span>
+                <input type="number" min="0" step="0.5" value={defaults.daysWaiting??0}
+                  onChange={e=>sD("daysWaiting",e.target.value)}
+                  style={{width:"100%",boxSizing:"border-box",background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 7px",outline:"none",textAlign:"right"}}/>
+              </label>
+              <label style={{minWidth:0,display:"flex",flexDirection:"column",gap:3}}>
+                <span style={{fontSize:10,fontWeight:700,color:C.dim}}>Sea weather allowance (%)</span>
+                <input type="number" min="0" step="1" value={defaults.weatherPct??8}
+                  onChange={e=>sD("weatherPct",e.target.value)}
+                  style={{width:"100%",boxSizing:"border-box",background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 7px",outline:"none",textAlign:"right"}}/>
+              </label>
               <div style={{gridColumn:"1 / -1",display:"flex",alignItems:"center",flexWrap:"wrap",gap:7}}>
                 <span style={{fontSize:10,fontWeight:700,color:C.dim}}>EU ETS (USD)</span>
                 <input value={euEts} onChange={e=>{setEuEts(numD(e.target.value));setAutoEts(false);setResult(null);}}
@@ -910,7 +929,7 @@ function TCECalculator(){
             </div>
 
             <button onClick={()=>calculate(panelMode)}
-              style={{marginTop:8,background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,color:"#fff",
+              style={{marginTop:8,background:C.bg3,border:"1px solid "+C.bd,borderRadius:6,color:C.blue,
                 fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"9px",cursor:"pointer",width:"100%"}}>
               {panelMode==="freight"?"Calculate TCE →":"Calculate Required Freight →"}
             </button>
