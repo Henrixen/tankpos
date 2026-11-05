@@ -181,12 +181,18 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   // Persist rate amendment dates separately from general route metadata.
   const [rateDates,setRateDates,rateDatesReady]=useCloudJson("tce-benchmark-rate-amended-v1",{});
   const savedFreight=useRef({});
+  // Existing tce_routes.updated_at provides a visible date for older records.
+  // New freight amendments are tracked independently in tce_workbench.
+  const [dbRateDates,setDbRateDates]=useState({});
+  const [sessionRateDates,setSessionRateDates]=useState({});
+  const rateDateFor=(key)=>sessionRateDates[key]||rateDates[key]||dbRateDates[key]||null;
   const markRateAmended=(items)=>{
-    if(!rateDatesReady)return;
     const changed=items.filter(r=>String(r.freight??"")!==String(savedFreight.current[r.key]??""));
     if(!changed.length)return;
     const stamp=new Date().toISOString();
-    setRateDates(prev=>({...prev,...Object.fromEntries(changed.map(r=>[r.key,stamp]))}));
+    const changes=Object.fromEntries(changed.map(r=>[r.key,stamp]));
+    setSessionRateDates(prev=>({...prev,...changes}));
+    if(rateDatesReady)setRateDates(prev=>({...prev,...changes}));
     changed.forEach(r=>{savedFreight.current[r.key]=String(r.freight??"");});
   };
   const [routeGroups,setRouteGroups,groupsReady,groupsError]=useCloudJson("tce-route-groups",{});
@@ -263,6 +269,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
     const custom = data.filter(d => !baseKeys.has(d.route_key)).map(fromDb);
     const loadedRows=[...base,...custom];
     savedFreight.current=Object.fromEntries(loadedRows.map(r=>[r.key,String(r.freight??"")]));
+    setDbRateDates(Object.fromEntries(data.filter(d=>d.updated_at).map(d=>[d.route_key,d.updated_at])));
     setRows(loadedRows.map(r=>({...r,tce:recalc(r)})));
   }
 
@@ -314,7 +321,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
       commission: numD(row.commission),
       speed: numD(row.speed), cons: numD(row.cons), updated_at: new Date().toISOString(),
     }, { onConflict: "route_key" });
-    if (!error) {markRateAmended([row]); window.dispatchEvent(new Event("tankpos:tce-routes-saved"));}
+    if (!error) {setDbRateDates(prev=>({...prev,[row.key]:new Date().toISOString()}));markRateAmended([row]); window.dispatchEvent(new Event("tankpos:tce-routes-saved"));}
     setStatus(error ? "Save failed" : "Saved ✓");
     setTimeout(() => setStatus(null), 2000);
   }
@@ -331,7 +338,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
       speed: numD(row.speed), cons: numD(row.cons), updated_at: new Date().toISOString(),
     }));
     const { error } = await supabase.from("tce_routes").upsert(payload, { onConflict: "route_key" });
-    if (!error) {markRateAmended(savable); window.dispatchEvent(new Event("tankpos:tce-routes-saved"));}
+    if (!error) {setDbRateDates(prev=>({...prev,...Object.fromEntries(savable.map(r=>[r.key,new Date().toISOString()]))}));markRateAmended(savable); window.dispatchEvent(new Event("tankpos:tce-routes-saved"));}
     setStatus(error ? "Save all failed" : `Saved ${savable.length} ✓`);
     setTimeout(() => setStatus(null), 2000);
   }
@@ -479,15 +486,15 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
               <input value={r.label} onChange={e=>updateField(r.key,"label",e.target.value)} placeholder="Route name"
                 style={{ flex:"1 1 140px", minWidth:100, background:"transparent", border:"none", color:C.tx, fontSize:12, fontWeight:700, padding:"2px 0", outline:"none", fontFamily:"inherit" }}/>
 
-              <span title={rateDates[r.key] ? "Freight last amended: "+new Date(rateDates[r.key]).toLocaleString("en-GB") : "No recorded freight amendment date yet — save an amended rate to start tracking"}
+              <span title={rateDateFor(r.key) ? "Freight last amended: "+new Date(rateDateFor(r.key)).toLocaleString("en-GB") : "No recorded freight amendment date yet — save an amended rate to start tracking"}
                 style={{fontSize:10,color:C.faint,minWidth:64,textAlign:"right",whiteSpace:"nowrap",fontVariantNumeric:"tabular-nums"}}>
-                {rateDates[r.key] && !Number.isNaN(new Date(rateDates[r.key]).getTime())
-                  ? new Date(rateDates[r.key]).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"})
+                {rateDateFor(r.key) && !Number.isNaN(new Date(rateDateFor(r.key)).getTime())
+                  ? new Date(rateDateFor(r.key)).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"})
                   : "—"}
               </span>
               <FmtInput value={r.freight} onChange={val=>updateField(r.key,"freight",val)} width={100} placeholder="Freight USD" fontSize={12}
-                color={rateDates[r.key] && Date.now()-new Date(rateDates[r.key]).getTime()>7*86400000 ? C.red : C.tx}/>
-              <div title={rateDates[r.key]?"Rate last amended: "+new Date(rateDates[r.key]).toLocaleString("en-GB"):"No recorded rate amendment date"} style={{ fontSize:13, fontWeight:800, color: rateDates[r.key] && Date.now()-new Date(rateDates[r.key]).getTime()>7*86400000 ? C.red : (r.tce!=null ? (r.tce>=0?C.green:C.red) : C.faint), minWidth:90, textAlign:"right" }}>
+                color={rateDateFor(r.key) && Date.now()-new Date(rateDateFor(r.key)).getTime()>7*86400000 ? C.red : C.tx}/>
+              <div title={rateDateFor(r.key)?"Rate last amended: "+new Date(rateDateFor(r.key)).toLocaleString("en-GB"):"No recorded rate amendment date"} style={{ fontSize:13, fontWeight:800, color: rateDateFor(r.key) && Date.now()-new Date(rateDateFor(r.key)).getTime()>7*86400000 ? C.red : (r.tce!=null ? (r.tce>=0?C.green:C.red) : C.faint), minWidth:90, textAlign:"right" }}>
                 {r.tce!=null ? "$"+r.tce.toLocaleString("nb-NO")+"/d" : "—"}
               </div>
               <button onClick={()=>saveRow(r)}
@@ -901,14 +908,14 @@ function TCECalculator(){
               </div>
               <label style={{minWidth:0,display:"flex",flexDirection:"column",gap:3}}>
                 <span style={{fontSize:10,fontWeight:700,color:C.dim}}>Idle / tank cleaning (days)</span>
-                <input type="number" min="0" step="0.5" value={defaults.daysWaiting??0}
-                  onChange={e=>sD("daysWaiting",e.target.value)}
+                <input type="text" inputMode="decimal" value={defaults.daysWaiting??0}
+                  onChange={e=>sD("daysWaiting",e.target.value.replace(/[^0-9.,]/g,"").replace(",","."))}
                   style={{width:"100%",boxSizing:"border-box",background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 7px",outline:"none",textAlign:"right"}}/>
               </label>
               <label style={{minWidth:0,display:"flex",flexDirection:"column",gap:3}}>
                 <span style={{fontSize:10,fontWeight:700,color:C.dim}}>Sea weather allowance (%)</span>
-                <input type="number" min="0" step="1" value={defaults.weatherPct??8}
-                  onChange={e=>sD("weatherPct",e.target.value)}
+                <input type="text" inputMode="decimal" value={defaults.weatherPct??8}
+                  onChange={e=>sD("weatherPct",e.target.value.replace(/[^0-9.,]/g,"").replace(",","."))}
                   style={{width:"100%",boxSizing:"border-box",background:C.bg3,border:"1px solid "+C.bd,borderRadius:4,color:C.tx,fontFamily:"inherit",fontSize:12,padding:"5px 7px",outline:"none",textAlign:"right"}}/>
               </label>
               <div style={{gridColumn:"1 / -1",display:"flex",alignItems:"center",flexWrap:"wrap",gap:7}}>
