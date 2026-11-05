@@ -44,12 +44,32 @@ export default function OperatorsTab() {
       <button style={{...btnStyle,background:"#58a6ff22",color:"#58a6ff"}} onClick={()=>openEditor()}>+ Add Operator</button>
     </div>
     {error&&<div role="alert" style={{color:"#ff7878",fontSize:12}}>{error}</div>}
-    {view==="columns"?<div style={{overflowX:"auto"}}><div style={{display:"grid",gridTemplateColumns:`repeat(${SEGMENTS.length}, minmax(155px, 1fr))`,gap:8,minWidth:1090}}>
-      {SEGMENTS.map(s=><div key={s} style={{border:`1px solid ${C.bd}`,borderRadius:8,background:C.bg2,overflow:"hidden"}}>
-        <div style={{padding:"12px 10px",fontWeight:700,fontSize:13,borderBottom:`1px solid ${C.bd}`,background:C.bg3}}>{s} <span style={{float:"right",color:C.faint,fontSize:11}}>{filtered.filter(o=>o.segments.includes(s)).length}</span></div>
-        <div style={{padding:6,display:"flex",flexDirection:"column",gap:4}}>{filtered.filter(o=>o.segments.includes(s)).map(o=><button key={o.id} title={[o.notes,o.tags.join(", ")].filter(Boolean).join("\n")} onClick={()=>openEditor(o)} style={{...btnStyle,textAlign:"left",padding:"9px 8px",background:"transparent",border:"1px solid transparent",whiteSpace:"normal"}} onMouseEnter={e=>e.currentTarget.style.background=C.bg3} onMouseLeave={e=>e.currentTarget.style.background="transparent"}><div style={{fontWeight:600}}>{o.name}</div>{o.segment_details?.[s]&&<div style={{fontSize:10,color:C.faint,marginTop:3}}>{[o.segment_details[s].pic&&`PIC: ${o.segment_details[s].pic}`,o.segment_details[s].ships&&`Ships: ${o.segment_details[s].ships}`,o.segment_details[s].note].filter(Boolean).join(" · ")}</div>}{o.tags.length>0&&<div style={{fontSize:10,color:"#58a6ff",marginTop:3}}>{o.tags.join(" · ")}</div>}{o.notes&&<div style={{fontSize:10,color:C.faint,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.notes}</div>}</button>)}{!filtered.some(o=>o.segments.includes(s))&&<div style={{padding:10,color:C.faint,fontSize:11}}>No owners</div>}</div>
-      </div>)}
-    </div></div>:<div style={{overflowX:"auto",border:`1px solid ${C.bd}`,borderRadius:8}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{background:C.bg3}}>{["Operator / Owner",...SEGMENTS,"Tags","Notes"].map(h=><th key={h} style={{padding:10,textAlign:SEGMENTS.includes(h)?"center":"left",borderBottom:`1px solid ${C.bd}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{filtered.map(o=><tr key={o.id} onClick={()=>openEditor(o)} style={{cursor:"pointer",borderBottom:`1px solid ${C.bd}`}}><td style={{padding:10,fontWeight:600,whiteSpace:"nowrap"}}>{o.name}</td>{SEGMENTS.map(s=><td key={s} style={{textAlign:"center",color:"#4ade80"}}>{o.segments.includes(s)?"✓":""}</td>)}<td style={{padding:10,color:"#58a6ff"}}>{o.tags.join(", ")}</td><td style={{padding:10,color:C.faint,maxWidth:250}}>{o.notes}</td></tr>)}</tbody></table></div>}
+    {view==="columns"?<div style={{overflowX:"auto"}}>
+      <div style={{display:"grid",gridTemplateColumns:`repeat(${SEGMENTS.length}, minmax(155px, 1fr))`,gap:0,minWidth:1090,border:`1px solid ${C.bd}`,borderRadius:8,overflow:"hidden"}}>
+        {SEGMENTS.map((segment,index)=>{
+          const items=filtered.filter(o=>o.segments.includes(segment));
+          return <div key={segment} style={{minWidth:0,background:C.bg2,borderRight:index<SEGMENTS.length-1?`1px solid ${C.bd}`:"none"}}>
+            <div style={{height:40,boxSizing:"border-box",padding:"11px 9px",fontWeight:700,fontSize:12,borderBottom:`1px solid ${C.bd}`,background:C.bg3}}>
+              {segment}<span style={{float:"right",color:C.faint,fontSize:11}}>{items.length}</span>
+            </div>
+            {items.map((o,i)=>{
+              const details=o.segment_details?.[segment];
+              const meta=[details?.pic&&`PIC: ${details.pic}`,details?.ships&&`Ships: ${details.ships}`,details?.note].filter(Boolean).join(" · ");
+              return <button key={o.id} title={[o.name,meta,o.tags.length&&`Tags: ${o.tags.join(", ")}`,o.notes].filter(Boolean).join("\n")} onClick={()=>openEditor(o)}
+                style={{display:"flex",flexDirection:"column",justifyContent:"center",width:"100%",height:78,boxSizing:"border-box",textAlign:"left",padding:"8px 9px",background:i%2===0?"transparent":"rgba(255,255,255,0.018)",color:C.tx,border:"none",borderBottom:`1px solid ${C.bd}`,cursor:"pointer",fontFamily:"inherit",overflow:"hidden"}}
+                onMouseEnter={e=>e.currentTarget.style.background=C.bg3}
+                onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"transparent":"rgba(255,255,255,0.018)"}>
+                <div style={{fontSize:11,fontWeight:650,width:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.name}</div>
+                {meta&&<div style={{fontSize:10,color:C.faint,marginTop:4,width:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{meta}</div>}
+                {o.tags.length>0&&<div style={{fontSize:10,color:"#58a6ff",marginTop:3,width:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.tags.join(" · ")}</div>}
+                {o.notes&&<div style={{fontSize:10,color:C.faint,marginTop:3,width:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.notes}</div>}
+              </button>;
+            })}
+            {items.length===0&&<div style={{height:78,boxSizing:"border-box",padding:"15px 9px",color:C.faint,fontSize:11,borderBottom:`1px solid ${C.bd}`}}>No owners</div>}
+          </div>;
+        })}
+      </div>
+    </div>:<div style={{overflowX:"auto",border:`1px solid ${C.bd}`,borderRadius:8}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr style={{background:C.bg3}}>{["Operator / Owner",...SEGMENTS,"Tags","Notes"].map(h=><th key={h} style={{padding:10,textAlign:SEGMENTS.includes(h)?"center":"left",borderBottom:`1px solid ${C.bd}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{filtered.map(o=><tr key={o.id} onClick={()=>openEditor(o)} style={{cursor:"pointer",borderBottom:`1px solid ${C.bd}`}}><td style={{padding:10,fontWeight:600,whiteSpace:"nowrap"}}>{o.name}</td>{SEGMENTS.map(s=><td key={s} style={{textAlign:"center",color:"#4ade80"}}>{o.segments.includes(s)?"✓":""}</td>)}<td style={{padding:10,color:"#58a6ff"}}>{o.tags.join(", ")}</td><td style={{padding:10,color:C.faint,maxWidth:250}}>{o.notes}</td></tr>)}</tbody></table></div>}
     {editing!==null&&<div style={{position:"fixed",inset:0,zIndex:9999,background:"#0009",display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onMouseDown={e=>{if(e.target===e.currentTarget)setEditing(null);}}><div style={{width:"min(520px, 100%)",background:C.bg2,border:`1px solid ${C.bd}`,borderRadius:12,padding:22,display:"flex",flexDirection:"column",gap:14,boxShadow:"0 18px 70px #0008"}}>
       <div style={{fontWeight:700,fontSize:16}}>{editing==="new"?"Add Operator / Owner":"Edit Operator / Owner"}</div>
       <label style={{fontSize:12}}>Name<input style={{...inputStyle,marginTop:5}} value={draft.name} onChange={e=>setDraft(d=>({...d,name:e.target.value}))} placeholder="Company name"/></label>
