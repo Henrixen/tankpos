@@ -177,6 +177,18 @@ function routeDefaults(r, defaults) {
 
 function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
   const [rows, setRows] = useState(BENCHMARK_ROUTES.map(r => routeDefaults(r, defaults)));
+  const [openGroups,setOpenGroups]=useState({Europe:true,Deepsea:false});
+  // Persist rate amendment dates separately from general route metadata.
+  const [rateDates,setRateDates,rateDatesReady]=useCloudJson("tce-benchmark-rate-amended-v1",{});
+  const savedFreight=useRef({});
+  const markRateAmended=(items)=>{
+    if(!rateDatesReady)return;
+    const changed=items.filter(r=>String(r.freight??"")!==String(savedFreight.current[r.key]??""));
+    if(!changed.length)return;
+    const stamp=new Date().toISOString();
+    setRateDates(prev=>({...prev,...Object.fromEntries(changed.map(r=>[r.key,stamp]))}));
+    changed.forEach(r=>{savedFreight.current[r.key]=String(r.freight??"");});
+  };
   const [routeGroups,setRouteGroups,groupsReady,groupsError]=useCloudJson("tce-route-groups",{});
   const [routeOrder,setRouteOrder,orderReady,orderError]=useCloudJson("tce-route-order",[]);
   const [routeInputs,setRouteInputs,inputsReady,inputsError]=useCloudJson("tce-route-inputs-v2",{});
@@ -249,7 +261,9 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
     // saved route whose key is not one of the built-in benchmark keys.
     const baseKeys = new Set(BENCHMARK_ROUTES.map(r => r.key));
     const custom = data.filter(d => !baseKeys.has(d.route_key)).map(fromDb);
-    setRows([...base, ...custom].map(r=>({...r,tce:recalc(r)})));
+    const loadedRows=[...base,...custom];
+    savedFreight.current=Object.fromEntries(loadedRows.map(r=>[r.key,String(r.freight??"")]));
+    setRows(loadedRows.map(r=>({...r,tce:recalc(r)})));
   }
 
   function recalc(row, bunkerOverride) {
@@ -300,7 +314,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
       commission: numD(row.commission),
       speed: numD(row.speed), cons: numD(row.cons), updated_at: new Date().toISOString(),
     }, { onConflict: "route_key" });
-    if (!error) window.dispatchEvent(new Event("tankpos:tce-routes-saved"));
+    if (!error) {markRateAmended([row]); window.dispatchEvent(new Event("tankpos:tce-routes-saved"));}
     setStatus(error ? "Save failed" : "Saved ✓");
     setTimeout(() => setStatus(null), 2000);
   }
@@ -317,7 +331,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
       speed: numD(row.speed), cons: numD(row.cons), updated_at: new Date().toISOString(),
     }));
     const { error } = await supabase.from("tce_routes").upsert(payload, { onConflict: "route_key" });
-    if (!error) window.dispatchEvent(new Event("tankpos:tce-routes-saved"));
+    if (!error) {markRateAmended(savable); window.dispatchEvent(new Event("tankpos:tce-routes-saved"));}
     setStatus(error ? "Save all failed" : `Saved ${savable.length} ✓`);
     setTimeout(() => setStatus(null), 2000);
   }
@@ -433,10 +447,10 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
         </div>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,padding:8}}>
+      <div style={{display:"flex",flexDirection:"column",gap:10,padding:8}}>
       {["Europe","Deepsea"].map(group=><div key={group} style={{minWidth:0,border:"1px solid "+C.bd2,borderRadius:5}}>
-      <div style={{padding:"6px 9px",fontSize:12,color:C.blue,fontWeight:700,background:C.bg3}}>{group} <span style={{color:C.faint,fontWeight:400}}>({rows.filter(r=>groupFor(r)===group).length})</span><button onClick={()=>addLeg(group)} style={{float:"right",background:"transparent",color:C.blue,border:"1px solid "+C.bd,borderRadius:4,cursor:"pointer",fontSize:10}}>+ Add leg</button></div>
-      <div style={{display:"flex",flexDirection:"column",overflow:"visible"}}>
+      <div style={{padding:"6px 9px",fontSize:12,color:C.blue,fontWeight:700,background:C.bg3}}><button onClick={()=>setOpenGroups(p=>({...p,[group]:!p[group]}))} style={{border:0,background:"transparent",color:C.blue,cursor:"pointer",fontWeight:700,fontSize:12}}>{openGroups[group]?"⌄":"›"} {group} <span style={{color:C.faint,fontWeight:400}}>({rows.filter(r=>groupFor(r)===group).length})</span></button><button onClick={()=>addLeg(group)} style={{float:"right",background:"transparent",color:C.blue,border:"1px solid "+C.bd,borderRadius:4,cursor:"pointer",fontSize:10}}>+ Add leg</button></div>
+      {openGroups[group]&&<div style={{display:"flex",flexDirection:"column",overflow:"visible"}}>
         {routeTokens.filter(token=>token===DIVIDER?group==="Europe":groupFor(orderedRows.find(r=>r.key===token))===group).map((token,routeIndex)=>{
           if(token===DIVIDER)return <div key={DIVIDER} {...dragProps(DIVIDER)} draggable={orderReady} onDragStart={e=>handleDrag(e,DIVIDER)} onDragEnd={()=>{drag.current=null;}} style={{padding:"9px 12px",cursor:"grab",color:C.blue,fontSize:11,fontWeight:700,borderTop:"2px solid "+C.blue}}>⠿ Main legs above · Other legs below — drag to move divider</div>;
           const r=orderedRows.find(x=>x.key===token);if(!r)return null;
@@ -466,7 +480,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
                 style={{ flex:"1 1 140px", minWidth:100, background:"transparent", border:"none", color:C.tx, fontSize:12, fontWeight:700, padding:"2px 0", outline:"none", fontFamily:"inherit" }}/>
 
               <FmtInput value={r.freight} onChange={val=>updateField(r.key,"freight",val)} width={100} placeholder="Freight USD" fontSize={12}/>
-              <div style={{ fontSize:13, fontWeight:800, color: r.tce!=null ? (r.tce>=0?C.green:C.red) : C.faint, minWidth:90, textAlign:"right" }}>
+              <div title={rateDates[r.key]?"Rate last amended: "+new Date(rateDates[r.key]).toLocaleString("en-GB"):"No recorded rate amendment date"} style={{ fontSize:13, fontWeight:800, color: rateDates[r.key] && Date.now()-new Date(rateDates[r.key]).getTime()>7*86400000 ? C.red : (r.tce!=null ? (r.tce>=0?C.green:C.red) : C.faint), minWidth:90, textAlign:"right" }}>
                 {r.tce!=null ? "$"+r.tce.toLocaleString("nb-NO")+"/d" : "—"}
               </div>
               <button onClick={()=>saveRow(r)}
@@ -518,7 +532,7 @@ function BenchmarkRoutes({ defaults, sharedBunker, updateSharedBunker }) {
             )}
           </div>
         );})}
-      </div></div>)}
+      </div>}</div>)}
       </div>
       <DifferentialWorkbench rows={rows} primaryKeys={primaryKeys}/>
 
@@ -796,8 +810,8 @@ function TCECalculator(){
   const fmtN=x=>x==null?"—":x.toLocaleString("nb-NO");
 
   const numInp=(label,k,val,setter,unit,ph="",fmt=false)=>(
-    <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 0",borderBottom:"1px solid "+C.bg3}}>
-      <span style={{flex:"0 0 130px",fontSize:12,color:C.dim}}>{label}</span>
+    <div style={{display:"flex",alignItems:"center",gap:6,padding:"3px 0",borderBottom:"1px solid "+C.bg3}}>
+      <span style={{flex:"0 0 110px",fontSize:12,color:C.dim}}>{label}</span>
       <input value={fmt&&typeof val==="number"?val.toLocaleString("nb-NO"):val}
         onChange={e=>{setter(k,e.target.value);setResult(null);}} placeholder={ph}
         onFocus={e=>{if(fmt)e.target.value=String(val).replace(/\s/g,"");}}
@@ -820,7 +834,11 @@ function TCECalculator(){
       <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}>
         <button onClick={()=>setStdVarsOpen(true)} title="Standard Variables" style={{background:"transparent",border:"1px solid "+C.bd,borderRadius:6,color:C.dim,cursor:"pointer",fontSize:12,padding:"5px 10px"}}>⚙ Standard Variables</button>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(250px,0.55fr)",gap:14,marginBottom:14}}>
+      <style>{`@media(max-width:1100px){.tce-workbench-layout{grid-template-columns:minmax(0,1fr)!important}}`}</style>
+      <div className="tce-workbench-layout" style={{display:"grid",gridTemplateColumns:"minmax(340px,0.92fr) minmax(0,1.08fr)",gap:14,alignItems:"start"}}>
+      <div style={{minWidth:0}}><BenchmarkRoutes defaults={defaults} sharedBunker={sharedBunker} updateSharedBunker={updateSharedBunker}/></div>
+      <div style={{minWidth:0}}>
+      <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(190px,0.55fr)",gap:14,marginBottom:14}}>
         <DistanceTable/>
         <div style={{...CARD,padding:"14px 16px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
           <div style={{fontSize:12,fontWeight:700,color:C.tx,textTransform:"uppercase",marginBottom:8}}>Bunker (MGO) $/mt</div>
@@ -831,7 +849,7 @@ function TCECalculator(){
           <div style={{fontSize:10,color:C.faint,marginTop:6}}>{pbtStatus || "Fetches live PBT ARA MGO and updates the shared Dashboard price"}</div>
         </div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:14,alignItems:"start"}}>
+      <div style={{display:"flex",flexDirection:"column",gap:14,alignItems:"stretch"}}>
         {["freight","tce"].map(panelMode=>{
           const panelResult=results[panelMode];
           return <React.Fragment key={panelMode}>
@@ -870,8 +888,8 @@ function TCECalculator(){
             {numInp("Canal cost","canalCost",defaults.canalCost,sD,"USD","",true)}
 
             {/* EU ETS */}
-            <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 0",borderBottom:"1px solid "+C.bg3}}>
-              <span style={{flex:"0 0 130px",fontSize:12,color:C.dim}}>EU ETS</span>
+            <div style={{display:"flex",alignItems:"center",gap:6,padding:"3px 0",borderBottom:"1px solid "+C.bg3}}>
+              <span style={{flex:"0 0 110px",fontSize:12,color:C.dim}}>EU ETS</span>
               <input value={autoEts?euEts:euEts} onChange={e=>{setEuEts(numD(e.target.value));setAutoEts(false);setResult(null);}}
                 style={{width:90,background:C.bg3,border:"1px solid "+(autoEts?C.green:C.bd),borderRadius:4,color:autoEts?C.green:C.tx,
                   fontFamily:"inherit",fontSize:12,padding:"3px 6px",outline:"none",textAlign:"right"}}/>
@@ -933,7 +951,7 @@ function TCECalculator(){
           </React.Fragment>;
         })}
       </div>
-      <div style={{marginTop:16}}><BenchmarkRoutes defaults={defaults} sharedBunker={sharedBunker} updateSharedBunker={updateSharedBunker}/></div>
+      </div></div>
 
       {/* ── Standard Variables popout ── */}
       {stdVarsOpen && (
