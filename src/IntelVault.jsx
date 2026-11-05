@@ -179,6 +179,7 @@ Rules:
 // ─── IntelVaultStrip — compact strip for nav bar ─────────────────────────────
 export function IntelVaultStrip({onVaultUpdate}){
   const [text,setText]=useState("");
+  const [editing,setEditing]=useState(false);
   const [busy,setBusy]=useState(false);
   const [status,setStatus]=useState(null);
   const [intelDate,setIntelDate]=useState(()=>new Date().toISOString().slice(0,10));
@@ -228,22 +229,29 @@ export function IntelVaultStrip({onVaultUpdate}){
       <span style={{fontSize:10,fontWeight:700,color:"#8fc9ff",textTransform:"uppercase",letterSpacing:"0.08em",flexShrink:0,whiteSpace:"nowrap"}}>
         Intel Vault {count>0&&<span style={{color:"rgba(250,163,86,0.4)",fontWeight:400}}>· {count}</span>}
       </span>
-      <textarea value={text} onChange={e=>setText(e.target.value)}
-        onKeyDown={e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();ingest();}}}
-        placeholder="Paste rates, fixtures, broker reports, market colour…"
-        rows={1}
-        style={{flex:1,background:"transparent",border:"none",borderBottom:"1px solid rgba(250,163,86,0.18)",
-          color:"rgba(250,195,130,0.7)",fontFamily:"inherit",fontSize:12,padding:"2px 0",outline:"none",
-          resize:"none",lineHeight:1.4,caretColor:"#faa356",minWidth:120,
-          overflow:"hidden",whiteSpace:"nowrap"}}/>
-      <input type="date" value={intelDate} onChange={e=>setIntelDate(e.target.value)}
-        style={{background:"transparent",border:"1px solid rgba(250,163,86,0.18)",borderRadius:3,
-          color:"rgba(180,160,120,0.55)",fontFamily:"inherit",fontSize:10,padding:"1px 4px",outline:"none",
-          colorScheme:"dark",width:90,flexShrink:0}}/>
-      <button onClick={()=>fRef.current&&fRef.current.click()} title="Attach image"
-        style={{background:"none",border:"1px solid rgba(250,163,86,0.18)",borderRadius:3,
-          color:"rgba(250,163,86,0.45)",fontFamily:"inherit",fontSize:11,padding:"2px 6px",cursor:"pointer",flexShrink:0}}>img</button>
-      <input ref={fRef} type="file" accept="image/*" style={{display:"none"}}/>
+      <div style={{position:"relative",flex:1,minWidth:0,display:"flex",alignItems:"center"}}
+        onFocusCapture={()=>setEditing(true)}
+        onBlurCapture={e=>{if(!e.currentTarget.contains(e.relatedTarget))setEditing(false);}}>
+        <textarea value={text} onChange={e=>setText(e.target.value)}
+          onKeyDown={e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();ingest();}}}
+          placeholder="" rows={1}
+          style={{width:"100%",height:29,boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
+            border:"1px solid rgba(88,166,255,0.38)",borderRadius:5,
+            color:"rgba(200,225,255,0.85)",fontFamily:"inherit",fontSize:12,
+            padding:editing?"5px 137px 5px 10px":"5px 10px",outline:"none",
+            resize:"none",lineHeight:"17px",caretColor:"#58a6ff",overflow:"hidden",whiteSpace:"nowrap"}}/>
+        {editing&&<div style={{position:"absolute",right:5,top:"50%",transform:"translateY(-50%)",
+          display:"flex",alignItems:"center",gap:4,background:"#0b1a2e",paddingLeft:4}}>
+          <input type="date" value={intelDate} onChange={e=>setIntelDate(e.target.value)}
+            title="Date of this intel" style={{background:"transparent",border:"1px solid rgba(88,166,255,0.28)",
+              borderRadius:3,color:"#9fc3f5",fontFamily:"inherit",fontSize:10,padding:"1px 3px",
+              outline:"none",colorScheme:"dark",width:92,boxSizing:"border-box"}}/>
+          <button onMouseDown={e=>e.preventDefault()} onClick={()=>fRef.current?.click()} title="Attach image"
+            style={{background:"transparent",border:"1px solid rgba(88,166,255,0.28)",borderRadius:3,
+              color:"#9fc3f5",fontFamily:"inherit",fontSize:10,padding:"2px 5px",cursor:"pointer"}}>img</button>
+        </div>}
+        <input ref={fRef} type="file" accept="image/*" style={{display:"none"}}/>
+      </div>
       <button onClick={ingest} disabled={busy||!text.trim()}
         style={{background:busy||!text.trim()?"transparent":"rgba(88,166,255,0.15)",
           border:"1px solid rgba(88,166,255,"+(busy||!text.trim()?"0.2":"0.5")+")",

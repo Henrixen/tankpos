@@ -129,8 +129,8 @@ export function AskAIStrip({vessels,cargoes,intelItems}){
           if(e.key==="Enter")ask();
           if(e.key==="Escape"){setShowAnswer(false);setAnswer("");}
         }}
-        placeholder="Ask about positions, cargoes, market colour…"
-        style={{flex:1,background:"rgba(255,255,255,0.03)",border:"1px solid rgba(58,130,246,0.2)",
+        placeholder=""
+        style={{flex:1,background:"rgba(255,255,255,0.03)",border:"1px solid rgba(88,166,255,0.38)",
           borderRadius:5,color:"rgba(200,225,255,0.8)",fontFamily:"inherit",fontSize:12,
           padding:"5px 10px",outline:"none",caretColor:"#58a6ff",minWidth:0}}/>
       <button onClick={ask} disabled={busy||!question.trim()}
