@@ -245,11 +245,13 @@ export function IntelVaultStrip({onVaultUpdate}){
           color:"rgba(250,163,86,0.45)",fontFamily:"inherit",fontSize:11,padding:"2px 6px",cursor:"pointer",flexShrink:0}}>img</button>
       <input ref={fRef} type="file" accept="image/*" style={{display:"none"}}/>
       <button onClick={ingest} disabled={busy||!text.trim()}
-        style={{background:"transparent",border:"1px solid rgba(250,163,86,0.35)",borderRadius:3,
-          color:busy?"rgba(250,163,86,0.3)":"rgba(250,163,86,0.8)",fontFamily:"inherit",fontWeight:600,
-          fontSize:10,padding:"2px 10px",cursor:busy||!text.trim()?"default":"pointer",flexShrink:0,
-          textTransform:"uppercase",letterSpacing:"0.06em",whiteSpace:"nowrap"}}>
-        {busy?"…":"Save Intel"}
+        style={{background:busy||!text.trim()?"transparent":"rgba(88,166,255,0.15)",
+          border:"1px solid rgba(88,166,255,"+(busy||!text.trim()?"0.2":"0.5")+")",
+          borderRadius:5,color:busy||!text.trim()?"rgba(88,166,255,0.3)":"#9fc3f5",
+          fontFamily:"inherit",fontWeight:700,fontSize:11,padding:"5px 14px",
+          cursor:busy||!text.trim()?"default":"pointer",flexShrink:0,
+          textTransform:"uppercase",letterSpacing:"0.06em",transition:"all 0.15s",whiteSpace:"nowrap"}}>
+        {busy?"…":"Save"}
       </button>
       {status&&(
         <span style={{fontSize:10,color:status.t==="success"?"#43e97b":status.t==="error"?"#ff6b6b":"rgba(120,160,220,0.6)",whiteSpace:"nowrap",flexShrink:0}}>

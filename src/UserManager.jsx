@@ -1,5 +1,6 @@
 import React,{useEffect,useState} from "react";
 import {C} from "./constants";
+import {supabase} from "./supabaseclient";
 import {brokerRpc,getBrokerSession,refreshBrokerIdentity,flushPreferences} from "./BrokerWorkspace";
 const input={width:"100%",minWidth:0,boxSizing:"border-box",background:"#081425",border:"1px solid #29425e",borderRadius:5,color:"#dcecff",fontFamily:"inherit",fontSize:12,padding:"7px 8px"};
 export default function UserManager(){
