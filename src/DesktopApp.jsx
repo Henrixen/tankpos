@@ -3084,8 +3084,7 @@ const filtV=useMemo(()=>{
               <Suspense fallback={null}><IntelVaultStrip onVaultUpdate={setIntelItems}/></Suspense>
             </div>
           )}
-          {!mobile&&<div style={{flex:"1 1 auto",minWidth:0}}/>}
-          {!mobile&&(quickAccess.includes("fleet_quick")||quickAccess.includes("worklist"))&&<div style={{flex:"0 0 auto",minWidth:0,paddingBottom:10}}><Suspense fallback={null}><HeaderQuickAccess showFleet={quickAccess.includes("fleet_quick")} showWorklist={quickAccess.includes("worklist")}/></Suspense></div>}
+          {!mobile&&(quickAccess.includes("fleet_quick")||quickAccess.includes("worklist"))&&<div style={{flex:"1 1 25%",minWidth:0,marginLeft:"auto",paddingBottom:10}}><Suspense fallback={null}><HeaderQuickAccess showFleet={quickAccess.includes("fleet_quick")} showWorklist={quickAccess.includes("worklist")}/></Suspense></div>}
           {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}          <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0,paddingBottom:10}}>
             {/* ⚙ Settings dropdown */}
             <SettingsMenu mobile={mobile} onToggleLayout={onToggleLayout} layoutOverride={layoutOverride}/>
