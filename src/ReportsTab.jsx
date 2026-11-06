@@ -1941,6 +1941,59 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const liveDraft=section==="market"?{reportType,reportDate,reportName,commentary,rateGrid,marketHeadings,intermediateTitle,asiaReport,weeklyHistory,benchmarkRows,driverBullets,tceStats,handy,handyCommentary,handySegments,importedFixingChart,routeColumns,routeTitles,intermediateRoutesLabel,excludedFixtureIds,excludedBenchmarkKeys,excludedCharterers,recipientCharterer,tceEarnings,fixtures,quotes}:section==="quick"?{quickReportName,quickTitle,quickRows,quickSelectedTags,quickUpdatedFilter,quickExcludedOperators,quickTableSort,quickExportSections,quickSpecs,quickMinAge,quickExcludeOther,quickNapStar,quickComparison,quickCompareIncluded,quickSent}:{positionReportName,posTitle,posSubtitle,posDate,reportVessels,positionColumns,positionChartSettings,positionCharts,posGroupBy,regionMode,outputSort,sortByDate,segmentNames,positionPreviewWidth};
   const reportLive=useReportLive({id:liveReportId,label:liveReportLabel,draft:liveDraft,busy:marketSaveBusy||listSaveBusy,onList:loadSavedReports,onLoad:(id,safe)=>section==="market"?loadReport(id,safe):section==="quick"?loadQuickPositions(id,safe):loadPositionList(id,safe)});
 
+  // Track each editor's last saved/loaded draft so creating a new report only
+  // prompts when the current report has changes that would be discarded.
+  const newReportBaselines = useRef({});
+  const resetNewReportBaseline = useRef(null);
+  const draftFingerprint = JSON.stringify(liveDraft);
+  useEffect(() => {
+    const key = section;
+    if (resetNewReportBaseline.current === key || !newReportBaselines.current[key] ||
+        (key === "market" && marketSaveStatus === "Saved!") ||
+        (key === "poslist" && posSaveStatus === "Saved ✓") ||
+        (key === "quick" && quickSaveStatus === "Saved ✓")) {
+      newReportBaselines.current[key] = { id: liveReportId, value: draftFingerprint };
+      if (resetNewReportBaseline.current === key) resetNewReportBaseline.current = null;
+    } else if (newReportBaselines.current[key].id !== liveReportId) {
+      newReportBaselines.current[key] = { id: liveReportId, value: draftFingerprint };
+    }
+  }, [section, liveReportId, draftFingerprint, marketSaveStatus, posSaveStatus, quickSaveStatus]);
+
+  function createNewReport() {
+    if (marketSaveBusy || listSaveBusy) return;
+    const baseline = newReportBaselines.current[section];
+    const hasUnsavedChanges = baseline && baseline.value !== draftFingerprint;
+    if (hasUnsavedChanges && !window.confirm("This report has unsaved changes. Create a new report and discard those changes? Your previously saved reports will not be affected.")) return;
+    resetNewReportBaseline.current = section;
+    if (section === "poslist") {
+      setActivePositionId(null);setPositionReportName("");setPositionSaveCopy(false);
+      setPosTitle("CHEMS & SPECIALIZED POSITION LIST");setPosSubtitle("");
+      setPosDate(new Date().toLocaleDateString("sv-SE",{timeZone:"Europe/Oslo"}));
+      clearAll();setPosSaveStatus("");
+    } else if (section === "quick") {
+      setActiveQuickId(null);setQuickReportName("");setQuickSaveCopy(false);
+      setQuickSelectedTags([]);setQuickUpdatedFilter("all");setQuickExcludedOperators([]);
+      setQuickTableSort({key:null,desc:false});setQuickRows([]);setQuickMinAge(0);
+      setQuickExcludeOther(false);setQuickNapStar(false);setQuickSent(null);
+      setQuickComparison(null);setQuickCompareIncluded(false);setQuickSaveStatus("");
+    } else if (section === "market" && reportType) {
+      setActiveMarketReportId(null);setReportName("");setSaveReportCopy(false);
+      setReportDate(new Date().toLocaleDateString("sv-SE",{timeZone:"Europe/Oslo"}));
+      setCommentary("");setFixtures([]);setQuotes([]);setTceEarnings({});
+      setAsiaReport(asiaBlank());setMarketSaveStatus("");setMarketExportStatus("");
+      setDriverBullets([""]);setBenchmarkRows(BENCHMARK_ROUTES.map(r=>({...r,freight:"",lastWeek:"",tce:null,tceLastWeek:null,override:false})));
+      setIntermediateTitle("Intermediate Summary");setExcludedFixtureIds([]);
+      setExcludedBenchmarkKeys([]);setExcludedCharterers([]);setRecipientCharterer("");
+      setImportedFixingChart(null);setPriorReportStatus("");
+      setWeeklyHistory({routeKey:"",series:{}});weeklyDirty.current={};
+      initRateGrid(reportType);
+    }
+  }
+  const newReportButton = <button type="button" disabled={marketSaveBusy||listSaveBusy}
+    onClick={createNewReport} title="Start a separate report without changing saved reports"
+    style={{background:"#1d4ed8",border:"1px solid #3b82f6",color:"#fff",borderRadius:5,
+      padding:"7px 12px",fontSize:11,fontWeight:750,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>+ New Report</button>;
+
   const SB = { background:C.bg3,color:C.tx,fontSize: 11, fontWeight: 600, padding: "6px 10px", borderRadius: 5, cursor: "pointer", border: "1px solid " + C.bd, fontFamily: "inherit", whiteSpace: "nowrap" };
   const IS = { background: C.bg3, border: "1px solid " + C.bd, borderRadius: 5, color: C.tx, fontSize: 11, padding: "5px 8px", outline: "none", fontFamily: "inherit" };
   const rateValues=Object.entries(rateGrid||{}).filter(([key,value])=>key!=="__marketEditor"&&value&&typeof value==="object").flatMap(([,group])=>Object.values(group).filter(v=>v!==null&&v!==undefined&&v!==""));
@@ -2594,6 +2647,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
 
       {/* ── Main ────────────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
+        {(section !== "market" || reportType) && <div className="no-export" style={{display:"flex",justifyContent:"flex-end",padding:"7px 12px",background:C.bg2,borderBottom:"1px solid "+C.bd,flexShrink:0}}>{newReportButton}</div>}
 
         {section === "poslist" && <>
           {/* Primary actions — separate from report layout settings */}
@@ -2601,7 +2655,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
             <span style={{ fontSize: 13, fontWeight: 750, color: C.tx, marginRight: 8 }}>POSITION LIST</span>
             <input aria-label="Position report name" value={positionReportName} onChange={e=>setPositionReportName(e.target.value)} style={{...IS,width:180}} placeholder="Saved report name"/>
             <label style={{fontSize:11,color:C.tx}}><input type="checkbox" checked={positionSaveCopy} onChange={e=>setPositionSaveCopy(e.target.checked)}/>Save as copy</label>
-            <button onClick={()=>{setActivePositionId(null);setPositionReportName("");setPositionSaveCopy(false);clearAll();}} style={{...SB,color:C.dim}}>New list</button>
+            
             <button onClick={()=>{setPositionChartDraft({...positionChartSettings});setPositionSettingsOpen(v=>!v);}} style={{...SB,color:ACCENT}}>Settings</button>
             <input type="date" value={posDate} onChange={e => setPosDate(e.target.value)} style={{ ...IS }} />
             <div style={{ flex: 1 }} />
@@ -3436,7 +3490,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
               <span style={{ fontSize: 13, fontWeight: 700, color: C.tx }}>Quick Positions</span>
               <input aria-label="Quick report name" value={quickReportName} onChange={e=>setQuickReportName(e.target.value)} style={{...IS,width:170}} placeholder="Saved report name"/>
               <label style={{fontSize:12,color:C.tx}}><input type="checkbox" checked={quickSaveCopy} onChange={e=>setQuickSaveCopy(e.target.checked)}/>Save as copy</label>
-              <button onClick={()=>{setActiveQuickId(null);setQuickReportName("");setQuickSaveCopy(false);setQuickSelectedTags([]);setQuickUpdatedFilter("all");setQuickExcludedOperators([]);setQuickTableSort({key:null,desc:false});setQuickRows([]);setQuickMinAge(0);setQuickExcludeOther(false);setQuickNapStar(false);setQuickSent(null);setQuickComparison(null);setQuickCompareIncluded(false);}} style={{...SB,color:C.dim}}>New list</button>
+              
               <input value={quickTitle} onChange={e => setQuickTitle(e.target.value)} style={{ ...IS, minWidth: 160 }} placeholder="Avail inter tonnage" />
               <div style={{ flex: 1 }} />
               {quickSaveStatus && <span style={{ fontSize: 13, color: quickSaveStatus === "Saved ✓" ? "#43e97b" : C.dim }}>{quickSaveStatus}</span>}
