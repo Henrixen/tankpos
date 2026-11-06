@@ -1360,17 +1360,6 @@ function DesktopApp({positionsReady,vessels,cargoes,cargoTotal,onUpdateV,onRenam
   const [pinMessage,setPinMessage]=React.useState("");
   const [guestMode, setGuestMode] = React.useState(false); // true = restricted User (kept name to avoid unrelated navigation changes)
   const [currentAppUser,setCurrentAppUser] = React.useState(null);
-  // Per-user default zoom; load only for the signed-in user.
-  React.useEffect(()=>{
-    const id=currentAppUser?.id;
-    if(!id)return;
-    let alive=true;
-    supabase.from("tag_settings").select("value").eq("key","user_default_zoom_"+id).maybeSingle()
-      .then(({data,error})=>{if(!alive||error)return;const z=Number(data?.value);document.body.style.zoom=([80,90,100,110,120].includes(z)?z:100)+"%";});
-    const onZoom=e=>{if(String(e.detail?.userId)===String(id))document.body.style.zoom=e.detail.zoom+"%";};
-    window.addEventListener("user-default-zoom-updated",onZoom);
-    return()=>{alive=false;window.removeEventListener("user-default-zoom-updated",onZoom);};
-  },[currentAppUser?.id]);
 
   // Login-screen live feeds. Fail quietly so the PIN screen always remains usable.
   const [loginMarkets,setLoginMarkets]=React.useState({
@@ -3084,7 +3073,7 @@ const filtV=useMemo(()=>{
               <Suspense fallback={null}><IntelVaultStrip onVaultUpdate={setIntelItems}/></Suspense>
             </div>
           )}
-          {!mobile&&(quickAccess.includes("fleet_quick")||quickAccess.includes("worklist"))&&<div style={{flex:"1 1 25%",minWidth:0,marginLeft:"auto",paddingBottom:10}}><Suspense fallback={null}><HeaderQuickAccess showFleet={quickAccess.includes("fleet_quick")} showWorklist={quickAccess.includes("worklist")}/></Suspense></div>}
+          {!mobile&&(quickAccess.includes("fleet_quick")||quickAccess.includes("worklist"))&&<div style={{flex:"1 1 25%",minWidth:0,paddingBottom:10}}><Suspense fallback={null}><HeaderQuickAccess showFleet={quickAccess.includes("fleet_quick")} showWorklist={quickAccess.includes("worklist")}/></Suspense></div>}
           {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}          <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0,paddingBottom:10}}>
             {/* ⚙ Settings dropdown */}
             <SettingsMenu mobile={mobile} onToggleLayout={onToggleLayout} layoutOverride={layoutOverride}/>
