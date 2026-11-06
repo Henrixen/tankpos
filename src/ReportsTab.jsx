@@ -3150,7 +3150,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead><tr>
-                      {["Segment","Last week","Spot WS",...reportFfaMonths(reportDate).map(m=>m+" FFA"),"TCE Spot","Comment"].map(h=>
+                      {["Segment","Last week","Spot WS",...reportFfaMonths(reportDate).map(m=>m+" FFA"),"Trend","TCE Spot","Comment"].map(h=>
                         <th key={h} style={{padding:"6px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:C.dim,textTransform:"uppercase"}}>{h}</th>)}
                     </tr></thead>
                     <tbody>
@@ -3162,8 +3162,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                               style={{width:110,color:C.blue,fontWeight:700}}/>
                             <button className="no-export" title="Remove segment" onClick={()=>setHandySegments(p=>p.filter(k=>k!==seg))}
                               style={{border:0,background:"transparent",color:C.faint,cursor:"pointer"}}>×</button>
-                            <div style={{marginTop:3}}><FfaSparkline lastWeek={handy[seg]?.lastWeekWS} spot={handy[seg]?.spotWS}
-                              aug={handy[seg]?.ffaAug} sep={handy[seg]?.ffaSep} oct={handy[seg]?.ffaOct}/></div>
+
                           </td>
                           {[["lastWeekWS","Last week WS"],["spotWS","Spot WS"],["ffaAug","Nov FFA"],["ffaSep","Dec FFA"],["ffaOct","Jan FFA"]].map(([field,label])=>
                             <td key={field} style={{padding:"6px 10px"}}>
@@ -3171,6 +3170,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                                 onChange={e=>setHandy(p=>({...p,[seg]:{...p[seg],[field]:e.target.value}}))}
                                 placeholder="WS" style={{width:62,fontSize:12,fontWeight:field==="spotWS"?700:400}}/>
                             </td>)}
+                          <td style={{padding:"6px 10px",minWidth:106}}><FfaSparkline lastWeek={handy[seg]?.lastWeekWS} spot={handy[seg]?.spotWS} aug={handy[seg]?.ffaAug} sep={handy[seg]?.ffaSep} oct={handy[seg]?.ffaOct}/></td>
                           <td style={{padding:"6px 10px"}}><input aria-label={`${seg} TCE Spot`} className="rpt-edit"
                             value={handy[seg]?.tce||""} onChange={e=>setHandy(p=>({...p,[seg]:{...p[seg],tce:e.target.value}}))}
                             placeholder="Free text" style={{width:105}}/></td>
@@ -3302,20 +3302,20 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                     {handyCommentary && <div style={{fontSize:11,color:"#334155",whiteSpace:"pre-wrap",lineHeight:1.6,marginBottom:8}}>{handyCommentary}</div>}
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                       <thead><tr style={{background:"#eaf2fc"}}>
-                        {["Segment","Last week","Spot WS",...reportFfaMonths(reportDate).map(m=>m+" FFA"),"TCE Spot","Comment"].map(h=>
+                        {["Segment","Last week","Spot WS",...reportFfaMonths(reportDate).filter((m,i)=>handySegments.some(seg=>String(handy[seg]?.[["ffaAug","ffaSep","ffaOct"][i]]??"").trim())).map(m=>m+" FFA"),"Trend","TCE Spot","Comment"].map(h=>
                           <th key={h} style={{padding:"5px 8px",textAlign:"left",fontWeight:600,color:"#6b7280"}}>{h}</th>)}
                       </tr></thead>
                       <tbody>
                         {handySegments.map(seg=><tr key={seg} style={{borderTop:"1px solid #d9e2ef"}}>
                           <td style={{padding:"5px 8px",fontWeight:700}}>
                             {(handy[seg]?.name && handy[seg].name !== "TC23" && handy[seg].name !== "TC6" ? handy[seg].name : seg==="tc23"?"TC23 UKC":seg==="tc6"?"TC6 X-Med":seg)}
-                            <div style={{marginTop:2}}><FfaSparkline lastWeek={handy[seg]?.lastWeekWS} spot={handy[seg]?.spotWS}
-                              aug={handy[seg]?.ffaAug} sep={handy[seg]?.ffaSep} oct={handy[seg]?.ffaOct}/></div>
+
                           </td>
-                          {["lastWeekWS","spotWS","ffaAug","ffaSep","ffaOct"].map(field=>
+                          {["lastWeekWS","spotWS",...["ffaAug","ffaSep","ffaOct"].filter(field=>handySegments.some(k=>String(handy[k]?.[field]??"").trim()))].map(field=>
                             <td key={field} style={{padding:"5px 8px",color:field.startsWith("ffa")?"#6b7280":undefined}}>
                               {handy[seg]?.[field] ? "WS "+handy[seg][field] : "—"}
                             </td>)}
+                          <td style={{padding:"5px 8px",minWidth:105}}><FfaSparkline lastWeek={handy[seg]?.lastWeekWS} spot={handy[seg]?.spotWS} aug={handy[seg]?.ffaAug} sep={handy[seg]?.ffaSep} oct={handy[seg]?.ffaOct}/></td>
                           <td style={{padding:"5px 8px"}}>{handy[seg]?.tce||"—"}</td>
                           <td style={{padding:"5px 8px",color:"#6b7280"}}>{handy[seg]?.comment||""}</td>
                         </tr>)}
