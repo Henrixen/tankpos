@@ -1443,6 +1443,9 @@ function DesktopApp({positionsReady,vessels,cargoes,cargoTotal,onUpdateV,onRenam
       }
       if(isAdmin)setQuickAccess(["ask_ai","intel_vault","fleet_quick","worklist"]);
       else {const {data:qaccess}=await supabase.from("tag_settings").select("value").eq("key","user_quick_access_"+user.id).maybeSingle();setQuickAccess(Array.isArray(qaccess?.value)?qaccess.value:[])}
+      const {data:zoomPref}=await supabase.from("tag_settings").select("value").eq("key","user_default_zoom_"+user.id).maybeSingle();
+      const savedZoom=Number(zoomPref?.value);
+      document.body.style.zoom=[80,90,100,110,120].includes(savedZoom)?savedZoom+"%":"100%";
       localStorage.setItem("signal_user",String(user.initials||"").toUpperCase());
       setCurrentAppUser(user); setUserTabs(tabs); setGuestMode(!isAdmin); setUnlocked(true); setPinInput("");
     }catch(_){
@@ -3073,7 +3076,7 @@ const filtV=useMemo(()=>{
               <Suspense fallback={null}><IntelVaultStrip onVaultUpdate={setIntelItems}/></Suspense>
             </div>
           )}
-          {!mobile&&(quickAccess.includes("fleet_quick")||quickAccess.includes("worklist"))&&<div style={{flex:"1 1 25%",minWidth:0,paddingBottom:10}}><Suspense fallback={null}><HeaderQuickAccess showFleet={quickAccess.includes("fleet_quick")} showWorklist={quickAccess.includes("worklist")}/></Suspense></div>}
+          {!mobile&&(quickAccess.includes("fleet_quick")||quickAccess.includes("worklist"))&&<div style={{flex:"0 0 auto",minWidth:0,marginLeft:"auto",paddingBottom:10}}><Suspense fallback={null}><HeaderQuickAccess showFleet={quickAccess.includes("fleet_quick")} showWorklist={quickAccess.includes("worklist")}/></Suspense></div>}
           {!mobile&&<div style={{width:1,background:"rgba(58,130,246,0.15)",alignSelf:"stretch",margin:"0 4px"}}/>}          <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0,paddingBottom:10}}>
             {/* ⚙ Settings dropdown */}
             <SettingsMenu mobile={mobile} onToggleLayout={onToggleLayout} layoutOverride={layoutOverride}/>

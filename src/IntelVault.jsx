@@ -238,8 +238,9 @@ export function IntelVaultStrip({onVaultUpdate}){
           style={{width:"100%",height:29,boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
             border:"1px solid rgba(88,166,255,0.38)",borderRadius:5,
             color:"rgba(200,225,255,0.85)",fontFamily:"inherit",fontSize:12,
-            padding:editing?"5px 137px 5px 10px":"5px 10px",outline:"none",
+            padding:editing?"5px 157px 5px 10px":text?"5px 25px 5px 10px":"5px 10px",outline:"none",
             resize:"none",lineHeight:"17px",caretColor:"#58a6ff",overflow:"hidden",whiteSpace:"nowrap"}}/>
+        {!!text&&<button aria-label="Clear Intel Vault" onMouseDown={e=>e.preventDefault()} onClick={()=>setText("")} style={{position:"absolute",right:editing?140:5,top:"50%",transform:"translateY(-50%)",background:"transparent",border:0,color:"#8fc9ff",cursor:"pointer",fontSize:13}}>×</button>}
         {editing&&<div style={{position:"absolute",right:5,top:"50%",transform:"translateY(-50%)",
           display:"flex",alignItems:"center",gap:4,background:"#0b1a2e",paddingLeft:4}}>
           <input type="date" value={intelDate} onChange={e=>setIntelDate(e.target.value)}

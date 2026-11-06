@@ -124,15 +124,15 @@ export function AskAIStrip({vessels,cargoes,intelItems}){
     <div style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"0 12px"}}>
       <span style={{fontSize:10,fontWeight:700,color:"#8fc9ff",textTransform:"uppercase",
         letterSpacing:"0.1em",flexShrink:0,whiteSpace:"nowrap"}}>Ask AI</span>
-      <input ref={inputRef} value={question} onChange={e=>setQuestion(e.target.value)}
+      <div style={{position:"relative",flex:1,minWidth:0,display:"flex"}}><input ref={inputRef} value={question} onChange={e=>setQuestion(e.target.value)}
         onKeyDown={e=>{
           if(e.key==="Enter")ask();
           if(e.key==="Escape"){setShowAnswer(false);setAnswer("");}
         }}
         placeholder=""
-        style={{flex:1,background:"rgba(255,255,255,0.03)",border:"1px solid rgba(88,166,255,0.38)",
+        style={{width:"100%",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(88,166,255,0.38)",
           borderRadius:5,color:"rgba(200,225,255,0.8)",fontFamily:"inherit",fontSize:12,
-          padding:"5px 10px",outline:"none",caretColor:"#58a6ff",minWidth:0}}/>
+          padding:question?"5px 25px 5px 10px":"5px 10px",outline:"none",caretColor:"#58a6ff",minWidth:0}}/>{!!question&&<button aria-label="Clear Ask AI" onClick={()=>setQuestion("")} style={{position:"absolute",right:5,top:"50%",transform:"translateY(-50%)",background:"transparent",border:0,color:"#8fc9ff",cursor:"pointer",fontSize:13}}>×</button>}</div>
       <button onClick={ask} disabled={busy||!question.trim()}
         style={{background:busy||!question.trim()?"transparent":"rgba(88,166,255,0.15)",
           border:"1px solid rgba(88,166,255,"+(busy||!question.trim()?"0.2":"0.5")+")",
