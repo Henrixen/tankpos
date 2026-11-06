@@ -738,21 +738,31 @@ function reportFfaMonths(dateValue){
 }
 
 // ─── Tiny inline sparkline for Handy FFA Aug/Sep/Oct trend ──
-function FfaSparkline({ aug, sep, oct }) {
-  const vals = [aug, sep, oct].map(v => parseFloat(v)).filter(v => !isNaN(v));
-  if (vals.length < 2) return <span style={{ fontSize: 10, color: C.faint }}>—</span>;
-  const min = Math.min(...vals), max = Math.max(...vals);
-  const range = max - min || 1;
-  const pts = [aug, sep, oct].map((v, i) => {
-    const n = parseFloat(v);
-    const x = 4 + i * 31;
-    const y = isNaN(n) ? 11 : 18 - ((n - min) / range) * 14;
-    return `${x},${y}`;
-  }).join(" ");
+function FfaSparkline({ lastWeek, spot, aug, sep, oct }) {
+  const raw = [lastWeek, spot, aug, sep, oct];
+  const numbers = raw.map(v => v === "" || v == null ? null : Number(String(v).replace(",", ".")));
+  const valid = numbers.filter(v => v !== null && Number.isFinite(v));
+  if (valid.length < 2) return <span style={{ fontSize: 10, color: C.faint }}>—</span>;
+  const min = Math.min(...valid), max = Math.max(...valid), range = max - min || 1;
+  const x = i => 4 + i * 19;
+  const y = v => 18 - ((v - min) / range) * 14;
+  // Last week → Spot is solid; Spot → forward months is dotted.
+  // Missing periods do not generate fake zero points or connecting lines.
+  const line = (from, to, dotted) => {
+    if (numbers[from] === null || numbers[to] === null ||
+        !Number.isFinite(numbers[from]) || !Number.isFinite(numbers[to])) return null;
+    return <line key={`${from}-${to}`} x1={x(from)} y1={y(numbers[from])}
+      x2={x(to)} y2={y(numbers[to])} stroke="#79c0ff"
+      strokeWidth="1.6" strokeDasharray={dotted ? "3,3" : undefined}/>;
+  };
+  const lastIndex = numbers.reduce((idx, v, i) => v !== null && Number.isFinite(v) ? i : idx, -1);
   return (
-    <svg width="70" height="22" viewBox="0 0 70 22">
-      <polyline points={pts} fill="none" stroke="#79c0ff" strokeWidth="1.6" strokeDasharray="3,3" />
-      <circle cx="66" cy={pts.split(" ")[2]?.split(",")[1] || 11} r="2" fill="#79c0ff" />
+    <svg width="85" height="22" viewBox="0 0 85 22" aria-label="Last week, spot and forward rates">
+      {line(0, 1, false)}
+      {line(1, 2, true)}
+      {line(2, 3, true)}
+      {line(3, 4, true)}
+      {lastIndex >= 0 && <circle cx={x(lastIndex)} cy={y(numbers[lastIndex])} r="2" fill="#79c0ff"/>}
     </svg>
   );
 }
@@ -3146,6 +3156,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead><tr>
                       <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>Segment</th>
+                      <th style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:C.dim}}>LAST WEEK</th>
                       <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>Spot WS</th><th style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:C.dim}}>TCE</th>
                       <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>{reportFfaMonths(reportDate).join(" | ")}</th>
                       <th style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:C.dim}}>Comment</th>
@@ -3155,6 +3166,11 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                         <tr key={seg} style={{ borderTop: "1px solid " + C.bd, background: i % 2 === 0 ? C.bg3 : C.bg2 }}>
                           <td style={{ padding: "6px 10px", fontWeight: 700, color: C.tx }}><input className="rpt-edit" value={handy[seg]?.name || (seg === "tc23" ? "TC23" : seg === "tc6" ? "TC6" : seg)} onChange={e=>setHandy(p=>({...p,[seg]:{...p[seg],name:e.target.value}}))} style={{width:100,color:C.blue,fontWeight:700}} />
                             <button className="no-export" title="Remove segment" onClick={()=>setHandySegments(p=>p.filter(k=>k!==seg))} style={{border:0,background:"transparent",color:C.faint,cursor:"pointer"}}>×</button></td>
+                          <td style={{padding:"6px 10px"}}>
+                            <input aria-label={`${seg} Last week WS`} value={handy[seg]?.lastWeekWS||""}
+                              onChange={e=>setHandy(p=>({...p,[seg]:{...p[seg],lastWeekWS:e.target.value}}))}
+                              placeholder="WS" className="rpt-edit" style={{width:55,fontSize:12}}/>
+                          </td>
                           <td style={{ padding: "6px 10px" }}>
                             <input value={handy[seg].spotWS} onChange={e => setHandy(p => ({ ...p, [seg]: { ...p[seg], spotWS: e.target.value } }))} placeholder="WS" className="rpt-edit"
                               style={{ width: 55, fontSize: 12, fontWeight: 600 }} />
@@ -3162,7 +3178,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                           <td style={{padding:"6px 10px"}}><input aria-label={`${seg} TCE`} className="rpt-edit" value={handy[seg]?.tce||""} onChange={e=>setHandy(p=>({...p,[seg]:{...p[seg],tce:e.target.value}}))} placeholder="Free text" style={{width:100}}/></td>
                           <td style={{ padding: "6px 10px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <FfaSparkline aug={handy[seg].ffaAug} sep={handy[seg].ffaSep} oct={handy[seg].ffaOct} />
+                              <FfaSparkline lastWeek={handy[seg].lastWeekWS} spot={handy[seg].spotWS} aug={handy[seg].ffaAug} sep={handy[seg].ffaSep} oct={handy[seg].ffaOct} />
                               <div style={{ display: "flex", gap: 4 }}>
                                 {["ffaAug", "ffaSep", "ffaOct"].map(f => (
                                   <input key={f} value={handy[seg][f]} onChange={e => setHandy(p => ({ ...p, [seg]: { ...p[seg], [f]: e.target.value } }))}
@@ -3299,6 +3315,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                       <thead><tr style={{ background: "#eaf2fc" }}>
                         <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Segment</th>
+                        <th style={{padding:"5px 8px",textAlign:"left",color:"#6b7280"}}>Last week</th>
                         <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Spot WS</th><th style={{padding:"5px 8px",textAlign:"left",color:"#6b7280"}}>TCE</th>
                         <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>{reportFfaMonths(reportDate).join(" | ")}</th>
                         <th style={{padding:"5px 8px",textAlign:"left",color:"#6b7280"}}>Comment</th>
@@ -3307,8 +3324,9 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                         {handySegments.map((seg, i) => (
                           <tr key={seg} style={{ borderTop: "1px solid #d9e2ef" }}>
                             <td style={{ padding: "5px 8px", fontWeight: 700 }}>{handy[seg]?.name || (seg === "tc23" ? "TC23" : seg === "tc6" ? "TC6" : seg)}</td>
+                            <td style={{padding:"5px 8px"}}>{handy[seg]?.lastWeekWS ? "WS " + handy[seg].lastWeekWS : "—"}</td>
                             <td style={{ padding: "5px 8px" }}>{handy[seg].spotWS ? "WS " + handy[seg].spotWS : "—"}</td><td style={{padding:"5px 8px"}}>{handy[seg]?.tce||"—"}</td>
-                            <td style={{ padding: "5px 8px", color: "#6b7280" }}><div style={{display:"flex",alignItems:"center",gap:10}}><FfaSparkline aug={handy[seg].ffaAug} sep={handy[seg].ffaSep} oct={handy[seg].ffaOct}/><span>{[handy[seg].ffaAug, handy[seg].ffaSep, handy[seg].ffaOct].filter(Boolean).map(v => "WS " + v).join(" / ") || "—"}</span></div></td>
+                            <td style={{ padding: "5px 8px", color: "#6b7280" }}><div style={{display:"flex",alignItems:"center",gap:10}}><FfaSparkline lastWeek={handy[seg].lastWeekWS} spot={handy[seg].spotWS} aug={handy[seg].ffaAug} sep={handy[seg].ffaSep} oct={handy[seg].ffaOct}/><span>{[handy[seg].ffaAug, handy[seg].ffaSep, handy[seg].ffaOct].filter(Boolean).map(v => "WS " + v).join(" / ") || "—"}</span></div></td>
                             <td style={{padding:"5px 8px",color:"#6b7280"}}>{handy[seg]?.comment||""}</td>
                           </tr>
                         ))}
