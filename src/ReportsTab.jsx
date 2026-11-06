@@ -751,7 +751,7 @@ function FfaSparkline({ aug, sep, oct }) {
   }).join(" ");
   return (
     <svg width="70" height="22" viewBox="0 0 70 22">
-      <polyline points={pts} fill="none" stroke="#79c0ff" strokeWidth="1.6" />
+      <polyline points={pts} fill="none" stroke="#79c0ff" strokeWidth="1.6" strokeDasharray="3,3" />
       <circle cx="66" cy={pts.split(" ")[2]?.split(",")[1] || 11} r="2" fill="#79c0ff" />
     </svg>
   );
