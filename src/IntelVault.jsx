@@ -24,11 +24,11 @@ function IntelVault({onVaultUpdate}){
     try{
       const imgBlock=img?[{type:"image",source:{type:"base64",media_type:img.mime,data:img.base64}}]:[];
       const today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
-      const res=await fetch("/api/claude",{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
         body:JSON.stringify({
-          model:"claude-sonnet-4-6",
+          model:"claude-sonnet-4-20250514",
           max_tokens:2000,
           system:`You are a maritime market intelligence extractor. Today is ${today}.
 
@@ -115,10 +115,10 @@ Rules:
     <div style={{display:"flex",flexDirection:"column",gap:7}}>
       {/* Input area */}
       <div style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,overflow:"hidden"}}>
-        <textarea value={text} onChange={e=>setText(e.target.value)}
+        <div style={{position:"relative"}}><textarea value={text} onChange={e=>setText(e.target.value)}
           onPaste={e=>{for(const it of Array.from(e.clipboardData?.items||[])){if(it.type.startsWith("image/")){e.preventDefault();loadImg(it.getAsFile(),setImg);return;}}}}
           placeholder={"Paste rates, broker reports, news, market colour…\nor attach a screenshot below"}
-          style={{width:"100%",minHeight:60,background:"transparent",border:"none",fontFamily:"inherit",fontSize:12,padding:"10px 12px",resize:"none",outline:"none",boxSizing:"border-box",lineHeight:1.5,color:"rgba(180,210,255,0.85)"}}/>
+          style={{width:"100%",minHeight:60,background:"transparent",border:"none",color:C.tx,fontFamily:"inherit",fontSize:12,padding:"6px 8px",paddingRight:text?28:8,resize:"vertical",outline:"none",boxSizing:"border-box"}}/>{text&&<button aria-label="Clear Intel Vault text" onClick={()=>setText("")} style={{position:"absolute",right:7,top:6,border:0,background:"transparent",color:C.faint,cursor:"pointer",fontSize:14}}>×</button>}</div>
         <div style={{display:"flex",gap:5,padding:"4px 6px",borderTop:"1px solid "+C.bd2,alignItems:"center"}}>
           <button onClick={ingest} disabled={busy||(!text.trim()&&!img)}
             style={{flex:1,background:busy?"#1a4a8f":"#1f6feb",border:"none",borderRadius:4,color:"#fff",fontFamily:"inherit",fontWeight:700,fontSize:12,padding:"4px 0",cursor:busy?"default":"pointer"}}>
@@ -175,99 +175,5 @@ Rules:
 }
 
 // ─── AI Ask ───────────────────────────────────────────────────────────────────
-
-// ─── IntelVaultStrip — compact strip for nav bar ─────────────────────────────
-export function IntelVaultStrip({onVaultUpdate}){
-  const [text,setText]=useState("");
-  const [editing,setEditing]=useState(false);
-  const [busy,setBusy]=useState(false);
-  const [status,setStatus]=useState(null);
-  const [intelDate,setIntelDate]=useState(()=>new Date().toISOString().slice(0,10));
-  const [count,setCount]=useState(0);
-  const fRef=useRef(null);
-
-  const TAGS=["RATES","FIXTURE","QUOTE","MARKET","FM","RUMOUR","COUNTERPARTY","EVENT","TC","SALE"];
-  const TAG_COLORS={"RATES":C.amber,"FIXTURE":C.green,"QUOTE":"#38bdf8","MARKET":C.blue,"FM":C.red,"RUMOUR":C.purple,"COUNTERPARTY":"#e879f9","EVENT":"#34d399","TC":"#fb923c","SALE":"#a3e635"};
-
-  useEffect(()=>{loadIntel().then(d=>{setCount(d.length);onVaultUpdate&&onVaultUpdate(d);});},[]);
-
-  async function ingest(){
-    if(!text.trim()){return;}
-    setBusy(true);setStatus({t:"info",m:"Extracting…"});
-    try{
-      const today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
-      const res=await fetch("/api/claude",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          model:"claude-sonnet-4-6",max_tokens:2000,
-          system:`You are a maritime market intelligence extractor. Today is ${today}. Split the input into logical items. Output as JSON array only, no markdown. Each item: {"tag":"TAG","title":"short title max 6 words","content":"full intel text"}. Tags: RATES,FIXTURE,QUOTE,MARKET,FM,RUMOUR,COUNTERPARTY,EVENT,TC,SALE`,
-          messages:[{role:"user",content:text.trim()}]
-        })
-      });
-      const d=await res.json();
-      const raw=(d.content||[]).map(b=>b.text||"").join("").trim();
-      const clean=raw.replace(/```json|```/g,"").trim();
-      const parsed=JSON.parse(clean);
-      const newItems=[];
-      for(const item of parsed){
-        const lineItem={tag:item.tag||"MARKET",title:item.title||"",extracted:item.content||item.title||"",addedAt:new Date(intelDate).toISOString()};
-        const saved=await saveIntelItem({...lineItem,comment:JSON.stringify({tag:lineItem.tag,title:lineItem.title,content:lineItem.extracted})});
-        newItems.push(saved?{...lineItem,id:saved.id}:lineItem);
-      }
-      setStatus({t:"success",m:"✓ "+newItems.length+" item"+(newItems.length!==1?"s":"")+" stored"});
-      setText("");
-      const updated=await loadIntel();
-      setCount(updated.length);
-      onVaultUpdate&&onVaultUpdate(updated);
-      setTimeout(()=>setStatus(null),3000);
-    }catch(e){setStatus({t:"error",m:e.message});}finally{setBusy(false);}
-  }
-
-  return(
-    <div style={{display:"flex",alignItems:"center",gap:6,padding:"0 10px",height:"100%"}}>
-      <span style={{fontSize:10,fontWeight:700,color:"#8fc9ff",textTransform:"uppercase",letterSpacing:"0.08em",flexShrink:0,whiteSpace:"nowrap"}}>
-        Intel Vault {count>0&&<span style={{color:"rgba(250,163,86,0.4)",fontWeight:400}}>· {count}</span>}
-      </span>
-      <div style={{position:"relative",flex:1,minWidth:0,display:"flex",alignItems:"center"}}
-        onFocusCapture={()=>setEditing(true)}
-        onBlurCapture={e=>{if(!e.currentTarget.contains(e.relatedTarget))setEditing(false);}}>
-        <textarea value={text} onChange={e=>setText(e.target.value)}
-          onKeyDown={e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();ingest();}}}
-          placeholder="" rows={1}
-          style={{width:"100%",height:29,boxSizing:"border-box",background:"rgba(255,255,255,0.03)",
-            border:"1px solid rgba(88,166,255,0.38)",borderRadius:5,
-            color:"rgba(200,225,255,0.85)",fontFamily:"inherit",fontSize:12,
-            padding:editing?"5px 137px 5px 10px":"5px 10px",outline:"none",
-            resize:"none",lineHeight:"17px",caretColor:"#58a6ff",overflow:"hidden",whiteSpace:"nowrap"}}/>
-        {editing&&<div style={{position:"absolute",right:5,top:"50%",transform:"translateY(-50%)",
-          display:"flex",alignItems:"center",gap:4,background:"#0b1a2e",paddingLeft:4}}>
-          <input type="date" value={intelDate} onChange={e=>setIntelDate(e.target.value)}
-            title="Date of this intel" style={{background:"transparent",border:"1px solid rgba(88,166,255,0.28)",
-              borderRadius:3,color:"#9fc3f5",fontFamily:"inherit",fontSize:10,padding:"1px 3px",
-              outline:"none",colorScheme:"dark",width:92,boxSizing:"border-box"}}/>
-          <button onMouseDown={e=>e.preventDefault()} onClick={()=>fRef.current?.click()} title="Attach image"
-            style={{background:"transparent",border:"1px solid rgba(88,166,255,0.28)",borderRadius:3,
-              color:"#9fc3f5",fontFamily:"inherit",fontSize:10,padding:"2px 5px",cursor:"pointer"}}>img</button>
-        </div>}
-        <input ref={fRef} type="file" accept="image/*" style={{display:"none"}}/>
-      </div>
-      <button onClick={ingest} disabled={busy||!text.trim()}
-        style={{background:busy||!text.trim()?"transparent":"rgba(88,166,255,0.15)",
-          border:"1px solid rgba(88,166,255,"+(busy||!text.trim()?"0.2":"0.5")+")",
-          borderRadius:5,color:busy||!text.trim()?"rgba(88,166,255,0.3)":"#9fc3f5",
-          fontFamily:"inherit",fontWeight:700,fontSize:11,padding:"5px 14px",
-          cursor:busy||!text.trim()?"default":"pointer",flexShrink:0,
-          textTransform:"uppercase",letterSpacing:"0.06em",transition:"all 0.15s",whiteSpace:"nowrap"}}>
-        {busy?"…":"Save"}
-      </button>
-      {status&&(
-        <span style={{fontSize:10,color:status.t==="success"?"#43e97b":status.t==="error"?"#ff6b6b":"rgba(120,160,220,0.6)",whiteSpace:"nowrap",flexShrink:0}}>
-          {status.m}
-        </span>
-      )}
-    </div>
-  );
-}
 
 export default IntelVault;
