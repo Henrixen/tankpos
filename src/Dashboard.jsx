@@ -1014,7 +1014,7 @@ function Dashboard({vessels, cargoes, history, onImportFixingWindow}) {
   const [fixingSegmentError,setFixingSegmentError]=useState(null);
   useEffect(()=>{
     let alive=true;
-    const cacheKey="dashboard-fixing-window-segments-v1";
+    const cacheKey="dashboard-fixing-window-segments-coating-v2";
     const load=async()=>{
       // Keep the last successful chart visible if Supabase has a transient statement timeout.
       try{
@@ -1027,7 +1027,7 @@ function Dashboard({vessels, cargoes, history, onImportFixingWindow}) {
       let lastError=null;
       for(let attempt=0;attempt<3&&alive;attempt++){
         try{
-          const {data,error}=await supabase.rpc("dashboard_fixing_window_segments");
+          const {data,error}=await supabase.rpc("dashboard_fixing_window_segments_coating");
           if(error)throw error;
           const rows=Array.isArray(data)?data:[];
           if(alive){
@@ -1259,7 +1259,7 @@ function Dashboard({vessels, cargoes, history, onImportFixingWindow}) {
   const fixingSegmentChartData=(()=>{
     const byDate={};
     const rows=(Array.isArray(fixingSegmentHistory)?fixingSegmentHistory:[])
-      .filter(r=>fixingRegionFilter==="All" || r.region===fixingRegionFilter);
+      .filter(r=>(fixingRegionFilter==="All" || r.region===fixingRegionFilter) && (!regionCoatingFilter.length || regionCoatingFilter.includes(normalizeCoating(r.coating))));
     for(const r of rows){
       const d=r.snapshot_date; if(!d)continue;
       byDate[d]||={date:d};
