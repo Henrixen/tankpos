@@ -739,32 +739,27 @@ function reportFfaMonths(dateValue){
 
 // ─── Tiny inline sparkline for Handy FFA Aug/Sep/Oct trend ──
 function FfaSparkline({ lastWeek, spot, aug, sep, oct }) {
-  const raw = [lastWeek, spot, aug, sep, oct];
-  const numbers = raw.map(v => v === "" || v == null ? null : Number(String(v).replace(",", ".")));
-  const valid = numbers.filter(v => v !== null && Number.isFinite(v));
-  if (valid.length < 2) return <span style={{ fontSize: 10, color: C.faint }}>—</span>;
-  const min = Math.min(...valid), max = Math.max(...valid), range = max - min || 1;
-  const x = i => 4 + i * 19;
-  const y = v => 18 - ((v - min) / range) * 14;
-  // Last week → Spot is solid; Spot → forward months is dotted.
-  // Missing periods do not generate fake zero points or connecting lines.
-  const line = (from, to, dotted) => {
-    if (numbers[from] === null || numbers[to] === null ||
-        !Number.isFinite(numbers[from]) || !Number.isFinite(numbers[to])) return null;
-    return <line key={`${from}-${to}`} x1={x(from)} y1={y(numbers[from])}
-      x2={x(to)} y2={y(numbers[to])} stroke="#79c0ff"
-      strokeWidth="1.6" strokeDasharray={dotted ? "3,3" : undefined}/>;
-  };
-  const lastIndex = numbers.reduce((idx, v, i) => v !== null && Number.isFinite(v) ? i : idx, -1);
-  return (
-    <svg width="85" height="22" viewBox="0 0 85 22" aria-label="Last week, spot and forward rates">
-      {line(0, 1, false)}
-      {line(1, 2, true)}
-      {line(2, 3, true)}
-      {line(3, 4, true)}
-      {lastIndex >= 0 && <circle cx={x(lastIndex)} cy={y(numbers[lastIndex])} r="2" fill="#79c0ff"/>}
-    </svg>
-  );
+  const values = [lastWeek, spot, aug, sep, oct].map(v => {
+    if (v == null || String(v).trim() === "") return null;
+    const n = Number(String(v).replace(",", ".").replace(/\\s/g, ""));
+    return Number.isFinite(n) ? n : null;
+  });
+  const valid = values.filter(v => v !== null);
+  if (valid.length < 1) return null;
+  const lo = Math.min(...valid), hi = Math.max(...valid), span = hi - lo || 1;
+  const x = i => 5 + i * 22, y = v => 20 - ((v - lo) / span) * 14;
+  return <svg width="100" height="26" viewBox="0 0 100 26" role="img"
+    aria-label="Last week to spot (solid), spot to FFA (dotted)">
+    {values.slice(0, -1).map((v, i) => v !== null && values[i + 1] !== null
+      ? <line key={i} x1={x(i)} y1={y(v)} x2={x(i+1)} y2={y(values[i+1])}
+          stroke="#60b4ff" strokeWidth="1.7" strokeLinecap="round"
+          strokeDasharray={i >= 1 ? "3 3" : undefined}/>
+      : null)}
+    {values.map((v,i) => v !== null
+      ? <circle key={i} cx={x(i)} cy={y(v)} r="2.6"
+          fill="#60b4ff" stroke="#fff" strokeWidth="0.65"/>
+      : null)}
+  </svg>;
 }
 
 // ─── Single interactive+capturable vessel row ─────────────────────────────────
@@ -1058,8 +1053,8 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
   const [handyCommentary, setHandyCommentary] = useState("");
   const [intermediateRoutesLabel,setIntermediateRoutesLabel] = useState("Intermediate routes");
   const [handy, setHandy] = useState({
-    tc23: { spotWS: "", ffaAug: "", ffaSep: "", ffaOct: "" },
-    tc6:  { spotWS: "", ffaAug: "", ffaSep: "", ffaOct: "" },
+    tc23: { name:"TC23 UKC", spotWS: "", ffaAug: "", ffaSep: "", ffaOct: "" },
+    tc6:  { name:"TC6 X-Med", spotWS: "", ffaAug: "", ffaSep: "", ffaOct: "" },
   });
   const [handySegments, setHandySegments] = useState(["tc23","tc6"]);
   const [benchmarkRefreshStatus, setBenchmarkRefreshStatus] = useState(null);
@@ -3155,40 +3150,33 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead><tr>
-                      <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>Segment</th>
-                      <th style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:C.dim}}>LAST WEEK</th>
-                      <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>Spot WS</th><th style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:C.dim}}>TCE</th>
-                      <th style={{ padding: "6px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.dim, textTransform: "uppercase" }}>{reportFfaMonths(reportDate).join(" | ")}</th>
-                      <th style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:C.dim}}>Comment</th>
+                      {["Segment","Last week","Spot WS",...reportFfaMonths(reportDate).map(m=>m+" FFA"),"TCE Spot","Comment"].map(h=>
+                        <th key={h} style={{padding:"6px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:C.dim,textTransform:"uppercase"}}>{h}</th>)}
                     </tr></thead>
                     <tbody>
                       {handySegments.map((seg, i) => (
-                        <tr key={seg} style={{ borderTop: "1px solid " + C.bd, background: i % 2 === 0 ? C.bg3 : C.bg2 }}>
-                          <td style={{ padding: "6px 10px", fontWeight: 700, color: C.tx }}><input className="rpt-edit" value={handy[seg]?.name || (seg === "tc23" ? "TC23" : seg === "tc6" ? "TC6" : seg)} onChange={e=>setHandy(p=>({...p,[seg]:{...p[seg],name:e.target.value}}))} style={{width:100,color:C.blue,fontWeight:700}} />
-                            <button className="no-export" title="Remove segment" onClick={()=>setHandySegments(p=>p.filter(k=>k!==seg))} style={{border:0,background:"transparent",color:C.faint,cursor:"pointer"}}>×</button></td>
-                          <td style={{padding:"6px 10px"}}>
-                            <input aria-label={`${seg} Last week WS`} value={handy[seg]?.lastWeekWS||""}
-                              onChange={e=>setHandy(p=>({...p,[seg]:{...p[seg],lastWeekWS:e.target.value}}))}
-                              placeholder="WS" className="rpt-edit" style={{width:55,fontSize:12}}/>
+                        <tr key={seg} style={{borderTop:"1px solid "+C.bd,background:i%2===0?C.bg3:C.bg2}}>
+                          <td style={{padding:"6px 10px",fontWeight:700,color:C.tx}}>
+                            <input className="rpt-edit" value={(handy[seg]?.name && handy[seg].name !== "TC23" && handy[seg].name !== "TC6" ? handy[seg].name : seg==="tc23"?"TC23 UKC":seg==="tc6"?"TC6 X-Med":seg)}
+                              onChange={e=>setHandy(p=>({...p,[seg]:{...p[seg],name:e.target.value}}))}
+                              style={{width:110,color:C.blue,fontWeight:700}}/>
+                            <button className="no-export" title="Remove segment" onClick={()=>setHandySegments(p=>p.filter(k=>k!==seg))}
+                              style={{border:0,background:"transparent",color:C.faint,cursor:"pointer"}}>×</button>
+                            <div style={{marginTop:3}}><FfaSparkline lastWeek={handy[seg]?.lastWeekWS} spot={handy[seg]?.spotWS}
+                              aug={handy[seg]?.ffaAug} sep={handy[seg]?.ffaSep} oct={handy[seg]?.ffaOct}/></div>
                           </td>
-                          <td style={{ padding: "6px 10px" }}>
-                            <input value={handy[seg].spotWS} onChange={e => setHandy(p => ({ ...p, [seg]: { ...p[seg], spotWS: e.target.value } }))} placeholder="WS" className="rpt-edit"
-                              style={{ width: 55, fontSize: 12, fontWeight: 600 }} />
-                          </td>
-                          <td style={{padding:"6px 10px"}}><input aria-label={`${seg} TCE`} className="rpt-edit" value={handy[seg]?.tce||""} onChange={e=>setHandy(p=>({...p,[seg]:{...p[seg],tce:e.target.value}}))} placeholder="Free text" style={{width:100}}/></td>
-                          <td style={{ padding: "6px 10px" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <FfaSparkline lastWeek={handy[seg].lastWeekWS} spot={handy[seg].spotWS} aug={handy[seg].ffaAug} sep={handy[seg].ffaSep} oct={handy[seg].ffaOct} />
-                              <div style={{ display: "flex", gap: 4 }}>
-                                {["ffaAug", "ffaSep", "ffaOct"].map(f => (
-                                  <input key={f} value={handy[seg][f]} onChange={e => setHandy(p => ({ ...p, [seg]: { ...p[seg], [f]: e.target.value } }))}
-                                    placeholder={({ffaAug:"BALMO",ffaSep:"+1",ffaOct:"+2"})[f]} className="rpt-edit"
-                                    style={{ width: 55, fontSize: 10, color: C.dim }} />
-                                ))}
-                              </div>
-                            </div>
-                          </td>
-                          <td style={{padding:"6px 10px"}}><input className="rpt-edit" value={handy[seg]?.comment||""} onChange={e=>setHandy(p=>({...p,[seg]:{...p[seg],comment:e.target.value}}))} placeholder="Comment" style={{width:"100%",minWidth:125}}/></td>
+                          {[["lastWeekWS","Last week WS"],["spotWS","Spot WS"],["ffaAug","Nov FFA"],["ffaSep","Dec FFA"],["ffaOct","Jan FFA"]].map(([field,label])=>
+                            <td key={field} style={{padding:"6px 10px"}}>
+                              <input className="rpt-edit" aria-label={`${seg} ${label}`} value={handy[seg]?.[field]??""}
+                                onChange={e=>setHandy(p=>({...p,[seg]:{...p[seg],[field]:e.target.value}}))}
+                                placeholder="WS" style={{width:62,fontSize:12,fontWeight:field==="spotWS"?700:400}}/>
+                            </td>)}
+                          <td style={{padding:"6px 10px"}}><input aria-label={`${seg} TCE Spot`} className="rpt-edit"
+                            value={handy[seg]?.tce||""} onChange={e=>setHandy(p=>({...p,[seg]:{...p[seg],tce:e.target.value}}))}
+                            placeholder="Free text" style={{width:105}}/></td>
+                          <td style={{padding:"6px 10px"}}><input className="rpt-edit" value={handy[seg]?.comment||""}
+                            onChange={e=>setHandy(p=>({...p,[seg]:{...p[seg],comment:e.target.value}}))}
+                            placeholder="Comment" style={{width:"100%",minWidth:125}}/></td>
                         </tr>
                       ))}
                     </tbody>
@@ -3312,24 +3300,25 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
                   <div>
                     <div style={{...reportHeadingStyle,marginBottom:8}}>{marketHeadings.handy}</div>
                     {handyCommentary && <div style={{fontSize:11,color:"#334155",whiteSpace:"pre-wrap",lineHeight:1.6,marginBottom:8}}>{handyCommentary}</div>}
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                      <thead><tr style={{ background: "#eaf2fc" }}>
-                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Segment</th>
-                        <th style={{padding:"5px 8px",textAlign:"left",color:"#6b7280"}}>Last week</th>
-                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>Spot WS</th><th style={{padding:"5px 8px",textAlign:"left",color:"#6b7280"}}>TCE</th>
-                        <th style={{ padding: "5px 8px", textAlign: "left", fontWeight: 600, color: "#6b7280" }}>{reportFfaMonths(reportDate).join(" | ")}</th>
-                        <th style={{padding:"5px 8px",textAlign:"left",color:"#6b7280"}}>Comment</th>
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                      <thead><tr style={{background:"#eaf2fc"}}>
+                        {["Segment","Last week","Spot WS",...reportFfaMonths(reportDate).map(m=>m+" FFA"),"TCE Spot","Comment"].map(h=>
+                          <th key={h} style={{padding:"5px 8px",textAlign:"left",fontWeight:600,color:"#6b7280"}}>{h}</th>)}
                       </tr></thead>
                       <tbody>
-                        {handySegments.map((seg, i) => (
-                          <tr key={seg} style={{ borderTop: "1px solid #d9e2ef" }}>
-                            <td style={{ padding: "5px 8px", fontWeight: 700 }}>{handy[seg]?.name || (seg === "tc23" ? "TC23" : seg === "tc6" ? "TC6" : seg)}</td>
-                            <td style={{padding:"5px 8px"}}>{handy[seg]?.lastWeekWS ? "WS " + handy[seg].lastWeekWS : "—"}</td>
-                            <td style={{ padding: "5px 8px" }}>{handy[seg].spotWS ? "WS " + handy[seg].spotWS : "—"}</td><td style={{padding:"5px 8px"}}>{handy[seg]?.tce||"—"}</td>
-                            <td style={{ padding: "5px 8px", color: "#6b7280" }}><div style={{display:"flex",alignItems:"center",gap:10}}><FfaSparkline lastWeek={handy[seg].lastWeekWS} spot={handy[seg].spotWS} aug={handy[seg].ffaAug} sep={handy[seg].ffaSep} oct={handy[seg].ffaOct}/><span>{[handy[seg].ffaAug, handy[seg].ffaSep, handy[seg].ffaOct].filter(Boolean).map(v => "WS " + v).join(" / ") || "—"}</span></div></td>
-                            <td style={{padding:"5px 8px",color:"#6b7280"}}>{handy[seg]?.comment||""}</td>
-                          </tr>
-                        ))}
+                        {handySegments.map(seg=><tr key={seg} style={{borderTop:"1px solid #d9e2ef"}}>
+                          <td style={{padding:"5px 8px",fontWeight:700}}>
+                            {(handy[seg]?.name && handy[seg].name !== "TC23" && handy[seg].name !== "TC6" ? handy[seg].name : seg==="tc23"?"TC23 UKC":seg==="tc6"?"TC6 X-Med":seg)}
+                            <div style={{marginTop:2}}><FfaSparkline lastWeek={handy[seg]?.lastWeekWS} spot={handy[seg]?.spotWS}
+                              aug={handy[seg]?.ffaAug} sep={handy[seg]?.ffaSep} oct={handy[seg]?.ffaOct}/></div>
+                          </td>
+                          {["lastWeekWS","spotWS","ffaAug","ffaSep","ffaOct"].map(field=>
+                            <td key={field} style={{padding:"5px 8px",color:field.startsWith("ffa")?"#6b7280":undefined}}>
+                              {handy[seg]?.[field] ? "WS "+handy[seg][field] : "—"}
+                            </td>)}
+                          <td style={{padding:"5px 8px"}}>{handy[seg]?.tce||"—"}</td>
+                          <td style={{padding:"5px 8px",color:"#6b7280"}}>{handy[seg]?.comment||""}</td>
+                        </tr>)}
                       </tbody>
                     </table>
                   </div>
