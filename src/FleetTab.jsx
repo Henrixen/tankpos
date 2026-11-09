@@ -5,6 +5,7 @@ import { fmtN } from "./utils";
 
 const OutsidersTab = React.lazy(()=>import("./OutsidersTab"));
 const OperatorsTab = React.lazy(()=>import("./OperatorsTab"));
+const OperatorSearchTab = React.lazy(()=>import("./OperatorSearchTab"));
 
 // ─── DWT → segment breakpoints — matches Barton's own classification as used
 // in NewbuildsTab.jsx, extended with Sub 10k/City split per the app's
@@ -695,11 +696,15 @@ export default function FleetTab() {
             color:viewMode==="outsiders"?"#f5a623":C.faint }}>
           Outsiders
         </button>
+        <button onClick={()=>React.startTransition(()=>setViewMode("operatorSearch"))}
+          style={{fontSize:12,fontWeight:700,padding:"6px 16px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(viewMode==="operatorSearch"?"#58a6ff88":C.bd),background:viewMode==="operatorSearch"?"#58a6ff22":"transparent",color:viewMode==="operatorSearch"?"#58a6ff":C.faint}}>Operator Search</button>
         <button onClick={()=>React.startTransition(()=>setViewMode("operators"))}
           style={{ fontSize:12,fontWeight:700,padding:"6px 16px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",border:"1px solid "+(viewMode==="operators"?"#4ade8088":C.bd),background:viewMode==="operators"?"#4ade8022":"transparent",color:viewMode==="operators"?"#4ade80":C.faint }}>Operators</button>
       </div>
 
-      {viewMode==="operators" ? (
+      {viewMode==="operatorSearch" ? (
+        <Suspense fallback={<div style={{fontSize:12,color:C.faint}}>Loading Operator Search…</div>}><OperatorSearchTab/></Suspense>
+      ) : viewMode==="operators" ? (
         <Suspense fallback={<div style={{fontSize:12,color:C.faint}}>Loading Operators…</div>}><OperatorsTab/></Suspense>
       ) : viewMode==="outsiders" ? (
         <Suspense fallback={<div style={{fontSize:12,color:C.faint}}>Loading…</div>}><OutsidersTab/></Suspense>
