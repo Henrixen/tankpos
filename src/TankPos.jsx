@@ -28,6 +28,9 @@ function positionDateDisplay(value){
   return value;
 }
 
+// Present stainless coatings consistently as STST; preserve existing database records.
+const normalisePositionCoating = value => /^(?:STAINLESS(?:\s+STEEL)?|STST)$/i.test(String(value || "").trim()) ? "STST" : value;
+
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function TankPos(){
 
@@ -197,7 +200,7 @@ export default function TankPos(){
     const actor=positionEditor(getBrokerSession()?.user?.initials);
     const now = new Date().toISOString();
     const positionEdit=["date","openPort","comment"].includes(field);
-    const cleanValue = value === "" || value === undefined ? null : value;
+    const cleanValue = value === "" || value === undefined ? null : (field === "coating" ? normalisePositionCoating(value) : value);
     setVessels(prev => {
       const next = prev.map(v => v.vessel !== name ? v : field.includes(".")
         ? {...v, entered_by:actor||v.entered_by, ...(positionEdit?{updatedAt:now}:{}), [field.split(".")[0]]:{...(v[field.split(".")[0]]||{}),[field.split(".")[1]]:cleanValue}}
@@ -618,7 +621,7 @@ export default function TankPos(){
 
   useEffect(()=>{const refresh=()=>fetchPositions();window.addEventListener("position-subtags-seeded",refresh);return()=>window.removeEventListener("position-subtags-seeded",refresh);},[]);
 
-  const displayVessels=useMemo(()=>vessels.map(v=>{const date=positionDateDisplay(v.date);return date===v.date?v:{...v,date};}),[vessels]);
+  const displayVessels=useMemo(()=>vessels.map(v=>{const date=positionDateDisplay(v.date);const coating=normalisePositionCoating(v.coating);return date===v.date&&coating===v.coating?v:{...v,date,coating};}),[vessels]);
   const props={positionsReady,vessels:displayVessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
   return <DesktopApp {...props}/>;
 }
