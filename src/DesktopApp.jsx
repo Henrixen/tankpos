@@ -1348,7 +1348,7 @@ function PositionControlsWrap({children,mobile}) { return mobile ? (
     </details>
   ) : <>{children}</>; }
 
-function DesktopApp({positionsReady,vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
+function DesktopApp({positionsReady,vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,externalPositionsFileDate,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
   // ── PIN config ───────────────────────────────────────────────────────────
   const DEFAULT_USER_TABS = ["pos","cargo","clients"];
 
@@ -1498,6 +1498,9 @@ function DesktopApp({positionsReady,vessels,cargoes,cargoTotal,onUpdateV,onRenam
   const [previewTags,setPreviewTags]=useState(()=>{
     try{return new Set(JSON.parse(personalCacheGet("steem_positions_preview_tags")||"[]"));}catch{return new Set();}
   });
+  const [previewManual,setPreviewManual]=useState(()=>{try{return new Set(JSON.parse(personalCacheGet("steem_positions_preview_manual")||"[]"));}catch{return new Set();}});
+  const [previewTagMenu,setPreviewTagMenu]=useState(false);
+  useEffect(()=>{try{personalCacheSet("steem_positions_preview_manual",JSON.stringify([...previewManual]));}catch{}},[previewManual]);
   const [confirmClearPreview,setConfirmClearPreview]=useState(false);
   const [previewSaved,setPreviewSaved]=useState(()=>{
     try{return JSON.parse(personalCacheGet("steem_positions_preview_saved")||"false");}catch{return false;}
@@ -2549,8 +2552,8 @@ const filtV=useMemo(()=>{
   }
   const positionsClearButton=(style={})=>positionsClearVisible?<button type="button" aria-label="Clear all position filters" title={previewMode?"Clear preview filters only":"Clear all position filters"} onClick={clearPositionFilters} style={{fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:4,border:"1px solid rgba(255,107,107,.5)",background:"#301c29",color:"#ff808b",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",...style}}>× Clear</button>:null;
 
-  const brokerPositionDefaults=useRef({...{"search": "", "previewSaved": false, "dwtRange": {"min": "", "max": ""}, "builtRange": {"min": "", "max": ""}, "openDateFilter": {"quick": "", "from": "", "to": ""}, "opFilter": null, "updFilter": "", "sortK": "fileDate", "sortD": -1, "posFileDaysBack": 90, "showSavedOnly": false, "fixingPanelTab": "Open Segments", "fixingExpanded": false, "aisPanelTab": "Map", "positionsWidths": [32, 34, 34], "interUKCActive": false, "previewSort": {"key": "operator", "dir": 1}, "previewFormat": "table", "filters": [], "posTagFilter": [], "previewTags": [], "coatingFilter": [], "bucketFilters": [], "superRegionFilter": [], "segmentFilter": [], "dwtFilter": [], "builtFilter": [], "savedVessels": []},colWidthsV,previewExcluded:[],posSubTags:[],previewSubTags:[],cargoVisibleCols:[...CARGO_COLUMN_KEYS],qfVisibleCols:[...QF_DEFAULT_VISIBLE]});
-  useWorkspacePreferences("positions",{posSubTags:[...posSubTags],previewSubTags:[...previewSubTags],filters:[...filters],posTagFilter:[...posTagFilter],previewTags:[...previewTags],coatingFilter:[...coatingFilter],bucketFilters:[...bucketFilters],superRegionFilter:[...superRegionFilter],segmentFilter:[...segmentFilter],dwtFilter:[...dwtFilter],builtFilter:[...builtFilter],savedVessels:[...savedVessels],previewExcluded:[...previewExcluded],cargoVisibleCols:[...cargoVisibleCols],qfVisibleCols:[...qfVisibleCols],search,previewSaved,dwtRange,builtRange,openDateFilter,opFilter,updFilter,sortK,sortD,posFileDaysBack,showSavedOnly,fixingPanelTab,fixingExpanded,aisPanelTab,positionsWidths,interUKCActive,colWidthsV,previewSort,previewFormat},p=>{
+  const brokerPositionDefaults=useRef({...{"search": "", "previewSaved": false, "dwtRange": {"min": "", "max": ""}, "builtRange": {"min": "", "max": ""}, "openDateFilter": {"quick": "", "from": "", "to": ""}, "opFilter": null, "updFilter": "", "sortK": "fileDate", "sortD": -1, "posFileDaysBack": 90, "showSavedOnly": false, "fixingPanelTab": "Open Segments", "fixingExpanded": false, "aisPanelTab": "Map", "positionsWidths": [32, 34, 34], "interUKCActive": false, "previewSort": {"key": "operator", "dir": 1}, "previewFormat": "table", "filters": [], "posTagFilter": [], "previewTags": [], "coatingFilter": [], "bucketFilters": [], "superRegionFilter": [], "segmentFilter": [], "dwtFilter": [], "builtFilter": [], "savedVessels": []},colWidthsV,previewExcluded:[],previewManual:[],posSubTags:[],previewSubTags:[],cargoVisibleCols:[...CARGO_COLUMN_KEYS],qfVisibleCols:[...QF_DEFAULT_VISIBLE]});
+  useWorkspacePreferences("positions",{posSubTags:[...posSubTags],previewSubTags:[...previewSubTags],filters:[...filters],posTagFilter:[...posTagFilter],previewTags:[...previewTags],coatingFilter:[...coatingFilter],bucketFilters:[...bucketFilters],superRegionFilter:[...superRegionFilter],segmentFilter:[...segmentFilter],dwtFilter:[...dwtFilter],builtFilter:[...builtFilter],savedVessels:[...savedVessels],previewExcluded:[...previewExcluded],previewManual:[...previewManual],cargoVisibleCols:[...cargoVisibleCols],qfVisibleCols:[...qfVisibleCols],search,previewSaved,dwtRange,builtRange,openDateFilter,opFilter,updFilter,sortK,sortD,posFileDaysBack,showSavedOnly,fixingPanelTab,fixingExpanded,aisPanelTab,positionsWidths,interUKCActive,colWidthsV,previewSort,previewFormat},p=>{
     setFilters(new Set(p.filters||[]));
     setPosTagFilter(new Set(p.posTagFilter||[]));
     setPosSubTags(new Set(p.posSubTags||[]));setPreviewSubTags(new Set(p.previewSubTags||[]));
@@ -2563,6 +2566,7 @@ const filtV=useMemo(()=>{
     setBuiltFilter(new Set(p.builtFilter||[]));
     setSavedVessels(new Set(p.savedVessels||[]));
     setPreviewExcluded(new Set(p.previewExcluded||[]));
+    setPreviewManual(new Set(p.previewManual||[]));
     setCargoVisibleCols(new Set(p.cargoVisibleCols||CARGO_COLUMN_KEYS));
     setQfVisibleCols(new Set(p.qfVisibleCols||QF_DEFAULT_VISIBLE));
     setSearch(p.search);
@@ -2600,7 +2604,7 @@ const filtV=useMemo(()=>{
       if(previewExcluded.has(String(v.vessel).toUpperCase()))return false;
       const vesselTags=(Array.isArray(v.tag)?v.tag.join("|"):String(v.tag||""))
         .split(/[|,;]+/).map(t=>t.trim().toUpperCase());
-      return vesselTags.some(t=>tags.has(t))||[...previewSubTags].some(t=>t==="Inter UKC"&&!subTagSeed.initialized?matchLegacyInterUKC(v,getInterUKCConfig()||defaultInterUKCConfig):(v.subTags||[]).includes(t))||(previewSaved&&savedVessels.has(v.vessel));
+      return vesselTags.some(t=>tags.has(t))||[...previewSubTags].some(t=>t==="Inter UKC"&&!subTagSeed.initialized?matchLegacyInterUKC(v,getInterUKCConfig()||defaultInterUKCConfig):(v.subTags||[]).includes(t))||(previewSaved&&savedVessels.has(v.vessel))||previewManual.has(String(v.vessel).toUpperCase());
     });
     const sortValue=v=>{
       const value=v[previewSort.key];
@@ -2614,7 +2618,7 @@ const filtV=useMemo(()=>{
       const result=typeof av==="number"?(av===bv?0:av<bv?-1:1):av.localeCompare(bv,undefined,{numeric:true,sensitivity:"base"});
       return result*previewSort.dir||String(a.vessel).localeCompare(String(b.vessel));
     });
-  },[vessels,previewTags,previewSubTags,subTagSeed.initialized,previewSaved,savedVessels,previewSort,previewExcluded]);
+  },[vessels,previewTags,previewSubTags,subTagSeed.initialized,previewSaved,savedVessels,previewSort,previewExcluded,previewManual]);
   function removePreviewVessel(v){
     setPreviewExcluded(prev=>new Set([...prev,String(v.vessel).toUpperCase()]));
   }
@@ -3420,6 +3424,7 @@ const filtV=useMemo(()=>{
               </div>
             </div>
             <div style={{display:"flex",gap:4,flexShrink:0}}>
+              <div style={{position:"relative",display:"flex",alignItems:"center"}}><button onClick={()=>setPreviewTagMenu(v=>!v)} disabled={!previewVessels.length} style={{...fb(false),color:"#f5c451",borderColor:"rgba(245,196,81,.55)",background:"rgba(245,196,81,.10)"}}>+ Add Tag</button>{previewTagMenu&&<div style={{position:"absolute",right:0,top:"100%",marginTop:4,zIndex:30,width:170,maxHeight:260,overflowY:"auto",padding:5,border:"1px solid rgba(245,196,81,.45)",borderRadius:5,background:"#0a1628",boxShadow:"0 8px 25px #0009"}}><div style={{fontSize:10,color:C.faint,padding:5}}>Tag {previewVessels.length} preview positions</div>{getTagListFor("position").map(t=><button key={t} onClick={async()=>{setPreviewTagMenu(false);await Promise.all(previewVessels.map(v=>Promise.resolve(onUpdateV(v.vessel,"tag",t))));}} style={{display:"block",width:"100%",textAlign:"left",padding:"6px 8px",fontSize:11,color:"#f5c451",border:"none",background:"transparent",cursor:"pointer"}}>{String(t).toUpperCase()}</button>)}</div>}</div>
               {previewExcluded.size>0&&<button style={fb(false)} onClick={()=>setPreviewExcluded(new Set())}>Restore removed ({previewExcluded.size})</button>}
               <select aria-label="Preview export format" value={previewFormat} onChange={e=>setPreviewFormat(e.target.value)} style={{...fb(false),background:C.bg2}}><option value="table">Table</option><option value="short">Short list</option></select>
               <button disabled={!previewVessels.length} style={{...fb(false),...(previewCopied==="copy"?{color:C.green,borderColor:C.green}:{} )}} onClick={()=>copyPreview(false)}>{previewCopied==="copy"?"✓ Copied!":`Copy (${previewVessels.length})`}</button>
@@ -3452,7 +3457,7 @@ const filtV=useMemo(()=>{
           </div>
           {confirmClearPreview&&<div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:C.bg2,border:"1px solid "+C.red,borderRadius:8,padding:"12px 20px",zIndex:9999,display:"flex",alignItems:"center",gap:12,boxShadow:"0 4px 24px rgba(0,0,0,0.5)",fontFamily:"sans-serif",fontSize:12,minWidth:300}}>
             <span style={{color:C.tx,flex:1}}>Clear positions preview ({previewVessels.length})?</span>
-            <button onClick={()=>{setPreviewTags(new Set());setPreviewSubTags(new Set());setPreviewSaved(false);setConfirmClearPreview(false);}} style={{background:C.red,border:"none",borderRadius:5,color:"#fff",padding:"5px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>Clear</button>
+            <button onClick={()=>{setPreviewTags(new Set());setPreviewSubTags(new Set());setPreviewSaved(false);setPreviewManual(new Set());setConfirmClearPreview(false);}} style={{background:C.red,border:"none",borderRadius:5,color:"#fff",padding:"5px 14px",cursor:"pointer",fontWeight:700,fontSize:12}}>Clear</button>
             <button onClick={()=>setConfirmClearPreview(false)} style={{background:C.bg3,border:"1px solid "+C.bd,borderRadius:5,color:C.tx,padding:"5px 14px",cursor:"pointer",fontSize:12}}>Cancel</button>
           </div>}
         </div>
@@ -3626,6 +3631,7 @@ const filtV=useMemo(()=>{
                       </button>
                     </>
                   )}
+                  {selVessels.size>0&&<button onClick={()=>{setPreviewManual(prev=>new Set([...prev,...[...selVessels].map(v=>String(v).toUpperCase())]));setPreviewExcluded(prev=>{const n=new Set(prev);selVessels.forEach(v=>n.delete(String(v).toUpperCase()));return n;});setAisPanelTab("Positions Preview");}} title="Add checked positions to Positions Preview" style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,border:"1px solid rgba(67,233,123,.5)",background:"rgba(67,233,123,.12)",color:"#43e97b",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>+ Add to Preview ({selVessels.size})</button>}
                   {/* Inline add vessel */}
                   <button onClick={()=>setShowAddVessel(v=>!v)}
                     style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
@@ -3653,6 +3659,7 @@ const filtV=useMemo(()=>{
                     </button>
                   )}
                   {outsiderSyncStatus&&<span style={{fontSize:11,color:outsiderSyncStatus.startsWith("✓")?"#43e97b":C.faint,whiteSpace:"nowrap"}}>{outsiderSyncStatus}</span>}
+                  <span title="Latest file_date in positions_external (Supabase), displayed in Oslo time" style={{fontSize:10,color:"#83a9d2",whiteSpace:"nowrap"}}>External file: <span style={{color:externalPositionsFileDate?"#7dd3fc":C.faint,fontWeight:700}}>{externalPositionsFileDate?new Date(externalPositionsFileDate).toLocaleString("en-GB",{timeZone:"Europe/Oslo",day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false}):"—"}</span></span>
                   <span style={{color:C.faint}}>Total <span style={{color:C.tx,fontWeight:700}}>{vessels.length}</span></span>
                   <span style={{color:C.faint}}>Showing <span style={{color:C.blue,fontWeight:700}}>{displayPosRows.length}</span></span>
                   <span style={{color:C.faint}}>Selected <span style={{color:"#4fc3f7",fontWeight:700}}>{selVessels.size}</span></span>
