@@ -53,6 +53,7 @@ export default function TankPos(){
   const ownPositionAcks=useRef(new Map()),ownCargoAcks=useRef(new Map());
   useEffect(()=>{vesselsRef.current=vessels;},[vessels]);
   const [mobile,setMobile]=useState(()=>isMobile());
+  const [externalPositionsFileDate,setExternalPositionsFileDate]=useState(null);
   const [fileDate, setFileDate] = useState(() => new Date().toISOString().slice(0,10));
 
   async function loadVesselDB(){
@@ -622,7 +623,7 @@ export default function TankPos(){
   useEffect(()=>{const refresh=()=>fetchPositions();window.addEventListener("position-subtags-seeded",refresh);return()=>window.removeEventListener("position-subtags-seeded",refresh);},[]);
 
   const displayVessels=useMemo(()=>vessels.map(v=>{const date=positionDateDisplay(v.date);const coating=normalisePositionCoating(v.coating);return date===v.date&&coating===v.coating?v:{...v,date,coating};}),[vessels]);
-  const props={positionsReady,vessels:displayVessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
+  const props={externalPositionsFileDate,positionsReady,vessels:displayVessels,cargoes,cargoTotal,onUpdateV:updateV,onRenameV:renameV,onUpdateC:updateC,onAddVessels:addVessels,onAddCargoes:addCargoes,onAddV:addV,onAddC:addC,onDelV:delV,onDelC:delC,hasMore,onLoadMore:loadMoreCargoes,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB:loadVesselDB};
   return <DesktopApp {...props}/>;
 }
 
