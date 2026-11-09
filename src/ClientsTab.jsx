@@ -4,6 +4,7 @@ import { C } from "./constants";
 import { v4 as uuidv4 } from 'uuid';
 
 // SQL update needed in Supabase:
+// ALTER TABLE public.client_directory ADD COLUMN IF NOT EXISTS location text DEFAULT '';
 // ALTER TABLE client_directory ADD COLUMN IF NOT EXISTS client_type text[] DEFAULT '{}';
 // ALTER TABLE client_directory ADD COLUMN IF NOT EXISTS email text DEFAULT '';
 // UPDATE client_directory SET lead_broker = 'Henriksen' WHERE lead_broker = 'Haakon';
@@ -317,7 +318,14 @@ function CommentExpandedRow({colSpan, comment, images, onUpdateComment, onUpdate
   );
 }
 
-const SORT_OPTS=[["company","Company"],["lead_broker","Lead"],["rating","Rating"],["last_contact","Last Contact"],["client_type","Type"]];
+// Location format: City, Country or Street address, City, Country.
+// Country is the last comma-separated part, city the part immediately before it.
+function locationParts(location){
+  const parts=String(location||"").split(",").map(x=>x.trim()).filter(Boolean);
+  return {country:parts.length>=2?parts[parts.length-1]:"",city:parts.length>=2?parts[parts.length-2]:""};
+}
+
+const SORT_OPTS=[["company","Company"],["lead_broker","Lead"],["rating","Rating"],["last_contact","Last Contact"],["client_type","Type"],["location","Location"]];
 
 export default function ClientsTab(){
   const [clients,setClients]=useState([]);
@@ -326,6 +334,8 @@ export default function ClientsTab(){
   const [search,setSearch]=useState("");
   const [typeFilter,setTypeFilter]=useState(""); // "" | "Charterer" | "Owner"
   const [brokerFilter,setBrokerFilter]=useState("");
+  const [countryFilter,setCountryFilter]=useState("");
+  const [cityFilter,setCityFilter]=useState("");
   const [sortK,setSortK]=useState("company");
   const [sortD,setSortD]=useState(1);
   const [pendingDel,setPendingDel]=useState(null);
@@ -363,7 +373,7 @@ export default function ClientsTab(){
   },[]);
 
   const onAdd=useCallback(async()=>{
-    const row={id:uuidv4(),type:"charterer",client_type:["Charterer"],company:"",pic:"",lead_broker:"",email:"",comment:"",rating:0,last_contact:null};
+    const row={id:uuidv4(),type:"charterer",client_type:["Charterer"],company:"",pic:"",lead_broker:"",email:"",location:"",comment:"",rating:0,last_contact:null};
     const{error}=await supabase.from("client_directory").insert(row);
     if(!error) setClients(prev=>[...prev,row]);
   },[]);
@@ -374,6 +384,10 @@ export default function ClientsTab(){
     setPendingDel(null);
   }
 
+  const countries=[...new Set(clients.map(c=>locationParts(c.location).country).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const cities=[...new Set(clients.filter(c=>!countryFilter||locationParts(c.location).country===countryFilter)
+    .map(c=>locationParts(c.location).city).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+
   // Filter + sort
   const visible=clients
     .filter(c=>{
@@ -382,9 +396,12 @@ export default function ClientsTab(){
         if(!types.includes(typeFilter)) return false;
       }
       if(brokerFilter&&c.lead_broker!==brokerFilter) return false;
+      const loc=locationParts(c.location);
+      if(countryFilter&&loc.country!==countryFilter) return false;
+      if(cityFilter&&loc.city!==cityFilter) return false;
       if(search){
         const q=search.toLowerCase();
-        return [c.company,c.pic,c.lead_broker,c.comment,c.email].some(f=>(f||"").toLowerCase().includes(q));
+        return [c.company,c.pic,c.lead_broker,c.comment,c.email,c.location].some(f=>(f||"").toLowerCase().includes(q));
       }
       return true;
     })
@@ -451,6 +468,20 @@ export default function ClientsTab(){
           <button key={v||"all"} onClick={()=>setBrokerFilter(prev=>prev===v?"":v)} style={fBtnSt(brokerFilter===v)}>{v||"All"}</button>
         ))}
 
+        <div style={{width:1,height:24,background:"rgba(58,130,246,0.15)"}}/>
+        <span style={{fontSize:10,color:"rgba(120,160,200,0.5)",textTransform:"uppercase"}}>Location</span>
+        <select aria-label="Filter by country" value={countryFilter} onChange={e=>{setCountryFilter(e.target.value);setCityFilter("");}}
+          style={{...BTN,maxWidth:160,color:countryFilter?"#d9ecff":"#79c0ff",colorScheme:"dark"}}>
+          <option value="">All countries</option>
+          {countries.map(v=><option key={v} value={v}>{v}</option>)}
+        </select>
+        <select aria-label="Filter by city" value={cityFilter} onChange={e=>setCityFilter(e.target.value)}
+          style={{...BTN,maxWidth:160,color:cityFilter?"#d9ecff":"#79c0ff",colorScheme:"dark"}}>
+          <option value="">All cities</option>
+          {cities.map(v=><option key={v} value={v}>{v}</option>)}
+        </select>
+        {(countryFilter||cityFilter)&&<button onClick={()=>{setCountryFilter("");setCityFilter("");}} style={BTN}>✕ Clear</button>}
+
         <div style={{flex:1}}/>
 
         {/* Stats */}
@@ -480,7 +511,7 @@ export default function ClientsTab(){
             <table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed"}}>
               <thead>
                 <tr>
-                  {[["COMPANY","14%"],["TYPE","9%"],["PIC","13%"],["LEAD BROKER","13%"],["RATING","7%"],["LAST CONTACT","10%"],["EMAIL","11%"],["COMMENT","21%"],["","2%"]].map(([h,w])=>(
+                  {[["COMPANY","12%"],["TYPE","8%"],["PIC","11%"],["LEAD BROKER","12%"],["RATING","6%"],["LAST CONTACT","9%"],["EMAIL","10%"],["LOCATION","15%"],["COMMENT","15%"],["","2%"]].map(([h,w])=>(
                     <th key={h} style={{...TH_BASE,width:w,minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{h}</th>
                   ))}
                 </tr>
@@ -500,6 +531,7 @@ export default function ClientsTab(){
                         <td style={TD}><StarRating value={c.rating||0} onChange={v=>onUpdate(c.id,"rating",v)}/></td>
                         <InlineCell value={c.last_contact||""} placeholder="dd/mm/yy" isDate onChange={v=>onUpdate(c.id,"last_contact",v||null)}/>
                         <InlineCell value={c.email||""} placeholder="email@…" onChange={v=>onUpdate(c.id,"email",v)}/>
+                        <InlineCell value={c.location||""} placeholder="City, Country" onChange={v=>onUpdate(c.id,"location",v)}/>
                         <CommentImageCell
                           rowId={c.id}
                           comment={c.comment}
@@ -515,7 +547,7 @@ export default function ClientsTab(){
                       </tr>
                       {expandedRow===c.id&&(
                         <CommentExpandedRow
-                          colSpan={9}
+                          colSpan={10}
                           comment={c.comment}
                           images={imgs}
                           onUpdateComment={v=>onUpdate(c.id,"comment",v)}
@@ -525,7 +557,7 @@ export default function ClientsTab(){
                   );
                 })}
                 {visible.length===0&&(
-                  <tr><td colSpan={9} style={{padding:"28px",textAlign:"center",color:"rgba(120,160,200,0.3)",fontSize:12}}>
+                  <tr><td colSpan={10} style={{padding:"28px",textAlign:"center",color:"rgba(120,160,200,0.3)",fontSize:12}}>
                     No clients match — click "+ Add Client" to get started
                   </td></tr>
                 )}
