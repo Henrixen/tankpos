@@ -442,15 +442,21 @@ function savedQuickRows(report){
 // Older saved drafts did not have a `sent.summary`; compute one from their saved rows.
 function quickSavedReportSummary(report){
   const editor=report.rate_grid?.__quickEditor||{};
-  if(editor.sent?.summary)return editor.sent.summary;
-  if(editor.snapshotSummary)return editor.snapshotSummary;
-  const reference=new Date(String(report.report_date||report.created_at||new Date().toISOString()).slice(0,10)+"T12:00:00");
-  const today=reportDay(String(report.report_date||report.created_at||"").slice(0,10),reference);
-  if(today===null)return null;
+  const rows=savedQuickRows(report);
+  const snapshot=editor.sent?.summary||editor.snapshotSummary;
+  // A snapshot is the actual historical report. Do not recalculate a saved
+  // fixing window from today's data or use a later save date for old reports.
+  const rawDate=String(report.report_date||report.created_at||new Date().toISOString()).slice(0,10);
+  const name=String(editor.name||report.report_name||"");
+  const namedDate=name.match(/\b(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(?:\s+(\d{4}))?\b/i);
+  const referenceDate=namedDate?(()=>{const year=Number(namedDate[3])||Number(rawDate.slice(0,4));const month=MN_SORT.indexOf(namedDate[2].toUpperCase())+1;return `${year}-${String(month).padStart(2,"0")}-${String(Number(namedDate[1])).padStart(2,"0")}`;})():rawDate;
+  const reference=new Date(referenceDate+"T12:00:00");
+  const today=reportDay(referenceDate,reference);
+  if(today===null)return snapshot||null;
   const buckets=[0,0,0,0];let unknown=0,overdue=0,total=0,count=0;
   const excluded=new Set((editor.excludedOperators||[]).map(quickOperatorKey));
-  const rows=savedQuickRows(report).filter(r=>!excluded.has(quickOperatorKey(r.operator)));
-  for(const row of rows){
+  const filtered=rows.filter(r=>!excluded.has(quickOperatorKey(r.operator))&&(!editor.excludeOther||(r.regionOverride||quickRegion(r.port,editor.regions||QUICK_REGION_DEFAULTS))!=="Other")&&(!editor.minAge||!Number(r.built)||yearFromQuickRow(r,reference)-Number(r.built)>=Number(editor.minAge)));
+  for(const row of filtered){
     const open=reportDay(row.date,reference);
     if(open===null){unknown++;continue;}
     const offset=open-today;
@@ -458,8 +464,14 @@ function quickSavedReportSummary(report){
     const updated=reportDay(row.updatedAt||row.updated_at||row._quickAddedAt,reference);
     if(updated!==null&&open>=updated&&open-updated<=60){total+=open-updated;count++;}
   }
-  return {buckets,unknown,overdue,count,average:count?total/count:null,todayText:String(report.report_date||"")};
+  const calculated={buckets,unknown,overdue,count,average:count?total/count:null,todayText:referenceDate,totalShips:filtered.length};
+  // A valid recorded distribution takes precedence. Historical reports that
+  // were saved with placeholder bars (e.g. 4,4,4,4 for 37 ships) are rebuilt
+  // from the selected report's own saved rows and original report date.
+  const validSnapshot=snapshot&&Array.isArray(snapshot.buckets)&&snapshot.buckets.length===4&&snapshot.buckets.every(n=>Number.isFinite(Number(n))&&Number(n)>=0)&&snapshot.buckets.reduce((sum,n)=>sum+Number(n),0)+Number(snapshot.unknown||0)+Number(snapshot.overdue||0)===filtered.length&&(!snapshot.todayText||snapshot.todayText===referenceDate);
+  return {...calculated,...(validSnapshot?{buckets:snapshot.buckets.map(Number),unknown:Number(snapshot.unknown||0),overdue:Number(snapshot.overdue||0)}:{}),average:snapshot?.average??calculated.average};
 }
+function yearFromQuickRow(row,reference){return reference.getFullYear();}
 function savedQuickTitle(report){const title=report.rate_grid?.__quickEditor?.title??report.quick_title??"Avail inter tonnage";return /^available tonnage$/i.test(title.trim())?"Avail inter tonnage":title;}
 function quickUpdatedValue(row,vessels){
   if(row._quickTagImported){
@@ -2424,7 +2436,7 @@ function ReportsTab({ selectedVessels = [], allVessels = [], selectedCargoes = [
     if(quickExportSections.region)groups.push(["By region",buildQuickTextByRegion()]);
     const summary=quickWindowSummary();
     const selectedComparisonReport=quickComparison?comparisonQuickReports.find(r=>String(r.id)===String(quickComparison.id)):null;
-    const prior=quickCompareIncluded?(selectedComparisonReport?quickSavedReportSummary(selectedComparisonReport):quickComparison?.summary):null;
+    const prior=quickCompareIncluded&&selectedComparisonReport?quickSavedReportSummary(selectedComparisonReport):null;
     const sectionTitle=text=>'<div style="margin-top:14px;margin-bottom:8px;padding:10px 12px;background:#d5e6f8;border-left:4px solid #3988d0;color:#122f51;font-size:14px;font-weight:bold;text-transform:uppercase">'+esc(text)+'</div>';
     const headingSet=new Set([...quickRegions.map(g=>g.name),...quickOutputRows.map(r=>r.regionOverride).filter(Boolean)]);
     const operatorHeadingSet=new Set(quickOutputRows.map(r=>quickDisplayText(quickOperatorKey(r.operator))));
