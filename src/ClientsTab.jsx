@@ -318,29 +318,32 @@ function CommentExpandedRow({colSpan, comment, images, onUpdateComment, onUpdate
   );
 }
 
-// Keep the existing Supabase location field for backward compatibility.
-// Legacy values such as "Copenhagen, Denmark" display as "Copenhagen".
-function cityFromLocation(location){
-  const parts=String(location||"").split(",").map(x=>x.trim()).filter(Boolean);
-  if(parts.length===0) return "";
-  if(parts.length===1) return parts[0];
-  return parts[parts.length-2];
+// Multiple cities are stored as a JSON array in the existing location text column.
+// Legacy "City, Country" records are still supported without a database migration.
+function citiesFromLocation(location){
+  const raw=String(location||"").trim();
+  if(!raw)return [];
+  if(raw.startsWith("[")){
+    try{const list=JSON.parse(raw);if(Array.isArray(list))return list.filter(x=>typeof x==="string"&&x.trim()).map(x=>x.trim());}catch{}
+  }
+  const parts=raw.split(",").map(x=>x.trim()).filter(Boolean);
+  return parts.length>1?[parts[parts.length-2]]:parts;
 }
+function cityFromLocation(location){return citiesFromLocation(location).join(", ");}
+function serializeCities(list){return list.length===0?"":list.length===1?list[0]:JSON.stringify(list);}
 
-// City suggestions combine your existing client cities with worldwide GeoDB results.
-// Enter saves immediately; clearing the text and pressing Enter removes the city.
 function CityCell({value,cities,onChange}){
-  const city=cityFromLocation(value);
+  const selected=citiesFromLocation(value);
   const [editing,setEditing]=useState(false);
-  const [draft,setDraft]=useState(city);
+  const [draft,setDraft]=useState("");
   const [worldCities,setWorldCities]=useState([]);
   const [active,setActive]=useState(0);
   const [loadingCities,setLoadingCities]=useState(false);
   const wrap=useRef(null);
-  useEffect(()=>{if(!editing)setDraft(city);},[city,editing]);
+  const input=useRef(null);
   useEffect(()=>{
     if(!editing)return;
-    const close=e=>{if(!wrap.current?.contains(e.target))setEditing(false);};
+    const close=e=>{if(!wrap.current?.contains(e.target)){setEditing(false);setDraft("");}};
     document.addEventListener("mousedown",close);
     return ()=>document.removeEventListener("mousedown",close);
   },[editing]);
@@ -361,33 +364,45 @@ function CityCell({value,cities,onChange}){
     return ()=>{clearTimeout(timer);controller.abort();};
   },[draft,editing]);
   const q=draft.trim().toLocaleLowerCase();
-  const options=[...new Set([...cities,...worldCities])]
-    .filter(c=>c.toLocaleLowerCase().includes(q)).slice(0,10);
+  const options=[...new Map([...cities,...worldCities].filter(Boolean)
+    .map(c=>[c.toLocaleLowerCase(),c])).values()]
+    .filter(c=>c.toLocaleLowerCase().includes(q)&&!selected.some(v=>v.toLocaleLowerCase()===c.toLocaleLowerCase())).slice(0,10);
   const exact=options.find(c=>c.toLocaleLowerCase()===q);
-  const commit=v=>{onChange(v);setDraft(v);setEditing(false);};
+  const save=list=>onChange(serializeCities(list));
+  const addCity=v=>{
+    const name=v.trim();
+    if(name&&!selected.some(c=>c.toLocaleLowerCase()===name.toLocaleLowerCase()))save([...selected,name]);
+    setDraft("");setActive(0);setEditing(false);
+  };
+  const removeCity=v=>save(selected.filter(c=>c!==v));
   return <td style={{...TD,position:"relative",overflow:"visible"}} onClick={e=>e.stopPropagation()}>
-    <div ref={wrap} style={{position:"relative",minHeight:32}}>
-      {!editing?<div onClick={()=>{setDraft(city);setActive(0);setEditing(true);}} style={{...INP,cursor:"text",minHeight:32,
-        color:city?"rgba(220,235,255,0.92)":"rgba(100,140,180,0.3)"}}>{city||"Select city…"}</div>
-      :<>
-        <input autoFocus value={draft} placeholder="Type city and press Enter…"
-          onChange={e=>{setDraft(e.target.value);setActive(0);}}
-          onKeyDown={e=>{
-            if(e.key==="Escape"){setEditing(false);return;}
-            if(e.key==="ArrowDown"){e.preventDefault();setActive(i=>Math.min(i+1,options.length-1));return;}
-            if(e.key==="ArrowUp"){e.preventDefault();setActive(i=>Math.max(0,i-1));return;}
-            if(e.key==="Enter"){e.preventDefault();commit(!q?"":exact||options[active]||draft.trim());}
-          }}
-          style={{...INP,background:"#102541",border:"1px solid #467cb5",borderRadius:4}}/>
-        {(q.length>=2||loadingCities)&&<div style={{position:"absolute",top:"100%",left:0,minWidth:190,maxHeight:220,overflowY:"auto",zIndex:10000,
-          background:"#0a192d",border:"1px solid #315681",borderRadius:5,boxShadow:"0 8px 22px #0009",padding:4}}>
-          {options.map((c,i)=><button key={c} type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>commit(c)}
-            style={{display:"block",width:"100%",textAlign:"left",background:i===active?"#173c65":"transparent",color:"#c7e1ff",
-              border:0,padding:"7px 9px",cursor:"pointer",fontSize:11}}>{c}</button>)}
-          {loadingCities&&<div style={{padding:"5px 9px",fontSize:10,color:"#7da9d9"}}>Searching worldwide cities…</div>}
-          {!loadingCities&&!options.length&&<div style={{padding:"6px 9px",fontSize:10,color:"#8daaca"}}>Press Enter to save "{draft.trim()}"</div>}
-        </div>}
-      </>}
+    <div ref={wrap} style={{position:"relative",display:"flex",alignItems:"center",flexWrap:"wrap",gap:4,minHeight:32,padding:"3px 8px"}}>
+      {selected.map(c=><span key={c} style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11,color:"#c7ddf8",
+        background:"rgba(58,130,246,0.12)",borderRadius:4,padding:"2px 5px"}}>{c}
+        <button type="button" title={"Remove "+c} onClick={()=>removeCity(c)}
+          style={{border:0,background:"transparent",color:"#79a9d8",cursor:"pointer",padding:0,fontSize:12}}>×</button>
+      </span>)}
+      {editing?<input ref={input} autoFocus value={draft} placeholder="City…"
+        onChange={e=>{setDraft(e.target.value);setActive(0);}}
+        onKeyDown={e=>{
+          if(e.key==="Escape"){setEditing(false);setDraft("");}
+          else if(e.key==="ArrowDown"){e.preventDefault();setActive(i=>Math.min(i+1,options.length-1));}
+          else if(e.key==="ArrowUp"){e.preventDefault();setActive(i=>Math.max(0,i-1));}
+          else if(e.key==="Enter"){e.preventDefault();if(q)addCity(exact||options[active]||draft.trim());else setEditing(false);}
+          else if(e.key==="Backspace"&&!draft&&selected.length){removeCity(selected[selected.length-1]);}
+        }}
+        style={{...INP,flex:"1 1 70px",minWidth:60,width:80,padding:"2px 0",background:"transparent",border:"none",outline:"none"}}/>
+      :<button type="button" title="Add city" onClick={()=>{setDraft("");setEditing(true);}}
+        style={{border:"1px solid rgba(88,166,255,0.25)",background:"rgba(58,130,246,0.08)",borderRadius:4,
+          padding:"1px 5px",color:"#79c0ff",fontSize:11,cursor:"pointer"}}>+{selected.length?"":" City"}</button>}
+      {editing&&(q.length>=2||loadingCities)&&<div style={{position:"absolute",top:"100%",left:8,minWidth:190,maxHeight:220,overflowY:"auto",zIndex:10000,
+        background:"#0a192d",border:"1px solid #315681",borderRadius:5,boxShadow:"0 8px 22px #0009",padding:4}}>
+        {options.map((c,i)=><button key={c} type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>addCity(c)}
+          style={{display:"block",width:"100%",textAlign:"left",background:i===active?"#173c65":"transparent",color:"#c7e1ff",
+            border:0,padding:"7px 9px",cursor:"pointer",fontSize:11}}>{c}</button>)}
+        {loadingCities&&<div style={{padding:"5px 9px",fontSize:10,color:"#7da9d9"}}>Searching cities…</div>}
+        {!loadingCities&&!options.length&&<div style={{padding:"6px 9px",fontSize:10,color:"#8daaca"}}>Press Enter to add "{draft.trim()}"</div>}
+      </div>}
     </div>
   </td>;
 }
@@ -450,7 +465,7 @@ export default function ClientsTab(){
     setPendingDel(null);
   }
 
-  const cities=[...new Map(clients.map(c=>cityFromLocation(c.location)).filter(Boolean)
+  const cities=[...new Map(clients.flatMap(c=>citiesFromLocation(c.location)).filter(Boolean)
     .map(c=>[c.toLocaleLowerCase(),c])).values()].sort((a,b)=>a.localeCompare(b));
 
   // Filter + sort
@@ -461,7 +476,7 @@ export default function ClientsTab(){
         if(!types.includes(typeFilter)) return false;
       }
       if(brokerFilter&&c.lead_broker!==brokerFilter) return false;
-      if(cityFilter&&cityFromLocation(c.location).toLocaleLowerCase()!==cityFilter.toLocaleLowerCase()) return false;
+      if(cityFilter&&!citiesFromLocation(c.location).some(v=>v.toLocaleLowerCase()===cityFilter.toLocaleLowerCase())) return false;
       if(search){
         const q=search.toLowerCase();
         return [c.company,c.pic,c.lead_broker,c.comment,c.email,c.location].some(f=>(f||"").toLowerCase().includes(q));
