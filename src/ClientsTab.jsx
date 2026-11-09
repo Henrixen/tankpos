@@ -318,14 +318,56 @@ function CommentExpandedRow({colSpan, comment, images, onUpdateComment, onUpdate
   );
 }
 
-// Location format: City, Country or Street address, City, Country.
-// Country is the last comma-separated part, city the part immediately before it.
-function locationParts(location){
+// Keep the existing Supabase location field for backward compatibility.
+// Legacy values such as "Copenhagen, Denmark" display as "Copenhagen".
+function cityFromLocation(location){
   const parts=String(location||"").split(",").map(x=>x.trim()).filter(Boolean);
-  return {country:parts.length>=2?parts[parts.length-1]:"",city:parts.length>=2?parts[parts.length-2]:""};
+  if(parts.length===0) return "";
+  if(parts.length===1) return parts[0];
+  return parts[parts.length-2];
 }
 
-const SORT_OPTS=[["company","Company"],["lead_broker","Lead"],["rating","Rating"],["last_contact","Last Contact"],["client_type","Type"],["location","Location"]];
+function CityCell({value,cities,onChange}){
+  const city=cityFromLocation(value);
+  const [editing,setEditing]=useState(false);
+  const [draft,setDraft]=useState(city);
+  const [showNew,setShowNew]=useState(false);
+  const wrap=useRef(null);
+  useEffect(()=>{if(!editing)setDraft(city);},[city,editing]);
+  useEffect(()=>{
+    if(!editing)return;
+    const close=e=>{if(!wrap.current?.contains(e.target)){setEditing(false);setShowNew(false);}};
+    document.addEventListener("mousedown",close);
+    return ()=>document.removeEventListener("mousedown",close);
+  },[editing]);
+  const matches=cities.filter(c=>c.toLocaleLowerCase().includes(draft.trim().toLocaleLowerCase())).slice(0,12);
+  const exact=cities.find(c=>c.toLocaleLowerCase()===draft.trim().toLocaleLowerCase());
+  const commit=v=>{onChange(v);setDraft(v);setEditing(false);setShowNew(false);};
+  return <td style={{...TD,position:"relative",overflow:"visible"}} onClick={e=>e.stopPropagation()}>
+    <div ref={wrap} style={{position:"relative",minHeight:32}}>
+      {!editing?<div onClick={()=>{setDraft(city);setEditing(true);}} style={{...INP,cursor:"text",minHeight:32,
+        color:city?"rgba(220,235,255,0.92)":"rgba(100,140,180,0.3)"}}>{city||"Select city…"}</div>
+      :<>
+        <input autoFocus value={draft} placeholder="Search city…" onChange={e=>{setDraft(e.target.value);setShowNew(false);}}
+          onKeyDown={e=>{if(e.key==="Escape")setEditing(false);if(e.key==="Enter"){e.preventDefault();if(exact)commit(exact);else if(matches.length===1)commit(matches[0]);else if(showNew&&draft.trim())commit(draft.trim());}}}
+          style={{...INP,background:"#102541",border:"1px solid #467cb5",borderRadius:4}}/>
+        <div style={{position:"absolute",top:"100%",left:0,minWidth:190,maxHeight:220,overflowY:"auto",zIndex:10000,
+          background:"#0a192d",border:"1px solid #315681",borderRadius:5,boxShadow:"0 8px 22px #0009",padding:4}}>
+          {matches.map(c=><button key={c} type="button" onClick={()=>commit(c)}
+            style={{display:"block",width:"100%",textAlign:"left",background:"transparent",color:"#c7e1ff",
+              border:0,padding:"7px 9px",cursor:"pointer",fontSize:11}}>{c}</button>)}
+          {!draft.trim()&&city&&<button type="button" onClick={()=>commit("")}
+            style={{...BTN,width:"100%",textAlign:"left"}}>Clear city</button>}
+          {draft.trim()&&!exact&&<button type="button" onClick={()=>showNew?commit(draft.trim()):setShowNew(true)}
+            style={{...BTN,width:"100%",textAlign:"left",marginTop:3}}>{showNew?`Confirm new city: ${draft.trim()}`:`+ Add new city: ${draft.trim()}`}</button>}
+          {!matches.length&&!draft.trim()&&<div style={{padding:8,fontSize:11,color:"#8daaca"}}>Type a city name</div>}
+        </div>
+      </>}
+    </div>
+  </td>;
+}
+
+const SORT_OPTS=[["company","Company"],["lead_broker","Lead"],["rating","Rating"],["last_contact","Last Contact"],["client_type","Type"],["location","City"]];
 
 export default function ClientsTab(){
   const [clients,setClients]=useState([]);
@@ -334,7 +376,6 @@ export default function ClientsTab(){
   const [search,setSearch]=useState("");
   const [typeFilter,setTypeFilter]=useState(""); // "" | "Charterer" | "Owner"
   const [brokerFilter,setBrokerFilter]=useState("");
-  const [countryFilter,setCountryFilter]=useState("");
   const [cityFilter,setCityFilter]=useState("");
   const [sortK,setSortK]=useState("company");
   const [sortD,setSortD]=useState(1);
@@ -384,9 +425,8 @@ export default function ClientsTab(){
     setPendingDel(null);
   }
 
-  const countries=[...new Set(clients.map(c=>locationParts(c.location).country).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  const cities=[...new Set(clients.filter(c=>!countryFilter||locationParts(c.location).country===countryFilter)
-    .map(c=>locationParts(c.location).city).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const cities=[...new Map(clients.map(c=>cityFromLocation(c.location)).filter(Boolean)
+    .map(c=>[c.toLocaleLowerCase(),c])).values()].sort((a,b)=>a.localeCompare(b));
 
   // Filter + sort
   const visible=clients
@@ -396,9 +436,7 @@ export default function ClientsTab(){
         if(!types.includes(typeFilter)) return false;
       }
       if(brokerFilter&&c.lead_broker!==brokerFilter) return false;
-      const loc=locationParts(c.location);
-      if(countryFilter&&loc.country!==countryFilter) return false;
-      if(cityFilter&&loc.city!==cityFilter) return false;
+      if(cityFilter&&cityFromLocation(c.location).toLocaleLowerCase()!==cityFilter.toLocaleLowerCase()) return false;
       if(search){
         const q=search.toLowerCase();
         return [c.company,c.pic,c.lead_broker,c.comment,c.email,c.location].some(f=>(f||"").toLowerCase().includes(q));
@@ -469,18 +507,12 @@ export default function ClientsTab(){
         ))}
 
         <div style={{width:1,height:24,background:"rgba(58,130,246,0.15)"}}/>
-        <span style={{fontSize:10,color:"rgba(120,160,200,0.5)",textTransform:"uppercase"}}>Location</span>
-        <select aria-label="Filter by country" value={countryFilter} onChange={e=>{setCountryFilter(e.target.value);setCityFilter("");}}
-          style={{...BTN,maxWidth:160,color:countryFilter?"#d9ecff":"#79c0ff",colorScheme:"dark"}}>
-          <option value="">All countries</option>
-          {countries.map(v=><option key={v} value={v}>{v}</option>)}
-        </select>
-        <select aria-label="Filter by city" value={cityFilter} onChange={e=>setCityFilter(e.target.value)}
-          style={{...BTN,maxWidth:160,color:cityFilter?"#d9ecff":"#79c0ff",colorScheme:"dark"}}>
-          <option value="">All cities</option>
-          {cities.map(v=><option key={v} value={v}>{v}</option>)}
-        </select>
-        {(countryFilter||cityFilter)&&<button onClick={()=>{setCountryFilter("");setCityFilter("");}} style={BTN}>✕ Clear</button>}
+        <span style={{fontSize:10,color:"rgba(120,160,200,0.5)",textTransform:"uppercase"}}>City</span>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center",maxWidth:600}}>
+          <button onClick={()=>setCityFilter("")} style={fBtnSt(!cityFilter)}>All</button>
+          {cities.map(city=><button key={city} onClick={()=>setCityFilter(prev=>prev===city?"":city)}
+            style={fBtnSt(cityFilter===city)}>{city}</button>)}
+        </div>
 
         <div style={{flex:1}}/>
 
@@ -511,7 +543,7 @@ export default function ClientsTab(){
             <table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed"}}>
               <thead>
                 <tr>
-                  {[["COMPANY","12%"],["TYPE","8%"],["PIC","11%"],["LEAD BROKER","12%"],["RATING","6%"],["LAST CONTACT","9%"],["EMAIL","10%"],["LOCATION","15%"],["COMMENT","15%"],["","2%"]].map(([h,w])=>(
+                  {[["COMPANY","12%"],["TYPE","8%"],["PIC","11%"],["LEAD BROKER","12%"],["RATING","6%"],["LAST CONTACT","9%"],["EMAIL","10%"],["CITY","15%"],["COMMENT","15%"],["","2%"]].map(([h,w])=>(
                     <th key={h} style={{...TH_BASE,width:w,minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{h}</th>
                   ))}
                 </tr>
@@ -531,7 +563,7 @@ export default function ClientsTab(){
                         <td style={TD}><StarRating value={c.rating||0} onChange={v=>onUpdate(c.id,"rating",v)}/></td>
                         <InlineCell value={c.last_contact||""} placeholder="dd/mm/yy" isDate onChange={v=>onUpdate(c.id,"last_contact",v||null)}/>
                         <InlineCell value={c.email||""} placeholder="email@…" onChange={v=>onUpdate(c.id,"email",v)}/>
-                        <InlineCell value={c.location||""} placeholder="City, Country" onChange={v=>onUpdate(c.id,"location",v)}/>
+                        <CityCell value={c.location||""} cities={cities} onChange={v=>onUpdate(c.id,"location",v)}/>
                         <CommentImageCell
                           rowId={c.id}
                           comment={c.comment}
