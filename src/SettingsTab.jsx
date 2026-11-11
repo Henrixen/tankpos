@@ -49,36 +49,46 @@ function InterUKCEditor(){
     try{return JSON.parse(localStorage.getItem(INTERUKC_KEY)||"null")||DEFAULT_CONFIG;}
     catch{return DEFAULT_CONFIG;}
   });
-  function save(next){setCfg(next);localStorage.setItem(INTERUKC_KEY,JSON.stringify(next));}
-
+  const [status,setStatus]=useState("Loading shared settings…");
+  const saveSeq=React.useRef(0);
+  useEffect(()=>{
+    let alive=true;
+    supabase.from("tag_settings").select("value").eq("key",INTERUKC_KEY).maybeSingle().then(({data,error})=>{
+      if(!alive)return;
+      if(error){setStatus("Cloud load failed — showing local settings");return;}
+      if(data?.value&&typeof data.value==="object"){
+        const next={...DEFAULT_CONFIG,...data.value};
+        setCfg(next);localStorage.setItem(INTERUKC_KEY,JSON.stringify(next));
+        window.dispatchEvent(new CustomEvent("signal-interukc-updated",{detail:next}));
+      }
+      setStatus(data?.value?"Shared via Supabase":"Defaults — save an edit to share");
+    });
+    return()=>{alive=false};
+  },[]);
+  async function save(next){
+    const clean={...DEFAULT_CONFIG,...next};
+    const seq=++saveSeq.current;
+    setCfg(clean);localStorage.setItem(INTERUKC_KEY,JSON.stringify(clean));
+    window.dispatchEvent(new CustomEvent("signal-interukc-updated",{detail:clean}));
+    setStatus("Saving…");
+    const {error}=await supabase.from("tag_settings").upsert({key:INTERUKC_KEY,value:clean,updated_at:new Date().toISOString()},{onConflict:"key"});
+    if(seq===saveSeq.current)setStatus(error?"Cloud save failed — local copy retained":"Saved to Supabase ✓");
+  }
   return(
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      {/* DWT range */}
-      <div style={{display:"flex",gap:12,alignItems:"flex-end"}}>
-        <div style={{flex:"0 0 110px"}}>
-          <div style={{fontSize:11,color:C.faint,marginBottom:4}}>DWT min (k)</div>
-          <input type="number" value={cfg.dwtMin} onChange={e=>save({...cfg,dwtMin:Number(e.target.value)})} style={inp}/>
-        </div>
-        <div style={{flex:"0 0 110px"}}>
-          <div style={{fontSize:11,color:C.faint,marginBottom:4}}>DWT max (k)</div>
-          <input type="number" value={cfg.dwtMax} onChange={e=>save({...cfg,dwtMax:Number(e.target.value)})} style={inp}/>
-        </div>
-        <button onClick={()=>{if(window.confirm("Reset Inter UKC pool to defaults? This will overwrite your current operator/relet lists.")) save(DEFAULT_CONFIG);}}
-          style={{fontSize:11,fontWeight:600,padding:"5px 12px",borderRadius:5,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit"}}>Reset defaults</button>
+      <div style={{display:"flex",gap:12,alignItems:"flex-end",flexWrap:"wrap"}}>
+        <div style={{flex:"0 0 110px"}}><div style={{fontSize:11,color:C.faint,marginBottom:4}}>DWT min (k)</div><input type="number" value={cfg.dwtMin} onChange={e=>save({...cfg,dwtMin:Number(e.target.value)})} style={inp}/></div>
+        <div style={{flex:"0 0 110px"}}><div style={{fontSize:11,color:C.faint,marginBottom:4}}>DWT max (k)</div><input type="number" value={cfg.dwtMax} onChange={e=>save({...cfg,dwtMax:Number(e.target.value)})} style={inp}/></div>
+        <button onClick={()=>{if(window.confirm("Reset Inter UKC pool to defaults? This will overwrite the shared operator/relet lists."))save(DEFAULT_CONFIG);}} style={{fontSize:11,fontWeight:600,padding:"5px 12px",borderRadius:5,border:"1px solid rgba(255,107,107,0.3)",background:"transparent",color:"rgba(255,107,107,0.6)",cursor:"pointer",fontFamily:"inherit"}}>Reset defaults</button>
       </div>
-      {/* Owners / Relets */}
       {[["owners","Operators / Owners (contains match)","operator"],["reletsFrom","Relets from (contains match)","company"]].map(([field,label,ph])=>(
         <div key={field}>
           <div style={{fontSize:11,color:C.faint,marginBottom:6}}>{label}</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
-            {cfg[field].map(name=>(
-              <Chip key={name} label={name} onDelete={()=>{if(window.confirm(`Remove "${name}" from this list?`)) save({...cfg,[field]:cfg[field].filter(x=>x!==name)});}}/>
-            ))}
-          </div>
-          <input placeholder={`Add ${ph}…`} style={inp}
-            onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){save({...cfg,[field]:[...cfg[field],e.target.value.trim()]});e.target.value="";}}}/>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>{(cfg[field]||[]).map(name=><Chip key={name} label={name} onDelete={()=>{if(window.confirm(`Remove "${name}" from this list?`))save({...cfg,[field]:cfg[field].filter(x=>x!==name)});}}/>)}</div>
+          <input placeholder={`Add ${ph}…`} style={inp} onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const name=e.target.value.trim();if(!(cfg[field]||[]).some(x=>x.toLowerCase()===name.toLowerCase()))save({...cfg,[field]:[...(cfg[field]||[]),name]});e.target.value="";}}}/>
         </div>
       ))}
+      <div style={{fontSize:10,color:status.startsWith("Cloud")?"#ff9999":C.faint}}>{status}</div>
     </div>
   );
 }
