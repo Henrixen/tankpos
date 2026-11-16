@@ -1,3 +1,69 @@
+
+
+
+
+
+
+
+
+// Deploy as api/claude.js in your Vercel project.
+// ANTHROPIC_API_KEY must be configured as a server-side Vercel environment variable.
+const SAFE_MODEL = 'claude-sonnet-4-6';
+
+function permittedOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return false;
+  let parsed;
+  try { parsed = new URL(origin); } catch { return false; }
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && parsed.hostname === 'localhost')) return false;
+
+  // Explicit production/custom domains, comma-separated in Vercel if needed.
+  const configured = [
+    'https://tankpos.vercel.app',
+    ...(process.env.ALLOWED_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean),
+  ];
+  if (configured.includes(parsed.origin)) return true;
+
+  // Permit requests from the same hostname that served this API (including Vercel previews).
+  // Vercel sets x-forwarded-host; host is the fallback for local deployments.
+  const servedHost = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim().toLowerCase();
+  return !!servedHost && parsed.host.toLowerCase() === servedHost;
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: { message: 'Method not allowed' } });
+  if (!permittedOrigin(req)) return res.status(403).json({ error: { message: 'Forbidden: origin not allowed' } });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: { message: 'Anthropic API key is not configured on the server' } });
+
+  const body = req.body || {};
+  if (!Array.isArray(body.messages) || !body.messages.length) {
+    return res.status(400).json({ error: { message: 'Missing messages' } });
+  }
+  const model = String(body.model || '');
+  if (!model || /opus|fable|mythos/i.test(model)) body.model = SAFE_MODEL;
+  body.max_tokens = Math.min(Math.max(Number(body.max_tokens) || 1024, 1), 4000);
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    return res.status(response.status).json(data);
+  } catch (error) {
+    console.error('Claude upstream request failed:', error);
+    return res.status(502).json({ error: { message: 'Unable to reach Anthropic API' } });
+  }
+}
+
+
+
+
 User attachment
 191ParsePanel-DTV8bxpj.js:39 Using window.vesselDB in ParsePanel
 otvnapimxxuyvhhxkdmy.supabase.co/rest/v1/positions_latest?select=*&imo_no=in.%28-87438748%2C1013949%2C1015208%2C1015868%2C1015870%2C1015909%2C1029297%2C1035052%2C1035088%2C1041489%2C1043188%2C1044235%2C1044651%2C1046178%2C1051020%2C1051068%2C1051070%2C1058561%2C1065368%2C1071367%2C1076525%2C1083188%2C1083190%2C1083205%2C1088449%2C1120297%2C1122544%2C1124516%2C9257723%2C9258686%2C9262481%2C9262493%2C9305348%2C9310252%2C9313175%2C9313266%2C9315721%2C9326914%2C9333187%2C9333242%2C9335056%2C9343209%2C9344150%2C9354272%2C9354519%2C9354894%2C9359375%2C9359636%2C9363792%2C9374296%29&limit=1000:1  Failed to load resource: the server responded with a status of 500 ()
