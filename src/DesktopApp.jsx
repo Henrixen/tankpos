@@ -1348,6 +1348,44 @@ function PositionControlsWrap({children,mobile}) { return mobile ? (
     </details>
   ) : <>{children}</>; }
 
+// Open-port region presets. Uses the Positions table only; AIS is not queried.
+const OPEN_PORT_AREAS=[
+  {id:"NWE",label:"NWE",x:111,y:65,w:91,h:64},
+  {id:"BALTIC",label:"Baltic",x:242,y:32,w:103,h:71},
+  {id:"BISCAY",label:"Biscay",x:69,y:158,w:102,h:55},
+  {id:"WMED",label:"West Med",x:153,y:233,w:122,h:54},
+  {id:"EMED",label:"East Med",x:306,y:230,w:127,h:58},
+  {id:"SKAW",label:"Skaw",x:208,y:113,w:84,h:39},
+  {id:"UKC",label:"UKC",x:78,y:108,w:89,h:40},
+  {id:"BLACKSEA",label:"Black Sea",x:365,y:158,w:105,h:49},
+];
+function openPortInArea(v,area){
+  const port=String(v.openPort||"").toUpperCase().trim();
+  if(!port||port==="EMPLOYED")return false;
+  const reg=String(classifyRegion(port)||"").toUpperCase();
+  const has=(...names)=>names.some(n=>port.includes(n));
+  if(area==="NWE")return ["WCUK","ECUK","CANAL","SKAW"].includes(reg)||has("ARA","ROTTERDAM","ANTWERP","AMSTERDAM","GHENT","TERNEUZEN","THAMES","TEES","HAMBURG","IMMINGHAM","LE HAVRE","DUNKIRK","NWE");
+  if(area==="BALTIC")return reg==="BALTIC"||has("BALTIC","GDANSK","GDYNIA","RIGA","TALLINN","KLAIPEDA","STOCKHOLM","HELSINKI","GOTHENBURG","BROFJORDEN","STENUNGSUND");
+  if(area==="BISCAY")return reg==="BISCAY"||has("BISCAY","BILBAO","GIJON","SANTANDER","BORDEAUX","LA PALLICE","NANTES","FERROL");
+  if(area==="SKAW")return reg==="SKAW"||has("SKAW","SKAGEN","FREDERICIA","AARHUS","FREDERIKSHAVN");
+  if(area==="UKC")return ["WCUK","ECUK","CANAL"].includes(reg)||has("UKC","ARA","ROTTERDAM","ANTWERP","THAMES","TEES","IMMINGHAM","GRANGEMOUTH");
+  if(area==="WMED")return has("WEST MED","WMED","MARSEILLE","FOS","LAVERA","GENOA","SAVONA","LIVORNO","BARCELONA","TARRAGONA","VALENCIA","CARTAGENA","ALGECIRAS","GIBRALTAR","MALAGA","PALERMO","NAPLES","CAGLIARI");
+  if(area==="EMED")return has("EAST MED","EMED","PIRAEUS","ELEFSIS","ISTANBUL","IZMIT","MERSIN","ISKENDERUN","ALEXANDRIA","HAIFA","LIMASSOL","TRIESTE","RIJEKA","VENICE");
+  if(area==="BLACKSEA")return has("BLACK SEA","BLACKSEA","CONSTANTA","NOVOROSSIYSK","ODESSA","VARNA","BURGAS","SAMSUN","TUAPSE");
+  return false;
+}
+function OpenPortAreaMap({selected,onToggle}){
+  return <svg viewBox="0 0 510 322" role="group" aria-label="Europe open-port regional selector" style={{width:"100%",maxHeight:310,display:"block",background:"#0e1b2d",borderRadius:7,border:"1px solid #30445d"}}>
+    <rect width="510" height="322" fill="#102238"/>
+    <path d="M0 58 L56 40 85 63 98 102 75 143 92 171 69 210 96 239 137 248 145 288 0 290Z M151 8 L198 0 231 32 216 75 185 96 160 71Z M249 0 L312 0 365 48 337 101 305 124 261 106 231 59Z M202 142 L262 132 310 150 352 139 404 162 432 201 405 221 356 212 326 234 285 224 247 245 213 217 170 211 157 175Z" fill="#25354a" stroke="#5b708a" strokeWidth="1.4"/>
+    {OPEN_PORT_AREAS.map(a=><g key={a.id} role="button" tabIndex={0} aria-pressed={selected.has(a.id)} aria-label={'Toggle '+a.label} onClick={()=>onToggle(a.id)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onToggle(a.id);}}} style={{cursor:'pointer'}}>
+      <rect x={a.x} y={a.y} width={a.w} height={a.h} rx="8" fill={selected.has(a.id)?"#2e78b7":"#375674"} fillOpacity={selected.has(a.id)?.87:.50} stroke={selected.has(a.id)?"#a5ddff":"#7293b5"} strokeWidth={selected.has(a.id)?2:1}/>
+      <text x={a.x+a.w/2} y={a.y+a.h/2+4} textAnchor="middle" fill="#f0f7ff" fontSize="13" fontWeight="700" pointerEvents="none">{a.label}</text>
+    </g>)}
+    <text x="13" y="310" fill="#91abc8" fontSize="11">OPEN PORT · SELECT ONE OR MORE AREAS</text>
+  </svg>;
+}
+
 function DesktopApp({positionsReady,vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,externalPositionsFileDate,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
   // ── PIN config ───────────────────────────────────────────────────────────
   const DEFAULT_USER_TABS = ["pos","cargo","clients"];
@@ -1632,6 +1670,9 @@ const [superRegionFilter,setSuperRegionFilter]=useState(new Set());
 const [segmentFilter,setSegmentFilter]=useState(new Set());
 const [dwtFilter,setDwtFilter]=useState(new Set()); // multi-select Set
 const [builtFilter,setBuiltFilter]=useState(new Set()); // multi-select Set
+const [positionFilterView,setPositionFilterView]=useState("filters");
+const [openPortAreas,setOpenPortAreas]=useState(new Set());
+const [vesselAgeFilter,setVesselAgeFilter]=useState("");
   const [cSearch,setCSearch]=useState("");const [cFilter,setCFilter]=useState("ALL");const [cDateFilter,setCDateFilter]=useState("");
   const [cTimeFilter,setCTimeFilter]=useState("");
   const [cGradeFilter,setCGradeFilter]=useState("");
@@ -2416,6 +2457,19 @@ const filtV=useMemo(()=>{
     }
   }
 
+  if(openPortAreas.size>0){
+    list=list.filter(v=>[...openPortAreas].some(area=>openPortInArea(v,area)));
+  }
+  if(vesselAgeFilter){
+    const year=new Date().getFullYear();
+    list=list.filter(v=>{
+      const built=Number(String(v.built||"").match(/(?:19|20)\d{2}/)?.[0]);
+      if(!Number.isFinite(built)||!built)return false;
+      const age=year-built;
+      return vesselAgeFilter==="20+"?age>=20:age>=0&&age<=Number(vesselAgeFilter);
+    });
+  }
+
   if(dwtFilter.size>0){
     list=list.filter(v=>{
       const d=parseFloat(v.dwt)||0;
@@ -2541,19 +2595,19 @@ const filtV=useMemo(()=>{
   useBrokerActivity(unlocked?(tab==="pos"?"positions":tab==="cargo"||tab==="cargo2"?"cargoes":""):"");
   const positionsClearVisible=previewMode
     ? Boolean(previewTags.size||previewSubTags.size||previewSaved)
-    : Boolean(filters.size||posTagFilter.size||posSubTags.size||coatingFilter.size||bucketFilters.size||superRegionFilter.size||segmentFilter.size||dwtFilter.size||builtFilter.size||interUKCActive||showSavedOnly||search||opFilter||updFilter||dwtRange.min||dwtRange.max||builtRange.min||builtRange.max||openDateFilter.quick||openDateFilter.from||openDateFilter.to);
+    : Boolean(filters.size||posTagFilter.size||posSubTags.size||coatingFilter.size||bucketFilters.size||superRegionFilter.size||segmentFilter.size||dwtFilter.size||builtFilter.size||openPortAreas.size||vesselAgeFilter||interUKCActive||showSavedOnly||search||opFilter||updFilter||dwtRange.min||dwtRange.max||builtRange.min||builtRange.max||openDateFilter.quick||openDateFilter.from||openDateFilter.to);
   function clearPositionFilters(){
     if(previewMode){setPreviewTags(new Set());setPreviewSubTags(new Set());setPreviewSaved(false);return;}
     setFilters(new Set());setPosTagFilter(new Set());setPosSubTags(new Set());setCoatingFilter(new Set());
     setBucketFilters(new Set());setSuperRegionFilter(new Set());setSegmentFilter(new Set());
-    setDwtFilter(new Set());setBuiltFilter(new Set());setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});
+    setDwtFilter(new Set());setBuiltFilter(new Set());setOpenPortAreas(new Set());setVesselAgeFilter("");setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});
     setOpenDateFilter({quick:"",from:"",to:""});setUpdFilter("");setOpFilter(null);setSearch("");
     setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);
   }
   const positionsClearButton=(style={})=>positionsClearVisible?<button type="button" aria-label="Clear all position filters" title={previewMode?"Clear preview filters only":"Clear all position filters"} onClick={clearPositionFilters} style={{fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:4,border:"1px solid rgba(255,107,107,.5)",background:"#301c29",color:"#ff808b",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",...style}}>× Clear</button>:null;
 
-  const brokerPositionDefaults=useRef({...{"search": "", "previewSaved": false, "dwtRange": {"min": "", "max": ""}, "builtRange": {"min": "", "max": ""}, "openDateFilter": {"quick": "", "from": "", "to": ""}, "opFilter": null, "updFilter": "", "sortK": "fileDate", "sortD": -1, "posFileDaysBack": 90, "showSavedOnly": false, "fixingPanelTab": "Open Segments", "fixingExpanded": false, "aisPanelTab": "Map", "positionsWidths": [32, 34, 34], "interUKCActive": false, "previewSort": {"key": "operator", "dir": 1}, "previewFormat": "table", "filters": [], "posTagFilter": [], "previewTags": [], "coatingFilter": [], "bucketFilters": [], "superRegionFilter": [], "segmentFilter": [], "dwtFilter": [], "builtFilter": [], "savedVessels": []},colWidthsV,previewExcluded:[],previewManual:[],posSubTags:[],previewSubTags:[],cargoVisibleCols:[...CARGO_COLUMN_KEYS],qfVisibleCols:[...QF_DEFAULT_VISIBLE]});
-  useWorkspacePreferences("positions",{posSubTags:[...posSubTags],previewSubTags:[...previewSubTags],filters:[...filters],posTagFilter:[...posTagFilter],previewTags:[...previewTags],coatingFilter:[...coatingFilter],bucketFilters:[...bucketFilters],superRegionFilter:[...superRegionFilter],segmentFilter:[...segmentFilter],dwtFilter:[...dwtFilter],builtFilter:[...builtFilter],savedVessels:[...savedVessels],previewExcluded:[...previewExcluded],previewManual:[...previewManual],cargoVisibleCols:[...cargoVisibleCols],qfVisibleCols:[...qfVisibleCols],search,previewSaved,dwtRange,builtRange,openDateFilter,opFilter,updFilter,sortK,sortD,posFileDaysBack,showSavedOnly,fixingPanelTab,fixingExpanded,aisPanelTab,positionsWidths,interUKCActive,colWidthsV,previewSort,previewFormat},p=>{
+  const brokerPositionDefaults=useRef({...{"search": "", "previewSaved": false, "dwtRange": {"min": "", "max": ""}, "builtRange": {"min": "", "max": ""}, "openDateFilter": {"quick": "", "from": "", "to": ""}, "opFilter": null, "updFilter": "", "sortK": "fileDate", "sortD": -1, "posFileDaysBack": 90, "showSavedOnly": false, "fixingPanelTab": "Open Segments", "fixingExpanded": false, "aisPanelTab": "Map", "positionsWidths": [32, 34, 34], "interUKCActive": false, "previewSort": {"key": "operator", "dir": 1}, "previewFormat": "table", "filters": [], "posTagFilter": [], "previewTags": [], "coatingFilter": [], "bucketFilters": [], "superRegionFilter": [], "segmentFilter": [], "dwtFilter": [], "builtFilter": [], "openPortAreas": [], "vesselAgeFilter": "", "savedVessels": []},colWidthsV,previewExcluded:[],previewManual:[],posSubTags:[],previewSubTags:[],cargoVisibleCols:[...CARGO_COLUMN_KEYS],qfVisibleCols:[...QF_DEFAULT_VISIBLE]});
+  useWorkspacePreferences("positions",{posSubTags:[...posSubTags],previewSubTags:[...previewSubTags],filters:[...filters],posTagFilter:[...posTagFilter],previewTags:[...previewTags],coatingFilter:[...coatingFilter],bucketFilters:[...bucketFilters],superRegionFilter:[...superRegionFilter],segmentFilter:[...segmentFilter],dwtFilter:[...dwtFilter],builtFilter:[...builtFilter],openPortAreas:[...openPortAreas],vesselAgeFilter,savedVessels:[...savedVessels],previewExcluded:[...previewExcluded],previewManual:[...previewManual],cargoVisibleCols:[...cargoVisibleCols],qfVisibleCols:[...qfVisibleCols],search,previewSaved,dwtRange,builtRange,openDateFilter,opFilter,updFilter,sortK,sortD,posFileDaysBack,showSavedOnly,fixingPanelTab,fixingExpanded,aisPanelTab,positionsWidths,interUKCActive,colWidthsV,previewSort,previewFormat},p=>{
     setFilters(new Set(p.filters||[]));
     setPosTagFilter(new Set(p.posTagFilter||[]));
     setPosSubTags(new Set(p.posSubTags||[]));setPreviewSubTags(new Set(p.previewSubTags||[]));
@@ -2564,6 +2618,8 @@ const filtV=useMemo(()=>{
     setSegmentFilter(new Set(p.segmentFilter||[]));
     setDwtFilter(new Set(p.dwtFilter||[]));
     setBuiltFilter(new Set(p.builtFilter||[]));
+    setOpenPortAreas(new Set(p.openPortAreas||[]));
+    setVesselAgeFilter(p.vesselAgeFilter||"");
     setSavedVessels(new Set(p.savedVessels||[]));
     setPreviewExcluded(new Set(p.previewExcluded||[]));
     setPreviewManual(new Set(p.previewManual||[]));
@@ -3319,8 +3375,22 @@ const filtV=useMemo(()=>{
                       )}
                     </div>
                   )}
-                  <div style={{flex:1,minHeight:0,overflowY:"hidden",padding:"2px 12px",display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
-                    {(()=>{
+                  <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"2px 12px",display:"flex",flexDirection:"column",justifyContent:"flex-start",gap:5}}>
+                    <div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 0",borderBottom:"1px solid "+C.bd2,flexShrink:0}}>
+                      {[["filters","☷ Filters"],["map","◈ Region map"]].map(([id,label])=><button key={id} onClick={()=>setPositionFilterView(id)} style={{...fbBig(positionFilterView===id,C.blue),padding:"5px 9px",fontSize:11}}>{label}</button>)}
+                      <span style={{marginLeft:"auto",fontSize:10,color:C.faint}}>{filtV.length} vessels</span>
+                      {positionsClearVisible&&<button onClick={clearPositionFilters} style={{...fbBig(false,C.red),fontSize:10}}>× Clear</button>}
+                    </div>
+                    {positionFilterView==="map"&&<div style={{display:"flex",flexDirection:"column",gap:8,padding:"6px 0"}}>
+                      <OpenPortAreaMap selected={openPortAreas} onToggle={id=>{setOpenPortAreas(prev=>{const next=new Set(prev);next.has(id)?next.delete(id):next.add(id);return next;});setPosPage(1);}}/>
+                      <div style={{fontSize:10,color:C.faint}}>Based on Open Port in Positions (not AIS). Click multiple areas to combine them.</div>
+                      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{OPEN_PORT_AREAS.map(a=><button key={a.id} onClick={()=>{setOpenPortAreas(prev=>{const n=new Set(prev);n.has(a.id)?n.delete(a.id):n.add(a.id);return n;});setPosPage(1);}} style={{...fbBig(openPortAreas.has(a.id),C.blue),fontSize:10}}>{a.label}</button>)}</div>
+                      <div style={{fontSize:10,fontWeight:700,color:C.blue}}>DWT</div>
+                      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{[["<10","<10k"],["10-15","10–15k"],["15-20","15–20k"],["20-30","20–30k"],["30-40","30–40k"],[">40",">40k"]].map(([v,l])=><button key={v} onClick={()=>{setDwtFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}} style={{...fbBig(dwtFilter.has(v),C.blue),fontSize:10}}>{l}</button>)}</div>
+                      <div style={{fontSize:10,fontWeight:700,color:C.blue}}>VESSEL AGE</div>
+                      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{[["","All"],["5","≤5y"],["10","≤10y"],["15","≤15y"],["20","≤20y"],["20+","20+y"]].map(([v,l])=><button key={v||"all"} onClick={()=>{setVesselAgeFilter(v);setPosPage(1);}} style={{...fbBig(vesselAgeFilter===v,C.blue),fontSize:10}}>{l}</button>)}</div>
+                    </div>}
+                    {positionFilterView==="filters"&&(()=>{
                       const Chip=({active,onClick,col,children})=>(
                         <button onClick={onClick} style={{...fbBig(active,col),textTransform:"uppercase"}}>{children}</button>
                       );
@@ -3391,6 +3461,9 @@ const filtV=useMemo(()=>{
                             <RangeBox minVal={dwtRange.min} maxVal={dwtRange.max} minPh="min" maxPh="max" onMin={v=>{setDwtRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setDwtRange(r=>({...r,max:v}));setPosPage(1);}}/>
                             {(dwtFilter.size>0||dwtRange.min!==""||dwtRange.max!=="")&&<Chip col={C.red} active={false} onClick={()=>{setDwtFilter(new Set());setDwtRange({min:"",max:""});setPosPage(1);}}>✕</Chip>}
                           </FilterRowWrap>
+                          <FilterRow label="Age" col="#94a3b8">
+                            {[["","All"],["5","≤5y"],["10","≤10y"],["15","≤15y"],["20","≤20y"],["20+","20+y"]].map(([v,l])=><Chip key={v||"all"} col="#94a3b8" active={vesselAgeFilter===v} onClick={()=>{setVesselAgeFilter(v);setPosPage(1);}}>{l}</Chip>)}
+                          </FilterRow>
                           {/* Built */}
                           <FilterRowWrap label="Built" col="#94a3b8">
                             {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<Chip key={v} col="#94a3b8" active={builtFilter.has(v)} onClick={()=>{setBuiltFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</Chip>))}
@@ -3625,7 +3698,7 @@ const filtV=useMemo(()=>{
                       >
                         🗑 Delete ({selVessels.size})
                       </button>
-                      <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setCoatingFilter(new Set());setInterUKCActive(false);setPosSubTags(new Set());setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());setSelVessels(new Set());setOpFilter(null);}}
+                      <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setOpenPortAreas(new Set());setVesselAgeFilter("");setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setCoatingFilter(new Set());setInterUKCActive(false);setPosSubTags(new Set());setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());setSelVessels(new Set());setOpFilter(null);}}
                         style={{fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",border:"1px solid "+C.bd,background:C.bg2,color:C.tx}}>
                         ✕ Clear all
                       </button>
