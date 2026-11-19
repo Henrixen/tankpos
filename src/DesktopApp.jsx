@@ -1378,15 +1378,17 @@ function openPortInArea(v,area){
 }
 // Uses the same Mapbox GL library and dark-v11 basemap as FreightMapTab.
 // Polygons are maritime BROKING regions; classification is by open port, not AIS.
+// Maritime polygons deliberately follow SEA corridors, not land-based country zones.
+// These are visual selection zones; vessel membership comes from Open Port text.
 const POSITION_REGION_POLYGONS={
- NWE:[[-7,49],[2,49],[9,51],[10,55],[7,59],[1,62],[-5,60],[-7,55],[-7,49]],
- BALTIC:[[10,54],[16,54],[23,54],[30,57],[31,66],[23,66],[16,61],[10,58],[10,54]],
- BISCAY:[[-11,42],[-1,42],[0,47],[-3,49],[-10,49],[-11,42]],
- WMED:[[-6,35],[4,35],[13,36],[15,42],[9,45],[1,44],[-6,39],[-6,35]],
- EMED:[[14,30],[37,30],[37,42],[29,43],[20,40],[14,37],[14,30]],
- SKAW:[[7,55],[13,55],[14,59],[10,59],[7,57],[7,55]],
- UKC:[[-6,49],[3,49],[6,52],[4,55],[-2,56],[-6,53],[-6,49]],
- BLACKSEA:[[27,40],[42,40],[43,47],[36,48],[28,46],[27,40]]
+ NWE:[[[2.2,51.6],[3.4,52.1],[4.2,53.5],[5.6,54.5],[6.8,56],[6.5,58.3],[4.4,59.2],[2.1,57.5],[1.0,54.5],[2.2,51.6]]],
+ BALTIC:[[[12.3,54.6],[14.4,54.7],[16.7,55.3],[19.2,56.4],[22,57.1],[24.5,58.4],[23.5,60],[21.0,60.4],[18.2,58.5],[15.5,56.8],[12.3,54.6]],[[19.1,60.5],[21.2,61.2],[23.1,62.9],[23.4,64.7],[21.2,65.4],[19.3,63.3],[19.1,60.5]]],
+ BISCAY:[[[-9.5,43.3],[-7.4,43.6],[-4.6,43.7],[-2.4,44.2],[-1.6,46.3],[-3.1,47.7],[-6.2,47.5],[-8.4,45.8],[-9.5,43.3]]],
+ WMED:[[[-4.7,36.2],[-1.2,36.8],[2.4,38.1],[5.7,39.2],[8.6,40.1],[9.7,41.0],[8.1,42.0],[5.4,42.3],[2.0,41.1],[-1.1,39.2],[-4.7,36.2]]],
+ EMED:[[[18.1,34.0],[22.5,34.0],[27.0,34.4],[30.3,35.2],[32.4,36.1],[30.2,37.2],[26.1,36.5],[22.0,36.6],[18.1,34.0]]],
+ SKAW:[[[8.6,56.3],[9.8,56.7],[10.6,57.4],[11.6,57.9],[11.4,58.6],[10.1,58.4],[9.0,57.5],[8.6,56.3]]],
+ UKC:[[[-5.7,50.1],[-3.8,50.1],[-1.6,50.2],[0.4,50.9],[1.7,51.8],[2.3,52.4],[1.1,53.3],[-0.9,52.5],[-3.1,51.6],[-5.7,50.1]]],
+ BLACKSEA:[[[28.7,42.4],[31.6,42.0],[35.1,42.4],[38.8,43.2],[40.5,44.0],[38.1,45.3],[34.5,45.5],[31.0,44.8],[28.7,42.4]]]
 };
 function OpenPortAreaMap({selected,onToggle}){
  const el=useRef(null),mapRef=useRef(null),toggleRef=useRef(onToggle),selectedRef=useRef(selected);
@@ -1406,7 +1408,7 @@ function OpenPortAreaMap({selected,onToggle}){
      map.on("load",()=>{
        const features=Object.entries(POSITION_REGION_POLYGONS).map(([id,coords])=>({
          type:"Feature",properties:{id,label:OPEN_PORT_AREAS.find(a=>a.id===id)?.label||id},
-         geometry:{type:"Polygon",coordinates:[coords]}
+         geometry:{type:coords.length===1?"Polygon":"MultiPolygon",coordinates:coords.length===1?coords:coords.map(ring=>[ring])}
        }));
        map.addSource("position-areas",{type:"geojson",data:{type:"FeatureCollection",features}});
        map.addLayer({id:"position-area-fill",type:"fill",source:"position-areas",
@@ -1418,12 +1420,14 @@ function OpenPortAreaMap({selected,onToggle}){
        map.addLayer({id:"position-area-labels",type:"symbol",source:"position-areas",
          layout:{"text-field":["get","label"],"text-size":12,"text-font":["DIN Pro Bold","Arial Unicode MS Bold"],"text-allow-overlap":true},
          paint:{"text-color":"#e8f3ff","text-halo-color":"#0b1524","text-halo-width":1.5}});
-       map.on("click","position-area-fill",e=>{
-         const id=e.features?.[0]?.properties?.id;
+       map.on("click",e=>{
+         const features=map.queryRenderedFeatures(e.point,{layers:["position-area-labels","position-area-fill"]});
+         const id=features?.[0]?.properties?.id;
          if(id)toggleRef.current(id);
        });
-       map.on("mouseenter","position-area-fill",()=>{map.getCanvas().style.cursor="pointer";});
-       map.on("mouseleave","position-area-fill",()=>{map.getCanvas().style.cursor="";});
+       map.on("mousemove",e=>{
+         map.getCanvas().style.cursor=map.queryRenderedFeatures(e.point,{layers:["position-area-labels","position-area-fill"]}).length?"pointer":"";
+       });
        map.resize();
      });
    }catch(e){setMapError(e.message||"Unable to initialize Mapbox");}
@@ -2625,6 +2629,7 @@ const filtV=useMemo(()=>{
   dwtRange.min,dwtRange.max,builtRange.min,builtRange.max,
   [...dwtFilter].join(),
   [...builtFilter].join(),
+  [...openPortAreas].sort().join(),vesselAgeFilter,
   interUKCActive,
   [...posSubTags].join(),subTagSeed.initialized,
   showSavedOnly,
@@ -3328,13 +3333,6 @@ const filtV=useMemo(()=>{
                   color:posOutsiderView?"#f5a623":C.faint }}>
                 🌏 Outsiders
               </button>
-              {!posOutsiderView&&<div style={{display:"flex",gap:6,alignItems:"center",marginLeft:mobile?0:12}}>
-                {[["filters","☷ Filters"],["map","◈ Region map"]].map(([id,label])=><button key={id} onClick={()=>setPositionFilterView(id)}
-                  style={{fontSize:12,fontWeight:700,padding:"6px 12px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",
-                    border:"1px solid "+(positionFilterView===id?"#58a6ff88":C.bd),
-                    background:positionFilterView===id?"#58a6ff22":"transparent",
-                    color:positionFilterView===id?"#79c0ff":C.faint}}>{label}</button>)}
-              </div>}
               <BrokerActivity scope="positions"/>
             </div>
 
@@ -3426,6 +3424,14 @@ const filtV=useMemo(()=>{
                 <div style={{width:`calc(${positionsVisibleWidths[1]}% - 12px)`,minWidth:0,height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"visible",position:"relative",display:"flex",flexDirection:"column"}}>
                   {positionsClearButton({position:"absolute",left:7,top:-29,zIndex:3})}
                   <HScrollStyle/>
+                  <div style={{display:"flex",gap:6,alignItems:"center",padding:"7px 10px 5px",borderBottom:"1px solid "+C.bd2,flexShrink:0}}>
+                    {[["filters","☷ Filters"],["map","◈ Region map"]].map(([id,label])=><button key={id} onClick={()=>setPositionFilterView(id)}
+                      style={{fontSize:11,fontWeight:700,padding:"5px 10px",borderRadius:5,cursor:"pointer",fontFamily:"inherit",
+                        border:"1px solid "+(positionFilterView===id?"#58a6ff88":C.bd),
+                        background:positionFilterView===id?"#58a6ff22":"transparent",
+                        color:positionFilterView===id?"#79c0ff":C.faint}}>{label}</button>)}
+                    <span style={{marginLeft:"auto",fontSize:10,color:C.faint}}>{filtV.length} vessels</span>
+                  </div>
                   {(opFilter||bucketFilters.size>0)&&(
                     <div style={{flexShrink:0,padding:"8px 12px 0 12px",display:"flex",flexDirection:"column",gap:4}}>
                       {opFilter&&(
@@ -3449,7 +3455,10 @@ const filtV=useMemo(()=>{
                     </div>
                     {positionFilterView==="map"&&<div style={{display:"flex",flexDirection:"column",gap:8,padding:"6px 0"}}>
                       <OpenPortAreaMap selected={openPortAreas} onToggle={id=>{setOpenPortAreas(prev=>{const next=new Set(prev);next.has(id)?next.delete(id):next.add(id);return next;});setPosPage(1);}}/>
-                      <div style={{fontSize:10,color:C.faint}}>Based on Open Port in Positions (not AIS). Click multiple areas to combine them.</div>
+                      <div style={{display:"flex",justifyContent:"space-between",gap:6,alignItems:"center",fontSize:10,color:C.faint}}>
+                        <span>Click water regions · filters use Open Port, not AIS · {openPortAreas.size?`${openPortAreas.size} selected`:"All regions"}</span>
+                        {openPortAreas.size>0&&<button onClick={()=>{setOpenPortAreas(new Set());setPosPage(1);}} style={{...fbBig(false,C.red),fontSize:10}}>Clear regions ×</button>}
+                      </div>
                       <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{OPEN_PORT_AREAS.map(a=><button key={a.id} onClick={()=>{setOpenPortAreas(prev=>{const n=new Set(prev);n.has(a.id)?n.delete(a.id):n.add(a.id);return n;});setPosPage(1);}} style={{...fbBig(openPortAreas.has(a.id),C.blue),fontSize:10}}>{a.label}</button>)}</div>
                       <div style={{fontSize:10,fontWeight:700,color:C.blue}}>DWT</div>
                       <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{[["<10","<10k"],["10-15","10–15k"],["15-20","15–20k"],["20-30","20–30k"],["30-40","30–40k"],[">40",">40k"]].map(([v,l])=><button key={v} onClick={()=>{setDwtFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}} style={{...fbBig(dwtFilter.has(v),C.blue),fontSize:10}}>{l}</button>)}</div>
