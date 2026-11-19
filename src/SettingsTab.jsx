@@ -1,5 +1,7 @@
 import React, { useState, useEffect, createContext, useContext } from "react";
 import { C } from "./constants";
+import mapboxgl from "mapbox-gl";
+import {SEA_REGION_KEY,readMaritimeRegions,normalizeMaritimeRegions,defaultMaritimeRegions} from "./maritimeRegions";
 import { supabase } from "./supabaseclient";
 import UserManager from "./UserManager";
 import TagManagement from "./TagManagement";
@@ -14,7 +16,7 @@ const DEFAULT_CONFIG = {
 
 const SettingsCategoryContext=createContext("general");
 const SETTINGS_CATEGORIES=[["general","General"],["users","Users / Login"],["positions","Positions"],["cargoes","Cargoes"],["fixing","Fixing"],["tags","Tags"]];
-const SETTINGS_SCOPES={"Navigation / Menu":["general"],"Users / Login":["users"],"Tag Management":["tags","positions","cargoes"],"Cargoes / Copy Format":["cargoes"],"Cargoes / WhatsApp Format":["cargoes"],"Positions / WhatsApp Format":["positions"],"Fixing":["fixing"],"Inter UKC Pool":["positions","cargoes"],"Cargo Filter Groups":["cargoes"],"Region Filter Groups":["positions"]};
+const SETTINGS_SCOPES={"Navigation / Menu":["general"],"Users / Login":["users"],"Tag Management":["tags","positions","cargoes"],"Cargoes / Copy Format":["cargoes"],"Cargoes / WhatsApp Format":["cargoes"],"Positions / WhatsApp Format":["positions"],"Fixing":["fixing"],"Inter UKC Pool":["positions","cargoes"],"Cargo Filter Groups":["cargoes"],"Region Filter Groups":["positions"],"Maritime Map Regions":["positions"]};
 
 // Shared section card wrapper — matches Tag Management styling
 function SectionCard({title,subtitle,children}){
@@ -496,6 +498,93 @@ function CargoExportEditor(){
  </div>;
 }
 
+
+function MaritimeRegionEditor(){
+ const [regions,setRegions]=useState(readMaritimeRegions);
+ const [active,setActive]=useState(regions[0]?.id||"");
+ const [status,setStatus]=useState("Loading shared regions…");
+ const [drawing,setDrawing]=useState(false);
+ const mapEl=React.useRef(null),mapRef=React.useRef(null),drawRef=React.useRef(false),activeRef=React.useRef(active);
+ drawRef.current=drawing;activeRef.current=active;
+ useEffect(()=>{
+  let alive=true;
+  supabase.from("tag_settings").select("value").eq("key",SEA_REGION_KEY).maybeSingle().then(({data,error})=>{
+   if(!alive)return;
+   if(error){setStatus("Cloud load failed; local regions shown");return;}
+   if(Array.isArray(data?.value)){
+    const next=normalizeMaritimeRegions(data.value);setRegions(next);
+    localStorage.setItem(SEA_REGION_KEY,JSON.stringify(next));
+    setStatus("Shared regions loaded");
+   }else setStatus("Default regions; save to share");
+  });
+  return()=>{alive=false};
+ },[]);
+ const region=regions.find(r=>r.id===active)||regions[0];
+ function change(id,patch){setRegions(rs=>rs.map(r=>r.id===id?{...r,...patch}:r));}
+ async function save(){
+  const clean=normalizeMaritimeRegions(regions);
+  if(clean.length!==regions.length){setStatus("Invalid polygon: at least 3 valid coordinate pairs required");return;}
+  setStatus("Saving…");
+  const {error}=await supabase.from("tag_settings").upsert({key:SEA_REGION_KEY,value:clean,updated_at:new Date().toISOString()},{onConflict:"key"});
+  if(error){setStatus("Cloud save failed: "+error.message);return;}
+  localStorage.setItem(SEA_REGION_KEY,JSON.stringify(clean));
+  window.dispatchEvent(new CustomEvent("signal-maritime-regions-updated",{detail:clean}));
+  setStatus("Saved to Supabase ✓ — Positions map updated");
+ }
+ useEffect(()=>{
+  if(!mapEl.current||mapRef.current)return;
+  mapboxgl.accessToken="pk.eyJ1IjoiaGhlbnJpa3NlbiIsImEiOiJjbXBhcWMyczMwMDVnMnNzaHd6emI4ampuIn0.u98OZhtN61S6IK23gV6ZYg";
+  const map=new mapboxgl.Map({container:mapEl.current,style:"mapbox://styles/mapbox/dark-v11",center:[10,51],zoom:2.5});
+  mapRef.current=map;map.addControl(new mapboxgl.NavigationControl({showCompass:false}),"top-right");
+  map.on("load",()=>{
+   map.addSource("edit-maritime",{type:"geojson",data:{type:"FeatureCollection",features:[]}});
+   map.addLayer({id:"edit-maritime-fill",type:"fill",source:"edit-maritime",paint:{"fill-color":["get","color"],"fill-opacity":0.25}});
+   map.addLayer({id:"edit-maritime-lines",type:"line",source:"edit-maritime",paint:{"line-color":["get","color"],"line-width":2}});
+  });
+  map.on("click",e=>{
+   if(!drawRef.current)return;
+   const lng=Math.round(e.lngLat.lng*10000)/10000,lat=Math.round(e.lngLat.lat*10000)/10000;
+   setRegions(rs=>rs.map(r=>{
+    if(r.id!==activeRef.current)return r;
+    const pts=r.coords.slice();if(pts.length>1&&pts[0][0]===pts.at(-1)[0]&&pts[0][1]===pts.at(-1)[1])pts.pop();
+    pts.push([lng,lat]);return {...r,coords:pts.length>=3?[...pts,pts[0]]:pts,center:[lng,lat]};
+   }));
+  });
+  return()=>{map.remove();mapRef.current=null};
+ },[]);
+ useEffect(()=>{
+  const map=mapRef.current;if(!map?.getSource("edit-maritime"))return;
+  map.getSource("edit-maritime").setData({type:"FeatureCollection",features:regions.filter(r=>r.coords.length>=4).map(r=>({type:"Feature",properties:{color:r.color||"#58a6ff"},geometry:{type:"Polygon",coordinates:[r.coords]}}))});
+ },[regions]);
+ return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+  <div style={{fontSize:11,color:C.faint}}>Draw maritime boundaries by clicking map coordinates, or edit longitude/latitude pairs. These are editable broker zones, not official maritime limits. Filtering still uses Open Port aliases, not AIS.</div>
+  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{regions.map(r=><button key={r.id} onClick={()=>setActive(r.id)} style={{...inp,width:"auto",cursor:"pointer",borderColor:active===r.id?"#58a6ff":C.bd2}}>{r.label}</button>)}</div>
+  <div ref={mapEl} style={{height:360,width:"100%",borderRadius:7,border:"1px solid "+C.bd2}}/>
+  {region&&<>
+   <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+    <label style={{fontSize:11,color:C.faint}}>Name <input value={region.label} onChange={e=>change(region.id,{label:e.target.value})} style={{...inp,width:130}}/></label>
+    <label style={{fontSize:11,color:C.faint}}>Colour <input type="color" value={region.color||"#58a6ff"} onChange={e=>change(region.id,{color:e.target.value})}/></label>
+    <button onClick={()=>setDrawing(x=>!x)} style={{...inp,width:"auto",cursor:"pointer",color:drawing?"#ffcf76":"#9ec5ff"}}>{drawing?"Stop drawing":"Draw on map"}</button>
+    <button onClick={()=>change(region.id,{coords:region.coords.slice(0,-2).length>=3?[...region.coords.slice(0,-2),region.coords[0]]:region.coords.slice(0,-2)})} style={{...inp,width:"auto",cursor:"pointer"}}>Undo point</button>
+    <button onClick={()=>change(region.id,{coords:[]})} style={{...inp,width:"auto",cursor:"pointer"}}>Clear polygon</button>
+   </div>
+   <label style={{fontSize:11,color:C.faint}}>Polygon coordinates — one longitude, latitude pair per line (first point closes automatically)
+    <textarea rows={5} style={{...inp,fontFamily:"monospace",resize:"vertical"}} value={region.coords.map(p=>p.join(", ")).join("\n")} onChange={e=>{const coords=e.target.value.split("\n").map(line=>line.split(",").map(Number)).filter(p=>p.length===2&&p.every(Number.isFinite));change(region.id,{coords});}}/>
+   </label>
+   <label style={{fontSize:11,color:C.faint}}>Open Port aliases (comma-separated)
+    <textarea rows={3} style={{...inp,resize:"vertical"}} value={(region.aliases||[]).join(", ")} onChange={e=>change(region.id,{aliases:e.target.value.split(",").map(x=>x.trim()).filter(Boolean)})}/>
+   </label>
+  </>}
+  <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+   <button onClick={()=>{const id="REGION_"+Date.now();setRegions(rs=>[...rs,{id,label:"New Region",coords:[],center:[10,50],aliases:[],color:"#58a6ff"}]);setActive(id);setDrawing(true);}} style={{...inp,width:"auto",cursor:"pointer"}}>+ New region</button>
+   <button onClick={()=>{if(region&&window.confirm("Delete "+region.label+"?")){setRegions(rs=>rs.filter(r=>r.id!==region.id));setActive(regions.find(r=>r.id!==region.id)?.id||"");}}} style={{...inp,width:"auto",cursor:"pointer",color:"#ff9ba6"}}>Delete region</button>
+   <button onClick={save} style={{...inp,width:"auto",cursor:"pointer",color:"#6ee7b7"}}>Save regions to Supabase</button>
+   <button onClick={()=>{if(window.confirm("Restore default maritime polygons? Save afterwards to share.")){setRegions(defaultMaritimeRegions());setActive("NWE");}}} style={{...inp,width:"auto",cursor:"pointer"}}>Reset defaults</button>
+   <span style={{fontSize:10,color:C.faint}}>{status}</span>
+  </div>
+ </div>;
+}
+
 export default function SettingsTab() {
   const [settingsCategory,setSettingsCategory]=useState("general");
   const [groups, setGroups] = useState(loadGroups);
@@ -653,6 +742,7 @@ export default function SettingsTab() {
           </div>
         </SectionCard>
 
+        <SectionCard title="Maritime Map Regions" subtitle="Edit Mapbox polygons, names, colours and Open Port aliases; shared through Supabase."><MaritimeRegionEditor/></SectionCard>
         <SectionCard title="Region Filter Groups" subtitle="Each group creates a Region filter button in the Positions report. Aliases are matched against the vessel's open port.">
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
             <div>
