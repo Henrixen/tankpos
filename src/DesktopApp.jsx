@@ -6,6 +6,8 @@ function brokerMatchesSearch(row,terms){
  return terms.every(term=>values.some(value=>value.includes(term)));
 }
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react";
+import mapboxgl from "mapbox-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
 import { loadHistory } from "./supabaseHelpers";
@@ -1374,16 +1376,73 @@ function openPortInArea(v,area){
   if(area==="BLACKSEA")return has("BLACK SEA","BLACKSEA","CONSTANTA","NOVOROSSIYSK","ODESSA","VARNA","BURGAS","SAMSUN","TUAPSE");
   return false;
 }
+// Uses the same Mapbox GL library and dark-v11 basemap as FreightMapTab.
+// Polygons are maritime BROKING regions; classification is by open port, not AIS.
+const POSITION_REGION_POLYGONS={
+ NWE:[[-7,49],[2,49],[9,51],[10,55],[7,59],[1,62],[-5,60],[-7,55],[-7,49]],
+ BALTIC:[[10,54],[16,54],[23,54],[30,57],[31,66],[23,66],[16,61],[10,58],[10,54]],
+ BISCAY:[[-11,42],[-1,42],[0,47],[-3,49],[-10,49],[-11,42]],
+ WMED:[[-6,35],[4,35],[13,36],[15,42],[9,45],[1,44],[-6,39],[-6,35]],
+ EMED:[[14,30],[37,30],[37,42],[29,43],[20,40],[14,37],[14,30]],
+ SKAW:[[7,55],[13,55],[14,59],[10,59],[7,57],[7,55]],
+ UKC:[[-6,49],[3,49],[6,52],[4,55],[-2,56],[-6,53],[-6,49]],
+ BLACKSEA:[[27,40],[42,40],[43,47],[36,48],[28,46],[27,40]]
+};
 function OpenPortAreaMap({selected,onToggle}){
-  return <svg viewBox="0 0 510 322" role="group" aria-label="Europe open-port regional selector" style={{width:"100%",maxHeight:310,display:"block",background:"#0e1b2d",borderRadius:7,border:"1px solid #30445d"}}>
-    <rect width="510" height="322" fill="#102238"/>
-    <path d="M0 58 L56 40 85 63 98 102 75 143 92 171 69 210 96 239 137 248 145 288 0 290Z M151 8 L198 0 231 32 216 75 185 96 160 71Z M249 0 L312 0 365 48 337 101 305 124 261 106 231 59Z M202 142 L262 132 310 150 352 139 404 162 432 201 405 221 356 212 326 234 285 224 247 245 213 217 170 211 157 175Z" fill="#25354a" stroke="#5b708a" strokeWidth="1.4"/>
-    {OPEN_PORT_AREAS.map(a=><g key={a.id} role="button" tabIndex={0} aria-pressed={selected.has(a.id)} aria-label={'Toggle '+a.label} onClick={()=>onToggle(a.id)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onToggle(a.id);}}} style={{cursor:'pointer'}}>
-      <rect x={a.x} y={a.y} width={a.w} height={a.h} rx="8" fill={selected.has(a.id)?"#2e78b7":"#375674"} fillOpacity={selected.has(a.id)?.87:.50} stroke={selected.has(a.id)?"#a5ddff":"#7293b5"} strokeWidth={selected.has(a.id)?2:1}/>
-      <text x={a.x+a.w/2} y={a.y+a.h/2+4} textAnchor="middle" fill="#f0f7ff" fontSize="13" fontWeight="700" pointerEvents="none">{a.label}</text>
-    </g>)}
-    <text x="13" y="310" fill="#91abc8" fontSize="11">OPEN PORT · SELECT ONE OR MORE AREAS</text>
-  </svg>;
+ const el=useRef(null),mapRef=useRef(null),toggleRef=useRef(onToggle),selectedRef=useRef(selected);
+ const [mapError,setMapError]=useState("");
+ toggleRef.current=onToggle;selectedRef.current=selected;
+ useEffect(()=>{
+   if(!el.current||mapRef.current)return;
+   // Token is already used by FreightMapTab. A public Mapbox token is safe in browser code.
+   mapboxgl.accessToken="pk.eyJ1IjoiaGhlbnJpa3NlbiIsImEiOiJjbXBhcWMyczMwMDVnMnNzaHd6emI4ampuIn0.u98OZhtN61S6IK23gV6ZYg";
+   let map;
+   try{
+     map=new mapboxgl.Map({container:el.current,style:"mapbox://styles/mapbox/dark-v11",
+       center:[12,49],zoom:2.45,minZoom:2,maxZoom:9,projection:"mercator",renderWorldCopies:false,attributionControl:false});
+     mapRef.current=map;
+     map.addControl(new mapboxgl.NavigationControl({showCompass:false}),"top-right");
+     map.on("error",e=>{if(e.error?.message)setMapError("Mapbox: "+e.error.message);});
+     map.on("load",()=>{
+       const features=Object.entries(POSITION_REGION_POLYGONS).map(([id,coords])=>({
+         type:"Feature",properties:{id,label:OPEN_PORT_AREAS.find(a=>a.id===id)?.label||id},
+         geometry:{type:"Polygon",coordinates:[coords]}
+       }));
+       map.addSource("position-areas",{type:"geojson",data:{type:"FeatureCollection",features}});
+       map.addLayer({id:"position-area-fill",type:"fill",source:"position-areas",
+         paint:{"fill-color":["case",["in",["get","id"],["literal",[...selectedRef.current]]],"#4f9de5","#5080ad"],
+                "fill-opacity":["case",["in",["get","id"],["literal",[...selectedRef.current]]],0.44,0.13]}});
+       map.addLayer({id:"position-area-border",type:"line",source:"position-areas",
+         paint:{"line-color":["case",["in",["get","id"],["literal",[...selectedRef.current]]],"#a6d9ff","#7b9ab7"],
+                "line-width":["case",["in",["get","id"],["literal",[...selectedRef.current]]],2.8,1.4]}});
+       map.addLayer({id:"position-area-labels",type:"symbol",source:"position-areas",
+         layout:{"text-field":["get","label"],"text-size":12,"text-font":["DIN Pro Bold","Arial Unicode MS Bold"],"text-allow-overlap":true},
+         paint:{"text-color":"#e8f3ff","text-halo-color":"#0b1524","text-halo-width":1.5}});
+       map.on("click","position-area-fill",e=>{
+         const id=e.features?.[0]?.properties?.id;
+         if(id)toggleRef.current(id);
+       });
+       map.on("mouseenter","position-area-fill",()=>{map.getCanvas().style.cursor="pointer";});
+       map.on("mouseleave","position-area-fill",()=>{map.getCanvas().style.cursor="";});
+       map.resize();
+     });
+   }catch(e){setMapError(e.message||"Unable to initialize Mapbox");}
+   return ()=>{mapRef.current=null;map?.remove();};
+ },[]);
+ useEffect(()=>{
+   const map=mapRef.current;
+   if(!map?.getLayer("position-area-fill"))return;
+   const ids=[...selected];
+   const active=["in",["get","id"],["literal",ids]];
+   map.setPaintProperty("position-area-fill","fill-color",["case",active,"#4f9de5","#5080ad"]);
+   map.setPaintProperty("position-area-fill","fill-opacity",["case",active,0.44,0.13]);
+   map.setPaintProperty("position-area-border","line-color",["case",active,"#a6d9ff","#7b9ab7"]);
+   map.setPaintProperty("position-area-border","line-width",["case",active,2.8,1.4]);
+ },[selected]);
+ return <div style={{position:"relative",width:"100%",height:305,borderRadius:7,overflow:"hidden",border:"1px solid #30445d"}}>
+   <div ref={el} style={{width:"100%",height:"100%"}}/>
+   {mapError&&<div style={{position:"absolute",bottom:4,left:4,right:4,background:"#331b24",color:"#ff9ba6",fontSize:10,padding:6}}>{mapError}</div>}
+ </div>;
 }
 
 function DesktopApp({positionsReady,vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,externalPositionsFileDate,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
@@ -3269,6 +3328,13 @@ const filtV=useMemo(()=>{
                   color:posOutsiderView?"#f5a623":C.faint }}>
                 🌏 Outsiders
               </button>
+              {!posOutsiderView&&<div style={{display:"flex",gap:6,alignItems:"center",marginLeft:mobile?0:12}}>
+                {[["filters","☷ Filters"],["map","◈ Region map"]].map(([id,label])=><button key={id} onClick={()=>setPositionFilterView(id)}
+                  style={{fontSize:12,fontWeight:700,padding:"6px 12px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",
+                    border:"1px solid "+(positionFilterView===id?"#58a6ff88":C.bd),
+                    background:positionFilterView===id?"#58a6ff22":"transparent",
+                    color:positionFilterView===id?"#79c0ff":C.faint}}>{label}</button>)}
+              </div>}
               <BrokerActivity scope="positions"/>
             </div>
 
@@ -3377,7 +3443,7 @@ const filtV=useMemo(()=>{
                   )}
                   <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"2px 12px",display:"flex",flexDirection:"column",justifyContent:"flex-start",gap:5}}>
                     <div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 0",borderBottom:"1px solid "+C.bd2,flexShrink:0}}>
-                      {[["filters","☷ Filters"],["map","◈ Region map"]].map(([id,label])=><button key={id} onClick={()=>setPositionFilterView(id)} style={{...fbBig(positionFilterView===id,C.blue),padding:"5px 9px",fontSize:11}}>{label}</button>)}
+                      <span style={{fontSize:11,fontWeight:700,color:C.blue}}>{positionFilterView==="map"?"Open-port regions":"Filter settings"}</span>
                       <span style={{marginLeft:"auto",fontSize:10,color:C.faint}}>{filtV.length} vessels</span>
                       {positionsClearVisible&&<button onClick={clearPositionFilters} style={{...fbBig(false,C.red),fontSize:10}}>× Clear</button>}
                     </div>
