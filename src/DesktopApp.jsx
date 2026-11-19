@@ -3442,7 +3442,6 @@ const filtV=useMemo(()=>{
               {positionsDivider(0)}
               {!mobile&&(
                 <div style={{width:`calc(${positionsVisibleWidths[1]}% - 12px)`,minWidth:0,height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"visible",position:"relative",display:"flex",flexDirection:"column"}}>
-                  {positionsClearButton({position:"absolute",left:7,top:-29,zIndex:3})}
                   <HScrollStyle/>
                   {(opFilter||bucketFilters.size>0)&&(
                     <div style={{flexShrink:0,padding:"8px 12px 0 12px",display:"flex",flexDirection:"column",gap:4}}>
@@ -3463,7 +3462,7 @@ const filtV=useMemo(()=>{
                     <div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 0",borderBottom:"1px solid "+C.bd2,flexShrink:0}}>
                       <span style={{fontSize:11,fontWeight:700,color:C.blue}}>{positionFilterView==="map"?"Open-port regions":"Filter settings"}</span>
                       <span style={{marginLeft:"auto",fontSize:10,color:C.faint}}>{filtV.length} vessels</span>
-                      {positionsClearVisible&&<button onClick={clearPositionFilters} style={{...fbBig(false,C.red),fontSize:10}}>× Clear</button>}
+                      {(previewMode?Boolean(previewTags.size||previewSubTags.size):Boolean(posTagFilter.size||posSubTags.size))&&<button onClick={clearPositionFilters} style={{...fbBig(false,C.red),fontSize:10,background:"#a82636",border:"1px solid #f05a68",color:"#fff",fontWeight:800}}>× Clear</button>}
                     </div>
                     {positionFilterView==="map"&&<div style={{display:"flex",flexDirection:"column",gap:8,padding:"6px 0"}}>
                       <OpenPortAreaMap areas={maritimeAreas} selected={openPortAreas} onToggle={id=>{setOpenPortAreas(prev=>{const next=new Set(prev);next.has(id)?next.delete(id):next.add(id);return next;});setPosPage(1);}}/>
