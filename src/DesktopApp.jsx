@@ -7,6 +7,7 @@ function brokerMatchesSearch(row,terms){
 }
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } from "react";
 import mapboxgl from "mapbox-gl";
+import {SEA_REGION_KEY,readMaritimeRegions,normalizeMaritimeRegions,maritimePortMatches} from "./maritimeRegions";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { C, OP_COLORS, isMobile } from "./constants";
 import { toTCase, fmtN, isOpenPPT, classifyRegion, daysBetween, normaliseQty, fmtDateShort, fmtFreight, calcVoyage, calcEuEts } from "./utils";
@@ -1382,17 +1383,10 @@ function openPortInArea(v,area){
 // These are visual selection zones; vessel membership comes from Open Port text.
 // Clickable maritime zones: markers sit on water, with no polygons drawn across land.
 // Open-port classifications below, not AIS coordinates, determine vessel membership.
-const POSITION_SEA_ZONES=[
- {id:"NWE",label:"NWE",lng:2.6,lat:55.6},
- {id:"UKC",label:"UKC",lng:1.0,lat:51.4},
- {id:"SKAW",label:"Skaw",lng:10.8,lat:57.8},
- {id:"BALTIC",label:"Baltic",lng:19.2,lat:57.4},
- {id:"BISCAY",label:"Biscay",lng:-5.4,lat:45.7},
- {id:"WMED",label:"West Med",lng:5.1,lat:39.1},
- {id:"EMED",label:"East Med",lng:26.5,lat:35.1},
- {id:"BLACKSEA",label:"Black Sea",lng:33.6,lat:43.7}
-];
-function OpenPortAreaMap({selected,onToggle}){
+// Approximate maritime area boundaries for visual selection. Not official Signal Ocean geometry.
+// Vessel filtering continues to use Positions Open Port classification, never AIS.
+
+function OpenPortAreaMap({selected,onToggle,areas}){
  const el=useRef(null),mapRef=useRef(null),toggleRef=useRef(onToggle),selectedRef=useRef(selected);
  const [mapError,setMapError]=useState("");
  toggleRef.current=onToggle;selectedRef.current=selected;
@@ -1402,28 +1396,33 @@ function OpenPortAreaMap({selected,onToggle}){
    let map;
    try{
      map=new mapboxgl.Map({container:el.current,style:"mapbox://styles/mapbox/dark-v11",
-       center:[12,48],zoom:2.7,minZoom:2,maxZoom:9,projection:"mercator",renderWorldCopies:false,attributionControl:false});
+       center:[12,48],zoom:2.5,minZoom:2,maxZoom:9,projection:"mercator",renderWorldCopies:false,attributionControl:false});
      mapRef.current=map;
      map.addControl(new mapboxgl.NavigationControl({showCompass:false}),"top-right");
      map.on("error",e=>{if(e.error?.message)setMapError("Mapbox: "+e.error.message);});
      map.on("load",()=>{
-       map.addSource("position-sea-zones",{type:"geojson",data:{type:"FeatureCollection",features:POSITION_SEA_ZONES.map(z=>({
-         type:"Feature",properties:{id:z.id,label:z.label},geometry:{type:"Point",coordinates:[z.lng,z.lat]}
-       }))}});
-       map.addLayer({id:"position-sea-halos",type:"circle",source:"position-sea-zones",
-         paint:{"circle-radius":27,"circle-color":"#142c48","circle-opacity":0.82,
-           "circle-stroke-color":["case",["in",["get","id"],["literal",[...selectedRef.current]]],"#9ed8ff","#5f9bc7"],
-           "circle-stroke-width":["case",["in",["get","id"],["literal",[...selectedRef.current]]],3,1.5]}});
-       map.addLayer({id:"position-sea-labels",type:"symbol",source:"position-sea-zones",
+       const features=areas.map(z=>({type:"Feature",properties:{id:z.id,label:z.label,color:z.color||"#58a6ff"},
+         geometry:{type:"Polygon",coordinates:[z.coords]}}));
+       map.addSource("position-sea-areas",{type:"geojson",data:{type:"FeatureCollection",features}});
+       map.addLayer({id:"position-area-fill",type:"fill",source:"position-sea-areas",
+         paint:{"fill-color":["coalesce",["get","color"],"#58a6ff"],"fill-opacity":0.16}});
+       map.addLayer({id:"position-area-outline",type:"line",source:"position-sea-areas",
+         paint:{"line-color":"#82a9ce","line-width":1.5,"line-opacity":0.9}});
+       const labels=areas.map(z=>({type:"Feature",properties:{id:z.id,label:z.label},
+         geometry:{type:"Point",coordinates:z.center}}));
+       map.addSource("position-sea-labels",{type:"geojson",data:{type:"FeatureCollection",features:labels}});
+       map.addLayer({id:"position-area-labels",type:"symbol",source:"position-sea-labels",
          layout:{"text-field":["get","label"],"text-size":11,"text-font":["DIN Pro Bold","Arial Unicode MS Bold"],"text-allow-overlap":true,"text-ignore-placement":true},
-         paint:{"text-color":"#e9f5ff","text-halo-color":"#102033","text-halo-width":1}});
-       const select=e=>{
-         const features=map.queryRenderedFeatures(e.point,{layers:["position-sea-labels","position-sea-halos"]});
-         const id=features?.[0]?.properties?.id;
-         if(id)toggleRef.current(id);
+         paint:{"text-color":"#f0f7ff","text-halo-color":"#102033","text-halo-width":2}});
+       const pick=e=>{
+         const f=map.queryRenderedFeatures(e.point,{layers:["position-area-labels","position-area-fill"]});
+         if(f?.[0]?.properties?.id)toggleRef.current(f[0].properties.id);
        };
-       map.on("click",select);
-       map.on("mousemove",e=>{map.getCanvas().style.cursor=map.queryRenderedFeatures(e.point,{layers:["position-sea-labels","position-sea-halos"]}).length?"pointer":"";});
+       map.on("click",pick);
+       map.on("mousemove",e=>{map.getCanvas().style.cursor=map.queryRenderedFeatures(e.point,{layers:["position-area-labels","position-area-fill"]}).length?"pointer":"";});
+       const ids=[...selectedRef.current],active=["in",["get","id"],["literal",ids]];
+       map.setPaintProperty("position-area-fill","fill-opacity",["case",active,0.52,0.16]);
+       map.setPaintProperty("position-area-outline","line-width",["case",active,3,1.5]);
        map.resize();
      });
    }catch(e){setMapError(e.message||"Unable to initialize Mapbox");}
@@ -1431,11 +1430,19 @@ function OpenPortAreaMap({selected,onToggle}){
  },[]);
  useEffect(()=>{
    const map=mapRef.current;
-   if(!map?.getLayer("position-sea-halos"))return;
+   if(!map?.getSource("position-sea-areas"))return;
+   const features=areas.map(z=>({type:"Feature",properties:{id:z.id,label:z.label,color:z.color||"#58a6ff"},geometry:{type:"Polygon",coordinates:[z.coords]}}));
+   map.getSource("position-sea-areas").setData({type:"FeatureCollection",features});
+   map.getSource("position-sea-labels")?.setData({type:"FeatureCollection",features:areas.map(z=>({type:"Feature",properties:{id:z.id,label:z.label},geometry:{type:"Point",coordinates:z.center}}))});
+ },[areas]);
+ useEffect(()=>{
+   const map=mapRef.current;
+   if(!map?.getLayer("position-area-fill"))return;
    const active=["in",["get","id"],["literal",[...selected]]];
-   map.setPaintProperty("position-sea-halos","circle-color",["case",active,"#245c91","#142c48"]);
-   map.setPaintProperty("position-sea-halos","circle-stroke-color",["case",active,"#a9e0ff","#5f9bc7"]);
-   map.setPaintProperty("position-sea-halos","circle-stroke-width",["case",active,3.5,1.5]);
+   map.setPaintProperty("position-area-fill","fill-opacity",["case",active,0.52,0.16]);
+   map.setPaintProperty("position-area-fill","fill-color",["case",active,"#488bd0",["coalesce",["get","color"],"#58a6ff"]]);
+   map.setPaintProperty("position-area-outline","line-color",["case",active,"#b4dfff","#82a9ce"]);
+   map.setPaintProperty("position-area-outline","line-width",["case",active,3,1.5]);
  },[selected]);
  return <div style={{position:"relative",width:"100%",height:305,borderRadius:7,overflow:"hidden",border:"1px solid #30445d"}}>
    <div ref={el} style={{width:"100%",height:"100%"}}/>
@@ -1444,6 +1451,18 @@ function OpenPortAreaMap({selected,onToggle}){
 }
 
 function DesktopApp({positionsReady,vessels,cargoes,cargoTotal,onUpdateV,onRenameV,onUpdateC,onAddVessels,onAddCargoes,onAddV,onAddC,onDelV,onDelC,hasMore,onLoadMore,onCargoSearch,vesselDBLoaded,vesselDBLoading,onLoadVesselDB,externalPositionsFileDate,offlineIndicator,mobile:mobileProp,onToggleLayout,layoutOverride}){
+  const [maritimeAreas,setMaritimeAreas]=useState(readMaritimeRegions);
+  useEffect(()=>{
+    let alive=true;
+    supabase.from("tag_settings").select("value").eq("key",SEA_REGION_KEY).maybeSingle().then(({data,error})=>{
+      if(!alive||error||!Array.isArray(data?.value))return;
+      const next=normalizeMaritimeRegions(data.value);
+      setMaritimeAreas(next);localStorage.setItem(SEA_REGION_KEY,JSON.stringify(next));
+    });
+    const update=e=>setMaritimeAreas(normalizeMaritimeRegions(e.detail||readMaritimeRegions()));
+    window.addEventListener("signal-maritime-regions-updated",update);
+    return()=>{alive=false;window.removeEventListener("signal-maritime-regions-updated",update)};
+  },[]);
   // ── PIN config ───────────────────────────────────────────────────────────
   const DEFAULT_USER_TABS = ["pos","cargo","clients"];
 
@@ -2515,7 +2534,7 @@ const filtV=useMemo(()=>{
   }
 
   if(openPortAreas.size>0){
-    list=list.filter(v=>[...openPortAreas].some(area=>openPortInArea(v,area)));
+    list=list.filter(v=>[...openPortAreas].some(id=>maritimePortMatches(v,maritimeAreas.find(a=>a.id===id))));
   }
   if(vesselAgeFilter){
     const year=new Date().getFullYear();
@@ -2623,7 +2642,7 @@ const filtV=useMemo(()=>{
   dwtRange.min,dwtRange.max,builtRange.min,builtRange.max,
   [...dwtFilter].join(),
   [...builtFilter].join(),
-  [...openPortAreas].sort().join(),vesselAgeFilter,
+  [...openPortAreas].sort().join(),vesselAgeFilter,maritimeAreas,
   interUKCActive,
   [...posSubTags].join(),subTagSeed.initialized,
   showSavedOnly,
@@ -3314,7 +3333,7 @@ const filtV=useMemo(()=>{
         {tab==="pos"&&(
           <div data-broker-scope="positions" style={{display:"flex",flexDirection:"column",gap:10}}>
 
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",position:"relative",alignItems:"center"}}>
               <button onClick={()=>setPosOutsiderView(false)}
                 style={{ fontSize:12, fontWeight:700, padding:"6px 16px", borderRadius:6, cursor:"pointer", fontFamily:"inherit",
                   border:"1px solid "+(!posOutsiderView?"#58a6ff88":C.bd), background:!posOutsiderView?"#58a6ff22":"transparent",
@@ -3327,6 +3346,13 @@ const filtV=useMemo(()=>{
                   color:posOutsiderView?"#f5a623":C.faint }}>
                 🌏 Outsiders
               </button>
+              {!posOutsiderView&&!mobile&&<div style={{display:"flex",gap:6,alignItems:"center",position:"absolute",left:`calc(${positionsVisibleWidths[0]}% + 8px)`,top:0,flexShrink:0}}>
+                {[["filters","☷ Filters"],["map","◈ Region map"]].map(([id,label])=><button key={id} onClick={()=>setPositionFilterView(id)}
+                  style={{fontSize:11,fontWeight:700,padding:"6px 11px",borderRadius:6,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
+                    border:"1px solid "+(positionFilterView===id?"#58a6ff88":C.bd),
+                    background:positionFilterView===id?"#58a6ff22":"transparent",
+                    color:positionFilterView===id?"#79c0ff":C.faint}}>{label}</button>)}
+              </div>}
               <BrokerActivity scope="positions"/>
             </div>
 
@@ -3418,14 +3444,6 @@ const filtV=useMemo(()=>{
                 <div style={{width:`calc(${positionsVisibleWidths[1]}% - 12px)`,minWidth:0,height:460,background:C.bg2,border:"1px solid "+C.bd,borderRadius:7,overflow:"visible",position:"relative",display:"flex",flexDirection:"column"}}>
                   {positionsClearButton({position:"absolute",left:7,top:-29,zIndex:3})}
                   <HScrollStyle/>
-                  <div style={{display:"flex",gap:6,alignItems:"center",padding:"7px 10px 5px",borderBottom:"1px solid "+C.bd2,flexShrink:0}}>
-                    {[["filters","☷ Filters"],["map","◈ Region map"]].map(([id,label])=><button key={id} onClick={()=>setPositionFilterView(id)}
-                      style={{fontSize:11,fontWeight:700,padding:"5px 10px",borderRadius:5,cursor:"pointer",fontFamily:"inherit",
-                        border:"1px solid "+(positionFilterView===id?"#58a6ff88":C.bd),
-                        background:positionFilterView===id?"#58a6ff22":"transparent",
-                        color:positionFilterView===id?"#79c0ff":C.faint}}>{label}</button>)}
-                    <span style={{marginLeft:"auto",fontSize:10,color:C.faint}}>{filtV.length} vessels</span>
-                  </div>
                   {(opFilter||bucketFilters.size>0)&&(
                     <div style={{flexShrink:0,padding:"8px 12px 0 12px",display:"flex",flexDirection:"column",gap:4}}>
                       {opFilter&&(
@@ -3448,12 +3466,12 @@ const filtV=useMemo(()=>{
                       {positionsClearVisible&&<button onClick={clearPositionFilters} style={{...fbBig(false,C.red),fontSize:10}}>× Clear</button>}
                     </div>
                     {positionFilterView==="map"&&<div style={{display:"flex",flexDirection:"column",gap:8,padding:"6px 0"}}>
-                      <OpenPortAreaMap selected={openPortAreas} onToggle={id=>{setOpenPortAreas(prev=>{const next=new Set(prev);next.has(id)?next.delete(id):next.add(id);return next;});setPosPage(1);}}/>
+                      <OpenPortAreaMap areas={maritimeAreas} selected={openPortAreas} onToggle={id=>{setOpenPortAreas(prev=>{const next=new Set(prev);next.has(id)?next.delete(id):next.add(id);return next;});setPosPage(1);}}/>
                       <div style={{display:"flex",justifyContent:"space-between",gap:6,alignItems:"center",fontSize:10,color:C.faint}}>
                         <span>Click water regions · filters use Open Port, not AIS · {openPortAreas.size?`${openPortAreas.size} selected`:"All regions"}</span>
                         {openPortAreas.size>0&&<button onClick={()=>{setOpenPortAreas(new Set());setPosPage(1);}} style={{...fbBig(false,C.red),fontSize:10}}>Clear regions ×</button>}
                       </div>
-                      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{OPEN_PORT_AREAS.map(a=><button key={a.id} onClick={()=>{setOpenPortAreas(prev=>{const n=new Set(prev);n.has(a.id)?n.delete(a.id):n.add(a.id);return n;});setPosPage(1);}} style={{...fbBig(openPortAreas.has(a.id),C.blue),fontSize:10}}>{a.label}</button>)}</div>
+                      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{maritimeAreas.map(a=><button key={a.id} onClick={()=>{setOpenPortAreas(prev=>{const n=new Set(prev);n.has(a.id)?n.delete(a.id):n.add(a.id);return n;});setPosPage(1);}} style={{...fbBig(openPortAreas.has(a.id),C.blue),fontSize:10}}>{a.label}</button>)}</div>
                       <div style={{borderTop:"1px solid "+C.bd2,paddingTop:8,display:"flex",flexDirection:"column",gap:6}}>
                         <div style={{fontSize:10,fontWeight:700,color:C.blue}}>REGIONS <span style={{fontWeight:400,color:C.faint}}>· Positions table</span></div>
                         <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
