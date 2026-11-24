@@ -201,7 +201,7 @@ export default function TankPos(){
     const actor=positionEditor(getBrokerSession()?.user?.initials);
     const now = new Date().toISOString();
     const positionEdit=["date","openPort","comment"].includes(field);
-    const cleanValue = value === "" || value === undefined ? null : (field === "coating" ? normalisePositionCoating(value) : value);
+    const cleanValue = field === "comment" ? String(value ?? "").trim() : value === "" || value === undefined ? null : (field === "coating" ? normalisePositionCoating(value) : value);
     setVessels(prev => {
       const next = prev.map(v => v.vessel !== name ? v : field.includes(".")
         ? {...v, entered_by:actor||v.entered_by, ...(positionEdit?{updatedAt:now}:{}), [field.split(".")[0]]:{...(v[field.split(".")[0]]||{}),[field.split(".")[1]]:cleanValue}}
