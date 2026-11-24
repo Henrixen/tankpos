@@ -3929,10 +3929,13 @@ const filtV=useMemo(()=>{
                     {showAddVessel&&<AddVesselInlineRow onSave={onAddV} onClose={()=>setShowAddVessel(false)}/>}
                   <div style={{...tableWrap,minWidth:mobile?"1400px":undefined}} className={"pos-hover-rows"+(mobile?" pos-table":"")}>
                     <style>{`
-                      .pos-hover-rows tbody tr[data-pos-selected="false"]:nth-child(odd){background:#0d1727!important;}
-                      .pos-hover-rows tbody tr[data-pos-selected="false"]:nth-child(even){background:#111d2e!important;}
-                      .pos-hover-rows tbody tr[data-pos-selected], .pos-hover-rows tbody tr[data-pos-selected]>td{border-bottom:0!important;border-top:0!important;}
-                      .pos-hover-rows tbody tr[data-pos-selected="false"]:hover{background:#17283e!important;}
+                      .pos-hover-rows tr:has(> td[data-pos-row]) {border-top:0!important;border-bottom:0!important;box-shadow:none;}
+                      .pos-hover-rows tr:has(> td[data-pos-row]) > td {border-top:0!important;border-bottom:0!important;background:transparent!important;}
+                      .pos-hover-rows tr:has(> td[data-pos-row="normal"]):nth-child(odd) {background:#0d1727!important;}
+                      .pos-hover-rows tr:has(> td[data-pos-row="normal"]):nth-child(even) {background:#111d2e!important;}
+                      .pos-hover-rows tr:has(> td[data-pos-row="selected"]) {background:#203b59!important;box-shadow:inset 3px 0 0 #58a6ff!important;}
+                      .pos-hover-rows tr:has(> td[data-pos-row]):hover {background:#203650!important;}
+                      .pos-hover-rows tr:has(> td[data-pos-row="selected"]):hover {background:#28496b!important;}
                     `}</style>
                     {mobile&&<style>{`
                       .pos-table td, .pos-table td>*{overflow:visible!important;text-overflow:unset!important;white-space:nowrap!important;max-width:none!important;}
@@ -3943,7 +3946,7 @@ const filtV=useMemo(()=>{
   columns={mobile ? posColumnsMobile : posColumns}
   data={displayPosRows.slice(0, posPage * POS_PAGE_SIZE)}
   keyField="vessel"
-  getRowProps={row=>({"data-broker-record":row.vessel,"data-broker-label":row.vessel,"data-pos-selected":String(selVessels.has(row.vessel)||sel===row.vessel),onClickCapture:e=>{if(!(e.ctrlKey||e.metaKey)||e.target.closest("button,input,select,textarea,[role=checkbox]"))return;e.preventDefault();e.stopPropagation();setSelVessels(prev=>{const n=new Set(prev);n.has(row.vessel)?n.delete(row.vessel):n.add(row.vessel);return n;});},style:selVessels.has(row.vessel)?{background:"rgba(58,130,246,.16)",boxShadow:"inset 3px 0 0 #58a6ff"}:undefined})}
+  getRowProps={row=>({"data-broker-record":row.vessel,"data-broker-label":row.vessel,onClickCapture:e=>{if(!(e.ctrlKey||e.metaKey)||e.target.closest("button,input,select,textarea,[role=checkbox]"))return;e.preventDefault();e.stopPropagation();setSelVessels(prev=>{const n=new Set(prev);n.has(row.vessel)?n.delete(row.vessel):n.add(row.vessel);return n;});},style:selVessels.has(row.vessel)?{background:"rgba(58,130,246,.16)",boxShadow:"inset 3px 0 0 #58a6ff"}:undefined})}
   selectedKey={sel}
   getRowStyle={row=>selVessels.has(row.vessel)?"rgba(58,130,246,.16)":sel===row.vessel?"rgba(88,166,255,.14)":undefined}
   onRowClick={(row) => {
@@ -3967,6 +3970,7 @@ const filtV=useMemo(()=>{
     <>
       {/* SELECT */}
       <td
+        data-pos-row={isSel||selVessels.has(v.vessel)?"selected":"normal"}
         style={{ ...tdCtr, width: 40, minWidth:40, maxWidth:40, padding: "0 2px" }}
         onClick={e => {
           e.stopPropagation();
