@@ -3929,13 +3929,13 @@ const filtV=useMemo(()=>{
                     {showAddVessel&&<AddVesselInlineRow onSave={onAddV} onClose={()=>setShowAddVessel(false)}/>}
                   <div style={{...tableWrap,minWidth:mobile?"1400px":undefined}} className={"pos-hover-rows"+(mobile?" pos-table":"")}>
                     <style>{`
-                      .pos-hover-rows tr[data-pos-state] {border-top:0!important;border-bottom:0!important;box-shadow:none;transition:none!important;}
-                      .pos-hover-rows tr[data-pos-state] > td {border-top:0!important;border-bottom:0!important;background:transparent!important;transition:none!important;}
-                      .pos-hover-rows tr[data-pos-state="normal"]:nth-child(odd) {background:#0d1727!important;}
-                      .pos-hover-rows tr[data-pos-state="normal"]:nth-child(even) {background:#111d2e!important;}
-                      .pos-hover-rows tr[data-pos-state="selected"] {background:#203b59!important;box-shadow:inset 3px 0 0 #58a6ff!important;}
-                      .pos-hover-rows tr[data-pos-state]:hover {background:#203650!important;}
-                      .pos-hover-rows tr[data-pos-state="selected"]:hover {background:#28496b!important;}
+                      .pos-hover-rows tr:has(> td[data-pos-row]) {border-top:0!important;border-bottom:0!important;box-shadow:none;transition:none!important;}
+                      .pos-hover-rows tr:has(> td[data-pos-row]) > td {border-top:0!important;border-bottom:0!important;background:transparent!important;transition:none!important;}
+                      .pos-hover-rows tr:has(> td[data-pos-row="normal"]):nth-child(odd) {background:#0d1727!important;}
+                      .pos-hover-rows tr:has(> td[data-pos-row="normal"]):nth-child(even) {background:#111d2e!important;}
+                      .pos-hover-rows tr:has(> td[data-pos-row="selected"]) {background:#203b59!important;box-shadow:inset 3px 0 0 #58a6ff!important;}
+                      .pos-hover-rows tr:has(> td[data-pos-row]):hover {background:#203650!important;}
+                      .pos-hover-rows tr:has(> td[data-pos-row="selected"]):hover {background:#28496b!important;}
                     `}</style>
                     {mobile&&<style>{`
                       .pos-table td, .pos-table td>*{overflow:visible!important;text-overflow:unset!important;white-space:nowrap!important;max-width:none!important;}
@@ -3946,7 +3946,7 @@ const filtV=useMemo(()=>{
   columns={mobile ? posColumnsMobile : posColumns}
   data={displayPosRows.slice(0, posPage * POS_PAGE_SIZE)}
   keyField="vessel"
-  getRowProps={row=>({"data-pos-state":sel===row.vessel||selVessels.has(row.vessel)?"selected":"normal","data-broker-record":row.vessel,"data-broker-label":row.vessel,onClickCapture:e=>{if(!(e.ctrlKey||e.metaKey)||e.target.closest("button,input,select,textarea,[role=checkbox]"))return;e.preventDefault();e.stopPropagation();setSelVessels(prev=>{const n=new Set(prev);n.has(row.vessel)?n.delete(row.vessel):n.add(row.vessel);return n;});},style:selVessels.has(row.vessel)?{background:"rgba(58,130,246,.16)",boxShadow:"inset 3px 0 0 #58a6ff"}:undefined})}
+  getRowProps={row=>({"data-broker-record":row.vessel,"data-broker-label":row.vessel,onClickCapture:e=>{if(!(e.ctrlKey||e.metaKey)||e.target.closest("button,input,select,textarea,[role=checkbox]"))return;e.preventDefault();e.stopPropagation();setSelVessels(prev=>{const n=new Set(prev);n.has(row.vessel)?n.delete(row.vessel):n.add(row.vessel);return n;});},style:selVessels.has(row.vessel)?{background:"rgba(58,130,246,.16)",boxShadow:"inset 3px 0 0 #58a6ff"}:undefined})}
   selectedKey={sel}
   getRowStyle={row=>selVessels.has(row.vessel)?"rgba(58,130,246,.16)":sel===row.vessel?"rgba(88,166,255,.14)":undefined}
   onRowClick={(row) => {
