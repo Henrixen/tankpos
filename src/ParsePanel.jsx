@@ -65,7 +65,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
           return {vessel:String(r[cVessel]||"").trim(),operator:String(r[cOp]||"").trim(),date:dateStr,openPort:String(r[cPort]||"").trim(),comment:String(r[cComment]||"").trim()};
         }).filter(v=>v.vessel);
         if(!parsed.length){setStatus({t:"error",m:"No vessel rows found. Check column headers."});return;}
-        const res=onAddVessels(parsed);
+        const res=await onAddVessels(parsed);
         setStatus({t:"success",m:"✓ "+res.added+" added, "+res.updated+" updated from "+rows.length+" rows"});
       } else {
         const cCharterer=fnd(["charterer","chtd","customer","client"]);
@@ -151,7 +151,7 @@ function ParsePanel({vessels,cargoes,onAddVessels,onAddCargoes,lockedMode,vessel
     };
   });
 
-  const r=onAddVessels(stamped);
+  const r=await onAddVessels(stamped);
   setText("");
   setImg(null);
 

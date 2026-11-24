@@ -346,23 +346,6 @@ export default function TankPos(){
       return "";
     }
 
-    setVessels(prev => {
-      const before = prev.length;
-      // We pass nowIso into the local state so the UI updates immediately
-      const next = mergeVessels(prev, parsed.map(p => {
-        const master = vdb[String(p.vessel || "").toLowerCase().trim()];
-        return {...p, coating: p.coating || master?.coating_type_2 || master?.coating || master?.coated || master?.coating_type || "", fileDate: nowIso};
-      }), vdb);
-      r = { 
-        added: next.length - before, 
-        updated: parsed.length - Math.max(0, next.length - before), 
-        total: next.length 
-      };
-      saveV(next);
-      setTimeout(() => saveSnapshot(next), 100);
-      return next;
-    });
-
     const names = parsed.map(v => String(v.vessel || "").trim()).filter(Boolean);
     const {data: existingRows, error: existingError} = await supabase.from("positions")
       .select("*").in("vessel_name", names);
@@ -398,6 +381,7 @@ export default function TankPos(){
   ...(previous || {}),
   id: previous?.id || uuidv4(),
   vessel_name: ev.vessel,
+  imo_no: ev.imoNo || ev.imo_no || previous?.imo_no || null,
   operator: keep(ev.operator, previous?.operator),
   port_name: ev.openPort || null,
   open_date: ev.date || null,
@@ -415,12 +399,19 @@ export default function TankPos(){
 };
     });
 
-    const { error } = await supabase
-  .from("positions")
-  .upsert(rows, { onConflict: 'vessel_name' });
-    if (error) { console.error("positions insert error:", error); throw error; }
-    else console.log("positions saved ok:", rows.length, "rows");
-    
+    const session = getBrokerSession();
+    if (!session?.token) throw new Error("Please log in again before importing positions.");
+    const result = await brokerRpc("broker_position_import", {p_token:session.token,p_rows:rows});
+    const saved = result.rows || [];
+    const before = vesselsRef.current;
+    const next = mergeVessels(before, saved.map(row => ({...mapBrokerPosition(row), operatorManual:row.operatorManual, entered_by:row.entered_by})), vdb);
+    const byName = new Map(saved.map(row=>[String(row.vessel_name).trim().toUpperCase(),row]));
+    const final = next.map(v=>{const row=byName.get(String(v._positionName||v.vessel).trim().toUpperCase());return row?{...v,operator:row.operator,entered_by:row.entered_by,operatorManual:row.operatorManual}:v;});
+    vesselsRef.current=final;
+    setVessels(final);
+    saveV(final);
+    setTimeout(()=>saveSnapshot(final),100);
+    r={added:result.added,updated:result.updated,total:final.length};
     return r;
   }, [vesselDB, saveV, saveSnapshot]);
 
