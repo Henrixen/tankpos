@@ -1,3 +1,4 @@
+import {formatCargoList,formatCargoText,SMART_CARGO_TEXT,SMART_TEXT_FIELDS} from "./cargoCopyFormatting";
 import React, { useState, useEffect, createContext, useContext } from "react";
 import { C } from "./constants";
 import mapboxgl from "mapbox-gl";
@@ -479,21 +480,21 @@ function CargoExportEditor(){
  };
  const save=()=>saveTemplate("cargo-copy-list-template",CARGO_EXPORT_KEY,format,setStatus);
  return <div style={{display:"flex",flexDirection:"column",gap:9}}>
-  <div style={{fontSize:11,color:C.faint}}>Copy List and Copy Text are stored separately in Supabase. Use {"{field|fallback}"} (e.g. {"{charterer|CNR}"}, {"{vessel|TBN}"}, {"{freight|RNR}"}) to show fallback text when a cell is empty. Click a field to insert its placeholder.</div>
+  <div style={{fontSize:11,color:C.faint}}>Copy List and Copy Text are stored separately in Supabase. Use {"{field|fallback}"} (e.g. {"{charterer|CNR}"}, {"{vessel|TBN}"}, {"{freight|RNR}"}) to show fallback text when a cell is empty. Click a field to insert its placeholder. Empty pipe-separated groups are omitted from Copy List.</div>
   {loadingTemplates&&<div style={{fontSize:10,color:C.faint}}>Loading saved templates from Supabase…</div>}
   <div style={{fontSize:11,fontWeight:700,color:C.blue}}>Copy List</div>
   <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{CARGO_EXPORT_FIELDS.map(f=><button key={f} onClick={()=>addField(f)} style={{...inp,width:"auto",cursor:"pointer",color:"#9ec5ff",fontSize:10,padding:"4px 7px"}}>+ {f}</button>)}</div>
   <textarea rows={3} value={format} onChange={e=>{setFormat(e.target.value);setStatus("");}} style={{...inp,resize:"vertical",lineHeight:1.6}}/>
   <div style={{fontSize:10,color:C.faint}}>Preview</div>
-  <div style={{...inp,whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{formatCargoExportRow({charterer:"Seariver",vessel:"Golden Olive",qty:"15kt",cargo:"Gasoil",load:"Antwerp",disch:"Brest",from:"14 Oct",to:"14 Oct",freight:"USD 337,5K LS",comment:""},format)}</div>
+  <div style={{...inp,whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{formatCargoList({charterer:"Seariver",vessel:"Golden Olive",qty:"15kt",cargo:"Gasoil",load:"Antwerp",disch:"Brest",from:"14 Oct",to:"14 Oct",freight:"USD 337,5K LS",comment:""},format)}</div>
   <div style={{display:"flex",alignItems:"center",gap:8}}><button onClick={save} style={{...inp,width:"auto",cursor:"pointer",color:"#6ee7b7"}}>Save format</button><button onClick={()=>{setFormat(CARGO_EXPORT_DEFAULT);setStatus("Click Save format to apply default");}} style={{...inp,width:"auto",cursor:"pointer"}}>Reset default</button><span style={{fontSize:10,color:C.faint}}>{status}</span></div>
   <div style={{fontSize:11,color:C.blue,fontWeight:700,marginTop:8}}>Copy Text — independent format</div>
-  <div style={{fontSize:10,color:C.faint}}>Customize the Copy Text button separately; actual newlines in the template are preserved.</div>
-  <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{CARGO_EXPORT_FIELDS.map(f=><button key={f} onClick={()=>setSecondFormat(v=>v+"{"+f+"}")} style={{...inp,width:"auto",cursor:"pointer",color:"#9ec5ff",fontSize:10,padding:"4px 7px"}}>+ {f}</button>)}</div>
+  <div style={{fontSize:10,color:C.faint}}>Customize the Copy Text button separately; actual newlines in the template are preserved. Reset format 2 for automatic quoted/fixed wording and optional route, rate and laycan fields.</div>
+  <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{[...CARGO_EXPORT_FIELDS,...SMART_TEXT_FIELDS].map(f=><button key={f} onClick={()=>setSecondFormat(v=>v+"{"+f+"}")} style={{...inp,width:"auto",cursor:"pointer",color:"#9ec5ff",fontSize:10,padding:"4px 7px"}}>+ {f}</button>)}</div>
   <textarea rows={3} value={secondFormat} onChange={e=>{setSecondFormat(e.target.value);setSecondStatus("");}} style={{...inp,resize:"vertical",lineHeight:1.6}}/>
   <div style={{fontSize:10,color:C.faint}}>Preview — format 2</div>
-  <div style={{...inp,whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{formatCargoExportRow({charterer:"Seariver",vessel:"Golden Olive",qty:"15kt",cargo:"ULSD",load:"Port Jerome",disch:"ARA",from:"08 Oct",to:"09 Oct",freight:"USD 337,5K LS"},secondFormat)}</div>
-  <div style={{display:"flex",alignItems:"center",gap:8}}><button onClick={()=>saveTemplate("cargo-copy-text-template",CARGO_EXPORT_SECOND_KEY,secondFormat,setSecondStatus)} style={{...inp,width:"auto",cursor:"pointer",color:"#6ee7b7"}}>Save Copy Text</button><button onClick={()=>{setSecondFormat(CARGO_EXPORT_SECOND_DEFAULT);setSecondStatus("Click Save Copy Text to apply default");}} style={{...inp,width:"auto",cursor:"pointer"}}>Reset format 2</button><span style={{fontSize:10,color:C.faint}}>{secondStatus}</span></div>
+  <div style={{...inp,whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{formatCargoText({status:"FIXED",charterer:"Seariver",vessel:"Golden Olive",qty:"15kt",cargo:"ULSD",load:"Port Jerome",disch:"ARA",from:"08 Oct",to:"09 Oct",freight:"USD 337,5K LS"},secondFormat)}</div>
+  <div style={{display:"flex",alignItems:"center",gap:8}}><button onClick={()=>saveTemplate("cargo-copy-text-template",CARGO_EXPORT_SECOND_KEY,secondFormat,setSecondStatus)} style={{...inp,width:"auto",cursor:"pointer",color:"#6ee7b7"}}>Save Copy Text</button><button onClick={()=>{setSecondFormat(SMART_CARGO_TEXT);setSecondStatus("Click Save Copy Text to apply default");}} style={{...inp,width:"auto",cursor:"pointer"}}>Reset format 2</button><span style={{fontSize:10,color:C.faint}}>{secondStatus}</span></div>
   <div style={{fontSize:10,color:C.faint}}>Copy CSV retains its standard comma-separated format.</div>
  </div>;
 }
