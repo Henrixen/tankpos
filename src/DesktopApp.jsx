@@ -938,11 +938,11 @@ function TabbedPanel({tabs,active,onChange,height=460,children,extraHeader}){
 }
 
 // Stable range-input pair (module-level so it isn't remounted each render → no cursor jump)
-function RangeBox({minVal,maxVal,minPh,maxPh,onMin,onMax}){
+function RangeBox({minVal,maxVal,minPh,maxPh,onMin,onMax,decimal=false}){
   return (
     <div style={{display:"flex",gap:3,marginTop:3}}>
-      <input type="text" inputMode="numeric" value={minVal} placeholder={minPh} onChange={e=>onMin(e.target.value.replace(/[^\d]/g,""))} style={rangeInp}/>
-      <input type="text" inputMode="numeric" value={maxVal} placeholder={maxPh} onChange={e=>onMax(e.target.value.replace(/[^\d]/g,""))} style={rangeInp}/>
+      <input type="text" inputMode={decimal?"decimal":"numeric"} value={minVal} placeholder={minPh} onChange={e=>onMin(decimal?e.target.value.replace(/,/g,".").replace(/[^\d.]/g,"").replace(/(\..*)\./g,"$1"):e.target.value.replace(/[^\d]/g,""))} style={rangeInp}/>
+      <input type="text" inputMode={decimal?"decimal":"numeric"} value={maxVal} placeholder={maxPh} onChange={e=>onMax(decimal?e.target.value.replace(/,/g,".").replace(/[^\d.]/g,"").replace(/(\..*)\./g,"$1"):e.target.value.replace(/[^\d]/g,""))} style={rangeInp}/>
     </div>
   );
 }
@@ -1625,6 +1625,8 @@ function DesktopApp({positionsReady,vessels,cargoes,cargoTotal,onUpdateV,onRenam
   const [coatingFilter,setCoatingFilter]=useState(new Set());
   const [dwtRange,setDwtRange]=useState({min:"",max:""});
   const [builtRange,setBuiltRange]=useState({min:"",max:""});
+  const [loaRange,setLoaRange]=useState({min:"",max:""});
+  const [beamRange,setBeamRange]=useState({min:"",max:""});
   const [openDateFilter,setOpenDateFilter]=useState({quick:"",from:"",to:""});
 
   // Open-date slider is forward-looking only: today -> latest future open position.
@@ -2423,22 +2425,23 @@ const filtV=useMemo(()=>{
   let list=vessels;
 
   if(filters.size>0){
+    const selectedFlags=[...filters].filter(k=>k.startsWith("FLAG:"));
+    const regionKeys=[...new Set(vessels.map(row=>String(row.region||classifyRegion(row.openPort||"")||"").trim()).filter(Boolean))];
+    const selectedRegions=new Set(regionKeys.filter(r=>filters.has(r)));
     list=list.filter(v=>{
       // OR between selected flags; AND with the other filter groups.
-      const selectedFlags=[...filters].filter(k=>k.startsWith("FLAG:"));
       if(selectedFlags.length&&!selectedFlags.some(flag=>flag==="FLAG:EU Flag"?isEUFlag(v):flag==="FLAG:"+vesselFlag(v).toUpperCase())) return false;
 
       if(filters.has("NAP") && !(v.comment?.toLowerCase().includes("naph") || v.spec?.lastCargo?.toLowerCase().includes("naph"))) return false;
 
+      if(!selectedRegions.size) return true;
       const reg=classifyRegion(v.openPort);
       const port=(v.openPort||"").toUpperCase();
       const asiaports=["SINGAPORE","MALAYSIA","THAILAND","VIETNAM","CHINA","JAPAN","KOREA","INDIA","PAKISTAN","INDONESIA","PHILIPPINES","TAIWAN","HONGKONG","HONG KONG","FUJAIRAH","UAE","BAHRAIN","KUWAIT","SAUDI","JEDDAH","YANBU","JUBAIL","OMAN","MUSCAT"];
       const isAsia=asiaports.some(p=>port.includes(p));
-      const regionKeys=[...new Set(vessels.map(row=>String(row.region||classifyRegion(row.openPort||"")||"").trim()).filter(Boolean))];
-      const selectedRegions=regionKeys.filter(r=>filters.has(r));
-      if(selectedRegions.length){
+      if(selectedRegions.size){
         if(isAsia||!reg) return false;
-        if(!selectedRegions.includes(String(v.region||reg||"").trim())) return false;
+        if(!selectedRegions.has(String(v.region||reg||"").trim())) return false;
       }
       return true;
     });
@@ -2513,6 +2516,12 @@ const filtV=useMemo(()=>{
     const lo=builtRange.min!==""?Number(builtRange.min):-Infinity;
     const hi=builtRange.max!==""?Number(builtRange.max):Infinity;
     list=list.filter(v=>{const b=parseInt(v.built);return isFinite(b)&&b>=lo&&b<=hi;});
+  }
+
+  for(const [field,range] of [["loa",loaRange],["beam",beamRange]]){
+    if(range.min===""&&range.max==="")continue;
+    const lo=range.min===""?-Infinity:Number(range.min),hi=range.max===""?Infinity:Number(range.max);
+    list=list.filter(v=>{const raw=String(v[field]??"").trim().replace(",",".");const n=parseFloat(raw);return Number.isFinite(n)&&n>0&&n>=lo&&n<=hi;});
   }
 
   // Inter UKC filter
@@ -2639,7 +2648,7 @@ const filtV=useMemo(()=>{
   segmentFilter,
   [...posTagFilter].join(),
   [...coatingFilter].join(),
-  dwtRange.min,dwtRange.max,builtRange.min,builtRange.max,
+  dwtRange.min,dwtRange.max,builtRange.min,builtRange.max,loaRange.min,loaRange.max,beamRange.min,beamRange.max,
   [...dwtFilter].join(),
   [...builtFilter].join(),
   [...openPortAreas].sort().join(),vesselAgeFilter,maritimeAreas,
@@ -2672,19 +2681,19 @@ const filtV=useMemo(()=>{
   useBrokerActivity(unlocked?(tab==="pos"?"positions":tab==="cargo"||tab==="cargo2"?"cargoes":""):"");
   const positionsClearVisible=previewMode
     ? Boolean(previewTags.size||previewSubTags.size||previewSaved)
-    : Boolean(filters.size||posTagFilter.size||posSubTags.size||coatingFilter.size||bucketFilters.size||superRegionFilter.size||segmentFilter.size||dwtFilter.size||builtFilter.size||openPortAreas.size||vesselAgeFilter||interUKCActive||showSavedOnly||search||opFilter||updFilter||dwtRange.min||dwtRange.max||builtRange.min||builtRange.max||openDateFilter.quick||openDateFilter.from||openDateFilter.to);
+    : Boolean(filters.size||posTagFilter.size||posSubTags.size||coatingFilter.size||bucketFilters.size||superRegionFilter.size||segmentFilter.size||dwtFilter.size||builtFilter.size||openPortAreas.size||vesselAgeFilter||interUKCActive||showSavedOnly||search||opFilter||updFilter||dwtRange.min||dwtRange.max||builtRange.min||builtRange.max||loaRange.min||loaRange.max||beamRange.min||beamRange.max||openDateFilter.quick||openDateFilter.from||openDateFilter.to);
   function clearPositionFilters(){
     if(previewMode){setPreviewTags(new Set());setPreviewSubTags(new Set());setPreviewSaved(false);return;}
     setFilters(new Set());setPosTagFilter(new Set());setPosSubTags(new Set());setCoatingFilter(new Set());
     setBucketFilters(new Set());setSuperRegionFilter(new Set());setSegmentFilter(new Set());
-    setDwtFilter(new Set());setBuiltFilter(new Set());setOpenPortAreas(new Set());setVesselAgeFilter("");setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});
+    setDwtFilter(new Set());setBuiltFilter(new Set());setOpenPortAreas(new Set());setVesselAgeFilter("");setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});setLoaRange({min:"",max:""});setBeamRange({min:"",max:""});
     setOpenDateFilter({quick:"",from:"",to:""});setUpdFilter("");setOpFilter(null);setSearch("");
     setInterUKCActive(false);setShowSavedOnly(false);setPosPage(1);
   }
   const positionsClearButton=(style={})=>positionsClearVisible?<button type="button" aria-label="Clear all position filters" title={previewMode?"Clear preview filters only":"Clear all position filters"} onClick={clearPositionFilters} style={{fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:4,border:"1px solid rgba(255,107,107,.5)",background:"#301c29",color:"#ff808b",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",...style}}>× Clear</button>:null;
 
-  const brokerPositionDefaults=useRef({...{"search": "", "previewSaved": false, "dwtRange": {"min": "", "max": ""}, "builtRange": {"min": "", "max": ""}, "openDateFilter": {"quick": "", "from": "", "to": ""}, "opFilter": null, "updFilter": "", "sortK": "fileDate", "sortD": -1, "posFileDaysBack": 90, "showSavedOnly": false, "fixingPanelTab": "Open Segments", "fixingExpanded": false, "aisPanelTab": "Map", "positionsWidths": [32, 34, 34], "interUKCActive": false, "previewSort": {"key": "operator", "dir": 1}, "previewFormat": "table", "filters": [], "posTagFilter": [], "previewTags": [], "coatingFilter": [], "bucketFilters": [], "superRegionFilter": [], "segmentFilter": [], "dwtFilter": [], "builtFilter": [], "openPortAreas": [], "vesselAgeFilter": "", "savedVessels": []},colWidthsV,previewExcluded:[],previewManual:[],posSubTags:[],previewSubTags:[],cargoVisibleCols:[...CARGO_COLUMN_KEYS],qfVisibleCols:[...QF_DEFAULT_VISIBLE]});
-  useWorkspacePreferences("positions",{posSubTags:[...posSubTags],previewSubTags:[...previewSubTags],filters:[...filters],posTagFilter:[...posTagFilter],previewTags:[...previewTags],coatingFilter:[...coatingFilter],bucketFilters:[...bucketFilters],superRegionFilter:[...superRegionFilter],segmentFilter:[...segmentFilter],dwtFilter:[...dwtFilter],builtFilter:[...builtFilter],openPortAreas:[...openPortAreas],vesselAgeFilter,savedVessels:[...savedVessels],previewExcluded:[...previewExcluded],previewManual:[...previewManual],cargoVisibleCols:[...cargoVisibleCols],qfVisibleCols:[...qfVisibleCols],search,previewSaved,dwtRange,builtRange,openDateFilter,opFilter,updFilter,sortK,sortD,posFileDaysBack,showSavedOnly,fixingPanelTab,fixingExpanded,aisPanelTab,positionsWidths,interUKCActive,colWidthsV,previewSort,previewFormat},p=>{
+  const brokerPositionDefaults=useRef({...{"search": "", "previewSaved": false, "dwtRange": {"min": "", "max": ""}, "builtRange": {"min": "", "max": ""}, "openDateFilter": {"quick": "", "from": "", "to": ""}, "opFilter": null, "updFilter": "", "sortK": "fileDate", "sortD": -1, "posFileDaysBack": 90, "showSavedOnly": false, "fixingPanelTab": "Open Segments", "fixingExpanded": false, "aisPanelTab": "Map", "positionsWidths": [32, 34, 34], "interUKCActive": false, "previewSort": {"key": "operator", "dir": 1}, "previewFormat": "table", "filters": [], "posTagFilter": [], "previewTags": [], "coatingFilter": [], "bucketFilters": [], "superRegionFilter": [], "segmentFilter": [], "dwtFilter": [], "builtFilter": [], "openPortAreas": [], "vesselAgeFilter": "", "savedVessels": []},loaRange:{min:"",max:""},beamRange:{min:"",max:""},colWidthsV,previewExcluded:[],previewManual:[],posSubTags:[],previewSubTags:[],cargoVisibleCols:[...CARGO_COLUMN_KEYS],qfVisibleCols:[...QF_DEFAULT_VISIBLE]});
+  useWorkspacePreferences("positions",{posSubTags:[...posSubTags],previewSubTags:[...previewSubTags],filters:[...filters],posTagFilter:[...posTagFilter],previewTags:[...previewTags],coatingFilter:[...coatingFilter],bucketFilters:[...bucketFilters],superRegionFilter:[...superRegionFilter],segmentFilter:[...segmentFilter],dwtFilter:[...dwtFilter],builtFilter:[...builtFilter],openPortAreas:[...openPortAreas],vesselAgeFilter,savedVessels:[...savedVessels],previewExcluded:[...previewExcluded],previewManual:[...previewManual],cargoVisibleCols:[...cargoVisibleCols],qfVisibleCols:[...qfVisibleCols],search,previewSaved,dwtRange,builtRange,loaRange,beamRange,openDateFilter,opFilter,updFilter,sortK,sortD,posFileDaysBack,showSavedOnly,fixingPanelTab,fixingExpanded,aisPanelTab,positionsWidths,interUKCActive,colWidthsV,previewSort,previewFormat},p=>{
     setFilters(new Set(p.filters||[]));
     setPosTagFilter(new Set(p.posTagFilter||[]));
     setPosSubTags(new Set(p.posSubTags||[]));setPreviewSubTags(new Set(p.previewSubTags||[]));
@@ -2706,6 +2715,7 @@ const filtV=useMemo(()=>{
     setPreviewSaved(p.previewSaved);
     setDwtRange(p.dwtRange);
     setBuiltRange(p.builtRange);
+    setLoaRange(p.loaRange||{min:"",max:""});setBeamRange(p.beamRange||{min:"",max:""});
     setOpenDateFilter(p.openDateFilter);
     setOpFilter(p.opFilter);
     setUpdFilter(p.updFilter);
@@ -3549,8 +3559,8 @@ const filtV=useMemo(()=>{
                           </FilterRow>
                           {/* Status */}
                           <FilterRow label="Flag" col={C.amber}>
-                            {flagOptions.map(flag=>["FLAG:"+flag,flag]).map(([f,l])=>(<Chip key={f} col={C.amber} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</Chip>))}
-                            {filters.size>0&&<Chip col={C.red} active={false} onClick={()=>setFilters(new Set())}>✕ Clear</Chip>}
+                            <Chip col={C.amber} active={filters.has("FLAG:EU Flag")} onClick={()=>toggleFilter("FLAG:EU Flag")}>EU FLAG</Chip><select aria-label="Country flags" value="" onChange={e=>{if(e.target.value)toggleFilter("FLAG:"+e.target.value);}} style={{...fbBig(false,C.amber),background:C.bg2,color:C.tx,colorScheme:"dark",maxWidth:180}}><option value="" style={{background:C.bg2,color:C.tx}}>Flags ({[...filters].filter(f=>f.startsWith("FLAG:")&&f!=="FLAG:EU Flag").length}) ▾</option>{flagOptions.filter(f=>f!=="EU Flag").map(f=><option key={f} value={f} style={{background:C.bg2,color:C.tx}}>{filters.has("FLAG:"+f)?"✓ ":""}{f}</option>)}</select>
+                            {[...filters].some(f=>f.startsWith("FLAG:"))&&<Chip col={C.red} active={false} onClick={()=>setFilters(prev=>new Set([...prev].filter(f=>!f.startsWith("FLAG:"))))}>✕ Clear</Chip>}
                           </FilterRow>
                           {/* Segment */}
                           <FilterRow label="Segment" col={C.green}>
@@ -3571,6 +3581,15 @@ const filtV=useMemo(()=>{
                             {[["<2005","<2005"],["2005-10","2005-10"],["2010-15","2010-15"],["2015-20","2015-20"],[">2020",">2020"]].map(([v,l])=>(<Chip key={v} col="#94a3b8" active={builtFilter.has(v)} onClick={()=>{setBuiltFilter(prev=>{const n=new Set(prev);n.has(v)?n.delete(v):n.add(v);return n;});setPosPage(1);}}>{l}</Chip>))}
                             <RangeBox minVal={builtRange.min} maxVal={builtRange.max} minPh="from" maxPh="to" onMin={v=>{setBuiltRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setBuiltRange(r=>({...r,max:v}));setPosPage(1);}}/>
                             {(builtFilter.size>0||builtRange.min!==""||builtRange.max!=="")&&<Chip col={C.red} active={false} onClick={()=>{setBuiltFilter(new Set());setBuiltRange({min:"",max:""});setPosPage(1);}}>✕</Chip>}
+                          </FilterRowWrap>
+                          <FilterRowWrap label="LOA" col="#94a3b8">
+                            <RangeBox decimal minVal={loaRange.min} maxVal={loaRange.max} minPh="from" maxPh="to" onMin={v=>{setLoaRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setLoaRange(r=>({...r,max:v}));setPosPage(1);}}/>
+                            <span style={{color:C.faint,fontSize:10}}>m</span>
+                            {(loaRange.min||loaRange.max)&&<Chip col={C.red} active={false} onClick={()=>setLoaRange({min:"",max:""})}>✕</Chip>}
+                            <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,marginLeft:12,whiteSpace:"nowrap"}}>BEAM</span>
+                            <RangeBox decimal minVal={beamRange.min} maxVal={beamRange.max} minPh="from" maxPh="to" onMin={v=>{setBeamRange(r=>({...r,min:v}));setPosPage(1);}} onMax={v=>{setBeamRange(r=>({...r,max:v}));setPosPage(1);}}/>
+                            <span style={{color:C.faint,fontSize:10}}>m</span>
+                            {(beamRange.min||beamRange.max)&&<Chip col={C.red} active={false} onClick={()=>setBeamRange({min:"",max:""})}>✕</Chip>}
                           </FilterRowWrap>
                         </>
                       );
@@ -3736,8 +3755,8 @@ const filtV=useMemo(()=>{
                           <OpenDateRangeSlider/>
                         </COL>
                         <COL label="Flag" col={C.amber}>
-                          {flagOptions.map(flag=>["FLAG:"+flag,flag]).map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
-                          {filters.size>0&&<B active={false} onClick={()=>setFilters(new Set())}><span style={{color:C.red}}>✕ Clear</span></B>}
+                          <B active={filters.has("FLAG:EU Flag")} onClick={()=>toggleFilter("FLAG:EU Flag")}>EU FLAG</B><select aria-label="Country flags" value="" onChange={e=>{if(e.target.value)toggleFilter("FLAG:"+e.target.value);}} style={{...fbBig(false,C.amber),background:C.bg2,color:C.tx,colorScheme:"dark",maxWidth:180}}><option value="" style={{background:C.bg2,color:C.tx}}>Flags ({[...filters].filter(f=>f.startsWith("FLAG:")&&f!=="FLAG:EU Flag").length}) ▾</option>{flagOptions.filter(f=>f!=="EU Flag").map(f=><option key={f} value={f} style={{background:C.bg2,color:C.tx}}>{filters.has("FLAG:"+f)?"✓ ":""}{f}</option>)}</select>
+                          {[...filters].some(f=>f.startsWith("FLAG:"))&&<B active={false} onClick={()=>setFilters(prev=>new Set([...prev].filter(f=>!f.startsWith("FLAG:"))))}><span style={{color:C.red}}>✕ Clear</span></B>}
                         </COL>
                         <COL label="Region" col="#7dd3fc">
                           {[["WCUK","WCUK"],["ECUK","ECUK"],["CANAL","Canal"],["BISCAY","Biscay"],["SKAW","Skaw"],["BALTIC","Baltic"],["MED","Med"]].map(([f,l])=>(<B key={f} active={filters.has(f)} onClick={()=>toggleFilter(f)}>{l}</B>))}
@@ -3800,7 +3819,7 @@ const filtV=useMemo(()=>{
                       >
                         🗑 Delete ({selVessels.size})
                       </button>
-                      <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setOpenPortAreas(new Set());setVesselAgeFilter("");setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setCoatingFilter(new Set());setInterUKCActive(false);setPosSubTags(new Set());setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());setSelVessels(new Set());setOpFilter(null);}}
+                      <button onClick={()=>{setFilters(new Set());setDwtFilter(new Set());setBuiltFilter(new Set());setOpenPortAreas(new Set());setVesselAgeFilter("");setDwtRange({min:"",max:""});setBuiltRange({min:"",max:""});setLoaRange({min:"",max:""});setBeamRange({min:"",max:""});setUpdFilter("");setSuperRegionFilter(new Set());setSegmentFilter(new Set());setPosTagFilter(new Set());setCoatingFilter(new Set());setInterUKCActive(false);setPosSubTags(new Set());setShowSavedOnly(false);setPosPage(1);setSearch("");setBucketFilters(new Set());setSelVessels(new Set());setOpFilter(null);}}
                         style={{fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",border:"1px solid "+C.bd,background:C.bg2,color:C.tx}}>
                         ✕ Clear all
                       </button>
