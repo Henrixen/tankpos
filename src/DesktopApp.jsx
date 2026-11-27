@@ -3472,7 +3472,7 @@ const filtV=useMemo(()=>{
                     <div style={{display:"flex",alignItems:"center",gap:5,padding:"5px 0",borderBottom:"1px solid "+C.bd2,flexShrink:0}}>
                       <span style={{fontSize:11,fontWeight:700,color:C.blue}}>{positionFilterView==="map"?"Open-port regions":"Filter settings"}</span>
                       <span style={{marginLeft:"auto",fontSize:10,color:C.faint}}>{filtV.length} vessels</span>
-                      {(previewMode?Boolean(previewTags.size||previewSubTags.size):Boolean(posTagFilter.size||posSubTags.size))&&<button onClick={clearPositionFilters} style={{...fbBig(false,C.red),fontSize:10,background:"#a82636",border:"1px solid #f05a68",color:"#fff",fontWeight:800}}>× Clear</button>}
+                      <button type="button" disabled={!positionsClearVisible} onClick={clearPositionFilters} title={previewMode?"Clear preview filters":"Clear all position filters"} style={{...fbBig(false,C.red),fontSize:10,background:positionsClearVisible?"rgba(240,90,104,.18)":"rgba(240,90,104,.08)",border:"1px solid #a84350",color:"#ff6878",opacity:1,fontWeight:800,whiteSpace:"nowrap",cursor:positionsClearVisible?"pointer":"default"}}>× Clear filters</button>
                     </div>
                     {positionFilterView==="map"&&<div style={{display:"flex",flexDirection:"column",gap:8,padding:"6px 0"}}>
                       <OpenPortAreaMap areas={maritimeAreas} selected={openPortAreas} onToggle={id=>{setOpenPortAreas(prev=>{const next=new Set(prev);next.has(id)?next.delete(id):next.add(id);return next;});setPosPage(1);}}/>
