@@ -607,7 +607,8 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
       
       .qf-mobile-fold .qf-chart{height:260px!important;min-height:260px!important;}
       .qf-actions{display:block!important;padding:7px!important;}
-      .qf-actions-main{display:flex!important;gap:5px!important;align-items:center!important;overflow-x:auto!important;padding-bottom:6px!important;}
+      .qf-actions-main{display:flex!important;gap:5px!important;align-items:center!important;overflow-x:auto!important;padding-bottom:6px!important;scrollbar-width:thin;scrollbar-color:#345577 #091321;}
+      .qf-actions-main > *{flex-shrink:0;}
       .qf-actions-search{display:flex!important;width:100%!important;gap:5px!important;align-items:center!important;}
       .qf-actions-search input{flex:1!important;width:auto!important;min-width:0!important;}
       .qf-mobile-controls{display:block!important;margin-top:6px!important;background:${C.bg2};border:1px solid ${C.bd};border-radius:7px;overflow:hidden;}
@@ -639,8 +640,11 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
       .qf-mobile-controls{display:contents!important;}
       .qf-mobile-controls > summary{display:none!important;}
       .qf-mobile-controls-body{display:contents!important;}
-      .qf-actions{display:flex!important;overflow-x:auto!important;}
-      .qf-actions-main{display:flex!important;}
+      .qf-actions{display:flex!important;overflow-x:auto!important;overflow-y:hidden!important;min-width:0;max-width:100%;box-sizing:border-box;flex-wrap:nowrap;scrollbar-width:thin;scrollbar-color:#345577 #091321;}
+      .qf-actions > *{flex-shrink:0;}
+      .qf-actions-main{display:flex!important;flex:0 0 auto!important;min-width:max-content!important;}
+      .qf-actions-main > *{flex-shrink:0;}
+      .qf-actions-main button{flex-shrink:0;white-space:nowrap;}
       .qf-actions-search{display:flex!important;position:relative!important;width:210px!important;flex:0 0 210px!important;align-items:center!important;}
     }
   `}</style>
