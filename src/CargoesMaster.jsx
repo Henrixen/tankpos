@@ -575,6 +575,16 @@ return String(x.id||"").localeCompare(String(y.id||""));})},[cargoes,section,hid
    try{await navigator.clipboard.writeText(text);markCopied(csv?"csv":"all");}catch(e){window.prompt("Copy cargoes",text)}
  }
 
+ async function copyCargoEmail(){
+   const rows=sortForExport(cargoes.filter(c=>selected.has(c.id)));
+   if(!rows.length)return;
+   const {html,text}=cargoEmailTable(rows);
+   try{
+     await navigator.clipboard.write([new ClipboardItem({"text/html":new Blob([html],{type:"text/html"}),"text/plain":new Blob([text],{type:"text/plain"})})]);
+     markCopied("email");
+   }catch(e){window.prompt("Formatted clipboard unavailable. Copy cargoes as plain text:",text);}
+ }
+
  return <div data-broker-scope="cargoes" style={{display:"flex",flexDirection:"column",gap:8}}>
   <style>{`
     .cargo-panel-handle{position:absolute;top:0;bottom:0;width:11px;transform:translateX(-50%);cursor:col-resize;z-index:80;touch-action:none;background:transparent;}
