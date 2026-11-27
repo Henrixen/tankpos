@@ -3797,7 +3797,7 @@ const filtV=useMemo(()=>{
                   display:"flex",alignItems:"center",gap:8,padding:"6px 10px",
                   background:C.bg3,border:"1px solid "+C.bd2,borderRadius:6,fontSize:12,
                   flexWrap:mobile?"wrap":"nowrap",minHeight:38,boxSizing:"border-box",
-                  overflowX:mobile?"visible":"auto",overflowY:mobile?"visible":"hidden",scrollbarWidth:"thin"
+                  overflowX:mobile?"visible":"auto",overflowY:mobile?"visible":"hidden",scrollbarWidth:"thin",scrollbarColor:"#345577 #091321"
                 }}>
                   {mobile&&<div style={{position:"relative",display:"flex",alignItems:"center",width:"100%"}}>
                     <input value={search} onChange={e=>setSearch(e.target.value)}
